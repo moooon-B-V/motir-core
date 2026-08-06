@@ -1484,45 +1484,45 @@ places, so BOTH doors are drawn (label + placement + which mode each opens) in e
 "Create project" is the kept, always-present manual path. Exact labels: **"Plan a new project with
 AI"** and **"Create project"** (verbatim).
 
-## The measured scale (MOTIR-2274) — and what the grid shows
+## The measured scale (MOTIR-2274) — the input this layout is built to
 
-The inventory walked every route and settled the numbers this layout is built to:
+The inventory walked every route and settled the numbers:
 
-|                            |             |
-| -------------------------- | ----------- |
-| Permissions                | **32**      |
-| Domains                    | **16**      |
-| Largest domain             | **4 rows**  |
-| Enforced today / `planned` | **11 / 21** |
+|                |            |
+| -------------- | ---------- |
+| Permissions    | **32**     |
+| Domains        | **16**     |
+| Largest domain | **4 rows** |
 
-**The grid shows all 32.** An earlier revision rendered only the 11 enforced keys, on the rule that a
-permission no gate consults must never become a switch that controls nothing. That rule is right and
-its placement was wrong: with 21 of 32 planned, the page showed a quarter of the model and implied
-that was all of it — the exact under-description this epic exists to fix. The rule belongs to the
-**editor**, where a switch actually exists; the read-only grid's job is to tell the truth.
+**Every permission on this page is one the code enforces.** The page ships behind
+[MOTIR-2256](motir:cmsgmcpy2001a04joa4k7rjtb), which wires the 21 keys the inventory named but that had
+no gate yet — so there is no "coming soon" state anywhere in the design.
 
-**A domain with nothing live yet collapses to its header.** That is what keeps the page honest AND
-short: the model is fully disclosed (each collapsed header names its domain and counts its rows)
-while the height matches what is actually usable today — **1618px against 2966px fully expanded**.
-Each group expands in place as MOTIR-2256 wires it; the layout never changes.
+That was decided the hard way. Two earlier revisions tried to render a partially-enforced model: one
+hid the unwired keys (showing 8 of 32, implying that was the model), the other showed them marked
+_"Not yet enforced"_ (putting Motir's own migration status on a customer's settings page). **Neither
+is a page worth shipping**, and the story is sequenced so neither is necessary — the page waits, and
+shows the model once, complete. `PLANNED_PERMISSIONS` being empty is asserted as this story's
+ship gate, so the ordering is a contract rather than a note.
 
-This is also why collapsing a GROUP is the right density lever rather than truncating rows inside
-one: the largest domain is four rows and the median is two, so the length lives in the number of
-groups, not the size of any one.
+**Collapsible groups are the density lever**, and the numbers say why: 32 rows across 16 groups is
+about 48 lines, but the largest domain is four rows and the median is two. The length lives in the
+NUMBER of groups, not the size of any one — so collapsing a GROUP is right, and truncating rows
+inside one, or per-row search, would fix a problem this catalog does not have. Groups ship expanded;
+the header is the control.
 
 ## Panels (inspect every one)
 
-0. **The populated page, project-admin view** — the whole model, the five live groups expanded and
-   the ten not-yet-wired collapsed. The access path is drawn: the rail's ACCESS group, under
-   _Members & access_. **MOTIR-2263 builds to this panel.**
-1. **A custom role joins as a COLUMN, every group EXPANDED** (MOTIR-2257) — the full 32 permissions,
-   which is what the layout must survive once MOTIR-2256 has wired each domain. "Contractor" is the
-   epic's own motivating gap (_may comment and attach but not transition_), which none of the three
-   built-ins can express.
+0. **The populated page, project-admin view** — the whole model, inside the settings shell, with the
+   access path drawn (the rail's ACCESS group, under _Members & access_). **MOTIR-2263 builds to
+   this panel.**
+1. **A custom role joins as a COLUMN** (MOTIR-2257) — "Contractor" is the epic's own motivating gap
+   (_may comment and attach but not transition_), which none of the three built-ins can express.
+   Shows the affordance split: built-ins carry a LOCK and no control, the custom column carries EDIT
+   and DELETE.
 2. **Creating a role** (MOTIR-2257) — name, a **base role to start from**, then the permission list.
    The base's grants arrive checked and visually distinct (grey, `from Viewer`) from what the author
-   adds (accent). **A `planned` permission appears but is NOT a control** — this is the one place the
-   no-dead-switch rule bites, and the only place it should.
+   adds (accent).
 3. **The member (non-admin) view** — browse-gated, so a member reads the same matrix. Two differences,
    both admin-only WRITE affordances: no `Create role`, and a custom column shows no edit/delete.
 

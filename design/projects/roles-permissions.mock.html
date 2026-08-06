@@ -1307,12 +1307,13 @@
     <!-- ════════════ PANEL 0 — the populated page, project-admin view ════════════ -->
     <div class="panel-label">
       0 · The populated page, project-admin view — reached from the settings rail’s ACCESS group,
-      the entry directly under “Members &amp; access”. Permissions are ROWS, roles are COLUMNS. It
-      shows the WHOLE model — all 32 permissions across 16 domains, the set MOTIR-2274 measured —
-      because a page that lists only the wired ones tells a project admin the model is a quarter of
-      its real size. The 21 not yet wired carry a <code>Not yet enforced</code> mark and no role
-      holds them; each group header counts how many of its rows are live. Each built-in column
-      carries a LOCK and no control — a built-in role is immutable.
+      the entry directly under “Members &amp; access”. Permissions are ROWS, roles are COLUMNS, and
+      it shows the WHOLE model: all 32 permissions across 16 domains, the set MOTIR-2274 measured by
+      walking every route. <strong>Every row is a permission the code enforces</strong> — this page
+      ships after MOTIR-2256 has wired them, so there is no “coming soon” state anywhere in it.
+      Group headers are collapsible, which is the density lever this catalog needs: the largest
+      domain is four rows, so the length is in the NUMBER of groups. Each built-in column carries a
+      LOCK and no control — a built-in role is immutable.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1438,28 +1439,28 @@
                 <div class="mhead mcorner"><span class="clabel">Permission</span></div>
                 <div class="mhead">
                   <span class="rname">Admin</span>
-                  <span class="rmeta">8 of 8 live</span>
+                  <span class="rmeta">8 of 29</span>
                   <span class="lockchip"
                     ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
                   >
                 </div>
                 <div class="mhead">
                   <span class="rname">Member</span>
-                  <span class="rmeta">4 of 8 live</span>
+                  <span class="rmeta">4 of 29</span>
                   <span class="lockchip"
                     ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
                   >
                 </div>
                 <div class="mhead">
                   <span class="rname">Viewer</span>
-                  <span class="rmeta">1 of 8 live</span>
+                  <span class="rmeta">1 of 29</span>
                   <span class="lockchip"
                     ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
                   >
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Project<span class="dom-count">2/2 live</span>
+                  >Project<span class="dom-count">2</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">View project</span
@@ -1493,7 +1494,7 @@
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Work
-                  items<span class="dom-count">1/3 live</span>
+                  items<span class="dom-count">3</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Edit work items</span
@@ -1510,41 +1511,39 @@
                 <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mperm pending">
+                <div class="mperm">
                   <span class="plabel">Delete work items</span
-                  ><span class="soon">Not yet enforced</span
                   ><span class="pdesc"
                     >Archive or delete a work item and everything beneath it.</span
                   >
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mperm pending">
+                <div class="mperm">
                   <span class="plabel">Triage requests</span
-                  ><span class="soon">Not yet enforced</span
                   ><span class="pdesc"
                     >Accept, decline, promote or snooze an item in the triage queue.</span
                   >
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Comments<span class="dom-count">2/2 live</span>
+                  >Comments<span class="dom-count">2</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Add comments</span
@@ -1574,7 +1573,7 @@
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Attachments<span class="dom-count">2/2 live</span>
+                  >Attachments<span class="dom-count">2</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Add attachments</span
@@ -1604,7 +1603,7 @@
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Watchers<span class="dom-count">1/1 live</span>
+                  >Watchers<span class="dom-count">1</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Manage watchers</span
@@ -1621,45 +1620,312 @@
                 <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Members & access<span class="dpend">2 not yet enforced</span>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Members
+                  & access<span class="dom-count">2</span>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Boards<span class="dpend">1 not yet enforced</span>
+                <div class="mperm">
+                  <span class="plabel">Manage members</span
+                  ><span class="pdesc">Add and remove project members, and set their roles.</span>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Sprints & backlog<span class="dpend">1 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Workflow & automation<span class="dpend">2 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Fields
-                  & components<span class="dpend">3 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Estimation<span class="dpend">1 not yet enforced</span>
+                <div class="mperm">
+                  <span class="plabel">Change project access</span
+                  ><span class="pdesc"
+                    >Set whether the project is public, open, limited or private.</span
+                  >
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Reports & filters<span class="dpend">2 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Repositories<span class="dpend">3 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Import<span class="dpend">1 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>AI
-                  planning<span class="dpend">3 not yet enforced</span>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Boards<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Configure boards</span
+                  ><span class="pdesc">Change board columns, swimlanes and WIP limits.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Sprints
+                  & backlog<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage sprints</span
+                  ><span class="pdesc">Start and complete Sprints, and rank the backlog.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Workflow & automation<span class="dom-count">2</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage automation rules</span
+                  ><span class="pdesc"
+                    >Create, edit and enable automation and status-derivation rules.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage the workflow</span
+                  ><span class="pdesc"
+                    >Change the statuses a board column projects, and their transitions.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Fields
+                  & components<span class="dom-count">3</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage components</span
+                  ><span class="pdesc">Create, rename and delete the project’s components.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage custom fields</span
+                  ><span class="pdesc">Create, edit and remove custom field definitions.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage labels</span
+                  ><span class="pdesc"
+                    >Create, rename and delete the project’s labels and tags.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Estimation<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage estimation</span
+                  ><span class="pdesc">Change the project’s estimation scheme.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Reports
+                  & filters<span class="dom-count">2</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">View reports</span
+                  ><span class="pdesc"
+                    >Open the project’s reports — distribution, workload, velocity, roadmap.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage saved filters</span
+                  ><span class="pdesc">Create, edit, share and subscribe to saved filters.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Repositories<span class="dom-count">3</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Connect a repository</span
+                  ><span class="pdesc"
+                    >Connect a GitHub or GitLab installation and start indexing.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage repositories</span
+                  ><span class="pdesc"
+                    >Add, remove, move and take over the project’s repositories.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage code access</span
+                  ><span class="pdesc"
+                    >Decide which team members may clone the project’s code.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Import<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Import work items</span
+                  ><span class="pdesc">Bulk-create work items from Jira, Linear or Plane.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>AI
+                  planning<span class="dom-count">3</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Configure AI planning</span
+                  ><span class="pdesc"
+                    >Set the planning cadence, planner model and drafted explanations.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Run AI planning</span
+                  ><span class="pdesc"
+                    >Submit a planning job that spends AI credits and proposes changes.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">View AI plans</span
+                  ><span class="pdesc">Open a generated plan and read its proposals.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
               </div>
               <div class="card level-card">
@@ -1711,14 +1977,15 @@
 
     <!-- ════════════ PANEL 1 — a custom role joins as a COLUMN ════════════ -->
     <div class="panel-label">
-      1 · A custom role joins as one more COLUMN (MOTIR-2257), shown here with EVERY group expanded
-      — the full 32-permission catalog, which is what the layout has to survive once MOTIR-2256
-      wires each domain. This is why the matrix is the right shape: a new role costs a column, not
-      another full-height card, and a newly-wired domain costs nothing but its own expansion.
-      “Contractor” is the epic’s own motivating gap — may comment and attach but not transition —
-      which none of the three built-ins can express (Viewer can’t comment, Member can edit). Note
-      the affordance split: the built-in columns carry a LOCK, the custom column carries EDIT and
-      DELETE. Built-in roles are not editable, so they have no edit control at all.
+      1 · A custom role joins as one more COLUMN (MOTIR-2257). This is why the matrix is the right
+      shape: a new role costs a COLUMN, not another full-height card. “Contractor” is the epic’s own
+      motivating gap — may comment and attach but not transition — which none of the three built-ins
+      can express (Viewer can’t comment, Member can edit). Note the affordance split: the built-in
+      columns carry a LOCK, the custom column carries EDIT and DELETE. “Contractor” is the epic’s
+      own motivating gap — may comment and attach but not transition — which none of the three
+      built-ins can express (Viewer can’t comment, Member can edit). Note the affordance split: the
+      built-in columns carry a LOCK, the custom column carries EDIT and DELETE. Built-in roles are
+      not editable, so they have no edit control at all.
     </div>
     <div class="panel">
       <div class="stage">
@@ -1727,28 +1994,28 @@
             <div class="mhead mcorner"><span class="clabel">Permission</span></div>
             <div class="mhead">
               <span class="rname">Admin</span>
-              <span class="rmeta">8 of 8 live</span>
+              <span class="rmeta">8 of 29</span>
               <span class="lockchip"
                 ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
               >
             </div>
             <div class="mhead">
               <span class="rname">Member</span>
-              <span class="rmeta">4 of 8 live</span>
+              <span class="rmeta">4 of 29</span>
               <span class="lockchip"
                 ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
               >
             </div>
             <div class="mhead">
               <span class="rname">Viewer</span>
-              <span class="rmeta">1 of 8 live</span>
+              <span class="rmeta">1 of 29</span>
               <span class="lockchip"
                 ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
               >
             </div>
             <div class="mhead custom">
               <span class="rname">Contractor</span>
-              <span class="rmeta">3 of 8 live</span>
+              <span class="rmeta">3 of 29</span>
               <span class="rowacts"
                 ><span class="iconbtn" role="img" aria-label="Edit role"
                   ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg></span
@@ -1758,7 +2025,7 @@
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-              >Project<span class="dom-count">2/2 live</span>
+              >Project<span class="dom-count">2</span>
             </div>
             <div class="mperm">
               <span class="plabel">View project</span
@@ -1798,7 +2065,7 @@
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Work
-              items<span class="dom-count">1/3 live</span>
+              items<span class="dom-count">3</span>
             </div>
             <div class="mperm">
               <span class="plabel">Edit work items</span
@@ -1816,43 +2083,43 @@
             <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Delete work items</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Delete work items</span
               ><span class="pdesc">Archive or delete a work item and everything beneath it.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Triage requests</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Triage requests</span
               ><span class="pdesc"
                 >Accept, decline, promote or snooze an item in the triage queue.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-              >Comments<span class="dom-count">2/2 live</span>
+              >Comments<span class="dom-count">2</span>
             </div>
             <div class="mperm">
               <span class="plabel">Add comments</span
@@ -1888,7 +2155,7 @@
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-              >Attachments<span class="dom-count">2/2 live</span>
+              >Attachments<span class="dom-count">2</span>
             </div>
             <div class="mperm">
               <span class="plabel">Add attachments</span
@@ -1924,7 +2191,7 @@
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-              >Watchers<span class="dom-count">1/1 live</span>
+              >Watchers<span class="dom-count">1</span>
             </div>
             <div class="mperm">
               <span class="plabel">Manage watchers</span
@@ -1946,375 +2213,366 @@
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Members &
-              access<span class="dom-count">0/2 live</span>
+              access<span class="dom-count">2</span>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Manage members</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Manage members</span
               ><span class="pdesc">Add and remove project members, and set their roles.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Change project access</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc"
                 >Set whether the project is public, open, limited or private.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Boards<span
                 class="dom-count"
-                >0/1 live</span
+                >1</span
               >
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Configure boards</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Configure boards</span
               ><span class="pdesc">Change board columns, swimlanes and WIP limits.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Sprints &
-              backlog<span class="dom-count">0/1 live</span>
+              backlog<span class="dom-count">1</span>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Manage sprints</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Manage sprints</span
               ><span class="pdesc">Start and complete Sprints, and rank the backlog.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Workflow &
-              automation<span class="dom-count">0/2 live</span>
+              automation<span class="dom-count">2</span>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Manage automation rules</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc"
                 >Create, edit and enable automation and status-derivation rules.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Manage the workflow</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc"
                 >Change the statuses a board column projects, and their transitions.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Fields &
-              components<span class="dom-count">0/3 live</span>
+              components<span class="dom-count">3</span>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Manage components</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Manage components</span
               ><span class="pdesc">Create, rename and delete the project’s components.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Manage custom fields</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc">Create, edit and remove custom field definitions.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Manage labels</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Manage labels</span
               ><span class="pdesc">Create, rename and delete the project’s labels and tags.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-              >Estimation<span class="dom-count">0/1 live</span>
+              >Estimation<span class="dom-count">1</span>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Manage estimation</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Manage estimation</span
               ><span class="pdesc">Change the project’s estimation scheme.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Reports &
-              filters<span class="dom-count">0/2 live</span>
+              filters<span class="dom-count">2</span>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">View reports</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">View reports</span
               ><span class="pdesc"
                 >Open the project’s reports — distribution, workload, velocity, roadmap.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Manage saved filters</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc">Create, edit, share and subscribe to saved filters.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-              >Repositories<span class="dom-count">0/3 live</span>
+              >Repositories<span class="dom-count">3</span>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Connect a repository</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc"
                 >Connect a GitHub or GitLab installation and start indexing.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Manage repositories</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc"
                 >Add, remove, move and take over the project’s repositories.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Manage code access</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc">Decide which team members may clone the project’s code.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Import<span
                 class="dom-count"
-                >0/1 live</span
+                >1</span
               >
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Import work items</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Import work items</span
               ><span class="pdesc">Bulk-create work items from Jira, Linear or Plane.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
             <div class="mgroup">
               <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>AI
-              planning<span class="dom-count">0/3 live</span>
+              planning<span class="dom-count">3</span>
             </div>
-            <div class="mperm pending">
+            <div class="mperm">
               <span class="plabel">Configure AI planning</span
-              ><span class="soon">Not yet enforced</span
               ><span class="pdesc"
                 >Set the planning cadence, planner model and drafted explanations.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">Run AI planning</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">Run AI planning</span
               ><span class="pdesc"
                 >Submit a planning job that spends AI credits and proposes changes.</span
               >
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mperm pending">
-              <span class="plabel">View AI plans</span><span class="soon">Not yet enforced</span
+            <div class="mperm">
+              <span class="plabel">View AI plans</span
               ><span class="pdesc">Open a generated plan and read its proposals.</span>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
-            <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+            <div class="mcell off" role="img" aria-label="Not held">
               <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
             </div>
           </div>
@@ -2368,7 +2626,7 @@
               <div class="field">
                 <span class="field-label">Permissions</span>
                 <div class="permlist">
-                  <div class="mgroup">Project<span class="dom-count">2/2 live</span></div>
+                  <div class="mgroup">Project<span class="dom-count">2</span></div>
                   <div class="prow">
                     <span class="cbox frombase"
                       ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
@@ -2389,7 +2647,7 @@
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Work items<span class="dom-count">1/3 live</span></div>
+                  <div class="mgroup">Work items<span class="dom-count">3</span></div>
                   <div class="prow">
                     <span class="cbox"></span>
                     <span
@@ -2399,27 +2657,25 @@
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Delete work items</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Delete work items</span>
                       <span class="pdesc"
                         >Archive or delete a work item and everything beneath it.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Triage requests</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Triage requests</span>
                       <span class="pdesc"
                         >Accept, decline, promote or snooze an item in the triage queue.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Comments<span class="dom-count">2/2 live</span></div>
+                  <div class="mgroup">Comments<span class="dom-count">2</span></div>
                   <div class="prow">
                     <span class="cbox on"
                       ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
@@ -2438,7 +2694,7 @@
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Attachments<span class="dom-count">2/2 live</span></div>
+                  <div class="mgroup">Attachments<span class="dom-count">2</span></div>
                   <div class="prow">
                     <span class="cbox on"
                       ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
@@ -2457,7 +2713,7 @@
                       <span class="pdesc">Remove attachments uploaded by anyone.</span></span
                     >
                   </div>
-                  <div class="mgroup">Watchers<span class="dom-count">1/1 live</span></div>
+                  <div class="mgroup">Watchers<span class="dom-count">1</span></div>
                   <div class="prow">
                     <span class="cbox"></span>
                     <span
@@ -2467,204 +2723,181 @@
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Members & access<span class="dom-count">0/2 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Members & access<span class="dom-count">2</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage members</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage members</span>
                       <span class="pdesc"
                         >Add and remove project members, and set their roles.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Change project access</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Change project access</span>
                       <span class="pdesc"
                         >Set whether the project is public, open, limited or private.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Boards<span class="dom-count">0/1 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Boards<span class="dom-count">1</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Configure boards</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Configure boards</span>
                       <span class="pdesc"
                         >Change board columns, swimlanes and WIP limits.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Sprints & backlog<span class="dom-count">0/1 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Sprints & backlog<span class="dom-count">1</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage sprints</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage sprints</span>
                       <span class="pdesc"
                         >Start and complete Sprints, and rank the backlog.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">
-                    Workflow & automation<span class="dom-count">0/2 live</span>
-                  </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Workflow & automation<span class="dom-count">2</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage automation rules</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage automation rules</span>
                       <span class="pdesc"
                         >Create, edit and enable automation and status-derivation rules.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage the workflow</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage the workflow</span>
                       <span class="pdesc"
                         >Change the statuses a board column projects, and their transitions.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">
-                    Fields & components<span class="dom-count">0/3 live</span>
-                  </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Fields & components<span class="dom-count">3</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage components</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage components</span>
                       <span class="pdesc"
                         >Create, rename and delete the project’s components.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage custom fields</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage custom fields</span>
                       <span class="pdesc"
                         >Create, edit and remove custom field definitions.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage labels</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage labels</span>
                       <span class="pdesc"
                         >Create, rename and delete the project’s labels and tags.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Estimation<span class="dom-count">0/1 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Estimation<span class="dom-count">1</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage estimation</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage estimation</span>
                       <span class="pdesc">Change the project’s estimation scheme.</span></span
                     >
                   </div>
-                  <div class="mgroup">Reports & filters<span class="dom-count">0/2 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Reports & filters<span class="dom-count">2</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">View reports</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">View reports</span>
                       <span class="pdesc"
                         >Open the project’s reports — distribution, workload, velocity,
                         roadmap.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage saved filters</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage saved filters</span>
                       <span class="pdesc"
                         >Create, edit, share and subscribe to saved filters.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Repositories<span class="dom-count">0/3 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Repositories<span class="dom-count">3</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Connect a repository</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Connect a repository</span>
                       <span class="pdesc"
                         >Connect a GitHub or GitLab installation and start indexing.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage repositories</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage repositories</span>
                       <span class="pdesc"
                         >Add, remove, move and take over the project’s repositories.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Manage code access</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Manage code access</span>
                       <span class="pdesc"
                         >Decide which team members may clone the project’s code.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">Import<span class="dom-count">0/1 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">Import<span class="dom-count">1</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Import work items</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Import work items</span>
                       <span class="pdesc"
                         >Bulk-create work items from Jira, Linear or Plane.</span
                       ></span
                     >
                   </div>
-                  <div class="mgroup">AI planning<span class="dom-count">0/3 live</span></div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="mgroup">AI planning<span class="dom-count">3</span></div>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Configure AI planning</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Configure AI planning</span>
                       <span class="pdesc"
                         >Set the planning cadence, planner model and drafted explanations.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">Run AI planning</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">Run AI planning</span>
                       <span class="pdesc"
                         >Submit a planning job that spends AI credits and proposes changes.</span
                       ></span
                     >
                   </div>
-                  <div class="prow disabled">
-                    <span class="cbox off"></span>
+                  <div class="prow">
+                    <span class="cbox"></span>
                     <span
-                      ><span class="plabel">View AI plans</span
-                      ><span class="soon">Not yet enforced</span>
+                      ><span class="plabel">View AI plans</span>
                       <span class="pdesc">Open a generated plan and read its proposals.</span></span
                     >
                   </div>
@@ -2806,28 +3039,28 @@
                 <div class="mhead mcorner"><span class="clabel">Permission</span></div>
                 <div class="mhead">
                   <span class="rname">Admin</span>
-                  <span class="rmeta">8 of 8 live</span>
+                  <span class="rmeta">8 of 29</span>
                   <span class="lockchip"
                     ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
                   >
                 </div>
                 <div class="mhead">
                   <span class="rname">Member</span>
-                  <span class="rmeta">4 of 8 live</span>
+                  <span class="rmeta">4 of 29</span>
                   <span class="lockchip"
                     ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
                   >
                 </div>
                 <div class="mhead">
                   <span class="rname">Viewer</span>
-                  <span class="rmeta">1 of 8 live</span>
+                  <span class="rmeta">1 of 29</span>
                   <span class="lockchip"
                     ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
                   >
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Project<span class="dom-count">2/2 live</span>
+                  >Project<span class="dom-count">2</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">View project</span
@@ -2861,7 +3094,7 @@
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Work
-                  items<span class="dom-count">1/3 live</span>
+                  items<span class="dom-count">3</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Edit work items</span
@@ -2878,41 +3111,39 @@
                 <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mperm pending">
+                <div class="mperm">
                   <span class="plabel">Delete work items</span
-                  ><span class="soon">Not yet enforced</span
                   ><span class="pdesc"
                     >Archive or delete a work item and everything beneath it.</span
                   >
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mperm pending">
+                <div class="mperm">
                   <span class="plabel">Triage requests</span
-                  ><span class="soon">Not yet enforced</span
                   ><span class="pdesc"
                     >Accept, decline, promote or snooze an item in the triage queue.</span
                   >
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mcell off pending" role="img" aria-label="Not yet enforced">
+                <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Comments<span class="dom-count">2/2 live</span>
+                  >Comments<span class="dom-count">2</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Add comments</span
@@ -2942,7 +3173,7 @@
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Attachments<span class="dom-count">2/2 live</span>
+                  >Attachments<span class="dom-count">2</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Add attachments</span
@@ -2972,7 +3203,7 @@
                 </div>
                 <div class="mgroup">
                   <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
-                  >Watchers<span class="dom-count">1/1 live</span>
+                  >Watchers<span class="dom-count">1</span>
                 </div>
                 <div class="mperm">
                   <span class="plabel">Manage watchers</span
@@ -2989,45 +3220,312 @@
                 <div class="mcell off" role="img" aria-label="Not held">
                   <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Members & access<span class="dpend">2 not yet enforced</span>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Members
+                  & access<span class="dom-count">2</span>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Boards<span class="dpend">1 not yet enforced</span>
+                <div class="mperm">
+                  <span class="plabel">Manage members</span
+                  ><span class="pdesc">Add and remove project members, and set their roles.</span>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Sprints & backlog<span class="dpend">1 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Workflow & automation<span class="dpend">2 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Fields
-                  & components<span class="dpend">3 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Estimation<span class="dpend">1 not yet enforced</span>
+                <div class="mperm">
+                  <span class="plabel">Change project access</span
+                  ><span class="pdesc"
+                    >Set whether the project is public, open, limited or private.</span
+                  >
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Reports & filters<span class="dpend">2 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Repositories<span class="dpend">3 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
-                  >Import<span class="dpend">1 not yet enforced</span>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
-                <div class="mgroup collapsed">
-                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>AI
-                  planning<span class="dpend">3 not yet enforced</span>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Boards<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Configure boards</span
+                  ><span class="pdesc">Change board columns, swimlanes and WIP limits.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Sprints
+                  & backlog<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage sprints</span
+                  ><span class="pdesc">Start and complete Sprints, and rank the backlog.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Workflow & automation<span class="dom-count">2</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage automation rules</span
+                  ><span class="pdesc"
+                    >Create, edit and enable automation and status-derivation rules.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage the workflow</span
+                  ><span class="pdesc"
+                    >Change the statuses a board column projects, and their transitions.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Fields
+                  & components<span class="dom-count">3</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage components</span
+                  ><span class="pdesc">Create, rename and delete the project’s components.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage custom fields</span
+                  ><span class="pdesc">Create, edit and remove custom field definitions.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage labels</span
+                  ><span class="pdesc"
+                    >Create, rename and delete the project’s labels and tags.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Estimation<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage estimation</span
+                  ><span class="pdesc">Change the project’s estimation scheme.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Reports
+                  & filters<span class="dom-count">2</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">View reports</span
+                  ><span class="pdesc"
+                    >Open the project’s reports — distribution, workload, velocity, roadmap.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage saved filters</span
+                  ><span class="pdesc">Create, edit, share and subscribe to saved filters.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Repositories<span class="dom-count">3</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Connect a repository</span
+                  ><span class="pdesc"
+                    >Connect a GitHub or GitLab installation and start indexing.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage repositories</span
+                  ><span class="pdesc"
+                    >Add, remove, move and take over the project’s repositories.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage code access</span
+                  ><span class="pdesc"
+                    >Decide which team members may clone the project’s code.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                  >Import<span class="dom-count">1</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Import work items</span
+                  ><span class="pdesc">Bulk-create work items from Jira, Linear or Plane.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mgroup">
+                  <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>AI
+                  planning<span class="dom-count">3</span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Configure AI planning</span
+                  ><span class="pdesc"
+                    >Set the planning cadence, planner model and drafted explanations.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Run AI planning</span
+                  ><span class="pdesc"
+                    >Submit a planning job that spends AI credits and proposes changes.</span
+                  >
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">View AI plans</span
+                  ><span class="pdesc">Open a generated plan and read its proposals.</span>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
                 </div>
               </div>
               <div class="card level-card">
