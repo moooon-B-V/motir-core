@@ -386,10 +386,6 @@
       "label": "管理保存的筛选器",
       "description": "创建、编辑、共享和订阅项目保存的筛选器。"
     },
-    "repository_connect": {
-      "label": "连接代码仓库",
-      "description": "将GitHub或GitLab安装连接到项目并开始建立索引。"
-    },
     "repository_manage": {
       "label": "管理代码仓库",
       "description": "添加、移除、迁移和接管项目的代码仓库。"

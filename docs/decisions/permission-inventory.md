@@ -38,16 +38,25 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**32 permissions across 16 domains.** **11** are
-enforced by a gate today; **21** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **11** are
+enforced by a gate today; **20** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
 `saved_filter:manage`, `import:run`, `work_item:triage`, `work_item:delete`) — those are governed by
 nothing at all today, so wiring them takes capability away from real actors and is argued on its own.
-(`repository:connect` is the twenty-first, and MOTIR-2256 RETIRES it: its six operations bind a
-provider installation to a WORKSPACE and name no project, so no project role can govern them.)
 A `planned` key is never offered in the grid or the role editor.
+
+> **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
+> MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
+> `/api/github/setup`, `/api/github/organizations`, and the two GitLab OAuth legs — were read on the
+> branch and NONE resolves a project: they bind a provider installation to a WORKSPACE, and
+> `app/api/gitlab/oauth/start/route.ts` says so in its own header. A project permission cannot gate an
+> operation that never names a project, and the catalog's opening rule forbids a key with no operation
+> behind it. Their rows below now read `workspace-scoped` / R3. The concern is NOT left ungoverned:
+> attaching a repository row TO a project is `/api/projects/[key]/repositories`, which is
+> `repository:manage`. Both mirrors split it the same way — Jira and Plane put the provider connection
+> at the org/workspace level and repository linking at the project level.
 
 | Domain               | Permissions                                                                       |
 | -------------------- | --------------------------------------------------------------------------------- |
@@ -62,7 +71,7 @@ A `planned` key is never offered in the grid or the role editor.
 | `project` (2)        | `project:administer` · `project:browse`                                           |
 | `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`      |
 | `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                         |
-| `repository` (3)     | `repository:connect` ᵖ · `repository:manage` ᵖ · `repository:manage_access` ᵖ     |
+| `repository` (2)     | `repository:manage` ᵖ · `repository:manage_access` ᵖ                              |
 | `sprint` (1)         | `sprint:manage` ᵖ                                                                 |
 | `watcher` (1)        | `watcher:manage`                                                                  |
 | `work_item` (4)      | `project:browse` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
@@ -73,6 +82,11 @@ A `planned` key is never offered in the grid or the role editor.
 ## Reasons
 
 Every row cites one of these. A row with no reason is the failure this card exists to prevent.
+
+**The list is numbered, not renumbered.** A reason nothing cites is deleted, leaving its number
+retired — R7 (_"connects a provider installation and triggers indexing"_) went that way in MOTIR-2294,
+when its six rows moved to R3. Renumbering would silently re-point every row below it, which is a far
+worse failure than a gap.
 
 **R1.** The public REST API mirrors in-app operations. Gated by token scopes AND, once the split lands, by the same permission as its in-app twin — it inherits, it does not get its own key.
 
@@ -85,8 +99,6 @@ Every row cites one of these. A row with no reason is the failure this card exis
 **R5.** Submits a planning job that spends the workspace’s AI credits and proposes plan changes. Today session-only.
 
 **R6.** Inbound provider webhook, signature-verified. No actor.
-
-**R7.** Connects a provider installation and triggers indexing.
 
 **R8.** TEST-SUPPORT route (Next escapes the leading underscore as %5F). It creates work items with no project gate. Must be unreachable in production — verify the build excludes it, else it is an ungated write path. Logged as a finding, not a permission.
 
@@ -411,22 +423,22 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `repository`
 
-| Operation                                           | Verbs        | Gate today                                              | Permission                 | Decision | Why |
-| --------------------------------------------------- | ------------ | ------------------------------------------------------- | -------------------------- | -------- | --- |
-| `/api/github/oauth/callback`                        | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/github/oauth/start`                           | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/github/organizations`                         | GET          | workspace only                                          | `repository:connect`       | new      | R7  |
-| `/api/github/setup`                                 | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/gitlab/oauth/callback`                        | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/gitlab/oauth/start`                           | GET          | workspace only                                          | `repository:connect`       | new      | R7  |
-| `/api/projects/[key]/repositories`                  | GET/POST     | workspace only                                          | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]`          | DELETE/PATCH | `assertCanEdit`                                         | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]/move`     | POST         | workspace only                                          | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]/state`    | POST         | `projectRepoSetService.attachRealizedRepo` (transitive) | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]/takeover` | POST         | workspace only                                          | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/access`           | GET/POST     | workspace only                                          | `repository:manage_access` | new      | R22 |
-| `/api/projects/[key]/repositories/access/team`      | GET/POST     | workspace only                                          | `repository:manage_access` | new      | R22 |
-| `/api/projects/[key]/repositories/establish`        | POST         | workspace only                                          | `repository:manage`        | new      | R21 |
+| Operation                                           | Verbs        | Gate today                                                                                               | Permission                 | Decision         | Why |
+| --------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------- | --- |
+| `/api/github/oauth/callback`                        | GET          | session only — binds the installation to a WORKSPACE; redirects to `/settings/workspace/github`          | —                          | workspace-scoped | R3  |
+| `/api/github/oauth/start`                           | GET          | session only — no project; redirects to `/settings/workspace/github`                                     | —                          | workspace-scoped | R3  |
+| `/api/github/organizations`                         | GET          | workspace only — `getWorkspaceContext()`; no project resolved                                            | —                          | workspace-scoped | R3  |
+| `/api/github/setup`                                 | GET          | session only — binds the installation to a WORKSPACE                                                     | —                          | workspace-scoped | R3  |
+| `/api/gitlab/oauth/callback`                        | GET          | session only — no project resolved                                                                       | —                          | workspace-scoped | R3  |
+| `/api/gitlab/oauth/start`                           | GET          | workspace only — the file header: "WORKSPACE-scoped, so we resolve the acting member’s active workspace" | —                          | workspace-scoped | R3  |
+| `/api/projects/[key]/repositories`                  | GET/POST     | workspace only                                                                                           | `repository:manage`        | new              | R21 |
+| `/api/projects/[key]/repositories/[rowId]`          | DELETE/PATCH | `assertCanEdit`                                                                                          | `repository:manage`        | new              | R21 |
+| `/api/projects/[key]/repositories/[rowId]/move`     | POST         | workspace only                                                                                           | `repository:manage`        | new              | R21 |
+| `/api/projects/[key]/repositories/[rowId]/state`    | POST         | `projectRepoSetService.attachRealizedRepo` (transitive)                                                  | `repository:manage`        | new              | R21 |
+| `/api/projects/[key]/repositories/[rowId]/takeover` | POST         | workspace only                                                                                           | `repository:manage`        | new              | R21 |
+| `/api/projects/[key]/repositories/access`           | GET/POST     | workspace only                                                                                           | `repository:manage_access` | new              | R22 |
+| `/api/projects/[key]/repositories/access/team`      | GET/POST     | workspace only                                                                                           | `repository:manage_access` | new              | R22 |
+| `/api/projects/[key]/repositories/establish`        | POST         | workspace only                                                                                           | `repository:manage`        | new              | R21 |
 
 ### `sprint`
 

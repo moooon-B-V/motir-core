@@ -304,13 +304,21 @@ describe('the PENDING set is bounded and shrinking', () => {
     const pending = ops.filter((o) => !o.gated && PENDING.has(decisionFor(o.url) ?? ''));
     // Adding an ungated route bumps this and fails the test; wiring one lowers
     // it and fails it too — both are changes worth noticing. The arm is deleted
-    // when this reaches 0, which takes BOTH stories (19 administrative, 62 not).
+    // when this reaches 0, which takes BOTH stories.
     //
     // Was 94, and the 94 was WRONG: the extractor above mistook a parameter's
     // inline object type for a method body, so 24 gated operations counted as
-    // ungoverned. 95 → 81 is the measurement being corrected, not 14 gates
-    // being added — this PR adds no gate at all (MOTIR-2292).
-    expect(pending.length).toBe(81);
+    // ungoverned. 95 → 81 was the measurement being corrected, not 14 gates
+    // being added — that PR added no gate at all (MOTIR-2292).
+    //
+    // 81 → 75 is MOTIR-2294 RETIRING `repository:connect`: its six operations
+    // (the GitHub + GitLab OAuth legs, `/api/github/setup`,
+    // `/api/github/organizations`) bind an installation to a WORKSPACE and
+    // resolve no project, so they are `workspace-scoped` / R3 in the inventory
+    // and leave the PENDING set. No gate was added and no route changed — six
+    // rows that were never this story's to wire stopped being counted as if
+    // they were.
+    expect(pending.length).toBe(75);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
