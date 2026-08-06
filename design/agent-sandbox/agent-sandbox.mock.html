@@ -981,25 +981,11 @@
         </header>
 
         <div class="docs">
-          <nav class="docs-nav" aria-label="API reference">
-            <div class="searchbox">
-              <span aria-hidden="true">⌕</span>Find an operation<span class="kbd">/</span>
-            </div>
-
+          <nav class="docs-nav" aria-label="Documentation">
             <div class="navgroup">
               <h3>Documentation</h3>
               <a class="navrow" href="/docs/api">API reference</a>
-              <a class="navrow" href="/docs/getting-started">Getting started</a>
-              <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
               <a class="navrow is-active" href="/docs/sandbox" aria-current="page">Agent sandbox</a>
-            </div>
-
-            <div class="navgroup">
-              <h3>Work items</h3>
-              <a class="navrow" href="#"><span class="verb verb--get">GET</span>List</a>
-              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Create</a>
-              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Read</a>
-              <a class="navrow" href="#"><span class="verb verb--patch">PATCH</span>Update</a>
             </div>
           </nav>
 
@@ -1565,37 +1551,41 @@ docker run -it --name motir-sandbox -v "$PWD:/workspace" ghcr.io/moooon-b-v/moti
 
     <!-- ════════ PANEL 3 — the rail's fourth entry ════════ -->
     <div class="panel-label">
-      Panel 3 · The rail's fourth entry — the page's ONLY entrance
+      Panel 3 · The rail's SECOND entry — the page's ONLY entrance
       <span class="note">
-        The one thing this design changes in someone else's surface: 11.4's rail gains a fourth row.
-        It is a plain label row like the other three, active state and
-        <code>aria-current</code> unchanged, and the group still reads as a list of documents rather
-        than a menu that has outgrown its box — at four rows it needs no treatment it did not need
-        at three, which is the check this panel exists to make. Nothing else in the product routes
-        to this page, so if this row is not drawn, the page is unreachable.
+        The one thing this design changes in someone else's surface: 11.4's rail gains a row for
+        this page. It is a plain label row, active state and <code>aria-current</code> unchanged.
+        Nothing else in the product routes to this page, so if this row is not drawn, the page is
+        unreachable.
+        <strong
+          >⚠️ Re-pointed by MOTIR-2311 (ADR Amendment 10): the rail's top tier now lists the
+          SURFACES Motir documents, so this is its SECOND row rather than its fourth — the API
+          reference's own pages moved into a second tier that renders only inside
+          <code>/docs/api</code>. The row this design contributes is unchanged in kind; only its
+          neighbours are.</strong
+        >
       </span>
     </div>
     <div class="panel">
       <div style="display: flex; gap: 32px; align-items: flex-start">
         <nav
           class="docs-nav"
-          aria-label="API reference"
+          aria-label="Documentation"
           style="border-right: none; border-radius: var(--radius-card)"
         >
           <div class="navgroup">
             <h3>Documentation</h3>
             <a class="navrow" href="/docs/api">API reference</a>
-            <a class="navrow" href="/docs/getting-started">Getting started</a>
-            <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
             <a class="navrow is-active" href="/docs/sandbox" aria-current="page">Agent sandbox</a>
           </div>
         </nav>
         <div style="padding-top: 8px; max-width: 42ch">
           <p style="font-size: 13.5px; color: var(--el-text-secondary); line-height: 1.6">
-            <strong>GIVES</strong> — this design adds the fourth row and nothing else.
+            <strong>GIVES</strong> — this design adds this page's row and nothing else.
             <strong>TAKES</strong> — the rail component, its group heading, its row treatment and
             its active state are Story 11.4's (MOTIR-2188, <code>design/api-docs/</code>), mounted
-            here unchanged.
+            here unchanged. Its GROUPING is that asset's too, restructured by MOTIR-2311 and
+            mirrored here so the two assets cannot describe the same component differently.
           </p>
         </div>
       </div>
