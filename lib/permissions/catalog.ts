@@ -16,12 +16,22 @@
 // so the catalog now covers what the product actually does.
 //
 // ⚠️ EVERY KEY CARRIES AN `enforcement`. `enforced` means a shipped gate
-// consults it today. `planned` means the inventory justified it and MOTIR-2256
-// has not wired the call sites yet. This is what lets the vocabulary be named
-// in one change and enforced in another WITHOUT weakening the orphan guard:
-// that guard keeps full strength over `enforced` keys, and a `planned` key is
-// excluded from `getRoleCatalog`, so it can never render as a switch. The
-// `planned` list emptying is the definition of done for MOTIR-2256.
+// consults it today. `planned` means the inventory justified it and no card has
+// wired the call sites yet. This is what lets the vocabulary be named in one
+// change and enforced in another WITHOUT weakening the orphan guard: that guard
+// keeps full strength over `enforced` keys, and a `planned` key is excluded from
+// `getRoleCatalog`, so it can never render as a switch.
+//
+// The `planned` list empties across TWO stories, and the split is deliberate:
+//   * MOTIR-2256 — the twelve ADMINISTRATIVE keys that fall out of
+//     `project:administer`. Behaviour-neutral for the built-in roles wherever
+//     the umbrella already stood, because Admin holds all twelve.
+//   * MOTIR-2291 — the eight MEMBER-FACING keys, whose operations are governed
+//     by NOTHING today; wiring them removes capability from real actors, which
+//     is a different kind of change and is argued on its own.
+// (`repository:connect` is the twenty-first and is RETIRED by MOTIR-2256 rather
+// than wired — its operations bind an installation to a WORKSPACE and name no
+// project, so no project role could ever govern them.)
 //
 // The `resource:action` form is the mirror convention (Plane names permissions
 // `workitem:edit`; Jira's permission names read the same way).
@@ -60,7 +70,8 @@ export const PERMISSION_DOMAINS = [
  *
  *   * `enforced` — a shipped `assertCan*` / predicate consults it TODAY.
  *   * `planned`  — justified by a row in docs/decisions/permission-inventory.md,
- *                  awaiting MOTIR-2256. NEVER offered to a user.
+ *                  awaiting MOTIR-2256 (administrative) or MOTIR-2291
+ *                  (member-facing). NEVER offered to a user.
  */
 export type PermissionEnforcement = 'enforced' | 'planned';
 
@@ -143,7 +154,8 @@ export function permissionSlug(key: PermissionKey): string {
  *
  * `enforced` — a shipped gate consults this key today.
  * `planned`  — the inventory (docs/decisions/permission-inventory.md) justified it and
- *              MOTIR-2256 has not wired it yet. A planned key NEVER reaches a user.
+ *              MOTIR-2256 / MOTIR-2291 have not wired it yet. A planned key
+ *              NEVER reaches a user.
  */
 const PERMISSION_META: Record<
   PermissionKey,
@@ -221,9 +233,11 @@ export function isEnforced(key: PermissionKey): boolean {
 export const ENFORCED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(isEnforced);
 
 /**
- * The keys the inventory justified but MOTIR-2256 has not wired yet. Named so a
- * test can pin it against the inventory document, and so "the split is done"
- * has a machine-readable definition: this array is empty.
+ * The keys the inventory justified but nothing has wired yet. Named so a test
+ * can pin it against the inventory document, and so "the model is fully
+ * enforced" has a machine-readable definition: this array is empty. That takes
+ * BOTH MOTIR-2256 (the twelve administrative keys) and MOTIR-2291 (the eight
+ * member-facing ones) — neither story empties it alone.
  */
 export const PLANNED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(
   (key) => !isEnforced(key),
