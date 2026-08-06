@@ -27,6 +27,13 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // new tab natively, and keyboard Enter opens the peek. The real `/items/<id>`
 // href stays on the anchor (shareable + accessible).
 //
+// The row is a small affordance (a menu/list row), so its own shape — radius and
+// padding — routes through `--radius-control` / `--spacing-control-x|y` (MOTIR-2301).
+// A raw `rounded-md px-2 py-2` is inert: only the element-semantic shape tokens are
+// overridden by a `[data-style]` block, so the row reshapes with every named style
+// instead of holding a fixed 6px/8px while the panel around it changes. The `gap-3`
+// between the row's children is layout spacing, not shape, and stays raw.
+//
 // Status tone reuses the lifecycle mapping (category → Pill variant); children
 // share the item's project, so the bundled `workflow` classifies their status
 // keys. Assignee resolves against the workspace members the page already loaded
@@ -71,7 +78,7 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
           <li key={child.id}>
             <RelationshipPeekLink
               identifier={child.identifier}
-              className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-md px-2 py-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <IssueTypeIcon type={child.kind} className="h-4 w-4 shrink-0" />
               <span className="text-(--el-text-muted) shrink-0 font-mono text-xs">
