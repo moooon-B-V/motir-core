@@ -57,39 +57,23 @@ export const EXEMPT_TOOLS = {
 export type ExemptToolName = keyof typeof EXEMPT_TOOLS;
 
 /**
- * Tools not yet re-based onto the shared schemas — the STAGING half, and
- * deliberately temporary.
+ * ⚠️ SEALED by MOTIR-2231 (11.6.5). This map is EMPTY and stays empty.
  *
- * ⚠️ This map exists because Story 11.6 lands the seam (11.6.2) BEFORE the three
- * family cards that move ~30 tools through it (11.6.3 / 11.6.4 / 11.6.5), and a
- * commit that leaves the tree red is not a commit. Every entry names the card
- * that removes it, so it is an enumerated, carded backlog rather than an escape
- * hatch — the distinction the exemption registry exists to draw, applied to
- * itself.
+ * It existed only because Story 11.6 landed the seam (11.6.2) before the three
+ * family cards that moved ~30 tools through it, and a commit that leaves the
+ * tree red is not a commit. Every entry named the card that would remove it; all
+ * three landed, so every registered tool is now DERIVED or EXEMPT and there is
+ * no third column.
  *
- * **`MOTIR-2231` (11.6.5) empties this map and deletes the `unmigrated`
- * constructor with it.** A tool must never be moved from here to
- * {@link EXEMPT_TOOLS} to make a card finish: those mean different things, and
- * conflating them would reintroduce exactly the invisible opt-out this whole
- * mechanism removes.
+ * The `unmigrated` constructor was deleted with the last entry. If a tool ever
+ * needs staging again, restore both TOGETHER and card each entry — what must
+ * never happen is a tool moving into {@link EXEMPT_TOOLS} to make a card finish,
+ * because "no shared resource exists" and "nobody has done it yet" are different
+ * facts and only one of them is permanent.
  */
-export const MIGRATING_TOOLS = {
-  // ── 11.6.3 (MOTIR-2229) — the work-item family: LANDED, none left ─────────
-  // ── 11.6.4 (MOTIR-2230) — project / sprint / backlog / identity: LANDED ───
-  // ── 11.6.5 (MOTIR-2231) — the work-loop family ────────────────────────────
-  dispatch_prompt: 'MOTIR-2231',
-  mark_integrated: 'MOTIR-2231',
-  complete_session: 'MOTIR-2231',
-  expand_item: 'MOTIR-2231',
-  get_plan_status: 'MOTIR-2231',
-  get_plan: 'MOTIR-2231',
-  open_plan_session: 'MOTIR-2231',
-  append_plan_turn: 'MOTIR-2231',
-  submit_plan_session: 'MOTIR-2231',
-  get_work_item_activity: 'MOTIR-2231',
-} as const satisfies Partial<Record<McpToolName, string>>;
+export const MIGRATING_TOOLS = {} as const satisfies Partial<Record<McpToolName, string>>;
 
-/** A tool still awaiting its family card. */
+/** A tool still awaiting its family card. Empty since MOTIR-2231. */
 export type MigratingToolName = keyof typeof MIGRATING_TOOLS;
 
 /** Whether a tool is exempt (runtime form, for the registry walk 11.6.5 seals). */

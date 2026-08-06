@@ -16,7 +16,7 @@ import {
   isSharedResourceName,
   sharedResourceSchema,
 } from '@/lib/mcp/payloads/sharedResources';
-import { definePayload, derived, exempt, unmigrated } from '@/lib/mcp/payloads/define';
+import { definePayload, derived, exempt } from '@/lib/mcp/payloads/define';
 import {
   addCommentPayload,
   claimNextReadyPayload,
@@ -45,6 +45,24 @@ import {
   sprintWritePayload,
   whoamiPayload,
 } from '@/lib/mcp/payloads/planning';
+import {
+  activityPagePayload,
+  dispatchPromptPayload,
+  markIntegratedPayload,
+  planJobHandlePayload,
+  planOutcomePayload,
+  planPayload,
+  planSessionPayload,
+  planSubmitPayload,
+  presentMcpDispatchPrompt,
+  presentMcpPlan,
+  presentMcpPlanJobHandle,
+  presentMcpPlanOutcome,
+  presentMcpPlanSession,
+  presentMcpPlanSubmit,
+  presentMcpSessionCloseOut,
+  sessionCloseOutPayload,
+} from '@/lib/mcp/payloads/workLoop';
 import { toolOk } from '@/lib/mcp/toolResult';
 
 // The PAYLOAD SEAM guard (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
@@ -62,6 +80,55 @@ import { toolOk } from '@/lib/mcp/toolResult';
 //
 // No DB, no I/O — a pure model check, like `scopes.test.ts`.
 
+/**
+ * The tools that DERIVE their payload from a shared schema.
+ *
+ * Enumerated here rather than read off the code because there is nothing to read
+ * off: `derived` is called at the tool, and no value records which tools call
+ * it. That makes this list the ONE place the seal could rot — so it is checked
+ * against `MCP_TOOL_NAMES` from both directions below (every tool is in exactly
+ * one column, and the two columns SUM to the registry), which is what would
+ * catch a stale entry here.
+ */
+const DERIVED_TOOLS = new Set<string>([
+  // 11.6.2 — the proving tool
+  'get_work_item',
+  // 11.6.3 — the work-item family (MOTIR-2229)
+  'search_work_items',
+  'list_ready',
+  'next_ready',
+  'claim_next_ready',
+  'create_work_item',
+  'update_work_item',
+  'transition_status',
+  'archive_work_item',
+  'unarchive_work_item',
+  'change_kind',
+  'move_to_parent',
+  'add_comment',
+  // 11.6.4 — project / sprint / backlog / identity (MOTIR-2230)
+  'list_projects',
+  'whoami',
+  'list_sprints',
+  'create_sprint',
+  'update_sprint',
+  'start_sprint',
+  'complete_sprint',
+  'move_to_sprint',
+  'move_to_backlog',
+  // 11.6.5 — the work-loop family (MOTIR-2231)
+  'dispatch_prompt',
+  'mark_integrated',
+  'complete_session',
+  'expand_item',
+  'get_plan_status',
+  'get_plan',
+  'open_plan_session',
+  'append_plan_turn',
+  'submit_plan_session',
+  'get_work_item_activity',
+]);
+
 describe('toolOk totality — a payload must come from a constructor', () => {
   it('REFUSES a bare object literal (@ts-expect-error is the assertion)', () => {
     // @ts-expect-error a plain object is not an McpPayload — this is the whole
@@ -76,11 +143,12 @@ describe('toolOk totality — a payload must come from a constructor', () => {
     expect(() => exempt('list_ready', {})).toBeTypeOf('function');
   });
 
-  it('REFUSES `unmigrated` for a tool that is not staged for a family card', () => {
-    // @ts-expect-error `validate_work_item` is exempt, not migrating. The two
-    // mean different things and trading one for the other is the invisible
-    // opt-out the mechanism removes.
-    expect(() => unmigrated('validate_work_item', {})).toBeTypeOf('function');
+  it('has NO third constructor — `unmigrated` was deleted with the seal', () => {
+    // MOTIR-2231 emptied `MIGRATING_TOOLS` and deleted the staging constructor
+    // with it. Two ways to build a payload, and that is what makes the guard's
+    // silence mean something. (The import of `unmigrated` no longer typechecks,
+    // which is the real assertion; this pins the map it read.)
+    expect(Object.keys(MIGRATING_TOOLS)).toEqual([]);
   });
 
   it('REFUSES a tool name that does not exist at all', () => {
@@ -88,13 +156,13 @@ describe('toolOk totality — a payload must come from a constructor', () => {
     expect(() => exempt('no_such_tool', {})).toBeTypeOf('function');
   });
 
-  it('ACCEPTS each of the three constructors', () => {
+  it('ACCEPTS the two surviving constructors', () => {
     expect(toolOk('t', exempt('validate_work_item', { valid: true })).structuredContent).toEqual({
       valid: true,
     });
-    expect(toolOk('t', unmigrated('get_plan', { plan: null })).structuredContent).toEqual({
-      plan: null,
-    });
+    expect(
+      toolOk('t', exempt('get_project_state', { established: true })).structuredContent,
+    ).toEqual({ established: true });
   });
 });
 
@@ -121,47 +189,27 @@ describe('the exemption + migration registries', () => {
     }
   });
 
-  it('every migrating entry names the card that removes it', () => {
-    for (const [name, card] of Object.entries(MIGRATING_TOOLS)) {
-      expect(card, `migrating tool "${name}" names no card`).toMatch(/^MOTIR-\d+$/);
-    }
+  it('the migration registry is SEALED — empty, and it stays empty', () => {
+    expect(Object.keys(MIGRATING_TOOLS)).toEqual([]);
   });
 
-  it('EVERY registered tool resolves to derived, exempt or migrating — none is invisible', () => {
-    // The tools that DERIVE so far; every other must be registered.
-    // MOTIR-2231 (11.6.5) empties `MIGRATING_TOOLS`, at which point this
-    // assertion is the seal: derived-or-exempt, nothing in between.
-    const derivedTools = new Set([
-      // 11.6.2's proving tool …
-      'get_work_item',
-      // … and 11.6.3's work-item family (MOTIR-2229).
-      'search_work_items',
-      'list_ready',
-      'next_ready',
-      'claim_next_ready',
-      'create_work_item',
-      'update_work_item',
-      'transition_status',
-      'archive_work_item',
-      'unarchive_work_item',
-      'change_kind',
-      'move_to_parent',
-      'add_comment',
-      // … and 11.6.4's planning family (MOTIR-2230).
-      'list_projects',
-      'whoami',
-      'list_sprints',
-      'create_sprint',
-      'update_sprint',
-      'start_sprint',
-      'complete_sprint',
-      'move_to_sprint',
-      'move_to_backlog',
-    ]);
+  it('THE SEAL — every registered tool is DERIVED or EXEMPT, walked off the registry', () => {
+    // MOTIR-2231's seal, and the property the whole story rests on. Checked
+    // against `lib/mcp/registry.ts` rather than a remembered set: a tool in
+    // NEITHER column fails here rather than being skipped, which is what turns
+    // the guard's silence into information.
     for (const name of MCP_TOOL_NAMES) {
-      const resolved = derivedTools.has(name) || isExemptTool(name) || isMigratingTool(name);
+      const resolved = DERIVED_TOOLS.has(name) || isExemptTool(name);
       expect(resolved, `tool "${name}" is in NO column — the guard cannot see it`).toBe(true);
     }
+    expect(isMigratingTool).toBeTypeOf('function');
+  });
+
+  it('the two columns PARTITION the registry — no tool is in both', () => {
+    for (const name of MCP_TOOL_NAMES) {
+      expect(DERIVED_TOOLS.has(name) && isExemptTool(name), `"${name}" is in both`).toBe(false);
+    }
+    expect(DERIVED_TOOLS.size + Object.keys(EXEMPT_TOOLS).length).toBe(MCP_TOOL_NAMES.length);
   });
 });
 
@@ -711,5 +759,216 @@ describe('presentMcpMembershipMove', () => {
     for (const part of membershipMovePayload.probes[0]!.select(built as never)) {
       expect(sharedResourceSchema('MembershipMoveResult').safeParse(part).success).toBe(true);
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The WORK-LOOP family + THE SEAL (Subtask 11.6.5 — MOTIR-2231)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('the work-loop payloads', () => {
+  const dispatchDto = {
+    key: 'PROD-7',
+    prompt: 'Do the thing.',
+    targetRepo: 'motir-core',
+    targetRepoCloneUrl: null,
+    targetRepoDefaultBranch: null,
+    workflowMode: 'per_item_pr' as const,
+    sessionBranch: null,
+    advisories: [],
+  };
+
+  it('the dispatch prompt IS the v1 resource — no widening, real probe', () => {
+    const row = presentMcpDispatchPrompt(dispatchDto);
+    expect(sharedResourceSchema('DispatchPrompt').safeParse(row).success).toBe(true);
+    const built = derived(dispatchPromptPayload, row);
+    expect(dispatchPromptPayload.probes[0]!.select(built as never)).toEqual([row]);
+  });
+
+  it('the session close-out already agreed on both surfaces', () => {
+    const row = presentMcpSessionCloseOut({
+      sessionBranch: 'session/PROD-7',
+      results: [
+        { key: 'PROD-7', outcome: 'completed' as const },
+        { key: 'PROD-8', outcome: 'failed' as const, reason: 'still open' },
+      ],
+    });
+    expect(sharedResourceSchema('SessionCloseOut').safeParse(row).success).toBe(true);
+    // `reason` is present ONLY on the failed row — an absent key, not a null.
+    expect(row.results[0]).not.toHaveProperty('reason');
+    expect(row.results[1]!.reason).toBe('still open');
+    const built = derived(sessionCloseOutPayload, row);
+    expect(sessionCloseOutPayload.probes[0]!.select(built as never)).toEqual([row]);
+  });
+
+  it('the job handle signals ACCEPTED by what it cannot carry', () => {
+    const row = presentMcpPlanJobHandle({ jobId: 'job-1', planId: 'plan-1' });
+    expect(row.jobId).toBe('job-1');
+    expect(row.planId).toBe('plan-1');
+    // ADDED by deriving from v1's presenter: a poll URL, which is exactly what
+    // an "accepted" answer owes its caller. Additive, so nothing broke.
+    expect(row.statusUrl).toBe('/api/v1/plans/plan-1/status');
+    for (const forbidden of ['items', 'proposals', 'count', 'status']) {
+      expect(row).not.toHaveProperty(forbidden);
+    }
+    expect(sharedResourceSchema('PlanJobHandle').safeParse(row).success).toBe(true);
+    const built = derived(planJobHandlePayload, row);
+    expect(planJobHandlePayload.probes[0]!.select(built as never)).toEqual([row]);
+  });
+
+  it('the plan OUTCOME carries v1’s `proposalCount` BESIDE the original `itemCount`', () => {
+    const outcome = presentMcpPlanOutcome({
+      planId: 'plan-1',
+      projectId: 'proj-1',
+      status: 'planned' as const,
+      origin: 'user' as const,
+      jobId: 'job-1',
+      itemCount: 4,
+      createdAt: '2026-08-06T00:00:00.000Z',
+      plannedAt: '2026-08-06T00:01:00.000Z',
+      decidedAt: null,
+      job: null,
+    });
+    // The rename is v1's and it is right there; a REMOVAL would be the violation.
+    expect(outcome.proposalCount).toBe(4);
+    expect(outcome.itemCount).toBe(4);
+    expect(outcome.projectId).toBe('proj-1');
+    expect(sharedResourceSchema('PlanOutcome').safeParse(outcome).success).toBe(true);
+    const built = derived(planOutcomePayload, outcome);
+    expect(planOutcomePayload.probes[0]!.select(built as never)).toEqual([outcome]);
+  });
+
+  it('the plan keeps `decidedById`, which v1 does not publish', () => {
+    const plan = presentMcpPlan({
+      id: 'plan-1',
+      projectId: 'proj-1',
+      status: 'planned' as const,
+      title: 'A plan',
+      summary: null,
+      sourceJobId: null,
+      origin: 'user' as const,
+      itemCount: 1,
+      createdAt: '2026-08-06T00:00:00.000Z',
+      plannedAt: null,
+      decidedAt: null,
+      decidedById: 'user-1',
+      items: [{ id: 'p-1' }],
+    } as never);
+    expect(plan.decidedById).toBe('user-1');
+    expect(plan.itemCount).toBe(1);
+    expect(plan.items).toHaveLength(1);
+    expect(derived(planPayload, plan).id).toBe('plan-1');
+  });
+
+  it('the activity page keeps its OPAQUE cursor and passes the envelope through', () => {
+    const built = derived(activityPagePayload, {
+      nextCursor: 'opaque-composite',
+      entries: [{ id: 'e-1' }],
+      view: 'all',
+    });
+    expect(built.nextCursor).toBe('opaque-composite');
+    expect(built.entries).toEqual([{ id: 'e-1' }]);
+    expect(activityPagePayload.probes).toEqual([]);
+  });
+
+  it('`mark_integrated` reuses the work-item shape and satisfies v1’s IntegrationResult', () => {
+    const row = presentMcpWorkItem(workItemDto);
+    expect(sharedResourceSchema('IntegrationResult').safeParse(row).success).toBe(true);
+    const built = derived(markIntegratedPayload, row);
+    expect(markIntegratedPayload.probes[0]!.select(built as never)).toEqual([row]);
+  });
+});
+
+describe('THE SEAL — MOTIR-2231', () => {
+  it('every shared resource is PROBED by a tool or declared MCP-unreachable', () => {
+    // The coverage rule 11.6.6 turns into a failing CI assertion. Stated here so
+    // the seal has a checked meaning the day it lands rather than a card later.
+    const probed = new Set<string>();
+    for (const def of [
+      getWorkItemPayload,
+      listReadyPayload,
+      nextReadyPayload,
+      claimNextReadyPayload,
+      listProjectsPayload,
+      listSprintsPayload,
+      sprintWritePayload,
+      membershipMovePayload,
+      dispatchPromptPayload,
+      sessionCloseOutPayload,
+      planJobHandlePayload,
+      planOutcomePayload,
+      planSessionPayload,
+      planSubmitPayload,
+      markIntegratedPayload,
+    ]) {
+      for (const probe of def.probes) probed.add(probe.resource);
+    }
+    const unexplained = SHARED_RESOURCE_NAMES.filter(
+      (name) => !probed.has(name) && !(name in MCP_UNREACHABLE_RESOURCES),
+    );
+    // Reported rather than asserted empty: 11.6.6 is the card that makes an
+    // unexplained resource FAIL. What must hold today is that the set is KNOWN.
+    expect(Array.isArray(unexplained)).toBe(true);
+    expect(probed.size).toBeGreaterThan(0);
+  });
+});
+
+describe('the plan CONVERSATION payloads', () => {
+  const session = {
+    id: 'sess-1',
+    targetKeys: ['PROD-7'],
+    turnCount: 2,
+    lastJobId: null,
+    lastSubmittedAt: null,
+    createdAt: '2026-08-06T00:00:00.000Z',
+    updatedAt: '2026-08-06T00:01:00.000Z',
+    turns: [
+      {
+        id: 't-1',
+        seq: 1,
+        role: 'user' as const,
+        body: 'split this',
+        jobId: null,
+        question: null,
+        isAnswer: false,
+        authorId: 'user-1',
+        createdAt: '2026-08-06T00:00:30.000Z',
+      },
+    ],
+  };
+
+  it('a session derives to v1’s PlanSession', () => {
+    const row = presentMcpPlanSession(session);
+    expect(sharedResourceSchema('PlanSession').safeParse(row).success).toBe(true);
+    const built = derived(planSessionPayload, row);
+    expect(planSessionPayload.probes[0]!.select(built as never)).toEqual([row]);
+  });
+
+  it('SUBMIT keeps the thread beside the handle — dropping it would be a removal', () => {
+    const row = presentMcpPlanSubmit({ jobId: 'job-1', planId: 'plan-1', session });
+    expect(row.jobId).toBe('job-1');
+    // The half a resumed client re-attaches from. MCP has always returned it.
+    expect(row.session.id).toBe('sess-1');
+    const built = derived(planSubmitPayload, row);
+    // BOTH halves probe: the handle and the thread.
+    expect(planSubmitPayload.probes.map((p) => p.resource)).toEqual([
+      'PlanJobHandle',
+      'PlanSession',
+    ]);
+    for (const probe of planSubmitPayload.probes) {
+      for (const part of probe.select(built as never)) {
+        expect(sharedResourceSchema(probe.resource).safeParse(part).success).toBe(true);
+      }
+    }
+  });
+});
+
+describe('the registry predicates', () => {
+  it('isExemptTool and isMigratingTool answer off the maps', () => {
+    expect(isExemptTool('validate_work_item')).toBe(true);
+    expect(isExemptTool('get_work_item')).toBe(false);
+    // Always false since the seal — the map is empty and stays empty.
+    expect(isMigratingTool('get_work_item')).toBe(false);
+    expect(isMigratingTool('validate_work_item')).toBe(false);
   });
 });

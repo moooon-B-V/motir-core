@@ -248,6 +248,8 @@ export default defineConfig({
         'lib/mcp/payloads/workItems.ts',
         // Subtask 11.6.4 (MOTIR-2230) — the project / sprint / identity family.
         'lib/mcp/payloads/planning.ts',
+        // Subtask 11.6.5 (MOTIR-2231) — the work-loop family + the seal.
+        'lib/mcp/payloads/workLoop.ts',
         'lib/mcp/registry.ts',
         'lib/mcp/tools/getWorkItem.ts',
         'lib/mcp/tools/listReady.ts',
@@ -1422,6 +1424,7 @@ export default defineConfig({
         'lib/mcp/payloads/sharedResources.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/workItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/planning.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/workLoop.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

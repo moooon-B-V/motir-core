@@ -121,10 +121,10 @@ import type { McpPayload } from './payloads/brand';
  * Build a dual-content (text + structuredContent) successful tool result.
  *
  * ⚠️ `structuredContent` is an {@link McpPayload} (MOTIR-2228 · ADR Amendment 7
- * Q4), not a bare object: the ONLY ways to make one are `derived` (from a
- * declared shared schema), `exempt` (a tool with no v1 resource, reason
- * recorded) and `unmigrated` (staged for a family card, deleted by MOTIR-2231).
- * A tool in none of those three cannot call this function — which is what makes
+ * Q4), not a bare object: the ONLY two ways to make one are `derived` (from a
+ * declared shared schema) and `exempt` (a tool with no v1 resource to derive
+ * from, reason recorded). SEALED by MOTIR-2231 — there is no third column.
+ * A tool in neither cannot call this function — which is what makes
  * "every tool's payload derives from a schema" a compile error rather than a
  * review habit, the same way `TOOL_SCOPES` makes an ungated tool one.
  *

@@ -1,6 +1,6 @@
 import type { z } from 'zod/v4';
 import { brandPayload, type McpPayload } from './brand';
-import type { ExemptToolName, MigratingToolName } from './exemptions';
+import type { ExemptToolName } from './exemptions';
 import type { SharedResourceName } from './sharedResources';
 
 // The payload SEAM (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
@@ -12,8 +12,9 @@ import type { SharedResourceName } from './sharedResources';
 //                                 contains and where.
 //   exempt(toolName, value)     — the tool has no shared resource to derive from
 //                                 (`EXEMPT_TOOLS`, with a written reason).
-//   unmigrated(toolName, value) — staged for a family card (`MIGRATING_TOOLS`).
-//                                 DELETED by MOTIR-2231 with the map it reads.
+//
+// (A third constructor, `unmigrated`, staged tools between 11.6.2 and 11.6.5.
+// MOTIR-2231 deleted it with the last entry of its map.)
 //
 // A tool in none of those three cannot call `toolOk` — the totality property,
 // enforced by the type system rather than by review. ADR Amendment 7 Q4.
@@ -101,18 +102,7 @@ export function exempt(_toolName: ExemptToolName, value: Record<string, unknown>
   return brandPayload(value);
 }
 
-/**
- * Build a payload for a tool still staged for its family card.
- *
- * ⚠️ TEMPORARY, and typed to {@link MigratingToolName} so every use names a tool
- * whose card is recorded in `MIGRATING_TOOLS`. **MOTIR-2231 (11.6.5) empties
- * that map and DELETES this function.** Moving a tool into `EXEMPT_TOOLS`
- * instead of migrating it would be the invisible opt-out this whole mechanism
- * removes — the two mean different things and must not be traded for each other.
- */
-export function unmigrated(
-  _toolName: MigratingToolName,
-  value: Record<string, unknown>,
-): McpPayload {
-  return brandPayload(value);
-}
+// ⚠️ The `unmigrated(toolName, value)` constructor was DELETED by MOTIR-2231
+// (11.6.5) together with the `MIGRATING_TOOLS` map it read. Every registered
+// tool is now DERIVED or EXEMPT, and there is deliberately no third way to build
+// an `McpPayload` — which is what makes the guard's silence mean something.
