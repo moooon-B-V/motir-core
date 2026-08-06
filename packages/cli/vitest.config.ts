@@ -47,6 +47,7 @@ export default defineConfig({
         'src/render.ts': { branches: 90, functions: 90, lines: 90 },
         'src/serverResolve.ts': { branches: 90, functions: 90, lines: 90 },
         'src/session.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/transport.ts': { branches: 90, functions: 90, lines: 90 },
         'src/sessionExcludes.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/auth.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/auto.ts': { branches: 90, functions: 90, lines: 90 },

@@ -106,23 +106,41 @@ describe('Guard B — the SERVED spec matches the emitter', () => {
   });
 });
 
-describe('the generated client is not yet wired into the CLI', () => {
-  it('no file under `packages/cli/src` outside `src/api` imports it', async () => {
-    // This card ships the pipeline and NO client behaviour: the hand-written
-    // interfaces are still the live types until 11.5.3 replaces them. Asserting
-    // it here is what makes "the CLI's behaviour is unchanged" a fact rather
-    // than an intention.
+describe('Q4’s import rule — a wire type never reaches a renderer', () => {
+  // `docs/decisions/cli-v1-client.md` Q4: only `src/transport.ts` and
+  // `src/adapters/` may import from `src/api/`. This is what makes the story's
+  // byte-identical promise AUDITABLE rather than asserted — if no generated type
+  // can reach `render.ts`, a server shape change can only arrive through an
+  // adapter, where it is a visible edit.
+  //
+  // (11.5.2 asserted the stronger "nothing imports it at all", which was true
+  // for exactly one card. 11.5.3 wires the transport, so the rule becomes the
+  // one the ADR actually pinned — and 11.5.7 extends it with the import-graph
+  // walk. The lists below are the allowance, and adding to them is the edit a
+  // reviewer should notice.)
+  const ALLOWED = [
+    'packages/cli/src/transport.ts',
+    // `src/adapters/` arrives with its first consumer in 11.5.4.
+  ];
+
+  it('only the transport and the adapters import `src/api`', async () => {
     const { globSync } = await import('node:fs');
-    const files = globSync('packages/cli/src/**/*.ts', { cwd: REPO_ROOT }).filter(
-      (file) => !file.replaceAll('\\', '/').includes('packages/cli/src/api/'),
-    );
+    const files = globSync('packages/cli/src/**/*.ts', { cwd: REPO_ROOT })
+      .map((file) => file.replaceAll('\\', '/'))
+      .filter((file) => !file.includes('packages/cli/src/api/'));
     expect(files.length).toBeGreaterThan(10);
 
     for (const file of files) {
+      if (ALLOWED.includes(file) || file.startsWith('packages/cli/src/adapters/')) continue;
       const source = await readFile(join(REPO_ROOT, file), 'utf8');
-      expect(source, `${file} already imports the generated client`).not.toMatch(
+      expect(source, `${file} may not import the generated client (ADR Q4)`).not.toMatch(
         /from\s+['"][^'"]*\/api(\/[^'"]*)?['"]/,
       );
     }
+  });
+
+  it('`render.ts` is the file the rule exists to protect, and it is clean', async () => {
+    const source = await readFile(join(REPO_ROOT, 'packages/cli/src/render.ts'), 'utf8');
+    expect(source).not.toMatch(/from\s+['"][^'"]*\/api(\/[^'"]*)?['"]/);
   });
 });
