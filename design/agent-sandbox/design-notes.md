@@ -60,13 +60,14 @@ loose on their laptop versus one that cannot reach it. So the page reads as:
 ```
   lede
   What it confines — and what it does not     ← why you would want this
-  Before you start                            ← preconditions, and the workspace root
+  Before you start                            ← two preconditions, and which folder
   1 · Pick your profile
-  2 · Give it a Motir credential
-  3 · Start the container
-  4 · Or start it from VS Code instead        ← 4.1 · 4.2 · 4.3, REPLACING step 3
-  5 · Confirm it is set up                    ← the finish line, for either path
-  What next                                   ← the hand-off, not a sixth step
+  2 · Start the container
+  3 · Or start it from VS Code instead        ← 3.1 · 3.2 · 3.3, REPLACING step 2
+  4 · Sign in                    (motir login)   ┐
+  5 · Link the folder to your project (motir link)│ inside the container,
+  6 · Check it                   (motir doctor)  ┘ the same either way
+  What next                                   ← the hand-off, not a seventh step
 ```
 
 Two things this ordering buys, both of which the first drafts got wrong:
@@ -89,15 +90,61 @@ The numbered-`h2` rhythm is the shipped one — the sibling getting-started page
 already reads `1 · Mint a token`, `2 · Your first call`, … — so this page is
 consistent with its neighbour rather than inventing a form.
 
-### Before you start — three preconditions, and the folder
+### ⚠️ The container comes FIRST, then the sign-in — not the other way round
 
-A two-column `table.spec` (what you need / how to get it). Each row is something
-that makes the run fail **later and less legibly** if it is missing:
+**The order is: start it → `motir login` → `motir link` → `motir doctor`, and all
+three of those run INSIDE the container.** An earlier drawing had the reader mint
+a Motir token on the host and pass it in, which made an account chore a
+precondition of a page about Docker, and quietly picked the tier meant for CI as
+the default for a laptop.
+
+`motir login` is the default because the container is exactly the machine it was
+designed for: a device grant prints a code and a URL, the human approves it in a
+browser anywhere, and the container polls. Nothing has to exist on the host
+first. Two consequences the drawing must carry:
+
+- **The step-2 command mounts no `~/.config/motir`.** A read-only bind over it
+  leaves `motir login` nowhere to write — the README says it "cannot persist over
+  a `:ro` bind, and says so in one sentence rather than dying on an `EROFS`".
+- **⚠️ There is no `--rm`, and the container is named.** _"the login persists for
+  the container's life (and dies with `--rm`, like the rest of the ephemeral
+  layer)"_ — so a `--rm` run throws the sign-in away on exit, and a setup guide
+  whose central step is a sign-in cannot use one. The drawing says
+  `--name motir-sandbox` and tells the reader to come back with
+  `docker start -ai motir-sandbox`. This is the one place the page departs from
+  the README's own `docker run --rm` examples, and it departs deliberately: those
+  examples are one-shot runs, and this is a setup.
+
+The two remaining preconditions are **Docker** and **the agent's own sign-in on
+the host** — and the page now says explicitly that the Motir CLI is not among
+them, because it ships in the image.
+
+### `motir link` is a STEP, and its happy path is empty
+
+`motir link` binds the mounted folder to a project, and it was missing entirely
+until review caught it. Drawn as step 5 with its cheap case stated first:
+**"if your workspace has exactly one project, that is the whole step."**
+Verified, not assumed — `projectLink.ts:72` is
+`if (projects.length === 1 && only) return { project: only, sole: true }`, and the
+command's own `--project` help reads _"Omit it and the workspace's only project is
+used."_ With several, an interactive shell gets a numbered picker and a
+non-interactive one is told to pass `--project <key>`; both are named in one
+sentence so neither reader is surprised.
+
+**This also moved `.motir.json` out of the preconditions for good.** Linking now
+happens inside the container, after the mount, so the host section only has to
+say _which folder you are mounting_ — which is what the directory tree was always
+actually for.
+
+### Before you start — two preconditions, and the folder
+
+A two-column `table.spec` (what you need / how to get it), down from three rows
+to two. Each is something that makes the run fail **later and less legibly** if it
+is missing:
 
 | Precondition                                         | Why it is on the page                                                                                                                                  |
 | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Docker running**                                   | The images are `linux/amd64` **and** `linux/arm64`, so Apple Silicon is first-class and nothing is emulated. Says "there is no build step — you pull." |
-| **A Motir token + server URL**                       | Names where to mint it, then defers HOW to hand it over to step 2 rather than answering the same question twice.                                       |
 | **The agent's own sign-in, already on this machine** | The non-obvious one. The credential mount is **read-only**, so the container can USE a sign-in and can never PERFORM one.                              |
 
 Then an `h3` — **"And run everything from your workspace root"** — with a
