@@ -3,8 +3,11 @@
 **Area:** `brand` · **Surface:** `brand-mark` (`brand-mark.mock.html` + `brand-mark.png`)
 **Story:** MOTIR-656 (8.3 Marketing site + brand mark) · **Subtask:** MOTIR-1139 (8.3.1)
 **Consumed by:** MOTIR-1150 (8.3.5, apply the mark across the app) — layout + token source of truth.
-**Decided:** MOTIR-1140 (8.3.2) is **answered** — Yue chose **A · Lattice** on 2026-08-05, and the
-nodes were added afterwards in response to the prior-art check in §1.
+**Current mark:** the **wave band**, traced from Yue's reference drawing on 2026-08-05 and adopted
+"for now" — see §1 for how it was fitted and what it still owes. MOTIR-1140 (8.3.2) stays open until
+that provisional status is resolved.
+**Assets:** `design/brand/wave-band.svg` (native 317 × 313) · `design/brand/wave-band-24.svg`
+(24-grid cut).
 
 This asset defines the logomark, the wordmark and its lockups, the light/dark colour rule, the
 favicon / app-icon set, the 1200 × 630 OG template, and every shipped surface the mark enters.
@@ -55,26 +58,54 @@ literals).
 
 ---
 
-## 1. The logomark — DECIDED
+## 1. The logomark — the wave band (current, provisional)
 
-**A · Lattice.** The Hasse diagram of a fork–join, nested inside itself at exactly half scale, drawn
-with its four vertices.
+Yue supplied a reference drawing on 2026-08-05 and asked for it to be used as the logo for now, so
+the mark was **traced from that image** rather than constructed.
 
-A plan is a **finite partially ordered set**, and the rhombus is how mathematics draws the smallest
-non-trivial one: one start, two independent paths, one convergence. Nesting a second rhombus at
-exactly half scale says the other true thing about a plan — it is **self-similar**. An epic holds
-stories holds subtasks, and every level is the same object at a different depth (Principle #9, _"the
-plan deepens just in time"_; Principle #14, _"the plan is a DAG, not a list"_).
+**How it was made.** The reference was read _pixel by pixel_ rather than redrawn by eye: thresholded
+to the white curve alone (dropping the grid), the two edges taken as the two runs in each column —
+**318 of 324 columns** gave both cleanly — and Catmull-Rom cubic Béziers fitted through samples every
+6 px. The two edges are joined by a straight cut at each end and filled. An overlay against the
+original shows the fill sitting exactly between the two curves with no drift.
 
-**The four nodes are load-bearing, not decoration.** A Hasse diagram has vertices and edges; a
-diamond has neither. Drawing the vertices is what makes this a _lattice diagram_ rather than a gem —
-it states the actual idea, and it is what separates the mark from the crowd the prior-art check
-turned up.
+**One path, `fill="currentColor"`.** It carries no colour of its own, so it takes whatever `color`
+the surface sets — which is how it follows the theme and a `data-palette` swap for free (§4).
 
-### Prior art — why the nodes exist
+### What this mark does not yet have
 
-A plain concentric rhombus is one of the most occupied geometric marks in existence. Checked against
-public sources on 2026-08-05, before the mark was locked:
+- **It is traced, not constructed.** Every other candidate on this card is generated from a rule — a
+  Hasse diagram, a hypocycloid, a Brunnian link — so it can be re-cut at any size, weight or
+  proportion from its own definition. This one is a fitted outline of a drawing. It cannot be
+  re-derived, only re-traced. If it stays, someone should re-author it as a constructed curve.
+- **The two edges are not parallel.** The vertical gap runs ~156 units at the trough and ~196 at the
+  peak, and the lower edge's amplitude is 108 against the upper's 146 — the band is not of constant
+  width; the lower edge is a flatter copy. Traced _exactly as drawn_, on instruction. If that was
+  accidental rather than intended, regularising it is a small change worth making before it ships.
+- **⚠️ At 24 px and below it reads as a letter M.** The two peaks and the central dip land squarely
+  in M territory once the detail closes up. That is the one thing this card ruled out at the start,
+  and it is the reason the mark is provisional rather than settled. It reads as an abstract wave at
+  40 px and above, and on the app tile. **Minimum size is therefore 40 px** — a _reading_ floor, not
+  a legibility one.
+- **No prior-art check has been run on it.** The check below was performed against the _lattice_. A
+  wave band is a much less crowded shape than a concentric rhombus, but "less crowded" is not
+  "checked" — **MOTIR-2267** (trademark clearance) now needs to search this shape, not that one.
+
+### On record — the lattice, chosen and then set aside
+
+The Hasse diagram of a fork–join, nested inside itself at exactly half scale. A plan is a **finite
+partially ordered set** and the rhombus is how mathematics draws the smallest non-trivial one — one
+start, two independent paths, one convergence; nesting a second at half scale says the other true
+thing, that a plan is **self-similar**. Chosen on 2026-08-05, then set aside in favour of the traced
+wave band. Its argument still stands and so does its prior-art record, which is why both are kept
+rather than deleted.
+
+### Prior art — the check that was run on the LATTICE
+
+Kept because it is the only prior-art work done on this card so far, and because it is a worked
+example of the check any mark needs. **It concerns the lattice, not the wave band.** A plain
+concentric rhombus is one of the most occupied geometric marks in existence — checked against public
+sources on 2026-08-05:
 
 | Mark               | Construction                                                                                                                  | Distance from a plain concentric rhombus                                                                                  |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
@@ -134,32 +165,23 @@ rejected for reading plainly as the letter Z, the very thing this card ruled out
 
 ## 2. Construction
 
-```svg
-<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
-  <path d="M12 3.6L20.4 12L12 20.4L3.6 12Z" fill="none" stroke="currentColor"
-        stroke-width="2.5" stroke-linejoin="round" />
-  <path d="M12 7.8L16.2 12L12 16.2L7.8 12Z" fill="none" stroke="currentColor"
-        stroke-width="2.5" stroke-linejoin="round" />
-  <circle cx="12"   cy="3.6"  r="1.9" fill="currentColor" />
-  <circle cx="20.4" cy="12"   r="1.9" fill="currentColor" />
-  <circle cx="12"   cy="20.4" r="1.9" fill="currentColor" />
-  <circle cx="3.6"  cy="12"   r="1.9" fill="currentColor" />
-</svg>
-```
+Source of truth: **`design/brand/wave-band.svg`** (native 317 × 313), with
+**`design/brand/wave-band-24.svg`** as the 24-grid cut the rest of this document uses.
 
-|                  |                                                                                                                                                                                                                                                      |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **viewBox**      | `0 0 24 24` — the same grid every `lucide-react` icon in the app uses, so the mark drops into any icon slot unscaled.                                                                                                                                |
-| **paths**        | Two closed rhombi, the inner at exactly **half** the outer's half-diagonal (8.4 → 4.2). One number generates the whole family; the next level in would be 2.1.                                                                                       |
-| **nodes**        | Four filled circles, **r = 1.9**, centred on the **outer** rhombus's vertices. They are the lattice's vertices, not decoration (§1). The inner rhombus carries none — the nesting is a change of _depth_, not another level of the same diagram.     |
-| **paint**        | Rhombi: `fill="none"`, `stroke="currentColor"`, `stroke-width="2.5"`, `stroke-linejoin="round"`. Nodes: `fill="currentColor"`, no stroke. No `stroke-linecap` — both paths are closed.                                                               |
-| **extent**       | x and y both 1.7 → 22.3 (20.6 square), centred on (12, 12) **by construction**. The extent is set by the **nodes** (8.4 + 1.9), not the stroke — so node radius is what to change if the mark ever needs to sit lighter in its box.                  |
-| **clear space**  | 2 × the stroke weight = **5.0 units** (21% of the box edge) on all four sides, measured from the **extent**, never from the viewBox. A rhombus reads with more air around it than a square of the same extent, so this is the floor, not the target. |
-| **minimum size** | **16 px** — the stroke lands at 1.67 px, the nodes at 2.5 px across and the inner rhombus at 2.8 px, all still legible. Below 16 px use the tiled form (§5).                                                                                         |
-| **colour**       | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                 |
+|                       |                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **path**              | **One closed path**, ~3.6 kB of cubic Béziers. It is a _fitted trace_, not a formula (§1).                                                                                                                                                                                                                                                                                |
+| **how it was fitted** | The reference image was thresholded to the white curve (dropping the grid), the two edges taken as the two pixel runs per column — 318 of 324 gave both — and Catmull-Rom cubic Béziers fitted through samples every 6 px, joined by a straight cut at each end. **Re-run that trace rather than redrawing by hand** if the mark ever needs re-cutting from the original. |
+| **paint**             | `fill="currentColor"`, no stroke. The mark carries **no colour of its own** — it inherits `color` from whatever renders it, which is exactly what makes it follow theme and palette (§4).                                                                                                                                                                                 |
+| **extent**            | x 1.0 → 23.0, y 1.14 → 22.86 on the 24-grid — 22 × 21.7, all but square, centred on (12, 12). Aspect is preserved from the source (317 × 313), so it is very slightly wider than tall; **do not stretch it to fill a square**.                                                                                                                                            |
+| **clear space**       | **3 units** (12.5% of the box edge) on all four sides, measured from the extent. A solid form needs less air than an outline of the same size.                                                                                                                                                                                                                            |
+| **minimum size**      | **⚠️ 40 px.** Not a legibility floor — the shape survives far smaller — but a _reading_ floor: at 24 px and below it reads as a letter M (§1). Below 40 px this mark needs a simplified cut or a different mark.                                                                                                                                                          |
+| **colour**            | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                                                                                                                                      |
 
-`currentColor` throughout is deliberate: it makes the dark variant a token choice rather than a
-second asset (§4).
+**`currentColor` only themes when the SVG is inline.** `<svg>` / `<use>` / an imported React
+component all inherit `color` and therefore follow the theme. Referenced via `<img src>`, as a CSS
+`background-image`, or as a favicon, `currentColor` resolves to **black** — those contexts need a
+baked-colour variant (§5, §6, §7e all hit this).
 
 ## 3. Wordmark and lockups
 
