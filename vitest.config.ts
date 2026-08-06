@@ -689,6 +689,10 @@ export default defineConfig({
         // that counts an unreadable repo as un-audited and cries wolf.
         'lib/services/auditCoverageService.ts',
         'app/api/ai/coding-convention/audit-coverage/route.ts',
+        // Subtask MOTIR-2249 — the scoped run's record merge (pure).
+        'lib/codeHealth/reauditRun.ts',
+        // Subtask MOTIR-2250 — the audit-coverage banner.
+        'components/planning/AuditCoverageBanner.tsx',
         'lib/codeGraph/offboarding.ts',
         'lib/repositories/codeGraphOffboardingRepository.ts',
         'lib/services/codeGraphOffboardingService.ts',
@@ -737,6 +741,8 @@ export default defineConfig({
         },
         // Subtask MOTIR-2248 — the audit-coverage read.
         'lib/services/auditCoverageService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/codeHealth/reauditRun.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/AuditCoverageBanner.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/api/ai/coding-convention/audit-coverage/route.ts': {
           branches: 90,
           functions: 90,

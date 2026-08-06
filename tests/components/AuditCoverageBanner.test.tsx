@@ -107,6 +107,30 @@ describe('what it does NOT render', () => {
     expect(container.innerHTML).toBe('');
   });
 
+  it('renders nothing when the body carries no count at all', async () => {
+    // A malformed / older payload must read as "nothing to say", never as NaN
+    // in the copy or a banner with a blank number.
+    respond = () => Promise.resolve(json({ repos: [] }));
+    const { container } = await render();
+
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('does not set state after unmount — an in-flight read is abandoned', async () => {
+    let settle: (r: Response) => void = () => {};
+    respond = () => new Promise<Response>((resolve) => (settle = resolve));
+    const { container, unmount } = renderWithIntl(<AuditCoverageBanner />);
+
+    unmount();
+    // The read comes back AFTER the component is gone. The cancelled guard is
+    // what stops React warning about a state update on an unmounted tree.
+    await act(async () => {
+      settle(json(coverage()));
+    });
+
+    expect(container.innerHTML).toBe('');
+  });
+
   it('never renders a DISMISS control — the banner is not dismissible', async () => {
     await render();
 
