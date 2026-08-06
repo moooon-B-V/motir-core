@@ -265,6 +265,25 @@ export const workItemSummarySchema = workItemFieldsSchema.extend({
 });
 export type WorkItemSummary = z.infer<typeof workItemSummarySchema>;
 
+/**
+ * How many work items match a filter — the answer to a question the COLLECTION
+ * deliberately does not answer (ADR Amendment 11).
+ *
+ * A resource of its own rather than a `totalCount` on the page, because the
+ * collection's read is a keyset walk that computes no count, and putting one on
+ * the envelope would run a `COUNT` under an arbitrary filter on every page of
+ * every caller — including the paging walks that want no count at all. As a
+ * separate operation, the count is paid for exactly once, by the caller who
+ * asked for it, and Amendment 3 Q2's two-envelope rule stays intact.
+ *
+ * EXACT, never capped: a "999+" would stop being true precisely when the number
+ * starts to matter.
+ */
+export const workItemCountSchema = z.object({
+  count: z.number().int().nonnegative(),
+});
+export type V1WorkItemCount = z.infer<typeof workItemCountSchema>;
+
 /** One dependency / relationship edge, as both `GET …/links` and the detail
  *  aggregate render it — ONE declaration, so the two cannot drift (11.2.9). */
 export const workItemLinkSchema = z.object({

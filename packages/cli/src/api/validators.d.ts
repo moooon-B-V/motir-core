@@ -31,6 +31,7 @@ export declare const operation_appendPlanTurn: ValidateFunction;
 export declare const operation_archiveWorkItem: ValidateFunction;
 export declare const operation_completeSession: ValidateFunction;
 export declare const operation_completeSprint: ValidateFunction;
+export declare const operation_countProjectWorkItems: ValidateFunction;
 export declare const operation_createSprint: ValidateFunction;
 export declare const operation_createWorkItem: ValidateFunction;
 export declare const operation_createWorkItemComment: ValidateFunction;

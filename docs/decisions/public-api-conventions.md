@@ -2617,3 +2617,109 @@ A client with a persisted exclusion list keyed by internal id migrates it to
   the rule is general and does not need re-deciding per resource.
 - **Story 11.6's `list_ready` re-base** becomes a true no-op on the MCP payload
   once this lands, rather than a change that would drop `assignee` from it.
+
+---
+
+### Amendment 11 (2026-08-06) — COUNTING a filtered set is its OWN operation, not a field on the page
+
+**Status:** accepted. Raised by **11.5.16** (MOTIR-2318), which is where **11.5.4**
+stopped: `MotirClient.searchWorkItems` returns a `total` that
+`GET /api/v1/projects/{projectKey}/work-items` has no way to supply.
+
+#### The problem
+
+`SearchPage.total` is load-bearing at four CLI call sites, and two of them exist
+_only_ to read it:
+
+- `packages/cli/src/commands/read.ts:96` asks for `limit: 1` under the in-flight
+  filter and uses `search.total` as `motir status`'s in-flight count. The file's
+  own comment states the bargain: _"search_work_items returns the matching
+  `total` directly, so one call suffices."_
+- `packages/cli/src/commands/doctor.ts:79` does the same to prove a project is
+  reachable and report its size.
+
+Neither can be served by paging: counting that way turns one request into as
+many as the match set is wide, on the two commands most likely to be run against
+a large project. And the collection genuinely has no count to give —
+`listProjectWorkItemsPage` is a KEYSET read over `(createdAt, id)`, unlike the
+MCP tool, whose `total` falls out of offset paging for free
+(`lib/mcp/tools/searchWorkItems.ts:207`).
+
+#### Q1 — does the collection become RANKED? **No. The count is a separate operation.**
+
+`GET /api/v1/projects/{projectKey}/work-items/count`, taking the same `?filter=`
+and answering `{ count }`.
+
+Amendment 3 Q2 drew the two-envelope line deliberately — a collection either
+promises a total or it does not — and `lib/api/v1/openapi/envelopes.ts` records
+why an optional `totalCount` was rejected: it makes the wire type stop saying
+which collections can answer the question. The ranked collections that exist
+(the backlog, a sprint's members) are ranked because _their own read already
+computes the number_, which `planning/operations.ts:37–45` states outright. This
+read does not, and making it ranked would put a `COUNT` under an arbitrary
+filter on the hot path of **every page of every caller** — including the paging
+walks that want no count at all, and including page 7 of 9, where the answer has
+already been sent six times.
+
+A separate operation inverts that: the count is paid for by the caller who wants
+it, exactly once, and the page envelope keeps meaning what Amendment 3 says it
+means. It is also purely ADDITIVE under §8 — a new operation, no existing shape
+touched — where making the collection ranked would change a declared response.
+
+Three alternatives were considered and rejected:
+
+- **`?count=true` on the collection.** Makes the response shape conditional on a
+  query parameter, which is the optional-`totalCount` problem wearing a
+  different hat: the generated type would have to admit an absent field on every
+  read, and a client could no longer tell from the type whether it had a count.
+- **`HEAD` with the count in a header.** Puts data in a header, needs a header
+  the emitter would have to declare per-operation, and is awkward for the exact
+  clients that want it (a browser fetch, a generated client) — all to avoid a
+  body of `{ count }`.
+- **A `?limit=0` special case.** Overloads a paging parameter with a second
+  meaning, and still has to answer where the number goes.
+
+#### Q2 — is the count EXACT, and what does it cost? **Exact. One indexed count.**
+
+It is `COUNT(*)` over the same predicate the list read already builds, in the
+same tenancy scope, against the same indexes — the shape
+`countArchivedWorkItems` and `countReady` already use in this service. The
+FilterAST carries a size cap, so the predicate cannot grow unboundedly, and the
+row set is bounded by one project.
+
+No cap, no "999+", no estimate. A capped count would make the two call sites
+that motivated this amendment _worse_ than what they have today: `motir status`
+would print a number that stops being true above the cap, which is precisely
+when the number starts to matter. If a project ever gets large enough for this
+to hurt, the fix is an index, not a lie.
+
+#### Q3 — does the CLI keep `SearchPage.total`? **No — the count-only sites get a count method.**
+
+`total` on `SearchPage` is an artifact of the MCP tool's offset paging, and it is
+what makes `read.ts` and `doctor.ts` ask for a row they immediately discard.
+Those two are not searches; they are counts spelled as searches. **11.5.4**
+therefore drops `total` from `SearchPage` and gives the CLI a `countWorkItems`
+method over this operation — one request, no wasted row, and a name that says
+what the caller wanted.
+
+The other two sites follow the same reading: `commands/plan.ts:163` tests
+`page.total > 0`, which is a count question, and `session.ts:128` walks the whole
+page set already and can use `items.length`, which is the number it actually
+has.
+
+#### Q4 — the version step. **MINOR — `1.4.0`.**
+
+A new operation is additive under §8. Nothing declared changes shape, so no
+client generated against `1.3.1` is affected; a client that wants the count
+regenerates.
+
+#### Consequences of this amendment
+
+- **11.5.16** adds the operation, the service count, and the route, and moves
+  `V1_CONTRACT_VERSION` to `1.4.0`.
+- **11.5.4** consumes it: `searchWorkItems` loses `total`, `countWorkItems`
+  arrives, and the four call sites split between them per Q3.
+- **A future collection asked for a count** gets the same treatment — a sibling
+  `/count` operation — rather than being promoted to the ranked envelope. The
+  ranked envelope stays reserved for reads that compute the number anyway, which
+  is the property Amendment 3 Q2 gave it.

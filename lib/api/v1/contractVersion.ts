@@ -39,5 +39,9 @@
  *   requests the server accepts is unchanged — `parseReadyFilters` has read
  *   both with `getAll` since they shipped — and only the document, which
  *   described them as scalars while its own prose said "Repeatable", moves.
+ * - `1.4.0` — MOTIR-2318 adds `GET …/work-items/count`, the operation
+ *   Amendment 11 decided on so a client can learn how many items match a filter
+ *   without paging the match set. Additive: a new operation, no declared shape
+ *   changed.
  */
-export const V1_CONTRACT_VERSION = '1.3.1';
+export const V1_CONTRACT_VERSION = '1.4.0';

@@ -9,6 +9,7 @@ import {
   relationshipSchema,
   transitionListSchema,
   updateWorkItemBodySchema,
+  workItemCountSchema,
   workItemDetailSchema,
   workItemKeySchema,
   workItemLinkGroupsSchema,
@@ -111,6 +112,36 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     },
     // The plain envelope: this collection reports no total, because the read
     // behind it does not compute one as a bounded aggregate (ADR Amendment 3 Q2).
+    // The count lives at `…/work-items/count` instead — see the operation below
+    // and ADR Amendment 11 for why it is a sibling rather than a field here.
+    errorStatuses: [404, 422],
+  }),
+  defineOperation({
+    method: 'GET',
+    path: '/api/v1/projects/{projectKey}/work-items/count',
+    operationId: 'countProjectWorkItems',
+    summary: 'Count a project’s work items',
+    description:
+      'How many work items match a filter, in ONE request and without paging the match set. Takes the same `filter` the collection takes, and counts exactly what that collection would page. Exact, never capped.',
+    scope: 'read',
+    // No `cursor` / `limit`: a count has no position and no page size, and
+    // accepting either would invite a caller to believe it counts a WINDOW.
+    parameters: [
+      projectKeyParameter,
+      {
+        name: FILTER_PARAM,
+        in: 'query',
+        required: false,
+        description:
+          'A serialised filter expression, in the same form the collection takes. Omit to count every work item in the project. An unknown field, operator or value is a 422 naming which.',
+        schema: z.string().min(1),
+      },
+    ],
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: workItemCountSchema },
+      description: 'How many work items match.',
+    },
     errorStatuses: [404, 422],
   }),
   defineOperation({
@@ -364,6 +395,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
  */
 export const WORK_ITEM_COMPONENTS: Readonly<Record<string, z.ZodType>> = {
   WorkItemSummary: workItemSummarySchema,
+  WorkItemCount: workItemCountSchema,
   WorkItemDetail: workItemDetailSchema,
   WorkItemLinkGroups: workItemLinkGroupsSchema,
   CommentThread: commentThreadSchema,

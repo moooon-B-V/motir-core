@@ -2740,6 +2740,42 @@ export const workItemsService = {
   },
 
   /**
+   * COUNT the work items {@link listProjectWorkItemsPage} would page (ADR
+   * Amendment 11) — the read behind `GET …/work-items/count`.
+   *
+   * Deliberately a MIRROR of that method and not a variation on it: the same
+   * project + workspace gate, the same `assertCanBrowse`, the same referent
+   * resolution, and the same `buildRepoFilter`. A count that disagreed with the
+   * page it claims to count would be worse than no count at all, and the only
+   * way to keep them agreeing is for both to build their predicate the same way
+   * from the same input. What it drops is the keyset position and the limit —
+   * a count has neither.
+   *
+   * `countProjectIssues` carries one term the keyset scope does not, an
+   * `excludeIds` exclusion; it is a no-op here because this path never sets one,
+   * and a test pins the two reads as agreeing rather than leaving that resting
+   * on inspection.
+   */
+  async countProjectWorkItems(
+    projectId: string,
+    params: { filter?: ProjectTreeFilter },
+    ctx: ServiceContext,
+  ): Promise<number> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    const referents = params.filter?.ast
+      ? await loadFilterReferents(projectId, project.workspaceId, params.filter.ast)
+      : undefined;
+    const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
+
+    return workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter);
+  },
+
+  /**
    * The project's ARCHIVED items, paginated (Story 2.9 · Subtask 2.9.2) — the
    * read behind the archive-management surface. The inverse of every active
    * view's `archivedAt IS NULL` filter: a FLAT, `archivedAt DESC` page of the
