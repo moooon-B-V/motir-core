@@ -250,6 +250,9 @@ export default defineConfig({
         'lib/mcp/payloads/planning.ts',
         // Subtask 11.6.5 (MOTIR-2231) — the work-loop family + the seal.
         'lib/mcp/payloads/workLoop.ts',
+        // Subtask 11.6.6 (MOTIR-2232) — the drift guard + the tool→payload map.
+        'lib/mcp/payloads/driftGuard.ts',
+        'lib/mcp/payloads/registry.ts',
         'lib/mcp/registry.ts',
         'lib/mcp/tools/getWorkItem.ts',
         'lib/mcp/tools/listReady.ts',
@@ -1425,6 +1428,8 @@ export default defineConfig({
         'lib/mcp/payloads/workItems.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/planning.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/workLoop.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/driftGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/registry.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },
