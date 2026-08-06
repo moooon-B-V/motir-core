@@ -38,8 +38,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **19** are
-enforced by a gate today; **12** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **23** are
+enforced by a gate today; **8** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -53,7 +53,9 @@ A `planned` key is never offered in the grid or the role editor.
 > without the catalog being told) fails the build rather than drifting here. Wired so far:
 > **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300) ·
 > **`repository:manage` · `repository:manage_access`** (MOTIR-2299) · **`board:configure`** (MOTIR-2296) ·
-> **`workflow:manage` · `automation:manage`** (MOTIR-2297).
+> **`workflow:manage` · `automation:manage`** (MOTIR-2297) ·
+> **`field:manage` · `component:manage` · `label:manage` · `estimation:manage`** (MOTIR-2298) — the
+> whole twelve are now wired.
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -72,8 +74,8 @@ A `planned` key is never offered in the grid or the role editor.
 | `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                     |
 | `board` (1)          | `board:configure`                                                                 |
 | `comment` (2)        | `comment:add` · `comment:moderate`                                                |
-| `estimation` (1)     | `estimation:manage` ᵖ                                                             |
-| `field` (3)          | `component:manage` ᵖ · `field:manage` ᵖ · `label:manage` ᵖ                        |
+| `estimation` (1)     | `estimation:manage`                                                               |
+| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                              |
 | `import` (1)         | `import:run` ᵖ                                                                    |
 | `member` (2)         | `member:manage` · `project:manage_access`                                         |
 | `project` (2)        | `project:administer` · `project:browse`                                           |
@@ -95,18 +97,18 @@ splitting. So MOTIR-2256's split is not one movement: it TIGHTENS some domains, 
 leaves the rest exactly where they were. The per-domain card is where each is argued, and a card that
 claims neutrality for a row in the LOOSENS column is wrong.
 
-| Domain       | The gate that actually runs                                    | Admits today                              | The split |
-| ------------ | -------------------------------------------------------------- | ----------------------------------------- | --------- |
-| `board`      | `assertPermission(board:configure)` (wired, MOTIR-2296)        | was workspace OWNER only                  | LOOSENED  |
-| `workflow`   | `assertPermission(workflow:manage)` (wired, MOTIR-2297)        | was workspace OWNER only                  | LOOSENED  |
-| `estimation` | `estimationService.assertEstimationAdmin` → `isOwnerRole(...)` | workspace OWNER                           | LOOSENS   |
-| `automation` | `assertPermission(automation:manage)` (wired, MOTIR-2297)      | `project:administer`-equivalent           | neutral   |
-| `component`  | `componentsService`'s module-private `assertCanManage`         | `project:administer`-equivalent           | neutral   |
-| `field`      | `customFieldsService`'s module-private `assertCanManage`       | `project:administer`-equivalent           | neutral   |
-| `label`      | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
-| `ai`         | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
-| `member`     | `projectAccessService.assertPermission` (wired, MOTIR-2295)    | `member:manage` / `project:manage_access` | wired     |
-| `repository` | `projectAccessService.assertCanEdit`                           | project MEMBER                            | TIGHTENS  |
+| Domain       | The gate that actually runs                                      | Admits today                                        | The split |
+| ------------ | ---------------------------------------------------------------- | --------------------------------------------------- | --------- |
+| `board`      | `assertPermission(board:configure)` (wired, MOTIR-2296)          | was workspace OWNER only                            | LOOSENED  |
+| `workflow`   | `assertPermission(workflow:manage)` (wired, MOTIR-2297)          | was workspace OWNER only                            | LOOSENED  |
+| `estimation` | `assertPermission(estimation:manage)` (wired, MOTIR-2298)        | was workspace OWNER only                            | LOOSENED  |
+| `automation` | `assertPermission(automation:manage)` (wired, MOTIR-2297)        | `project:administer`-equivalent                     | neutral   |
+| `component`  | `assertPermission(component:manage)` (wired, MOTIR-2298)         | was a module-private `assertCanManage`, same answer | neutral   |
+| `field`      | `assertPermission(field:manage)` (wired, MOTIR-2298)             | was a module-private `assertCanManage`, same answer | neutral   |
+| `label`      | `assertPermission(label:manage)` (wired, MOTIR-2298)             | was `project:administer`                            | neutral   |
+| `ai`         | `assertPermission(ai:configure)` (wired, MOTIR-2300)             | was `project:administer`                            | neutral   |
+| `member`     | `assertPermission(member:manage / project:manage_access)` (2295) | was `project:administer`                            | neutral   |
+| `repository` | `assertPermission(repository:manage / …_access)` (MOTIR-2299)    | was project MEMBER via `assertCanEdit`              | TIGHTENED |
 
 **Why this had to be written down.** The `Gate today` cells for `board`, `workflow` and `estimation`
 read **`session only`** until 2026-08-06. They were produced by the guard in
@@ -338,23 +340,26 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `estimation`
 
-| Operation                               | Verbs | Gate today                                     | Permission          | Decision | Why |
-| --------------------------------------- | ----- | ---------------------------------------------- | ------------------- | -------- | --- |
-| `/api/projects/[key]/estimation-config` | GET   | none on the read                               | `project:browse`    | new      | R25 |
-| `/api/projects/[key]/estimation-config` | PATCH | `assertEstimationAdmin` — workspace OWNER only | `estimation:manage` | new      | R25 |
+| Operation                               | Verbs | Gate today                                                       | Permission          | Decision | Why |
+| --------------------------------------- | ----- | ---------------------------------------------------------------- | ------------------- | -------- | --- |
+| `/api/projects/[key]/estimation-config` | GET   | browse via the service read                                      | `project:browse`    | existing | R25 |
+| `/api/projects/[key]/estimation-config` | PATCH | `assertPermission(estimation:manage)` — was workspace OWNER only | `estimation:manage` | existing | R25 |
 
 ### `field`
 
-| Operation                                  | Verbs        | Gate today                           | Permission         | Decision | Why |
-| ------------------------------------------ | ------------ | ------------------------------------ | ------------------ | -------- | --- |
-| `/api/components/[id]`                     | DELETE/PATCH | `assertCanManage`                    | `component:manage` | new      | R24 |
-| `/api/fields/[fieldId]`                    | DELETE/PATCH | workspace only                       | `field:manage`     | new      | R26 |
-| `/api/fields/[fieldId]/options`            | POST         | workspace only                       | `field:manage`     | new      | R26 |
-| `/api/fields/[fieldId]/options/[optionId]` | DELETE/PATCH | workspace only                       | `field:manage`     | new      | R26 |
-| `/api/projects/[key]/components`           | GET/POST     | `assertCanBrowse`, `assertCanManage` | `component:manage` | new      | R24 |
-| `/api/projects/[key]/fields`               | GET/POST     | `assertCanBrowse`                    | `field:manage`     | new      | R26 |
-| `/api/projects/[key]/labels`               | GET          | `assertCanBrowse`                    | `label:manage`     | new      | R20 |
-| `/api/projects/[key]/tags`                 | GET/PUT      | `assertCanBrowse`, `assertCanManage` | `label:manage`     | new      | R20 |
+| Operation                                  | Verbs        | Gate today                                                                    | Permission         | Decision | Why |
+| ------------------------------------------ | ------------ | ----------------------------------------------------------------------------- | ------------------ | -------- | --- |
+| `/api/components/[id]`                     | DELETE/PATCH | `assertPermission(component:manage)` — was a module-private `assertCanManage` | `component:manage` | existing | R24 |
+| `/api/fields/[fieldId]`                    | DELETE/PATCH | `assertPermission(field:manage)` — was a module-private `assertCanManage`     | `field:manage`     | existing | R26 |
+| `/api/fields/[fieldId]/options`            | POST         | `assertPermission(field:manage)`                                              | `field:manage`     | existing | R26 |
+| `/api/fields/[fieldId]/options/[optionId]` | DELETE/PATCH | `assertPermission(field:manage)`                                              | `field:manage`     | existing | R26 |
+| `/api/projects/[key]/components`           | GET          | `assertCanBrowse` — the create/edit FORM reads this                           | `project:browse`   | existing | R24 |
+| `/api/projects/[key]/components`           | POST         | `assertPermission(component:manage)`                                          | `component:manage` | existing | R24 |
+| `/api/projects/[key]/fields`               | GET          | `assertCanBrowse` — the create/edit FORM reads this                           | `project:browse`   | existing | R26 |
+| `/api/projects/[key]/fields`               | POST         | `assertPermission(field:manage)`                                              | `field:manage`     | existing | R26 |
+| `/api/projects/[key]/labels`               | GET          | `assertCanBrowse` — a member must be able to PICK a label                     | `project:browse`   | existing | R20 |
+| `/api/projects/[key]/tags`                 | GET          | `assertCanBrowse`                                                             | `project:browse`   | existing | R20 |
+| `/api/projects/[key]/tags`                 | PUT          | `assertPermission(label:manage)`                                              | `label:manage`     | existing | R20 |
 
 ### `import`
 
