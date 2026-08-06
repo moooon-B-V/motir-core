@@ -94,14 +94,39 @@ describe('auto-descend is opt-in, and exactly one consumer opts in', () => {
   });
 
   it('WorkItemRoadmap enables it for BOTH scopes, not just the sprint read', () => {
-    // The opt-in is unconditional by design (MOTIR-1807): a single-epic project
-    // has the same degenerate shape in project scope. A later edit that made it
-    // `autoDescendSingleParent={scope === 'sprint'}` would narrow the feature
-    // without any test of the descent itself failing.
+    // The opt-in must not be narrowed by SCOPE (MOTIR-1807): a single-epic project
+    // has the same degenerate shape in project scope, so an edit that made it
+    // `autoDescendSingleParent={scope === 'sprint'}` would silently shrink the
+    // feature while every descent spec still passed.
+    //
+    // ⚠️ This assertion USED to be "the prop is a bare attribute, with no `={…}`
+    // at all". That was a proxy for the real rule, and MOTIR-2287 outgrew it: the
+    // adapter can now be ROOTED at one work item (the Children panel), where the
+    // design's recorded verdict is that auto-descend must be OFF — a panel that
+    // says "this item's children" must show them even when there is exactly one.
+    // So the value is legitimately an expression now, and the guard has to name
+    // WHICH gate is allowed instead of banning every gate. It keeps its teeth:
+    // the scope form below still fails it.
     const adapter = code(read(join(ROOT, OPTED_IN)));
-    // The bare-attribute form (`autoDescendSingleParent` with no `={…}`) is the
-    // unconditional opt-in; an expression value would be a scope/flag gate.
-    expect(adapter).toMatch(new RegExp(`\\n\\s*${PROP}\\s*\\n`));
-    expect(adapter).not.toMatch(new RegExp(`${PROP}\\s*=`));
+    const passed = adapter.match(new RegExp(`${PROP}(?:\\s*=\\s*\\{([^}]*)\\})?`));
+    expect(passed, 'the adapter must still opt in at its canvas mount').not.toBeNull();
+    const value = (passed?.[1] ?? '').trim();
+    // Whatever gates it, SCOPE may not: that is the MOTIR-1807 decision this
+    // guard was written to protect, and it is unchanged.
+    expect(value, 'auto-descend must not be gated on scope').not.toMatch(/scope/i);
+    // And the ONLY gate allowed is the subtree-rooting one (MOTIR-2285's verdict).
+    // An empty value is the original unconditional opt-in, still legal.
+    expect(['', '!rooted'], `unexpected auto-descend gate: ${value || '(none)'}`).toContain(value);
+  });
+
+  it('the rooting gate is real: a rooted mount is what turns auto-descend off', () => {
+    // The assertion above reads the SOURCE, so on its own it could be satisfied by
+    // a `rooted` that never means anything. This one drives the behaviour: the
+    // adapter must derive `rooted` from the subtree-root prop, so the gate is
+    // wired to the thing it claims to be wired to. (The behavioural proof — a
+    // rooted level with one drillable child does NOT descend — lives in
+    // `tests/components/WorkItemRoadmap.test.tsx`, both directions.)
+    const adapter = code(read(join(ROOT, OPTED_IN)));
+    expect(adapter).toMatch(/const\s+rooted\s*=\s*subtreeRootId\s*!=\s*null/);
   });
 });
