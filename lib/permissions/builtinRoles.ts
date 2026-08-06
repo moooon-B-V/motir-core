@@ -19,11 +19,27 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
 // putting them in a role set would be a lie in the grid the settings page renders.
 
 /**
- * The permissions a role can hold — every catalog key EXCEPT the three
- * level-gated public-request grants. This is also the set the workspace-manager
+ * The permissions a role can hold. This is also the set the workspace-manager
  * always-pass rail resolves to (see `resolvePermissions`), which is why it is
  * named here rather than inlined: "the full role-gated catalog" is a concept the
  * resolution and the role editor both need.
+ *
+ * ⚠️ It is NOT yet every catalog key minus the three level-gated public-request
+ * grants. The catalog (MOTIR-2277) covers the whole operation surface, and the
+ * keys whose gates nobody has wired — `enforcement: 'planned'` — stay out of
+ * every role set until the card that wires them puts them in. Today that leaves
+ * MOTIR-2291's eight member-facing keys outside; MOTIR-2256 has put its twelve
+ * administrative ones in (below).
+ *
+ * ⚠️ THE TWELVE ADMINISTRATIVE KEYS ARE HERE, AND THAT IS BEHAVIOUR-NEUTRAL.
+ * They enter alongside `project:administer` and nowhere else: `member` /
+ * `viewer` / {@link IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS} gain none. Because
+ * `levelGrants` in `lib/permissions/resolve.ts` treats every key that is not
+ * `work_item:edit` / `comment:add` / `attachment:create` identically, each of the
+ * twelve resolves to EXACTLY the actors `project:administer` resolves to, on all
+ * four access levels and both rails. `tests/permissions/accessParity.test.ts`
+ * proves that equivalence over the whole 64-row input space rather than asserting
+ * it here.
  */
 export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'project:browse',
@@ -34,13 +50,29 @@ export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'attachment:create',
   'attachment:delete_any',
   'watcher:manage',
+  // MOTIR-2256 — the twelve per-domain administrative keys that fall out of
+  // `project:administer`. Admin holds all twelve, which is what makes the split
+  // neutral wherever the umbrella already stood.
+  'member:manage',
+  'project:manage_access',
+  'board:configure',
+  'workflow:manage',
+  'automation:manage',
+  'field:manage',
+  'component:manage',
+  'label:manage',
+  'estimation:manage',
+  'repository:manage',
+  'repository:manage_access',
+  'ai:configure',
 ];
 
 /**
  * The three built-in project roles, as sets over the catalog. Typed against
  * {@link PermissionKey}, so a key that does not exist fails to compile.
  *
- *   * **admin**  — the whole role-gated catalog: administers the project,
+ *   * **admin**  — the whole role-gated catalog: administers the project (and
+ *                  each of MOTIR-2256's twelve per-domain administrative keys),
  *                  moderates comments and attachments, manages watchers.
  *   * **member** — browses, edits work items, comments, attaches. No
  *                  administrative or moderation grant.
