@@ -235,17 +235,28 @@ export const PLANNED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(
  * render order the Roles & permissions grid walks, so the grid's grouping is a
  * property of the catalog rather than a decision re-made in a component.
  *
- * ⚠️ DEFAULTS TO `enforced` ONLY. A `planned` key names an operation no gate
- * consults yet, so rendering it would put a switch on the settings page that
- * controls nothing — exactly the lie this model exists to prevent. Pass
- * `{ include: 'all' }` only for a developer-facing surface or a test; the role
- * grid and the role editor must never do so. Domains left empty by the filter
- * are dropped, so the grid never draws a heading with nothing under it.
+ * ⚠️ RETURNS EVERY KEY, INCLUDING `planned` — and that is deliberate.
+ *
+ * An earlier revision filtered to `enforced` here, reasoning that a key no gate
+ * consults would become a switch controlling nothing. The reasoning is right and
+ * the placement was wrong: with 21 of 32 keys planned, filtering meant the
+ * Roles & permissions page showed a QUARTER of the model and implied that was
+ * all of it — which is precisely the under-description this epic exists to fix.
+ * Trading one lie for a larger one.
+ *
+ * The rule belongs where a switch actually exists. The read-only GRID shows the
+ * whole model and marks each row's `enforcement`, so the page is honest about
+ * both what the product governs and what is not wired yet. The role EDITOR
+ * (MOTIR-2257) is what must never let a `planned` key be toggled.
+ *
+ * `{ include: 'enforced' }` narrows to the wired keys for a caller that needs
+ * only those. Domains left empty by a filter are dropped, so a heading is never
+ * drawn with nothing under it.
  */
 export function permissionsByDomain(
   options: { include?: 'enforced' | 'all' } = {},
 ): { domain: PermissionDomain; permissions: PermissionDescriptor[] }[] {
-  const all = options.include === 'all';
+  const all = options.include !== 'enforced';
   return PERMISSION_DOMAINS.map((domain) => ({
     domain,
     permissions: PERMISSIONS.map((key) => PERMISSION_CATALOG[key]).filter(

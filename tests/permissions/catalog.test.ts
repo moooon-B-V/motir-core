@@ -124,11 +124,11 @@ describe('every domain in the render order earns its heading', () => {
     ]);
   });
 
-  it('never emits an EMPTY group once the planned keys are filtered out', () => {
-    // The default view drops a domain whose keys are all still `planned`, so the
-    // grid can never draw a heading with nothing under it.
-    for (const group of permissionsByDomain()) {
-      expect(group.permissions.length, `domain "${group.domain}" is empty`).toBeGreaterThan(0);
+  it('never emits an EMPTY group under any filter', () => {
+    for (const opts of [{}, { include: 'enforced' as const }]) {
+      for (const group of permissionsByDomain(opts)) {
+        expect(group.permissions.length, `domain "${group.domain}" is empty`).toBeGreaterThan(0);
+      }
     }
   });
 });
@@ -168,13 +168,29 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS).toHaveLength(11);
   });
 
-  it('DOES NOT render a planned key by default — the whole point of the marker', () => {
+  it('renders the WHOLE model by default — the grid must not under-describe the product', () => {
+    // The earlier revision filtered to `enforced` here. With 21 of 32 keys
+    // planned that showed a quarter of the model and implied it was all of it —
+    // the exact under-description this epic exists to fix. The no-dead-switch
+    // rule belongs to the EDITOR, where a switch actually exists.
     const shown = permissionsByDomain().flatMap((g) => g.permissions.map((p) => p.key));
-    expect(
-      shown.filter((k) => !isEnforced(k)),
-      'a permission no gate consults must never reach the grid or the role editor',
-    ).toEqual([]);
-    expect([...shown].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
+    expect([...shown].sort()).toEqual([...PERMISSIONS].sort());
+  });
+
+  it('marks every rendered row with its enforcement, so the UI can say which are live', () => {
+    for (const group of permissionsByDomain()) {
+      for (const descriptor of group.permissions) {
+        expect(['enforced', 'planned']).toContain(descriptor.enforcement);
+        expect(descriptor.enforcement).toBe(PERMISSION_CATALOG[descriptor.key].enforcement);
+      }
+    }
+  });
+
+  it('can still narrow to the wired keys when a caller needs only those', () => {
+    const enforced = permissionsByDomain({ include: 'enforced' }).flatMap((g) =>
+      g.permissions.map((p) => p.key),
+    );
+    expect([...enforced].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
   });
 
   it('every PLANNED key is justified by a row in the inventory document', () => {

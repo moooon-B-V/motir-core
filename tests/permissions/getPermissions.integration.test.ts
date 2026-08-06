@@ -306,9 +306,11 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     const s = await buildScenario('open', 'dto-domains');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
     const flattened = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
-    // ENFORCED only — a `planned` key names an operation no gate consults yet, so
-    // it must never reach the grid (MOTIR-2277).
-    expect([...flattened].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
+    // The WHOLE model — the grid tells the truth about what the product governs.
+    // Each row carries its `enforcement` so the UI can mark the not-yet-wired
+    // ones; hiding them showed a quarter of the catalog and implied it was all.
+    expect([...flattened].sort()).toEqual([...PERMISSIONS].sort());
+    expect(flattened.filter((k) => !ENFORCED_PERMISSIONS.includes(k)).length).toBeGreaterThan(0);
     for (const domain of catalog.domains) {
       expect(domain.permissions.length, `${domain.domain} is empty`).toBeGreaterThan(0);
       expect(domain.labelKey).toBe(`permissions.domain.${domain.domain}`);
