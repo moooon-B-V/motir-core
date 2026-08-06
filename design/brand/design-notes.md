@@ -6,9 +6,9 @@
 **Current mark:** the **wave band**, traced from Yue's reference drawing on 2026-08-05 and adopted
 "for now" — see §1 for how it was fitted and what it still owes. MOTIR-1140 (8.3.2) stays open until
 that provisional status is resolved.
-**Assets:** `design/brand/wave-band.svg` (native 322 × 320, the artwork) ·
-`design/brand/wave-band-24.svg` (24-grid cut) · `design/brand/wave-band-exact.svg` (0.000%
-pixel-exact reference — not for rendering).
+**Assets:** `design/brand/motir-logo.drawio.svg` (the editable **source**) ·
+`design/brand/wave-band.svg` (native 768 × 768.5, the artwork) · `design/brand/wave-band-24.svg`
+(24-grid cut).
 
 This asset defines the logomark, the wordmark and its lockups, the light/dark colour rule, the
 favicon / app-icon set, the 1200 × 630 OG template, and every shipped surface the mark enters.
@@ -64,25 +64,37 @@ literals).
 Yue supplied a reference drawing on 2026-08-05 and asked for it to be used as the logo for now, so
 the mark was **traced from that image** rather than constructed.
 
-**How it was made.** The reference was read _pixel by pixel_ rather than redrawn by eye: thresholded
-to the white curve alone (dropping the grid), the two edges taken as the two runs in each column —
-**318 of 324 columns** gave both cleanly — and Catmull-Rom cubic Béziers fitted through samples every
-6 px. The two edges are joined by a straight cut at each end and filled. An overlay against the
-original shows the fill sitting exactly between the two curves with no drift.
+**It is not a trace.** Yue supplied the mark as an editable **draw.io vector file**
+(`design/brand/motir-logo.drawio.svg`), which draws it as four _open_ strokes: an upper curve, a
+lower curve and two straight end caps. The artwork is that same geometry **closed and filled** —
+upper curve → right cap → lower curve reversed → left cap — built from the source's _own control
+points_.
+
+**Four quadratic curves and two straight caps: six segments, ~110 bytes.** There is no fitting error
+to measure, because nothing was fitted — the path _is_ the source's geometry.
 
 **One path, `fill="currentColor"`.** It carries no colour of its own, so it takes whatever `color`
 the surface sets — which is how it follows the theme and a `data-palette` swap for free (§4).
 
+> **Superseded, and worth remembering.** Until 2026-08-06 this mark was traced from a _screenshot_.
+> The first trace sampled the drawn strokes' centrelines and was **3.17% off** — 1,745 of 55,000
+> pixels, all missing, the whole shape ~1 px thin all round. Refitting against the flood-filled
+> region got it to **0.069%**, and reaching 0.000% required an 822-point staircase that visibly
+> stepped when enlarged. All of that disappeared the moment a real vector source existed. **The
+> lesson: ask for the source before tracing the picture** — and if you must trace, measure the
+> result rather than eyeballing it, because a 3% error was invisible by eye.
+
 ### What this mark does not yet have
 
-- **It is traced, not constructed.** Every other candidate on this card is generated from a rule — a
-  Hasse diagram, a hypocycloid, a Brunnian link — so it can be re-cut at any size, weight or
-  proportion from its own definition. This one is a fitted outline of a drawing. It cannot be
-  re-derived, only re-traced. If it stays, someone should re-author it as a constructed curve.
-- **The two edges are not parallel.** The vertical gap runs ~156 units at the trough and ~196 at the
-  peak, and the lower edge's amplitude is 108 against the upper's 146 — the band is not of constant
-  width; the lower edge is a flatter copy. Traced _exactly as drawn_, on instruction. If that was
-  accidental rather than intended, regularising it is a small change worth making before it ships.
+- **~~It is traced, not constructed.~~ Resolved 2026-08-06** — the draw.io source replaced the
+  screenshot trace, so the mark can be edited at source and re-exported exactly. The items below
+  still stand.
+
+- **The two edges are not parallel** — and the source now says so precisely. Both curves start and
+  end exactly **384 units** apart, but their interior control points do not: the upper curve's sit at
+  y 497.25 and −226.75, the lower's at 1025.25 and 165.25, so those offsets are 144 and 8 rather than 384. The band pinches and swells along its length. That is how it was drawn; only worth changing if
+  it was not deliberate.
+
 - **⚠️ At 24 px and below it reads as a letter M.** The two peaks and the central dip land squarely
   in M territory once the detail closes up. That is the one thing this card ruled out at the start,
   and it is the reason the mark is provisional rather than settled. It reads as an abstract wave at
@@ -166,23 +178,25 @@ rejected for reading plainly as the letter Z, the very thing this card ruled out
 
 ## 2. Construction
 
-Source of truth: **`design/brand/wave-band.svg`** (native 317 × 313), with
-**`design/brand/wave-band-24.svg`** as the 24-grid cut the rest of this document uses.
+**Source of truth: `design/brand/motir-logo.drawio.svg`** — Yue's editable draw.io file, kept beside
+the artwork. **To change the mark, edit the source and re-derive the artwork; do not hand-edit the
+path.**
 
-|                       |                                                                                                                                                                                                                                                                                                                                                                           |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **path**              | **One closed path**, ~3.6 kB of cubic Béziers. It is a _fitted trace_, not a formula (§1).                                                                                                                                                                                                                                                                                |
-| **how it was fitted** | The reference image was thresholded to the white curve (dropping the grid), the two edges taken as the two pixel runs per column — 318 of 324 gave both — and Catmull-Rom cubic Béziers fitted through samples every 6 px, joined by a straight cut at each end. **Re-run that trace rather than redrawing by hand** if the mark ever needs re-cutting from the original. |
-| **paint**             | `fill="currentColor"`, no stroke. The mark carries **no colour of its own** — it inherits `color` from whatever renders it, which is exactly what makes it follow theme and palette (§4).                                                                                                                                                                                 |
-| **extent**            | x 1.0 → 23.0, y 1.14 → 22.86 on the 24-grid — 22 × 21.7, all but square, centred on (12, 12). Aspect is preserved from the source (317 × 313), so it is very slightly wider than tall; **do not stretch it to fill a square**.                                                                                                                                            |
-| **clear space**       | **3 units** (12.5% of the box edge) on all four sides, measured from the extent. A solid form needs less air than an outline of the same size.                                                                                                                                                                                                                            |
-| **minimum size**      | **⚠️ 40 px.** Not a legibility floor — the shape survives far smaller — but a _reading_ floor: at 24 px and below it reads as a letter M (§1). Below 40 px this mark needs a simplified cut or a different mark.                                                                                                                                                          |
-| **colour**            | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                                                                                                                                      |
+|                       |                                                                                                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **path**              | **One closed path: four quadratic curves + two straight caps** — six segments, ~110 bytes. `wave-band.svg` is the native artwork (768 × 768.5); `wave-band-24.svg` is the 24-grid cut.                                                                                                            |
+| **how it is derived** | The source draws four _open_ strokes. The artwork closes and fills them — upper curve → right cap → lower curve reversed → left cap — using the source's own control points. Reversing a quadratic just swaps its endpoints and keeps its control point, which is why the derivation is lossless. |
+| **accuracy**          | **Exact by construction.** Nothing is fitted, so there is no deviation to measure.                                                                                                                                                                                                                |
+| **paint**             | `fill="currentColor"`, no stroke. The mark carries **no colour of its own** — it inherits `color` from whatever renders it, which is what makes it follow theme and palette (§4).                                                                                                                 |
+| **extent**            | x 1.01 → 22.99, y 1.0 → 23.0 on the 24-grid — **21.98 × 22**, all but square, centred on (12, 12). Aspect preserved from the source, so it is a hair taller than wide; **do not stretch it to fill a square**.                                                                                    |
+| **clear space**       | **3 units** (12.5% of the box edge) on all four sides, measured from the extent. A solid form needs less air than an outline of the same size.                                                                                                                                                    |
+| **minimum size**      | **⚠️ 40 px.** Not a legibility floor — the shape survives far smaller — but a _reading_ floor: at 24 px and below it reads as a letter M (§1).                                                                                                                                                    |
+| **colour**            | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                                                              |
 
 **`currentColor` only themes when the SVG is inline.** `<svg>` / `<use>` / an imported React
 component all inherit `color` and therefore follow the theme. Referenced via `<img src>`, as a CSS
 `background-image`, or as a favicon, `currentColor` resolves to **black** — those contexts need a
-baked-colour variant (§5, §6, §7e all hit this).
+baked-colour variant (§5, §6 and §7e all hit this).
 
 ## 3. Wordmark and lockups
 

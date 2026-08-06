@@ -3479,6 +3479,9 @@
       .chosen-p b {
         color: var(--el-text);
       }
+      .ok-note {
+        color: var(--el-accent-on-surface);
+      }
       .prior-warn {
         border-color: var(--el-danger);
         background: var(--el-tint-peach);
@@ -4655,16 +4658,17 @@
             stroke-linejoin="round"
           />
         </g>
-        <!-- THE CURRENT MARK (Yue, 2026-08-05) — the WAVE BAND, traced from
-         Yue's reference and fitted to the TRUE filled region: the reference was
-         thresholded to the drawn curve, the area between the two edges
-         flood-filled, and that mask's boundary fitted with least-squares cubic
-         Beziers (Schneider). 123 curves. MEASURED accuracy: 38 of 55,000 pixels
-         differ at the reference's native 324px — 0.069%, all sub-pixel boundary
-         deviation. Source of truth: design/brand/wave-band.svg. -->
+        <!-- THE CURRENT MARK (Yue, 2026-08-06) — the WAVE BAND, derived from
+         Yue's own draw.io vector source (design/brand/motir-logo.drawio.svg).
+         That file draws four open strokes: an upper curve, a lower curve and two
+         straight end caps. This is the same geometry CLOSED and FILLED — upper,
+         right cap, lower reversed, left cap — built from the source's own
+         control points, so it is EXACT BY CONSTRUCTION: no tracing, no fitting
+         error. Four quadratic curves + two straight caps = six segments.
+         Artwork: design/brand/wave-band.svg -->
         <g id="mark-a">
           <path
-            d="M1 1.068C1.172 1.106 1.231 1.208 1.307 1.323C1.473 1.573 1.635 1.834 1.786 2.093C2.055 2.557 2.377 2.995 2.674 3.441C2.947 3.85 3.203 4.275 3.494 4.671C3.855 5.164 4.226 5.65 4.587 6.143C4.765 6.386 4.935 6.65 5.134 6.876C5.176 6.924 5.228 6.964 5.27 7.012C5.441 7.207 5.578 7.433 5.748 7.627C5.833 7.724 5.937 7.804 6.022 7.901C6.098 7.987 6.151 8.088 6.227 8.174C6.46 8.44 6.745 8.66 6.978 8.925C7.054 9.012 7.107 9.113 7.183 9.199C7.263 9.29 7.367 9.327 7.457 9.404C7.627 9.551 7.765 9.735 7.935 9.882C7.998 9.937 8.076 9.964 8.14 10.019C8.188 10.061 8.228 10.113 8.276 10.155C8.34 10.21 8.418 10.237 8.481 10.292C8.71 10.489 8.978 10.657 9.233 10.82C9.318 10.874 9.416 10.912 9.506 10.957C9.685 11.046 9.865 11.162 10.053 11.23C10.256 11.303 10.465 11.361 10.668 11.435C10.798 11.482 10.943 11.435 11.078 11.453C11.151 11.464 11.209 11.511 11.283 11.522C11.365 11.533 11.477 11.531 11.556 11.503C11.621 11.479 11.623 11.463 11.693 11.453C11.76 11.445 11.831 11.462 11.898 11.453C11.967 11.444 11.969 11.427 12.034 11.404C12.13 11.369 12.215 11.344 12.307 11.298C12.373 11.266 12.449 11.261 12.512 11.23C12.563 11.205 12.602 11.161 12.649 11.13C12.715 11.089 12.788 11.067 12.854 11.025C12.958 10.959 12.892 10.992 12.991 10.907C13.054 10.852 13.132 10.825 13.196 10.77C13.29 10.689 13.386 10.59 13.469 10.497C13.545 10.411 13.598 10.31 13.674 10.224C13.742 10.146 13.821 10.086 13.879 10C14.272 9.409 14.591 8.771 14.835 8.106C14.983 7.703 15.123 7.306 15.245 6.894C15.403 6.365 15.556 5.831 15.724 5.304C15.805 5.05 15.909 4.805 15.997 4.553C16.119 4.206 16.25 3.861 16.407 3.528C16.589 3.139 16.783 2.743 17.022 2.385C17.16 2.179 17.325 1.995 17.5 1.82C17.606 1.714 17.765 1.586 17.91 1.547C18.042 1.51 18.179 1.448 18.32 1.448C18.381 1.448 18.396 1.47 18.457 1.478C18.566 1.493 18.696 1.514 18.798 1.565C18.849 1.59 18.888 1.634 18.935 1.665C19.024 1.721 19.125 1.774 19.208 1.838C19.296 1.906 19.341 2.011 19.413 2.093C19.502 2.194 19.606 2.276 19.686 2.385C19.873 2.639 20.016 2.91 20.165 3.186C20.255 3.356 20.363 3.505 20.438 3.683C20.549 3.945 20.674 4.202 20.78 4.466C21.139 5.364 21.46 6.271 21.736 7.199C22.001 8.089 22.255 8.982 22.488 9.882C22.583 10.252 22.675 10.622 22.761 10.994C22.822 11.263 22.876 11.528 22.966 11.788L23 22.932C22.772 22.878 22.744 22.547 22.693 22.385C22.578 22.028 22.478 21.663 22.351 21.31C22.283 21.122 22.21 20.936 22.146 20.745C21.814 19.749 21.43 18.759 20.984 17.807C20.862 17.546 20.71 17.308 20.575 17.056C20.425 16.778 20.271 16.518 20.096 16.254C20.011 16.127 19.932 16.004 19.823 15.894C19.718 15.79 19.653 15.656 19.55 15.553C19.491 15.494 19.408 15.47 19.345 15.416C19.274 15.355 19.22 15.282 19.14 15.23C19.074 15.188 19 15.166 18.935 15.124C18.888 15.094 18.849 15.05 18.798 15.025C18.73 14.991 18.664 15.016 18.593 15.006C18.522 14.997 18.46 14.938 18.388 14.938C18.316 14.938 18.254 14.997 18.183 15.006C18.138 15.012 18.092 15 18.047 15.006C17.971 15.016 17.908 15.06 17.842 15.093C17.751 15.138 17.654 15.176 17.568 15.23C17.49 15.28 17.429 15.351 17.363 15.416C17.227 15.552 17.08 15.682 16.953 15.826C16.724 16.088 16.569 16.411 16.407 16.714C16.344 16.831 16.261 16.937 16.202 17.056C16.159 17.143 16.102 17.291 16.065 17.379C15.978 17.586 15.875 17.785 15.792 17.994C15.453 18.841 15.178 19.738 14.699 20.522C14.617 20.656 14.518 20.774 14.425 20.9C14.353 21 14.293 21.106 14.22 21.205C14.091 21.382 13.908 21.558 13.742 21.702C13.655 21.776 13.556 21.832 13.469 21.907C13.394 21.971 13.412 21.943 13.332 21.994C13.285 22.024 13.246 22.068 13.196 22.093C13.132 22.125 13.056 22.129 12.991 22.162C12.901 22.206 12.812 22.263 12.717 22.298C12.648 22.324 12.582 22.31 12.512 22.335C12.447 22.359 12.445 22.376 12.376 22.385C12.201 22.409 12.005 22.385 11.829 22.385C11.697 22.385 11.55 22.403 11.419 22.385C11.345 22.375 11.288 22.327 11.214 22.317C11.101 22.301 11.19 22.339 11.078 22.298C11.012 22.274 11.011 22.258 10.941 22.248C10.824 22.233 10.712 22.203 10.599 22.162C10.528 22.135 10.466 22.089 10.394 22.062C10.163 21.979 9.921 21.885 9.711 21.752C9.664 21.721 9.622 21.683 9.575 21.652C9.509 21.61 9.435 21.588 9.37 21.547C9.184 21.428 9.009 21.293 8.823 21.174C8.725 21.112 8.647 21.031 8.55 20.969C8.47 20.918 8.488 20.946 8.413 20.882C8.365 20.84 8.325 20.788 8.276 20.745C8.213 20.691 8.135 20.663 8.071 20.609C7.998 20.546 7.94 20.467 7.866 20.404C7.803 20.349 7.725 20.322 7.661 20.267C7.444 20.079 7.25 19.855 7.047 19.652C6.796 19.401 6.546 19.151 6.295 18.901C6.182 18.788 6.059 18.679 5.953 18.559C5.878 18.473 5.824 18.372 5.748 18.286C5.664 18.189 5.56 18.109 5.475 18.012C5.399 17.926 5.346 17.825 5.27 17.739C5.207 17.667 5.129 17.607 5.065 17.534C4.989 17.448 4.936 17.347 4.86 17.261C4.693 17.07 4.532 16.869 4.382 16.664C4.299 16.552 4.191 16.466 4.109 16.354C3.704 15.803 3.283 15.265 2.879 14.714C2.647 14.398 2.427 14.074 2.196 13.758C1.786 13.2 1.426 12.607 1.034 12.038Z"
+            d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
             fill="currentColor"
           />
         </g>
@@ -4911,7 +4915,7 @@
           />
           <path d="M12 0V24M0 12H24" stroke="var(--el-border)" stroke-width="0.4" />
           <path
-            d="M1 0V24M23 0V24M0 1.14H24M0 22.86H24"
+            d="M1.01 0V24M22.99 0V24M0 1H24M0 23H24"
             stroke="var(--el-accent-on-surface)"
             stroke-width="0.3"
             stroke-dasharray="1 1"
@@ -5146,15 +5150,21 @@
         </div>
         <div>
           <p class="cand-math">
-            Traced from Yue's reference; closed at both ends and filled solid.
+            Derived from Yue's own vector source — closed, filled, exact by construction.
           </p>
           <p class="chosen-p">
-            <b>How it was made.</b> The reference was read <i>pixel by pixel</i> rather than redrawn
-            by eye: the image was thresholded to the white curve alone (dropping the grid), the two
-            edges taken as the two runs in each column — <b>318 of 324 columns</b> gave both cleanly
-            — and Catmull-Rom cubic Béziers fitted through samples every 6&nbsp;px. The two edges
-            are then joined by a straight cut at each end and filled. An overlay against the
-            original shows the fill sitting exactly between the two curves with no drift.
+            <b>It is no longer a trace.</b> Yue supplied the mark as an editable
+            <b>draw.io vector file</b> (<code>design/brand/motir-logo.drawio.svg</code>), which
+            draws it as four open strokes: an upper curve, a lower curve and two straight end caps.
+            The artwork is that same geometry <b>closed and filled</b> — upper curve, right cap,
+            lower curve reversed, left cap — built from the source's <i>own control points</i>.
+          </p>
+          <p class="chosen-p">
+            <b>Four quadratic curves and two straight caps — six segments, ~110 bytes.</b> There is
+            no fitting error to measure, because nothing was fitted: the path <i>is</i> the source's
+            geometry. The earlier version was traced from a screenshot and carried a measured 0.069%
+            deviation; that problem is gone, along with the 822-point pixel-exact reference file it
+            needed.
           </p>
           <p class="chosen-p">
             <b>One path, <code>fill="currentColor"</code>.</b> It carries no colour of its own, so
@@ -5168,18 +5178,18 @@
         <p class="prior-title">What this mark does not yet have</p>
         <ul class="finding-list">
           <li>
-            <b>It is traced, not constructed.</b> Every other candidate on this card is generated
-            from a rule — a Hasse diagram, a hypocycloid, a Brunnian link — so it can be re-cut at
-            any size, weight or proportion from its own definition. This one is a fitted outline of
-            a drawing. It cannot be re-derived; it can only be re-traced. If it stays, someone
-            should re-author it as a constructed curve.
+            <b class="ok-note">Resolved: it is no longer traced.</b> It was, until 2026-08-06 — a
+            fitted outline of a screenshot, 0.069% off and impossible to re-derive. Yue's draw.io
+            source replaced that with real geometry, so the mark can now be edited at source and
+            re-exported exactly. The remaining items below still stand.
           </li>
           <li>
-            <b>The two edges are not parallel.</b> The vertical gap runs ~156 units at the trough
-            and ~196 at the peak, and the lower edge's amplitude is 108 against the upper's 146 — so
-            the band is not of constant width; the lower edge is a flatter copy. This was traced
-            <i>exactly as drawn</i>, on instruction. If the difference was accidental rather than
-            intended, regularising it is a small change and worth making before it ships.
+            <b>The two edges are not parallel</b> — and the source now says so precisely. Both
+            curves start and end exactly <b>384 units</b> apart, but their interior control points
+            do not: the upper curve's are at y&nbsp;497.25 and −226.75, the lower's at 1025.25 and
+            165.25, so the offsets run 144 and 8 rather than 384. The band therefore pinches and
+            swells along its length. That is how it was drawn; it is only worth changing if it was
+            not deliberate.
           </li>
           <li>
             <b class="flag">At 24&nbsp;px and below it reads as a letter M.</b> The two peaks and
@@ -5189,10 +5199,11 @@
             an abstract wave at 40&nbsp;px and above, and on the app tile.
           </li>
           <li>
-            <b>No prior-art check has been run on it.</b> The check recorded below was performed
-            against the <i>lattice</i>. A wave band is a much less crowded shape than a concentric
-            rhombus, but "less crowded" is not "checked" — and <b>MOTIR-2267</b> (trademark
-            clearance) now needs to search this shape, not that one.
+            <b>No prior-art check has been run on it.</b> The shape is unchanged by the move to a
+            vector source, and the check recorded below was performed against the <i>lattice</i>. A
+            wave band is a much less crowded shape than a concentric rhombus, but "less crowded" is
+            not "checked" — and <b>MOTIR-2267</b> (trademark clearance) now needs to search this
+            shape, not that one.
           </li>
         </ul>
       </div>
@@ -5474,7 +5485,7 @@
             <use href="#mark-a" />
           </svg>
           <p class="art-cap">
-            24-unit grid · the dashed box is the mark's true extent (20.6 square)
+            24-unit grid · the dashed box is the mark's true extent (21.98 × 22)
           </p>
         </div>
         <div class="constr-spec">
@@ -5486,26 +5497,23 @@
             </dd>
             <dt>path</dt>
             <dd>
-              <b>One closed path, 123 cubic Béziers</b> (~4.6&nbsp;kB). Source of truth is
-              <code>design/brand/wave-band.svg</code> (native 322 × 320), with
-              <code>design/brand/wave-band-24.svg</code> as the 24-grid cut used here.
+              <b>One closed path: four quadratic curves + two straight caps</b> — six segments,
+              ~110&nbsp;bytes. Artwork is <code>design/brand/wave-band.svg</code> (native 768 ×
+              768.5); <code>wave-band-24.svg</code> is the 24-grid cut used here.
             </dd>
-            <dt>how it was fitted</dt>
+            <dt>source</dt>
             <dd>
-              The reference was thresholded to the drawn curve, the region <i>between</i> the two
-              edges flood-filled, and the strokes unioned back in — giving the true filled region as
-              a mask. That mask's boundary was then fitted with <b>least-squares cubic Béziers</b>
-              (Schneider's algorithm, 0.2&nbsp;px tolerance). Re-run that pipeline rather than
-              redrawing by hand if the mark ever needs re-cutting.
+              <code>design/brand/motir-logo.drawio.svg</code> — Yue's editable draw.io file, kept
+              beside the artwork. It draws the mark as four <i>open</i> strokes; the artwork closes
+              and fills them (upper curve → right cap → lower curve reversed → left cap) using the
+              source's own control points. <b>To change the mark, edit the source and re-derive</b>
+              — do not hand-edit the path.
             </dd>
-            <dt>measured accuracy</dt>
+            <dt>accuracy</dt>
             <dd>
-              Rasterised at the reference's native 324&nbsp;px and compared pixel-for-pixel against
-              the mask: <b>38 of 55,000 pixels differ — 0.069%</b>, all of it sub-pixel deviation
-              along the boundary. <code>design/brand/wave-band-exact.svg</code> is a
-              <b>0.000%</b> variant kept as the accuracy reference; it is an 822-point staircase
-              that follows the screenshot's pixel grid, so it shows visible steps when enlarged and
-              is <b>not</b> the artwork to render.
+              <b>Exact by construction</b> — nothing is fitted, so there is no deviation to measure.
+              This replaces a screenshot trace that was 0.069% off and needed a separate 822-point
+              pixel-exact reference file; both are gone.
             </dd>
             <dt>paint</dt>
             <dd>
@@ -5516,9 +5524,9 @@
             </dd>
             <dt>extent</dt>
             <dd>
-              x 1.0 → 23.0, y 1.14 → 22.86 on the 24-grid — 22 × 21.7, all but square, centred on
-              (12, 12). Aspect is preserved from the source (317 × 313), so the mark is very
-              slightly wider than tall; do not stretch it to fill a square.
+              x 1.01 → 22.99, y 1.0 → 23.0 on the 24-grid — <b>21.98 × 22</b>, all but square,
+              centred on (12, 12). Aspect is preserved from the source (768 × 768.5), so the mark is
+              a hair taller than wide; <b>do not stretch it to fill a square</b>.
             </dd>
             <dt>clear space</dt>
             <dd>
