@@ -1220,6 +1220,30 @@
         flex: none;
         color: var(--el-text-muted);
       }
+
+      /* ── The GROWN catalog (panel 3) — collapsing GROUPS is the density lever ──
+         MOTIR-2274 measured 32 permissions across 16 domains with a largest group
+         of FOUR rows. So the page's length lives in the number of groups, not in
+         any single one — which makes collapsing a group the right control and
+         truncating rows inside one a fix for a problem this catalog does not
+         have. A group whose keys are all still `planned` collapses to its header. */
+      .mgroup .dchev {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        color: var(--el-text-faint);
+      }
+      .mgroup.collapsed {
+        color: var(--el-text-muted);
+      }
+      .mgroup .dpend {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-weight: 500;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-faint);
+      }
     </style>
   </head>
   <body>
@@ -1888,6 +1912,265 @@
       </div>
     </div>
 
+    <!-- ════════════ PANEL 3 — the catalog at full size ════════════ -->
+    <div class="panel-label">
+      3 · The catalog AT FULL SIZE — 32 permissions across 16 domains, the numbers MOTIR-2274
+      measured by walking every route. Only the <strong>8 enforced role-gated</strong> keys render
+      as matrix rows on the day this ships (the five groups expanded); the ten groups that are
+      entirely <code>planned</code> collapse to a header with a pending count, and the sixteenth
+      domain — <code>public_request</code> — is level-gated, so it renders in the Access-level card
+      below the matrix exactly as in panels 0 and 2, never as a role column. That is the density
+      lever this catalog actually needs: the length is in the NUMBER of groups, not in any one group
+      — the largest is four rows — so collapsing GROUPS is right, and truncating rows inside one
+      would fix a problem this catalog does not have. As MOTIR-2256 wires a domain its group expands
+      in place; nothing about the layout changes.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="content" style="padding: 22px">
+          <div class="rp-stack">
+            <div class="matrix with-custom">
+              <div class="mhead mcorner"><span class="clabel">Permission</span></div>
+              <div class="mhead">
+                <span class="rname">Admin</span>
+                <span class="rmeta">8 of 8</span>
+                <span class="lockchip"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                >
+              </div>
+              <div class="mhead">
+                <span class="rname">Member</span>
+                <span class="rmeta">4 of 8</span>
+                <span class="lockchip"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                >
+              </div>
+              <div class="mhead">
+                <span class="rname">Viewer</span>
+                <span class="rmeta">1 of 8</span>
+                <span class="lockchip"
+                  ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                >
+              </div>
+              <div class="mhead custom">
+                <span class="rname">Contractor</span>
+                <span class="rmeta">3 of 8</span>
+                <span class="rowacts"
+                  ><span class="iconbtn" role="img" aria-label="Edit role"
+                    ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg></span
+                  ><span class="iconbtn" role="img" aria-label="Delete role"
+                    ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg></span
+                ></span>
+              </div>
+              <div class="mgroup">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                >Project<span class="dom-count">2/2</span>
+              </div>
+              <div class="mperm"><span class="plabel">View project</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mperm"><span class="plabel">Administer project</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mgroup">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg>Work
+                items<span class="dom-count">1/3</span>
+              </div>
+              <div class="mperm"><span class="plabel">Edit work items</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mgroup">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                >Comments<span class="dom-count">2/2</span>
+              </div>
+              <div class="mperm"><span class="plabel">Add comments</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mperm"><span class="plabel">Moderate comments</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mgroup">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                >Attachments<span class="dom-count">2/2</span>
+              </div>
+              <div class="mperm"><span class="plabel">Add attachments</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mperm"><span class="plabel">Delete any attachment</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mgroup">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-down" /></svg
+                >Watchers<span class="dom-count">1/1</span>
+              </div>
+              <div class="mperm"><span class="plabel">Manage watchers</span></div>
+              <div class="mcell on" role="img" aria-label="Held">
+                <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mcell off" role="img" aria-label="Not held">
+                <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Members
+                & access<span class="dom-count">0/2</span><span class="dpend">2 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
+                >Boards<span class="dom-count">0/1</span><span class="dpend">1 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Sprints
+                & backlog<span class="dom-count">0/1</span><span class="dpend">1 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Workflow
+                & automation<span class="dom-count">0/2</span><span class="dpend">2 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Fields &
+                components<span class="dom-count">0/3</span><span class="dpend">3 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
+                >Estimation<span class="dom-count">0/1</span><span class="dpend">1 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>Reports
+                & filters<span class="dom-count">0/2</span><span class="dpend">2 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
+                >Repositories<span class="dom-count">0/3</span><span class="dpend">3 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg
+                >Import<span class="dom-count">0/1</span><span class="dpend">1 pending</span>
+              </div>
+              <div class="mgroup collapsed">
+                <svg viewBox="0 0 24 24" class="dchev"><use href="#i-chevron-right" /></svg>AI
+                planning<span class="dom-count">0/3</span><span class="dpend">3 pending</span>
+              </div>
+            </div>
+            <div class="card level-card">
+              <div class="level-head">
+                <div>
+                  <div class="rname">Public requests</div>
+                  <div class="rdesc">
+                    Granted by the project’s <strong>access level</strong>, not by a role — which is
+                    why they are not a column above. Every visitor of a
+                    <strong>public</strong> project holds all three, signed in or not; nobody holds
+                    them on an open, limited or private project, a workspace owner included.
+                  </div>
+                </div>
+                <span class="pill pill-neutral"
+                  ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Access level</span
+                >
+              </div>
+              <div class="lrow">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  ><span class="plabel">Submit requests</span>
+                  <span class="pdesc"
+                    >Send a bug report or feature request into the triage queue.</span
+                  ></span
+                >
+              </div>
+              <div class="lrow">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  ><span class="plabel">Upvote requests</span>
+                  <span class="pdesc">Vote on a public request to signal demand for it.</span></span
+                >
+              </div>
+              <div class="lrow">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  ><span class="plabel">Comment on requests</span>
+                  <span class="pdesc">Reply on a public request’s thread.</span></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ════════════ PANEL 3 — the member (non-admin) view ════════════ -->
     <div class="panel-label">
       3 · The member (non-admin) view — browse-gated, so a member opens the same page and reads the
@@ -2507,6 +2790,16 @@
           <path d="M3 6h18" />
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
           <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
         </g>
       </defs>
     </svg>
