@@ -113,6 +113,21 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: [
+        // Story MOTIR-2256 · Subtask MOTIR-2302 — the permission MODEL and its
+        // enforcement seam. Every administrative gate in the product now routes
+        // through these four files, and until this story they were not in the
+        // coverage report at all, so the ≥90% per-file gate never applied to the
+        // code that decides who may do what.
+        //
+        // ⚠️ REPORT-ONLY, deliberately: they are added to `include` but NOT to
+        // `thresholds` below, so CI publishes the number without gating on one
+        // nobody has measured. The honest sequence is measure first, then pin —
+        // pinning a threshold blind is how a gate gets loosened later to make a
+        // build pass, which is worse than not having it. The follow-up is to read
+        // the number off the first CI run and add the four `thresholds` entries.
+        'lib/permissions/**',
+        'lib/services/projectAccessService.ts',
+
         // Story 5.7 (in-app notifications) · Subtask 5.7.6 — the per-user
         // notification-preference layer (the channel gate) lands gated.
         'lib/services/notificationPreferencesService.ts',
