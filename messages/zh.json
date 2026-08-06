@@ -5150,7 +5150,12 @@
         "startedRecently": "刚刚开始",
         "retry": "重试",
         "pick": "查看 {repoRef} 的审核",
-        "groupLabel": "选择要查看审核报告的仓库"
+        "groupLabel": "选择要查看审核报告的仓库",
+        "auditOne": "审计此仓库",
+        "auditOneLabel": "审计 {repoRef}",
+        "reauditOne": "重新审计",
+        "reauditOneLabel": "重新审计 {repoRef}",
+        "auditUnaudited": "{count, plural, other {审计 # 个尚无报告的仓库}}"
       }
     },
     "convention": {
@@ -5716,5 +5721,10 @@
     "policyAdditiveHeading": "增量变更 —— 无需事先通知",
     "policyForbiddenHeading": "除非发布新主版本，否则绝不",
     "policyAdrNote": "本页是对外的公开承诺。其生成来源的内部记录是 API 决策记录，"
+  },
+  "auditCoverage": {
+    "count": "{count, plural, other {# 个仓库尚无代码健康度审计。}}",
+    "consequence": "涉及这些仓库的计划，将在没有其既有规范的情况下生成。",
+    "action": "查看代码健康度"
   }
 }

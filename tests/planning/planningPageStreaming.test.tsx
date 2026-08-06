@@ -24,13 +24,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   getSession,
   getActiveProject,
-  getCapabilities,
+  getSettingsCapabilities,
   getProjectRoadmap,
   getWorkItemWithAncestors,
 } = vi.hoisted(() => ({
   getSession: vi.fn(),
   getActiveProject: vi.fn(),
-  getCapabilities: vi.fn(),
+  getSettingsCapabilities: vi.fn(),
   getProjectRoadmap: vi.fn(),
   getWorkItemWithAncestors: vi.fn(),
 }));
@@ -48,7 +48,7 @@ vi.mock('next-intl/server', () => ({
 vi.mock('@/lib/auth', () => ({ getSession }));
 vi.mock('@/lib/projects', () => ({ getActiveProject }));
 vi.mock('@/lib/services/projectAccessService', () => ({
-  projectAccessService: { getCapabilities },
+  projectAccessService: { getSettingsCapabilities },
 }));
 vi.mock('@/lib/services/workItemsService', () => ({
   workItemsService: { getProjectRoadmap, getWorkItemWithAncestors },
@@ -83,7 +83,9 @@ function render(searchParams: Record<string, string> = {}) {
 beforeEach(() => {
   getSession.mockResolvedValue({ user: { id: 'u1' } });
   getActiveProject.mockResolvedValue(PROJECT);
-  getCapabilities.mockResolvedValue({ canBrowse: true });
+  // The page reads all three capabilities from ONE call (MOTIR-2250):
+  // `canBrowse` gates the paint, `canManage` gates the audit-coverage banner.
+  getSettingsCapabilities.mockResolvedValue({ canBrowse: true, canEdit: true, canManage: false });
   getProjectRoadmap.mockResolvedValue({ nodes: [{ id: 'wi1' }] });
   // The LINEAGE read (MOTIR-2070) replaced the bare identifier resolve: the
   // canvas's arrival level needs the anchor's ancestors, so the page asks for
@@ -158,7 +160,11 @@ describe('the ACCESS gates still run ahead of the paint (MOTIR-2069)', () => {
   });
 
   it('a no-access actor gets the refusal — no workspace frame for a project they cannot browse', async () => {
-    getCapabilities.mockResolvedValue({ canBrowse: false });
+    getSettingsCapabilities.mockResolvedValue({
+      canBrowse: false,
+      canEdit: false,
+      canManage: false,
+    });
 
     const element = await render();
 

@@ -51,6 +51,8 @@ export function AuditRepoList({
   selectedRepoKey,
   onSelect,
   onRetry,
+  onAuditRepos,
+  busy = false,
 }: {
   rows: RepoAuditRow[];
   selectedRepoKey: string | null;
@@ -58,6 +60,13 @@ export function AuditRepoList({
   /** Re-read ONE repo's surface after its read failed. Never a re-audit: the
    *  row failed to LOAD, which says nothing about whether it needs deriving. */
   onRetry: (repoKey: string) => void;
+  /** DERIVE an audit for exactly these repos (Panel 8 / MOTIR-2249). One repo
+   *  from a row action, or every un-audited repo from the header action. */
+  onAuditRepos?: (repoKeys: string[]) => void;
+  /** A run is in flight (or is being resumed). Every derive trigger is then
+   *  REMOVED, not disabled — Panel 4b State C's rule: the guarded handler would
+   *  no-op anyway, and a control that does nothing is worse than an absent one. */
+  busy?: boolean;
 }) {
   const t = useTranslations('codeHealth.audit.repos');
   const format = useFormatter();
@@ -67,13 +76,28 @@ export function AuditRepoList({
 
   const ordered = orderRepoAuditRows(rows);
   const rollup = rollupRepoAuditRows(rows);
+  const canTrigger = onAuditRepos !== undefined && !busy;
+  // The header action's scope: every repo with NO report. `unavailable` is
+  // excluded — its read failed, so nothing here knows whether it needs deriving
+  // (Panel 8 §2); the row offers a free re-READ instead.
+  const unaudited = ordered.filter((row) => row.state === 'not_audited').map((row) => row.repoKey);
 
   return (
     <Card
       header={
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm font-medium text-(--el-text-strong)">{t('title')}</span>
-          <Pill tone="neutral">{t('connected', { count: rollup.connected })}</Pill>
+          <div className="flex items-center gap-2">
+            <Pill tone="neutral">{t('connected', { count: rollup.connected })}</Pill>
+            {/* ABSENT at zero, never disabled (Panel 8 §3): a control whose only
+                meaning is "there is nothing to do" has to be explained, and the
+                rollup already says every repo is audited. */}
+            {canTrigger && unaudited.length > 0 ? (
+              <Button variant="secondary" size="sm" onClick={() => onAuditRepos?.(unaudited)}>
+                {t('auditUnaudited', { count: unaudited.length })}
+              </Button>
+            ) : null}
+          </div>
         </div>
       }
     >
@@ -110,6 +134,7 @@ export function AuditRepoList({
             selected={row.repoKey === selectedRepoKey}
             onSelect={onSelect}
             onRetry={onRetry}
+            onAudit={canTrigger ? (repoKey) => onAuditRepos?.([repoKey]) : undefined}
             when={row.auditedAt === null ? null : format.relativeTime(new Date(row.auditedAt))}
           />
         ))}
@@ -123,12 +148,15 @@ function RepoRow({
   selected,
   onSelect,
   onRetry,
+  onAudit,
   when,
 }: {
   row: RepoAuditRow;
   selected: boolean;
   onSelect: (repoKey: string) => void;
   onRetry: (repoKey: string) => void;
+  /** Undefined when no derive trigger may render at all (N/A or a run in flight). */
+  onAudit?: (repoKey: string) => void;
   when: string | null;
 }) {
   const t = useTranslations('codeHealth.audit.repos');
@@ -208,6 +236,36 @@ function RepoRow({
       {row.state === 'unavailable' ? (
         <Button variant="ghost" size="sm" onClick={() => onRetry(row.repoKey)}>
           {t('retry')}
+        </Button>
+      ) : null}
+
+      {/* The DERIVE trigger — also a sibling, and the row's last element (Panel 8
+          §2). Weight encodes price: `secondary` (bordered) for the one thing
+          worth doing on a repo with no report, `ghost` for the rarer re-derive.
+          Its accessible name repeats the REPO, because "Audit this repo" read
+          out of the row means nothing.
+
+          ⚠️ Two states get NO trigger, and both are deliberate:
+            · `deriving`    — the work is already happening; a second press can
+                              only duplicate it.
+            · `unavailable` — the read FAILED, so nothing here knows whether the
+                              repo has a report; deriving would spend money to
+                              fix what may be a display error. Its free re-READ
+                              above is the correct first move. This is also what
+                              keeps the free recovery and the paid trigger from
+                              ever sitting in the same row. */}
+      {onAudit !== undefined && (row.state === 'not_audited' || row.state === 'audited') ? (
+        <Button
+          variant={row.state === 'not_audited' ? 'secondary' : 'ghost'}
+          size="sm"
+          aria-label={
+            row.state === 'not_audited'
+              ? t('auditOneLabel', { repoRef: row.repoKey })
+              : t('reauditOneLabel', { repoRef: row.repoKey })
+          }
+          onClick={() => onAudit(row.repoKey)}
+        >
+          {row.state === 'not_audited' ? t('auditOne') : t('reauditOne')}
         </Button>
       ) : null}
     </div>
