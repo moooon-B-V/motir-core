@@ -63,8 +63,9 @@
         (8) The IN-APP DOOR, on the shipped API-tokens settings page.
         (9) Mobile (390px) — the catalogue drawer and the scrolling code block.
        (10) The AGENT SANDBOX guide (MOTIR-2270) — the rail's fourth entry, the
-            confinement summary, the `docker run` + its mounts, the three Motir
-            credential tiers, and the eight-profile matrix at full width.
+            PRECONDITIONS, the confinement summary, the `docker run` + its mounts,
+            the three Motir credential tiers, the eight-profile matrix, and the
+            three-step VS Code dev-container setup, at full width.
        (11) The PROFILE MATRIX at 390px — the same eight profiles as stacked
             cards, which is the case a five-column table cannot survive.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
@@ -1949,10 +1950,12 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
       <span class="note">
         The FOURTH page, in the same shell as the other three — same rail, same content column, same
         heading rhythm as Getting started. It is deliberately the FIRST TEN MINUTES and nothing
-        more: what the container confines, the one command, the mounts that command needs, the three
-        ways to hand it a Motir credential, and which profile to run. Everything past that stays in
-        <code>packages/cli/sandbox/README.md</code>, which the last line links. The rail's fourth
-        entry is this page's ONLY entrance — nothing else in the product routes here.
+        more: what you need BEFORE you start, what the container confines, the one command, the
+        mounts that command needs, the three ways to hand it a Motir credential, which profile to
+        run, and the three-step VS Code path for a reader who would rather stay in their editor.
+        Everything past that stays in <code>packages/cli/sandbox/README.md</code>, which the last
+        line links. The rail's fourth entry is this page's ONLY entrance — nothing else in the
+        product routes here.
       </span>
     </div>
     <div class="panel">
@@ -2004,6 +2007,74 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
               and nothing else on your machine. Adopting it is a <code>docker run</code>, not a
               <code>git clone</code>.
             </p>
+
+            <h2>Before you start</h2>
+            <p>
+              Four things, none of which involves cloning this repository. The container consumes
+              credentials you already have — it never mints one for you.
+            </p>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 26%">What you need</th>
+                  <th>How to get it</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">Docker</span><br /><span class="ty">running</span></td>
+                  <td>
+                    Docker Desktop or any engine. The images are built for
+                    <code>linux/amd64</code> <em>and</em> <code>linux/arm64</code>, so Apple Silicon
+                    is a first-class machine and nothing is emulated. There is no build step — you
+                    pull.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="nm">A Motir token</span><br /><span class="ty">+ server URL</span>
+                  </td>
+                  <td>
+                    Mint one under <strong>Settings → Account → API tokens</strong> and export it as
+                    <code>MOTIR_TOKEN</code> (with <code>MOTIR_SERVER</code>). Or skip it and run
+                    <code>motir login</code> inside the container — see the three tiers below.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="nm">Your agent's own sign-in</span><br /><span class="ty"
+                      >on the host</span
+                    >
+                  </td>
+                  <td>
+                    Sign in to your coding agent <em>once, on this machine</em>, before you start —
+                    or pass its API key through the environment. The credential mount is
+                    <strong>read-only</strong>, so the container can use a sign-in but can never
+                    perform one.
+                  </td>
+                </tr>
+                <tr>
+                  <td>
+                    <span class="nm">A linked workspace</span><br /><span class="ty"
+                      >.motir.json</span
+                    >
+                  </td>
+                  <td>
+                    Run <code>motir link</code> at your workspace root — the folder holding your
+                    checkouts, not one of them. It writes <code>.motir.json</code>, which carries no
+                    secret, and that folder is the one you run from.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                ><code>motir doctor</code> checks all four and names what is missing. Run it on the
+                host before you start, and again inside the container if a run stops early — it is
+                the same command in both places.</span
+              >
+            </div>
 
             <h2>What it confines — and what it does not</h2>
             <table class="spec">
@@ -2198,13 +2269,72 @@ docker run --rm -it \
               >
             </div>
 
-            <h2>Or stay in your editor</h2>
+            <h2>Or set it up in VS Code</h2>
             <p>
-              Each profile also ships a dev-container variant, so VS Code opens
-              <code>/workspace</code> inside the same confined image with the same mounts.
+              The same confined image, as a dev container: VS Code opens
+              <code>/workspace</code> inside it with the same mounts, so your editor, terminal and
+              agent all run behind the same boundary. Three steps.
+            </p>
+
+            <h3>1 · Install the Dev Containers extension</h3>
+            <p>
+              From the Extensions view, or the command palette's
+              <strong>Extensions: Install Extensions</strong>. Docker must be running, as above.
+            </p>
+
+            <h3>2 · Add <code>.devcontainer/devcontainer.json</code> to your workspace root</h3>
+            <p>
+              Beside your <code>.motir.json</code>. Pin the published image and the mounts your
+              profile needs — this is the same set the <code>docker run</code> above passes:
+            </p>
+            <div class="codeblock">
+              <div class="cap">.devcontainer/devcontainer.json</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+{
+  "name": "Motir sandbox (Claude Code)",
+  "image": "ghcr.io/moooon-b-v/motir-sandbox:claude",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true,
+  "postAttachCommand": "motir doctor",
+  "remoteEnv": {
+    "MOTIR_TOKEN": "${localEnv:MOTIR_TOKEN}",
+    "MOTIR_SERVER": "${localEnv:MOTIR_SERVER}"
+  }
+}</pre
+              >
+            </div>
+            <p>
+              Swap <code>:claude</code> and the <code>mounts</code> entry for your profile's row in
+              the matrix above. <code>remoteEnv</code> forwards your Motir credential from the local
+              environment, so a machine that never ran a host login still resolves one.
+            </p>
+
+            <h3>3 · Reopen in Container</h3>
+            <p>
+              Command palette → <strong>Dev Containers: Reopen in Container</strong>. VS Code pulls
+              the image, attaches, and <code>postAttachCommand</code> runs
+              <code>motir doctor</code> so a missing credential shows up in the terminal on the way
+              in, rather than mid-run.
             </p>
             <div class="callout callout--warn">
               <span aria-hidden="true">▲</span>
+              <span
+                >The <code>devcontainer.json</code> files committed under
+                <code>packages/cli/sandbox/devcontainer/</code> are <strong>not</strong> this file.
+                They carry a <code>build</code> block pointing at the repository's own
+                <code>Dockerfile</code>, because they are <em>motir-core's</em> dev containers and a
+                checkout is what those are for. For your own workspace, pin the image as
+                above.</span
+              >
+            </div>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
               <span
                 >This page is the first ten minutes. Digests to pin, the confinement proof, the
                 validation harness and the escape hatch for an unlisted agent live in
@@ -2215,11 +2345,12 @@ docker run --rm -it \
 
           <aside class="docs-aside toc">
             <h4>On this page</h4>
-            <a class="is-active" href="#">What it confines</a>
+            <a class="is-active" href="#">Before you start</a>
+            <a href="#">What it confines</a>
             <a href="#">The one command</a>
             <a href="#">Credential tiers</a>
             <a href="#">Choosing a profile</a>
-            <a href="#">Dev container</a>
+            <a href="#">Set it up in VS Code</a>
           </aside>
         </div>
       </div>

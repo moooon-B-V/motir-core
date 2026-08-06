@@ -297,6 +297,19 @@ Sections, in reading order, and each is the FIRST-RUN half of its subject per
 ADR Amendment 8 Q2 (_a fact belongs on the page when a reader needs it for their
 first successful run AND a test can hold it true_):
 
+0. **Before you start — the PRECONDITIONS.** A two-column `table.spec` (what you
+   need / how to get it) with four rows, then a `callout` (info) pointing at
+   `motir doctor`. It sits above everything, because each row is a thing that
+   makes the `docker run` fail _later and less legibly_ if it is missing:
+   **Docker** running (the images are `linux/amd64` **and** `linux/arm64`, so
+   Apple Silicon is first-class and there is no build step); **a Motir token +
+   server URL** (Settings → Account → API tokens, or `motir login` inside the
+   container); **the agent's own sign-in, already on the host** — the mount is
+   read-only, so the container can USE a sign-in and can never PERFORM one, which
+   is the non-obvious one; and **a linked workspace** (`motir link` writes
+   `.motir.json`; that folder is the one you run from, not a checkout inside it).
+   The `motir doctor` callout is the affordance that turns all four into one
+   command, and it is the same command inside the container.
 1. **What it confines — and what it does not.** A three-row `table.spec`
    (`Filesystem` / `Network` / `Privileges`). The middle row is the one that
    earns the section: the network is **open by design**, and a guide that let a
@@ -316,12 +329,42 @@ first successful run AND a test can hold it true_):
    `motir-sandbox:base` beside it. **`base` is a TAG, not a profile**, so it is
    deliberately drawn OUTSIDE the table: putting it in as a ninth row is exactly
    the confusion the callout exists to prevent.
-6. **Or stay in your editor** — one paragraph pointing at the dev-container
-   variants, then a `callout` (warning) handing the reader to
-   `packages/cli/sandbox/README.md` for everything past the first ten minutes.
+6. **Or set it up in VS Code** — three numbered `h3` steps with a real
+   `.devcontainer/devcontainer.json` to copy (below), then a `callout` (warning)
+   about which file NOT to copy, and a closing `callout` (info) handing the
+   reader to `packages/cli/sandbox/README.md` for everything past the first ten
+   minutes. The closing pointer is INFO tone, not warning: it is where the rest
+   lives, not a hazard, and two peach blocks in a row would read as one.
 
-The right-hand `toc` aside carries the five section links (`docs-aside toc`,
+The right-hand `toc` aside carries the six section links (`docs-aside toc`,
 unchanged from Panels 2 and 4).
+
+### ⚠️ The VS Code path draws the IMAGE-PINNED form, not the committed file
+
+**Checked against the shipped artifact, and it changes what the page says.** Every
+`devcontainer.json` under `packages/cli/sandbox/devcontainer/` carries a **`build`
+block** — `"dockerfile": "../Dockerfile"` with `"context"` at the repository root —
+so those files build the image from a **checkout**. They are _motir-core's own_ dev
+containers and a checkout is exactly what they are for. Pointing a reader at them
+would contradict this page's entire premise in the one section where they are most
+likely to copy-paste.
+
+So the page draws the form the README's own _"To use one for your own workspace"_
+paragraph prescribes: **drop the `build` block and pin the published image**. The
+drawn JSON keeps the committed file's other keys verbatim — `workspaceFolder`,
+`workspaceMount`, `mounts`, `remoteUser`, `overrideCommand`, `remoteEnv` (which
+forwards `MOTIR_TOKEN` / `MOTIR_SERVER` from the local environment, so a machine
+that never ran a host login still resolves a credential) — and changes
+`postAttachCommand` from `motir --version` to **`motir doctor`**, so the
+preconditions section's own check runs on the way in rather than a version string.
+The warning callout names the committed files explicitly, because "there is a
+`devcontainer.json` in the repo" is what a reader will find first.
+
+The three steps are drawn as `h3`s rather than a numbered list: they are
+procedure, and each carries a paragraph and (for step 2) a code block, which a
+`<li>` rhythm does not hold. The JSON block scrolls inside its own container like
+every other code block on the surface — `workspaceMount` is the line that proves
+it.
 
 ### ⚠️ The PROFILE MATRIX — the decision the page card implements
 
