@@ -1,11 +1,14 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { NextResponse } from 'next/server';
 import { apiTokensService } from '@/lib/services/apiTokensService';
-import { withV1Route, REQUEST_ID_HEADER } from '@/lib/api/v1/route';
+import { withV1Route, REQUEST_ID_HEADER, API_VERSION_HEADER } from '@/lib/api/v1/route';
+import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 import { ApiV1Error, InvalidRequestError } from '@/lib/api/v1/errors';
 import { presentedBearerToken, tokenFingerprint } from '@/lib/api/v1/bearer';
+import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { createV1Caller, bearer } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). Real Postgres, real PATs minted through the shipped service —
@@ -216,6 +219,17 @@ describe('withV1Route — request id', () => {
     }
   });
 
+  it('does NOT let a client dictate the api version the way it can the request id', async () => {
+    // The request id is echoed by design; the contract version is a fact about
+    // the SERVER and must never be reflected back from the request, or a client
+    // could convince itself it is talking to a contract that does not exist.
+    const caller = await createV1Caller();
+
+    const res = await fixtureRoute(req({ ...caller.headers, [API_VERSION_HEADER]: '9.9.9' }));
+
+    expect(res.headers.get(API_VERSION_HEADER)).toBe(V1_CONTRACT_VERSION);
+  });
+
   it('echoes an id-shaped client request id, and mints one otherwise', async () => {
     const caller = await createV1Caller();
 
@@ -231,6 +245,89 @@ describe('withV1Route — request id', () => {
     const minted = rejected.headers.get(REQUEST_ID_HEADER);
     expect(minted).toBeTruthy();
     expect(minted).not.toContain('<script>');
+  });
+});
+
+describe('withV1Route — the contract version header (MOTIR-2275)', () => {
+  const savedEnv = {
+    limit: process.env['MOTIR_API_V1_RATE_LIMIT'],
+    window: process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'],
+  };
+
+  beforeEach(async () => {
+    await truncateAuthTables();
+    resetRateLimitStore();
+  });
+
+  afterEach(() => {
+    if (savedEnv.limit === undefined) delete process.env['MOTIR_API_V1_RATE_LIMIT'];
+    else process.env['MOTIR_API_V1_RATE_LIMIT'] = savedEnv.limit;
+    if (savedEnv.window === undefined) delete process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'];
+    else process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'] = savedEnv.window;
+    resetRateLimitStore();
+  });
+
+  // The criterion the card is FOR: every exit path, driving the REAL wrapper
+  // rather than a fixture that re-states what the wrapper is assumed to do.
+  // A version a client can only read on a 200 is useless precisely when it
+  // matters — a 401/403/429/500 is when it most wants to know whether it is
+  // speaking the right contract at all.
+  it('stamps the version on a 200, a 401, a 403, a mapped domain error and a 500', async () => {
+    const caller = await createV1Caller({ scopes: ['read'] });
+    const wrongScope = await createV1Caller({ scopes: ['work_items:write'] });
+    const notAMember = Object.assign(new Error('You are not a member of this workspace.'), {
+      code: 'NOT_A_MEMBER',
+    });
+
+    const cases: Array<[string, number, Response]> = [
+      ['200', 200, await fixtureRoute(req(caller.headers))],
+      ['401', 401, await fixtureRoute(req())],
+      ['403', 403, await fixtureRoute(req(wrongScope.headers))],
+      ['422 mapped', 422, await throwingRoute(new InvalidRequestError('INVALID_LIMIT', 'no.'))(req(caller.headers))], // prettier-ignore
+      ['404 domain', 404, await throwingRoute(notAMember)(req(caller.headers))],
+      ['500', 500, await throwingRoute(new Error('boom'))(req(caller.headers))],
+    ];
+
+    for (const [label, status, res] of cases) {
+      expect(res.status, `${label} status`).toBe(status);
+      // Read FROM the constant, never restated — a bump must not need this
+      // assertion edited, and a hard-coded '1.0.0' here would pass while the
+      // header lied.
+      expect(res.headers.get(API_VERSION_HEADER), `${label} carries the version`).toBe(
+        V1_CONTRACT_VERSION,
+      );
+    }
+  });
+
+  // The 429 is its own case: it is the ONE exit the wrapper takes before the
+  // scope check, from inside the try block, so a version stamped anywhere but
+  // before the try could plausibly still cover the five above and miss this one.
+  it('stamps the version on a 429 — the exit taken before the scope check', async () => {
+    process.env['MOTIR_API_V1_RATE_LIMIT'] = '1';
+    process.env['MOTIR_API_V1_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
+    const caller = await createV1Caller({ scopes: ['read'] });
+    // Two requests whose outcome depends on the ACCUMULATED count, so the run
+    // must own a whole window (`tests/helpers/rateLimitWindow.ts`).
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+
+    const served = await fixtureRoute(req(caller.headers));
+    const refused = await fixtureRoute(req(caller.headers));
+
+    expect(served.status).toBe(200);
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get(API_VERSION_HEADER)).toBe(V1_CONTRACT_VERSION);
+  });
+
+  it('matches the version the emitted document publishes as `info.version`', async () => {
+    // One number with one meaning (ADR Amendment 4 Q6): the header and the
+    // document cannot disagree, because a client compares one against the other.
+    const caller = await createV1Caller({ scopes: ['read'] });
+    const { emitOpenApiDocument } = await import('@/lib/api/v1/openapi/emit');
+    const document = emitOpenApiDocument() as unknown as { info: { version: string } };
+
+    const res = await fixtureRoute(req(caller.headers));
+
+    expect(res.headers.get(API_VERSION_HEADER)).toBe(document.info.version);
   });
 });
 

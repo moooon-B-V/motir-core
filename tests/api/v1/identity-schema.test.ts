@@ -93,6 +93,20 @@ describe('presentMe', () => {
 
     expect(() => meSchema.parse(payload)).not.toThrow();
   });
+
+  // MOTIR-2275 put the contract version on the TRANSPORT, deliberately NOT in
+  // this body: a client that has to call one endpoint to learn the version
+  // cannot learn it from the response that just failed. This asserts the road
+  // not taken stayed not taken — `meSchema` still has exactly its three keys,
+  // and `.strict()` still refuses a fourth.
+  it('is UNCHANGED — exactly three keys, and a version field is refused', () => {
+    expect(Object.keys(meSchema.shape).sort()).toEqual(['scopes', 'user', 'workspaceId']);
+
+    const valid = { user: { id: 'u', name: 'n', email: 'e' }, workspaceId: 'ws', scopes: [] };
+    expect(meSchema.safeParse(valid).success).toBe(true);
+    expect(meSchema.safeParse({ ...valid, version: '1.1.0' }).success).toBe(false);
+    expect(meSchema.safeParse({ ...valid, apiVersion: '1.1.0' }).success).toBe(false);
+  });
 });
 
 describe('presentWorkspaceSummary', () => {

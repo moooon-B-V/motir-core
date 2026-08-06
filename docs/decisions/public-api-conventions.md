@@ -364,11 +364,17 @@ deferred silently.
 > as §8-permitted ADDITIONS with the bounded-projection form named, so the
 > permission is a decision a reader can find rather than one they re-derive.
 
+> **⚠️ Amended 2026-08-06 — see [Amendment 8](#amendment-8-2026-08-06--api1-advertises-its-contract-version-on-every-response).**
+> The allowed list gains **a new response header**, which is what `X-Motir-Api-Version`
+> lands under. The amendment also records the obligation that comes with it: an
+> additive change now MUST move `V1_CONTRACT_VERSION`, because the number is on a
+> header every client reads rather than in a document nobody fetches at runtime.
+
 Within `v1`:
 
 - **Allowed (additive):** a new endpoint; a new optional query parameter; a new
-  field on a response object; a new enum value on a field documented as
-  open-ended; a raised rate-limit budget.
+  field on a response object; a new response header; a new enum value on a field
+  documented as open-ended; a raised rate-limit budget.
 - **Forbidden without a new major:** removing a field; renaming a field;
   changing a field's type or nullability; removing or re-purposing an error
   `code`; changing an existing status for an existing condition; tightening a
@@ -422,18 +428,18 @@ epic — not something v1 invents at the edge.
 
 ## Rejected alternatives
 
-| Rejected                                                           | Why                                                                                                                                                                                                                                                                                                                                                                              |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Offset pagination** (`?page=` / `?offset=`)                      | Silently skips and duplicates rows when the collection mutates mid-scan — which for Motir is the normal case, not an edge case, since agent loops write while clients read. Simpler to implement and impossible to make correct.                                                                                                                                                 |
-| **Header versioning** (`X-Motir-Api-Version`)                      | Legitimate and used by GitHub and Stripe (§1 records the real evidence). Rejected because it leaves the public/internal boundary invisible inside one `app/api/**` tree, and because it only pays for itself with per-version transformation infrastructure that a self-hostable product with drifting client/server pairs would still find less debuggable than a visible path. |
-| **Query-parameter versioning** (`?v=1`)                            | Same "same resource, two names" objection as path versioning but without its one benefit — the boundary is not visible in the route tree — and trivially lost when a client drops the parameter.                                                                                                                                                                                 |
-| **`X-API-Key` as an alternative header**                           | A second auth path doubles the surface that must stay correct, and every gate would have to accept both forever. `Authorization: Bearer` is already shipped, already parsed, and already what both mirrors use. One auth path.                                                                                                                                                   |
-| **A session-cookie fallback**                                      | Would make CSRF a concern on a surface that currently has none: a bearer-only endpoint cannot be driven by a browser carrying a victim's cookie. The web app has its own cookie-authenticated tree; the public API stays credential-disjoint from it.                                                                                                                            |
-| **Exposing `work_items:delete` in the first cut**                  | The only irreversible, subtree-cascading operation, already off by default in `DEFAULT_TOKEN_SCOPES`. Exposing it later is additive under §8; withdrawing it later would be breaking.                                                                                                                                                                                            |
-| **A distinct error shape for validation errors**                   | Two error shapes means every client writes two parsers. 422 carries the same `{ code, error }`; per-field detail, if ever needed, is an additive field under §8.                                                                                                                                                                                                                 |
-| **Distinguishing 401 causes** (`TOKEN_EXPIRED` vs `TOKEN_REVOKED`) | Friendlier, and a token oracle. The shipped MCP gate already refuses to distinguish them; the public surface is exactly where that refusal matters most.                                                                                                                                                                                                                         |
-| **Per-endpoint or per-scope rate budgets**                         | One budget for v1's first cut. Differentiated budgets are additive later and pre-building them means guessing at traffic shapes that do not exist yet.                                                                                                                                                                                                                           |
-| **Rate-limiting by IP**                                            | Shared NATs, CI runners and corporate proxies collide, so one tenant's traffic would refuse another's. Per token is both fairer and revocable.                                                                                                                                                                                                                                   |
+| Rejected                                                           | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Offset pagination** (`?page=` / `?offset=`)                      | Silently skips and duplicates rows when the collection mutates mid-scan — which for Motir is the normal case, not an edge case, since agent loops write while clients read. Simpler to implement and impossible to make correct.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Header versioning** (`X-Motir-Api-Version`)                      | Legitimate and used by GitHub and Stripe (§1 records the real evidence). Rejected because it leaves the public/internal boundary invisible inside one `app/api/**` tree, and because it only pays for itself with per-version transformation infrastructure that a self-hostable product with drifting client/server pairs would still find less debuggable than a visible path. **⚠️ Still rejected — as a MECHANISM for choosing a version. [Amendment 8](#amendment-8-2026-08-06--api1-advertises-its-contract-version-on-every-response) ships a RESPONSE header of the same name that merely REPORTS the contract version; it is never read off a request and selects nothing.** |
+| **Query-parameter versioning** (`?v=1`)                            | Same "same resource, two names" objection as path versioning but without its one benefit — the boundary is not visible in the route tree — and trivially lost when a client drops the parameter.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **`X-API-Key` as an alternative header**                           | A second auth path doubles the surface that must stay correct, and every gate would have to accept both forever. `Authorization: Bearer` is already shipped, already parsed, and already what both mirrors use. One auth path.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **A session-cookie fallback**                                      | Would make CSRF a concern on a surface that currently has none: a bearer-only endpoint cannot be driven by a browser carrying a victim's cookie. The web app has its own cookie-authenticated tree; the public API stays credential-disjoint from it.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Exposing `work_items:delete` in the first cut**                  | The only irreversible, subtree-cascading operation, already off by default in `DEFAULT_TOKEN_SCOPES`. Exposing it later is additive under §8; withdrawing it later would be breaking.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **A distinct error shape for validation errors**                   | Two error shapes means every client writes two parsers. 422 carries the same `{ code, error }`; per-field detail, if ever needed, is an additive field under §8.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Distinguishing 401 causes** (`TOKEN_EXPIRED` vs `TOKEN_REVOKED`) | Friendlier, and a token oracle. The shipped MCP gate already refuses to distinguish them; the public surface is exactly where that refusal matters most.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| **Per-endpoint or per-scope rate budgets**                         | One budget for v1's first cut. Differentiated budgets are additive later and pre-building them means guessing at traffic shapes that do not exist yet.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| **Rate-limiting by IP**                                            | Shared NATs, CI runners and corporate proxies collide, so one tenant's traffic would refuse another's. Per token is both fairer and revocable.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## Consequences
 
@@ -2087,11 +2093,94 @@ A planning bug records why the criterion could not hold as written.
 
 ---
 
-### Amendment 8 (2026-08-06) — a v1 collection row EMBEDS a minimal actor; `targetRepo` stays off it; and how a key-addressed collection is enumerated
+### Amendment 8 (2026-08-06) — `/api/v1` ADVERTISES its contract version on every response
+
+**Amends:** §8's allowed list, which gains **a new response header**, and §8's
+implicit treatment of `V1_CONTRACT_VERSION` as documentation, which becomes an
+obligation: an additive change MUST move the number.
+**Leaves unchanged:** §1's rejection of header VERSIONING — in full, and this
+amendment turns on the distinction; §2–§7 and §9; every prior amendment,
+including Amendment 4 Q6's definition of what the number means. **No `/api/v1`
+path, body shape, scope or status changes here.**
+**Card:** MOTIR-2275, under the epic (MOTIR-1850).
+
+#### The problem
+
+Nothing on a `/api/v1` response said which contract version served it. Verified by
+grep on `origin/main` @ `6d472611`: `withV1Route` stamped exactly `x-request-id`
+and the `x-ratelimit-*` trio; `GET /api/v1/me` returns a `.strict()` `meSchema`
+over `{ user, workspaceId, scopes }`, so no version could appear there even by
+accident; and `V1_CONTRACT_VERSION` was read only by the emitter, the reference
+page and two tests — never by a response path.
+
+The only surface carrying the number was the specification document. So a client
+that wanted to know what it was talking to had to download a specification to read
+one string. `@motir/cli` was the first in-house client to hit that wall, and
+`docs/decisions/cli-v1-client.md` Q3 (Story 11.5, MOTIR-2209) worked around it
+honestly: probe the spec only after a boundary parse failure or an unrouted 404,
+once per process — a decision recorded on 11.5's own branch. That design is
+correct and it **stands** — but it is a fallback. It can only report skew _after_ a
+command has already broken, and it costs a spec download at exactly the moment the
+user is already having a bad time.
+
+#### The decision
+
+**`withV1Route` stamps `X-Motir-Api-Version: <V1_CONTRACT_VERSION>` on every
+response**, into `responseHeaders` before the try block — exactly where the request
+id goes — so it survives a 401, a 403, a 429, a mapped domain error and a 500
+alike. It is declared in `V1_SHARED_RESPONSE_HEADERS`, so it appears on every
+operation in the emitted document without being authored per operation.
+
+The client that has the header reads it off a call it was already making and skips
+the spec fetch entirely; the lazy probe stays as the fallback for a server that
+does not send it — which is every server older than this change. Third-party
+integrators get the same thing: an SDK, a CI action or an orchestration script can
+pin a major and warn on a mismatch without ever fetching a specification.
+
+##### ⚠️ ADVERTISING is not NEGOTIATING — why this does not reopen §1
+
+§1 rejected **header versioning**: a REQUEST header (`X-GitHub-Api-Version`-style)
+that SELECTS which contract the server serves. That rejection is untouched and this
+change does not weaken it. The path is still the only thing that picks a contract,
+this header is never read off a request, and a client sending it gets no different
+behaviour. §1's two reasons both survive intact — the public/internal boundary is
+still structural in `app/api/v1`, and no per-version transformation infrastructure
+is implied by reporting a number the server already publishes.
+
+The distinction is worth stating because the names collide: §1's "Rejected
+alternatives" table names `X-Motir-Api-Version` as the rejected mechanism. It is
+rejected as a mechanism for CHOOSING a version and adopted as a way of REPORTING
+one.
+
+##### ⚠️ It goes on the TRANSPORT, not in `GET /api/v1/me`'s body
+
+A client that has to call one specific endpoint to learn the version cannot learn
+it from the response that just failed — which is the case where it matters most.
+`meSchema` also stays `.strict()` with its three deliberate fields: widening it
+would put the answer in the one place it is least useful and make it unavailable
+on every other response.
+
+##### The obligation this creates
+
+**An additive change under §8 MUST bump `V1_CONTRACT_VERSION` in the same PR.**
+Before this amendment a stale number was a documentation defect a reader might not
+notice; now it is a wrong answer on a header every client reads on the happy path,
+so the number would lie about the very thing it exists to report. This amendment
+pays its own toll: adding a response header is additive, so the constant moves
+`1.0.0` → `1.1.0` in the same change.
+
+| Rejected                                                    | Why                                                                                                                                                                                             |
+| ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A `version` field on `meSchema`**                         | Reachable only by calling one endpoint, so it cannot be read off the response that just failed — and it widens a `.strict()` shape whose three fields are deliberate.                           |
+| **Leave it to the lazy spec probe alone**                   | The probe is a good fallback and it stays, but it reports skew only after a command has broken and costs a spec download to do it. The header makes the check free rather than merely possible. |
+| **Report the deployment's release number instead**          | Amendment 4 Q6 already settled what the number means: a release number churns on every unrelated deploy and tells a client nothing it can act on.                                               |
+| **Stamp it inside the try block, beside the response body** | It would then be absent from exactly the 401 / 403 / 429 / 500 responses where a client most wants to know whether it is speaking the right contract.                                           |
+
+### Amendment 9 (2026-08-06) — a v1 collection row EMBEDS a minimal actor; `targetRepo` stays off it; and how a key-addressed collection is enumerated
 
 > **Written by Story 11.5 · Subtask 11.5.13 (MOTIR-2279), from a defect its own consumer found at RUN time.**
 >
-> **Numbered 8, not 7.** Amendment 7 (Story 11.6, the MCP-derives-from-v1 alignment) was written in parallel on a branch that has since merged; this record was authored against a tree that did not yet have it. The two are independent — 7 governs how the MCP surface derives its payloads, 8 governs what a v1 collection row contains — and Q1's widening is additive, so 7's derived MCP payloads gain `assignee` on the ready row for free.
+> **Numbered 9.** Two amendments were authored in parallel on 2026-08-06 and both reached for 8; MOTIR-2275's (the contract-version header) merged first and keeps it. The two are independent — 8 makes the contract version legible on every response, 9 says what a collection row contains — and they compose: 9 is the first additive change 8's header has to report, which is why `V1_CONTRACT_VERSION` moves to `1.2.0` here.
 
 Story 11.5 makes `@motir/cli` a peer consumer of this API, on the argument that an
 API is only real once something in-house depends on it. Running it produced the

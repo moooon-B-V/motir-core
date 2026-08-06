@@ -336,7 +336,19 @@ describe('the /planning shell is not hostage to the roadmap read', () => {
     expect(gateAt).toBeGreaterThan(-1);
     const beforeGate = page.slice(0, gateAt);
     expect(beforeGate).toMatch(/await getSession\(\)/);
-    expect(beforeGate).toMatch(/await projectAccessService\.getCapabilities/);
+    // An awaited ACCESS read before the gate — whichever capability reader it is.
+    // MOTIR-2250 moved this to `getSettingsCapabilities`, a superset over the SAME
+    // `resolveInputs` round-trip, so the audit-coverage banner's `canManage` gate
+    // costs no EXTRA read on this page's critical path. The invariant this guards
+    // is "the access read resolves before anything renders", not the method name —
+    // but it stays pinned to one of the two readers so a future edit cannot drop
+    // the await entirely.
+    expect(beforeGate).toMatch(
+      /await projectAccessService\.(getCapabilities|getSettingsCapabilities)/,
+    );
+    // ⚠️ And it must remain exactly ONE access round-trip: two awaited reads here
+    // would put a second query back on the path MOTIR-2069 cleared.
+    expect(beforeGate.match(/await projectAccessService\./g) ?? []).toHaveLength(1);
     // …and the redirect for a never-onboarded project is still on this path.
     expect(page).toMatch(/redirect\('\/onboarding'\)/);
   });

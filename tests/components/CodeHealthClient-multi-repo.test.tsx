@@ -182,7 +182,12 @@ describe('the audit tab presents EVERY repo, one report at a time', () => {
   it('opens on the worst repo’s report with a row for each connected repo', () => {
     render();
 
-    expect(within(repoGroup()).getAllByRole('button')).toHaveLength(3);
+    // ONE SELECT button per connected repo. Counted by accessible name rather
+    // than by every button in the group: since MOTIR-2249 a row also carries a
+    // derive trigger, so a bare button count no longer means "one row each".
+    expect(
+      within(repoGroup()).getAllByRole('button', { name: /^Show the audit for / }),
+    ).toHaveLength(3);
     // The report is the SELECTED repo's — the worst-conforming one, not the
     // alphabetically-first one `repos[0]` used to pick.
     expect(screen.getByText('rule-moooon/motir-gateway')).toBeTruthy();

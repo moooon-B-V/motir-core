@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { Map, X } from 'lucide-react';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { AuditCoverageBanner } from '@/components/planning/AuditCoverageBanner';
 import { PlanningWorkspace } from '@/components/planning/PlanningWorkspace';
 import { PlanChangeCanvas } from '@/components/planning/PlanChangeCanvas';
 import { PlanningCanvasSkeleton } from '@/components/planning/PlanningWorkspaceSkeleton';
@@ -74,6 +75,15 @@ export interface PlanningWorkspaceHostProps {
    * which degrades to the project conversation rather than a dead workspace.
    */
   anchorId?: string | null;
+  /** May this viewer MANAGE the project? Gates the audit-coverage banner
+   *  (MOTIR-2250) — deriving an audit is `assertCanManage`-gated, so a banner
+   *  shown to a member is an invitation to a 403.
+   *
+   *  ⚠️ Passed EXPLICITLY rather than read from `useProjectAccess()`: `/planning`
+   *  lives in the `(planning)` route group, OUTSIDE `(authed)`, so
+   *  `ProjectAccessProvider` is not mounted here and the hook would return its
+   *  documented permissive default — showing the banner to every member. */
+  canManage?: boolean;
   /** Where Close / `Esc` return to. */
   backHref: string;
   /** The work item the Plan / Re-plan entrance opened on, resolved server-side
@@ -94,6 +104,7 @@ export interface PlanningWorkspaceHostProps {
 }
 
 export function PlanningWorkspaceHost({
+  canManage = false,
   projectKey,
   projectName,
   launch,
@@ -186,6 +197,13 @@ export function PlanningWorkspaceHost({
             </Link>
             <span className="truncate text-sm font-semibold text-(--el-text)">{projectName}</span>
           </div>
+
+          {/* The audit-coverage banner sits in the seam BETWEEN the top bar and
+              the panes, full-bleed and unpadded (design/audit-coverage §1). It
+              must not be wrapped in a padded container — the full bleed is the
+              design. It renders nothing at all for a non-admin, or when every
+              connected repo has a report, and reserves no gap when absent. */}
+          {canManage ? <AuditCoverageBanner /> : null}
 
           {/* The canvas mounts UNCONDITIONALLY (MOTIR-2069). It reads its own
               root level, so it — not the page — knows whether there is anything

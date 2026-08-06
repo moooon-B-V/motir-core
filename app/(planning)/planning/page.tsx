@@ -64,8 +64,22 @@ export default async function PlanningWorkspacePage({
   const launch = parsePlanningLaunch(await searchParams);
 
   const wsCtx = ctx ? { userId: ctx.userId, workspaceId: ctx.workspaceId } : null;
+  // ONE access read, carrying all three capabilities this page needs.
+  //
+  // `canBrowse` gates the paint (below). `canManage` gates the audit-coverage
+  // banner (MOTIR-2250) — read HERE rather than through `useProjectAccess()`,
+  // because `/planning` lives in the `(planning)` route group, OUTSIDE
+  // `(authed)`, so `ProjectAccessProvider` is not mounted and the hook would
+  // return its documented PERMISSIVE default: an admin-only prompt shown to
+  // every member.
+  //
+  // ⚠️ `getSettingsCapabilities` rather than `getCapabilities` + a second call:
+  // it is a superset (`canBrowse` / `canEdit` / `canManage`) over the SAME
+  // `resolveInputs` round-trip, so the admin gate costs no extra read. MOTIR-2069
+  // took every non-gating read off this page's critical path; adding one back
+  // for a banner would be the wrong trade.
   const caps =
-    ctx && wsCtx ? await projectAccessService.getCapabilities(ctx.projectId, wsCtx) : null;
+    ctx && wsCtx ? await projectAccessService.getSettingsCapabilities(ctx.projectId, wsCtx) : null;
 
   const gate = resolvePlanningHostGate({
     hasActiveProject: ctx !== null,
@@ -198,6 +212,7 @@ export default async function PlanningWorkspacePage({
       launch={launch}
       anchorId={anchorId}
       backHref={planningLaunchBackHref(launch)}
+      canManage={caps?.canManage ?? false}
       initialTarget={initialTarget}
       initialCanvasTrail={initialCanvasTrail}
     />
