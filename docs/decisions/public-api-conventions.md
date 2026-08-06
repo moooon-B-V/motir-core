@@ -124,6 +124,13 @@ account-level for the same reason.)
 
 ### 3. Scopes — reuse `TokenScope` verbatim, mapped PER OPERATION
 
+> **⚠️ Amended 2026-08-05 — see [Amendment 6, Q2](#q2--scopes-mirror-libmcpscopests-the-map-is-the-source-this-table-is-derived).**
+> The table below maps the CRUD surface it was written for. Amendment 6 states the
+> underlying principle — **one capability model, two transports** — and records
+> that a v1 operation MIRRORS its MCP counterpart's entry in `TOOL_SCOPES` rather
+> than deriving a scope from an HTTP verb. A `read`-scoped POST is therefore
+> correct and is not an exception to this clause.
+
 v1 introduces **no new scope**. It uses the shipped set from `lib/mcp/scopes.ts`
 (**rung 2**, typed total by construction) and maps each operation to exactly one
 scope — the same per-operation shape `TOOL_SCOPES` already uses for MCP tools,
@@ -181,16 +188,18 @@ second error shape into the same codebase.
 
 The status table — each row is the condition that produces it:
 
-| Status  | Condition                                                                                                                                                                                                              |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**                                                                                                                |
-| **403** | A valid token whose granted scopes do not include the required one                                                                                                                                                     |
-| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer                                                                                                                     |
-| **409** | A conflict with existing STATE, not a malformed request — e.g. creating a link that already exists (added 2026-08-03 by Subtask 11.2.9; likewise a new condition, permitted by §8)                                     |
-| **412** | An `If-Match` precondition failed — the resource moved since the validator was issued (added 2026-08-03 by Subtask 11.2.6; a NEW condition getting a status, which §8 permits, not an existing condition changing one) |
-| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation                                                                                                               |
-| **429** | The token's rate-limit budget is exhausted (§6)                                                                                                                                                                        |
-| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                                                                                                                                          |
+| Status  | Condition                                                                                                                                                                                                                                                     |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **401** | No token, malformed header, unknown token, revoked token, expired token — **all five undifferentiated**                                                                                                                                                       |
+| **403** | A valid token whose granted scopes do not include the required one                                                                                                                                                                                            |
+| **404** | The resource does not exist **or** is outside the token's workspace — deliberately the same answer                                                                                                                                                            |
+| **409** | A conflict with existing STATE, not a malformed request — e.g. creating a link that already exists (added 2026-08-03 by Subtask 11.2.9; likewise a new condition, permitted by §8)                                                                            |
+| **412** | An `If-Match` precondition failed — the resource moved since the validator was issued (added 2026-08-03 by Subtask 11.2.6; a NEW condition getting a status, which §8 permits, not an existing condition changing one)                                        |
+| **422** | A malformed request: an invalid cursor, an out-of-range or non-numeric `limit`, a failed body validation                                                                                                                                                      |
+| **402** | The workspace owner's AI credits are exhausted — the request was valid and was refused for want of BALANCE (added 2026-08-05 by Subtask 11.7.5; a new condition, permitted by §8)                                                                             |
+| **429** | The token's rate-limit budget is exhausted (§6)                                                                                                                                                                                                               |
+| **500** | An unexpected server fault — body carries no `code`, no stack, no driver text                                                                                                                                                                                 |
+| **503** | A dependency the operation needs — the motir-ai planning service — could not be reached or is misconfigured (added 2026-08-05 by Subtask 11.7.5; a new condition, permitted by §8). Distinct from 500: the request was fine and a retry is the right response |
 
 Three of those rows are decisions, not defaults:
 
@@ -214,6 +223,18 @@ Three of those rows are decisions, not defaults:
 **Every response carries a request id header**, success and failure alike, so a
 developer can quote one identifier in a support conversation.
 
+> **⚠️ Amended 2026-08-05 — the SUCCESS vocabulary gains `202`, and the table
+> above gains `402` and `503`; see
+> [Amendment 6, Q3](#q3--a-job-submitting-endpoint-publishes-accepted-and-cannot-publish-a-result).**
+> The two job-submitting endpoints return before anything has been planned, so
+> "accepted" needs a status of its own. `402` and `503` arrive with the same
+> endpoints (Subtask 11.7.5): an exhausted AI balance is neither a malformed body
+> nor a spent rate-limit window, and an upstream planning service being down is
+> not an UNEXPECTED fault, so §4's code-less 500 would tell a client nothing it
+> could act on. All three are NEW conditions getting a status, which is what §8
+> permits and what 409 and 412 already arrived by; no existing condition changes
+> status.
+>
 > **⚠️ The table above is the STATUS VOCABULARY the emitted document must cover —
 > see [Amendment 4](#amendment-4-2026-08-05--how-the-openapi-31-document-is-emitted-where-it-is-served-and-what-the-published-reference-is).**
 > Story 11.4 declares it as a value reconciled against `DOMAIN_ERROR_STATUS`, so a
@@ -317,6 +338,12 @@ deferred silently.
 
 ### 7. Resource naming
 
+> **⚠️ Amended 2026-08-05 — see [Amendment 6](#amendment-6-2026-08-05--the-work-loop-resources-paths-and-verbs-scope-mirroring-the-job-handle-and-the-three-projections-as-8-additions).**
+> The rules below stand. Amendment 6 pins the paths and verbs for Story 11.7's ten
+> work-loop operations — the first that are not plain CRUD on a noun — and grants
+> ONE reasoned exception to the plural rule (`plan-session`, a resource with
+> exactly one member per scope that is never addressed by id).
+
 - **Plural, hyphenated nouns**, scoped by their parent:
   `/api/v1/projects/{projectKey}/work-items`,
   `/api/v1/sprints/{sprintId}/work-items`. **Rung 1:** Plane scopes by
@@ -330,6 +357,12 @@ deferred silently.
 - Query parameters are `lowerCamelCase`, matching the JSON bodies.
 
 ### 8. Stability — additive-only within `v1`
+
+> **⚠️ Applied 2026-08-05 — see [Amendment 6, Q4](#q4--the-three-field-projections-are-8-additions).**
+> Story 11.7 widens three shipped response schemas (per-child and per-row
+> dependency edges, and the blocked ancestor's title). The amendment records them
+> as §8-permitted ADDITIONS with the bounded-projection form named, so the
+> permission is a decision a reader can find rather than one they re-derive.
 
 Within `v1`:
 
@@ -1305,3 +1338,331 @@ in the handler.
   this decision, in `motir-core`, one PR.
 - **11.4's boundary is intact** — the one shape it authored is transferred, not
   excused, so a future reader finds no per-resource schema owned by 11.4.
+
+### Amendment 6 (2026-08-05) — the WORK-LOOP resources: paths and verbs, scope mirroring, the job handle, and the three projections as §8 additions
+
+**Amends:** §3 (which the shipped map, not this ADR, is the source of truth for —
+stated explicitly here), §4's status vocabulary (which gains **202**), §7 (which
+gains one reasoned singular-noun exception), and §8 (which gains three named
+additions).
+**Leaves unchanged:** §1, §2, §5, §6, §9 in full; Amendment 1's carve-out table;
+Amendment 3's cursor, envelope and bounded-call rules; Amendment 4's emission
+mechanics; Amendment 5's ownership walk.
+**Card:** MOTIR-2235 (Subtask 11.7.1), for Story 11.7.
+
+Stories 11.1–11.4 shipped a surface of plain CRUD on nouns, and §7's naming rules
+covered every one of them without anyone having to think. Story 11.7's ten
+operations are the first that are not: fetching an assembled prompt, recording an
+integration, closing out a branch, submitting a job, holding a conversation
+addressed by a set of anchors rather than an id. Each has two or three defensible
+shapes, and settling them one card at a time would leave the surface with three
+idioms for one kind of operation and nothing recording why.
+
+All rung-2 evidence below was read on `origin/main` @ `b82ed141` and is cited by
+path.
+
+#### Q1 — a path and a verb for ten operations
+
+| #   | Operation                         | Verb + path                                                   | Success |
+| --- | --------------------------------- | ------------------------------------------------------------- | ------- |
+| 1   | Dispatch prompt                   | `GET /api/v1/work-items/{key}/dispatch-prompt?sessionBranch=` | 200     |
+| 2   | Record one item integrated        | `POST /api/v1/work-items/{key}/integration`                   | 200     |
+| 3   | Close out a session branch        | `POST /api/v1/sessions/complete`                              | 200     |
+| 4   | Submit an expansion               | `POST /api/v1/work-items/{key}/expansions`                    | **202** |
+| 5   | Open / resume the planning thread | `POST /api/v1/projects/{projectKey}/plan-session`             | 200     |
+| 6   | Append one turn                   | `POST /api/v1/projects/{projectKey}/plan-session/turns`       | 200     |
+| 7   | Submit the accumulated thread     | `POST /api/v1/projects/{projectKey}/plan-session/submissions` | **202** |
+| 8   | Read a plan's status              | `GET /api/v1/plans/{planId}/status`                           | 200     |
+| 9   | Read a plan with its proposals    | `GET /api/v1/plans/{planId}`                                  | 200     |
+| 10  | Read a work item's activity       | `GET /api/v1/work-items/{key}/activity?view=`                 | 200     |
+
+Seven of those are the obvious shape and are recorded rather than argued. The
+three that are not follow.
+
+##### 1 · Dispatch prompt — a sub-resource GET
+
+`GET /api/v1/work-items/{key}/dispatch-prompt`, `sessionBranch` as an optional
+query parameter. **Rung 2:** `lib/mcp/tools/dispatchPrompt.ts` records that it
+"does NOT claim the item and does NOT flip its status", and its own header calls
+it "a read, not a write" — so it is a GET, and the resource it reads is the
+prompt FOR that item.
+
+`sessionBranch` is a query parameter and not a body field because a GET has no
+body, and it is a genuine input to the read rather than a filter over it: it
+seeds an unattended run's lineage and, per the shipped tool, "never overrides".
+
+| Rejected                                         | Why                                                                                                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/work-items/{key}/dispatch-prompts` | Reads as a creation; this creates nothing and must stay safe and cacheable-in-principle.                                                       |
+| `GET /api/v1/work-items/{key}?include=prompt`    | Buries a large text payload inside the detail read every client already makes, and makes `sessionBranch` a parameter of an unrelated resource. |
+
+##### 2 · Integration — a POST on a sub-resource, not a PATCH on the item
+
+`POST /api/v1/work-items/{key}/integration`, body
+`{ sessionBranch, implementationSource?, implementationHarness?, implementationModel? }`,
+returning the updated work item. **Rung 2:** `workItemsService.markIntegrated`
+"moves the item to `in_review` AND stamps its `session_branch` in ONE
+transaction" (`lib/mcp/tools/markIntegrated.ts`), and the move is validated
+against the workflow's legal transitions — an item that cannot reach `in_review`
+raises `IllegalTransitionError` with the field untouched. That is a state
+transition with a body, not a field edit.
+
+| Rejected                                                        | Why                                                                                                                                                                          |
+| --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PATCH /api/v1/work-items/{key}` with `sessionBranch`           | A PATCH that also moves status would put a second status-writing path beside the shipped `POST …/transitions`, and the two could disagree about which transitions are legal. |
+| `POST /api/v1/work-items/{key}/transitions` with a branch field | Overloads a shipped operation with a second meaning, which §8 forbids (re-purposing an existing contract).                                                                   |
+
+##### 3 · Session close-out — the branch travels in the BODY
+
+`POST /api/v1/sessions/complete`, body
+`{ sessionBranch, implementationSource?, implementationHarness?, implementationModel? }`,
+returning `{ sessionBranch, results: [{ key, outcome, reason }] }`.
+
+**A session branch is a git ref and routinely contains `/`** (`subtask/MOTIR-…`),
+which is why this is a decision and not a detail. It is settled as a body field
+because a path segment cannot carry the value safely and the failure is not ours
+to fix: a Next.js `[param]` segment does not match `/` at all, and `%2F` is
+normalised by proxies and CDNs before a route ever sees it, so the escaping is
+not under the server's control. A catch-all `[...sessionBranch]` would "work" and
+make `refs/heads/x` and its encoded form two addresses for one ref.
+
+**The literal `complete` sits where an id would, and that is deliberate: v1 does
+not address a session by path, and reserves the segment.** There is no session
+row — `session_branch` is a column on `work_item` — so `sessions` is a collection
+with no members to address, and this amendment records that a future
+`GET /api/v1/sessions/{id}` is not available. A bulk write addressed by its body
+is already the shipped idiom: `POST /api/v1/projects/{projectKey}/backlog/work-items`
+takes its keys the same way.
+
+| Rejected                                         | Why                                                                                                                                                              |
+| ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /api/v1/sessions/{sessionBranch}/complete` | The ref contains `/`; the encoding is normalised away by infrastructure between the client and the route, so correctness would depend on hops we do not control. |
+| A catch-all `[...sessionBranch]` segment         | Makes one ref addressable two ways, and silently re-splits any branch name containing an encoded slash.                                                          |
+| `POST /api/v1/session-completions`               | Invents a resource for a record that is never created or read; the operation closes work items, it does not persist a completion.                                |
+
+##### 5–7 · The planning conversation — SINGULAR, and addressed by scope
+
+`plan-session` is **deliberately singular**, and it is the one exception to §7's
+plural-nouns rule that this ADR grants. **Rung 2:** the thread's identity is
+`(project, anchor set)` — `@@unique([projectId, scopeKey])` — and
+`lib/mcp/tools/planSession.ts` records the contract in as many words: "ONE THREAD
+PER SCOPE, ADDRESSED BY SCOPE … NOT a client-held session id", so that a CLI
+"cannot desynchronise from it or fork a second conversation about the same
+items". A plural noun invites `/plan-sessions/{id}`, which is exactly the
+addressing the contract exists to make impossible. The singular is the API
+telling the truth about the resource.
+
+**The anchor set travels in the BODY on all three operations**, as an optional
+`targetKeys: string[]` (bounded by the shipped `MAX_SCOPE_TARGETS`; omitted means
+the project-wide thread). It is a SET whose order and duplicates do not matter,
+which a repeated query parameter would encode as a list, and all three operations
+are POSTs that already carry a body.
+
+**Open/resume is a POST returning 200, not a GET and not a 201.** It is a POST
+because get-or-create writes an empty row, and GET must stay safe. It is 200
+because the caller cannot tell an open from a resume and a 201 would be a lie
+half the time — `runOpenPlanSession` itself chooses between "Opened" and
+"Resumed" only after the service answers.
+
+| Rejected                                            | Why                                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET …/plan-session?targetKeys=A,B` for open/resume | A GET that creates a row is not safe; the write is small but real, and a cache or a prefetch would perform it.                             |
+| `POST /api/v1/plan-sessions/{sessionId}/turns`      | Hands the client an id to hold, which is precisely how a second conversation about one anchor set gets forked.                             |
+| `targetKeys` as a repeated query parameter          | Encodes a set as an ordered list, so two spellings of the same thread would look different at the edge before the service normalises them. |
+
+##### 8–9 · Plan reads — status is a SUB-RESOURCE, and the plan id is the only address
+
+`GET /api/v1/plans/{planId}` returns the plan with its proposals
+(`plansService.getPlan` → `PlanWithItemsDto`).
+`GET /api/v1/plans/{planId}/status` returns the outcome
+(`aiPlanEditsService.getOutcome` → `PlanOutcomeDto`).
+
+**Status is a sub-resource rather than a field because it is a different read
+against a different source.** `getOutcome` reaches motir-ai for the JOB's
+liveness — a job can die and leave its plan `generating` forever, which the plan
+row alone cannot report — so folding it into the plan would make one endpoint's
+latency and failure modes depend on a cross-service call a client asking only for
+proposals never wanted.
+
+**v1 addresses a plan by `planId` only; the MCP tool's `jobId` alternative is not
+mirrored.** Every v1 operation that starts a job returns BOTH ids in its handle
+(Q3), so a v1 client that holds a job id holds a plan id. This is a narrower
+ADDRESS, not a narrower capability, and adding the job address later is additive
+under §8.
+
+| Rejected                                            | Why                                                                                                                                                   |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status` as a field on `GET /api/v1/plans/{planId}` | Makes every proposal read pay for a cross-service job probe, and couples a pure read's failure modes to motir-ai's availability.                      |
+| Mirroring the `planId`-xor-`jobId` addressing       | Two path shapes for one read, plus a "pass exactly one" 422 that no v1 client can reach, for an id that is the primary key of nothing a client reads. |
+
+##### 10 · Activity — a view parameter, and `…/comments` STAYS
+
+`GET /api/v1/work-items/{key}/activity?view=all|comments|history`, with
+`order` and the standard `cursor` / `limit`. **The shipped
+`GET /api/v1/work-items/{key}/comments` is not withdrawn, folded, or
+deprecated** — it is public API under §8 and could not be, and it remains the
+canonical address for the discussion. `?view=comments` exists so a client that
+walks all three views does it with one code path, and both read the same
+`commentsService.listComments`, so they cannot disagree.
+
+**The cursor is v1's own, scoped to the activity collection.** All three views
+share one cursor family (`encodeCollectionCursor('workItemActivity', …)`) wrapping
+whatever position the underlying service issued — including the `all` view's
+OPAQUE COMPOSITE over both sources, which the route must never construct, parse
+or merge (`lib/mcp/tools/getWorkItemActivity.ts` records the same rule for the
+MCP transport). A cursor from `…/comments`, or from any other collection, is a
+422 under §5 rather than a silent reset. `V1_COLLECTIONS` gains
+`workItemActivity`, which is additive.
+
+**A SHORT page with a non-null cursor is normal here** for `all` and `history`
+(the bounded noise scan) and for `comments` (a root comment drags its whole reply
+thread), so a client walks until `nextCursor` is null — never until a page is
+short. The shipped `…/comments` route already carries that note.
+
+| Rejected                                                  | Why                                                                                                                                                                                  |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Three endpoints (`…/activity`, `…/history`, `…/comments`) | The `all` view is a merged stream over both sources, so it would need a fourth path anyway; one parameterised read matches the one service adapter and the product's own three tabs. |
+| Making `…/comments` a redirect to `?view=comments`        | Changes the response of a shipped endpoint, which §8 forbids, for no gain a client can use.                                                                                          |
+| Passing the service's own `all` cursor through unwrapped  | It is neither signed nor collection-scoped, so a cursor from another collection would decode into a meaningless position instead of a 422.                                           |
+
+#### Q2 — scopes MIRROR `lib/mcp/scopes.ts`; the map is the source, this table is derived
+
+**The decision is to mirror, and the principle is: one capability model, two
+transports.** A token granting `read` must mean the same thing whichever door it
+arrives at. Inventing a v1-only mapping would make a scope's meaning depend on
+transport, which is the drift this epic exists to end.
+
+**Verified, not remembered.** `lib/mcp/scopes.ts` was read on `origin/main` @
+`b82ed141`: `TOOL_SCOPES` is typed `Record<McpToolName, TokenScope>` — total by
+construction — and carries a reasoned comment per entry. The derived table:
+
+| v1 operation                      | MCP tool mirrored        | Scope              | The map's own reasoning                                                                              |
+| --------------------------------- | ------------------------ | ------------------ | ---------------------------------------------------------------------------------------------------- |
+| `GET …/dispatch-prompt`           | `dispatch_prompt`        | `read`             | "only READS the item and assembles text — it never claims it or flips its status"                    |
+| `GET /plans/{planId}`             | `get_plan`               | `read`             | "a proposal is not a work item, and approving the plan … does not happen on this surface at all"     |
+| `GET /plans/{planId}/status`      | `get_plan_status`        | `read`             | "neither submits a job nor spends a credit"                                                          |
+| `POST …/plan-session`             | `open_plan_session`      | `read`             | "idempotent, spends no credit, opens no Plan … Opening the door is not starting a conversation"      |
+| `GET …/activity`                  | `get_work_item_activity` | `read`             | "a pure paged read … `add_comment` is the write, this is not"                                        |
+| `POST …/expansions`               | `expand_item`            | `work_items:write` | "the narrowest shipped scope that admits a plan-mutating, billable submit"                           |
+| `POST …/plan-session/turns`       | `append_plan_turn`       | `work_items:write` | same reasoning, stated at the entry                                                                  |
+| `POST …/plan-session/submissions` | `submit_plan_session`    | `work_items:write` | same reasoning, stated at the entry                                                                  |
+| `POST …/integration`              | `mark_integrated`        | `integration`      | the scope's own definition: "External-agent integration writes — mark-integrated / complete-session" |
+| `POST /sessions/complete`         | `complete_session`       | `integration`      | as above                                                                                             |
+
+Two consequences worth stating, because both look like contradictions and are not:
+
+- **A `read`-scoped POST is correct.** §3's table reads "Any `GET` → `read`",
+  which maps the CRUD surface it was written for; it does not say only a GET may
+  be `read`-scoped. The scope mirrors the CAPABILITY, and v1 never derives one
+  from an HTTP verb. `POST …/plan-session` is the case: it writes an empty row
+  and grants nothing a read does not already grant.
+- **`expand_item` is NOT `integration`, and that was already decided.** The map
+  considered the credit-spending argument and chose `work_items:write` as the
+  narrowest scope admitting a billable submit. An earlier draft of Story 11.7
+  guessed otherwise; the map wins.
+
+**If mirroring is ever wrong for one operation, the remedy is an amendment to the
+SHARED map with its reasoning updated — never a v1-only divergence.** §3 already
+says a capability the shipped set lacks is "a separate card against
+`lib/mcp/scopes.ts` — flagged, not invented at the route"; this extends the same
+rule to a mapping believed wrong.
+
+#### Q3 — a job-submitting endpoint publishes "accepted", and cannot publish a result
+
+`POST …/expansions` and `POST …/plan-session/submissions` both return the moment
+motir-ai accepts the job. Nothing has been planned; what eventually appears is a
+Plan of PROPOSALS that only a human approving in Motir turns into work items.
+
+**The status is 202 Accepted**, added to §4's vocabulary by this amendment
+(`V1_SUCCESS_STATUSES` gains `202`). This is a NEW condition getting a status,
+which §8 permits and which 409 and 412 already arrived by (Subtasks 11.2.9 and
+11.2.6). 200 is rejected: it is the status every finished read and write on this
+API returns, so it would make "the work is done" and "the work has not started"
+indistinguishable at the only layer a generic client inspects.
+
+**The body is one shared handle schema, and it is CLOSED:**
+
+```
+{ jobId: string, planId: string, statusUrl: string }
+```
+
+`statusUrl` is the relative path `/api/v1/plans/{planId}/status` — relative
+because the server behind a proxy cannot know its own public origin, and present
+so a client polls an address it was given rather than one it assembles.
+
+**How the SCHEMA — not its description — prevents the mistake: there is no field
+a result could arrive in.** No `items`, no `proposals`, no `count`, no `status`.
+A client cannot read an outcome out of this shape at all; it can only read where
+to come back. That is stronger than a `status: "accepted"` literal, which is a
+label a reader can skim past and which would sit confusingly beside the PLAN's
+own status vocabulary (`generating` / `planned` / `approved` / `declined`).
+
+The plan reads carry the other half: `GET /plans/{planId}` returns proposals, and
+its schema names them proposals — an `add`'s `workItemId` is `null` until the
+plan is approved, and that nullability is part of the published contract rather
+than a footnote.
+
+| Rejected                                   | Why                                                                                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 200 with the handle                        | Indistinguishable from a completed write at the status layer, which is the one layer generic clients and proxies read.                            |
+| 202 with `proposals: []`                   | An empty array reads as "zero results", which is a stronger and wronger claim than "not yet".                                                     |
+| 202 with `status: "accepted"`              | A skimmable label rather than a structural guarantee, and it collides with the plan's own `status` vocabulary.                                    |
+| A `Location` header instead of `statusUrl` | Conventionally names a created resource; the plan is not created-and-ready, and a header is invisible to the JSON-shaped clients this API is for. |
+
+#### Q4 — the three field projections are §8 ADDITIONS
+
+Story 11.7 widens three shipped, published response schemas. §8 permits "a new
+field on a response object" within a major, so all three are allowed — recorded
+explicitly because "we added a field to a published response" is exactly the
+sentence a future reader will want to find a decision behind.
+
+| #   | Schema                              | Added                                     | Form                          |
+| --- | ----------------------------------- | ----------------------------------------- | ----------------------------- |
+| 1   | `workItemDetailSchema.children[]`   | `dependencies: { blockedBy[], blocks[] }` | bounded page-level projection |
+| 2   | `workItemSummarySchema`             | `dependencies: { blockedBy[], blocks[] }` | bounded page-level projection |
+| 3   | `readinessSchema.blockedByAncestor` | the ancestor's `title` beside its key     | pure widening, no new read    |
+
+**1 and 2 use the bounded-projection form Amendment 3 Q4 permits**, and it is
+already shipped: `app/api/v1/projects/{projectKey}/ready/route.ts` calls
+`workItemsService.getDependencyEdgesForItems(ids)` once for the whole page, and
+`readyItemSchema` already carries the identical `dependencies` block. So this is
+the same projection applied to two more collections, not a new mechanism. **The
+ceiling is CONSTANT, never per-row** — one batched call for a page of any size,
+which is why that service method takes an id array.
+
+**3 is a pure widening of data the route already holds.** `lib/dto/workItems.ts`
+carries `blockedByAncestor: WorkItemSummaryDto | null`; `lib/api/v1/workItems/schema.ts`
+narrows it to `?.identifier ?? null` at the mapper. Restoring the title reads
+nothing new — it stops discarding a field the DTO in hand already carries.
+
+**All three keep the shape TOTAL.** A row with no edges gets two EMPTY arrays,
+never a missing key, so a typed client never branches on presence — the property
+`readyItemSchema`'s own comment records and the reason it is worth copying.
+
+| Rejected                          | Why                                                                                                                                                                     |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A `?include=dependencies` opt-in  | A second shape for one resource, and every client would have to learn which endpoints honour it; the projection is one batched call, so there is nothing to opt out of. |
+| A per-row edge read               | An N+1 invisible until a 100-row page — forbidden by Amendment 3 Q4 however thin each call is.                                                                          |
+| Widening the service DTOs instead | Ships an edge payload to every product surface that does not consume it, which Amendment 3 Q1 already rejected in the other direction.                                  |
+| Leaving the ancestor's key alone  | The CLI's `renderReadinessLine` prints `blocked by ancestor <key> — <title>`, so the shipped renderer would silently lose half its line the moment it speaks v1.        |
+
+#### Consequences of this amendment
+
+- **Ten operations have a pinned path, verb, scope and success status** — the six
+  code cards behind this decision are adapters, not designers.
+- **§4's success vocabulary gains 202**, and the card that first declares a 202
+  operation (11.7.5, MOTIR-2239, or 11.7.6, MOTIR-2240 — whichever lands first)
+  adds it to `V1_SUCCESS_STATUSES` and `V1_STATUS_DESCRIPTIONS`. This is a
+  one-line extension of a shared 11.4-owned module, in the same way Subtasks
+  11.2.6 and 11.2.9 added 412 and 409.
+- **§7 gains one reasoned exception** — `plan-session`, singular, because the
+  resource genuinely has one member per scope and is never addressed by id.
+- **`sessions/{id}` is reserved and unavailable**; `POST /api/v1/sessions/complete`
+  owns the segment.
+- **`V1_COLLECTIONS` gains `workItemActivity`**, so the activity cursor is
+  refused at every other collection and vice versa.
+- **The three projections are §8-permitted additions**, with the bounded form
+  named, so no client breaks and no reviewer has to re-derive the permission.
+- **The MCP surface is untouched.** No tool is re-pointed, re-shaped, renamed or
+  deprecated by anything decided here; `lib/mcp/` was read as the reference for
+  argument shapes and semantics and left exactly as it is.

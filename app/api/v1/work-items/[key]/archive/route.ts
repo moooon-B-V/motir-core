@@ -6,6 +6,7 @@ import {
   encodeWorkItemETag,
   presentWorkItemDetail,
 } from '@/lib/api/v1/workItems/schema';
+import { readChildDependencyEdges } from '@/lib/api/v1/workItems/childEdges';
 import { commentsService } from '@/lib/services/commentsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -35,5 +36,8 @@ export const POST = withV1Route<{ key: string }>({ scope: 'work_items:archive' }
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  return NextResponse.json(presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id)));
+  const childEdges = await readChildDependencyEdges(detail, ctx.service);
+  return NextResponse.json(
+    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
+  );
 });
