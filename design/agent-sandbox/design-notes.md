@@ -122,6 +122,39 @@ alone is its consumer **four times over** (confinement, preconditions, the
 matrix, the step-3 substitutions), which is the argument for the shared kind
 made by the page itself.
 
+### The `Tier` column must SAY what a tier is — or it is decoration
+
+A reader asked "what is tier?" of the first drawing, which is the whole finding:
+the column showed `Tier 1` / `Tier 2` pills and the page never defined them, so
+it carried a fact nobody could act on. Step 1's lede now answers it in reader
+terms, and the phrasing is deliberate:
+
+> **Tier is how closely we track the vendor, not whether it works.** Every
+> profile is published, and every one is built and smoke-tested before a release
+> ships. Tier 1 pins the install source AND the credential location and verifies
+> them on every change. Tier 2 installs from a vendor endpoint we do not
+> control, so day-to-day breakage there is reported rather than blocking.
+
+**Checked, because the two lanes differ and the obvious summary is wrong.**
+`smoke/profiles.json` says _"Tier 2 is allow-fail in CI"_, which reads as "tier 2
+is less reliable" — but the README's release section says _"**On the release lane
+every tier gates**: a release that quietly shipped six of eight images, green, is
+worse than one that failed"_, and _"A Tier-2 vendor can block a release, on
+purpose."_ So allow-fail is the PULL-REQUEST lane only. Publishing "tier 2 is not
+gated" would have been a published untruth about the thing a reader is deciding
+on. The drawn sentence separates the two lanes without naming either, because a
+reader of a public guide does not have our CI.
+
+### ⚠️ `Tier` means two different things on this page — so step 2 no longer says it
+
+Step 2's three ways to supply a Motir credential are _"the three tiers"_ in the
+README and in `serverResolve.ts`'s own comments. Drawn as a column headed **Tier**
+directly under the profile matrix's **Tier** column, that is two unrelated
+meanings of one word, adjacent, on the surface where a reader is deciding. Step
+2's column is **"The way in"** and its lede says "three ways", not "three tiers".
+The README keeps its own vocabulary; the page does not inherit a collision from
+it.
+
 ### Wide — FOUR columns, not five
 
 The card framed the matrix as five columns × eight rows. Five is the version that
@@ -180,6 +213,23 @@ Drawn instead as **shape → what changes → filled-in example**:
 command that fails in the terminal; that asymmetry is the design, not a detail.
 Two notes carry what the placeholders flatten: a profile with two mounts takes two
 `-v` lines, one with none takes none.
+
+**⚠️ The command does NOT pass `MOTIR_SERVER`, and that is a correction.** An
+earlier drawing carried `-e MOTIR_TOKEN -e MOTIR_SERVER` in every block, which
+made a reader ask what the second one was for — the right question.
+`packages/cli/src/serverResolve.ts` exports
+`DEFAULT_SERVER_URL = 'https://app.motir.co'` as the LAST rung of its ladder
+(`--server` > `MOTIR_SERVER` > `.motir.json` > the single stored server > the
+default), with the reason written beside it: _"the common case is the hosted
+product, and a CLI whose default is a dev server makes `motir login` a command
+you cannot type without also knowing a URL."_ So on the hosted product the
+variable is **not needed at all**, and passing it unconditionally advertises a
+decision the reader does not have to make. It appears exactly once now, in a
+`callout` after the filled-in command: _"Self-hosting? … add
+`-e MOTIR_SERVER=https://motir.example.com` — Motir is open-core and
+self-hostable, and that variable is the whole difference."_ Same for the
+dev-container `remoteEnv`, which forwards `MOTIR_TOKEN` and mentions
+`MOTIR_SERVER` in prose.
 
 **`<your agent's command>` is the one part this page cannot source from itself.**
 The vendor non-interactive + auto-approve flags drift between releases, so under

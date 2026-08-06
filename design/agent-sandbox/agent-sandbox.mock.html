@@ -1071,9 +1071,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td>
-                    <span class="nm">A Motir token</span><br /><span class="ty">+ server URL</span>
-                  </td>
+                  <td><span class="nm">A Motir token</span></td>
                   <td>
                     Mint one under <strong>Settings → Account → API tokens</strong>. Step 2 covers
                     the three ways to hand it to the container, one of which needs nothing on this
@@ -1124,6 +1122,15 @@
               One image per agent, each layer fetching that CLI from its own official source at
               build time. Find the row for the agent you already use — you need its
               <strong>tag</strong> and its <strong>credential mount</strong> in step 3.
+            </p>
+            <p>
+              <strong>Tier is how closely we track the vendor, not whether it works.</strong> Every
+              profile here is published, and every one is built and smoke-tested before a release
+              ships. <span class="pill pill--tier1">Tier 1</span> means we pin both the install
+              source and the credential location and verify them on every change.
+              <span class="pill pill--tier2">Tier 2</span> installs from a vendor endpoint we do not
+              control, so day-to-day breakage there is reported rather than blocking — it is caught
+              at release, not necessarily the hour it happens.
             </p>
             <table class="spec">
               <thead>
@@ -1200,22 +1207,21 @@
 
             <h2>2 · Give it a Motir credential</h2>
             <p>
-              The container needs a token for your Motir server, and has the same three tiers the
-              CLI has anywhere else. Pick one:
+              The container needs a token for your Motir server. There are three ways to give it one
+              — the same three the CLI accepts anywhere else. Pick whichever fits the machine you
+              are on:
             </p>
             <table class="spec">
               <thead>
                 <tr>
-                  <th style="width: 30%">Tier</th>
+                  <th style="width: 30%">The way in</th>
                   <th>When to use it</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <td>
-                    <span class="nm">-e MOTIR_TOKEN</span><br /><span class="ty"
-                      >-e MOTIR_SERVER</span
-                    >
+                    <span class="nm">-e MOTIR_TOKEN</span>
                   </td>
                   <td>
                     Pass them through from your shell. Nothing mounted, nothing written to disk —
@@ -1256,7 +1262,7 @@
               <pre>
 docker run --rm -it \
   -v "$PWD:/workspace" \
-  -e MOTIR_TOKEN -e MOTIR_SERVER \
+  -e MOTIR_TOKEN \
   -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
   ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt; \
   motir auto --agent "&lt;your agent's command&gt;"</pre
@@ -1307,7 +1313,7 @@ docker run --rm -it \
               <pre>
 docker run --rm -it \
   -v "$PWD:/workspace" \
-  -e MOTIR_TOKEN -e MOTIR_SERVER \
+  -e MOTIR_TOKEN \
   -v "$HOME/.claude:/home/node/.claude:ro" \
   ghcr.io/moooon-b-v/motir-sandbox:claude \
   motir auto --agent "claude --dangerously-skip-permissions"</pre
@@ -1317,6 +1323,16 @@ docker run --rm -it \
               With no command after the image name you get an interactive shell in
               <code>/workspace</code> instead.
             </p>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                ><strong>Self-hosting?</strong> The CLI talks to
+                <code>https://app.motir.co</code> unless told otherwise, so nothing above names a
+                server. Point it at your own instance by adding
+                <code>-e MOTIR_SERVER=https://motir.example.com</code> — Motir is open-core and
+                self-hostable, and that variable is the whole difference.</span
+              >
+            </div>
 
             <h2>4 · Or run it in VS Code instead</h2>
             <div class="callout">
@@ -1357,8 +1373,7 @@ docker run --rm -it \
   "overrideCommand": true,
   "postAttachCommand": "motir doctor",
   "remoteEnv": {
-    "MOTIR_TOKEN": "${localEnv:MOTIR_TOKEN}",
-    "MOTIR_SERVER": "${localEnv:MOTIR_SERVER}"
+    "MOTIR_TOKEN": "${localEnv:MOTIR_TOKEN}"
   }
 }</pre
               >
@@ -1366,7 +1381,8 @@ docker run --rm -it \
             <p>
               Swap <code>:claude</code> and the <code>mounts</code> entry for your row from step 1.
               <code>remoteEnv</code> forwards your Motir credential from the local environment, so a
-              machine that never ran a host login still resolves one.
+              machine that never ran a host login still resolves one — add
+              <code>MOTIR_SERVER</code> beside it if you self-host.
             </p>
 
             <h3>4.3 · Reopen in Container</h3>
