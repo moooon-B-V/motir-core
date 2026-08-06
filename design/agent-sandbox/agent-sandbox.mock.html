@@ -1004,12 +1004,16 @@
           </nav>
 
           <div class="docs-main doc">
-            <h1>Run your agent in the sandbox</h1>
+            <h1>Set up the agent sandbox</h1>
             <p class="lede">
               Motir asks you to hand work to a coding agent that runs unattended, with approvals
-              off. This is where it runs: a published container that can reach your workspace tree
-              and nothing else on your machine. Adopting it is a <code>docker run</code>, not a
-              <code>git clone</code>.
+              off. This is where it should run: a published container that can reach your workspace
+              tree and nothing else on your machine. Setting it up is a <code>docker run</code>, not
+              a <code>git clone</code> — and this page ends when you have a working one.
+              <strong
+                >What you then do inside it is the work loop, and it is documented with the
+                CLI</strong
+              >, not here.
             </p>
 
             <h2>What it confines — and what it does not</h2>
@@ -1111,9 +1115,9 @@
             <div class="callout">
               <span aria-hidden="true">◆</span>
               <span
-                ><code>motir doctor</code> checks every one of these and names what is missing. Run
-                it here before you start, and again inside the container if a run stops early — it
-                is the same command in both places.</span
+                ><code>motir doctor</code> checks every one of these on THIS machine and names what
+                is missing. Run it before you start; step 5 runs the same command inside the
+                container, where it answers a different question.</span
               >
             </div>
 
@@ -1252,20 +1256,11 @@
               </tbody>
             </table>
 
-            <h2>3 · Run it</h2>
+            <h2>3 · Start the container</h2>
             <p>
-              The command has two halves, and conflating them is the commonest way to misunderstand
-              this page. <strong><code>docker run …</code> is the PLACE</strong> — the confined
-              container. <strong><code>motir auto</code> is the WORK</strong> — Motir's unattended
-              loop, which claims one ready item at a time, hands each to your agent on a session
-              branch, and keeps going without you. The CLI never starts a container for you: you
-              start the container, and run the loop inside it. Run <code>motir auto</code> on your
-              host instead and it behaves identically — just without the confinement, which is the
-              thing this page is for.
-            </p>
-            <p>
-              So: one command, shaped by the row you picked in step 1. Three of its parts come from
-              that row; everything else is the same for every profile:
+              One command, shaped by the row you picked in step 1 — two of its parts come from that
+              row, and everything else is the same for every profile. It drops you into a shell in
+              <code>/workspace</code>:
             </p>
             <div class="codeblock">
               <div class="cap">sh · the shape</div>
@@ -1274,15 +1269,14 @@ docker run --rm -it \
   -v "$PWD:/workspace" \
   -e MOTIR_TOKEN \
   -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt; \
-  motir auto --agent "&lt;your agent's command&gt;"</pre
+  ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt;</pre
               >
             </div>
             <table class="spec">
               <thead>
                 <tr>
                   <th style="width: 26%">The part</th>
-                  <th style="width: 32%">Comes from</th>
+                  <th style="width: 38%">Comes from</th>
                   <th>For <code>claude</code></th>
                 </tr>
               </thead>
@@ -1300,16 +1294,6 @@ docker run --rm -it \
                   </td>
                   <td><span class="mount">.claude</span></td>
                 </tr>
-                <tr>
-                  <td><span class="nm">&lt;your agent's command&gt;</span></td>
-                  <td>
-                    your agent's own non-interactive + auto-approve flags. They drift between vendor
-                    releases, so the current set lives beside the image in
-                    <code>packages/cli/sandbox/README.md</code> § <em>Auto-approve flags</em> —
-                    check yours there rather than here.
-                  </td>
-                  <td><span class="mount">claude --dangerously-skip-permissions</span></td>
-                </tr>
               </tbody>
             </table>
             <p>
@@ -1318,23 +1302,16 @@ docker run --rm -it \
               takes none at all. Filled in for <code>claude</code>, that is:
             </p>
             <div class="codeblock">
-              <div class="cap">sh · copy, then swap the three parts for your row</div>
+              <div class="cap">sh · copy, then swap the two parts for your row</div>
               <button class="copy" type="button">Copy</button>
               <pre>
 docker run --rm -it \
   -v "$PWD:/workspace" \
   -e MOTIR_TOKEN \
   -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude \
-  motir auto --agent "claude --dangerously-skip-permissions"</pre
+  ghcr.io/moooon-b-v/motir-sandbox:claude</pre
               >
             </div>
-            <p>
-              <code>motir auto</code> is not the only thing you can run in there. Leave the command
-              off entirely and you get an interactive shell in <code>/workspace</code>, where
-              <code>motir next</code>, <code>motir run &lt;key&gt;</code> and everything else behave
-              as they do on your host — the container is a place, not a mode.
-            </p>
             <div class="callout">
               <span aria-hidden="true">◆</span>
               <span
@@ -1346,7 +1323,7 @@ docker run --rm -it \
               >
             </div>
 
-            <h2>4 · Or run it in VS Code instead</h2>
+            <h2>4 · Or start it from VS Code instead</h2>
             <div class="callout">
               <span aria-hidden="true">◆</span>
               <span
@@ -1415,12 +1392,75 @@ docker run --rm -it \
               >
             </div>
 
+            <h2>5 · Confirm it is set up</h2>
+            <p>
+              Whichever way you started it, run this <em>inside</em> the container. It is the same
+              command you ran on your host in <em>Before you start</em>, and here it answers a
+              different question — not "is my machine ready" but "did the container actually get
+              what I passed it":
+            </p>
+            <div class="codeblock">
+              <div class="cap">sh · inside the container</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>motir doctor</pre>
+            </div>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 30%">It checks</th>
+                  <th>Which tells you</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">the workspace</span></td>
+                  <td>
+                    <code>/workspace</code> is writable and the project link resolves — so you
+                    mounted the right folder, not a checkout inside it.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">the Motir credential</span></td>
+                  <td>
+                    Your token reached the container by one of step 2's three ways, and names which
+                    one it used.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">your agent</span></td>
+                  <td>
+                    The binary is on <code>PATH</code>, and its own credential is present where that
+                    profile keeps it — the read-only mount from step 3 actually landed.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p>
+              All three green is the end of this page: you have a confined container that can see
+              your work and hold your credentials, and nothing else on your machine.
+            </p>
+
+            <h2>What next</h2>
+            <p>
+              <strong
+                >Setting the sandbox up and using it are different things, and this page only owns
+                the first.</strong
+              >
+              Inside the container the CLI behaves exactly as it does on your host —
+              <code>motir next</code> to take one item, <code>motir run &lt;key&gt;</code> for a
+              specific one, or <code>motir auto</code> to drain the ready set unattended, which is
+              what the confinement is really for. All three are documented with the CLI, because
+              none of them is about the container.
+            </p>
             <div class="callout">
               <span aria-hidden="true">◆</span>
               <span
-                >This page is the first ten minutes. Digests to pin, the confinement proof, the
-                validation harness and the escape hatch for an unlisted agent live in
-                <code>packages/cli/sandbox/README.md</code>.</span
+                >The unattended loop takes your agent's own non-interactive and auto-approve flags
+                (<code>motir auto --agent "&lt;your agent's command&gt;"</code>). Those drift
+                between vendor releases, so the current set lives beside the image in
+                <code>packages/cli/sandbox/README.md</code> — which is also where the digests to
+                pin, the confinement proof, the validation harness and the escape hatch for an
+                unlisted agent live.</span
               >
             </div>
           </div>
@@ -1431,8 +1471,10 @@ docker run --rm -it \
             <a href="#">Before you start</a>
             <a href="#">1 · Pick your profile</a>
             <a href="#">2 · Motir credential</a>
-            <a href="#">3 · Run it</a>
-            <a href="#">4 · In VS Code</a>
+            <a href="#">3 · Start the container</a>
+            <a href="#">4 · From VS Code</a>
+            <a href="#">5 · Confirm it</a>
+            <a href="#">What next</a>
           </aside>
         </div>
       </div>
@@ -1537,7 +1579,7 @@ docker run --rm -it \
             </dl>
           </div>
 
-          <h2>3 · Run it</h2>
+          <h2>3 · Start the container</h2>
           <div class="codeblock">
             <div class="cap">sh · scrolls here, not the page →</div>
             <pre>

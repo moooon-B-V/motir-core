@@ -16,6 +16,15 @@ and `packages/cli/sandbox/README.md` (Q2), and `AGENT_PROFILES` as the profile
 table's single derivation source (Q3). This asset draws to those answers; it does
 not re-decide them.
 
+> **⚠️ WHAT THIS PAGE IS.** It **sets the container up**, and it ends when the
+> reader has a working one. It does **not** teach the work loop that runs inside
+> it — `motir auto` / `motir next` / `motir run <key>` are CLI concerns, they
+> behave identically on the host, and none of them is about the container. The
+> page names them once, in a closing _What next_, and hands off. Drawing the
+> setup and the usage as one thing is what produced two earlier defects: a
+> `docker run` that ended in an unattended work loop, and a reader who reasonably
+> concluded `motir auto` was the thing that starts the sandbox.
+
 > **Why its own area, and not an amendment to `design/api-docs/`.** This is a new
 > feature with its own content, its own procedure and its own failure modes. It
 > only happens to be served by a shell somebody else designed. Folding it into
@@ -54,9 +63,10 @@ loose on their laptop versus one that cannot reach it. So the page reads as:
   Before you start                            ← preconditions, and the workspace root
   1 · Pick your profile
   2 · Give it a Motir credential
-  3 · Run it
-  4 · Or run it in VS Code instead            ← 4.1 · 4.2 · 4.3
-  → the README, for everything past the first ten minutes
+  3 · Start the container
+  4 · Or start it from VS Code instead        ← 4.1 · 4.2 · 4.3, REPLACING step 3
+  5 · Confirm it is set up                    ← the finish line, for either path
+  What next                                   ← the hand-off, not a sixth step
 ```
 
 Two things this ordering buys, both of which the first drafts got wrong:
@@ -66,7 +76,14 @@ Two things this ordering buys, both of which the first drafts got wrong:
   **step 1**, before the command, not a reference table below it.
 - **The VS Code path is a numbered STEP, not a closing paragraph.** As prose at
   the bottom it is a footnote nobody scrolls to; as `4 ·` with its own sub-steps
-  it is visibly one of the two ways to run this.
+  it is visibly one of the two ways to start this. Its lede says the three
+  sub-steps **replace** step 3 rather than following it, so the two are read as
+  alternatives.
+- **A setup guide ends with a CHECK, and step 5 is it.** `motir doctor`, run
+  inside the container, against the same three things _Before you start_ checked
+  on the host — asking a different question there: not _"is my machine ready"_
+  but _"did the container actually get what I passed it"_. All three green is a
+  stated finish line, which is what lets the page stop rather than trail off.
 
 The numbered-`h2` rhythm is the shipped one — the sibling getting-started page
 already reads `1 · Mint a token`, `2 · Your first call`, … — so this page is
@@ -192,71 +209,74 @@ credentials is exactly the person reading this on a phone first.
 
 ---
 
-## Step 3 — the command is a SHAPE, then an example
+## Step 3 — START the container; the command is a SHAPE, then an example
 
-**⚠️ This is the fix for the sharpest defect in the drafts.** An earlier pass drew
-a single `docker run` under the heading _"The one command"_, and that command was
-`claude`'s in **three** separate places: the image tag, the credential mount, and
-the `--agent` invocation. Seven of the eight profiles would have copied something
-wrong three times over, from a heading promising it was universal.
+**⚠️ Two defects were fixed here, and the second one reframed the page.**
 
-Drawn instead as **shape → what changes → filled-in example**:
+**First: the command was `claude`'s.** An earlier pass drew a single `docker run`
+under the heading _"The one command"_, claude-specific in the image tag, the
+credential mount and the `--agent` invocation. Seven of the eight profiles would
+have copied something wrong three times over, from a heading promising it was
+universal. Drawn instead as **shape → what changes → filled-in example**:
 
 1. A **non-copyable** `codeblock` (caption `sh · the shape`) with
-   `<profile>` / `<credential mount>` / `<your agent's command>` in place.
-2. A three-row `table.spec` — the part / where it comes from / the `claude`
-   value — cross-referencing step 1's columns by name.
+   `<profile>` / `<credential mount>` in place.
+2. A two-row `table.spec` — the part / where it comes from / the `claude` value —
+   cross-referencing step 1's columns by name.
 3. The `claude` version **with** the `Copy` affordance and a caption that says to
-   swap the three parts.
+   swap the two parts.
 
 **The copy affordance is on the filled-in block only.** A copyable template is a
 command that fails in the terminal; that asymmetry is the design, not a detail.
 Two notes carry what the placeholders flatten: a profile with two mounts takes two
 `-v` lines, one with none takes none.
 
-**⚠️ Step 3 must say what the two HALVES of the command are.** A reader asked
-_"why do we have `motir auto` in the docker command? I thought `motir auto` is to
-run a task in the sandbox"_ — an inversion the page caused by using the name
-without defining it, the same defect as `tier` and `.motir.json`. Checked:
-`program.ts` registers `auto` as _"Drain the ready set unattended: one item at a
-time onto a session branch"_, the CLI has **no** sandbox or docker command
-(`login logout auth link ready status sprints sprint show doctor open next run
-auto batch plan done`), and nothing under `packages/cli/src/` spawns a container.
-So `motir auto` never starts a sandbox; it is the loop that runs INSIDE one.
+**Second: the command ENDED IN A WORK LOOP, and it should not.** It ran
+`motir auto --agent "…"`, which is not setup — it is the unattended loop you run
+_after_ you are set up. Two things followed from that mistake, and both are
+evidence for the scope line at the top of these notes:
 
-The step-3 lede now says so before the command: **`docker run …` is the PLACE**
-(the confined container), **`motir auto` is the WORK** (the unattended loop —
-claims one ready item at a time, hands each to the agent on a session branch,
-keeps going). And the closing line makes the container's nature explicit —
-leave the command off and you get a shell where `motir next` and
-`motir run <key>` behave as they do on the host, because **the container is a
-place, not a mode**. That sentence is what stops the next reader forming the
-same inversion.
+- The substitution table needed a third row, `<your agent's command>`, for a fact
+  **this page cannot source from itself** — the vendor auto-approve flags drift
+  between releases, so under Amendment 8 Q2's second limb they cannot live on a
+  page whose rule is _only facts a test can hold true_. A setup guide that does
+  not run the agent does not need them, and the row is gone.
+- A reader asked _"why is `motir auto` in the docker command? I thought
+  `motir auto` runs a task in the sandbox"_ — a reasonable inversion for a page
+  that used the name without defining it. Checked: `program.ts` registers `auto`
+  as _"Drain the ready set unattended: one item at a time onto a session
+  branch"_, the CLI has **no** sandbox or docker command, and nothing under
+  `packages/cli/src/` spawns a container. `motir auto` never starts a sandbox; it
+  runs inside one.
 
-**⚠️ The command does NOT pass `MOTIR_SERVER`, and that is a correction.** An
-earlier drawing carried `-e MOTIR_TOKEN -e MOTIR_SERVER` in every block, which
-made a reader ask what the second one was for — the right question.
-`packages/cli/src/serverResolve.ts` exports
-`DEFAULT_SERVER_URL = 'https://app.motir.co'` as the LAST rung of its ladder
-(`--server` > `MOTIR_SERVER` > `.motir.json` > the single stored server > the
-default), with the reason written beside it: _"the common case is the hosted
-product, and a CLI whose default is a dev server makes `motir login` a command
-you cannot type without also knowing a URL."_ So on the hosted product the
-variable is **not needed at all**, and passing it unconditionally advertises a
-decision the reader does not have to make. It appears exactly once now, in a
-`callout` after the filled-in command: _"Self-hosting? … add
-`-e MOTIR_SERVER=https://motir.example.com` — Motir is open-core and
-self-hostable, and that variable is the whole difference."_ Same for the
-dev-container `remoteEnv`, which forwards `MOTIR_TOKEN` and mentions
-`MOTIR_SERVER` in prose.
+So the command now **ends at the image name** and drops the reader into a shell in
+`/workspace`. Two placeholders, not three. The work loop is named once, in
+_What next_, with its flags delegated to the README.
 
-**`<your agent's command>` is the one part this page cannot source from itself.**
-The vendor non-interactive + auto-approve flags drift between releases, so under
-Amendment 8 Q2's second limb — _a fact belongs here only if a test can hold it
-true_ — they stay in the README, and the table points there **by name**. That is
-the honest form of a fact the page must not own.
+## Step 5 — the finish line, and why it is `motir doctor` again
 
----
+The same command as _Before you start_, run **inside** the container, against the
+same three things — and that repetition is deliberate, not an oversight. On the
+host it answers _"is my machine ready"_; in the container it answers _"did the
+container actually get what I passed it"_, which is the only question a setup
+guide can end on. A three-row `table.spec` says what each check proves in terms of
+the steps that produced it: the workspace check proves you mounted the root rather
+than a checkout inside it (step 3's commonest error), the credential check names
+which of step 2's three ways it used, and the agent check proves step 3's
+read-only mount actually landed.
+
+**"All three green is the end of this page"** is stated in those words. A guide
+without a declared finish line trails off into whatever the author thought of
+last, which is exactly how the work loop got into it.
+
+## What next — a hand-off, not a sixth step
+
+Deliberately **unnumbered**, so it reads as the boundary rather than more
+procedure. It names `motir next`, `motir run <key>` and `motir auto` once each,
+says they behave identically on the host, and states why they are not here:
+_none of them is about the container_. The `motir auto --agent` flags and the
+README's deep reference (digests, confinement proof, validation harness, the
+tier-3 escape hatch) share the closing callout.
 
 ## Step 4 — VS Code, and the file NOT to copy
 
