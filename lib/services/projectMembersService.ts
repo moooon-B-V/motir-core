@@ -9,16 +9,12 @@ import {
   InvalidProjectRoleError,
   LastProjectAdminError,
   NotAProjectMemberError,
-  NotProjectAdminError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
-import {
-  asAccessLevel,
-  asProjectRole,
-  isWorkspaceManager,
-  type ProjectRole,
-} from '@/lib/projects/roles';
+import { asAccessLevel, asProjectRole, type ProjectRole } from '@/lib/projects/roles';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { toProjectAccessDTO, toProjectMemberDTO } from '@/lib/mappers/projectMemberMappers';
 import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMembers';
 
@@ -27,13 +23,40 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 // validation, the project-admin gate, and the DTO mapping; the routes are thin
 // HTTP transports; the single Prisma ops live in the repositories.
 //
-// AUTHORIZATION (two tiers, the Jira team-managed shape):
-//   * Workspace owner/admin ALWAYS pass — the "site admin sees/manages every
-//     project" tier (isWorkspaceManager on the workspace_membership.role).
-//   * Otherwise the actor must hold a project membership with role `admin`.
-//   * Everyone else → NotProjectAdminError (403).
-// The browse/edit READ gate (canBrowse/canEdit per access level) is Subtask
-// 6.4.3, deliberately NOT here — 6.4.4 is the management write path only.
+// AUTHORIZATION — ⚠️ ONE POLICY, ASKED BY KEY (Story MOTIR-2256 · MOTIR-2295).
+// Until this card, this file declared its OWN module-private `assertCanManage`
+// that re-derived the admin answer from scratch (workspace-manager rail, then
+// `projectMembership?.role === 'admin'`). That was a SECOND implementation of
+// the access policy — it happened to agree with `lib/permissions/resolve.ts` and
+// nothing kept it that way. MOTIR-2255 moved the policy into one place precisely
+// so this could not happen; it is deleted, and every gate here now asks
+// `projectAccessService.assertPermission` for a named key:
+//
+//   * `addMember` / `setRole` / `removeMember`  → `member:manage`
+//   * `setAccessLevel`                          → `project:manage_access`
+//     Its own key on purpose: who is IN the project and how open the project is
+//     to the workspace are different decisions, and Jira separates them too.
+//   * `listMembers` / `getAccess`               → `project:browse`
+//
+// ⚠️ THE TWO READS ARE NOW GATED, AND THAT IS A DELIBERATE HOLE CLOSED. They
+// were documented as "available to any workspace member who can resolve the
+// project key". Read on this branch, `resolveProjectInTx` applies NO browse gate
+// — its own header says "the access gate (assertCanBrowse) is the CALLER's job"
+// — so a workspace member who could not browse a private project could still
+// read its member list and its access level. `project:browse` is the right gate
+// (never a `manage` key: the Members page renders READ-ONLY for non-admins by
+// design, and changing what is SHOWN is MOTIR-2258's surface, not this one).
+//
+// Two consequences of routing through the shared gate, both intended:
+//   * A NON-BROWSER now gets ProjectNotFoundError (404) where the private assert
+//     returned NotProjectAdminError (403). That is the no-existence-leak posture
+//     (finding #26) this file already claims below — a private project must look
+//     missing, not forbidden.
+//   * A browser who lacks the key gets PermissionDeniedError (403) rather than
+//     NotProjectAdminError. Same status; the code changes from
+//     `NOT_PROJECT_ADMIN` to `PERMISSION_DENIED`, which no consumer of these
+//     three routes reads (`ProjectMembersSettings` special-cases only
+//     `LAST_PROJECT_ADMIN` and falls through to a generic message).
 //
 // RLS: every method runs inside withWorkspaceContext(ctx) so the project +
 // project_membership RLS policies see the per-transaction workspace GUC under
@@ -59,32 +82,28 @@ function resolveProjectInTx(key: string, ctx: WorkspaceContext, tx: Prisma.Trans
 }
 
 /**
- * Assert the actor may MANAGE the project (add/remove members, set roles +
- * access). Passes for a workspace owner/admin (always) or a project admin;
- * throws NotProjectAdminError otherwise. Reads run through `tx` so the RLS
- * policies admit the rows under prodect_app.
+ * The actor context the shared gate takes. Built from `actorUserId` rather than
+ * `ctx.userId` so the gate answers about the ACTOR the caller named — the two
+ * are the same in every shipped route, and the private assert this replaces took
+ * `actorUserId` explicitly, so keeping that is the behaviour-preserving reading.
  */
-async function assertCanManage(
-  actorUserId: string,
-  workspaceId: string,
+function actorContext(input: ActorScopedInput): { userId: string; workspaceId: string } {
+  return { userId: input.actorUserId, workspaceId: input.ctx.workspaceId };
+}
+
+/**
+ * Assert the actor holds `key` on the project, inside the enclosing transaction.
+ * A thin adapter onto `projectAccessService.assertPermission` — `tx` is threaded
+ * so the gate's reads see the per-transaction workspace GUC the RLS policies
+ * need under prodect_app, and share the snapshot the write will use.
+ */
+function assertPermission(
+  input: ActorScopedInput,
   projectId: string,
+  key: PermissionKey,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const wsMembership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-    actorUserId,
-    workspaceId,
-    tx,
-  );
-  if (wsMembership && isWorkspaceManager(wsMembership.role)) return;
-
-  const projectMembership = await projectMembershipRepository.findByUserAndProject(
-    actorUserId,
-    projectId,
-    tx,
-  );
-  if (projectMembership?.role === 'admin') return;
-
-  throw new NotProjectAdminError(projectId);
+  return projectAccessService.assertPermission(projectId, actorContext(input), key, tx);
 }
 
 function validateRole(role: string): ProjectRole {
@@ -101,14 +120,19 @@ export interface ActorScopedInput {
 
 export const projectMembersService = {
   /**
-   * List a project's members as DTOs. Available to any workspace member who can
-   * resolve the project key (the per-access-level browse gate is 6.4.3); the
-   * Members UI renders this read-only for non-admins. Reads inside
-   * withWorkspaceContext so the project_membership RLS policy exposes the rows.
+   * List a project's members as DTOs. BROWSE-gated (MOTIR-2295): any actor who
+   * can see the project may read who is on it, and the Members UI renders that
+   * read-only for non-admins — a `manage` key here would hide the page from the
+   * people it is meant to inform. Before this card it was ungated, because
+   * `resolveProjectInTx` resolves the key without applying the access gate, so a
+   * workspace member who could not browse a private project could still read its
+   * member list. Reads inside withWorkspaceContext so the project_membership RLS
+   * policy exposes the rows.
    */
   async listMembers(input: ActorScopedInput): Promise<ProjectMemberDTO[]> {
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
+      await assertPermission(input, project.id, 'project:browse', tx);
       const rows = await projectMembershipRepository.findMembersByProject(project.id, tx);
       return rows.map(toProjectMemberDTO);
     });
@@ -116,15 +140,15 @@ export const projectMembersService = {
 
   /**
    * Read the project's current browse-access level (open / limited / private).
-   * Available to any workspace member who can resolve the project key (the
-   * Settings → Access control in 6.4.5 renders this; it's read-only for
-   * non-admins). A pure read — no gate, no transaction-spanning write — so it
-   * mirrors `listMembers`: resolve the project under withWorkspaceContext and
-   * map to the DTO. The write counterpart is `setAccessLevel`.
+   * BROWSE-gated, for the same reason as `listMembers` (MOTIR-2295): the
+   * Settings → Access control pane in 6.4.5 renders it read-only for non-admins,
+   * so the gate is `project:browse`, never `project:manage_access` — that key is
+   * the WRITE counterpart, `setAccessLevel`.
    */
   async getAccess(input: ActorScopedInput): Promise<ProjectAccessDTO> {
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
+      await assertPermission(input, project.id, 'project:browse', tx);
       return toProjectAccessDTO(project);
     });
   },
@@ -140,7 +164,7 @@ export const projectMembersService = {
     const role = validateRole(input.role);
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
-      await assertCanManage(input.actorUserId, input.ctx.workspaceId, project.id, tx);
+      await assertPermission(input, project.id, 'member:manage', tx);
 
       // The target must be a workspace member — a project can only draw from the
       // people already in its workspace (the add-member combobox in 6.4.5 is
@@ -192,7 +216,7 @@ export const projectMembersService = {
     const role = validateRole(input.role);
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
-      await assertCanManage(input.actorUserId, input.ctx.workspaceId, project.id, tx);
+      await assertPermission(input, project.id, 'member:manage', tx);
 
       const existing = await projectMembershipRepository.findByUserAndProject(
         input.targetUserId,
@@ -229,7 +253,7 @@ export const projectMembersService = {
   ): Promise<ProjectMemberDTO> {
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
-      await assertCanManage(input.actorUserId, input.ctx.workspaceId, project.id, tx);
+      await assertPermission(input, project.id, 'member:manage', tx);
 
       const existing = await projectMembershipRepository.findByUserAndProjectWithUser(
         input.targetUserId,
@@ -261,7 +285,7 @@ export const projectMembersService = {
 
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
-      await assertCanManage(input.actorUserId, input.ctx.workspaceId, project.id, tx);
+      await assertPermission(input, project.id, 'project:manage_access', tx);
 
       if (level === 'private') {
         const workspaceMembers = await workspaceMembershipRepository.findMembersByWorkspace(

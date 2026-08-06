@@ -38,14 +38,20 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **11** are
-enforced by a gate today; **20** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **13** are
+enforced by a gate today; **18** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
 `saved_filter:manage`, `import:run`, `work_item:triage`, `work_item:delete`) — those are governed by
 nothing at all today, so wiring them takes capability away from real actors and is argued on its own.
 A `planned` key is never offered in the grid or the role editor.
+
+> **The enforced / planned split moves as MOTIR-2256 lands, one domain per card.** The counts above
+> are read on this branch, not as of the day the document was written — `tests/permissions/catalog.test.ts`
+> pins them against the code, so a key that flips without a gate behind it (or a gate that lands
+> without the catalog being told) fails the build rather than drifting here. Wired so far:
+> **`member:manage` · `project:manage_access`** (MOTIR-2295).
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -67,7 +73,7 @@ A `planned` key is never offered in the grid or the role editor.
 | `estimation` (1)     | `estimation:manage` ᵖ                                                             |
 | `field` (3)          | `component:manage` ᵖ · `field:manage` ᵖ · `label:manage` ᵖ                        |
 | `import` (1)         | `import:run` ᵖ                                                                    |
-| `member` (2)         | `member:manage` ᵖ · `project:manage_access` ᵖ                                     |
+| `member` (2)         | `member:manage` · `project:manage_access`                                         |
 | `project` (2)        | `project:administer` · `project:browse`                                           |
 | `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`      |
 | `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                         |
@@ -371,11 +377,12 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `member`
 
-| Operation                              | Verbs        | Gate today     | Permission              | Decision | Why |
-| -------------------------------------- | ------------ | -------------- | ----------------------- | -------- | --- |
-| `/api/projects/[key]/access`           | PATCH        | workspace only | `project:manage_access` | new      | R18 |
-| `/api/projects/[key]/members`          | GET/POST     | workspace only | `member:manage`         | new      | R27 |
-| `/api/projects/[key]/members/[userId]` | DELETE/PATCH | workspace only | `member:manage`         | new      | R27 |
+| Operation                              | Verbs        | Gate today                                                          | Permission              | Decision | Why |
+| -------------------------------------- | ------------ | ------------------------------------------------------------------- | ----------------------- | -------- | --- |
+| `/api/projects/[key]/access`           | PATCH        | `projectMembersService.setAccessLevel` → `assertPermission`         | `project:manage_access` | existing | R18 |
+| `/api/projects/[key]/members`          | GET          | `projectMembersService.listMembers` → `assertPermission`            | `project:browse`        | existing | R27 |
+| `/api/projects/[key]/members`          | POST         | `projectMembersService.addMember` → `assertPermission`              | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/members/[userId]` | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission` | `member:manage`         | existing | R27 |
 
 ### `project`
 

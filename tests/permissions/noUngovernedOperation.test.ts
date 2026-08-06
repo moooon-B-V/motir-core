@@ -26,8 +26,20 @@ const DOC = join(ROOT, 'docs', 'decisions', 'permission-inventory.md');
 
 // A gate — the shipped `assertCan*` surface, the capability reads, or the
 // permission model itself.
+//
+// ⚠️ `assertPermission(` IS ON THIS LIST, and it has to be. MOTIR-2293 made
+// `projectAccessService.assertPermission(projectId, ctx, key, tx?)` THE
+// administrative gate — one method that takes the key, rather than twelve named
+// `assertCanX`. A walk that only knows the `assertCan*` shape would read every
+// operation MOTIR-2256 wires as UNGOVERNED, and the pinned counts below would
+// climb as the story CLOSED holes. That is the MOTIR-2292 failure exactly: an
+// instrument that under-reports gates in the alarming direction sends the next
+// card looking for holes that are not there. The pattern is deliberately loose
+// on the receiver so a service's own thin adapter onto the shared gate (e.g.
+// `projectMembersService`'s module-local `assertPermission`) counts too — the
+// adapter's whole body is one call to the real gate.
 const GATE =
-  /assertCan[A-Za-z]+|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(/;
+  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(/;
 /**
  * Every `someService.someMethod(` call in `source`.
  *
