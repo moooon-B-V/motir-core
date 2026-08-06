@@ -125,6 +125,31 @@ describe('ChildList (2.4.3)', () => {
     expect(within(second).queryByTitle(/.+/)).toBeNull(); // unassigned → no avatar
   });
 
+  it('falls back to the member’s email when they have no name set', () => {
+    // The avatar + its tooltip both read `name || email`, so a member who never
+    // set a display name still gets an identifiable initial rather than a blank.
+    const items = [
+      summary({
+        id: 'c9',
+        identifier: 'PROD-60',
+        title: 'Nameless owner',
+        assigneeId: 'u_nameless',
+      }),
+    ];
+    render(
+      <ChildList
+        items={items}
+        workflow={workflow}
+        members={[
+          ...members,
+          { userId: 'u_nameless', name: '', email: 'zoe@example.com' } as (typeof members)[number],
+        ]}
+      />,
+    );
+    const row = screen.getByRole('link', { name: /PROD-60/ });
+    expect(within(row).getByTitle('zoe@example.com').textContent).toBe('Z');
+  });
+
   it('falls back to the raw status key when it is not in the workflow', () => {
     const items = [summary({ id: 'c3', identifier: 'PROD-50', status: 'mystery' })];
     render(<ChildList items={items} workflow={workflow} members={members} />);

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
@@ -401,6 +401,122 @@ describe('WorkItemRoadmap', () => {
       // rooted mount's cached level (a per-mount ref, plus a root-keyed entry).
       expect(await screen.findByText('Epic one')).toBeTruthy();
       expect(screen.queryByText('Rooted child')).toBeNull();
+    });
+  });
+
+  // ── the paths the story gate (MOTIR-2289) found uncovered ────────────────
+  // These are pre-existing behaviours of the adapter that no suite exercised;
+  // the story puts this file under the per-file coverage gate, so they are
+  // asserted rather than left as an untested branch.
+
+  describe('the planning-origin DOOR + the manual refresh', () => {
+    const PREPLAN = {
+      docs: [{ kind: 'discovery' }, { kind: 'vision' }],
+    };
+
+    function stubWithPreplan() {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('/api/ai/pre-plan')) return { ok: true, json: async () => PREPLAN };
+          if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => root };
+        }),
+      );
+    }
+
+    it('drills the phase card into a SYNTHETIC pre-plan station level (no roadmap read)', async () => {
+      stubWithPreplan();
+      render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      // The badge's read has landed, so the card reports what the journey produced.
+      await screen.findByText('2 of 4 docs');
+      fireEvent.keyDown(el('__planning_origin__')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      // The stations are built from the pre-plan read, not from a roadmap level —
+      // no work item backs them, so asking the API for ORIGIN_ID's children would
+      // be a request for an id it has never heard of.
+      expect(await screen.findByText('Understanding your project')).toBeTruthy();
+      const calls = (
+        globalThis.fetch as unknown as { mock: { calls: unknown[][] } }
+      ).mock.calls.map((c) => String(c[0]));
+      expect(calls.some((u) => u.includes('__planning_origin__'))).toBe(false);
+    });
+
+    it('opens the tier doc from a produced station’s View, and closes it', async () => {
+      stubWithPreplan();
+      render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      await screen.findByText('2 of 4 docs');
+      fireEvent.keyDown(el('__planning_origin__')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Understanding your project');
+      // A produced station is `viewable`, so the canvas's own View button surfaces
+      // on it — and the adapter routes a TIER id to the doc modal rather than to
+      // the work-item peek (work-item ids are cuids and never a tier kind).
+      fireEvent.keyDown(el('discovery')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('view-button'));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('a FAILED pre-plan read leaves the card chip-less and the level upcoming', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('/api/ai/pre-plan')) throw new Error('offline');
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => root };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      // `null` is the honest "we do not know": no chip, never an error on the
+      // roadmap, and the card still paints (the read never blocks first paint).
+      expect(screen.getByTestId('planning-origin')).toBeTruthy();
+      expect(screen.queryByTestId('planning-origin-chip')).toBeNull();
+      // The drilled level still renders — its four stations, all `upcoming`.
+      fireEvent.keyDown(el('__planning_origin__')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      expect(await screen.findByText('Understanding your project')).toBeTruthy();
+    });
+
+    it('a refreshSignal bump refetches the CURRENT level in place and settles', async () => {
+      const onRefreshSettled = vi.fn();
+      const fetchSpy = vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+        return { ok: true, json: async () => root };
+      });
+      vi.stubGlobal('fetch', fetchSpy);
+      const view = render(
+        <WorkItemRoadmap
+          projectKey="MOTIR"
+          refreshSignal={0}
+          onRefreshSettled={onRefreshSettled}
+        />,
+      );
+      await screen.findByText('Epic one');
+      const before = fetchSpy.mock.calls.length;
+      expect(onRefreshSettled).not.toHaveBeenCalled(); // an initial load never settles
+      view.rerender(
+        <WorkItemRoadmap
+          projectKey="MOTIR"
+          refreshSignal={1}
+          onRefreshSettled={onRefreshSettled}
+        />,
+      );
+      await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(before));
+      // The refresh drops the cache and re-reads — and reports settled on the real
+      // fetch-completion signal, which is what lets a caller clear its spinner
+      // without a timer.
+      await waitFor(() => expect(onRefreshSettled).toHaveBeenCalled());
+      expect(await screen.findByText('Epic one')).toBeTruthy(); // same level, in place
     });
   });
 });
