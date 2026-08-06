@@ -9,7 +9,6 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -19,7 +18,6 @@ import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/reg
 import type { FilterAst } from '@/lib/filters/ast';
 import { keyBetweenSafe, keyForAppend } from '@/lib/workItems/positioning';
 import { sendEvent } from '@/lib/jobs/sendEvent';
-import { isOwnerRole } from '@/lib/workspaces/roles';
 import { toWorkflowStatusDto } from '@/lib/mappers/workflowMappers';
 import {
   toBoardCardDto,
@@ -64,7 +62,6 @@ import {
   InvalidWipLimitError,
   LastBoardError,
   LastColumnError,
-  NotBoardAdminError,
   StatusMappingConflictError,
   UnmappedColumnTargetError,
 } from '@/lib/boards/errors';
@@ -973,6 +970,11 @@ export const boardsService = {
    * position), ordered by `position`.
    */
   async listBoards(projectId: string, ctx: ServiceContext): Promise<BoardSummaryDto[]> {
+    // BROWSE-gated (MOTIR-2296). It was the one board read with no gate at all,
+    // so a workspace member who could not browse a private project could still
+    // enumerate its boards. A `manage` key here would be wrong — seeing which
+    // boards exist is what every member of the project does all day.
+    await projectAccessService.assertCanBrowse(projectId, ctx);
     const boards = await boardRepository.findByProjectByPosition(projectId, ctx.workspaceId);
     return boards.map(toBoardSummaryDto);
   },
@@ -1135,22 +1137,40 @@ export const boardsService = {
  * gates board config to admins (rung 1) — so the owner gate is the consistent
  * build, not "any member". Logged as a finding.
  */
+/**
+ * Assert the actor may configure this project's boards (Story MOTIR-2256 ·
+ * Subtask MOTIR-2296). A thin adapter onto the ONE shared gate, kept as a named
+ * function because ten board-shape methods call it and the name says what the
+ * call means.
+ *
+ * ⚠️ IT REPLACES A GATE THAT ASKED A DIFFERENT QUESTION, AND THAT IS A DELIBERATE
+ * WIDENING. Until this card, board configuration ran through a module-private
+ * `assertBoardConfigAdmin` resolving `isOwnerRole(membership?.role)` — the
+ * workspace OWNER, and nobody else. Not a workspace admin, not the project's own
+ * admin. `board:configure` is held by all three, so a project admin can now tune
+ * their own board, which is what the key exists to express and what both mirrors
+ * do (Jira team-managed and Plane put board configuration under project
+ * administration).
+ *
+ * It is also REQUIRED rather than optional: MOTIR-2293 put `board:configure` into
+ * `BUILTIN_ROLE_PERMISSIONS.admin`, so leaving the old gate would have the
+ * catalog advertise a permission a project admin holds while this code refuses
+ * them — the exact lie `lib/permissions/catalog.ts`'s opening rule forbids.
+ *
+ * The 404-before-403 ordering comes along with the shared gate: an actor who
+ * cannot BROWSE the project gets `ProjectNotFoundError`, so a board they may not
+ * see stays invisible rather than merely forbidden.
+ */
 async function assertBoardConfigAdmin(
   userId: string,
   projectId: string,
   workspaceId: string,
 ): Promise<void> {
-  const project = await projectRepository.findById(projectId);
-  if (!project || project.workspaceId !== workspaceId) {
-    throw new ProjectNotFoundError(projectId);
-  }
-  const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
-    userId,
-    workspaceId,
+  await projectAccessService.assertPermission(
+    projectId,
+    { userId, workspaceId },
+    'board:configure',
   );
-  if (!isOwnerRole(membership?.role)) {
-    throw new NotBoardAdminError();
-  }
 }
 
 /**

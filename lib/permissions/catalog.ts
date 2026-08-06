@@ -178,7 +178,7 @@ const PERMISSION_META: Record<
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
   'member:manage': { domain: 'member', enforcement: 'enforced' },
   'project:manage_access': { domain: 'member', enforcement: 'enforced' },
-  'board:configure': { domain: 'board', enforcement: 'planned' },
+  'board:configure': { domain: 'board', enforcement: 'enforced' },
   'sprint:manage': { domain: 'sprint', enforcement: 'planned' },
   'automation:manage': { domain: 'workflow', enforcement: 'planned' },
   'workflow:manage': { domain: 'workflow', enforcement: 'planned' },

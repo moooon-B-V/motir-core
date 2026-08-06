@@ -9,8 +9,8 @@ import {
   InvalidColumnPositionError,
   InvalidWipLimitError,
   LastColumnError,
-  NotBoardAdminError,
 } from '@/lib/boards/errors';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // PATCH /api/board/columns/[columnId] — mutate one of a board column's
 // attributes. ONE attribute per request (the 3.6.3 UI sends a single edit at a
@@ -34,7 +34,8 @@ import {
 //
 // Typed errors → status codes:
 //   InvalidWipLimitError / InvalidColumnNameError / InvalidColumnPositionError → 400
-//   NotBoardAdminError                                                         → 403
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardColumnNotFoundError                                                   → 404
 //   LastColumnError / ColumnNotEmptyError                                      → 409
 
@@ -118,9 +119,8 @@ export async function PATCH(
     ) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardColumnNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
@@ -152,9 +152,8 @@ export async function DELETE(
     });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardColumnNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

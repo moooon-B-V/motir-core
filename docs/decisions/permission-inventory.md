@@ -38,8 +38,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **16** are
-enforced by a gate today; **15** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **17** are
+enforced by a gate today; **14** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -52,7 +52,7 @@ A `planned` key is never offered in the grid or the role editor.
 > pins them against the code, so a key that flips without a gate behind it (or a gate that lands
 > without the catalog being told) fails the build rather than drifting here. Wired so far:
 > **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300) ·
-> **`repository:manage` · `repository:manage_access`** (MOTIR-2299).
+> **`repository:manage` · `repository:manage_access`** (MOTIR-2299) · **`board:configure`** (MOTIR-2296).
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -69,7 +69,7 @@ A `planned` key is never offered in the grid or the role editor.
 | -------------------- | --------------------------------------------------------------------------------- |
 | `ai` (3)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ                                   |
 | `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                     |
-| `board` (1)          | `board:configure` ᵖ                                                               |
+| `board` (1)          | `board:configure`                                                                 |
 | `comment` (2)        | `comment:add` · `comment:moderate`                                                |
 | `estimation` (1)     | `estimation:manage` ᵖ                                                             |
 | `field` (3)          | `component:manage` ᵖ · `field:manage` ᵖ · `label:manage` ᵖ                        |
@@ -96,7 +96,7 @@ claims neutrality for a row in the LOOSENS column is wrong.
 
 | Domain       | The gate that actually runs                                    | Admits today                              | The split |
 | ------------ | -------------------------------------------------------------- | ----------------------------------------- | --------- |
-| `board`      | `boardsService.assertBoardConfigAdmin` → `isOwnerRole(...)`    | workspace OWNER                           | LOOSENS   |
+| `board`      | `assertPermission(board:configure)` (wired, MOTIR-2296)        | was workspace OWNER only                  | LOOSENED  |
 | `workflow`   | `workflowsService.assertProjectAdmin` → `isOwnerRole(...)`     | workspace OWNER                           | LOOSENS   |
 | `estimation` | `estimationService.assertEstimationAdmin` → `isOwnerRole(...)` | workspace OWNER                           | LOOSENS   |
 | `automation` | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |

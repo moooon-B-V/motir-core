@@ -12,8 +12,8 @@ import {
   InvalidBoardNameError,
   InvalidBoardTypeError,
   LastBoardError,
-  NotBoardAdminError,
 } from '@/lib/boards/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -28,7 +28,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //
 // Authorization: board CRUD is a project-config write → workspace-OWNER-gated
 // (finding #36 + the consistent build over the 3.7.3 card's "membership-gated"
-// prose), so an owner succeeds and a plain member is denied (NotBoardAdminError).
+// prose), so an owner succeeds and a plain member is denied (PermissionDeniedError).
 // Tenancy (finding #26): a board/project from another workspace is a 404 (no
 // cross-tenant existence leak).
 
@@ -133,7 +133,7 @@ describe('boardsService.createBoard (Subtask 3.7.3)', () => {
     const fx = await makeFixture('authz');
     await expect(
       boardsService.createBoard(fx.projectId, { name: 'Nope' }, fx.memberCtx),
-    ).rejects.toBeInstanceOf(NotBoardAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
 
     // A project in ANOTHER workspace, addressed with this owner's context → 404.
     const other = await makeFixture('authz-other');
@@ -181,7 +181,7 @@ describe('boardsService.setDefaultBoard (Subtask 3.7.3)', () => {
     const fx = await makeFixture('setdefault-authz');
     const triage = await boardsService.createBoard(fx.projectId, { name: 'Triage' }, fx.ownerCtx);
     await expect(boardsService.setDefaultBoard(triage.id, fx.memberCtx)).rejects.toBeInstanceOf(
-      NotBoardAdminError,
+      PermissionDeniedError,
     );
 
     const other = await makeFixture('setdefault-other');
@@ -244,7 +244,7 @@ describe('boardsService.deleteBoard (Subtask 3.7.3)', () => {
     const fx = await makeFixture('delete-authz');
     const triage = await boardsService.createBoard(fx.projectId, { name: 'Triage' }, fx.ownerCtx);
     await expect(boardsService.deleteBoard(triage.id, fx.memberCtx)).rejects.toBeInstanceOf(
-      NotBoardAdminError,
+      PermissionDeniedError,
     );
 
     const other = await makeFixture('delete-other');
