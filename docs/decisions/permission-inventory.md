@@ -85,6 +85,40 @@ A `planned` key is never offered in the grid or the role editor.
 
 ᵖ = `planned` — justified here, not yet enforced.
 
+## GATE TODAY, MEASURED (MOTIR-2304)
+
+**⚠️ `project:administer` is NOT the tightest administrative gate in the product.** Three domains are
+gated to the workspace **OWNER** — a strictly narrower actor set than the umbrella this story is
+splitting. So MOTIR-2256's split is not one movement: it TIGHTENS some domains, LOOSENS others, and
+leaves the rest exactly where they were. The per-domain card is where each is argued, and a card that
+claims neutrality for a row in the LOOSENS column is wrong.
+
+| Domain       | The gate that actually runs                                    | Admits today                              | The split |
+| ------------ | -------------------------------------------------------------- | ----------------------------------------- | --------- |
+| `board`      | `boardsService.assertBoardConfigAdmin` → `isOwnerRole(...)`    | workspace OWNER                           | LOOSENS   |
+| `workflow`   | `workflowsService.assertProjectAdmin` → `isOwnerRole(...)`     | workspace OWNER                           | LOOSENS   |
+| `estimation` | `estimationService.assertEstimationAdmin` → `isOwnerRole(...)` | workspace OWNER                           | LOOSENS   |
+| `automation` | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
+| `component`  | `componentsService`'s module-private `assertCanManage`         | `project:administer`-equivalent           | neutral   |
+| `field`      | `customFieldsService`'s module-private `assertCanManage`       | `project:administer`-equivalent           | neutral   |
+| `label`      | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
+| `ai`         | `projectAccessService.assertCanManage`                         | `project:administer`                      | neutral   |
+| `member`     | `projectAccessService.assertPermission` (wired, MOTIR-2295)    | `member:manage` / `project:manage_access` | wired     |
+| `repository` | `projectAccessService.assertCanEdit`                           | project MEMBER                            | TIGHTENS  |
+
+**Why this had to be written down.** The `Gate today` cells for `board`, `workflow` and `estimation`
+read **`session only`** until 2026-08-06. They were produced by the guard in
+`tests/permissions/noUngovernedOperation.test.ts`, whose `GATE` pattern recognised only CALLS TO
+KNOWN GATE FUNCTIONS — so a service that factors its authorization into a privately-named module-local
+helper and branches on `isOwnerRole(...)` was invisible twice over: the walk never entered the helper,
+and would not have recognised the decision if it had. MOTIR-2304 added both limbs (a same-file call
+hop, and the two role predicates), and the guard's PENDING pin fell **75 → 36**: thirty-nine
+operations that were never ungoverned. No gate was added to close that gap.
+
+It is the MOTIR-2292 failure one level up — that repair fixed WHERE the walk looks and left WHAT it
+recognises alone — and it is the reason three cards under MOTIR-2256 were written claiming their
+domains had _"no project gate at all"_ when the gates were there and tighter than the umbrella.
+
 ## Reasons
 
 Every row cites one of these. A row with no reason is the failure this card exists to prevent.
@@ -281,14 +315,16 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `board`
 
-| Operation                       | Verbs        | Gate today        | Permission        | Decision | Why |
-| ------------------------------- | ------------ | ----------------- | ----------------- | -------- | --- |
-| `/api/board`                    | GET/PATCH    | `assertCanBrowse` | `board:configure` | new      | R9  |
-| `/api/board/columns`            | POST         | session only      | `board:configure` | new      | R9  |
-| `/api/board/columns/[columnId]` | DELETE/PATCH | session only      | `board:configure` | new      | R9  |
-| `/api/board/move`               | POST         | `assertCanEdit`   | `board:configure` | new      | R9  |
-| `/api/boards`                   | GET/POST     | session only      | `board:configure` | new      | R9  |
-| `/api/boards/[id]`              | DELETE/PATCH | session only      | `board:configure` | new      | R9  |
+| Operation                       | Verbs        | Gate today                                      | Permission        | Decision | Why |
+| ------------------------------- | ------------ | ----------------------------------------------- | ----------------- | -------- | --- |
+| `/api/board`                    | GET          | `assertCanBrowse` (`boardsService.getBoard`)    | `project:browse`  | existing | R9  |
+| `/api/board`                    | PATCH        | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/board/columns`            | POST         | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/board/columns/[columnId]` | DELETE/PATCH | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/board/move`               | POST         | `assertCanEdit`                                 | `work_item:edit`  | existing | R9  |
+| `/api/boards`                   | GET          | none (`listBoards` has no gate)                 | `project:browse`  | new      | R9  |
+| `/api/boards`                   | POST         | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/boards/[id]`              | DELETE/PATCH | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
 
 ### `comment`
 
@@ -299,9 +335,10 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `estimation`
 
-| Operation                               | Verbs     | Gate today     | Permission          | Decision | Why |
-| --------------------------------------- | --------- | -------------- | ------------------- | -------- | --- |
-| `/api/projects/[key]/estimation-config` | GET/PATCH | workspace only | `estimation:manage` | new      | R25 |
+| Operation                               | Verbs | Gate today                                     | Permission          | Decision | Why |
+| --------------------------------------- | ----- | ---------------------------------------------- | ------------------- | -------- | --- |
+| `/api/projects/[key]/estimation-config` | GET   | none on the read                               | `project:browse`    | new      | R25 |
+| `/api/projects/[key]/estimation-config` | PATCH | `assertEstimationAdmin` — workspace OWNER only | `estimation:manage` | new      | R25 |
 
 ### `field`
 
@@ -520,15 +557,15 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `workflow`
 
-| Operation                                                  | Verbs            | Gate today                           | Permission          | Decision | Why |
-| ---------------------------------------------------------- | ---------------- | ------------------------------------ | ------------------- | -------- | --- |
-| `/api/board/columns/[columnId]/statuses`                   | PUT              | session only                         | `workflow:manage`   | new      | R10 |
-| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | session only                         | `workflow:manage`   | new      | R10 |
-| `/api/projects/[key]/automation-rules`                     | GET/POST         | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/status-automation`                    | GET/PATCH        | `assertCanBrowse`, `assertCanManage` | `automation:manage` | new      | R28 |
+| Operation                                                  | Verbs            | Gate today                               | Permission          | Decision | Why |
+| ---------------------------------------------------------- | ---------------- | ---------------------------------------- | ------------------- | -------- | --- |
+| `/api/board/columns/[columnId]/statuses`                   | PUT              | `assertBoardConfigAdmin` — ws OWNER only | `workflow:manage`   | new      | R10 |
+| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | `assertBoardConfigAdmin` — ws OWNER only | `workflow:manage`   | new      | R10 |
+| `/api/projects/[key]/automation-rules`                     | GET/POST         | workspace only                           | `automation:manage` | new      | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | workspace only                           | `automation:manage` | new      | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | workspace only                           | `automation:manage` | new      | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | workspace only                           | `automation:manage` | new      | R28 |
+| `/api/projects/[key]/status-automation`                    | GET/PATCH        | `assertCanBrowse`, `assertCanManage`     | `automation:manage` | new      | R28 |
 
 ### `workspace`
 

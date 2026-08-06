@@ -38,8 +38,25 @@ const DOC = join(ROOT, 'docs', 'decisions', 'permission-inventory.md');
 // on the receiver so a service's own thin adapter onto the shared gate (e.g.
 // `projectMembersService`'s module-local `assertPermission`) counts too — the
 // adapter's whole body is one call to the real gate.
+//
+// ⚠️ AND `isOwnerRole(` / `isWorkspaceManager(` ARE ON IT TOO (MOTIR-2304), which
+// is the other half of that card. Everything above recognises a CALL TO A KNOWN
+// GATE FUNCTION — so the pattern can only ever see authorization somebody routed
+// through a name it already knows. Three services do not: `boardsService`'s
+// `assertBoardConfigAdmin`, `workflowsService`'s `assertProjectAdmin` and
+// `estimationService`'s `assertEstimationAdmin` each resolve the actor's
+// membership themselves and branch on `isOwnerRole(...)`. Following the call into
+// the helper (the same-file hop below) finds the helper; it does not help unless
+// the walk can also recognise the DECISION the helper makes when it gets there.
+//
+// These two are `lib/workspaces/roles.ts` / `lib/projects/roles.ts` predicates
+// whose only purpose is to answer "may this actor do administrative things",
+// so a `lib/services` body that calls one is consulting the access policy by
+// definition. That is exactly the guard's question — not "is this gate the one
+// we would choose" (the inventory's row decides that) but "does this operation
+// consult the policy at all".
 const GATE =
-  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(/;
+  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|isOwnerRole\(|isWorkspaceManager\(/;
 /**
  * Every `someService.someMethod(` call in `source`.
  *
@@ -131,8 +148,89 @@ function serviceBodies(): Map<string, string> {
   return bodies;
 }
 
+/**
+ * Every MODULE-LOCAL function body in each service file, by `service` → `name`
+ * → body — the top-level `function` / `async function` declarations that sit
+ * beside the exported service object rather than inside it.
+ *
+ * ⚠️ THIS IS THE HALF THE WALK NEVER HAD, AND WITHOUT IT `GATE` IS A NAME
+ * WHITELIST (MOTIR-2304). The pattern lists the names the codebase happened to
+ * use for its gates — `assertCan*`, `getXCapabilities`, `hasPermission(` — so a
+ * service that factors its authorization into a privately-named helper is
+ * invisible, and every operation behind that helper reports UNGOVERNED. Three
+ * did, and their policy was not merely unseen but MISREAD: `boardsService`'s
+ * `assertBoardConfigAdmin`, `workflowsService`'s `assertProjectAdmin` and
+ * `estimationService`'s `assertEstimationAdmin` each resolve `isOwnerRole(...)`
+ * — a gate TIGHTER than `project:administer`, reported as no gate at all. Three
+ * cards under MOTIR-2256 were sized, argued and estimated on that inversion.
+ *
+ * It is the MOTIR-2292 failure one level up. That repair fixed WHERE the walk
+ * looks (a parameter's inline object type was captured as the body) and left
+ * WHAT it recognises alone, which is independent and was never checked. The
+ * durable fix is not a longer whitelist — the next privately-named gate would be
+ * invisible again — but the same-file hop the walk already makes ACROSS services
+ * and never made within one.
+ */
+function localFunctionBodies(): Map<string, Map<string, string>> {
+  const byService = new Map<string, Map<string, string>>();
+  const dir = join(ROOT, 'lib', 'services');
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith('.ts')) continue;
+    const svc = file.slice(0, -3);
+    const src = readFileSync(join(dir, file), 'utf8');
+    // Top-level declarations only — column 0, so a nested closure is not one.
+    const re = /^(?:export\s+)?(?:async\s+)?function\s+([a-zA-Z_][\w]*)\s*(?:<[^>]*>)?\s*\(/gm;
+    const locals = new Map<string, string>();
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(src)) !== null) {
+      const body = methodBody(src, m.index + m[0].length);
+      if (body === null) continue;
+      locals.set(m[1]!, body);
+    }
+    if (locals.size > 0) byService.set(svc, locals);
+  }
+  return byService;
+}
+
+/**
+ * Whether `source` CALLS the bare local function `name`.
+ *
+ * The negative lookbehind is what keeps `foo.assertThing(` from counting as a
+ * call to a local `assertThing` — a method on some other object is not this
+ * file's helper, and the cross-service hop already covers that case. Built fresh
+ * per call, like `serviceCalls`, so no `lastIndex` state can leak.
+ */
+function callsLocal(source: string, name: string): boolean {
+  return new RegExp(`(?<![.\\w$])${name}\\s*\\(`).test(source);
+}
+
 const BODIES = serviceBodies();
+const LOCALS = localFunctionBodies();
 const gateMemo = new Map<string, boolean>();
+
+/**
+ * Whether a body enforces a gate — directly, through a service it calls, or
+ * through a MODULE-LOCAL helper in its own file. `svc` names the file so the
+ * third hop knows which locals are in scope.
+ */
+function bodyIsGated(svc: string, body: string, seen: Set<string>): boolean {
+  if (GATE.test(body)) return true;
+  if (seen.size > 6) return false;
+  // Hop 1 — across SERVICES (unchanged).
+  for (const [otherSvc, method] of serviceCalls(body)) {
+    if (methodIsGated(`${otherSvc}.${method}`, seen)) return true;
+  }
+  // Hop 2 — into a MODULE-LOCAL function of the same file (MOTIR-2304). Recurses
+  // through `bodyIsGated`, so a local calling another local, or a local calling
+  // a service, resolves too.
+  for (const [name, localBody] of LOCALS.get(svc) ?? []) {
+    const localKey = `${svc}::${name}`;
+    if (seen.has(localKey)) continue;
+    if (!callsLocal(body, name)) continue;
+    if (bodyIsGated(svc, localBody, new Set(seen).add(localKey))) return true;
+  }
+  return false;
+}
 
 /** Whether `service.method` enforces a gate, directly or through what it calls. */
 function methodIsGated(key: string, seen = new Set<string>()): boolean {
@@ -141,18 +239,10 @@ function methodIsGated(key: string, seen = new Set<string>()): boolean {
   if (seen.has(key) || seen.size > 6) return false;
   const body = BODIES.get(key);
   if (body === undefined) return false;
-  if (GATE.test(body)) {
-    gateMemo.set(key, true);
-    return true;
-  }
-  const next = new Set(seen).add(key);
-  for (const [svc, method] of serviceCalls(body)) {
-    if (methodIsGated(`${svc}.${method}`, next)) {
-      gateMemo.set(key, true);
-      return true;
-    }
-  }
-  return false;
+  const svc = key.slice(0, key.indexOf('.'));
+  const gated = bodyIsGated(svc, body, new Set(seen).add(key));
+  if (gated) gateMemo.set(key, true);
+  return gated;
 }
 
 interface Operation {
@@ -330,7 +420,19 @@ describe('the PENDING set is bounded and shrinking', () => {
     // and leave the PENDING set. No gate was added and no route changed — six
     // rows that were never this story's to wire stopped being counted as if
     // they were.
-    expect(pending.length).toBe(75);
+    //
+    // 75 → 36 is MOTIR-2304 REPAIRING THE WALK, and it is by far the largest
+    // correction this pin has taken — larger than the extractor fix that
+    // preceded it. `GATE` recognised only CALLS TO KNOWN GATE FUNCTIONS, so an
+    // operation whose authorization ran through a privately-named module-local
+    // helper that resolves the membership itself was invisible twice over. Both
+    // limbs were needed: following the same-file call finds the helper, and
+    // adding `isOwnerRole(` / `isWorkspaceManager(` lets the walk recognise the
+    // decision the helper makes once it arrives. 39 operations were never
+    // ungoverned. NO GATE WAS ADDED by that card — read its diff: two test
+    // files and a document. A FALL here means the instrument got better; only a
+    // RISE means a hole opened.
+    expect(pending.length).toBe(36);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
@@ -340,9 +442,13 @@ describe('the PENDING set is bounded and shrinking', () => {
     // Operations the inventory calls `existing` that this walk cannot confirm.
     // Each needs a human read in MOTIR-2291: either the gate is reached by a hop
     // the walk cannot follow, or the operation is genuinely ungoverned. Lowering
+    // MOTIR-2304 moved this one 33 → 18 for the same reason as the pin above:
+    // the inventory marked these `existing` and the walk simply could not see
+    // the gate the row was claiming. Fifteen of the eighteen remaining
+    // discrepancies were never discrepancies.
     // this number is progress; raising it is a regression. (38 → 33 for the same
     // extractor fix as above — five of them were never unconfirmed.)
-    expect(unverified.length).toBe(33);
+    expect(unverified.length).toBe(18);
   });
 
   it('every pending operation names the permission that will govern it', () => {
@@ -393,6 +499,73 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     expect(
       GATE.test(methodBody(ungated, ungated.indexOf('(', ungated.indexOf('reaudit')) + 1)!),
     ).toBe(false);
+  });
+
+  it('follows a call into a MODULE-LOCAL helper, and still says no when the helper gates nothing', () => {
+    // The MOTIR-2304 regression, pinned. `GATE` is a whitelist of NAMES, so a
+    // service that factors its authorization into a privately-named helper read
+    // as UNGOVERNED however plainly the helper asserted. Both halves are here
+    // deliberately: without the negative one, "follow local calls" is
+    // indistinguishable from "answer true more often", which is the same trap
+    // MOTIR-2292's control was written to close.
+    const gatedSrc = [
+      'async function assertBoardConfigAdmin(userId: string, projectId: string) {',
+      '  const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, projectId);',
+      '  if (!isOwnerRole(m?.role)) throw new NotBoardAdminError();',
+      '  await projectAccessService.assertCanBrowse(projectId, ctx);',
+      '}',
+      'export const svc = {',
+      '  async addColumn(boardId: string, ctx: ServiceContext) {',
+      '    await assertBoardConfigAdmin(ctx.userId, boardId);',
+      '  },',
+      '};',
+    ].join('\n');
+    const gatedLocals = new Map([
+      ['assertBoardConfigAdmin', methodBody(gatedSrc, gatedSrc.indexOf('(') + 1)!],
+    ]);
+    const addColumnBody = methodBody(
+      gatedSrc,
+      gatedSrc.indexOf('(', gatedSrc.indexOf('addColumn')) + 1,
+    )!;
+    // The method's own body holds no GATE token — the whole point.
+    expect(GATE.test(addColumnBody)).toBe(false);
+    expect(callsLocal(addColumnBody, 'assertBoardConfigAdmin')).toBe(true);
+    expect(GATE.test(gatedLocals.get('assertBoardConfigAdmin')!)).toBe(true);
+
+    // Negative half: a module-local helper that asserts NOTHING must leave the
+    // caller ungated.
+    const ungatedSrc = gatedSrc
+      .replace('  if (!isOwnerRole(m?.role)) throw new NotBoardAdminError();\n', '')
+      .replace('  await projectAccessService.assertCanBrowse(projectId, ctx);\n', '');
+    const ungatedLocal = methodBody(ungatedSrc, ungatedSrc.indexOf('(') + 1)!;
+    expect(GATE.test(ungatedLocal), 'a helper that gates nothing must not read as a gate').toBe(
+      false,
+    );
+
+    // …and a DOTTED call to a same-named method on another object is not this
+    // file's helper, so it must not satisfy the local hop.
+    expect(callsLocal('await other.assertBoardConfigAdmin(x);', 'assertBoardConfigAdmin')).toBe(
+      false,
+    );
+  });
+
+  it('sees the three real privately-named gates, and reads their operations as governed', () => {
+    // Each of these is a top-level `async function assert…` beside its service
+    // object, resolving `isOwnerRole(...)`. None matches `assertCan*`, so all
+    // three — and every operation behind them — reported UNGOVERNED, which is
+    // how three MOTIR-2256 cards came to be written claiming their domains had
+    // "no project gate at all" when the gates were there and TIGHTER than
+    // `project:administer`.
+    expect(LOCALS.get('boardsService')?.has('assertBoardConfigAdmin')).toBe(true);
+    expect(LOCALS.get('workflowsService')?.has('assertProjectAdmin')).toBe(true);
+    expect(LOCALS.get('estimationService')?.has('assertEstimationAdmin')).toBe(true);
+
+    expect(methodIsGated('boardsService.addColumn')).toBe(true);
+    expect(methodIsGated('boardsService.deleteColumn')).toBe(true);
+    expect(methodIsGated('boardsService.createBoard')).toBe(true);
+    expect(methodIsGated('workflowsService.createStatus')).toBe(true);
+    expect(methodIsGated('workflowsService.deleteStatus')).toBe(true);
+    expect(methodIsGated('estimationService.updateEstimationConfig')).toBe(true);
   });
 
   it('sees the three real service methods the regression hid', () => {
