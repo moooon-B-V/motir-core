@@ -15,7 +15,7 @@ import {
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
 import { resolvePermissions } from '@/lib/permissions/resolve';
-import { PERMISSIONS } from '@/lib/permissions/catalog';
+import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 
 // The PARITY TRUTH TABLE (Story MOTIR-2255 · Subtask MOTIR-2261). MOTIR-2261
 // moved the decision that guards every read and every write in the product onto
@@ -1279,8 +1279,10 @@ describe('the two rails resolve INSIDE the set, not around it', () => {
     for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
       for (const workspaceRole of ['owner', 'admin'] as const) {
         const held = resolvePermissions({ accessLevel, workspaceRole, projectRole: null });
-        for (const key of PERMISSIONS) {
-          if (key.startsWith('public_request:')) continue;
+        // ROLE_GATED_PERMISSIONS, not every catalog key: the catalog also holds
+        // the level-gated public-request grants (never role-held) and the
+        // `planned` keys MOTIR-2256 has yet to wire to a gate.
+        for (const key of ROLE_GATED_PERMISSIONS) {
           expect(held.has(key), `${workspaceRole} on ${accessLevel} lacks ${key}`).toBe(true);
         }
       }

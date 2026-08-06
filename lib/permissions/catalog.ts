@@ -4,13 +4,24 @@
 // so it imports cleanly from the server, the client and a test.
 //
 // ⚠️ A PERMISSION IS CODE, NEVER A ROW A USER AUTHORS. A key exists here
-// because somewhere in the codebase there is a gate that consults it. Letting a
-// user invent one would put a switch on a settings page that controls nothing —
-// the precise lie this model exists to prevent. The catalog therefore starts at
-// EXACTLY what Motir enforces today (one key per shipped predicate in
-// `lib/projects/access.ts`, plus the `project:administer` umbrella) rather than
-// copying the mirror product's larger catalog, which would ship keys with no
-// enforcement behind them on day one. It grows as enforcement grows.
+// because the product has an operation it governs. Letting a user invent one
+// would put a switch on a settings page that controls nothing — the precise lie
+// this model exists to prevent.
+//
+// The key set is derived from `docs/decisions/permission-inventory.md`
+// (MOTIR-2274), which walks every `app/api/**/route.ts`, every `'use server'`
+// action and all 122 services and records a DECIDED policy per operation. The
+// first eleven keys came from the eleven predicates in `lib/projects/access.ts`;
+// the inventory established that those eleven were one corner of the surface,
+// so the catalog now covers what the product actually does.
+//
+// ⚠️ EVERY KEY CARRIES AN `enforcement`. `enforced` means a shipped gate
+// consults it today. `planned` means the inventory justified it and MOTIR-2256
+// has not wired the call sites yet. This is what lets the vocabulary be named
+// in one change and enforced in another WITHOUT weakening the orphan guard:
+// that guard keeps full strength over `enforced` keys, and a `planned` key is
+// excluded from `getRoleCatalog`, so it can never render as a switch. The
+// `planned` list emptying is the definition of done for MOTIR-2256.
 //
 // The `resource:action` form is the mirror convention (Plane names permissions
 // `workitem:edit`; Jira's permission names read the same way).
@@ -32,7 +43,26 @@ export const PERMISSION_DOMAINS = [
   'attachment',
   'watcher',
   'public_request',
+  'member',
+  'board',
+  'sprint',
+  'workflow',
+  'field',
+  'estimation',
+  'report',
+  'repository',
+  'import',
+  'ai',
 ] as const;
+
+/**
+ * Whether a key is wired to a gate yet.
+ *
+ *   * `enforced` — a shipped `assertCan*` / predicate consults it TODAY.
+ *   * `planned`  — justified by a row in docs/decisions/permission-inventory.md,
+ *                  awaiting MOTIR-2256. NEVER offered to a user.
+ */
+export type PermissionEnforcement = 'enforced' | 'planned';
 
 /** One catalog domain — the group a permission renders under. */
 export type PermissionDomain = (typeof PERMISSION_DOMAINS)[number];
@@ -42,38 +72,44 @@ export type PermissionDomain = (typeof PERMISSION_DOMAINS)[number];
  * exhaustive: {@link PermissionKey} is derived from it, so every consumer is
  * exhaustive by construction and a key that does not exist fails to compile.
  *
- * One key per shipped predicate in `lib/projects/access.ts`:
- *
- * | key                        | predicate                    |
- * | -------------------------- | ---------------------------- |
- * | `project:browse`           | `canBrowse`                  |
- * | `project:administer`       | `canManageProject`           |
- * | `work_item:edit`           | `canEdit`                    |
- * | `comment:add`              | `canComment`                 |
- * | `comment:moderate`         | `canModerateComments`        |
- * | `attachment:create`        | `canCreateAttachments`       |
- * | `attachment:delete_any`    | `canDeleteAllAttachments`    |
- * | `watcher:manage`           | `canManageWatchers`          |
- * | `public_request:submit`    | `canSubmitToTriage`          |
- * | `public_request:upvote`    | `canUpvotePublicRequest`     |
- * | `public_request:comment`   | `canCommentPublicRequest`    |
- *
- * `project:administer` is deliberately ONE umbrella covering every settings
- * domain. Splitting it per domain is Story MOTIR-2256's whole job; this story
- * must not start it.
+ * Grouped by domain in {@link PERMISSION_DOMAINS} order, and within a domain the
+ * `enforced` keys come before the `planned` ones. See PERMISSION_META for each
+ * key's domain and enforcement, and the inventory document for the operation
+ * that justifies it.
  */
 export const PERMISSIONS = [
-  'project:browse',
   'project:administer',
+  'project:browse',
   'work_item:edit',
+  'work_item:delete',
+  'work_item:triage',
   'comment:add',
   'comment:moderate',
   'attachment:create',
   'attachment:delete_any',
   'watcher:manage',
+  'public_request:comment',
   'public_request:submit',
   'public_request:upvote',
-  'public_request:comment',
+  'member:manage',
+  'project:manage_access',
+  'board:configure',
+  'sprint:manage',
+  'automation:manage',
+  'workflow:manage',
+  'component:manage',
+  'field:manage',
+  'label:manage',
+  'estimation:manage',
+  'report:view',
+  'saved_filter:manage',
+  'repository:connect',
+  'repository:manage',
+  'repository:manage_access',
+  'import:run',
+  'ai:configure',
+  'ai:plan',
+  'ai:view_plan',
 ] as const;
 
 /** One permission key — the union derived from {@link PERMISSIONS}. */
@@ -83,6 +119,8 @@ export type PermissionKey = (typeof PERMISSIONS)[number];
 export interface PermissionDescriptor {
   key: PermissionKey;
   domain: PermissionDomain;
+  /** Whether a gate consults this key today — see {@link PermissionEnforcement}. */
+  enforcement: PermissionEnforcement;
   /** i18n key for the human label (under the `permissions` namespace). */
   labelKey: string;
   /** i18n key for the one-line description shown beside the label. */
@@ -100,19 +138,49 @@ export function permissionSlug(key: PermissionKey): string {
   return key.replace(':', '_');
 }
 
-/** The domain each permission belongs to. Total over {@link PERMISSIONS}. */
-const PERMISSION_DOMAIN_BY_KEY: Record<PermissionKey, PermissionDomain> = {
-  'project:browse': 'project',
-  'project:administer': 'project',
-  'work_item:edit': 'work_item',
-  'comment:add': 'comment',
-  'comment:moderate': 'comment',
-  'attachment:create': 'attachment',
-  'attachment:delete_any': 'attachment',
-  'watcher:manage': 'watcher',
-  'public_request:submit': 'public_request',
-  'public_request:upvote': 'public_request',
-  'public_request:comment': 'public_request',
+/**
+ * The domain + ENFORCEMENT of each permission. Total over {@link PERMISSIONS}.
+ *
+ * `enforced` — a shipped gate consults this key today.
+ * `planned`  — the inventory (docs/decisions/permission-inventory.md) justified it and
+ *              MOTIR-2256 has not wired it yet. A planned key NEVER reaches a user.
+ */
+const PERMISSION_META: Record<
+  PermissionKey,
+  { domain: PermissionDomain; enforcement: PermissionEnforcement }
+> = {
+  'project:administer': { domain: 'project', enforcement: 'enforced' },
+  'project:browse': { domain: 'project', enforcement: 'enforced' },
+  'work_item:edit': { domain: 'work_item', enforcement: 'enforced' },
+  'work_item:delete': { domain: 'work_item', enforcement: 'planned' },
+  'work_item:triage': { domain: 'work_item', enforcement: 'planned' },
+  'comment:add': { domain: 'comment', enforcement: 'enforced' },
+  'comment:moderate': { domain: 'comment', enforcement: 'enforced' },
+  'attachment:create': { domain: 'attachment', enforcement: 'enforced' },
+  'attachment:delete_any': { domain: 'attachment', enforcement: 'enforced' },
+  'watcher:manage': { domain: 'watcher', enforcement: 'enforced' },
+  'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
+  'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
+  'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
+  'member:manage': { domain: 'member', enforcement: 'planned' },
+  'project:manage_access': { domain: 'member', enforcement: 'planned' },
+  'board:configure': { domain: 'board', enforcement: 'planned' },
+  'sprint:manage': { domain: 'sprint', enforcement: 'planned' },
+  'automation:manage': { domain: 'workflow', enforcement: 'planned' },
+  'workflow:manage': { domain: 'workflow', enforcement: 'planned' },
+  'component:manage': { domain: 'field', enforcement: 'planned' },
+  'field:manage': { domain: 'field', enforcement: 'planned' },
+  'label:manage': { domain: 'field', enforcement: 'planned' },
+  'estimation:manage': { domain: 'estimation', enforcement: 'planned' },
+  'report:view': { domain: 'report', enforcement: 'planned' },
+  'saved_filter:manage': { domain: 'report', enforcement: 'planned' },
+  'repository:connect': { domain: 'repository', enforcement: 'planned' },
+  'repository:manage': { domain: 'repository', enforcement: 'planned' },
+  'repository:manage_access': { domain: 'repository', enforcement: 'planned' },
+  'import:run': { domain: 'import', enforcement: 'planned' },
+  'ai:configure': { domain: 'ai', enforcement: 'planned' },
+  'ai:plan': { domain: 'ai', enforcement: 'planned' },
+  'ai:view_plan': { domain: 'ai', enforcement: 'planned' },
 };
 
 /**
@@ -126,7 +194,8 @@ export const PERMISSION_CATALOG: Record<PermissionKey, PermissionDescriptor> = O
     key,
     {
       key,
-      domain: PERMISSION_DOMAIN_BY_KEY[key],
+      domain: PERMISSION_META[key].domain,
+      enforcement: PERMISSION_META[key].enforcement,
       labelKey: `permissions.${permissionSlug(key)}.label`,
       descriptionKey: `permissions.${permissionSlug(key)}.description`,
     } satisfies PermissionDescriptor,
@@ -143,22 +212,47 @@ export function permissionDescriptor(key: PermissionKey): PermissionDescriptor {
   return PERMISSION_CATALOG[key];
 }
 
+/** Whether a shipped gate consults this key today. */
+export function isEnforced(key: PermissionKey): boolean {
+  return PERMISSION_CATALOG[key].enforcement === 'enforced';
+}
+
+/** The keys a gate consults today — what a user may actually be shown. */
+export const ENFORCED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(isEnforced);
+
+/**
+ * The keys the inventory justified but MOTIR-2256 has not wired yet. Named so a
+ * test can pin it against the inventory document, and so "the split is done"
+ * has a machine-readable definition: this array is empty.
+ */
+export const PLANNED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(
+  (key) => !isEnforced(key),
+);
+
 /**
  * The catalog grouped for rendering — domains in {@link PERMISSION_DOMAINS}
  * order, each carrying its permissions in {@link PERMISSIONS} order. This is the
  * render order the Roles & permissions grid walks, so the grid's grouping is a
  * property of the catalog rather than a decision re-made in a component.
+ *
+ * ⚠️ DEFAULTS TO `enforced` ONLY. A `planned` key names an operation no gate
+ * consults yet, so rendering it would put a switch on the settings page that
+ * controls nothing — exactly the lie this model exists to prevent. Pass
+ * `{ include: 'all' }` only for a developer-facing surface or a test; the role
+ * grid and the role editor must never do so. Domains left empty by the filter
+ * are dropped, so the grid never draws a heading with nothing under it.
  */
-export function permissionsByDomain(): {
-  domain: PermissionDomain;
-  permissions: PermissionDescriptor[];
-}[] {
+export function permissionsByDomain(
+  options: { include?: 'enforced' | 'all' } = {},
+): { domain: PermissionDomain; permissions: PermissionDescriptor[] }[] {
+  const all = options.include === 'all';
   return PERMISSION_DOMAINS.map((domain) => ({
     domain,
     permissions: PERMISSIONS.map((key) => PERMISSION_CATALOG[key]).filter(
-      (descriptor) => descriptor.domain === domain,
+      (descriptor) =>
+        descriptor.domain === domain && (all || descriptor.enforcement === 'enforced'),
     ),
-  }));
+  })).filter((group) => group.permissions.length > 0);
 }
 
 /** Sort an arbitrary permission collection into canonical catalog order. */

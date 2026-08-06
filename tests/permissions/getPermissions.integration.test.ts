@@ -7,7 +7,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
+import { ENFORCED_PERMISSIONS, PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from '../helpers/db';
@@ -284,15 +284,15 @@ describe('the DTO boundary is serialisable and deterministic', () => {
 
     // The sets the grid will render, spelled out so a silent widening fails here.
     expect(catalog.roles.find((r) => r.role === 'viewer')?.permissions).toEqual(['project:browse']);
-    expect(catalog.roles.find((r) => r.role === 'member')?.permissions).toEqual([
-      'project:browse',
-      'work_item:edit',
-      'comment:add',
-      'attachment:create',
-    ]);
-    expect(catalog.roles.find((r) => r.role === 'admin')?.permissions).toEqual([
-      ...ROLE_GATED_PERMISSIONS,
-    ]);
+    expect([...(catalog.roles.find((r) => r.role === 'member')?.permissions ?? [])].sort()).toEqual(
+      ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'].sort(),
+    );
+    // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed
+    // when it grouped the keys by domain. The membership is the contract, not
+    // the ordering of the source constant.
+    expect([...(catalog.roles.find((r) => r.role === 'admin')?.permissions ?? [])].sort()).toEqual(
+      [...ROLE_GATED_PERMISSIONS].sort(),
+    );
 
     // No role holds a level-gated public-request grant — a role cannot give one.
     for (const role of catalog.roles) {
@@ -306,7 +306,9 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     const s = await buildScenario('open', 'dto-domains');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
     const flattened = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
-    expect([...flattened].sort()).toEqual([...PERMISSIONS].sort());
+    // ENFORCED only — a `planned` key names an operation no gate consults yet, so
+    // it must never reach the grid (MOTIR-2277).
+    expect([...flattened].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
     for (const domain of catalog.domains) {
       expect(domain.permissions.length, `${domain.domain} is empty`).toBeGreaterThan(0);
       expect(domain.labelKey).toBe(`permissions.domain.${domain.domain}`);

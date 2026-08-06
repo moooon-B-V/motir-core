@@ -4,9 +4,12 @@ import { describe, expect, it } from 'vitest';
 import en from '@/messages/en.json';
 import zh from '@/messages/zh.json';
 import {
+  ENFORCED_PERMISSIONS,
   PERMISSIONS,
   PERMISSION_CATALOG,
   PERMISSION_DOMAINS,
+  PLANNED_PERMISSIONS,
+  isEnforced,
   isPermissionKey,
   permissionDescriptor,
   permissionSlug,
@@ -107,14 +110,79 @@ describe('every domain in the render order earns its heading', () => {
   });
 
   it('covers every permission exactly once across the groups', () => {
-    const grouped = permissionsByDomain().flatMap((group) => group.permissions.map((p) => p.key));
+    const grouped = permissionsByDomain({ include: 'all' }).flatMap((group) =>
+      group.permissions.map((p) => p.key),
+    );
     expect(grouped.length).toBe(PERMISSIONS.length);
     expect(new Set(grouped).size).toBe(PERMISSIONS.length);
     expect([...grouped].sort()).toEqual([...PERMISSIONS].sort());
   });
 
   it('emits the domains in PERMISSION_DOMAINS order', () => {
-    expect(permissionsByDomain().map((group) => group.domain)).toEqual([...PERMISSION_DOMAINS]);
+    expect(permissionsByDomain({ include: 'all' }).map((group) => group.domain)).toEqual([
+      ...PERMISSION_DOMAINS,
+    ]);
+  });
+
+  it('never emits an EMPTY group once the planned keys are filtered out', () => {
+    // The default view drops a domain whose keys are all still `planned`, so the
+    // grid can never draw a heading with nothing under it.
+    for (const group of permissionsByDomain()) {
+      expect(group.permissions.length, `domain "${group.domain}" is empty`).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('enforcement — the seam that lets naming and wiring land separately', () => {
+  it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
+    expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
+      [...PERMISSIONS].sort(),
+    );
+    expect(ENFORCED_PERMISSIONS.filter((k) => PLANNED_PERMISSIONS.includes(k))).toEqual([]);
+  });
+
+  it('marks every key with a known enforcement value', () => {
+    for (const key of PERMISSIONS) {
+      expect(['enforced', 'planned'], `"${key}"`).toContain(PERMISSION_CATALOG[key].enforcement);
+    }
+  });
+
+  it('keeps the ELEVEN shipped predicates enforced — growing the catalog demotes nothing', () => {
+    // These are the keys `lib/projects/access.ts` resolves through today. If one
+    // became `planned`, a shipped gate would be consulting a key the model says
+    // nothing enforces.
+    const shipped: PermissionKey[] = [
+      'project:browse',
+      'project:administer',
+      'work_item:edit',
+      'comment:add',
+      'comment:moderate',
+      'attachment:create',
+      'attachment:delete_any',
+      'watcher:manage',
+      'public_request:submit',
+      'public_request:upvote',
+      'public_request:comment',
+    ];
+    for (const key of shipped) expect(isEnforced(key), `${key} must stay enforced`).toBe(true);
+    expect(ENFORCED_PERMISSIONS).toHaveLength(11);
+  });
+
+  it('DOES NOT render a planned key by default — the whole point of the marker', () => {
+    const shown = permissionsByDomain().flatMap((g) => g.permissions.map((p) => p.key));
+    expect(
+      shown.filter((k) => !isEnforced(k)),
+      'a permission no gate consults must never reach the grid or the role editor',
+    ).toEqual([]);
+    expect([...shown].sort()).toEqual([...ENFORCED_PERMISSIONS].sort());
+  });
+
+  it('every PLANNED key is justified by a row in the inventory document', () => {
+    const doc = readFileSync(join(ROOT, 'docs', 'decisions', 'permission-inventory.md'), 'utf8');
+    expect(
+      PLANNED_PERMISSIONS.filter((k) => !doc.includes(`\`${k}\``)),
+      'a key cannot be parked as `planned` without an operation that needs it',
+    ).toEqual([]);
   });
 });
 

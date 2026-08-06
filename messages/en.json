@@ -274,19 +274,37 @@
       "comment": "Comments",
       "attachment": "Attachments",
       "watcher": "Watchers",
-      "public_request": "Public requests"
-    },
-    "project_browse": {
-      "label": "View project",
-      "description": "Open the project and read its work items, boards, backlog and reports."
+      "public_request": "Public requests",
+      "member": "Members & access",
+      "board": "Boards",
+      "sprint": "Sprints & backlog",
+      "workflow": "Workflow & automation",
+      "field": "Fields & components",
+      "estimation": "Estimation",
+      "report": "Reports & filters",
+      "repository": "Repositories",
+      "import": "Import",
+      "ai": "AI planning"
     },
     "project_administer": {
       "label": "Administer project",
       "description": "Change project settings — members, workflow, boards, fields, components and automation."
     },
+    "project_browse": {
+      "label": "View project",
+      "description": "Open the project and read its work items, boards, backlog and reports."
+    },
     "work_item_edit": {
       "label": "Edit work items",
       "description": "Create, update, assign and move work items, and transition them on the board."
+    },
+    "work_item_delete": {
+      "label": "Delete work items",
+      "description": "Archive or delete a work item and everything beneath it."
+    },
+    "work_item_triage": {
+      "label": "Triage requests",
+      "description": "Accept, decline, promote or snooze an item in the triage queue."
     },
     "comment_add": {
       "label": "Add comments",
@@ -308,6 +326,10 @@
       "label": "Manage watchers",
       "description": "Add and remove other people from a work item's watcher list. Anyone who can view a work item may watch it themselves."
     },
+    "public_request_comment": {
+      "label": "Comment on requests",
+      "description": "Reply on a public request's thread. Public projects only."
+    },
     "public_request_submit": {
       "label": "Submit requests",
       "description": "Send a bug report or feature request into the project's triage queue. Public projects only."
@@ -316,9 +338,81 @@
       "label": "Upvote requests",
       "description": "Vote on a public request to signal demand for it. Public projects only."
     },
-    "public_request_comment": {
-      "label": "Comment on requests",
-      "description": "Reply on a public request's thread. Public projects only."
+    "member_manage": {
+      "label": "Manage members",
+      "description": "Add and remove project members, and set their roles."
+    },
+    "project_manage_access": {
+      "label": "Change project access",
+      "description": "Set whether the project is public, open, limited or private."
+    },
+    "board_configure": {
+      "label": "Configure boards",
+      "description": "Change board columns, swimlanes and WIP limits."
+    },
+    "sprint_manage": {
+      "label": "Manage sprints",
+      "description": "Start and complete Sprints, and rank the backlog."
+    },
+    "automation_manage": {
+      "label": "Manage automation rules",
+      "description": "Create, edit and enable the project’s automation and status-derivation rules."
+    },
+    "workflow_manage": {
+      "label": "Manage the workflow",
+      "description": "Change the statuses a board column projects, and the transitions between them."
+    },
+    "component_manage": {
+      "label": "Manage components",
+      "description": "Create, rename and delete the project’s components."
+    },
+    "field_manage": {
+      "label": "Manage custom fields",
+      "description": "Create, edit and remove custom field definitions."
+    },
+    "label_manage": {
+      "label": "Manage labels",
+      "description": "Create, rename and delete the project’s labels and tags."
+    },
+    "estimation_manage": {
+      "label": "Manage estimation",
+      "description": "Change the project’s estimation scheme."
+    },
+    "report_view": {
+      "label": "View reports",
+      "description": "Open the project’s reports — distribution, workload, resolution time, velocity and the roadmap."
+    },
+    "saved_filter_manage": {
+      "label": "Manage saved filters",
+      "description": "Create, edit, share and subscribe to the project’s saved filters."
+    },
+    "repository_connect": {
+      "label": "Connect a repository",
+      "description": "Connect a GitHub or GitLab installation to the project and start indexing it."
+    },
+    "repository_manage": {
+      "label": "Manage repositories",
+      "description": "Add, remove, move and take over the project’s repositories."
+    },
+    "repository_manage_access": {
+      "label": "Manage code access",
+      "description": "Decide which team members may clone the project’s code."
+    },
+    "import_run": {
+      "label": "Import work items",
+      "description": "Bulk-create work items from Jira, Linear or Plane."
+    },
+    "ai_configure": {
+      "label": "Configure AI planning",
+      "description": "Set the planning cadence, the planner model, and whether explanations are drafted."
+    },
+    "ai_plan": {
+      "label": "Run AI planning",
+      "description": "Submit a planning job that spends the workspace’s AI credits and proposes plan changes."
+    },
+    "ai_view_plan": {
+      "label": "View AI plans",
+      "description": "Open a generated plan and read its proposals."
     }
   },
   "localeToggle": {
