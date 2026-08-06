@@ -149,7 +149,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
   // ── 4 — the first call, and the promise ───────────────────────────────────
   await chapter('Follow getting started — mint, call, paginate, err, back off', async () => {
     await page.getByRole('link', { name: 'Getting started' }).first().click();
-    await page.waitForURL('**/docs/getting-started');
+    await page.waitForURL('**/docs/api/getting-started');
     await expect(page.getByRole('heading', { name: 'Getting started', level: 1 })).toBeVisible();
     await beat();
 
@@ -174,7 +174,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
 
   await chapter('Read what v1 promises — and what it asks in return', async () => {
     await page.getByRole('link', { name: 'Stability & deprecation' }).first().click();
-    await page.waitForURL('**/docs/stability');
+    await page.waitForURL('**/docs/api/stability');
     await expect(
       page.getByRole('heading', { name: 'Stability & deprecation', level: 1 }),
     ).toBeVisible();
@@ -266,7 +266,7 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
   });
 
   await chapter('Find the agent sandbox in the rail — by CLICKING it', async () => {
-    const rail = page.getByRole('navigation', { name: 'API reference' });
+    const rail = page.getByRole('navigation', { name: 'Documentation' });
     await rail.getByRole('link', { name: 'Agent sandbox' }).click();
     await page.waitForURL('**/docs/sandbox');
     // The entry marks itself current, which is what makes the surface read as
@@ -310,18 +310,32 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     expect(copied).not.toContain('motir auto');
   });
 
-  await chapter('Leave for any of the other three pages', async () => {
-    const rail = page.getByRole('navigation', { name: 'API reference' });
+  await chapter('Leave for the API — and reach its pages from inside it', async () => {
+    // Re-pointed by MOTIR-2312. This chapter used to click straight from the
+    // sandbox guide to each of the other three pages, because the rail was one
+    // flat list of four. Under ADR Amendment 11 the rail's top tier lists the
+    // SURFACES, and the API's own pages appear only once a reader is INSIDE the
+    // API — so the walk is now two levels, and that is the behaviour to drive.
+    const rail = page.getByRole('navigation', { name: 'Documentation' });
+
+    // From a guide page the API is one click away — the access path the design
+    // draws. If this ever stops working, the regrouping has stranded the reader.
+    await rail.getByRole('link', { name: 'API reference' }).click();
+    await page.waitForURL('**/docs/api');
+
+    // …and from inside it, its own pages are reachable, and lead back.
     for (const [label, url] of [
-      ['Getting started', '**/docs/getting-started'],
-      ['Stability & deprecation', '**/docs/stability'],
-      ['API reference', '**/docs/api'],
+      ['Getting started', '**/docs/api/getting-started'],
+      ['Stability & deprecation', '**/docs/api/stability'],
     ] as const) {
       await rail.getByRole('link', { name: label }).click();
       await page.waitForURL(url);
-      await rail.getByRole('link', { name: 'Agent sandbox' }).click();
-      await page.waitForURL('**/docs/sandbox');
     }
+
+    // The sandbox row is in the top tier, so it is reachable from anywhere in
+    // the area — including from two levels inside the API.
+    await rail.getByRole('link', { name: 'Agent sandbox' }).click();
+    await page.waitForURL('**/docs/sandbox');
   });
 });
 

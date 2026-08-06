@@ -5840,7 +5840,7 @@
   "apiDocs": {
     "metaTitle": "Motir API 参考手册",
     "metaDescription": "Motir 公开 REST API 的全部接口，含权限范围、参数、响应以及可直接复制的鉴权示例。",
-    "navLabel": "API 参考",
+    "navLabel": "文档",
     "navDocumentation": "文档",
     "navReference": "API 参考",
     "navGettingStarted": "快速入门",

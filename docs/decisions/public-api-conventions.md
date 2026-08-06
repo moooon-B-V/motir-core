@@ -2628,6 +2628,7 @@ A client with a persisted exclusion list keyed by internal id migrates it to
   the rule is general and does not need re-deciding per resource.
 - **Story 11.6's `list_ready` re-base** becomes a true no-op on the MCP payload
   once this lands, rather than a change that would drop `assignee` from it.
+
 ---
 
 ### Amendment 11 (2026-08-06) — the documentation area is a set of SUB-AREAS; the API reference owns `/docs/api/*`, and the operation index renders only inside it
@@ -2644,7 +2645,7 @@ addresses-move rule**, which this amendment APPLIES rather than re-opens, and it
 full. **No `/api/v1` shape, path, scope or status changes here.**
 **Card:** MOTIR-2310, under MOTIR-2307 (the docs-navigation defect).
 
-> **Numbered 11, not 10.** This amendment was authored as *Amendment 10* and lost
+> **Numbered 11, not 10.** This amendment was authored as _Amendment 10_ and lost
 > the merge race to [Amendment 10](#amendment-10-2026-08-06--a-v1-collection-row-embeds-a-minimal-actor-targetrepo-stays-off-it-and-how-a-key-addressed-collection-is-enumerated)
 > (MOTIR-2279, the collection-row actor), which landed on `main` first — the same
 > race its own header records for 8 → 9 → 10, one round later. The content is

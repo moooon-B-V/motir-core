@@ -20,9 +20,9 @@ afterEach(() => {
   vi.resetModules();
 });
 
-describe('/docs/getting-started', () => {
+describe('/docs/api/getting-started', () => {
   it('renders all five steps, numbered, in order, inside the shell', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/getting-started/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/getting-started/page');
     render(await Page());
 
     const sections = [...document.querySelectorAll('main section[id]')].map((s) => s.id);
@@ -37,7 +37,7 @@ describe('/docs/getting-started', () => {
   });
 
   it('puts every runnable sample on the page with a copy affordance', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/getting-started/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/getting-started/page');
     render(await Page());
 
     const copyable = GUIDE_STEPS.flatMap((step) => step.blocks).filter(
@@ -48,11 +48,11 @@ describe('/docs/getting-started', () => {
   });
 
   it('is reachable from the shell’s nav, and marks itself current', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/getting-started/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/getting-started/page');
     render(await Page());
 
     const current = document.querySelector('nav a[aria-current="page"]');
-    expect(current?.getAttribute('href')).toBe('/docs/getting-started');
+    expect(current?.getAttribute('href')).toBe('/docs/api/getting-started');
     // …and it does not strand the reader: the other three pages are one click
     // away (four-page surface since Story MOTIR-2268).
     expect(screen.getAllByText('API reference').length).toBeGreaterThan(0);
@@ -60,9 +60,9 @@ describe('/docs/getting-started', () => {
   });
 });
 
-describe('/docs/stability', () => {
+describe('/docs/api/stability', () => {
   it('publishes BOTH lists in full — every item reaches the page', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/stability/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/stability/page');
     render(await Page());
 
     for (const item of [...POLICY_ADDITIVE, ...POLICY_FORBIDDEN]) {
@@ -74,7 +74,7 @@ describe('/docs/stability', () => {
   });
 
   it('states the client’s obligation and the deprecation channel', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/stability/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/stability/page');
     render(await Page());
 
     expect(document.body.textContent).toContain('tolerate unknown fields');
@@ -83,7 +83,7 @@ describe('/docs/stability', () => {
   });
 
   it('cross-links the ADR, saying which record is which', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/stability/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/stability/page');
     render(await Page());
 
     const note = screen.getByTestId('adr-cross-link');
@@ -92,11 +92,11 @@ describe('/docs/stability', () => {
   });
 
   it('is reachable from the shell’s nav, and marks itself current', async () => {
-    const { default: Page } = await import('@/app/(public)/docs/stability/page');
+    const { default: Page } = await import('@/app/(public)/docs/api/stability/page');
     render(await Page());
 
     expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe(
-      '/docs/stability',
+      '/docs/api/stability',
     );
   });
 });

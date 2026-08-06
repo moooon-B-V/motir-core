@@ -678,8 +678,8 @@ export default defineConfig({
         // be silently useless while every module beneath it is green.
         'app/(public)/docs/layout.tsx',
         'app/(public)/docs/api/page.tsx',
-        'app/(public)/docs/getting-started/page.tsx',
-        'app/(public)/docs/stability/page.tsx',
+        'app/(public)/docs/api/getting-started/page.tsx',
+        'app/(public)/docs/api/stability/page.tsx',
         'app/(public)/docs/_components/CatalogueNav.tsx',
         'app/(public)/docs/_components/CodeBlock.tsx',
         'app/(public)/docs/_components/DocBlocks.tsx',
@@ -880,12 +880,12 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
         'app/(public)/docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/(public)/docs/api/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/docs/getting-started/page.tsx': {
+        'app/(public)/docs/api/getting-started/page.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/docs/api/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/(public)/docs/_components/CatalogueNav.tsx': {
           branches: 90,
           functions: 90,
