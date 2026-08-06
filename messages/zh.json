@@ -267,6 +267,154 @@
     "readOnlyHint": "你对此项目仅有只读访问权限",
     "readOnlyBoardBanner": "只读访问——你可以查看此看板，但无法移动或编辑卡片。"
   },
+  "permissions": {
+    "domain": {
+      "project": "项目",
+      "work_item": "工作项",
+      "comment": "评论",
+      "attachment": "附件",
+      "watcher": "关注者",
+      "public_request": "公开请求",
+      "member": "成员与访问",
+      "board": "面板",
+      "sprint": "Sprint与待办",
+      "workflow": "工作流与自动化",
+      "field": "字段与组件",
+      "estimation": "估算",
+      "report": "报表与筛选器",
+      "repository": "代码仓库",
+      "import": "导入",
+      "ai": "AI规划"
+    },
+    "project_administer": {
+      "label": "管理项目",
+      "description": "修改项目设置——成员、工作流、面板、字段、组件和自动化。"
+    },
+    "project_browse": {
+      "label": "查看项目",
+      "description": "打开项目，查看其工作项、面板、待办列表和报表。"
+    },
+    "work_item_edit": {
+      "label": "编辑工作项",
+      "description": "创建、更新、分配和移动工作项，并在面板上流转其状态。"
+    },
+    "work_item_delete": {
+      "label": "删除工作项",
+      "description": "归档或删除工作项及其下级内容。"
+    },
+    "work_item_triage": {
+      "label": "处理收件箱",
+      "description": "接受、拒绝、升级或延后收件箱中的条目。"
+    },
+    "comment_add": {
+      "label": "发表评论",
+      "description": "在工作项下发表评论，并编辑或删除自己发表的评论。"
+    },
+    "comment_moderate": {
+      "label": "管理评论",
+      "description": "编辑和删除任何人的评论，而不仅是自己的。"
+    },
+    "attachment_create": {
+      "label": "添加附件",
+      "description": "向工作项上传文件，并删除自己上传的附件。"
+    },
+    "attachment_delete_any": {
+      "label": "删除任意附件",
+      "description": "删除任何人上传的附件，而不仅是自己的。"
+    },
+    "watcher_manage": {
+      "label": "管理关注者",
+      "description": "将他人添加到工作项的关注列表或从中移除。任何能查看工作项的人都可以自行关注。"
+    },
+    "public_request_comment": {
+      "label": "评论请求",
+      "description": "在公开请求的讨论串中回复。仅适用于公开项目。"
+    },
+    "public_request_submit": {
+      "label": "提交请求",
+      "description": "向项目的收件箱提交缺陷报告或功能请求。仅适用于公开项目。"
+    },
+    "public_request_upvote": {
+      "label": "为请求投票",
+      "description": "为公开请求投票以表达需求强度。仅适用于公开项目。"
+    },
+    "member_manage": {
+      "label": "管理成员",
+      "description": "添加或移除项目成员，并设置其角色。"
+    },
+    "project_manage_access": {
+      "label": "修改项目访问级别",
+      "description": "设置项目为公开、开放、受限或私有。"
+    },
+    "board_configure": {
+      "label": "配置面板",
+      "description": "修改面板的列、泳道和在制品限制。"
+    },
+    "sprint_manage": {
+      "label": "管理Sprint",
+      "description": "启动和完成Sprint，并对待办列表排序。"
+    },
+    "automation_manage": {
+      "label": "管理自动化规则",
+      "description": "创建、编辑并启用项目的自动化规则与状态联动规则。"
+    },
+    "workflow_manage": {
+      "label": "管理工作流",
+      "description": "修改面板列所映射的状态及其之间的流转。"
+    },
+    "component_manage": {
+      "label": "管理组件",
+      "description": "创建、重命名和删除项目的组件。"
+    },
+    "field_manage": {
+      "label": "管理自定义字段",
+      "description": "创建、编辑和删除自定义字段定义。"
+    },
+    "label_manage": {
+      "label": "管理标签",
+      "description": "创建、重命名和删除项目的标签。"
+    },
+    "estimation_manage": {
+      "label": "管理估算",
+      "description": "修改项目的估算方式。"
+    },
+    "report_view": {
+      "label": "查看报表",
+      "description": "查看项目的报表——分布、工作量、解决时长、速率和路线图。"
+    },
+    "saved_filter_manage": {
+      "label": "管理保存的筛选器",
+      "description": "创建、编辑、共享和订阅项目保存的筛选器。"
+    },
+    "repository_connect": {
+      "label": "连接代码仓库",
+      "description": "将GitHub或GitLab安装连接到项目并开始建立索引。"
+    },
+    "repository_manage": {
+      "label": "管理代码仓库",
+      "description": "添加、移除、迁移和接管项目的代码仓库。"
+    },
+    "repository_manage_access": {
+      "label": "管理代码访问权限",
+      "description": "决定哪些团队成员可以克隆项目代码。"
+    },
+    "import_run": {
+      "label": "导入工作项",
+      "description": "从Jira、Linear或Plane批量创建工作项。"
+    },
+    "ai_configure": {
+      "label": "配置AI规划",
+      "description": "设置规划节奏、规划模型，以及是否自动生成说明。"
+    },
+    "ai_plan": {
+      "label": "运行AI规划",
+      "description": "提交规划任务，消耗工作区的AI额度并生成计划变更建议。"
+    },
+    "ai_view_plan": {
+      "label": "查看AI计划",
+      "description": "打开已生成的计划并查看其建议内容。"
+    }
+  },
   "localeToggle": {
     "label": "语言",
     "activate": "点击切换。"
@@ -1202,6 +1350,20 @@
       "aiPlanning": "AI规划",
       "rules": "规则",
       "repositories": "代码仓库"
+    },
+    "roles": {
+      "admin": {
+        "name": "管理员",
+        "description": "对项目拥有完全控制权——设置、成员及全部工作内容。"
+      },
+      "member": {
+        "name": "成员",
+        "description": "负责推进工作：创建和编辑工作项、发表评论、上传附件。"
+      },
+      "viewer": {
+        "name": "访客",
+        "description": "只读。可查看项目中的全部内容，但不能做任何更改。"
+      }
     },
     "area": {
       "noProjectTitle": "未选择项目",

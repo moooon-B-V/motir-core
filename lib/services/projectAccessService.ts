@@ -28,6 +28,10 @@ import {
   savedFilterCapabilities,
   type SavedFilterProjectCapabilities,
 } from '@/lib/savedFilters/access';
+import { resolvePermissions } from '@/lib/permissions/resolve';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+import { toActorPermissionsDTO, toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
+import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions';
 
 // projectAccessService — the ENFORCEMENT half of the Story 6.4 access model
 // (Subtask 6.4.3). It resolves the three policy inputs (the project's access
@@ -573,5 +577,77 @@ export const projectAccessService = {
     const inputs = await resolveInputs(projectId, ctx, tx);
     if (!canBrowse(inputs)) throw new ProjectNotFoundError(projectId);
     if (!canManageProject(inputs)) throw new NotProjectAdminError(projectId);
+  },
+
+  // --- The permission model (Story MOTIR-2255 · Subtask MOTIR-2262) ---------
+  // The GENERAL read the five `getXCapabilities` methods above are specialised
+  // versions of. Each of those grew when a story needed access decisions in a
+  // new domain — comments, attachments, watchers, saved filters, settings — and
+  // each resolves the same three facts to answer three or four booleans. Once a
+  // role is a permission SET, `getPermissions` is the read they all specialise,
+  // and the pattern stops needing a sixth sibling.
+  //
+  // ⚠️ The five are DELIBERATELY left alone by this card. They are called from
+  // ~40 places; re-pointing them belongs with the surfaces that consume the set
+  // (Story MOTIR-2258), not with the card that introduces it. Their agreement
+  // with `getPermissions` is asserted by the story test gate (MOTIR-2264).
+
+  /**
+   * The actor's full effective permission SET on a project — one `resolveInputs`
+   * round trip, then the pure resolution. The general form of every
+   * `getXCapabilities` method above: instead of asking "may I comment?" and "may
+   * I moderate?" separately, a caller asks once and tests membership.
+   *
+   * Throws only ProjectNotFoundError — never a 403-shaped error — for a project
+   * that is missing OR in another workspace, preserving the shipped
+   * no-existence-leak posture (finding #26).
+   */
+  async getPermissions(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ReadonlySet<PermissionKey>> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    return resolvePermissions(inputs);
+  },
+
+  /**
+   * The actor's own permissions as a serialisable DTO — the set flattened to an
+   * array in CATALOG order, which is what crosses to a client island or a Server
+   * Component's props. A `Set` cannot; an unsorted array crosses
+   * non-deterministically and makes the grid reshuffle for no visible reason.
+   */
+  async getPermissionsDTO(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ActorPermissionsDTO> {
+    const held = await this.getPermissions(projectId, ctx, tx);
+    return toActorPermissionsDTO(projectId, held);
+  },
+
+  /**
+   * The project's ROLE CATALOG — every role with the permissions it holds, plus
+   * the catalog's domain grouping. This is what the read-only Roles & permissions
+   * settings page renders (Subtask MOTIR-2263).
+   *
+   * ⚠️ A PROJECT-SCOPED SERVICE READ, not a static import, even though today's
+   * answer is the same for every project. Story MOTIR-2257 makes custom roles
+   * project-scoped, at which point the answer genuinely depends on which project
+   * is asked — and a page wired to a constant would need its data source torn out
+   * and replaced exactly then. The round trip costs nothing measurable now and
+   * saves that replacement. It also re-uses the same 404-not-403 gate, so the
+   * page cannot confirm a foreign project exists.
+   */
+  async getRoleCatalog(
+    projectId: string,
+    ctx: AccessActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<RoleCatalogDTO> {
+    // Resolves for its SIDE EFFECT — the ProjectNotFoundError guard. The catalog
+    // itself is code-owned today; MOTIR-2257 will read the project's own roles
+    // here, which is the reason the projectId is threaded at all.
+    await resolveInputs(projectId, ctx, tx);
+    return toRoleCatalogDTO();
   },
 };
