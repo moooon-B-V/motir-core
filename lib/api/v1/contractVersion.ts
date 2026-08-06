@@ -34,5 +34,10 @@
  *   (`ReadyItem.assignee`), the rule Amendment 10 Q1 states for every one.
  * - `1.3.0` — MOTIR-2283 applies that rule to `Comment.author`, the one shape
  *   that had kept the rationale Amendment 10 overturned.
+ * - `1.3.1` — MOTIR-2317 declares the ready set's `kind` / `priority` as the
+ *   ARRAYS the route has always read them as. A PATCH, not a minor: the set of
+ *   requests the server accepts is unchanged — `parseReadyFilters` has read
+ *   both with `getAll` since they shipped — and only the document, which
+ *   described them as scalars while its own prose said "Repeatable", moves.
  */
-export const V1_CONTRACT_VERSION = '1.3.0';
+export const V1_CONTRACT_VERSION = '1.3.1';

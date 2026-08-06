@@ -203,6 +203,29 @@ describe('GET /api/v1/projects/{projectKey}/ready', () => {
     expect(((await res.json()) as { code: string }).code).toBe('INVALID_READY_FILTER');
   });
 
+  // MOTIR-2317. The document declared `kind` as a scalar until this card, so
+  // the route's REPEATED form had no test of its own — it was described in
+  // prose and read by `getAll`, and nothing held the two together. A generated
+  // client now depends on this exact wire form.
+  it('narrows to the UNION of a repeated kind, not to the last one', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const task = await makeItem(caller, 'a task');
+    const bug = await workItemsService.createWorkItem(
+      { projectId: caller.fixture.projectId, kind: 'bug', title: 'a bug' },
+      caller.ctx,
+    );
+    await workItemsService.createWorkItem(
+      { projectId: caller.fixture.projectId, kind: 'story', title: 'a story' },
+      caller.ctx,
+    );
+
+    const keys = (await page(caller, '?kind=task&kind=bug')).items.map((i) => i.key);
+
+    // Both, and only both — a last-value-wins read would return the bug alone,
+    // and an ignored filter would drag the story in.
+    expect(new Set(keys)).toEqual(new Set([task.identifier, bug.identifier]));
+  });
+
   it('supports the UNASSIGNED bucket as an explicit literal', async () => {
     // Absent means "any assignee"; an empty `?assigneeId=` cannot mean
     // "unassigned" because it is indistinguishable from omitting it — so the

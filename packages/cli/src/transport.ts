@@ -208,13 +208,27 @@ export class V1Transport {
     // rebuilt, merged or carried to another collection. It is opaque, signed and
     // collection-scoped (ADR §5); a client that took it apart would be relying
     // on an encoding the server is free to change.
-    // ⚠️ One value per key, deliberately: no `/api/v1` operation declares an
-    // ARRAY query parameter (checked against the emitted document), so a
-    // repeated-key encoding would be a client inventing a convention the server
-    // has never agreed to. If one is ever added, the generated types will say
-    // so and this is where it lands.
+    // ⚠️ An ARRAY value spreads into REPEATED KEYS — `?kind=a&kind=b` — and
+    // anything else takes exactly one key. Both forms come from the document
+    // rather than from a convention invented here: the array parameters declare
+    // `explode: true`, which is that wire form, and `parseReadyFilters` reads
+    // them with `params.getAll`. An empty array therefore sends NO key at all,
+    // which is the same request as omitting the filter — the only reading that
+    // could be right, since `?kind=` matches nothing rather than everything.
+    //
+    // (Until MOTIR-2317 no operation declared an array and this set one value
+    // per key. The document was wrong, not the encoder: the ready set's
+    // `kind` / `priority` had been repeatable since they shipped.)
     for (const [key, value] of Object.entries({ ...(input.query ?? {}) })) {
       if (value === undefined || value === null) continue;
+      if (Array.isArray(value)) {
+        // No per-element skip: the outer guard already handles an ABSENT
+        // parameter, and an element cannot be absent — every declared array is
+        // `string[]`, so a null inside one would be a caller lying to the type
+        // rather than a case to defend against.
+        for (const element of value) url.searchParams.append(key, String(element));
+        continue;
+      }
       url.searchParams.set(key, String(value));
     }
     return url.toString();

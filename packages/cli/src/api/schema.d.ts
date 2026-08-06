@@ -4573,10 +4573,10 @@ export interface operations {
                 cursor?: string;
                 /** @description Rows per page. Defaults to 50; a larger value is CLAMPED to 100 rather than rejected. */
                 limit?: number;
-                /** @description Narrow to one or more work-item kinds. Repeatable. An unknown kind is a 422. */
-                kind?: string;
-                /** @description Narrow to one or more priorities. Repeatable. An unknown priority is a 422. */
-                priority?: string;
+                /** @description Narrow to one or more work-item kinds, as `?kind=epic&kind=story`. An unknown kind is a 422. */
+                kind?: string[];
+                /** @description Narrow to one or more priorities, as `?priority=high&priority=urgent`. An unknown priority is a 422. */
+                priority?: string[];
                 /** @description TRI-STATE, and all three are reachable: OMIT for any assignee, the literal `none` for the unassigned bucket, or a user id for that user's items. An empty value is treated as omitted. */
                 assigneeId?: string;
             };

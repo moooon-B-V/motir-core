@@ -41,6 +41,19 @@ export interface V1Parameter {
   required: boolean;
   description: string;
   schema: z.ZodType;
+  /**
+   * How an ARRAY-valued parameter spreads across the query string.
+   *
+   * `true` is `?kind=a&kind=b` — one repeated key, which is what
+   * `URLSearchParams.getAll` reads and therefore the only form our routes
+   * accept. It is also OpenAPI 3.1's default for a `form`-style query
+   * parameter, so emitting it changes no reader's interpretation; it is written
+   * down because a wire form the server cannot parse if it changed is not
+   * something to leave resting on a default (MOTIR-2317).
+   *
+   * Omit on a scalar, where it has no meaning.
+   */
+  explode?: boolean;
 }
 
 /**

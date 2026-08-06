@@ -166,6 +166,10 @@ function parameterObject(parameter: V1Parameter): JsonObject {
     in: parameter.in,
     required: parameter.required,
     description: parameter.description,
+    // `explode` rides ALONGSIDE the schema rather than being inferred from it:
+    // a reader must not have to know that `type: array` implies repeated keys,
+    // and a declaration that says so cannot be quietly changed by a default.
+    ...(parameter.explode === undefined ? {} : { explode: parameter.explode }),
     schema: toOpenApiSchema(parameter.schema, 'input'),
   };
 }

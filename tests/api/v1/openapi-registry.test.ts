@@ -199,6 +199,37 @@ describe('the emitted document', () => {
     }
   });
 
+  // MOTIR-2317. The ready set's `kind` / `priority` were declared as SCALARS
+  // while their own descriptions said "Repeatable" and the route read them with
+  // `params.getAll` — an under-description nobody noticed until a client was
+  // GENERATED from this document and inherited a type that cannot express two
+  // kinds. The declaration and the wire form are asserted together, off the
+  // emitted document rather than a fixture, so the two cannot drift apart again.
+  it('declares the ready set’s repeatable filters as exploded ARRAYS', () => {
+    const paths = document['paths'] as unknown as Record<
+      string,
+      Record<string, Record<string, unknown>>
+    >;
+    const parameters = (paths['/api/v1/projects/{projectKey}/ready']?.['get']?.['parameters'] ??
+      []) as { name: string; explode?: boolean; schema?: { type?: string; items?: unknown } }[];
+
+    for (const name of ['kind', 'priority']) {
+      const parameter = parameters.find((p) => p.name === name);
+      expect(parameter, name).toBeDefined();
+      expect(parameter?.schema?.type, name).toBe('array');
+      expect(parameter?.schema?.items, name).toBeDefined();
+      // `?kind=a&kind=b`, which is what `getAll` reads. A `false` here would
+      // mean `?kind=a,b` — one kind, named `a,b`, matching nothing.
+      expect(parameter?.explode, name).toBe(true);
+    }
+
+    // `assigneeId` sits beside them and is TRI-STATE, not repeatable: a second
+    // value would have no meaning, so it stays a scalar with no `explode`.
+    const assignee = parameters.find((p) => p.name === 'assigneeId');
+    expect(assignee?.schema?.type).toBe('string');
+    expect(assignee?.explode).toBeUndefined();
+  });
+
   it('gives every operation the wrapper’s errors as well as its own', () => {
     const paths = document['paths'] as unknown as Record<
       string,
