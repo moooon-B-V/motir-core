@@ -5,6 +5,7 @@ import { projectStateService } from '@/lib/services/projectStateService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { exempt } from '../payloads/define';
 import { projectKeyField } from './sprintRef';
 
 // `get_project_state` (MOTIR-1968) — the project-CONFIGURATION read a planning
@@ -90,7 +91,7 @@ export async function runGetProjectState(
     // agent. The DTO is spread rather than nested so a caller reads
     // `structuredContent.code` / `.planningGate` directly — `structuredContent`
     // must be an object, and this one already is.
-    return toolOk(summarizeProjectState(state), { ...state });
+    return toolOk(summarizeProjectState(state), exempt('get_project_state', { ...state }));
   } catch (err) {
     return toToolError(err);
   }

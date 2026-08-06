@@ -5,11 +5,13 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { db } from '@/lib/db';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { TOOL_SCOPES } from '@/lib/mcp/scopes';
-import {
-  LIST_PROJECTS_TOOL_NAME,
-  type McpProjectRow,
-  toProjectRow,
-} from '@/lib/mcp/tools/listProjects';
+// `toProjectRow` is no longer imported here: the payload assertion below
+// compares through `presentMcpProjectRow`, the presenter the tool's
+// `structuredContent` actually goes through since MOTIR-2230. The old helper is
+// still live in the tool — it shapes the human-readable TEXT block — so this is
+// a change of what this suite asserts against, not a deletion.
+import { LIST_PROJECTS_TOOL_NAME, type McpProjectRow } from '@/lib/mcp/tools/listProjects';
+import { presentMcpProjectRow } from '@/lib/mcp/payloads/planning';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -113,6 +115,11 @@ describe('list_projects — registration + the token workspace read', () => {
       name: fx.project.name,
       slug: fx.project.slug,
       accessLevel: fx.project.accessLevel,
+      // ADDED by MOTIR-2230: the row now derives from v1's `projectSchema`,
+      // which publishes `archived`. `listProjects` filters archived rows out, so
+      // a listed project is live by construction — but a client that cannot tell
+      // a dead project from a live one is the hazard the v1 field exists for.
+      archived: false,
     });
     // `key` is the string the OTHER tools take as `projectKey` — the whole point
     // of the tool is that this value round-trips without translation.
@@ -280,7 +287,11 @@ describe('list_projects — the access checks are the UI switcher’s', () => {
     for (const ctx of [ownerCtx, { userId: viewer.id, workspaceId: workspace.id }]) {
       const viaService = await projectsService.listProjects(ctx.workspaceId, ctx.userId);
       const viaTool = rowsOf(await callListProjects(ctx));
-      expect(viaTool).toEqual(viaService.map(toProjectRow));
+      // Same assertion, one layer over: the tool agrees EXACTLY with the
+      // switcher's own read. Compared through the presenter the tool now uses
+      // (MOTIR-2230) rather than `toProjectRow`, so the `archived` field the v1
+      // schema adds is on both sides of the equality rather than only one.
+      expect(viaTool).toEqual(viaService.map(presentMcpProjectRow));
     }
   });
 });

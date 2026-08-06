@@ -12,6 +12,13 @@ import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import {
+  planSessionPayload,
+  planSubmitPayload,
+  presentMcpPlanSession,
+  presentMcpPlanSubmit,
+} from '../payloads/workLoop';
 import { projectKeyField } from './readyFilters';
 import { normalizeIdentifier } from './workItemRef';
 
@@ -212,7 +219,10 @@ export async function runOpenPlanSession(
   const session = await planChangeSessionsService.getOrCreateForScope(pctx, scope);
   const headline =
     session.turnCount > 0 ? 'Resumed planning conversation' : 'Opened planning conversation';
-  return toolOk(summarizeSession(session, headline), session as unknown as Record<string, unknown>);
+  return toolOk(
+    summarizeSession(session, headline),
+    derived(planSessionPayload, presentMcpPlanSession(session)),
+  );
 }
 
 /**
@@ -234,7 +244,7 @@ export async function runAppendPlanTurn(
   const session = await planChangeSessionsService.appendTurn(args.body, pctx, scope.scopeKey);
   return toolOk(
     summarizeSession(session, 'Turn added — NOT submitted'),
-    session as unknown as Record<string, unknown>,
+    derived(planSessionPayload, presentMcpPlanSession(session)),
   );
 }
 
@@ -245,7 +255,7 @@ export async function runSubmitPlanSession(
 ): Promise<CallToolResult> {
   const { pctx, scope } = await resolveTarget(args, ctx);
   const result = await planChangeSessionsService.submit(pctx, scope.scopeKey);
-  return toolOk(summarizeSubmit(result), result as unknown as Record<string, unknown>);
+  return toolOk(summarizeSubmit(result), derived(planSubmitPayload, presentMcpPlanSubmit(result)));
 }
 
 export function registerPlanSession(server: McpServer, resolveContext: McpContextResolver): void {

@@ -236,6 +236,23 @@ export default defineConfig({
         // modules and stay ungated.) `tests/mcp/story-roundtrip` drives them over
         // the real `/api/mcp` transport; `tests/mcp/tool-coverage` walks the
         // per-tool summary / edge branches.
+        // Story 11.6 · Subtask 11.6.2 (MOTIR-2228) — the payload SEAM: the brand
+        // that makes `toolOk` refuse an underived payload, the exemption +
+        // migration registries, the derived shared-resource set, and the
+        // work-item payload shapes. Gated from the start: an ungated new module
+        // is exactly the invisible member the seam exists to make impossible.
+        'lib/mcp/payloads/brand.ts',
+        'lib/mcp/payloads/define.ts',
+        'lib/mcp/payloads/exemptions.ts',
+        'lib/mcp/payloads/sharedResources.ts',
+        'lib/mcp/payloads/workItems.ts',
+        // Subtask 11.6.4 (MOTIR-2230) — the project / sprint / identity family.
+        'lib/mcp/payloads/planning.ts',
+        // Subtask 11.6.5 (MOTIR-2231) — the work-loop family + the seal.
+        'lib/mcp/payloads/workLoop.ts',
+        // Subtask 11.6.6 (MOTIR-2232) — the drift guard + the tool→payload map.
+        'lib/mcp/payloads/driftGuard.ts',
+        'lib/mcp/payloads/registry.ts',
         'lib/mcp/registry.ts',
         'lib/mcp/tools/getWorkItem.ts',
         'lib/mcp/tools/listReady.ts',
@@ -1401,6 +1418,18 @@ export default defineConfig({
         'lib/jobs/schedules.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/jobScheduleHealthService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/dailyHealthCheck.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.6 · Subtask 11.6.2 (MOTIR-2228) — the payload seam. Explicit
+        // per-file entries because an unnamed new file is an UNGATED one, and a
+        // seam whose whole job is that nothing opts out silently must not.
+        'lib/mcp/payloads/brand.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/define.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/exemptions.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/sharedResources.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/workItems.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/planning.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/workLoop.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/driftGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/payloads/registry.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

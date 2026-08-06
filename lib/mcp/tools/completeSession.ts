@@ -5,6 +5,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { CompleteSessionResultDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { presentMcpSessionCloseOut, sessionCloseOutPayload } from '../payloads/workLoop';
 import {
   buildImplementationProvenance,
   implementationProvenanceFields,
@@ -66,7 +68,10 @@ export async function runCompleteSession(
       ctx,
       buildImplementationProvenance(args),
     );
-    return toolOk(summarize(result), result as unknown as Record<string, unknown>);
+    return toolOk(
+      summarize(result),
+      derived(sessionCloseOutPayload, presentMcpSessionCloseOut(result)),
+    );
   } catch (err) {
     return toToolError(err);
   }

@@ -7,6 +7,8 @@ import type { CreateSprintInput } from '@/lib/dto/sprints';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { presentMcpSprint, sprintWritePayload } from '../payloads/planning';
 import { projectKeyField, summarizeSprint } from './sprintRef';
 
 // `create_sprint` (Story 7.8 · Subtask 7.8.10) — create a PLANNED sprint on a
@@ -53,7 +55,10 @@ export async function runCreateSprint(
       endDate: args.endDate,
     };
     const dto = await sprintsService.createSprint(project.id, input, ctx);
-    return toolOk(`Created ${summarizeSprint(dto)}`, dto as unknown as Record<string, unknown>);
+    return toolOk(
+      `Created ${summarizeSprint(dto)}`,
+      derived(sprintWritePayload, presentMcpSprint(dto)),
+    );
   } catch (err) {
     return toToolError(err);
   }

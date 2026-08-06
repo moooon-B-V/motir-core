@@ -13,6 +13,8 @@ import type {
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `update_work_item` (Story 7.8 · Subtask 7.8.14; `storyPoints` added 7.8.21) —
@@ -156,7 +158,10 @@ export async function runUpdateWorkItem(
     const item = await workItemsService.getWorkItemByIdentifier(project.id, identifier, ctx);
     const patch = toPatch(args);
     const dto = await workItemsService.updateWorkItem(item.id, patch, ctx);
-    return toolOk(summarize(dto, Object.keys(patch)), dto as unknown as Record<string, unknown>);
+    return toolOk(
+      summarize(dto, Object.keys(patch)),
+      derived(workItemWritePayload, presentMcpWorkItem(dto)),
+    );
   } catch (err) {
     return toToolError(err);
   }

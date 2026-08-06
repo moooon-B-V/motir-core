@@ -8,6 +8,8 @@ import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems'
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { dispatchPromptPayload, presentMcpDispatchPrompt } from '../payloads/workLoop';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `dispatch_prompt` (Story 7.9 · MOTIR-1802) — the CANONICAL, server-generated
@@ -120,7 +122,7 @@ export async function runDispatchPrompt(
   const dto = await dispatchPromptService.getDispatchPrompt(project.id, identifier, ctx, {
     sessionBranch: args.sessionBranch ?? null,
   });
-  return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);
+  return toolOk(summarize(dto), derived(dispatchPromptPayload, presentMcpDispatchPrompt(dto)));
 }
 
 export function registerDispatchPrompt(
