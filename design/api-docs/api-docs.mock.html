@@ -62,12 +62,6 @@
         (7) The PUBLIC DOOR, in the shipped marketing top bar + footer.
         (8) The IN-APP DOOR, on the shipped API-tokens settings page.
         (9) Mobile (390px) — the catalogue drawer and the scrolling code block.
-       (10) The AGENT SANDBOX guide (MOTIR-2270) — the rail's fourth entry, the
-            PRECONDITIONS, the confinement summary, the `docker run` + its mounts,
-            the three Motir credential tiers, the eight-profile matrix, and the
-            three-step VS Code dev-container setup, at full width.
-       (11) The PROFILE MATRIX at 390px — the same eight profiles as stacked
-            cards, which is the case a five-column table cannot survive.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -520,85 +514,6 @@
         background: var(--el-tint-peach);
         color: var(--el-text-strong);
       }
-      /* Tier 1 = pinned by the sandbox matrix; tier 2 = also-supported. Two tint
-         SLOTS rather than two shades of one hue, so the distinction survives a
-         palette swap and reads without the legend. */
-      .pill--tier1 {
-        background: var(--el-tint-mint);
-        color: var(--el-text-strong);
-        font-size: 11px;
-      }
-      .pill--tier2 {
-        background: var(--el-tint-yellow);
-        color: var(--el-text-strong);
-        font-size: 11px;
-      }
-
-      /* ── The PROFILE MATRIX (MOTIR-2270) ────────────────────────────────────
-         Wide: `table.spec` unchanged, four columns. The `binary` fact folds into
-         column 1 as the spec table's existing .nm/.ty two-line cell instead of
-         taking a fifth column — five columns of technical text is the layout that
-         fails, and the two-line cell is already shipped on this surface.
-         A mount is a PATH, so each one is a code chip; a profile with several
-         gets several, stacked, because wrapping one long line reads as one path.  */
-      .mount {
-        display: block;
-        font-family: var(--font-mono);
-        font-size: 11.5px;
-        color: var(--el-code-text);
-        background: var(--el-code-bg);
-        border-radius: var(--radius-kbd);
-        padding: 1px 6px;
-        margin-bottom: 3px;
-        width: fit-content;
-      }
-      .mount--none {
-        font-family: var(--font-sans);
-        background: transparent;
-        color: var(--el-text-faint);
-        padding-left: 0;
-      }
-
-      /* Narrow: the SAME data as one card per profile. Not a scrolling table and
-         not hidden columns — every fact a reader chooses on stays visible. */
-      .pcard {
-        border: 1px solid var(--el-border-soft);
-        border-radius: var(--radius-card);
-        padding: 10px 12px;
-        margin-bottom: 8px;
-        background: var(--el-surface);
-      }
-      .pcard-head {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 8px;
-      }
-      .pcard-head .nm {
-        font-family: var(--font-mono);
-        font-size: 13px;
-        color: var(--el-text);
-      }
-      .pcard dl {
-        display: grid;
-        grid-template-columns: 78px 1fr;
-        gap: 4px 10px;
-        margin: 0;
-      }
-      .pcard dt {
-        font-size: 11px;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
-        color: var(--el-text-faint);
-        padding-top: 2px;
-      }
-      .pcard dd {
-        margin: 0;
-        font-size: 12.5px;
-        color: var(--el-text-secondary);
-        min-width: 0;
-        overflow-wrap: anywhere;
-      }
 
       .btn {
         display: inline-flex;
@@ -986,7 +901,7 @@
 
     <!-- ════════ PANEL 1 — the reference, default view ════════ -->
     <div class="panel-label">
-      Panel 1 · /docs/api — the API reference, default view
+      Panel 1 · /api-docs — the API reference, default view
       <span class="note">
         ONE docs shell: a left catalogue (search + operations grouped by resource), the content
         column, and a right in-page contents. The three pages — Reference, Getting started,
@@ -1003,7 +918,7 @@
           >
           <nav class="site-nav" aria-label="Product">
             <span class="nav-label">Product</span>
-            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+            <a class="nav-current" href="/api-docs" aria-current="page">Docs</a>
             <span class="nav-label">Pricing</span>
             <a class="nav-link" href="/explore">Explore</a>
           </nav>
@@ -1021,10 +936,9 @@
 
             <div class="navgroup">
               <h3>Documentation</h3>
-              <a class="navrow is-active" href="/docs/api">API reference</a>
-              <a class="navrow" href="/docs/getting-started">Getting started</a>
-              <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
-              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow is-active" href="/api-docs">API reference</a>
+              <a class="navrow" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow" href="/api-docs/stability">Stability &amp; deprecation</a>
             </div>
 
             <div class="navgroup">
@@ -1210,7 +1124,7 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 \
               <li>Overview</li>
               <li>AI planning</li>
               <li>Boards &amp; sprints</li>
-              <li><a href="/docs/api">API docs</a> <span class="anno">NEW LINK</span></li>
+              <li><a href="/api-docs">API docs</a> <span class="anno">NEW LINK</span></li>
               <li>Pricing</li>
             </ul>
           </div>
@@ -1401,7 +1315,7 @@ curl -X PATCH https://app.motir.co/api/v1/work-items/MOTIR-1854 \
 
     <!-- ════════ PANEL 4 — getting started ════════ -->
     <div class="panel-label">
-      Panel 4 · /docs/getting-started — the linear read’s RHYTHM
+      Panel 4 · /api-docs/getting-started — the linear read’s RHYTHM
       <span class="note">
         The words are 11.4.8’s; this panel fixes the rhythm they land in — numbered step heading,
         one short paragraph, one code block, and a callout only where a reader would otherwise get
@@ -1419,10 +1333,9 @@ curl -X PATCH https://app.motir.co/api/v1/work-items/MOTIR-1854 \
             </div>
             <div class="navgroup">
               <h3>Documentation</h3>
-              <a class="navrow" href="/docs/api">API reference</a>
-              <a class="navrow is-active" href="/docs/getting-started">Getting started</a>
-              <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
-              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow" href="/api-docs">API reference</a>
+              <a class="navrow is-active" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow" href="/api-docs/stability">Stability &amp; deprecation</a>
             </div>
             <div class="navgroup">
               <h3>Work items</h3>
@@ -1525,7 +1438,7 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
 
     <!-- ════════ PANEL 5 — stability & deprecation ════════ -->
     <div class="panel-label">
-      Panel 5 · /docs/stability — the published promise
+      Panel 5 · /api-docs/stability — the published promise
       <span class="note">
         A short prose page, deliberately narrower than the reference: it is read once, in order, and
         then cited. The two lists are the load-bearing content, so they are the page’s only
@@ -1543,10 +1456,9 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
             </div>
             <div class="navgroup">
               <h3>Documentation</h3>
-              <a class="navrow" href="/docs/api">API reference</a>
-              <a class="navrow" href="/docs/getting-started">Getting started</a>
-              <a class="navrow is-active" href="/docs/stability">Stability &amp; deprecation</a>
-              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow" href="/api-docs">API reference</a>
+              <a class="navrow" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow is-active" href="/api-docs/stability">Stability &amp; deprecation</a>
             </div>
           </nav>
 
@@ -1632,10 +1544,9 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
             </div>
             <div class="navgroup">
               <h3>Documentation</h3>
-              <a class="navrow" href="/docs/api">API reference</a>
-              <a class="navrow" href="/docs/getting-started">Getting started</a>
-              <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
-              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow" href="/api-docs">API reference</a>
+              <a class="navrow" href="/api-docs/getting-started">Getting started</a>
+              <a class="navrow" href="/api-docs/stability">Stability &amp; deprecation</a>
             </div>
           </nav>
           <main class="docs-main">
@@ -1725,7 +1636,7 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
               >
               <nav class="site-nav" aria-label="Product">
                 <span class="nav-label">Product</span>
-                <a class="nav-link" href="/docs/api">Docs</a><span class="anno">NOW A LINK</span>
+                <a class="nav-link" href="/api-docs">Docs</a><span class="anno">NOW A LINK</span>
                 <span class="nav-label">Pricing</span>
                 <a class="nav-current" href="/explore" aria-current="page">Explore</a>
               </nav>
@@ -1779,7 +1690,7 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
                 <li>Overview</li>
                 <li>AI planning</li>
                 <li>Boards &amp; sprints</li>
-                <li><a href="/docs/api">API docs</a> <span class="anno">NEW LINK</span></li>
+                <li><a href="/api-docs">API docs</a> <span class="anno">NEW LINK</span></li>
                 <li>Pricing</li>
               </ul>
             </div>
@@ -1836,8 +1747,10 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
                 </div>
               </div>
               <span style="display: inline-flex; flex: none; gap: 8px">
-                <a class="btn btn-sm btn-secondary" href="/docs/getting-started">Getting started</a>
-                <a class="btn btn-sm btn-primary" href="/docs/api">API reference</a>
+                <a class="btn btn-sm btn-secondary" href="/api-docs/getting-started"
+                  >Getting started</a
+                >
+                <a class="btn btn-sm btn-primary" href="/api-docs">API reference</a>
               </span>
             </div>
           </div>
@@ -1939,634 +1852,6 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
               <span class="status status--client">429</span
               ><span style="font-size: 12.5px; color: var(--el-text-secondary)">Budget spent</span>
             </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════ PANEL 10 — /docs/sandbox, the agent sandbox guide ════════ -->
-    <div class="panel-label">
-      Panel 10 · /docs/sandbox — the agent sandbox guide (MOTIR-2270)
-      <span class="note">
-        The FOURTH page, in the same shell as the other three — same rail, same content column, same
-        heading rhythm as Getting started. It is deliberately the FIRST TEN MINUTES and nothing
-        more: what you need BEFORE you start, what the container confines, the one command, the
-        mounts that command needs, the three ways to hand it a Motir credential, which profile to
-        run, and the three-step VS Code path for a reader who would rather stay in their editor.
-        Everything past that stays in <code>packages/cli/sandbox/README.md</code>, which the last
-        line links. The rail's fourth entry is this page's ONLY entrance — nothing else in the
-        product routes here.
-      </span>
-    </div>
-    <div class="panel">
-      <div class="stage">
-        <header class="site-top">
-          <span class="brand"
-            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
-          >
-          <nav class="site-nav" aria-label="Product">
-            <span class="nav-label">Product</span>
-            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
-            <span class="nav-label">Pricing</span>
-            <a class="nav-link" href="/explore">Explore</a>
-          </nav>
-          <span style="display: inline-flex; gap: 8px">
-            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
-            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
-          </span>
-        </header>
-
-        <div class="docs">
-          <nav class="docs-nav" aria-label="API reference">
-            <div class="searchbox">
-              <span aria-hidden="true">⌕</span>Find an operation<span class="kbd">/</span>
-            </div>
-
-            <div class="navgroup">
-              <h3>Documentation</h3>
-              <a class="navrow" href="/docs/api">API reference</a>
-              <a class="navrow" href="/docs/getting-started">Getting started</a>
-              <a class="navrow" href="/docs/stability">Stability &amp; deprecation</a>
-              <a class="navrow is-active" href="/docs/sandbox" aria-current="page">Agent sandbox</a>
-            </div>
-
-            <div class="navgroup">
-              <h3>Work items</h3>
-              <a class="navrow" href="#"><span class="verb verb--get">GET</span>List</a>
-              <a class="navrow" href="#"><span class="verb verb--post">POST</span>Create</a>
-              <a class="navrow" href="#"><span class="verb verb--get">GET</span>Read</a>
-              <a class="navrow" href="#"><span class="verb verb--patch">PATCH</span>Update</a>
-            </div>
-          </nav>
-
-          <div class="docs-main doc">
-            <h1>Run your agent in the sandbox</h1>
-            <p class="lede">
-              Motir asks you to hand work to a coding agent that runs unattended, with approvals
-              off. This is where it runs: a published container that can reach your workspace tree
-              and nothing else on your machine. Adopting it is a <code>docker run</code>, not a
-              <code>git clone</code>.
-            </p>
-
-            <h2>Before you start</h2>
-            <p>
-              Four things, none of which involves cloning this repository. The container consumes
-              credentials you already have — it never mints one for you.
-            </p>
-            <table class="spec">
-              <thead>
-                <tr>
-                  <th style="width: 26%">What you need</th>
-                  <th>How to get it</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span class="nm">Docker</span><br /><span class="ty">running</span></td>
-                  <td>
-                    Docker Desktop or any engine. The images are built for
-                    <code>linux/amd64</code> <em>and</em> <code>linux/arm64</code>, so Apple Silicon
-                    is a first-class machine and nothing is emulated. There is no build step — you
-                    pull.
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <span class="nm">A Motir token</span><br /><span class="ty">+ server URL</span>
-                  </td>
-                  <td>
-                    Mint one under <strong>Settings → Account → API tokens</strong> and export it as
-                    <code>MOTIR_TOKEN</code> (with <code>MOTIR_SERVER</code>). Or skip it and run
-                    <code>motir login</code> inside the container — see the three tiers below.
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <span class="nm">Your agent's own sign-in</span><br /><span class="ty"
-                      >on the host</span
-                    >
-                  </td>
-                  <td>
-                    Sign in to your coding agent <em>once, on this machine</em>, before you start —
-                    or pass its API key through the environment. The credential mount is
-                    <strong>read-only</strong>, so the container can use a sign-in but can never
-                    perform one.
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <span class="nm">A linked workspace</span><br /><span class="ty"
-                      >.motir.json</span
-                    >
-                  </td>
-                  <td>
-                    Run <code>motir link</code> in the folder that HOLDS your checkouts — not inside
-                    one of them. See below.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h3>Your workspace root, and <code>.motir.json</code></h3>
-            <p>
-              A Motir project usually spans several repositories, and
-              <code>motir auto</code> dispatches across all of them — so the thing the container
-              mounts is the folder that <em>contains</em> your checkouts, not any one checkout. That
-              folder is your <strong>workspace root</strong>, and <code>motir link</code> marks it
-              by writing <code>.motir.json</code> there:
-            </p>
-            <div class="codeblock">
-              <div class="cap">your machine</div>
-              <pre>
-~/work/                 ← the workspace root. Run docker from HERE.
-├── .motir.json         ← motir link writes this
-├── motir-core/         ← a checkout
-└── motir-ai/           ← another</pre
-              >
-            </div>
-            <p>
-              <code>.motir.json</code> is just the link — <code>serverUrl</code>,
-              <code>workspace</code>, <code>project</code>, and an optional <code>repos</code> map
-              for a checkout that is not named after its repo. It holds
-              <strong>no secret</strong> and is safe to commit. Commands resolve it by walking
-              upward from wherever you are, so they work from inside any checkout — but the
-              <code>docker run</code> is the one thing that must start at the root, because that is
-              what gets mounted.
-            </p>
-
-            <div class="callout">
-              <span aria-hidden="true">◆</span>
-              <span
-                ><code>motir doctor</code> checks all four and names what is missing. Run it on the
-                host before you start, and again inside the container if a run stops early — it is
-                the same command in both places.</span
-              >
-            </div>
-
-            <h2>What it confines — and what it does not</h2>
-            <table class="spec">
-              <thead>
-                <tr>
-                  <th style="width: 18%">Surface</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span class="nm">Filesystem</span></td>
-                  <td>
-                    <strong>Confined.</strong> The only host surfaces inside the container are a
-                    writable <code>/workspace</code> and, if you mount them, a read-only Motir
-                    credential and your agent's own. No docker socket, no other host bind.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">Network</span></td>
-                  <td>
-                    <strong>Open, by design.</strong> Every agent needs its provider API, and every
-                    dispatched item needs git remotes. This image confines the filesystem blast
-                    radius, not egress — reach for docker's own <code>--network</code> controls if
-                    your threat model needs more.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">Privileges</span></td>
-                  <td>
-                    Runs as the unprivileged <code>node</code> user (uid 1000), so files written
-                    into the mount stay owned by you rather than by root.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h2>Choosing a profile</h2>
-            <p>
-              One image per agent, each layer fetching that CLI from its own official source at
-              build time. Pick the tag that matches the agent you already use; the credential column
-              is the directory that agent keeps its own sign-in in, mounted
-              <strong>read-only</strong>.
-            </p>
-            <table class="spec">
-              <thead>
-                <tr>
-                  <th style="width: 20%">Profile · binary</th>
-                  <th style="width: 12%">Tier</th>
-                  <th style="width: 30%">Installed from</th>
-                  <th>Credential mount (read-only)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span class="nm">claude</span><br /><span class="ty">claude</span></td>
-                  <td><span class="pill pill--tier1">Tier 1</span></td>
-                  <td>npm <code>@anthropic-ai/claude-code</code></td>
-                  <td><span class="mount">~/.claude</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">codex</span><br /><span class="ty">codex</span></td>
-                  <td><span class="pill pill--tier1">Tier 1</span></td>
-                  <td>npm <code>@openai/codex</code></td>
-                  <td><span class="mount">~/.codex</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">opencode</span><br /><span class="ty">opencode</span></td>
-                  <td><span class="pill pill--tier1">Tier 1</span></td>
-                  <td>npm <code>opencode-ai</code></td>
-                  <td>
-                    <span class="mount">~/.config/opencode</span
-                    ><span class="mount">~/.local/share/opencode</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">kimi</span><br /><span class="ty">kimi</span></td>
-                  <td><span class="pill pill--tier1">Tier 1</span></td>
-                  <td>npm <code>@moonshot-ai/kimi-code</code></td>
-                  <td><span class="mount">~/.kimi-code</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">antigravity</span><br /><span class="ty">agy</span></td>
-                  <td><span class="pill pill--tier2">Tier 2</span></td>
-                  <td>the Antigravity install script</td>
-                  <td><span class="mount mount--none">— OS keyring</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">cursor</span><br /><span class="ty">agent</span></td>
-                  <td><span class="pill pill--tier2">Tier 2</span></td>
-                  <td>the Cursor install script</td>
-                  <td><span class="mount">~/.local/share/cursor-agent</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">aider</span><br /><span class="ty">aider</span></td>
-                  <td><span class="pill pill--tier2">Tier 2</span></td>
-                  <td>PyPI <code>aider-chat</code>, in a venv</td>
-                  <td><span class="mount">~/.aider.conf.yml</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">goose</span><br /><span class="ty">goose</span></td>
-                  <td><span class="pill pill--tier2">Tier 2</span></td>
-                  <td>the Goose installer (Block)</td>
-                  <td><span class="mount">~/.config/goose</span></td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="callout">
-              <span aria-hidden="true">◆</span>
-              <span
-                >Using something else? <code>motir-sandbox:base</code> ships the sandbox with
-                <strong>no agent at all</strong> — bring your own binary and pass it as
-                <code>--agent "&lt;your command&gt;"</code>. Motir is agent-agnostic; the profiles
-                make eight CLIs first-class, they do not make Motir depend on any of them.</span
-              >
-            </div>
-
-            <h2>Run it</h2>
-            <p>
-              One command, shaped by the row you just picked. Three of its parts come from that row
-              — everything else is the same for every profile:
-            </p>
-            <div class="codeblock">
-              <div class="cap">sh · the shape</div>
-              <pre>
-docker run --rm -it \
-  -v "$PWD:/workspace" \
-  -e MOTIR_TOKEN -e MOTIR_SERVER \
-  -v "$HOME/&lt;credential mount&gt;:/home/node/&lt;credential mount&gt;:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:&lt;profile&gt; \
-  motir auto --agent "&lt;your agent's command&gt;"</pre
-              >
-            </div>
-            <table class="spec">
-              <thead>
-                <tr>
-                  <th style="width: 26%">The part</th>
-                  <th style="width: 32%">Comes from</th>
-                  <th>For <code>claude</code></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span class="nm">&lt;profile&gt;</span></td>
-                  <td>the <strong>Profile</strong> column above</td>
-                  <td><span class="mount">claude</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">&lt;credential mount&gt;</span></td>
-                  <td>
-                    the <strong>Credential mount</strong> column above, with its
-                    <code>~/</code> written as <code>$HOME/</code>
-                  </td>
-                  <td><span class="mount">.claude</span></td>
-                </tr>
-                <tr>
-                  <td><span class="nm">&lt;your agent's command&gt;</span></td>
-                  <td>
-                    your agent's own non-interactive + auto-approve flags. They drift between vendor
-                    releases, so the current set lives beside the image in
-                    <code>packages/cli/sandbox/README.md</code> § <em>Auto-approve flags</em> —
-                    check yours there rather than here.
-                  </td>
-                  <td>
-                    <span class="mount">claude --dangerously-skip-permissions</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <p>
-              A profile with <strong>two</strong> credential mounts (<code>opencode</code>) takes
-              two <code>-v</code> lines; one with <strong>none</strong> (<code>antigravity</code>)
-              takes none at all, and signs in through its own keyring on the host. Filled in for
-              <code>claude</code>, that is:
-            </p>
-            <div class="codeblock">
-              <div class="cap">sh · copy, then swap the three parts for your row</div>
-              <button class="copy" type="button">Copy</button>
-              <pre>
-docker run --rm -it \
-  -v "$PWD:/workspace" \
-  -e MOTIR_TOKEN -e MOTIR_SERVER \
-  -v "$HOME/.claude:/home/node/.claude:ro" \
-  ghcr.io/moooon-b-v/motir-sandbox:claude \
-  motir auto --agent "claude --dangerously-skip-permissions"</pre
-              >
-            </div>
-            <p>
-              Run it from your <strong>workspace root</strong> — the folder holding
-              <code>.motir.json</code>, not a checkout inside it. With no command after the image
-              name you get an interactive shell in <code>/workspace</code> instead.
-            </p>
-
-            <h3>What each part is for</h3>
-            <table class="spec">
-              <thead>
-                <tr>
-                  <th style="width: 30%">Mount / variable</th>
-                  <th>Why</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td><span class="nm">$PWD:/workspace</span></td>
-                  <td>
-                    <strong>Required, writable.</strong> Your <code>.motir.json</code> tree — the
-                    only host path the agent can change.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">MOTIR_TOKEN · MOTIR_SERVER</span></td>
-                  <td>
-                    The Motir credential, from the environment. Needs no host state at all, so it is
-                    the CI and fresh-machine path.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">~/.config/motir:…:ro</span></td>
-                  <td>
-                    <strong>Optional</strong>, read-only. A credential you already have on this host
-                    — an alternative to the two variables above, not a requirement.
-                  </td>
-                </tr>
-                <tr>
-                  <td><span class="nm">~/.claude:…:ro</span></td>
-                  <td>
-                    Read-only. The <em>agent's</em> own credential — the row you picked above.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <h2>Three ways to give it a Motir credential</h2>
-            <p>
-              The container needs a token for your Motir server, and has the same three tiers the
-              CLI has anywhere else. <strong>1 · Pass them through</strong> with
-              <code>-e MOTIR_TOKEN -e MOTIR_SERVER</code> — nothing mounted, nothing written to
-              disk. <strong>2 · Run <code>motir login</code> inside the container</strong> — a
-              device grant you approve in a browser on any device.
-              <strong>3 · Mount a credential you already have</strong>, read-only.
-            </p>
-            <div class="callout">
-              <span aria-hidden="true">◆</span>
-              <span
-                ><code>motir login</code> needs the credential mount to be <strong>absent</strong> —
-                with a read-only bind over it, <code>~/.config/motir</code> is not writable and the
-                login has nowhere to land.</span
-              >
-            </div>
-
-            <h2>Or set it up in VS Code</h2>
-            <p>
-              The same confined image, as a dev container: VS Code opens
-              <code>/workspace</code> inside it with the same mounts, so your editor, terminal and
-              agent all run behind the same boundary. Three steps.
-            </p>
-            <div class="callout">
-              <span aria-hidden="true">◆</span>
-              <span
-                >It is the SAME image, so
-                <strong>everything in <em>Before you start</em> still applies</strong> — Docker
-                running, a Motir credential, your agent's sign-in already on the host, and a linked
-                workspace root. The dev container adds exactly one thing to that list: the extension
-                in step 1.</span
-              >
-            </div>
-
-            <h3>1 · Install the Dev Containers extension</h3>
-            <p>
-              From the Extensions view, or the command palette's
-              <strong>Extensions: Install Extensions</strong>. It is what starts the container on
-              your behalf — VS Code does not ship it, and it drives the same Docker engine the
-              command above uses.
-            </p>
-
-            <h3>2 · Add <code>.devcontainer/devcontainer.json</code> to your workspace root</h3>
-            <p>
-              Beside your <code>.motir.json</code>. Pin the published image and the mounts your
-              profile needs — this is the same set the <code>docker run</code> above passes:
-            </p>
-            <div class="codeblock">
-              <div class="cap">.devcontainer/devcontainer.json</div>
-              <button class="copy" type="button">Copy</button>
-              <pre>
-{
-  "name": "Motir sandbox (Claude Code)",
-  "image": "ghcr.io/moooon-b-v/motir-sandbox:claude",
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "mounts": [
-    "source=${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
-  ],
-  "remoteUser": "node",
-  "overrideCommand": true,
-  "postAttachCommand": "motir doctor",
-  "remoteEnv": {
-    "MOTIR_TOKEN": "${localEnv:MOTIR_TOKEN}",
-    "MOTIR_SERVER": "${localEnv:MOTIR_SERVER}"
-  }
-}</pre
-              >
-            </div>
-            <p>
-              Swap <code>:claude</code> and the <code>mounts</code> entry for your profile's row in
-              the matrix above. <code>remoteEnv</code> forwards your Motir credential from the local
-              environment, so a machine that never ran a host login still resolves one.
-            </p>
-
-            <h3>3 · Reopen in Container</h3>
-            <p>
-              Command palette → <strong>Dev Containers: Reopen in Container</strong>. VS Code pulls
-              the image, attaches, and <code>postAttachCommand</code> runs
-              <code>motir doctor</code> so a missing credential shows up in the terminal on the way
-              in, rather than mid-run.
-            </p>
-            <div class="callout callout--warn">
-              <span aria-hidden="true">▲</span>
-              <span
-                >The <code>devcontainer.json</code> files committed under
-                <code>packages/cli/sandbox/devcontainer/</code> are <strong>not</strong> this file.
-                They carry a <code>build</code> block pointing at the repository's own
-                <code>Dockerfile</code>, because they are <em>motir-core's</em> dev containers and a
-                checkout is what those are for. For your own workspace, pin the image as
-                above.</span
-              >
-            </div>
-            <div class="callout">
-              <span aria-hidden="true">◆</span>
-              <span
-                >This page is the first ten minutes. Digests to pin, the confinement proof, the
-                validation harness and the escape hatch for an unlisted agent live in
-                <code>packages/cli/sandbox/README.md</code>.</span
-              >
-            </div>
-          </div>
-
-          <aside class="docs-aside toc">
-            <h4>On this page</h4>
-            <a class="is-active" href="#">Before you start</a>
-            <a href="#">What it confines</a>
-            <a href="#">Choosing a profile</a>
-            <a href="#">Run it</a>
-            <a href="#">Credential tiers</a>
-            <a href="#">Set it up in VS Code</a>
-          </aside>
-        </div>
-      </div>
-    </div>
-
-    <!-- ════════ PANEL 11 — the profile matrix at 390 px ════════ -->
-    <div class="panel-label">
-      Panel 11 · The profile matrix at 390 px — the case a table cannot survive
-      <span class="note">
-        Four columns of paths and package names cannot shrink to a phone, and hiding columns hides
-        exactly the fact a reader is choosing on. So below the docs breakpoint the SAME data renders
-        as one card per profile with labelled rows — every fact still visible, nothing scrolling
-        sideways. Drawn against the real values: <code>cursor</code>'s mount is the longest string
-        in the set and <code>antigravity</code>'s is empty, which are the two cells that break a
-        naive layout. Four of the eight are shown; the rest repeat.
-      </span>
-    </div>
-    <div class="panel">
-      <div class="phone">
-        <header class="site-top" style="padding: 10px 16px">
-          <span class="brand"
-            ><span
-              class="tile"
-              style="width: 24px; height: 24px; font-size: 12px"
-              aria-hidden="true"
-              >M</span
-            ><span class="name" style="font-size: 14px">Motir</span></span
-          >
-          <a class="btn btn-sm btn-primary" href="/sign-up">Start free</a>
-        </header>
-        <div class="docs-main doc">
-          <button
-            class="btn btn-sm btn-secondary"
-            type="button"
-            style="width: 100%; justify-content: space-between; margin-bottom: 16px"
-          >
-            <span>Agent sandbox</span><span aria-hidden="true">▾</span>
-          </button>
-
-          <h2 style="margin-top: 0">Choosing a profile</h2>
-          <div class="codeblock" style="margin-bottom: 14px">
-            <div class="cap">docker run · scrolls here, not the page →</div>
-            <pre>
-docker run --rm -it -v "$PWD:/workspace" -e MOTIR_TOKEN ghcr.io/moooon-b-v/motir-sandbox:claude</pre
-            >
-          </div>
-
-          <div class="pcard">
-            <div class="pcard-head">
-              <span class="nm">claude</span>
-              <span class="pill pill--tier1">Tier 1</span>
-            </div>
-            <dl>
-              <dt>Binary</dt>
-              <dd><code>claude</code></dd>
-              <dt>Installed</dt>
-              <dd>npm <code>@anthropic-ai/claude-code</code></dd>
-              <dt>Mounts</dt>
-              <dd><span class="mount">~/.claude</span></dd>
-            </dl>
-          </div>
-          <div class="pcard">
-            <div class="pcard-head">
-              <span class="nm">codex</span>
-              <span class="pill pill--tier1">Tier 1</span>
-            </div>
-            <dl>
-              <dt>Binary</dt>
-              <dd><code>codex</code></dd>
-              <dt>Installed</dt>
-              <dd>npm <code>@openai/codex</code></dd>
-              <dt>Mounts</dt>
-              <dd><span class="mount">~/.codex</span></dd>
-            </dl>
-          </div>
-          <div class="pcard">
-            <div class="pcard-head">
-              <span class="nm">opencode</span>
-              <span class="pill pill--tier1">Tier 1</span>
-            </div>
-            <dl>
-              <dt>Binary</dt>
-              <dd><code>opencode</code></dd>
-              <dt>Installed</dt>
-              <dd>npm <code>opencode-ai</code></dd>
-              <dt>Mounts</dt>
-              <dd>
-                <span class="mount">~/.config/opencode</span
-                ><span class="mount">~/.local/share/opencode</span>
-              </dd>
-            </dl>
-          </div>
-          <div class="pcard">
-            <div class="pcard-head">
-              <span class="nm">antigravity</span>
-              <span class="pill pill--tier2">Tier 2</span>
-            </div>
-            <dl>
-              <dt>Binary</dt>
-              <dd><code>agy</code></dd>
-              <dt>Installed</dt>
-              <dd>the Antigravity install script</dd>
-              <dt>Mounts</dt>
-              <dd><span class="mount mount--none">— its token lives in the OS keyring</span></dd>
-            </dl>
-          </div>
-          <div class="pcard">
-            <div class="pcard-head">
-              <span class="nm">cursor</span>
-              <span class="pill pill--tier2">Tier 2</span>
-            </div>
-            <dl>
-              <dt>Binary</dt>
-              <dd>
-                <code>agent</code> <span class="ty">(alias <code>cursor-agent</code>)</span>
-              </dd>
-              <dt>Installed</dt>
-              <dd>the Cursor install script</dd>
-              <dt>Mounts</dt>
-              <dd><span class="mount">~/.local/share/cursor-agent</span></dd>
-            </dl>
           </div>
         </div>
       </div>
