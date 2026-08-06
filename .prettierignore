@@ -9,6 +9,11 @@ next-env.d.ts
 # Workspace-package build output (bundled by tsup; not source).
 packages/*/dist/
 
+# The GENERATED v1 client (Subtask 11.5.2). Written byte-for-byte by
+# `pnpm generate:cli-api`; a formatter run here would make the CI freshness
+# guard fail on formatting rather than on staleness.
+packages/cli/src/api/
+
 # Prisma's migration SQL has its own formatting from the CLI; leave it alone.
 prisma/migrations/
 

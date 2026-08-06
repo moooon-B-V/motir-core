@@ -17,6 +17,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
+    "generate:cli-api": "tsx --tsconfig tsconfig.node.json scripts/generate-cli-api.ts",
     "db:seed": "tsx --tsconfig tsconfig.node.json scripts/plan-seed/seed.ts",
     "db:seed:large": "tsx --tsconfig tsconfig.node.json scripts/seed-large.ts",
     "db:seed:collab": "tsx --tsconfig tsconfig.node.json scripts/seed-collab.ts",
@@ -37,7 +38,7 @@
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": [
-      "eslint --fix --max-warnings=0",
+      "eslint --fix --max-warnings=0 --no-warn-ignored",
       "prettier --write"
     ],
     "*.{json,css,md,yml,yaml}": [
@@ -108,6 +109,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/coverage-v8": "^4.1.7",
+    "ajv": "^8.20.0",
     "axe-core": "4.11.4",
     "dotenv": "^17.4.2",
     "eslint": "^9",
@@ -117,6 +119,7 @@
     "husky": "^9.1.7",
     "inngest-cli": "1.27.0",
     "lint-staged": "^17.0.5",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.8.3",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",

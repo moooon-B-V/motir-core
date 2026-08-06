@@ -23,6 +23,11 @@ export default defineConfig({
       // Measure the WHOLE source tree — an ungated file still appears in the
       // report, so a regression in one is visible even where it is not fatal.
       include: ['src/**/*.ts'],
+      // …EXCEPT the generated v1 client (Subtask 11.5.2). It is machine-written
+      // from the server's own schemas and kept correct by the freshness guard +
+      // the round-trip assertions in `test/api-validators.test.ts`, not by line
+      // coverage over generated branches nobody wrote.
+      exclude: ['src/api/**'],
       reporter: ['text', 'text-summary'],
       thresholds: {
         // The client core, the command modules, and the pure decision layers.

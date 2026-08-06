@@ -50,11 +50,11 @@ method `MotirClient` exposes now has an endpoint.
 Two generators over **one** document (`emitOpenApiDocument()`), producing two
 committed artifacts:
 
-| artifact                                       | produced by                                                | what it is                                                                                                                 |
-| ---------------------------------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `packages/cli/src/api/schema.d.ts`             | `openapi-typescript`                                       | the `paths` / `components` type tree; every wire type the client names is an indexed lookup into it                        |
-| `packages/cli/src/api/validators.js` + `.d.ts` | `ajv` (2020-12 dialect) compiled via `ajv/dist/standalone` | one exported validator function per response component, as plain JS                                                        |
-| `packages/cli/src/api/operations.ts`           | the same generator script                                  | the operation table: `operationId → { method, path, scope, responseComponent }`, read off `x-motir-scope` and the registry |
+| artifact                                       | produced by                                                | what it is                                                                                                               |
+| ---------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `packages/cli/src/api/schema.d.ts`             | `openapi-typescript`                                       | the `paths` / `components` type tree; every wire type the client names is an indexed lookup into it                      |
+| `packages/cli/src/api/validators.js` + `.d.ts` | `ajv` (2020-12 dialect) compiled via `ajv/dist/standalone` | one exported validator per OPERATION success body, as plain JS                                                           |
+| `packages/cli/src/api/operations.ts`           | the same generator script                                  | the operation table: `operationId → { method, path, scope, successStatus, responseComponent }`, read off `x-motir-scope` |
 
 **Exact packages** (both **root** `devDependencies`, neither shipped):
 `openapi-typescript` (v7, which targets OpenAPI 3.1 natively) and `ajv` (v8,
@@ -107,10 +107,18 @@ The costs, stated rather than glossed:
 
 - **Two build steps and two committed artifacts** where a zod-regenerating
   approach would have one.
-- **`validators.js` is machine-written and unreadable in review** — tens of
-  kilobytes of generated branches. Nobody will ever read that diff, which is
-  exactly why Q2(c)'s regenerate-and-compare guard, not human review, is what
-  makes it trustworthy.
+- **`validators.js` is machine-written, unreadable in review, and BIG** — 1.7 MB
+  as generated (measured, 38 operations over 24 components), beside a 437 KB
+  `schema.d.ts`. Nobody will ever read that diff, which is exactly why Q2(c)'s
+  regenerate-and-compare guard, not human review, is what makes it trustworthy.
+  Two decisions in the generator hold the number down and are worth keeping:
+  `allErrors: false` (Ajv's default — the CLI names ONE field, and `allErrors`
+  roughly triples the source), and exporting a validator per OPERATION only,
+  with the components reachable through `$ref` rather than compiled a second
+  time. `tsup` tree-shakes what the transport does not import, but the shipped
+  bundle will still grow by several hundred KB; dropping
+  `@modelcontextprotocol/sdk` in 11.5.6 is what pays for it, and 11.5.10 should
+  state the net change in the changelog rather than let it pass unremarked.
 - **Types and validators can in principle disagree** (two generators, one
   document). They cannot drift _from the server_, which is the drift that
   matters, but a bug in either generator is invisible until a payload hits it.
@@ -365,19 +373,19 @@ message and the exact hint. Three new classes join `CliError` / `AuthError` /
 own fields; `{requestId}` is the `x-request-id` header, present on **every** v1
 response including errors.
 
-| status / condition           | envelope `code`      | class                               | message                                                                             | hint                                                                        |
-| ---------------------------- | -------------------- | ----------------------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **401**                      | `UNAUTHENTICATED`    | `AuthError` _(existing, unchanged)_ | `Token invalid or expired.`                                                         | ``Run `motir auth login` to authenticate.``                                 |
-| **403**                      | `INSUFFICIENT_SCOPE` | `ScopeError` _(new)_                | `This token lacks the '{scope}' scope required for {operationId}.`                  | `Create a token with the '{scope}' scope: Settings → Account → API tokens.` |
-| **404**, v1 envelope present | any                  | `NotFoundError` _(new)_             | `{error}` — the server's own sentence                                               | ``Check the identifier, or run `motir ready` to list what you can reach.``  |
-| **404**, envelope ABSENT     | —                    | _(skew probe, Q3)_                  | see Q3                                                                              | see Q3                                                                      |
-| **402 · 409 · 412 · 422**    | any                  | `CliError`                          | `{error}` — the server's own sentence                                               | _(none — the server's sentence is the actionable one)_                      |
-| **429**                      | `RATE_LIMITED`       | `RateLimitError` _(new)_            | `Rate limit exceeded. The budget refills at {resetAt as local time}.`               | `Retry in {resetAt − now} seconds.`                                         |
-| **5xx**                      | —                    | `CliError`                          | `The Motir server failed ({status}). Request id: {requestId}.`                      | `If it persists, quote the request id when reporting it.`                   |
-| **network / DNS / TLS**      | —                    | `CliError`                          | `Could not reach {server}: {cause}.`                                                | ``Check the server URL and run `motir doctor`.``                            |
-| **2xx, validator rejected**  | —                    | `ResponseShapeError` _(new)_        | `Unexpected response from {server} for {operationId}: {instancePath} {ajvMessage}.` | ``Your CLI and this server may be out of step — run `motir doctor`.``       |
-| **skew, major**              | —                    | `IncompatibleServerError` _(new)_   | see Q3                                                                              | see Q3                                                                      |
-| **skew, minor behind**       | —                    | `IncompatibleServerError` _(new)_   | see Q3                                                                              | see Q3                                                                      |
+| status / condition           | envelope `code`      | class                               | message                                                                      | hint                                                                        |
+| ---------------------------- | -------------------- | ----------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| **401**                      | `UNAUTHENTICATED`    | `AuthError` _(existing, unchanged)_ | `Token invalid or expired.`                                                  | ``Run `motir auth login` to authenticate.``                                 |
+| **403**                      | `INSUFFICIENT_SCOPE` | `ScopeError` _(new)_                | `This token lacks the '{scope}' scope required for {operationId}.`           | `Create a token with the '{scope}' scope: Settings → Account → API tokens.` |
+| **404**, v1 envelope present | any                  | `NotFoundError` _(new)_             | `{error}` — the server's own sentence                                        | ``Check the identifier, or run `motir ready` to list what you can reach.``  |
+| **404**, envelope ABSENT     | —                    | _(skew probe, Q3)_                  | see Q3                                                                       | see Q3                                                                      |
+| **402 · 409 · 412 · 422**    | any                  | `CliError`                          | `{error}` — the server's own sentence                                        | _(none — the server's sentence is the actionable one)_                      |
+| **429**                      | `RATE_LIMITED`       | `RateLimitError` _(new)_            | `Rate limit exceeded. The budget refills at {resetAt as local time}.`        | `Retry in {resetAt − now} seconds.`                                         |
+| **5xx**                      | —                    | `CliError`                          | `The Motir server failed ({status}). Request id: {requestId}.`               | `If it persists, quote the request id when reporting it.`                   |
+| **network / DNS / TLS**      | —                    | `CliError`                          | `Could not reach {server}: {cause}.`                                         | ``Check the server URL and run `motir doctor`.``                            |
+| **2xx, validator rejected**  | —                    | `ResponseShapeError` _(new)_        | `Unexpected response from {server} for {operationId}: {field} {ajvMessage}.` | ``Your CLI and this server may be out of step — run `motir doctor`.``       |
+| **skew, major**              | —                    | `IncompatibleServerError` _(new)_   | see Q3                                                                       | see Q3                                                                      |
+| **skew, minor behind**       | —                    | `IncompatibleServerError` _(new)_   | see Q3                                                                       | see Q3                                                                      |
 
 Five things this table decides, each of which five cards would otherwise decide
 differently:
@@ -400,6 +408,19 @@ differently:
    `isUnauthorized` is deleted with the MCP transport.
 5. **`{requestId}` appears on the 5xx line only.** It is on every response, but
    it is actionable exactly when the failure is ours and opaque.
+6. **`{field}` is NOT just `instancePath`** — verified against the real
+   generated validators in 11.5.2, and the distinction is the whole criterion:
+   - a wrong VALUE (`priority: 'urgent'`) reports `instancePath: '/priority'`;
+   - a MISSING field reports the PARENT's path (`''`) with the name in
+     `params.missingProperty`;
+   - an UNEXPECTED field reports the parent's path with `params.additionalProperty`.
+
+   A message built from `instancePath` alone therefore says
+   _"` ` must have required property"_ for the case that matters most — a
+   renamed server field, which is precisely the blank-cell failure this
+   migration exists to end. So `{field}` is
+   `instancePath + (params.missingProperty ?? params.additionalProperty ?? '')`,
+   joined with `/`, and 11.5.3 asserts all three shapes.
 
 ### Rejected alternatives
 
