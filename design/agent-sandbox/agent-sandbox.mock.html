@@ -1254,8 +1254,18 @@
 
             <h2>3 · Run it</h2>
             <p>
-              One command, shaped by the row you picked in step 1. Three of its parts come from that
-              row; everything else is the same for every profile:
+              The command has two halves, and conflating them is the commonest way to misunderstand
+              this page. <strong><code>docker run …</code> is the PLACE</strong> — the confined
+              container. <strong><code>motir auto</code> is the WORK</strong> — Motir's unattended
+              loop, which claims one ready item at a time, hands each to your agent on a session
+              branch, and keeps going without you. The CLI never starts a container for you: you
+              start the container, and run the loop inside it. Run <code>motir auto</code> on your
+              host instead and it behaves identically — just without the confinement, which is the
+              thing this page is for.
+            </p>
+            <p>
+              So: one command, shaped by the row you picked in step 1. Three of its parts come from
+              that row; everything else is the same for every profile:
             </p>
             <div class="codeblock">
               <div class="cap">sh · the shape</div>
@@ -1320,8 +1330,10 @@ docker run --rm -it \
               >
             </div>
             <p>
-              With no command after the image name you get an interactive shell in
-              <code>/workspace</code> instead.
+              <code>motir auto</code> is not the only thing you can run in there. Leave the command
+              off entirely and you get an interactive shell in <code>/workspace</code>, where
+              <code>motir next</code>, <code>motir run &lt;key&gt;</code> and everything else behave
+              as they do on your host — the container is a place, not a mode.
             </p>
             <div class="callout">
               <span aria-hidden="true">◆</span>

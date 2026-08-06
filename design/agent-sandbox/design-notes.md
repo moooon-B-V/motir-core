@@ -214,6 +214,25 @@ command that fails in the terminal; that asymmetry is the design, not a detail.
 Two notes carry what the placeholders flatten: a profile with two mounts takes two
 `-v` lines, one with none takes none.
 
+**⚠️ Step 3 must say what the two HALVES of the command are.** A reader asked
+_"why do we have `motir auto` in the docker command? I thought `motir auto` is to
+run a task in the sandbox"_ — an inversion the page caused by using the name
+without defining it, the same defect as `tier` and `.motir.json`. Checked:
+`program.ts` registers `auto` as _"Drain the ready set unattended: one item at a
+time onto a session branch"_, the CLI has **no** sandbox or docker command
+(`login logout auth link ready status sprints sprint show doctor open next run
+auto batch plan done`), and nothing under `packages/cli/src/` spawns a container.
+So `motir auto` never starts a sandbox; it is the loop that runs INSIDE one.
+
+The step-3 lede now says so before the command: **`docker run …` is the PLACE**
+(the confined container), **`motir auto` is the WORK** (the unattended loop —
+claims one ready item at a time, hands each to the agent on a session branch,
+keeps going). And the closing line makes the container's nature explicit —
+leave the command off and you get a shell where `motir next` and
+`motir run <key>` behave as they do on the host, because **the container is a
+place, not a mode**. That sentence is what stops the next reader forming the
+same inversion.
+
 **⚠️ The command does NOT pass `MOTIR_SERVER`, and that is a correction.** An
 earlier drawing carried `-e MOTIR_TOKEN -e MOTIR_SERVER` in every block, which
 made a reader ask what the second one was for — the right question.
