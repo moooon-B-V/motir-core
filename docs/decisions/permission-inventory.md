@@ -38,8 +38,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **14** are
-enforced by a gate today; **17** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **16** are
+enforced by a gate today; **15** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -51,7 +51,8 @@ A `planned` key is never offered in the grid or the role editor.
 > are read on this branch, not as of the day the document was written — `tests/permissions/catalog.test.ts`
 > pins them against the code, so a key that flips without a gate behind it (or a gate that lands
 > without the catalog being told) fails the build rather than drifting here. Wired so far:
-> **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300).
+> **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300) ·
+> **`repository:manage` · `repository:manage_access`** (MOTIR-2299).
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -77,7 +78,7 @@ A `planned` key is never offered in the grid or the role editor.
 | `project` (2)        | `project:administer` · `project:browse`                                           |
 | `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`      |
 | `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                         |
-| `repository` (2)     | `repository:manage` ᵖ · `repository:manage_access` ᵖ                              |
+| `repository` (2)     | `repository:manage` · `repository:manage_access`                                  |
 | `sprint` (1)         | `sprint:manage` ᵖ                                                                 |
 | `watcher` (1)        | `watcher:manage`                                                                  |
 | `work_item` (4)      | `project:browse` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
@@ -468,22 +469,24 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `repository`
 
-| Operation                                           | Verbs        | Gate today                                                                                               | Permission                 | Decision         | Why |
-| --------------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------- | --- |
-| `/api/github/oauth/callback`                        | GET          | session only — binds the installation to a WORKSPACE; redirects to `/settings/workspace/github`          | —                          | workspace-scoped | R3  |
-| `/api/github/oauth/start`                           | GET          | session only — no project; redirects to `/settings/workspace/github`                                     | —                          | workspace-scoped | R3  |
-| `/api/github/organizations`                         | GET          | workspace only — `getWorkspaceContext()`; no project resolved                                            | —                          | workspace-scoped | R3  |
-| `/api/github/setup`                                 | GET          | session only — binds the installation to a WORKSPACE                                                     | —                          | workspace-scoped | R3  |
-| `/api/gitlab/oauth/callback`                        | GET          | session only — no project resolved                                                                       | —                          | workspace-scoped | R3  |
-| `/api/gitlab/oauth/start`                           | GET          | workspace only — the file header: "WORKSPACE-scoped, so we resolve the acting member’s active workspace" | —                          | workspace-scoped | R3  |
-| `/api/projects/[key]/repositories`                  | GET/POST     | workspace only                                                                                           | `repository:manage`        | new              | R21 |
-| `/api/projects/[key]/repositories/[rowId]`          | DELETE/PATCH | `assertCanEdit`                                                                                          | `repository:manage`        | new              | R21 |
-| `/api/projects/[key]/repositories/[rowId]/move`     | POST         | workspace only                                                                                           | `repository:manage`        | new              | R21 |
-| `/api/projects/[key]/repositories/[rowId]/state`    | POST         | `projectRepoSetService.attachRealizedRepo` (transitive)                                                  | `repository:manage`        | new              | R21 |
-| `/api/projects/[key]/repositories/[rowId]/takeover` | POST         | workspace only                                                                                           | `repository:manage`        | new              | R21 |
-| `/api/projects/[key]/repositories/access`           | GET/POST     | workspace only                                                                                           | `repository:manage_access` | new              | R22 |
-| `/api/projects/[key]/repositories/access/team`      | GET/POST     | workspace only                                                                                           | `repository:manage_access` | new              | R22 |
-| `/api/projects/[key]/repositories/establish`        | POST         | workspace only                                                                                           | `repository:manage`        | new              | R21 |
+| Operation                                           | Verbs        | Gate today                                                                                                                  | Permission                 | Decision         | Why |
+| --------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------- | --- |
+| `/api/github/oauth/callback`                        | GET          | session only — binds the installation to a WORKSPACE; redirects to `/settings/workspace/github`                             | —                          | workspace-scoped | R3  |
+| `/api/github/oauth/start`                           | GET          | session only — no project; redirects to `/settings/workspace/github`                                                        | —                          | workspace-scoped | R3  |
+| `/api/github/organizations`                         | GET          | workspace only — `getWorkspaceContext()`; no project resolved                                                               | —                          | workspace-scoped | R3  |
+| `/api/github/setup`                                 | GET          | session only — binds the installation to a WORKSPACE                                                                        | —                          | workspace-scoped | R3  |
+| `/api/gitlab/oauth/callback`                        | GET          | session only — no project resolved                                                                                          | —                          | workspace-scoped | R3  |
+| `/api/gitlab/oauth/start`                           | GET          | workspace only — the file header: "WORKSPACE-scoped, so we resolve the acting member’s active workspace"                    | —                          | workspace-scoped | R3  |
+| `/api/projects/[key]/repositories`                  | GET          | `assertCanBrowse` (`inProject('browse')`)                                                                                   | `project:browse`           | existing         | R21 |
+| `/api/projects/[key]/repositories`                  | POST         | `assertPermission(repository:manage)` — was `assertCanEdit`, i.e. any project MEMBER                                        | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]`          | DELETE/PATCH | `assertPermission(repository:manage)` — was `assertCanEdit`                                                                 | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]/move`     | POST         | `assertPermission(repository:manage)` (`inLockedRow`)                                                                       | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]/state`    | POST         | `assertPermission(repository:manage)` — ACTOR-initiated: the route resolves `getWorkspaceContext()`, not serviceAuth        | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]/takeover` | POST         | `assertPermission(repository:manage)` (takeover `inLockedRow`)                                                              | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/access`           | GET/POST     | browse, via `listByProject` — the SELF-connect path (`grantAccess` invites the actor's OWN identity). Stays open: ADR §3 Q3 | `project:browse`           | existing         | R22 |
+| `/api/projects/[key]/repositories/access/team`      | GET          | browse, via `listTeamAccess` → `listByProject` — reads the matrix                                                           | `project:browse`           | existing         | R22 |
+| `/api/projects/[key]/repositories/access/team`      | POST         | `assertPermission(repository:manage_access)` — was `assertCanEdit`; granting ANOTHER member's clone access                  | `repository:manage_access` | existing         | R22 |
+| `/api/projects/[key]/repositories/establish`        | POST         | `assertPermission(repository:manage)` (via the set service's helpers)                                                       | `repository:manage`        | existing         | R21 |
 
 ### `sprint`
 

@@ -272,10 +272,14 @@ export const projectRepoAccessService = {
     ctx: ServiceContext,
     options: { rowId?: string; userId?: string } = {},
   ): Promise<GrantTeamAccessResultDto> {
-    // Inviting people to a repository is a WRITE, so it is edit-gated — the read
-    // below would only assert browse, and "can see the project" must never be
-    // enough to hand out push access to its code.
-    await projectAccessService.assertCanEdit(projectId, ctx);
+    // Inviting OTHER PEOPLE to a repository is `repository:manage_access`
+    // (MOTIR-2299) — its own key, because a lead may decide who can clone the
+    // code without administering the project. It was `assertCanEdit`, i.e. any
+    // project MEMBER, and "can see the project" must never be enough to hand out
+    // push access to its code. `grantAccess` above is the SELF-connect path and
+    // deliberately keeps its browse gate: connecting your OWN identity is the one
+    // action nobody can take on your behalf (project-repository-set ADR §3 Q3).
+    await projectAccessService.assertPermission(projectId, ctx, 'repository:manage_access');
     const rows = await projectRepoSetService.listByProject(projectId, ctx);
     const candidates = await resolveCandidates(projectId, ctx);
 

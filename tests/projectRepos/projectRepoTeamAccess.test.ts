@@ -651,3 +651,67 @@ describe('concurrency', () => {
     );
   });
 });
+
+describe('who may hand out access — `repository:manage_access` vs SELF-connect (MOTIR-2299)', () => {
+  it('a project MEMBER cannot grant a teammate access, and is told which key is missing', async () => {
+    // Granting ANOTHER person's clone access moved from `assertCanEdit` — any
+    // project member — to `repository:manage_access`. "Can see the project" was
+    // never enough to hand out push access to its code.
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx.ownerId, OWNER_LOGIN, '4242');
+    const teammate = await addMember(fx, {
+      email: 'grant-teammate@example.com',
+      projectRole: 'member',
+      login: 'grant-teammate-gh',
+    });
+    const actor = await addMember(fx, {
+      email: 'grant-actor@example.com',
+      projectRole: 'member',
+      login: 'grant-actor-gh',
+    });
+    await establishOneRepo(fx);
+    const actorCtx = { userId: actor, workspaceId: fx.workspaceId };
+
+    await expect(
+      projectRepoAccessService.grantTeamAccess(fx.projectId, actorCtx, { userId: teammate }),
+    ).rejects.toMatchObject({
+      code: 'PERMISSION_DENIED',
+      permission: 'repository:manage_access',
+    });
+  });
+
+  it('the SAME member CAN still connect their own identity — self-connect stays open', async () => {
+    // The boundary the card must not cross (project-repository-set ADR §3 Q3):
+    // connecting your OWN GitHub identity is the one action nobody can take on
+    // your behalf, so `grantAccess` keeps its browse gate. Same actor, same
+    // project, opposite answer — which is what makes this pair the real test.
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx.ownerId, OWNER_LOGIN, '4242');
+    const actor = await addMember(fx, {
+      email: 'self-connect@example.com',
+      projectRole: 'member',
+      login: 'self-connect-gh',
+    });
+    await establishOneRepo(fx);
+    const actorCtx = { userId: actor, workspaceId: fx.workspaceId };
+
+    const result = await projectRepoAccessService.grantAccess(fx.projectId, actorCtx);
+    expect(result.login).toBe('self-connect-gh');
+  });
+
+  it('a project member still SEES where the code lives — the reads stay browse-gated', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx.ownerId, OWNER_LOGIN, '4242');
+    const actor = await addMember(fx, {
+      email: 'read-set@example.com',
+      projectRole: 'member',
+      login: 'read-set-gh',
+    });
+    await establishOneRepo(fx);
+    const actorCtx = { userId: actor, workspaceId: fx.workspaceId };
+
+    expect((await projectRepoSetService.listByProject(fx.projectId, actorCtx)).length).toBe(1);
+    const matrix = await projectRepoAccessService.listTeamAccess(fx.projectId, actorCtx);
+    expect(matrix.rows.length).toBe(1);
+  });
+});
