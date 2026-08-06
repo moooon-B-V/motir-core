@@ -11,6 +11,7 @@ import { isOrderingAdvisory, isRepoStraddleAdvisory } from '@/lib/dto/workItems'
 import type { WorkItemProseAdvisoryDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import {
   attachCommentCounts,
   commentCountMarker,
@@ -122,7 +123,7 @@ export async function runClaimNextReady(
         'one), or check there is unblocked work to start.',
       // `advisories` is present on BOTH arms so the caller reads one shape and
       // never has to branch on "did I get an item?" before reading it.
-      { item: null, reason: 'none_ready', advisories: [] },
+      unmigrated('claim_next_ready', { item: null, reason: 'none_ready', advisories: [] }),
     );
   }
   // The DISCUSSION signal on the claimed payload (MOTIR-2001) — the same field
@@ -157,14 +158,17 @@ export async function runClaimNextReady(
     ),
   ]);
   const claimed = attachCommentCounts([item], counts)[0]!;
-  return toolOk(summarize(item, claimed.commentCount, advisories), {
-    item: claimed as unknown as Record<string, unknown>,
-    // Additive and ALWAYS present — `[]` when the card names nothing, so a
-    // caller reads one shape. It rides beside `item` rather than on it: it is a
-    // fact about the card's PLAN GRAPH, not a column of the dispatch payload,
-    // and `next_ready` returns the same `item` shape without it.
-    advisories,
-  });
+  return toolOk(
+    summarize(item, claimed.commentCount, advisories),
+    unmigrated('claim_next_ready', {
+      item: claimed as unknown as Record<string, unknown>,
+      // Additive and ALWAYS present — `[]` when the card names nothing, so a
+      // caller reads one shape. It rides beside `item` rather than on it: it is a
+      // fact about the card's PLAN GRAPH, not a column of the dispatch payload,
+      // and `next_ready` returns the same `item` shape without it.
+      advisories,
+    }),
+  );
 }
 
 export function registerClaimNextReady(

@@ -6,6 +6,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDeletePreviewDto, WorkItemKindDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `delete_work_item` (Story 2.8 · Subtask 2.8.5) — the PERMANENT, irreversible
@@ -95,7 +96,7 @@ export async function runDeleteWorkItem(
     return toolOk(
       `Permanently deleted ${item.identifier} — ${item.title}${cascade}. This is irreversible ` +
         `(unlike archive_work_item, which is recoverable).`,
-      result as unknown as Record<string, unknown>,
+      unmigrated('delete_work_item', result as unknown as Record<string, unknown>),
     );
   } catch (err) {
     return toToolError(err);

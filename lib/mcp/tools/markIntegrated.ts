@@ -6,6 +6,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import {
   buildImplementationProvenance,
   implementationProvenanceFields,
@@ -58,7 +59,7 @@ export async function runMarkIntegrated(
     );
     return toolOk(
       `${dto.identifier}: integrated on "${dto.sessionBranch}" (status ${dto.status})`,
-      dto as unknown as Record<string, unknown>,
+      unmigrated('mark_integrated', dto as unknown as Record<string, unknown>),
     );
   } catch (err) {
     return toToolError(err);

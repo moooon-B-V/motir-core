@@ -6,6 +6,7 @@ import type { UpdateSprintInput } from '@/lib/dto/sprints';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { sprintIdField, summarizeSprint } from './sprintRef';
 
 // `update_sprint` (Story 7.8 · Subtask 7.8.10) — the "sprint settings" tool:
@@ -59,7 +60,10 @@ export async function runUpdateSprint(
       endDate: args.endDate,
     };
     const dto = await sprintsService.updateSprint(args.sprintId, patch, ctx);
-    return toolOk(`Updated ${summarizeSprint(dto)}`, dto as unknown as Record<string, unknown>);
+    return toolOk(
+      `Updated ${summarizeSprint(dto)}`,
+      unmigrated('update_sprint', dto as unknown as Record<string, unknown>),
+    );
   } catch (err) {
     return toToolError(err);
   }

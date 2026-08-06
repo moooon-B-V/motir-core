@@ -7,6 +7,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto, WorkItemKindDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `change_kind` (Story 7.8 · Subtask 7.8 MOTIR-1020) — RECLASSIFY a work item:
@@ -72,7 +73,10 @@ export async function runChangeKind(
       { kind: args.kind as WorkItemKindDto },
       ctx,
     );
-    return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);
+    return toolOk(
+      summarize(dto),
+      unmigrated('change_kind', dto as unknown as Record<string, unknown>),
+    );
   } catch (err) {
     return toToolError(err);
   }

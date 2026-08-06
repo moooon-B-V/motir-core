@@ -17,6 +17,7 @@ import {
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import type { McpContextResolver } from '../context';
 import { toFilterDecodeToolError, toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { decodeSearchCursor, encodeSearchCursor } from '../searchCursor';
 import { edgeMarker, EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import {
@@ -233,14 +234,17 @@ export async function runSearchWorkItems(
       : `${items.length} of ${result.total} matching work item${result.total === 1 ? '' : 's'}:`;
   const body = items.map((item) => line(item, edges[item.id], commentCounts[item.id])).join('\n');
   const footer = nextCursor ? `\n\nMore available — pass cursor: ${nextCursor}` : '';
-  return toolOk(`${header}${body ? '\n' + body : ''}${footer}`, {
-    items: attachCommentCounts(
-      items.map((item) => ({ ...item, dependencies: edges[item.id] })),
-      commentCounts,
-    ),
-    total: result.total,
-    nextCursor,
-  });
+  return toolOk(
+    `${header}${body ? '\n' + body : ''}${footer}`,
+    unmigrated('search_work_items', {
+      items: attachCommentCounts(
+        items.map((item) => ({ ...item, dependencies: edges[item.id] })),
+        commentCounts,
+      ),
+      total: result.total,
+      nextCursor,
+    }),
+  );
 }
 
 export function registerSearchWorkItems(

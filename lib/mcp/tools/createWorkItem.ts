@@ -14,6 +14,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { normalizeIdentifier } from './workItemRef';
 
 // `create_work_item` (Story 7.8 · Subtask 7.8.5) — create a work item (epic /
@@ -228,7 +229,10 @@ export async function runCreateWorkItem(
       },
     };
     const dto = await workItemsService.createWorkItem(input, ctx);
-    return toolOk(summarize(dto), dto as unknown as Record<string, unknown>);
+    return toolOk(
+      summarize(dto),
+      unmigrated('create_work_item', dto as unknown as Record<string, unknown>),
+    );
   } catch (err) {
     return toToolError(err);
   }

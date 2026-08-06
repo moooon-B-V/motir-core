@@ -62,6 +62,7 @@ import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import type { FilterDecodeResult } from '@/lib/filters/ast';
 import { McpMissingContextError } from './context';
 import { InvalidSearchCursorError } from './searchCursor';
+import type { McpPayload } from './payloads/brand';
 
 // Tool-result helpers (Story 7.8 · Subtask 7.8.4, extended by 7.8.5) — the MCP
 // analogue of the route layer's typed-error → HTTP-status mapping.
@@ -116,8 +117,22 @@ import { InvalidSearchCursorError } from './searchCursor';
 // at the tool BEFORE `toToolError` so it can enrich the message with the legal
 // targets; the entry here is the plain-message fallback.
 
-/** Build a dual-content (text + structuredContent) successful tool result. */
-export function toolOk(text: string, structuredContent: Record<string, unknown>): CallToolResult {
+/**
+ * Build a dual-content (text + structuredContent) successful tool result.
+ *
+ * ⚠️ `structuredContent` is an {@link McpPayload} (MOTIR-2228 · ADR Amendment 7
+ * Q4), not a bare object: the ONLY ways to make one are `derived` (from a
+ * declared shared schema), `exempt` (a tool with no v1 resource, reason
+ * recorded) and `unmigrated` (staged for a family card, deleted by MOTIR-2231).
+ * A tool in none of those three cannot call this function — which is what makes
+ * "every tool's payload derives from a schema" a compile error rather than a
+ * review habit, the same way `TOOL_SCOPES` makes an ungated tool one.
+ *
+ * This constrains the DATA SHAPE only. The `text` block below, the tool's name,
+ * its `tools/list` description, its arguments and its scope stay MCP's own and
+ * SHOULD churn freely.
+ */
+export function toolOk(text: string, structuredContent: McpPayload): CallToolResult {
   return {
     content: [{ type: 'text', text }],
     structuredContent,

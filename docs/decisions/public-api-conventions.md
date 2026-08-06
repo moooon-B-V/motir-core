@@ -2033,3 +2033,54 @@ behaviour change into a visible act. So the rule is:
 - **No `/api/v1` shape changes.** If the alignment shows a v1 schema is wrong, that is
   a card against the owning story (Amendment 5 §3's standing procedure), never a
   widening made at the MCP end to make both sides fit.
+
+##### Q6 addendum (same card) — the `key` COLLISION, found while building 11.6.2
+
+Q6's additive rule has exactly one case it cannot cover, and it is on the most
+important resource. **`key` already means two different things, and one of them is
+inside the MCP surface itself:**
+
+| Surface / row                                                              | `key` is…                     |
+| -------------------------------------------------------------------------- | ----------------------------- |
+| `/api/v1` — every resource (`workItemKeySchema`, `/^[A-Z][A-Z0-9]*-\d+$/`) | the `PROD-<n>` **identifier** |
+| MCP `list_ready` / `next_ready` rows (`ReadyItemDto.key`)                  | the `PROD-<n>` **identifier** |
+| MCP `search_work_items` rows (`WorkItemListItemDto.key`)                   | the **numeric** key           |
+| MCP `get_work_item` children (`WorkItemSummaryDto.key`)                    | the **numeric** key           |
+
+Observed live, not inferred: a `get_work_item` call on `MOTIR-1856` returns children
+as `{"key":2227,"identifier":"MOTIR-2227", …}`.
+
+**This is the founding defect's twin, and nobody had found it.** `list_ready` and
+`search_work_items` were made to agree about `dependencies` (MOTIR-1842) and left
+disagreeing about what `key` MEANS — the same two tools, the same kind of silent
+divergence, discovered here only because something finally compared them.
+
+**There is no additive fix.** You cannot add `key: "MOTIR-2227"` to a row that
+already has `key: 2227`. So Q6's "additive only" rule has to yield here, and the
+choice is which way.
+
+**Decision: on the MCP surface, `key` becomes the `PROD-<n>` identifier
+everywhere, and the numeric key is preserved as `numericKey`.**
+
+- It makes `key` mean ONE thing across both surfaces and, for the first time,
+  across MCP's own tools — which is the story's entire purpose, applied to the
+  field the story is addressed by.
+- It aligns the work-item rows with MCP's OWN ready rows, which already say
+  identifier. The inconsistent tools are the minority.
+- Nothing is lost: the numeric key stays, renamed to what it is.
+- **Blast radius, by grep rather than assumption:** `@motir/cli` never reads a
+  numeric key (`grep -rn "key: number" packages/cli/src/` → no matches; its
+  renderers read `identifier`). The only consumer is `tests/mcp/search.test.ts`,
+  which casts `items: { key: number }[]` at three sites and compares the MCP page
+  to the internal URL route's page.
+
+**This is the one payload change in Story 11.6 that is not additive**, it is named
+here, and the test edit it forces is named on the cards (MOTIR-2228, MOTIR-2229) so
+it cannot be mistaken for the sloppiness those cards froze their suites against.
+A planning bug records why the criterion could not hold as written.
+
+| Rejected                                                       | Why                                                                                                                                                                      |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Keep `key` numeric on MCP; probe a narrowing that omits it** | Removes the identifying field from the guard on the resource the story exists for, and leaves `key` meaning two things inside one surface — the exact defect, preserved. |
+| **Rename the REST field instead**                              | `/api/v1` is published and §8 is additive-only. The stable surface is the one that must not move; that is the whole asymmetry this epic is built on.                     |
+| **Add `identifierKey` to MCP and probe that**                  | Invents a third name for a thing that already has two, and leaves `key` ambiguous forever. The guard would pass while the confusion it exists to remove got worse.       |

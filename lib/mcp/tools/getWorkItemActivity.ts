@@ -14,6 +14,7 @@ import type { CommentDTO, CommentThreadDTO, CommentsPageDTO } from '@/lib/dto/co
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { resolveWorkItemByKey, workItemKeyField } from './workItemRef';
 
 // `get_work_item_activity` (MOTIR-1999) — read a work item's COMMENTS and its
@@ -251,7 +252,7 @@ export async function runGetWorkItemActivity(
   const page = await readPage(view, item.id, { cursor: args.cursor, order: args.order }, ctx);
   return toolOk(
     summarizeActivity(item.identifier, view, page),
-    page as unknown as Record<string, unknown>,
+    unmigrated('get_work_item_activity', page as unknown as Record<string, unknown>),
   );
 }
 

@@ -5,6 +5,7 @@ import { backlogService } from '@/lib/services/backlogService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { resolveWorkItemIdsByKeys } from './workItemRef';
 import { summarizeMovedItems } from './sprintRef';
 
@@ -32,7 +33,10 @@ export async function runMoveToBacklog(
   try {
     const ids = await resolveWorkItemIdsByKeys(args.keys, ctx);
     const moved = await backlogService.bulkMoveToBacklog(ids, ctx);
-    return toolOk(summarizeMovedItems(moved, 'the backlog'), { items: moved });
+    return toolOk(
+      summarizeMovedItems(moved, 'the backlog'),
+      unmigrated('move_to_backlog', { items: moved }),
+    );
   } catch (err) {
     return toToolError(err);
   }

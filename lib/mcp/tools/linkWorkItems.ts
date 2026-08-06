@@ -12,6 +12,7 @@ import type { RelationshipKind } from '@/lib/dto/workItemLinks';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { resolveWorkItemIdPair, workItemKeyField } from './workItemRef';
 
 // `link_work_items` / `unlink_work_items` (Story 7.8 · Subtask 7.8.13) — the
@@ -80,18 +81,24 @@ export async function runLinkWorkItems(
     const [fromId, toId] = await resolveWorkItemIdPair(args.fromKey, args.toKey, ctx);
     const input = relationshipToLink(args.relationship, fromId, toId);
     const dto = await workItemsService.linkWorkItems(input, ctx);
-    return toolOk(`Linked: ${edgeText(args)} (stored ${input.kind})`, {
-      ...(dto as unknown as Record<string, unknown>),
-      relationship: args.relationship,
-    });
+    return toolOk(
+      `Linked: ${edgeText(args)} (stored ${input.kind})`,
+      unmigrated('link_work_items', {
+        ...(dto as unknown as Record<string, unknown>),
+        relationship: args.relationship,
+      }),
+    );
   } catch (err) {
     // Idempotency (acceptance): re-creating an existing link is a no-op success,
     // not a DUPLICATE_LINK error — the agent can safely retry.
     if (err instanceof DuplicateLinkError) {
-      return toolOk(`Already linked: ${edgeText(args)} (idempotent no-op)`, {
-        idempotent: true,
-        relationship: args.relationship,
-      });
+      return toolOk(
+        `Already linked: ${edgeText(args)} (idempotent no-op)`,
+        unmigrated('link_work_items', {
+          idempotent: true,
+          relationship: args.relationship,
+        }),
+      );
     }
     return toToolError(err);
   }
@@ -110,7 +117,10 @@ export async function runUnlinkWorkItems(
     const text = removed
       ? `Unlinked: ${edgeText(args)} (removed ${input.kind})`
       : `No such link: ${edgeText(args)} (already absent — no-op)`;
-    return toolOk(text, { removed, relationship: args.relationship });
+    return toolOk(
+      text,
+      unmigrated('unlink_work_items', { removed, relationship: args.relationship }),
+    );
   } catch (err) {
     return toToolError(err);
   }

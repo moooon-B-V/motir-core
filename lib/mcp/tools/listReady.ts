@@ -11,6 +11,7 @@ import type { ReadyItemDto } from '@/lib/dto/ready';
 import type { WorkItemDependencyEdgesDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { edgeMarker, EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
 import {
   attachCommentCounts,
@@ -100,13 +101,16 @@ export async function runListReady(
     .map((item) => line(item, edges[item.id], commentCounts[item.id]))
     .join('\n');
   const footer = page.nextCursor ? `\n\nMore available — pass cursor: ${page.nextCursor}` : '';
-  return toolOk(`${header}${body ? '\n' + body : ''}${footer}`, {
-    items: attachCommentCounts(
-      page.items.map((item) => ({ ...item, dependencies: edges[item.id] })),
-      commentCounts,
-    ),
-    nextCursor: page.nextCursor,
-  });
+  return toolOk(
+    `${header}${body ? '\n' + body : ''}${footer}`,
+    unmigrated('list_ready', {
+      items: attachCommentCounts(
+        page.items.map((item) => ({ ...item, dependencies: edges[item.id] })),
+        commentCounts,
+      ),
+      nextCursor: page.nextCursor,
+    }),
+  );
 }
 
 export function registerListReady(server: McpServer, resolveContext: McpContextResolver): void {

@@ -9,6 +9,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `expand_item` + `get_plan_status` (Story 7.9 · MOTIR-1825) — the MCP surface
@@ -122,7 +123,7 @@ export async function runExpandItem(
   const identifier = normalizeIdentifier(args.key);
   const projectCtx = await projectContextFor(identifier, ctx);
   const result = await aiPlanEditsService.submitExpand(identifier, projectCtx);
-  return toolOk(summarizeSubmit(identifier, result), { ...result });
+  return toolOk(summarizeSubmit(identifier, result), unmigrated('expand_item', { ...result }));
 }
 
 /** The adapter: address the plan by whichever id the caller kept, then read it. */
@@ -141,7 +142,10 @@ export async function runGetPlanStatus(
   }
   const ref: PlanOutcomeRef = args.planId ? { planId: args.planId } : { jobId: args.jobId! };
   const outcome = await aiPlanEditsService.getOutcome(ref, ctx);
-  return toolOk(summarizeOutcome(outcome), outcome as unknown as Record<string, unknown>);
+  return toolOk(
+    summarizeOutcome(outcome),
+    unmigrated('get_plan_status', outcome as unknown as Record<string, unknown>),
+  );
 }
 
 export function registerExpandItem(server: McpServer, resolveContext: McpContextResolver): void {

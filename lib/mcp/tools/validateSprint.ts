@@ -6,6 +6,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { SprintValidityDto, ValidityCondition } from '@/lib/dto/sprints';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { exempt } from '../payloads/define';
 import { conditionField, projectKeyField, sprintIdField } from './sprintRef';
 
 // `validate_sprint` (Story 7.8 · Subtask 7.8.15) — is a sprint FINISHABLE? The
@@ -74,7 +75,10 @@ export async function runValidateSprint(
       ctx,
       args.condition,
     );
-    return toolOk(summarize(result), result as unknown as Record<string, unknown>);
+    return toolOk(
+      summarize(result),
+      exempt('validate_sprint', result as unknown as Record<string, unknown>),
+    );
   } catch (err) {
     return toToolError(err);
   }

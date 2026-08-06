@@ -4,6 +4,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 import { sprintIdField } from './sprintRef';
 
 // `delete_sprint` (Story 7.8 · Subtask 7.8.10) — delete a planned or complete
@@ -27,10 +28,13 @@ export async function runDeleteSprint(
 ): Promise<CallToolResult> {
   try {
     await sprintsService.deleteSprint(args.sprintId, ctx);
-    return toolOk(`Deleted sprint ${args.sprintId}. Its issues fell back to the backlog.`, {
-      sprintId: args.sprintId,
-      deleted: true,
-    });
+    return toolOk(
+      `Deleted sprint ${args.sprintId}. Its issues fell back to the backlog.`,
+      unmigrated('delete_sprint', {
+        sprintId: args.sprintId,
+        deleted: true,
+      }),
+    );
   } catch (err) {
     return toToolError(err);
   }

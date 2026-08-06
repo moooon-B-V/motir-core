@@ -161,11 +161,35 @@ The server reports itself as `{ name: "motir", version: "0.1.0" }` in the MCP
 
 **Dual-content convention.** Every successful tool result carries **both** a
 human-readable `text` block (a compact summary a person watching the session can
-read) **and** `structuredContent` — the DTO JSON an agent parses. The DTOs are
-the exact shapes the HTTP routes already ship; the tools deliberately declare no
-`outputSchema`, so `structuredContent` is free-form DTO JSON. On a failure a
+read) **and** `structuredContent` — the JSON an agent parses. On a failure a
 tool returns an `isError` result whose text is `CODE: message` (the service's
 own typed error code + message), so an agent can self-correct.
+
+**Where the shapes come from (Story 11.6).** `structuredContent` is DERIVED from
+the same `zod` resource schemas `/api/v1` responds with, rather than hand-shaped
+per tool — so the two surfaces cannot disagree about what a work item is, and a
+CI guard fails the build if a field is added on one and forgotten on the other.
+See `docs/decisions/public-api-conventions.md` Amendment 7.
+
+**Nothing a caller SEES has moved.** The tools still declare **no**
+`outputSchema`, deliberately and for new reasons: an `outputSchema` is published
+in `tools/list` and validated by the SDK at request time, which would turn a
+shape defect into a runtime error in front of an agent and would make every
+additive change a published-contract change. The derivation is internal; the
+guard is in CI.
+
+**What is frozen and what is free.** Only the DATA SHAPE is shared and guarded —
+it is the half with a second consumer. Tool **names**, `tools/list`
+**descriptions**, **argument** names and **scopes** remain MCP's own and are
+expected to churn: rewording a description is how an agent's behaviour gets
+tuned, and nothing in the guard constrains it.
+
+> ⚠️ **One field changed meaning**, and it is the only non-additive change in
+> Story 11.6. On the work-item rows `key` used to be the NUMERIC key while
+> `/api/v1` — and MCP's own `list_ready` rows — used it for the `PROD-<n>`
+> identifier. `key` is now the **identifier everywhere**, and the numeric key
+> rides beside it as **`numericKey`**, so nothing is lost. Readers of
+> `identifier` are unaffected.
 
 Shared input conventions:
 
@@ -503,7 +527,10 @@ aggregate answers for one card, and the list reads answer per row.
 Each **CHILD** row additionally carries the same
 [`dependencies` block](#the-dependencies-block-list-reads) the list reads attach
 — identical shape, identical guarantees — so the children's build ORDER is
-derivable from this one call:
+derivable from this one call. Since MOTIR-2228 the child rows are the SHARED
+schema's output (v1's `WorkItemChild`) widened with the fields the aggregate has
+always carried, so a child row's `key` is now its `PROD-<n>` identifier and the
+numeric key rides as `numericKey`:
 
 ```jsonc
 "children": [

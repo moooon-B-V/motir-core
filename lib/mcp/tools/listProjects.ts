@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { unmigrated } from '../payloads/define';
 
 // `list_projects` (MOTIR-1879) — the read that lets a client RESOLVE a project
 // instead of demanding its key.
@@ -87,7 +88,7 @@ export async function runListProjects(ctx: ServiceContext): Promise<CallToolResu
       rows.length === 0
         ? 'No projects in this workspace.'
         : rows.map((row) => summarizeProject(row)).join('\n');
-    return toolOk(text, { projects: rows });
+    return toolOk(text, unmigrated('list_projects', { projects: rows }));
   } catch (err) {
     return toToolError(err);
   }
