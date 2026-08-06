@@ -20,20 +20,34 @@ permissions page, as a complete answer.
 
 |                                            |                                               |
 | ------------------------------------------ | --------------------------------------------- |
-| API routes                                 | **251**                                       |
+| API routes                                 | **252**                                       |
 | `'use server'` action files                | **22**                                        |
 | Services in `lib/services`                 | **122**, of which **40** reach a project gate |
 | Routes — workspace membership only         | **89**                                        |
 | Routes — session only                      | **63**                                        |
-| Routes — project-gated                     | **52**                                        |
+| Routes — project-gated                     | **76**                                        |
 | Routes — no context resolved               | **32**                                        |
 | Routes — serviceAuth / internal (no actor) | **15**                                        |
+
+> **Two of these numbers were re-measured on 2026-08-06 (MOTIR-2292).** `/api/ai/coding-convention/audit-coverage`
+> shipped after this document was written, so the route total is **252**, not 251. And the project-gated
+> count was **52** because the walk in `tests/permissions/noUngovernedOperation.test.ts` mistook a
+> parameter's inline object type (`opts: { repoKeys?: string[] } = {}`) for a method body and could not
+> see the `assertCan*` on the next line — 24 gated routes read as ungoverned. The real figure is **76**.
+> Nothing was gated to achieve that: the instrument was wrong, not the product.
 
 ## The resulting catalog
 
 **32 permissions across 16 domains.** **11** are
-enforced by a gate today; **21** are `planned` — justified by a row below, wired by
-MOTIR-2256. A `planned` key is never offered in the grid or the role editor.
+enforced by a gate today; **21** are `planned` — justified by a row below, and wired by **two**
+stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
+(member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
+eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
+`saved_filter:manage`, `import:run`, `work_item:triage`, `work_item:delete`) — those are governed by
+nothing at all today, so wiring them takes capability away from real actors and is argued on its own.
+(`repository:connect` is the twenty-first, and MOTIR-2256 RETIRES it: its six operations bind a
+provider installation to a WORKSPACE and name no project, so no project role can govern them.)
+A `planned` key is never offered in the grid or the role editor.
 
 | Domain               | Permissions                                                                       |
 | -------------------- | --------------------------------------------------------------------------------- |
@@ -170,9 +184,10 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                   | `ai:plan`      | new      | R5  |
 | `/api/ai/chat`                                | POST      | session only                                                   | `ai:plan`      | new      | R5  |
 | `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/audit`             | GET       | — none —                                                       | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/convention`        | GET       | — none —                                                       | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/refresh`           | POST      | `assertCanManage`                                              | `ai:plan`      | new      | R5  |
+| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`             | `ai:plan`      | new      | R5  |
+| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`         | `ai:plan`      | new      | R5  |
+| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`        | `ai:plan`      | new      | R5  |
+| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`              | `ai:plan`      | new      | R5  |
 | `/api/ai/expand`                              | POST      | session only                                                   | `ai:plan`      | new      | R5  |
 | `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`      | new      | R5  |
 | `/api/ai/explanation`                         | POST      | session only                                                   | `ai:plan`      | new      | R5  |
