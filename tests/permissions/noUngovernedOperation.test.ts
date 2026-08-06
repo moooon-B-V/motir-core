@@ -58,6 +58,43 @@ function walk(dir: string, hit: (p: string) => void): void {
   }
 }
 
+/**
+ * The `{ … }` BODY of a method whose signature's opening `(` sits at `afterOpenParen - 1`,
+ * or `null` when the source holds no body after it.
+ *
+ * ⚠️ WALK THE PARAMETER LIST FIRST. Taking the first `{` after the method NAME
+ * looks right and is wrong the moment a parameter carries an inline object
+ * type — `opts: { repoKeys?: string[] } = {}` — because that brace wins. The
+ * "body" then IS the parameter, and a method whose first statement is an
+ * `assertCanManage` reports as UNGOVERNED. That is not hypothetical: adding
+ * exactly that parameter to three `aiConventionService` methods hid 24 gated
+ * operations at once and moved this file's own pinned count (MOTIR-2292). So
+ * advance by PAREN depth to the signature's closing `)`, and only then look
+ * for the body.
+ *
+ * Split out of {@link serviceBodies} so the failure shape can be pinned by a
+ * synthetic control below rather than by whatever `lib/services` happens to
+ * contain today.
+ */
+function methodBody(src: string, afterOpenParen: number): string | null {
+  let parenDepth = 1;
+  let cursor = afterOpenParen;
+  for (; cursor < src.length && parenDepth > 0; cursor++) {
+    if (src[cursor] === '(') parenDepth += 1;
+    else if (src[cursor] === ')') parenDepth -= 1;
+  }
+  if (parenDepth > 0) return null;
+  const open = src.indexOf('{', cursor);
+  if (open < 0) return null;
+  let depth = 0;
+  let j = open;
+  for (; j < src.length; j++) {
+    if (src[j] === '{') depth += 1;
+    else if (src[j] === '}' && --depth === 0) break;
+  }
+  return src.slice(open, j + 1);
+}
+
 /** Every service method body, by `service.method`. */
 function serviceBodies(): Map<string, string> {
   const bodies = new Map<string, string>();
@@ -72,16 +109,11 @@ function serviceBodies(): Map<string, string> {
     while ((m = re.exec(src)) !== null) {
       const name = m[1]!;
       if (['if', 'for', 'while', 'switch', 'catch', 'return'].includes(name)) continue;
-      const open = src.indexOf('{', m.index + m[0].length);
-      if (open < 0) continue;
-      let depth = 0;
-      let j = open;
-      for (; j < src.length; j++) {
-        if (src[j] === '{') depth += 1;
-        else if (src[j] === '}' && --depth === 0) break;
-      }
+      // `m[0]` ends AT the signature's opening `(`, so the walk starts just past it.
+      const body = methodBody(src, m.index + m[0].length);
+      if (body === null) continue;
       const key = `${svc}.${name}`;
-      bodies.set(key, (bodies.get(key) ?? '') + src.slice(open, j + 1));
+      bodies.set(key, (bodies.get(key) ?? '') + body);
     }
   }
   return bodies;
@@ -185,8 +217,23 @@ const PERMANENTLY_UNGATED = new Set([
 
 /**
  * Decisions that justify no gate YET. `new` means the inventory named the
- * permission and MOTIR-2256 has not wired it. This set shrinks to nothing as
- * that story lands, and the count below is what stops it growing meanwhile.
+ * permission and no card has wired the call sites yet. This set shrinks to
+ * nothing as TWO stories land, and the count below is what stops it growing
+ * meanwhile:
+ *
+ *   * **MOTIR-2256** — the twelve ADMINISTRATIVE keys that split out of
+ *     `project:administer` (member, board, workflow, field, estimation,
+ *     repository, ai:configure). Behaviour-neutral for the built-in roles
+ *     wherever the umbrella already stood.
+ *   * **MOTIR-2291** — the eight MEMBER-FACING keys (`ai:plan`, `sprint:manage`,
+ *     `report:view`, `import:run`, `saved_filter:manage`, `ai:view_plan`,
+ *     `work_item:triage`, `work_item:delete`) plus the `CLAIMED_BUT_UNVERIFIED`
+ *     bucket below. Those operations are governed by NOTHING today, so wiring
+ *     them removes capability from real actors — a different kind of change,
+ *     argued on its own rather than inside a refactor that claims to change
+ *     nothing.
+ *
+ * This arm is deleted when the count reaches 0, which takes BOTH.
  */
 const PENDING = new Set(['new']);
 
@@ -203,11 +250,14 @@ const PENDING = new Set(['new']);
  * guard is the verifier, and where the two disagree the disagreement is the
  * finding. It is recorded rather than resolved because resolving it either way
  * without reading each path would be guessing: silently trusting the claim hides
- * a possible hole, and silently failing them would block on 38 investigations
- * this card is not scoped for.
+ * a possible hole, and silently failing them would block on investigations that
+ * card was not scoped for.
  *
- * MOTIR-2256 must confirm each one as it wires that domain. The count is pinned
- * so the bucket can only shrink.
+ * **MOTIR-2291 owns confirming these**, one read each: either the gate is real
+ * and reached by a hop this walk cannot follow (record HOW, and teach the walk
+ * to see it), or it is not — and that is a hole whose fix is a gate. None of
+ * them is administrative, which is why they did not travel with MOTIR-2256.
+ * The count is pinned so the bucket can only shrink.
  */
 const CLAIMED_BUT_UNVERIFIED = new Set(['existing']);
 
@@ -250,23 +300,29 @@ describe('every actor-initiated operation has an ANSWER', () => {
 describe('the PENDING set is bounded and shrinking', () => {
   const ops = operations();
 
-  it('pins how many operations still await MOTIR-2256, so the number cannot creep', () => {
+  it('pins how many operations still await MOTIR-2256 / MOTIR-2291, so the number cannot creep', () => {
     const pending = ops.filter((o) => !o.gated && PENDING.has(decisionFor(o.url) ?? ''));
-    // Adding an ungated route bumps this and fails the test; wiring one in
-    // MOTIR-2256 lowers it and fails it too — both are changes worth noticing.
-    // MOTIR-2256 is done when this reaches 0 and the arm can be deleted.
-    expect(pending.length).toBe(94);
+    // Adding an ungated route bumps this and fails the test; wiring one lowers
+    // it and fails it too — both are changes worth noticing. The arm is deleted
+    // when this reaches 0, which takes BOTH stories (19 administrative, 62 not).
+    //
+    // Was 94, and the 94 was WRONG: the extractor above mistook a parameter's
+    // inline object type for a method body, so 24 gated operations counted as
+    // ungoverned. 95 → 81 is the measurement being corrected, not 14 gates
+    // being added — this PR adds no gate at all (MOTIR-2292).
+    expect(pending.length).toBe(81);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
     const unverified = ops.filter(
       (o) => !o.gated && CLAIMED_BUT_UNVERIFIED.has(decisionFor(o.url) ?? ''),
     );
-    // 38 operations the inventory calls `existing` that this walk cannot confirm.
-    // Each needs a human read in MOTIR-2256: either the gate is reached by a hop
+    // Operations the inventory calls `existing` that this walk cannot confirm.
+    // Each needs a human read in MOTIR-2291: either the gate is reached by a hop
     // the walk cannot follow, or the operation is genuinely ungoverned. Lowering
-    // this number is progress; raising it is a regression.
-    expect(unverified.length).toBe(38);
+    // this number is progress; raising it is a regression. (38 → 33 for the same
+    // extractor fix as above — five of them were never unconfirmed.)
+    expect(unverified.length).toBe(33);
   });
 
   it('every pending operation names the permission that will govern it', () => {
@@ -288,6 +344,43 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     // known-ungoverned service reports false rather than defaulting to true.
     expect(methodIsGated('projectAccessService.__doesNotExist')).toBe(false);
     expect(methodIsGated('dashboardsService.listDashboards')).toBe(false);
+  });
+
+  it('finds a gate that sits after a parameter carrying an INLINE OBJECT TYPE', () => {
+    // The MOTIR-2292 regression, pinned. `methodBody` used to take the first
+    // `{` after the method NAME, so this parameter captured it, the "body"
+    // became `{ repoKeys?: string[] }`, and the assert on the next line was
+    // invisible. The synthetic source keeps the control honest even if every
+    // real service later drops the shape.
+    const src = [
+      'export const svc = {',
+      '  async reaudit(',
+      '    projectId: string,',
+      '    ctx: AccessActorContext,',
+      '    opts: { repoKeys?: string[] } = {},',
+      '  ): Promise<void> {',
+      '    await projectAccessService.assertCanManage(projectId, ctx);',
+      '  },',
+      '};',
+    ].join('\n');
+    const open = src.indexOf('(', src.indexOf('reaudit')) + 1;
+    const body = methodBody(src, open);
+    expect(body, 'the parameter list must be walked before the body is found').not.toBeNull();
+    expect(GATE.test(body!), 'the gate inside the real body must be visible').toBe(true);
+    // …and the same helper still reports NO gate when there genuinely is none,
+    // so the fix is not just "answer true more often".
+    const ungated = src.replace('await projectAccessService.assertCanManage(projectId, ctx);', '');
+    expect(
+      GATE.test(methodBody(ungated, ungated.indexOf('(', ungated.indexOf('reaudit')) + 1)!),
+    ).toBe(false);
+  });
+
+  it('sees the three real service methods the regression hid', () => {
+    // Each takes an `opts: { … } = {}` parameter and asserts on its first line;
+    // all three read as UNGOVERNED before the fix, and with them 24 operations.
+    expect(methodIsGated('aiConventionService.reaudit')).toBe(true);
+    expect(methodIsGated('aiConventionService.getAudit')).toBe(true);
+    expect(methodIsGated('aiConventionService.getConvention')).toBe(true);
   });
 
   it('flags a synthetic ungated operation that has no inventory row', () => {

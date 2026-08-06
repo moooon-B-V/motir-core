@@ -20,6 +20,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Draft explanation with AI**                     | **`draft-with-ai.mock.html`** + `draft-with-ai.png`               | The _Draft with AI_ INTERACTION for `explanationMd`, on BOTH the create modal and the detail page. Drawn against the SHIPPED components (`CreateIssueModal` disclosure + min `MarkdownEditor` + the existing disabled secondary "Draft with AI" button · `IssueExplanation` read-only card · `EditIssueForm`), NOT the legacy pens. Specifies streaming (SSE, 8.8.11), the draft landing in the editor (no accept/discard gate), `ai_draft` / `user_edited` source signalling, the cloud-gate, and the error state. Story 8.8 · 8.8.6 (MOTIR-1090). Gates 8.8.12 (MOTIR-1096). See below.                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | **Work-item provenance on the detail rail**       | **`provenance.mock.html`** + `provenance.png`                     | `detail.pen`/`CoreFieldsPanel` draw no provenance surface — two new READ-ONLY rail `FieldCard`s (Planning · Implementation), each a `source · harness · model` triple + the "—" unknown state. Composes the shipped rail (does not redraw); source = a tinted `Pill`-chip (six values). Story MOTIR-1685 · MOTIR-1688 (design). Gates MOTIR-1693. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Plan / Re-plan entrance (detail + quick-view)** | **`plan-replan-entrance.mock.html`** + `plan-replan-entrance.png` | The contextual Plan / Re-plan entrance on BOTH the work-item detail page AND the quick-view / peek modal, for EVERY kind. COMPOSES the shipped surfaces — detail page (`detail.pen`), quick-view (`quick-view.mock.html`), universal workspace (`planning-workspace.mock.html` / 7.20.1), and `PlanWithAILauncher` (MOTIR-1299). **Plan / Re-plan is a CONVERSATION, not a single message** — the button opens the universal workspace directly; for Re-plan, the reason is captured as the FIRST CHAT TURN inside the workspace's chat rail (no pre-workspace form). Map scoped to item neighborhood, proposed nodes dashed, done work LOCKED. Confirm gate (MOTIR-911) as a bottom bar. Six panels: Plan button on detail · Re-plan button on detail · Plan button on quick-view · Re-plan button on quick-view · scoped workspace with conversation (Plan flow + Re-plan flow + continuing conversation) · states (loading/error/empty). Story 7.12 · MOTIR-1489 (design). Gates MOTIR-910. See below. |
+| **Child panel — List ↔ Graph**                    | **`child-panel-graph.mock.html`** + `child-panel-graph.png`       | The Children section gains a `List` ↔ `Graph` view switcher; Graph mounts the shipped roadmap canvas **rooted at this item**, bounded in a 28rem block. COMPOSES `design/roadmap/` (node cards, edges, legend, ready highlight, breadcrumb, quick-view) — nothing there is redrawn. Five panels light + dark: the door · Graph · drilled · loading / empty-level / graph-unavailable · leaf-renders-nothing. Resolves the height, every canvas opt-in, the crumb root label, and the no-local-preference rule. Story MOTIR-2284 · MOTIR-2285 (design). Gates MOTIR-2287 + MOTIR-2288. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ---
 
@@ -3912,3 +3913,193 @@ The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `plan-replan-entrance.mock.html` (source of truth) · `plan-replan-entrance.png`
 (full-page export). Rendered with Playwright chromium (full-page, light,
 `deviceScaleFactor: 2`, ~960px wide); `prettier --check` clean.
+
+---
+
+## ⭐ Child panel — List ↔ Graph (Story MOTIR-2284 · MOTIR-2285 — `child-panel-graph.mock.html`)
+
+`child-panel-graph.mock.html` adds a **view switcher** to the Children section on
+the work-item detail page — `List` (today's rows, unchanged, still the default)
+and `Graph`, the SAME roadmap canvas `/roadmap` uses, **rooted at THIS item** so it
+draws that item's children and the `blocked_by` edges between them.
+
+`detail.pen` / `detail.png` draw the detail page with a Children list and no view
+affordance; `design/roadmap/` draws the canvas at full-page scale. Neither answers
+the question this story asks: **what does that canvas look like sitting inside a
+content-column section card, bounded, showing one item's children?** That is this
+asset, and nothing else.
+
+### COMPOSES `design/roadmap/`, does not redraw it (`notes.html` #82 / #95)
+
+The canvas's visual language is **already designed and shipped**, and this asset
+re-specifies none of it. It cites, by path:
+
+| Already designed there                                                | Sheet                                                   |
+| --------------------------------------------------------------------- | ------------------------------------------------------- |
+| node cards, the drill affordance, the canvas frame                    | `design/roadmap/roadmap.mock.html` (MOTIR-1009 / 1194)  |
+| arrowed `blocked_by` edges, the legend, the off-level blocker anchor  | `design/roadmap/edges.mock.html` (MOTIR-1331)           |
+| the ready-to-start highlight (mint pill + success accent bar)         | `design/roadmap/ready-highlight.mock.html` (MOTIR-1416) |
+| the selected card's **Open** / **View** buttons + the quick-view peek | `design/roadmap/detail-surfaces.mock.html` (MOTIR-1351) |
+| the breadcrumb + Back on an arrived-drilled level                     | `design/roadmap/auto-drill.mock.html` (MOTIR-1805)      |
+| the `Segmented` view-toggle precedent in a header                     | `design/roadmap/scope-toggle.mock.html` (MOTIR-1380)    |
+| the container progress meter + "you are here"                         | `design/roadmap/roadmap.mock.html` §7.20.6 (MOTIR-1013) |
+
+### Composed components + their contracts (`notes.html` #95)
+
+| Composed thing         | Source                                                        | Contract this design honours                                                                                                                                                                                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ProjectRoadmapCanvas` | `components/planning/ProjectRoadmapCanvas.tsx` (MOTIR-1194)   | PRESENTATIONAL + level-driven: it FILLS its container and pulls each level through the consumer's `loadLevel(parentId)`. The panel therefore owns the BOX, never the canvas. Its opt-ins are given a verdict below — the code card must not choose them. **Unchanged by this story**, and so are its four other consumers. |
+| `WorkItemRoadmap`      | `components/planning/WorkItemRoadmap.tsx`                     | the adapter the panel MOUNTS; it maps a level to `WorkItemNode` cards and already owns the quick-view peek (MOTIR-1352). The item-rooting is an **adapter** opt-in (MOTIR-2287), not a canvas change.                                                                                                                      |
+| `ContentSectionCard`   | `app/(authed)/items/[key]/_components/ContentSectionCard.tsx` | the section-card header grammar. The count `Pill` already occupies `headerExtra`; the switcher goes in **`headerRight`** (`ml-auto flex items-center`), which is free on this card. `editHref` is NOT used here, so there is no contention for the header's far end.                                                       |
+| `Segmented`            | `components/ui/Segmented.tsx` → `@motir/design-system`        | reused unchanged: an `--el-tabnav-track` track at `--radius-btn` with a 2px inset, the pressed option raised on `--el-page-bg` + `--shadow-subtle`, `role="group"` + per-option `aria-pressed`. **No new toggle primitive.**                                                                                               |
+| `ChildList`            | `app/(authed)/items/[key]/_components/ChildList.tsx`          | the List mode IS this component, byte for byte. Its `items.length === 0 → return null` is preserved: the switcher lives inside the section, so a leaf grows no new chrome.                                                                                                                                                 |
+
+### ⭐ DRAWN AGAINST SHIPPED REALITY — rendered before drawn (`notes.html` #73)
+
+Every product fragment on the board is the **real emitted markup** of the shipped
+components, captured from a headless render through the repo's own
+`tests/helpers/renderWithIntl` harness, with Tailwind's real output over
+`app/globals.css`'s token layers inlined. The canvas panels use MOTIR-2284's **own
+five children and their real `blocked_by` edges**, positioned by the shipped
+`deterministicLayout` and transformed by the shipped `fitView`. Two things the
+render established that reading the `.tsx` could not:
+
+- **The panel is WIDTH-bound, and a dependency chain does not fit.** This level
+  lays out as four dependency layers — world bounds 1360 × 320 px (`NODE_W` 280,
+  `GAP_X` 80). `fitView` in the panel's real 758 × 448 box (padding 48) resolves to
+  **0.487×**, which puts the 14px node title at ~6.8px. Height buys nothing: the
+  vertical fit is 0.9× and slack. **So the panel's honest promise is a MAP, not a
+  read** — shape, colour, the ready highlight, which column comes first — and the
+  reader zooms/pans or goes **Full screen** (where the same level fits at ~1:1) to
+  read it. This is a stated design position, NOT a defect for the code card to
+  "fix" by special-casing the shared canvas.
+- **The breadcrumb only exists once drilled.** At the panel's first level there is
+  no crumb at all, so nothing inside the canvas says what it is rooted at — the
+  section header (`Child work items` + the count `Pill`) is what says it. That is
+  why the switcher must sit in that header and not float inside the canvas.
+
+### The five panels (`child-panel-graph.mock.html`) — each in light AND dark
+
+| Panel     | State                    | What it draws                                                                                                                                                                      |
+| --------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A**     | **The door** — List mode | the switcher in the Children `ContentSectionCard` header, in its real place after the title + count `Pill`, at the page's real content width; the shipped rows below, unchanged    |
+| **B**     | Graph mode               | the same card with `Graph` selected and `WorkItemRoadmap` in the fixed 28rem box — five real children, real edges, the legend, the "you are here" marker, the Full-screen control  |
+| **C**     | Drilled one level        | the breadcrumb + **Back** inside the panel; the root crumb is the ITEM's identifier; a ready child carries the shipped mint `Ready` treatment                                      |
+| **D1–D3** | The three states         | loading (the canvas's own centred `Spinner`) · a drilled level that comes back empty (the canvas's own copy) · the graph read that did not come back (the panel's own `emptyRoot`) |
+| **E**     | Leaf                     | an item with no children renders **nothing at all** — no section, no switcher, no empty scaffold                                                                                   |
+
+### Decisions this asset RESOLVES (the code card is not allowed to choose them)
+
+**(a) The panel's canvas height — a fixed `h-[28rem]` block, not a viewport fill.**
+The canvas fills its container, so the panel owns the box:
+
+```
+h-[28rem] overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-canvas)
+```
+
+28rem is the **shipped roadmap view's own `min-h-[28rem]` floor**
+(`components/planning/RoadmapView.tsx`), reused rather than invented. The roadmap
+page's `h-[calc(100dvh-13rem)]` is deliberately NOT reused: a section card in a
+scrolling content column must not be measured against the viewport. Why not
+shorter: at 24rem the fitted level and the canvas's bottom-left legend + zoom
+cluster collide (measured); at 28rem the fitted content clears them. Why not
+taller: the fit is width-bound, so every extra pixel of height is empty canvas.
+**Rejected alternative** — letting Graph mode break out of the content column and
+span the rail's width to buy ~290px. It would give the panel a layout the page does
+not have, for a scale gain that still does not make the chain readable; Full screen
+already answers it properly.
+
+**(b) The canvas opt-ins — a verdict for each.**
+
+| Prop                                               | Verdict             | Why                                                                                                                                                                                                                          |
+| -------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fullScreenable`                                   | **ON**              | the answer to (a). The panel is a map; full screen is where the same level fits at ~1:1 and becomes readable. Without it the bounded canvas has no escape.                                                                   |
+| `searchable`                                       | **OFF**             | the `/` overlay is a page-level key grab from inside an embedded panel, and one item's children is a set you scan, not search. The page's own find stays unshadowed.                                                         |
+| `locatable`                                        | **OFF**             | "locate the actionable node" earns its place on a whole-project canvas. This canvas is already rooted at the one item the reader is on, and its level auto-fits on arrival — there is nothing off-screen to locate.          |
+| `autoDescendSingleParent`                          | **OFF**             | a panel that says "this item's children" must never silently show something else's. An only child is still this item's only child.                                                                                           |
+| the planning-origin cluster (`showPlanningOrigin`) | **OFF**             | the project's onboarding journey is not this subtree's story, and pinning it would put a node in the panel that is not a child of the item at all.                                                                           |
+| `loadingFallback`                                  | **default**         | the shipped centred `Spinner`. A level-shaped skeleton is for a surface the user is waiting ON; here the panel is one section of a page that has already painted.                                                            |
+| `emptyRoot`                                        | **the panel's own** | see (e).                                                                                                                                                                                                                     |
+| `initialTrail`                                     | **NOT used**        | seeding a trail would leave **Back** pointing at the project root — wrong inside a panel. The rooting belongs in the adapter (MOTIR-2287), which is what makes the first level the item's own children _and_ the crumb root. |
+
+**(c) The breadcrumb root label — the ITEM's identifier** (e.g. `MOTIR-2284`),
+passed as `rootLabel`. Not "Roadmap" (the canvas default — false here: this is not
+the project roadmap) and not "Children" (says what, never which). The identifier is
+the same vocabulary the crumbs themselves use (`workItemCrumbLabel` →
+`IDENT · title`), it is already on the page's own eyebrow, and it makes **Back**
+self-describing: _back to MOTIR-2284_. It is data, not copy — no new i18n key.
+
+**(d) No preference is persisted beyond the URL.** `?children=graph` is the single
+source of truth (the story's baked-in decision). **No `localStorage`, no cookie, no
+user setting** — an item you open from a shared link shows what the link says, and
+the browser's Back button undoes the switch like it undoes everything else. `List`
+renders on a clean URL, so first paint and every existing link are unchanged.
+
+**(e) The empty canvas — the panel says its own thing at the FIRST level, and the
+canvas's at a drilled one.** `fetchRoadmapLevel` is best-effort: it **never throws**,
+it resolves to an EMPTY level on any failure. And the section renders at all only
+when the server read already returned children. So an empty FIRST level can only
+mean the graph read did not come back — while the count `Pill` two lines above still
+says `5`. The canvas default ("Nothing on the roadmap yet · Work items will appear
+here as the plan takes shape") would be a flat contradiction, so the panel passes its
+own `emptyRoot`. A **drilled** empty level keeps the canvas's shipped copy ("No items
+at this level") — that one is true as written and is not the panel's to reword.
+
+### Exact copy (the strings MOTIR-2288 ships — `messages/en.json` + `zh.json`)
+
+| Key                                                      | en                                                 | zh                                   |
+| -------------------------------------------------------- | -------------------------------------------------- | ------------------------------------ |
+| `issueViews.viewList` _(shipped, reused)_                | `List`                                             | `列表`                               |
+| `issueViews.viewGraph` _(new)_                           | `Graph`                                            | `关系图`                             |
+| `issueViews.childrenViewLabel` _(new)_                   | `Children view`                                    | `子工作项视图`                       |
+| `issueViews.childrenGraphAria` _(new)_                   | `Child work items as a dependency graph`           | `子工作项依赖关系图`                 |
+| `issueViews.childrenGraphUnavailableTitle` _(new)_       | `The graph couldn’t be drawn`                      | `无法绘制关系图`                     |
+| `issueViews.childrenGraphUnavailableDescription` _(new)_ | `Switch back to List to see this item’s children.` | `切换回列表即可查看该工作项的子项。` |
+
+`viewList` is **reused, not duplicated** — the `/items` view switcher already ships
+it, and one product should have one word for a list. `childrenViewLabel` is the
+`Segmented` group's accessible name (not rendered visually). Every new key lands in
+`en.json` **and** its `zh.json` twin in the same PR (the catalog-parity gate). The
+canvas's own strings (`roadmap.canvas.*` — the legend, Back, the drilled-empty copy,
+the zoom labels) are reused untouched; this panel adds none of them.
+
+### Access path (DRAW THE DOOR — the `run.md` design gate)
+
+Panel **A** is the door, drawn as real UI: the `Segmented` control in the Children
+section header of the shipped work-item detail page, reached the way that page is
+already reached (any work item's `/items/<key>`). There is **no new route and no new
+nav affordance** — `?children=graph` is view state on the same route, exactly as
+`/roadmap?scope=sprint` is (MOTIR-1541). A control inside a section is scoped to that
+section; nothing about it is a top-level view (`notes.html` #99).
+
+### Token / a11y discipline
+
+- **Colour** via `--el-*` only. The switcher is the `Segmented` primitive's own token
+  set (`--el-tabnav-track` track, `--el-border` edge, `--el-page-bg` +
+  `--el-text-strong` + `--shadow-subtle` on the pressed option, `--el-text-secondary`
+  on the unpressed one); the canvas box is `--el-canvas` inside `--el-border`; the
+  `emptyRoot` copy is `--el-text` over `--el-text-muted`. **No Tier-0 `--color-*`, no
+  invented hue** — the board's only raw values are the sheet chrome, which is not
+  product UI.
+- **Shape** via element-semantic tokens: the canvas box is `--radius-card`, the
+  switcher's track `--radius-btn` with its options at `calc(--radius-btn - 2px)`,
+  option height `--height-control` and padding `--spacing-control-x`. The single
+  fixed dimension is the panel's `h-[28rem]` box, which is a LAYOUT height, not a
+  control's shape.
+- **A11y** — the switcher is the shipped `role="group"` + `aria-pressed` pair with an
+  accessible group name; the canvas keeps its `role="application"` + `aria-label`, its
+  `Breadcrumb` nav, the `aria-busy` loading box and the `progressbar` meters. Switching
+  mode is a shallow `router.replace` (URL state), never a `router.refresh()` — the
+  page-state contract: the graph is a client island that seeds itself from the URL, and
+  the server-rendered rows are what the other mode shows.
+- **Observed drift, NOT fixed here:** `ChildList`'s row uses a raw `rounded-md`
+  instead of `--radius-control`, which the shape-swap rule forbids. It is pre-existing
+  and outside this story — logged as its own card rather than absorbed
+  (`notes.html` #27 / the drive-by rule).
+
+### Deliverable
+
+The three-file set under `design/work-items/`: this `design-notes.md` section ·
+`child-panel-graph.mock.html` (the source of truth) · `child-panel-graph.png`
+(full-page export, Playwright chromium, `deviceScaleFactor: 2`, 1720px wide — the
+board pairs each panel light/dark side by side). Gates MOTIR-2287 and MOTIR-2288.

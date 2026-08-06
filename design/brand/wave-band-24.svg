@@ -1,0 +1,24 @@
+<!--
+  Motir brand mark — the wave band. 24-grid cut, aspect preserved.
+
+  SOURCE: design/brand/motir-logo.drawio.svg (draw.io / diagrams.net, editable).
+  That file draws the mark as four open strokes — an upper curve, a lower curve
+  and two straight end caps. This file is the same geometry CLOSED and FILLED:
+  upper curve, right cap, lower curve reversed, left cap. It uses the source's
+  own control points, so it is exact by construction — no tracing, no fitting
+  error. The same six segments, scaled to a 24×24 icon grid and centred.
+  To change the mark, edit the .drawio.svg and re-derive this file; do not hand-edit
+  the path.
+
+  fill="currentColor" is deliberate: the mark carries NO colour of its own, so it
+  follows the theme and the palette from whatever renders it. Set the colour on the
+  consuming element (the accent-on-surface element token) and never inside this file.
+  WARNING: that only works INLINE (<svg> / <use> / an imported component). Via
+  <img src> or as a favicon, currentColor resolves to black and a baked-colour
+  variant is required instead.
+
+  See design/brand/design-notes.md sections 1 and 2.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label="Motir">
+  <path d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z" fill="currentColor" />
+</svg>
