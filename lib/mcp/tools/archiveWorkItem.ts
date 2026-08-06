@@ -6,6 +6,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
+import { derived } from '../payloads/define';
+import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `archive_work_item` / `unarchive_work_item` (Story 7.8 · Subtask 7.8.14) — the
@@ -51,7 +53,7 @@ export async function runArchiveWorkItem(
     const dto: WorkItemDto = await workItemsService.archiveWorkItem(id, ctx);
     return toolOk(
       `Archived ${dto.identifier} — ${dto.title} (removed from the ready set; children left intact).`,
-      dto as unknown as Record<string, unknown>,
+      derived(workItemWritePayload, presentMcpWorkItem(dto)),
     );
   } catch (err) {
     return toToolError(err);
@@ -68,7 +70,7 @@ export async function runUnarchiveWorkItem(
     const dto: WorkItemDto = await workItemsService.unarchiveWorkItem(id, ctx);
     return toolOk(
       `Restored ${dto.identifier} — ${dto.title} (back in active views).`,
-      dto as unknown as Record<string, unknown>,
+      derived(workItemWritePayload, presentMcpWorkItem(dto)),
     );
   } catch (err) {
     return toToolError(err);

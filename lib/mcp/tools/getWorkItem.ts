@@ -8,7 +8,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { IssueDetailDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { attachEdges, CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import { CHILD_EDGE_BLOCK_DESCRIPTION } from '../dependencyEdges';
+import { derived } from '../payloads/define';
+import { getWorkItemPayload, presentMcpWorkItemChild } from '../payloads/workItems';
 import {
   attachCommentCounts,
   commentCountMarker,
@@ -87,11 +89,25 @@ export async function runGetWorkItem(
   // answer that question per row.
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx);
   const item = attachCommentCounts([detail.item], counts)[0]!;
-  const structured = { ...detail, item, children: attachEdges(detail.children, edges) };
-  return toolOk(
-    summarize(detail, item.commentCount),
-    structured as unknown as Record<string, unknown>,
-  );
+  // Every row this read already resolved, so a child's `parentId` can be named
+  // by its KEY — the same map `presentWorkItemDetail` builds, for the same
+  // field. Built once and shared by every child.
+  const keyById = new Map<string, string>([[detail.item.id, detail.item.identifier]]);
+  for (const row of [...detail.ancestors, ...detail.children]) {
+    keyById.set(row.id, row.identifier);
+  }
+  if (detail.parent) keyById.set(detail.parent.id, detail.parent.identifier);
+  // The CHILD rows now DERIVE from v1's `workItemChildSchema` (MOTIR-2228) —
+  // the sub-graph the founding defect lived in. The rest of the aggregate is the
+  // envelope, which stays MCP's own (ADR Amendment 7 Q6).
+  const structured = {
+    ...detail,
+    item,
+    children: detail.children.map((child) =>
+      presentMcpWorkItemChild(child, edges[child.id], (id) => keyById.get(id)),
+    ),
+  };
+  return toolOk(summarize(detail, item.commentCount), derived(getWorkItemPayload, structured));
 }
 
 export function registerGetWorkItem(server: McpServer, resolveContext: McpContextResolver): void {

@@ -3,14 +3,24 @@ import type { WorkItemDependencyEdgesDto } from '@/lib/dto/workItems';
 // The per-row DEPENDENCY-EDGE block the MCP LIST reads attach (Subtask 7.9.0f /
 // MOTIR-1842) — the transport half of `workItemsService.getDependencyEdgesForItems`.
 //
-// ONE seam, THREE tools: `list_ready` and `search_work_items` attach the IDENTICAL
-// `dependencies: { blockedBy, blocks }` block to every `structuredContent` row and
-// render the same compact text marker, so a client (the 7.9.16 CLI edge column)
-// renders both lists with ONE renderer and never branches per tool. `get_work_item`
-// (7.9.16b / MOTIR-1848) attaches the SAME block to each CHILD of the detail
-// aggregate — the sibling sub-graph the CLI's build-order WAVE view is computed
-// from, which the aggregate's own `children` (a `WorkItemSummaryDto[]`) does not
-// carry.
+// ⚠️ HISTORY, not a live asymmetry (corrected by MOTIR-2229). This comment used
+// to read "ONE seam, TWO tools" — `list_ready` and `search_work_items` carried
+// the block and `get_work_item` did not. Nobody decided that; the block was
+// added where it was needed and the third tool was never revisited, and the
+// disagreement stayed invisible until a card was planned on the assumption all
+// three agreed (MOTIR-1849, the defect Story 11.6 exists to end). 7.9.16b
+// (MOTIR-1848) added the child block, and 11.6.3 removed the place where such a
+// shape could be authored by hand at all: `dependencies` now comes from v1's
+// `dependencyEdgesSchema` on every row that carries it, so the three tools
+// cannot drift about it again.
+//
+// What the block still IS: the IDENTICAL `dependencies: { blockedBy, blocks }`
+// on every `structuredContent` row of `list_ready` and `search_work_items`, plus
+// the same block on each CHILD of `get_work_item`'s detail aggregate — the
+// sibling sub-graph the CLI's build-order WAVE view is computed from, which the
+// aggregate's own `children` (a `WorkItemSummaryDto[]`) does not carry. One
+// renderer reads all three and never branches per tool (the 7.9.16 CLI edge
+// column).
 //
 // The block is attached HERE, at the transport, and deliberately NOT added to
 // `ReadyItemDto` / `WorkItemListItemDto` / `IssueDetailDto.children`: those are the
