@@ -6,8 +6,9 @@
 **Current mark:** the **wave band**, traced from Yue's reference drawing on 2026-08-05 and adopted
 "for now" — see §1 for how it was fitted and what it still owes. MOTIR-1140 (8.3.2) stays open until
 that provisional status is resolved.
-**Assets:** `design/brand/wave-band.svg` (native 317 × 313) · `design/brand/wave-band-24.svg`
-(24-grid cut).
+**Assets:** `design/brand/wave-band.svg` (native 322 × 320, the artwork) ·
+`design/brand/wave-band-24.svg` (24-grid cut) · `design/brand/wave-band-exact.svg` (0.000%
+pixel-exact reference — not for rendering).
 
 This asset defines the logomark, the wordmark and its lockups, the light/dark colour rule, the
 favicon / app-icon set, the 1200 × 630 OG template, and every shipped surface the mark enters.
