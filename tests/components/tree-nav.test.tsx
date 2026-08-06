@@ -89,13 +89,16 @@ describe('ParentBreadcrumb (2.4.3)', () => {
   });
 });
 
+// ChildList renders the ROWS. The section card around them — the header, the
+// count Pill and the List / Graph switcher — moved up into `ChildPanel`
+// (MOTIR-2288); those are asserted in tests/components/ChildPanel.test.tsx.
 describe('ChildList (2.4.3)', () => {
   it('renders nothing for a leaf (no children → no scaffold)', () => {
     const { container } = render(<ChildList items={[]} workflow={workflow} members={members} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('lists each child as a link with identifier, title, status pill, and a count', () => {
+  it('lists each child as a link with identifier, title, status pill and assignee', () => {
     const items = [
       summary({
         id: 'c1',
@@ -107,10 +110,6 @@ describe('ChildList (2.4.3)', () => {
       summary({ id: 'c2', identifier: 'PROD-49', title: 'Callback bug', status: 'todo' }),
     ];
     render(<ChildList items={items} workflow={workflow} members={members} />);
-
-    // Section title + count badge reflecting the number of children.
-    screen.getByText('Child work items');
-    screen.getByText('2');
 
     const first = screen.getByRole('link', { name: /PROD-41/ });
     expect(first.getAttribute('href')).toBe('/items/PROD-41');

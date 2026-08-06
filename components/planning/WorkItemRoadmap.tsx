@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
@@ -116,6 +116,23 @@ export interface WorkItemRoadmapProps {
    *  copy; a rooted mount passes the item's own identifier, so Back reads as
    *  "back to MOTIR-1234" (MOTIR-2285's recorded verdict). */
   rootLabel?: string;
+  /**
+   * The canvas's three chrome opt-ins, surfaced so an EMBEDDED mount can make its
+   * own call (MOTIR-2288). **All three default to `true`** — what the full-page
+   * `/roadmap` mount has always passed — so every existing consumer is unchanged.
+   * The Children panel turns `searchable` and `locatable` off (a `/` overlay
+   * inside a page section is a page-level key grab, and a canvas already rooted at
+   * the item the reader is on has nothing off-screen to locate) and keeps
+   * `fullScreenable`, which is the bounded panel's only escape.
+   */
+  searchable?: boolean;
+  locatable?: boolean;
+  fullScreenable?: boolean;
+  /** Replace the ROOT level's empty state. Passed straight through to the canvas
+   *  — an embedded mount whose section only renders when children EXIST has a
+   *  different thing to say about an empty first level than "nothing here yet"
+   *  (the read did not come back). Absent → the canvas's own copy. */
+  emptyRoot?: ReactNode;
 }
 
 export function WorkItemRoadmap({
@@ -131,6 +148,10 @@ export function WorkItemRoadmap({
   onRefreshSettled,
   subtreeRootId = null,
   rootLabel,
+  searchable = true,
+  locatable = true,
+  fullScreenable = true,
+  emptyRoot,
 }: WorkItemRoadmapProps) {
   const t = useTranslations('roadmap.canvas');
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
@@ -298,9 +319,10 @@ export function WorkItemRoadmap({
         onResetPositions={onResetPositions}
         onSelect={onSelect}
         onView={handleView}
-        searchable
-        fullScreenable
-        locatable
+        searchable={searchable}
+        fullScreenable={fullScreenable}
+        locatable={locatable}
+        emptyRoot={emptyRoot}
         // AUTO-DRILL (MOTIR-1807): a level that resolves to exactly ONE drillable node
         // offers no choice, so the canvas descends into it and the roadmap opens on the
         // WORK rather than on one card. Opted in for BOTH scopes, not sprint-only — the
