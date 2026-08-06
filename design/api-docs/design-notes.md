@@ -21,27 +21,39 @@ answer; it does not re-decide it.
 Stated first, because two of the nine panels draw surfaces that belong to other
 designs and would otherwise read as a redesign of them.
 
-| Element                                         | Owned by                                                                             | What THIS design does                                                                           |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
-| The marketing top bar and footer                | `design/project-square/` (Story 6.13 · 6.13.6, Panel 1)                              | Changes ONE nav item's TREATMENT (`Docs`: label → link) and adds ONE footer link. Nothing else. |
-| The API-tokens settings page header + CLI panel | `design/settings/` (`account-settings.mock.html` Panels 3–8) · `design/cli-connect/` | Places ONE link row above them. Redraws neither.                                                |
-| The token manager (list, create modal, scopes)  | `design/settings/` (`account-settings.mock.html` · `token-scopes.mock.html`)         | Nothing. Drawn at 55% opacity in Panel 8 purely as position context.                            |
-| The app shell / authed nav                      | `design/shell/`                                                                      | Nothing — the docs surface is PUBLIC and does not render inside the authed shell.               |
-| The renderer, the routes, the spec URL          | ADR Amendment 4 (Subtask 11.4.1)                                                     | Draws to them.                                                                                  |
+| Element                                                        | Owned by                                                                             | What THIS design does                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| The marketing top bar and footer                               | `design/project-square/` (Story 6.13 · 6.13.6, Panel 1)                              | Changes ONE nav item's TREATMENT (`Docs`: label → link) and adds ONE footer link. Nothing else. |
+| The API-tokens settings page header + CLI panel                | `design/settings/` (`account-settings.mock.html` Panels 3–8) · `design/cli-connect/` | Places ONE link row above them. Redraws neither.                                                |
+| The token manager (list, create modal, scopes)                 | `design/settings/` (`account-settings.mock.html` · `token-scopes.mock.html`)         | Nothing. Drawn at 55% opacity in Panel 8 purely as position context.                            |
+| The sandbox guide's CONTENT (its procedure, its profile table) | `design/agent-sandbox/` (Story MOTIR-2268 · MOTIR-2270)                              | Draws its ROW in the rail's first tier and the rail it sees. Redraws none of its page.          |
+| The `/docs` area ROOT (an index page)                          | nobody yet — MOTIR-2315                                                              | Nothing. Amendment 10 records it as open; `/docs` still 308s to `/docs/api`.                    |
+| The app shell / authed nav                                     | `design/shell/`                                                                      | Nothing — the docs surface is PUBLIC and does not render inside the authed shell.               |
+| The renderer, the routes, the spec URL                         | ADR Amendment 4 (Subtask 11.4.1)                                                     | Draws to them.                                                                                  |
 
 ---
 
 ## Routes
 
-| Route                       | Page                                      | Auth          |
-| --------------------------- | ----------------------------------------- | ------------- |
-| `/api-docs`                 | The API reference (catalogue + operation) | none (public) |
-| `/api-docs/getting-started` | The five-step guide                       | none (public) |
-| `/api-docs/stability`       | The stability & deprecation policy        | none (public) |
-| `/api/openapi/v1.json`      | The spec the reference renders FROM       | none (public) |
+| Route                       | Page                                                                                             | Auth          |
+| --------------------------- | ------------------------------------------------------------------------------------------------ | ------------- |
+| `/docs/api`                 | The API reference (catalogue + operation)                                                        | none (public) |
+| `/docs/api/getting-started` | The five-step guide                                                                              | none (public) |
+| `/docs/api/stability`       | The stability & deprecation policy                                                               | none (public) |
+| `/docs/sandbox`             | The agent sandbox guide (`design/agent-sandbox/` owns its CONTENT; this asset owns its rail row) | none (public) |
+| `/api/openapi/v1.json`      | The spec the reference renders FROM                                                              | none (public) |
 
-All three pages live in `app/(public)/api-docs/`, the route group
-`app/(public)/explore/` already established for unauthenticated, indexable pages.
+The pages live in `app/(public)/docs/`, the route group `app/(public)/explore/`
+already established for unauthenticated, indexable pages.
+
+> **⚠️ These addresses have moved twice, and this asset is drawn to the current
+> ones.** They were `/api-docs*` when this asset was first written;
+> **Amendment 9 Q1** renamed the area to `/docs`, and **Amendment 10 Q1**
+> ([MOTIR-2310](motir:cmshyscjx001d04jyhvr1lwc6)) nested the guide and the policy
+> inside the reference's own prefix. Every old address keeps a permanent 308.
+> **The FOLDER name does not move**: `design/api-docs/`, `lib/apiDocs/`, the
+> `apiDocs` i18n namespace and `tests/api-docs/` are internal identifiers, kept by
+> Amendment 9 Q1's addresses-move rule.
 
 ---
 
@@ -65,7 +77,8 @@ against. Every element below is therefore a shipped `components/ui/*` primitive.
 │ catalogue     │  content column                  │  on this page     │
 │ 264px         │  flex, min-width 0               │  200px            │
 │ ─ search      │                                  │  ─ section links  │
-│ ─ Documentation                                  │  ─ spec link      │
+│ ─ Documentation  (the SURFACES)                  │  ─ spec link      │
+│ ─ API reference  (this sub-area's pages)         │                   │
 │ ─ operations  │                                  │                   │
 │   by resource │                                  │                   │
 ├───────────────┴──────────────────────────────────┴───────────────────┤
@@ -73,19 +86,27 @@ against. Every element below is therefore a shipped `components/ui/*` primitive.
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
-The three pages are the **top group in the same left nav** (`Documentation`:
-API reference · Getting started · Stability & deprecation), which is what makes
-them read as one surface rather than three unrelated pages.
+The rail has **two tiers** (§ _"The two-tier rail"_ below, and Panel 10). The top
+group `Documentation` lists the SURFACES Motir documents — API reference, Agent
+sandbox — and renders on every page in the area. A second group appears only
+INSIDE a surface and lists that surface's own pages; for the API reference those
+are Getting started and Stability & deprecation, followed by the operation groups.
 
-| Element             | Primitive         | Colour                                                                        | Shape                                                         |
-| ------------------- | ----------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Catalogue rail      | `Sidebar` grammar | `--el-sidebar-bg`, border `--el-border`                                       | —                                                             |
-| Search box          | `Input`           | bg `--el-page-bg`, border `--el-border-strong`, placeholder `--el-text-faint` | `--radius-input`, `--height-control`, `--spacing-control-x`   |
-| `/` hint            | `<kbd>` chip      | border `--el-border`, text `--el-text-faint`                                  | `--radius-kbd`, `--spacing-kbd-x/y`                           |
-| Nav group heading   | `SectionLabel`    | `--el-text-faint`                                                             | —                                                             |
-| Nav row             | sidebar row       | `--el-text-secondary`; hover `--el-sidebar-item-bg-hover`                     | `--radius-control`, `--height-control`, `--spacing-control-x` |
-| Nav row, active     | sidebar row       | bg `--el-sidebar-item-bg-active`, text `--el-text`                            | `--shadow-subtle`                                             |
-| Right-hand contents | plain list        | `--el-text-muted`; active `--el-text`                                         | —                                                             |
+> This replaces the original single flat `Documentation` group (API reference ·
+> Getting started · Stability & deprecation), which was right while every page in
+> the area was about the API and became wrong when the sandbox guide arrived —
+> [MOTIR-2307](motir:cmshyic5q000604jyjq7mm0dr).
+
+| Element                         | Primitive                                                         | Colour                                                                        | Shape                                                         |
+| ------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| Catalogue rail                  | `Sidebar` grammar                                                 | `--el-sidebar-bg`, border `--el-border`                                       | —                                                             |
+| Search box                      | `Input`                                                           | bg `--el-page-bg`, border `--el-border-strong`, placeholder `--el-text-faint` | `--radius-input`, `--height-control`, `--spacing-control-x`   |
+| `/` hint                        | `<kbd>` chip                                                      | border `--el-border`, text `--el-text-faint`                                  | `--radius-kbd`, `--spacing-kbd-x/y`                           |
+| Nav group heading               | `SectionLabel`                                                    | `--el-text-faint`                                                             | —                                                             |
+| Nav row                         | sidebar row                                                       | `--el-text-secondary`; hover `--el-sidebar-item-bg-hover`                     | `--radius-control`, `--height-control`, `--spacing-control-x` |
+| Nav row, active                 | sidebar row                                                       | bg `--el-sidebar-item-bg-active`, text `--el-text`                            | `--shadow-subtle`                                             |
+| Sub-area group heading (tier 2) | `SectionLabel` — **the same primitive as tier 1**, no new element | `--el-text-faint`                                                             | —                                                             |
+| Right-hand contents             | plain list                                                        | `--el-text-muted`; active `--el-text`                                         | —                                                             |
 
 **Content-column typography.** `h1` is `--font-serif` at 26px (the app's page-title
 convention); `h2` is 16px semibold; `h3` is an 11–13px uppercase
@@ -122,9 +143,91 @@ of fact from a verb and must not be mistaken for one.
 
 ---
 
+## The two-tier rail — what a guide page shows, and what an API page does
+
+**Added by [MOTIR-2311](motir:cmshysgbl001g04jytj8r5cl0), under
+[MOTIR-2307](motir:cmshyic5q000604jyjq7mm0dr). Drawn to ADR
+`public-api-conventions.md` **Amendment 10** ([MOTIR-2310](motir:cmshyscjx001d04jyhvr1lwc6)),
+which decides the structure. This asset draws to that answer; it does not
+re-decide it.** Panels 10 and 11.
+
+### The defect this replaces
+
+Every page in `app/(public)/docs/` rendered the SAME rail: one flat
+`Documentation` group of four rows — three of them about the REST API, one about
+running a container — followed by all ~28 `/api/v1` operations. A reader on the
+agent sandbox guide was shown the entire REST API, and the rail's accessible name
+was the literal string `"API reference"` on that page too.
+
+### The structure
+
+| Tier | Heading                                  | Rows                                                                | Renders on                         |
+| ---- | ---------------------------------------- | ------------------------------------------------------------------- | ---------------------------------- |
+| 1    | `Documentation`                          | one per SURFACE — API reference, Agent sandbox (later CLI, MCP)     | every page in the area             |
+| 2    | the surface's name, e.g. `API reference` | that surface's own pages — Getting started, Stability & deprecation | only inside that surface           |
+| 3    | the resource groups                      | the operation rows                                                  | only inside the API (`/docs/api…`) |
+
+**What decides it is the ROUTE PREFIX, not the page** (Amendment 10 Q2): tiers 2
+and 3 render if and only if the route is `/docs/api` or below. One fact decides
+both which sub-area a page is in and what its rail shows, so the two cannot drift
+apart — and a page added anywhere else cannot acquire the operation list by
+accident, which is exactly how the sandbox guide acquired it.
+
+### Three details, resolved here rather than left to the implementer
+
+- **The active row.** Only the page the reader is ON carries `aria-current="page"`
+  and the active treatment — unchanged from the shipped component. The second
+  tier's PRESENCE, and its heading naming the surface, are the "you are here"
+  signal for the sub-area. **No new state and no new primitive**: tier 2's heading
+  is the same `SectionLabel` tier 1 uses.
+- **The find control** is unchanged in behaviour (Panel 3: it filters in place and
+  keeps its group headings) and now renders only where there are operations to
+  find. A guide page shows no find box and no count line, because
+  `operationCount` / `findEmpty` against an empty set is a control describing
+  nothing.
+- **The rail's accessible name is `Documentation` on every page.** It was
+  `"API reference"`, which was accurate when the area was the API reference and is
+  a false statement on the sandbox guide. This is an ADDRESS in the sense of
+  Amendment 9 Q1's rule — a stranger reads it — so it moves with the surface.
+
+### The ACCESS PATH — the door out of a guide page
+
+Taking the operation list off the guide pages removes something from a reader's
+view, so the surface owes them a visible way back. **Panel 10 marks it ①**: the
+`API reference` row in tier 1, on the sandbox guide, above the fold and without
+scrolling. It is the only affordance a sandbox reader needs in order to reach the
+API, and it is drawn rather than described. The area's outer entrances are
+unchanged and remain Panel 7 (the marketing top bar) and Panel 8 (the API-tokens
+settings page).
+
+### Drawn against a RENDER, not from the source
+
+Per the design-against-shipped-reality rule, the panels were drawn against a
+headless Playwright render of this mock (`api-docs.mock.html`, which mirrors the
+shipped `CatalogueNav` markup), cross-read line by line against
+`app/(public)/docs/_components/CatalogueNav.tsx` on `origin/main` — its `pages`
+array, its unconditional `filtered.map(...)` over the operation groups, and its
+`aria-label={t('navLabel')}`. The rails in **Panels 1, 4, 5 and 6** were restructured
+in place, so no panel in this asset still depicts the flat group.
+
+### GIVES / TAKES
+
+| Card                                                 | Direction | What                                                                                                                                                          |
+| ---------------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-2311](motir:cmshysgbl001g04jytj8r5cl0) (this) | GIVES     | the two-tier structure, the prefix rule's visual consequence, the access path, the mobile disclosure labels                                                   |
+| [MOTIR-2312](motir:cmshysk24001j04jy9nmgw0zp) (code) | TAKES     | builds the tiers in `CatalogueNav`, scopes the operation index by route prefix, re-points `navLabel`                                                          |
+| [MOTIR-2313](motir:cmshysoxh001m04jynsd6v7ok) (E2E)  | TAKES     | drives the ① door by CLICKING it, and asserts a guide page renders no operation rows                                                                          |
+| MOTIR-2188 (11.4.7, `done`)                          | —         | owns the rail COMPONENT and the shell. Restructured here, not replaced; no new primitive is introduced                                                        |
+| MOTIR-2270 (`done`)                                  | —         | owns `design/agent-sandbox/`, whose Panel 3 draws the sandbox row as an entry in THIS rail. Its row survives as tier 1's second row; that asset needs no edit |
+
+**This section TAKES nothing from a sibling card** — no element is moved out of
+another card's scope by it.
+
+---
+
 ## Panel-by-panel
 
-### Panel 1 — `/api-docs`, the default view
+### Panel 1 — `/docs/api`, the default view
 
 The catalogue is the **default landing content**: an integrator arriving cold
 sees what the API can do before being asked to choose. Operations are grouped by
@@ -262,6 +365,38 @@ the reference). Copy:
   sideways**. The block's caption says so (`scrolls here, not the page →`).
 - The spec tables become **stacked rows** (status chip + condition) rather than
   shrinking three columns to unreadable widths.
+- **Its disclosure LABEL is Panel 11's**, not this panel's: `API reference · 28
+operations` is correct inside the API and wrong on a guide page.
+
+### Panel 10 — the SAME rail on two pages
+
+The pair that is the whole point of [MOTIR-2307](motir:cmshyic5q000604jyjq7mm0dr).
+Left, a reader inside the API sub-area (`/docs/api/getting-started`): find box,
+tier 1, tier 2, then the operation groups. Right, a reader on the sandbox guide
+(`/docs/sandbox`): tier 1 and nothing else — two rows, no find box, no operations.
+
+**Today those two pictures are IDENTICAL**, and that sameness is the defect. Put
+side by side they make an argument about information architecture into something
+a reader settles in a second. The row marked **①** is the access path — see
+§ _"The ACCESS PATH"_ above. The panel's third column states the prefix rule and
+the active-row rule in the words the implementer needs.
+
+### Panel 11 — mobile, what the disclosure summarises
+
+Panel 9's treatment is **unchanged** — below `lg` the rail is still a full-width
+`Button` `secondary` `sm` disclosure above the content. What changes is its
+LABEL, which today reads `API reference · 28 operations` on every page in the
+area including the sandbox guide. It now names the surface the reader is in, and
+the operation count appears only where there are operations:
+
+| Page                | Label                           |
+| ------------------- | ------------------------------- |
+| inside `/docs/api…` | `API reference · 28 operations` |
+| a guide page        | `Documentation`                 |
+
+Opened, the disclosure holds the same tiers as the desktop rail in the same
+order — the phone treatment is a container change, not an information-architecture
+change.
 
 ---
 
