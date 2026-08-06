@@ -368,12 +368,17 @@ the reference). Copy:
 - **Its disclosure LABEL is Panel 11's**, not this panel's: `API reference · 28
 operations` is correct inside the API and wrong on a guide page.
 
-### Panel 10 — the SAME rail on two pages
+### Panel 10 — the SAME rail on two pages, side by side
 
 The pair that is the whole point of [MOTIR-2307](motir:cmshyic5q000604jyjq7mm0dr).
 Left, a reader inside the API sub-area (`/docs/api/getting-started`): find box,
 tier 1, tier 2, then the operation groups. Right, a reader on the sandbox guide
 (`/docs/sandbox`): tier 1 and nothing else — two rows, no find box, no operations.
+
+**The rails are shown ALONE here** so the difference is legible at a glance; a
+rail drawn on its own is a diagram, not a design of a page. **Panel 11 mounts the
+right-hand one in the whole page**, which is what a reviewer needs in order to
+judge it.
 
 **Today those two pictures are IDENTICAL**, and that sameness is the defect. Put
 side by side they make an argument about information architecture into something
@@ -381,7 +386,25 @@ a reader settles in a second. The row marked **①** is the access path — see
 § _"The ACCESS PATH"_ above. The panel's third column states the prefix rule and
 the active-row rule in the words the implementer needs.
 
-### Panel 11 — mobile, what the disclosure summarises
+### Panel 11 — `/docs/sandbox`, the WHOLE page
+
+The state Panel 10's right-hand rail belongs to, drawn as a page: the shipped
+marketing top bar, the new two-row rail, and the guide itself. This is the panel
+that answers _"what does the sandbox page look like now"_ — the question Panel 10
+alone cannot, because it shows a rail with nothing beside it.
+
+**The content column is `design/agent-sandbox/`'s, reproduced UNCHANGED as the
+frame** (its Panel 1 markup: the `h1`, the lede, the _"What it confines"_
+`table.spec`, the first numbered step). This asset owns the RAIL, not the
+procedure — so the page's own content is shown rather than redrawn, and the two
+assets cannot disagree about it.
+
+What is new is entirely to the left: two rows, no find control, no operation
+groups, and the `API reference` row directly above the reader's own as the way
+back. Compare it against Panel 1 (`/docs/api`) to see the second and third tiers
+appear.
+
+### Panel 12 — mobile, what the disclosure summarises
 
 Panel 9's treatment is **unchanged** — below `lg` the rail is still a full-width
 `Button` `secondary` `sm` disclosure above the content. What changes is its

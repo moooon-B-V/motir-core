@@ -1879,7 +1879,7 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
 
     <!-- ════════ PANEL 10 — the two tiers: what each page's rail shows ════════ -->
     <div class="panel-label">
-      Panel 10 · The SAME rail on two pages — the pair that is the whole fix
+      Panel 10 · The SAME rail on two pages — the RAILS side by side
       <span class="note">
         Left: a reader inside the API sub-area. Right: a reader on the sandbox guide. Today these
         two are IDENTICAL — both list every one of the 28 operations — which is the defect
@@ -1887,6 +1887,10 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
         the second tier appears only inside the surface you are in. A guide page therefore shows two
         rows and nothing else. The ACCESS PATH out is the row marked ①: it is the only thing a
         sandbox reader needs in order to reach the API, and it is visible without scrolling.
+        <strong
+          >The rails are shown alone here to make the difference legible; Panel 11 mounts the
+          right-hand one in the whole page.</strong
+        >
       </span>
     </div>
     <div class="panel">
@@ -2000,9 +2004,98 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
       </div>
     </div>
 
-    <!-- ════════ PANEL 11 — the collapsed rail below lg ════════ -->
+    <!-- ════════ PANEL 11 — /docs/sandbox, the WHOLE page ════════ -->
     <div class="panel-label">
-      Panel 11 · Mobile — what the disclosure summarises with two tiers
+      Panel 11 · /docs/sandbox — the whole page, with the new rail, 1200 px
+      <span class="note">
+        Panel 10 shows the rails alone; this is the page they sit in, because a rail drawn on its
+        own is not a design of anything. The content column is `design/agent-sandbox/`'s (Story
+        MOTIR-2268 · MOTIR-2270) reproduced UNCHANGED as the frame — this asset owns the rail, not
+        the procedure. What is new is everything to the left of it: two rows, no find control, no
+        operation groups. A reader who came to run a container is no longer framed by 28 REST
+        operations, and the row above their own is the way back to the API.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/docs/api">API reference</a>
+              <a class="navrow is-active" href="/docs/sandbox" aria-current="page">Agent sandbox</a>
+            </div>
+          </nav>
+
+          <div class="docs-main doc">
+            <h1>Set up the agent sandbox</h1>
+            <p class="lede">
+              Motir asks you to hand work to a coding agent that runs unattended, with approvals
+              off. This is where it should run: a published container that can reach your workspace
+              tree and nothing else on your machine. Setting it up is a <code>docker run</code>, not
+              a <code>git clone</code> — and this page ends when you have a working one.
+              <strong
+                >What you then do inside it is the work loop, and it is documented with the
+                CLI</strong
+              >, not here.
+            </p>
+
+            <h2>What it confines — and what it does not</h2>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th style="width: 18%">Surface</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">Filesystem</span></td>
+                  <td>
+                    <strong>Confined.</strong> The only host surfaces inside the container are a
+                    writable <code>/workspace</code> and your agent's own credential, mounted
+                    read-only. No docker socket, no other host bind.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Network</span></td>
+                  <td>
+                    <strong>Open, by design.</strong> Every agent needs its provider API, and every
+                    dispatched item needs git remotes.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h2>1 · Pull the image</h2>
+            <div class="codeblock">
+              <div class="cap">shell</div>
+              <pre>docker pull ghcr.io/moooon-b-v/motir-agent-sandbox:latest</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 12 — the collapsed rail below lg ════════ -->
+    <div class="panel-label">
+      Panel 12 · Mobile — what the disclosure summarises with two tiers
       <span class="note">
         Panel 9's treatment is unchanged: below <code>lg</code> the rail is a disclosure button
         above the content. What changes is its LABEL, which today reads
