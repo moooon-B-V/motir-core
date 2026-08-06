@@ -8,7 +8,7 @@ import { DocBlocks } from '../_components/DocBlocks';
 // design Panel 4).
 //
 // A single LINEAR read, and the order is the deliverable: mint → first call →
-// paginate → read an error → read the rate-limit headers. Each step ends in
+// paginate → read an error → read the response headers. Each step ends in
 // something the reader can see happen, because a guide whose steps produce no
 // visible result is a list of assertions a reader has to take on trust.
 //

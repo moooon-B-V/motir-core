@@ -27,6 +27,7 @@
 // to conclude it was forgotten.
 
 import { EXAMPLE_TOKEN } from '@/lib/apiDocs/reference';
+import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 
 /** One block inside a step — the rhythm the design draws (Panel 4). */
 export type GuideBlock =
@@ -178,10 +179,16 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
   },
   {
     id: 'rate-limits',
-    title: 'Read the rate-limit headers',
+    title: 'Read the response headers',
     endpoint: { method: 'GET', path: '/api/v1/me' },
     statuses: [429],
-    headers: ['X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'X-Request-Id'],
+    headers: [
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+      'X-Request-Id',
+      'X-Motir-Api-Version',
+    ],
     blocks: [
       {
         kind: 'prose',
@@ -193,7 +200,8 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
         code: `X-RateLimit-Limit:     600
 X-RateLimit-Remaining: 594
 X-RateLimit-Reset:     1785312000
-X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4`,
+X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4
+X-Motir-Api-Version:   ${V1_CONTRACT_VERSION}`,
       },
       {
         kind: 'callout',
@@ -203,6 +211,10 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4`,
       {
         kind: 'prose',
         text: '`X-Request-Id` is on every response too. Quote it if you ever need to ask us about a specific call — it is the one identifier that finds it.',
+      },
+      {
+        kind: 'prose',
+        text: '`X-Motir-Api-Version` is the version of the CONTRACT that served the response — the same `MAJOR.MINOR.PATCH` as the specification’s `info.version`, not our release number. Read it off any response, including a failure, to check for version skew: you never have to fetch the specification just to learn which contract you are talking to. A MAJOR you do not recognise means a `/api/v2` exists; a higher MINOR means the contract grew, additively, and your client is still correct.',
       },
     ],
   },
@@ -235,6 +247,7 @@ export const POLICY_ADDITIVE: readonly PolicyItem[] = [
   { text: 'A new endpoint.', adrPhrase: 'a new endpoint' },
   { text: 'A new OPTIONAL query parameter.', adrPhrase: 'a new optional query parameter' },
   { text: 'A new field on a response object.', adrPhrase: 'a new field on a response object' },
+  { text: 'A new response header.', adrPhrase: 'a new response header' },
   {
     text: 'A new value on a field documented as open-ended.',
     adrPhrase: 'a new enum value on a field documented as open-ended',
