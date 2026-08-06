@@ -193,6 +193,13 @@ path.**
 | **minimum size**      | **⚠️ 40 px.** Not a legibility floor — the shape survives far smaller — but a _reading_ floor: at 24 px and below it reads as a letter M (§1).                                                                                                                                                    |
 | **colour**            | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                                                              |
 
+> **⚠️ Never write `--` inside an SVG comment.** XML forbids a double hyphen in a comment, so an
+> otherwise-harmless line like `color: var(--el-accent-on-surface)` in a file header makes the
+> whole SVG malformed. It still renders in a browser (HTML parsing is lenient) but fails anywhere
+> that parses it as XML — GitHub shows _"Error rendering embedded code — Invalid image source"_ in the
+> PR diff, which is how this was found. Refer to tokens by name in SVG comments, not by `var()`
+> syntax.
+
 **`currentColor` only themes when the SVG is inline.** `<svg>` / `<use>` / an imported React
 component all inherit `color` and therefore follow the theme. Referenced via `<img src>`, as a CSS
 `background-image`, or as a favicon, `currentColor` resolves to **black** — those contexts need a

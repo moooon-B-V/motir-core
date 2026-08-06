@@ -12,7 +12,7 @@
 
   fill="currentColor" is deliberate: the mark carries NO colour of its own, so it
   follows the theme and the palette from whatever renders it. Set the colour on the
-  consuming element — color: var(--el-accent-on-surface) — never inside this file.
+  consuming element (the accent-on-surface element token) and never inside this file.
   WARNING: that only works INLINE (<svg> / <use> / an imported component). Via
   <img src> or as a favicon, currentColor resolves to black and a baked-colour
   variant is required instead.
