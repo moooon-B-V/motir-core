@@ -247,7 +247,7 @@ describe('THE IN-APP DOOR — the API-tokens settings page', () => {
 });
 
 describe('the catalogue rail', () => {
-  it('lists every operation the reference holds, grouped, with the three pages on top', async () => {
+  it('lists every operation the reference holds, grouped, with the four pages on top', async () => {
     const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     const { buildApiReference } = await import('@/lib/apiDocs/reference');
 
@@ -258,14 +258,17 @@ describe('the catalogue rail', () => {
     );
     expect(listed.sort()).toEqual(V1_OPERATIONS.map((o) => o.operationId).sort());
 
-    // The three pages are the top group in the SAME nav — what makes the
-    // reference, the guide and the policy read as one surface.
+    // The pages are the top group in the SAME nav — what makes the reference,
+    // the guides and the policy read as one surface. Story MOTIR-2268 made this
+    // group four: the sandbox row is that page's ONLY entrance, so an assertion
+    // that stopped at three would let it go missing silently.
     const reference = screen.getByText('API reference', { selector: 'a' });
     expect(reference.getAttribute('aria-current')).toBe('page');
     expect(screen.getByText('Getting started').getAttribute('href')).toBe('/docs/getting-started');
     expect(screen.getByText('Stability & deprecation').getAttribute('href')).toBe(
       '/docs/stability',
     );
+    expect(screen.getByText('Agent sandbox').getAttribute('href')).toBe('/docs/sandbox');
   });
 
   it('renders the pages even when the spec could not be built', async () => {

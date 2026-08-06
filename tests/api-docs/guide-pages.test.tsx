@@ -53,8 +53,10 @@ describe('/docs/getting-started', () => {
 
     const current = document.querySelector('nav a[aria-current="page"]');
     expect(current?.getAttribute('href')).toBe('/docs/getting-started');
-    // …and it does not strand the reader: the other two pages are one click away.
+    // …and it does not strand the reader: the other three pages are one click
+    // away (four-page surface since Story MOTIR-2268).
     expect(screen.getAllByText('API reference').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Agent sandbox').length).toBeGreaterThan(0);
   });
 });
 

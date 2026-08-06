@@ -685,6 +685,8 @@ export default defineConfig({
         'app/(public)/docs/_components/DocBlocks.tsx',
         'app/(public)/docs/_components/MethodPill.tsx',
         'app/(public)/docs/_components/OperationSection.tsx',
+        'app/(public)/docs/sandbox/page.tsx',
+        'lib/apiDocs/sandbox.ts',
         'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
@@ -904,6 +906,8 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        'app/(public)/docs/sandbox/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiDocs/sandbox.ts': { branches: 90, functions: 90, lines: 90 },
         'app/(public)/docs/_components/OperationSection.tsx': {
           branches: 90,
           functions: 90,

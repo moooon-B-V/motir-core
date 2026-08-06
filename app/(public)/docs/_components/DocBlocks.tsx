@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import type { GuideBlock } from '@/lib/apiDocs/guide';
 import { CodeBlock } from './CodeBlock';
 
@@ -58,6 +58,9 @@ export function DocBlock({ block }: { block: GuideBlock }) {
       </div>
     );
   }
+  if (block.kind === 'table') {
+    return <DocTable block={block} />;
+  }
   return (
     <div
       className={
@@ -69,6 +72,82 @@ export function DocBlock({ block }: { block: GuideBlock }) {
       {/* Decorative: the tone is already carried by the words. */}
       <span aria-hidden>{block.tone === 'warning' ? '▲' : '◆'}</span>
       <span>{renderInline(block.text)}</span>
+    </div>
+  );
+}
+
+/**
+ * The `table` kind, at two widths.
+ *
+ * ⚠️ TWO renderings, not one responsive table. Squeezing four columns of paths
+ * into a phone produces something unreadable, and dropping a column hides
+ * exactly the fact a reader came to compare — so below the docs breakpoint the
+ * same rows render as one card per row, with every cell keeping its column name
+ * as its label. Each rendering is `display: none` at the other width, so a
+ * screen reader is offered one of them, never both.
+ */
+function DocTable({ block }: { block: Extract<GuideBlock, { kind: 'table' }> }) {
+  return (
+    <div className="mb-5">
+      {block.caption ? (
+        <p className="mb-1.5 font-mono text-[11px] tracking-wide text-(--el-text-faint) uppercase">
+          {block.caption}
+        </p>
+      ) : null}
+
+      {/* Wide: the same `table.spec` grammar the operation tables use. */}
+      <table className="hidden w-full border-collapse text-[13px] md:table">
+        <thead>
+          <tr>
+            {block.columns.map((column, index) => (
+              <th
+                key={index}
+                scope="col"
+                className="border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase"
+              >
+                {renderInline(column)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {block.rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, cellIndex) => (
+                <td
+                  key={cellIndex}
+                  className="border-b border-(--el-border-soft) px-2.5 py-2 align-top leading-relaxed text-(--el-text-secondary)"
+                >
+                  {renderInline(cell)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {/* Narrow: one card per row; the column name becomes each cell's label. */}
+      <div className="md:hidden">
+        {block.rows.map((row, rowIndex) => (
+          <div
+            key={rowIndex}
+            className="mb-2 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface) px-3 py-2.5"
+          >
+            <dl className="m-0 grid grid-cols-[minmax(0,5.5rem)_1fr] gap-x-2.5 gap-y-1">
+              {row.map((cell, cellIndex) => (
+                <Fragment key={cellIndex}>
+                  <dt className="pt-0.5 text-[11px] tracking-wide text-(--el-text-faint) uppercase">
+                    {block.columns[cellIndex] ?? ''}
+                  </dt>
+                  <dd className="m-0 min-w-0 text-[12.5px] leading-relaxed break-words text-(--el-text-secondary)">
+                    {renderInline(cell)}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

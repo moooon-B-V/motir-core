@@ -286,6 +286,11 @@ describe('guard: the reference page does not fetch its own public URL', () => {
       'app/(public)/docs/api/page.tsx',
       'app/(public)/docs/getting-started/page.tsx',
       'app/(public)/docs/stability/page.tsx',
+      // Story MOTIR-2268's fourth page. It derives its profile table from the
+      // CLI's own record at BUILD time, which is the same principle this guard
+      // protects: a documentation page describes the system by reading it, never
+      // by calling it over the network.
+      'app/(public)/docs/sandbox/page.tsx',
     ]) {
       const source = stripComments(readFileSync(join(REPO_ROOT, file), 'utf8'));
       expect(source, `${file} fetches`).not.toMatch(/\bfetch\s*\(/);

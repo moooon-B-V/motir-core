@@ -69,6 +69,23 @@ export interface AgentProfile {
    */
   credentialPaths: (dirs: CredentialDirs) => string[];
   /**
+   * The host paths `sandbox/docker-compose.yml` binds READ-ONLY into the
+   * container for this profile, `~`-relative and in mount order. `[]` when the
+   * profile mounts nothing at all.
+   *
+   * ⚠️ NOT `credentialPaths`, and the two are answers to different questions.
+   * `credentialPaths` is what `motir doctor` PROBES to prove a sign-in
+   * happened, deliberately narrowed wherever a mounted location is not proof of
+   * auth (see the header note). This is what the image BINDS. They diverge on
+   * four of the eight profiles: `cursor`, `aider` and `goose` probe nothing at
+   * all while the compose file mounts a path for each, and `opencode` probes one
+   * file where two directories are mounted. Anything PUBLISHING the mount — the
+   * `/docs/sandbox` guide derives its table from here — must read this field;
+   * deriving it from `credentialPaths` would tell three profiles they need no
+   * mount. `test/sandbox.test.ts` pins every value against the compose file.
+   */
+  sandboxMounts: readonly string[];
+  /**
    * Env vars whose PRESENCE also satisfies the credential check. Only ever
    * passed to a presence predicate — the VALUE is never read (see doctor.ts).
    */
@@ -161,6 +178,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     binaries: ['claude'],
     installSource: 'npm install -g @anthropic-ai/claude-code',
     credentialPaths: ({ home }) => [join(home, '.claude')],
+    sandboxMounts: ['~/.claude'],
     credentialEnv: ['ANTHROPIC_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `claude` once to sign in, or set ANTHROPIC_API_KEY.',
@@ -191,6 +209,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     binaries: ['codex'],
     installSource: 'npm install -g @openai/codex',
     credentialPaths: ({ home }) => [join(home, '.codex')],
+    sandboxMounts: ['~/.codex'],
     credentialEnv: ['OPENAI_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `codex` once to sign in, or set OPENAI_API_KEY.',
@@ -221,6 +240,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     // sandbox mounts both dirs. Testing the config dir passed on any machine
     // that had ever run opencode, signed in or not; the check is the auth FILE.
     credentialPaths: ({ xdgDataHome }) => [join(xdgDataHome, 'opencode', 'auth.json')],
+    sandboxMounts: ['~/.config/opencode', '~/.local/share/opencode'],
     credentialEnv: [],
     credentialKnown: true,
     credentialHint: 'Run `opencode auth login` to sign in — it writes auth.json.',
@@ -248,6 +268,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     binaries: ['kimi'],
     installSource: 'npm (@moonshot-ai/kimi-code) — needs Node ≥ 22.19',
     credentialPaths: ({ home }) => [join(home, '.kimi-code')],
+    sandboxMounts: ['~/.kimi-code'],
     credentialEnv: [],
     credentialKnown: true,
     credentialHint: 'Run `kimi` once to sign in — it writes ~/.kimi-code.',
@@ -266,6 +287,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     // file — the one profile with genuinely nowhere to look (the sandbox
     // mounts no credential for it either).
     credentialPaths: () => [],
+    sandboxMounts: [],
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Sign in with `agy` (its token lives in the OS keyring, not a file).',
@@ -293,6 +315,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     // a sign-in. The API key is the one unambiguous signal, so it is the only
     // one tested.
     credentialPaths: () => [],
+    sandboxMounts: ['~/.local/share/cursor-agent'],
     credentialEnv: ['CURSOR_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Run `cursor-agent login` to sign in, or set CURSOR_API_KEY.',
@@ -317,6 +340,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     // create it (even empty) so docker can bind it — so its presence would
     // prove nothing at all.
     credentialPaths: () => [],
+    sandboxMounts: ['~/.aider.conf.yml'],
     credentialEnv: ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY'],
     credentialKnown: true,
     credentialHint: 'Give Aider a model key: set ANTHROPIC_API_KEY or OPENAI_API_KEY.',
@@ -334,6 +358,7 @@ export const AGENT_PROFILES: readonly AgentProfile[] = [
     // the sandbox does). Neither state is testable from outside: an existing
     // config dir need not hold a key, and a keyring-backed key leaves no file.
     credentialPaths: () => [],
+    sandboxMounts: ['~/.config/goose'],
     credentialEnv: [],
     credentialKnown: false,
     credentialHint: 'Run `goose configure` to store a provider key.',
