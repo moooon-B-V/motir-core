@@ -61,7 +61,7 @@ export const V1_API_MAJOR = 1;
  * every unrelated deploy and tell a client nothing it can act on. This is the
  * number Story 11.5's CLI version-skew gate compares against.
  */
-export const V1_CONTRACT_VERSION = '1.0.0';
+export const V1_CONTRACT_VERSION = '1.1.0';
 
 /** A JSON value, as the emitted document is made of. */
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };

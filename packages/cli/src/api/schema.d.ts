@@ -1060,6 +1060,10 @@ export interface components {
             type: ("code" | "design" | "test" | "content" | "research" | "review" | "decision" | "deploy" | "manual" | "chore") | null;
             executor: ("coding_agent" | "human") | null;
             assigneeId: string | null;
+            assignee: {
+                id: string;
+                name: string;
+            } | null;
             descriptionExcerpt: string | null;
             dependencies: {
                 blockedBy: {

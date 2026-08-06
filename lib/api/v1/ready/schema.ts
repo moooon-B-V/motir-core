@@ -35,14 +35,28 @@ import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 //     than an absent one; `descriptionExcerpt` carries what a list needs, and a
 //     client wanting the body reads the item through 11.2's detail endpoint.
 //   • `id` — the internal cuid. §7; `key` is the item's public name.
-//   • `assignee.avatarUrl` / `name` — a public API must not acquire a second,
-//     accidental user resource. The id is what a client can act on (it is what
-//     11.2's PATCH takes back); the display fields are the web app's.
+//   • `assignee.avatarUrl` — an avatar URL is a web-app concern; no terminal or
+//     script renders one, and neither mirror's minimal shape is needed for it.
+//     A client that wants richer user data is asking for a user resource, which
+//     v1 deliberately does not have.
 //   • `runCommand` / `contextRefs` / `sessionBranch` / `targetRepo` — those live
 //     on `ReadyItemDispatchDto`, the payload for Motir's OWN CLI dispatch path.
 //     They encode assumptions about a local checkout that a third-party
 //     integration does not share, and `runCommand` in particular would freeze
-//     the CLI's invocation string as public API.
+//     the CLI's invocation string as public API. **Reaffirmed by Amendment 8
+//     Q2**: a client that needs `targetRepo` reads it from
+//     `GET /api/v1/work-items/{key}/dispatch-prompt`, which 11.7 ships.
+//
+// ⚠️ `assignee.name` USED TO BE ON THIS LIST, and Amendment 8 Q1 removed it.
+// The reason given was "a public API must not acquire a second, accidental user
+// resource" — right about what it feared, wrong about what counts as one. An
+// EMBEDDED, minimal, read-only actor has no endpoint, no collection, no
+// expansion and cannot be queried; it is a field, not a resource. And with
+// `assigneeId` alone NO client can render a work-item list showing who owns
+// what, because v1 has no user endpoint to resolve an id against — which is
+// every integration that draws a table, not one CLI. Both mirrors embed one
+// (GitHub `assignees[].login`/`name`, GitLab `assignees[].name`/`username`).
+// The rule now applies to every v1 collection row, not just this one.
 
 /** `true` only when `Union` is fully covered by `Covered`; otherwise `never`. */
 type AssertTotal<Union, Covered> = [Exclude<Union, Covered>] extends [never] ? true : never;
@@ -93,6 +107,23 @@ void [_kindsTotal, _prioritiesTotal, _typesTotal, _executorsTotal];
 // that is what makes it ready — and `blocks` is the payload that matters: what
 // finishing this item unblocks, i.e. why it is worth doing first.
 
+/**
+ * The MINIMAL ACTOR a v1 collection row embeds (Amendment 8 Q1).
+ *
+ * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes
+ * back) and the name a client displays. Deliberately NOT a user resource — it
+ * has no endpoint, no collection, no expansion and cannot be queried — which is
+ * the distinction the pre-Amendment-8 rationale collapsed.
+ *
+ * Declared here because the ready row is the first collection to carry one;
+ * Amendment 8 states the rule for every v1 collection row, so a second consumer
+ * imports THIS rather than restating it.
+ */
+export const actorRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
 /** The v1 ready row. */
 export const readyItemSchema = z.object({
   key: workItemKeySchema,
@@ -102,7 +133,16 @@ export const readyItemSchema = z.object({
   status: z.object({ key: z.string(), category: z.string() }),
   type: z.enum(READY_TYPES).nullable(),
   executor: z.enum(READY_EXECUTORS).nullable(),
+  /**
+   * The assignee's id — KEPT alongside `assignee` rather than replaced by it.
+   *
+   * Removing it would be a §8 violation (a field taken away), and it is the
+   * cheaper read for a client that only routes on identity. `assignee.id` and
+   * `assigneeId` are the same value; a test asserts they cannot diverge.
+   */
   assigneeId: z.string().nullable(),
+  /** Who it is assigned to, for a client that renders a name (Amendment 8 Q1). */
+  assignee: actorRefSchema.nullable(),
   /** ~200 chars of the description, Markdown stripped to plain text. */
   descriptionExcerpt: z.string().nullable(),
   dependencies: dependencyEdgesSchema,
@@ -129,6 +169,10 @@ export function presentReadyItem(
     type: item.type,
     executor: item.executor,
     assigneeId: item.assignee?.id ?? null,
+    // From the SAME `item.assignee` the id comes from — the service already
+    // read it, so this is a mapper widening and not a second query. `avatarUrl`
+    // is dropped here rather than in the service (see the header note).
+    assignee: item.assignee === null ? null : { id: item.assignee.id, name: item.assignee.name },
     descriptionExcerpt: item.descriptionExcerpt,
     dependencies: presentDependencyEdges(edges),
   };

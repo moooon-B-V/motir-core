@@ -97,7 +97,12 @@ const READY_SET = {
       status: { key: 'todo', category: 'todo' },
       type: 'code',
       executor: 'coding_agent',
-      assigneeId: null,
+      assigneeId: 'user_1',
+      // The minimal ACTOR object every v1 collection row embeds (ADR
+      // Amendment 8 Q1, MOTIR-2279). `assigneeId` is kept beside it and carries
+      // the same value — `renderReadyTable` reads the NAME, and before this
+      // field existed it printed "unassigned" for every assigned row.
+      assignee: { id: 'user_1', name: 'Zhu Yue' },
       descriptionExcerpt: null,
       dependencies: { blockedBy: [], blocks: [] },
     },
