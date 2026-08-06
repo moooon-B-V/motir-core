@@ -1,4 +1,5 @@
 import { z } from 'zod/v4';
+import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 import {
   V1_PAGE_ENVELOPE_COMPONENT,
   V1_RANKED_PAGE_ENVELOPE_COMPONENT,
@@ -55,13 +56,14 @@ export const V1_API_MAJOR = 1;
 /**
  * `info.version` — the API CONTRACT's version, NOT the app's release number.
  *
- * MAJOR is the path version (`1`), MINOR increments on an additive change under
- * ADR §8's allowed list, and PATCH on a documentation-only correction. A client
- * reading it learns what the contract offers; a release number would churn on
- * every unrelated deploy and tell a client nothing it can act on. This is the
- * number Story 11.5's CLI version-skew gate compares against.
+ * Defined in `lib/api/v1/contractVersion.ts` and re-exported here, because the
+ * request wrapper stamps the same value on every response as
+ * `X-Motir-Api-Version` and must not import the documentation emitter to do it
+ * (MOTIR-2275). Re-exported rather than moved so every existing importer of
+ * this module is unchanged. See that module for what the number means and when
+ * it moves.
  */
-export const V1_CONTRACT_VERSION = '1.1.0';
+export { V1_CONTRACT_VERSION };
 
 /** A JSON value, as the emitted document is made of. */
 type Json = string | number | boolean | null | Json[] | { [key: string]: Json };

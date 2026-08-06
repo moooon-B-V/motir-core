@@ -3,6 +3,8 @@
 // motir-ai boundary responses into, stripping the internal aiProjectId. Dates stay
 // ISO strings (they crossed the wire as JSON and the UI only formats them).
 
+import type { RepoAuditRowState } from '@/lib/codeHealth/repoAuditRows';
+
 export interface ConventionProvenanceDTO {
   ruleId: string;
   category: string;
@@ -136,6 +138,36 @@ export interface CodeAuditSurfaceDTO {
 export interface RepoAuditSurfaceDTO {
   repoKey: string;
   surface: CodeAuditSurfaceDTO | null;
+}
+
+// ── Audit COVERAGE (MOTIR-2248) ──────────────────────────────────────────────
+// "Which of this project's connected repos have never been assessed?" — the one
+// question the /planning nudge asks, answered in one request.
+//
+// The vocabulary is BORROWED from the shipped row states, not invented: this is
+// `RepoAuditRowState` minus `deriving`, which is a CLIENT-side fact (the set the
+// island knows it just queued) and has no meaning in a server read. Binding it
+// with `Extract` rather than restating the three words means a change to the
+// shipped vocabulary breaks this at compile time instead of drifting from it.
+export type RepoAuditCoverageState = Extract<
+  RepoAuditRowState,
+  'audited' | 'not_audited' | 'unavailable'
+>;
+
+export interface RepoAuditCoverageEntryDTO {
+  repoKey: string;
+  state: RepoAuditCoverageState;
+}
+
+export interface AuditCoverageDTO {
+  /** One entry per CONNECTED repo, in connected order (`owner asc, name asc`). */
+  repos: RepoAuditCoverageEntryDTO[];
+  // How many connected repos have NO derived audit. A repo whose read FAILED is
+  // `unavailable` and is deliberately NOT counted here: a nudge that says "1
+  // repository has no audit" because a request timed out sends an admin to a page
+  // where the repo looks fine, and teaches them the prompt is noise. Unknown is
+  // not the same as missing.
+  notAuditedCount: number;
 }
 
 // One repo's queued pair (MOTIR-928 · POST /v1/code-context/refresh): a fresh

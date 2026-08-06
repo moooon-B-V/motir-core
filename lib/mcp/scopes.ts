@@ -9,8 +9,11 @@ import type { McpToolName } from './registry';
 //
 // "scopes", NOT "permissions" — the durable industry convention for API-token
 // capabilities (GitHub classic-PAT *scopes*, Linear/Slack/Atlassian-OAuth
-// *scopes*). Motir already uses "permissions" for the 6.4 role model
-// (`lib/services` role gates), so reusing that word here would collide.
+// *scopes*). Motir already uses "permissions" for the project access model — a
+// named catalog in `lib/permissions/catalog.ts` that each role holds a SET over
+// (MOTIR-2255) — so reusing that word here would collide. The two axes COMPOSE
+// and never merge: a permission says what the token's owner may do, a scope
+// narrows what this particular token may do on their behalf.
 //
 // This module is the MODEL + the canonical tool→scope map only — no enforcement
 // (7.7.17), no UI (7.7.19). The map is TOTAL over `MCP_TOOL_NAMES` by

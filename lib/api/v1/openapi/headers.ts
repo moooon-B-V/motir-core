@@ -44,6 +44,30 @@ export const V1_REQUEST_ID_HEADER: V1HeaderComponent = {
 };
 
 /**
+ * The CONTRACT version that served this response — ADR §8's additive list, via
+ * MOTIR-2275.
+ *
+ * ⚠️ It ADVERTISES the contract version; it does not NEGOTIATE one. ADR §1
+ * rejected header VERSIONING (a REQUEST header selecting which contract to
+ * serve) and that rejection stands — `/api/v1` is still the only thing that
+ * picks a contract. This is a RESPONSE header, never read off a request, and
+ * what it buys is that a client learns the number from a call it was already
+ * making instead of downloading a specification to read one string.
+ *
+ * The value is the CONTRACT's `MAJOR.MINOR.PATCH` (ADR Amendment 4 Q6) — the
+ * same number `info.version` carries — and NOT the deployment's release
+ * number, which would churn on every unrelated deploy and tell a client
+ * nothing it can act on.
+ */
+export const V1_API_VERSION_HEADER: V1HeaderComponent = {
+  name: 'X-Motir-Api-Version',
+  wireName: 'x-motir-api-version',
+  description:
+    "The version of the API CONTRACT that served this response, as `MAJOR.MINOR.PATCH` — the same value as this document's `info.version`. MAJOR is the path version (`1`), MINOR moves on an additive change, PATCH on a documentation-only correction. It is NOT the deployment's release number. Present on every response, success and failure alike, so a client can check for version skew without fetching this document.",
+  schema: z.string().regex(/^\d+\.\d+\.\d+$/),
+};
+
+/**
  * The per-token rate-limit budget headers — ADR §6. On every response,
  * including the 429 that reports the budget is spent and the 403 that was
  * metered anyway.
@@ -78,5 +102,6 @@ export const V1_RATE_LIMIT_HEADERS: readonly V1HeaderComponent[] = [
  */
 export const V1_SHARED_RESPONSE_HEADERS: readonly V1HeaderComponent[] = [
   V1_REQUEST_ID_HEADER,
+  V1_API_VERSION_HEADER,
   ...V1_RATE_LIMIT_HEADERS,
 ];

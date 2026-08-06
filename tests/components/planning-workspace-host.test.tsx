@@ -126,11 +126,13 @@ function renderHost(
     anchorId = null,
     initialTarget = null,
     initialCanvasTrail,
+    canManage = false,
   }: {
     state?: PlanChangeConversationState;
     anchorId?: string | null;
     initialTarget?: PlanningTarget | null;
     initialCanvasTrail?: readonly { id: string; label: string }[];
+    canManage?: boolean;
   } = {},
 ) {
   const launch = parsePlanningLaunch(searchParams);
@@ -144,6 +146,7 @@ function renderHost(
       backHref={planningLaunchBackHref(launch)}
       initialTarget={initialTarget}
       initialCanvasTrail={initialCanvasTrail}
+      canManage={canManage}
     />,
   );
 }
@@ -453,5 +456,55 @@ describe('PlanningWorkspaceHost — the shell carries its own exit chrome', () =
     document.dispatchEvent(event);
 
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+// ── The audit-coverage banner's HOST gate (MOTIR-2250) ──────────────────────
+//
+// ⚠️ `/planning` lives in the `(planning)` route group, OUTSIDE `(authed)`, so
+// `ProjectAccessProvider` is NOT mounted here and `useProjectAccess()` would
+// return its documented PERMISSIVE default — showing an admin-only prompt to
+// every member. The capability is therefore threaded as an explicit prop, and
+// these pin that the gate is real rather than inherited from that default.
+describe('PlanningWorkspaceHost — the audit-coverage banner is admin-only', () => {
+  const coverage = { repos: [], notAuditedCount: 2 };
+
+  function stubCoverage() {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', (input: string) => {
+      calls.push(String(input));
+      return Promise.resolve({ ok: true, json: async () => coverage } as unknown as Response);
+    });
+    return calls;
+  }
+
+  it('renders it for a viewer who CAN manage the project', async () => {
+    stubCoverage();
+    renderHost({ mode: 'replan', from: 'project' }, { canManage: true });
+    await act(async () => {});
+
+    expect(screen.getByRole('status').textContent).toContain('2 repositories have no code-health');
+    vi.unstubAllGlobals();
+  });
+
+  it('renders NOTHING for a viewer who cannot — and never even asks', async () => {
+    const calls = stubCoverage();
+    renderHost({ mode: 'replan', from: 'project' }, { canManage: false });
+    await act(async () => {});
+
+    expect(screen.queryByRole('status')).toBeNull();
+    // The member's browser does not even issue the read: the banner is not
+    // mounted, so there is no request for the server gate to refuse.
+    expect(calls.filter((c) => c.includes('audit-coverage'))).toEqual([]);
+    vi.unstubAllGlobals();
+  });
+
+  it('defaults to NOT rendering when the capability is not supplied at all', async () => {
+    stubCoverage();
+    renderHost({ mode: 'replan', from: 'project' });
+    await act(async () => {});
+
+    expect(screen.queryByRole('status')).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

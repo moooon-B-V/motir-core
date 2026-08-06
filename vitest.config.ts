@@ -617,6 +617,7 @@ export default defineConfig({
         // path that leaks a stack. Stories 11.2 / 11.3 add endpoints ON TOP of
         // these files, so the gate must already be load-bearing when they land.
         'lib/api/v1/route.ts',
+        'lib/api/v1/contractVersion.ts',
         'lib/api/v1/errors.ts',
         'lib/api/v1/bearer.ts',
         'lib/api/v1/pagination.ts',
@@ -710,6 +711,23 @@ export default defineConfig({
         // a project silently showing one repo's grade as if it were its own.
         'lib/codeHealth/repoAuditRows.ts',
         'app/(authed)/code-health/_components/AuditRepoList.tsx',
+        // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-SCOPED audit trigger.
+        // The scope decides how many derivations a click PAYS for, so an
+        // untested branch here is either a fan-out that spends N times what was
+        // asked for, or a body parse that silently downgrades a client bug into
+        // a whole-set run. The typed rejections gate the same money.
+        'lib/codeHealth/errors.ts',
+        'app/api/ai/coding-convention/_shared.ts',
+        'app/api/ai/coding-convention/refresh/route.ts',
+        // Subtask MOTIR-2248 — the audit-COVERAGE read. Its whole contract is
+        // what it does when a repo's read FAILS: an untested branch is a nudge
+        // that counts an unreadable repo as un-audited and cries wolf.
+        'lib/services/auditCoverageService.ts',
+        'app/api/ai/coding-convention/audit-coverage/route.ts',
+        // Subtask MOTIR-2249 — the scoped run's record merge (pure).
+        'lib/codeHealth/reauditRun.ts',
+        // Subtask MOTIR-2250 — the audit-coverage banner.
+        'components/planning/AuditCoverageBanner.tsx',
         'lib/codeGraph/offboarding.ts',
         'lib/repositories/codeGraphOffboardingRepository.ts',
         'lib/services/codeGraphOffboardingService.ts',
@@ -734,6 +752,9 @@ export default defineConfig({
       thresholds: {
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.
         'lib/api/v1/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-2275 — the ONE definition of the contract version, read by both
+        // the emitted document and the header the wrapper stamps.
+        'lib/api/v1/contractVersion.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },
@@ -786,6 +807,23 @@ export default defineConfig({
         // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
         'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },
         'app/(authed)/code-health/_components/AuditRepoList.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-scoped audit trigger.
+        'lib/codeHealth/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/coding-convention/_shared.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/coding-convention/refresh/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Subtask MOTIR-2248 — the audit-coverage read.
+        'lib/services/auditCoverageService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/codeHealth/reauditRun.ts': { branches: 90, functions: 90, lines: 90 },
+        'components/planning/AuditCoverageBanner.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/api/ai/coding-convention/audit-coverage/route.ts': {
           branches: 90,
           functions: 90,
           lines: 90,

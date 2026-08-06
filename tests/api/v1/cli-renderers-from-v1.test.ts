@@ -74,11 +74,11 @@ function toCliSearchRow(row: WorkItemSummary): SearchItemSummary {
 }
 
 /**
- * A v1 ready row → the CLI's `ReadyItemSummary` (Amendment 8 Q1 · MOTIR-2279).
+ * A v1 ready row → the CLI's `ReadyItemSummary` (Amendment 9 Q1 · MOTIR-2279).
  *
  * A RENAME of nothing at all: `key`, `kind`, `title`, `priority`, `assignee` and
  * `dependencies` are all already the names the renderer reads. That is the point
- * — before Amendment 8 this adapter could not be written, because `assignee` did
+ * — before Amendment 9 this adapter could not be written, because `assignee` did
  * not exist on the row and `assigneeId` is not a name.
  */
 function toCliReadyRow(row: V1ReadyItem): ReadyItemSummary {
@@ -274,8 +274,8 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
     expect(blockedRow).toContain(first.identifier);
   });
 
-  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 8 Q1)', async () => {
-    // The regression this whole card exists to prevent. Before Amendment 8 the
+  it('renderReadyTable prints the ASSIGNEE NAME from `GET …/ready` (Amendment 9 Q1)', async () => {
+    // The regression this whole card exists to prevent. Before Amendment 9 the
     // v1 row carried `assigneeId` and no name, so this table printed
     // "unassigned" for an item that plainly has an assignee — silently, because
     // a blank ASSIGNEE column looks exactly like unassigned work.
@@ -309,7 +309,7 @@ describe('the shipped CLI renderers, driven from a v1 response', () => {
   });
 
   it('adds NO query — the assignee comes off the page the route already read', async () => {
-    // Amendment 8 permits the widening because it is a mapper change. An N+1
+    // Amendment 9 permits the widening because it is a mapper change. An N+1
     // here would be invisible until a 50-row page, so it is asserted rather
     // than reasoned about: two service calls for the whole page, whatever its
     // size (`listReady`, then the bounded edge projection).

@@ -16,6 +16,12 @@
 //     synthetic plan/usage state + hosted session URLs, so the billing journeys
 //     (checkout / paywall / portal) drive the real surfaces with no live Stripe
 //     and no motir-ai instance (Subtask 8.1.10's dedicated cloud-on E2E lane).
+//   - E2E_TEST_CODE_HEALTH=1 → lib/test-code-health-mock intercepts the motir-ai
+//     code-health seam (the MOTIR_AI_URL origin's /v1/code-audit,
+//     /v1/convention and /v1/code-context/refresh) and answers from a JSON
+//     fixture, so the audit-coverage journey (MOTIR-2244) can drive the
+//     SERVER-rendered /code-health page — which a browser `page.route` cannot
+//     reach — with no motir-ai instance.
 //   - E2E_TEST_GITHUB_REPOS=1 → lib/test-github-repos-mock intercepts the
 //     repo-PROVISIONING and COLLABORATOR calls to api.github.com (create, the
 //     readiness read, the CI stub, the admin invite), so the repository-set
@@ -43,7 +49,15 @@ export async function register() {
   const wantBlobMock = process.env['E2E_TEST_BLOB'] === '1';
   const wantBillingMock = process.env['E2E_TEST_BILLING'] === '1';
   const wantGithubReposMock = process.env['E2E_TEST_GITHUB_REPOS'] === '1';
-  if (!wantOauthMock && !wantBlobMock && !wantBillingMock && !wantGithubReposMock) return;
+  const wantCodeHealthMock = process.env['E2E_TEST_CODE_HEALTH'] === '1';
+  if (
+    !wantOauthMock &&
+    !wantBlobMock &&
+    !wantBillingMock &&
+    !wantGithubReposMock &&
+    !wantCodeHealthMock
+  )
+    return;
 
   const { installSharedMockAgent } = await import('@/lib/test-mock-agent');
   const agent = installSharedMockAgent();
@@ -83,5 +97,11 @@ export async function register() {
     console.log(
       '[INSTRUMENT] E2E_TEST_GITHUB_REPOS active — GitHub repo creation + collaborator API mocked.',
     );
+  }
+  if (wantCodeHealthMock) {
+    const { installCodeHealthBoundaryMock } = await import('@/lib/test-code-health-mock');
+    installCodeHealthBoundaryMock(agent);
+    // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
+    console.log('[INSTRUMENT] E2E_TEST_CODE_HEALTH active — motir-ai code-health seam mocked.');
   }
 }
