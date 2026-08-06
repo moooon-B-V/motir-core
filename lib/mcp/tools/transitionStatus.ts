@@ -10,7 +10,8 @@ import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, WorkflowStatusDto } from '@/lib/dto/workflows';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolError, toolOk } from '../toolResult';
-import { unmigrated } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `transition_status` (Story 7.8 · Subtask 7.8.5) — move a work item to a target
@@ -99,7 +100,7 @@ export async function runTransitionStatus(
         : `${fromStatus} → ${dto.status}`;
     return toolOk(
       `${dto.identifier}: ${moved}`,
-      unmigrated('transition_status', dto as unknown as Record<string, unknown>),
+      derived(workItemWritePayload, presentMcpWorkItem(dto)),
     );
   } catch (err) {
     // Enrich an illegal move with the legal targets so the agent self-corrects.

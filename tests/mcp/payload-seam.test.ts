@@ -17,7 +17,23 @@ import {
   sharedResourceSchema,
 } from '@/lib/mcp/payloads/sharedResources';
 import { definePayload, derived, exempt, unmigrated } from '@/lib/mcp/payloads/define';
-import { getWorkItemPayload, presentMcpWorkItemChild } from '@/lib/mcp/payloads/workItems';
+import {
+  addCommentPayload,
+  claimNextReadyPayload,
+  getWorkItemPayload,
+  listReadyPayload,
+  mcpCommentSchema,
+  mcpWorkItemSchema,
+  nextReadyPayload,
+  presentMcpComment,
+  presentMcpReadyDispatch,
+  presentMcpReadyRow,
+  presentMcpWorkItem,
+  presentMcpWorkItemChild,
+  presentMcpWorkItemRow,
+  searchWorkItemsPayload,
+  workItemWritePayload,
+} from '@/lib/mcp/payloads/workItems';
 import { toolOk } from '@/lib/mcp/toolResult';
 
 // The PAYLOAD SEAM guard (Story 11.6 · Subtask 11.6.2 — MOTIR-2228).
@@ -45,7 +61,7 @@ describe('toolOk totality — a payload must come from a constructor', () => {
 
   it('REFUSES `exempt` for a tool that is not in the exemption registry', () => {
     // @ts-expect-error `list_ready` is not exempt — it returns a shape v1
-    // describes, so it must DERIVE. Exemption has to be written down first.
+    // describes, so it DERIVES (MOTIR-2229). Exemption must be written first.
     expect(() => exempt('list_ready', {})).toBeTypeOf('function');
   });
 
@@ -65,8 +81,8 @@ describe('toolOk totality — a payload must come from a constructor', () => {
     expect(toolOk('t', exempt('validate_work_item', { valid: true })).structuredContent).toEqual({
       valid: true,
     });
-    expect(toolOk('t', unmigrated('list_ready', { items: [] })).structuredContent).toEqual({
-      items: [],
+    expect(toolOk('t', unmigrated('list_projects', { projects: [] })).structuredContent).toEqual({
+      projects: [],
     });
   });
 });
@@ -101,10 +117,26 @@ describe('the exemption + migration registries', () => {
   });
 
   it('EVERY registered tool resolves to derived, exempt or migrating — none is invisible', () => {
-    // `get_work_item` is the one tool 11.6.2 DERIVES; every other is registered.
+    // The tools that DERIVE so far; every other must be registered.
     // MOTIR-2231 (11.6.5) empties `MIGRATING_TOOLS`, at which point this
     // assertion is the seal: derived-or-exempt, nothing in between.
-    const derivedTools = new Set(['get_work_item']);
+    const derivedTools = new Set([
+      // 11.6.2's proving tool …
+      'get_work_item',
+      // … and 11.6.3's work-item family (MOTIR-2229).
+      'search_work_items',
+      'list_ready',
+      'next_ready',
+      'claim_next_ready',
+      'create_work_item',
+      'update_work_item',
+      'transition_status',
+      'archive_work_item',
+      'unarchive_work_item',
+      'change_kind',
+      'move_to_parent',
+      'add_comment',
+    ]);
     for (const name of MCP_TOOL_NAMES) {
       const resolved = derivedTools.has(name) || isExemptTool(name) || isMigratingTool(name);
       expect(resolved, `tool "${name}" is in NO column — the guard cannot see it`).toBe(true);
@@ -278,5 +310,250 @@ describe('definePayload', () => {
     });
     expect(def.probes).toEqual([]);
     expect(def.schema.parse({ a: 'x' })).toEqual({ a: 'x' });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The WORK-ITEM family mappers (Subtask 11.6.3 — MOTIR-2229)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const workItemDto = {
+  id: 'row-9',
+  projectId: 'proj-1',
+  parentId: 'row-0',
+  kind: 'subtask' as const,
+  key: 2229,
+  identifier: 'PROD-2229',
+  title: 'Re-base the family',
+  descriptionMd: 'body',
+  explanationMd: null,
+  explanationSource: 'user_authored' as const,
+  status: 'in_progress',
+  priority: 'high' as const,
+  assigneeId: null,
+  reporterId: 'user-1',
+  dueDate: null,
+  estimateMinutes: 55,
+  type: 'code' as const,
+  executor: 'coding_agent' as const,
+  storyPoints: 5,
+  position: 'a2',
+  sprintId: null,
+  backlogRank: 'a0',
+  publicChildrenHidden: false,
+  sessionBranch: null,
+  targetRepo: 'motir-core',
+  planningSource: 'mcp' as const,
+  planningHarness: null,
+  planningModel: null,
+  implementationSource: null,
+  implementationHarness: null,
+  implementationModel: null,
+  archivedAt: null,
+  createdAt: '2026-08-05T16:05:35.168Z',
+  updatedAt: '2026-08-06T00:36:35.928Z',
+};
+
+describe('presentMcpWorkItem — the write confirmation', () => {
+  it('maps the shared half AND keeps every aggregate column', () => {
+    const row = presentMcpWorkItem(workItemDto);
+    expect(row.key).toBe('PROD-2229');
+    expect(row.numericKey).toBe(2229);
+    expect(row.identifier).toBe('PROD-2229');
+    expect(row.targetRepo).toBe('motir-core');
+    expect(row.descriptionMd).toBe('body');
+    expect(row.createdAt).toBe(workItemDto.createdAt);
+  });
+
+  it('is a NARROWING — it carries no `dependencies`, because a write reads no graph', () => {
+    expect(presentMcpWorkItem(workItemDto)).not.toHaveProperty('dependencies');
+  });
+
+  it('round-trips through its own declared schema', () => {
+    expect(mcpWorkItemSchema.safeParse(presentMcpWorkItem(workItemDto)).success).toBe(true);
+  });
+
+  it('`derived` accepts it and REFUSES a row missing a shared field', () => {
+    expect(derived(workItemWritePayload, presentMcpWorkItem(workItemDto)).key).toBe('PROD-2229');
+    const { title: _dropped, ...broken } = presentMcpWorkItem(workItemDto);
+    expect(() => derived(workItemWritePayload, broken as never)).toThrow();
+  });
+});
+
+describe('presentMcpWorkItemRow — the search row', () => {
+  const listItem = {
+    id: 'row-9',
+    kind: 'task' as const,
+    type: null,
+    key: 42,
+    identifier: 'PROD-42',
+    title: 'A row',
+    status: 'todo',
+    priority: 'medium' as const,
+    assigneeId: null,
+    reporterId: 'user-1',
+    dueDate: null,
+    estimateMinutes: null,
+    storyPoints: null,
+    updatedAt: '2026-08-06T00:00:00.000Z',
+    hasDescription: true,
+  };
+
+  it('carries `key` as the identifier, the numeric key beside it, and the count', () => {
+    const row = presentMcpWorkItemRow(listItem, undefined, 3);
+    expect(row.key).toBe('PROD-42');
+    expect(row.numericKey).toBe(42);
+    expect(row.commentCount).toBe(3);
+    expect(row.hasDescription).toBe(true);
+  });
+
+  it('carries the `dependencies` block from the SHARED schema, total by construction', () => {
+    expect(presentMcpWorkItemRow(listItem, undefined, 0).dependencies).toEqual({
+      blockedBy: [],
+      blocks: [],
+    });
+    const edges = { blockedBy: [{ key: 'PROD-1', title: 'A', status: 'done' }], blocks: [] };
+    expect(presentMcpWorkItemRow(listItem, edges, 0).dependencies).toEqual(edges);
+  });
+
+  it('is a NARROWING — no `createdAt`, which the MCP list projection does not read', () => {
+    expect(presentMcpWorkItemRow(listItem, undefined, 0)).not.toHaveProperty('createdAt');
+  });
+
+  it('the page payload validates and refuses a malformed row', () => {
+    const page = {
+      items: [presentMcpWorkItemRow(listItem, undefined, 0)],
+      total: 1,
+      nextCursor: null,
+    };
+    expect(derived(searchWorkItemsPayload, page).total).toBe(1);
+    expect(() =>
+      derived(searchWorkItemsPayload, { ...page, items: [{ key: 'PROD-1' }] as never }),
+    ).toThrow();
+  });
+});
+
+describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
+  const readyDto = {
+    id: 'row-7',
+    key: 'PROD-7',
+    kind: 'subtask' as const,
+    title: 'Ready work',
+    priority: 'high' as const,
+    status: { key: 'todo', category: 'todo' },
+    assignee: { id: 'user-2', name: 'Yue', avatarUrl: null },
+    descriptionExcerpt: 'excerpt',
+    type: 'code' as const,
+    executor: 'coding_agent' as const,
+    descriptionMd: 'the body',
+  };
+
+  it('is a pure WIDENING — the row VALIDATES against v1’s ReadyItem schema', () => {
+    const row = presentMcpReadyRow(readyDto, undefined, 0);
+    expect(sharedResourceSchema('ReadyItem').safeParse(row).success).toBe(true);
+  });
+
+  it('derives `assigneeId` from the object MCP already carried — both ride', () => {
+    const row = presentMcpReadyRow(readyDto, undefined, 0);
+    expect(row.assigneeId).toBe('user-2');
+    expect(row.assignee).toEqual({ id: 'user-2', name: 'Yue', avatarUrl: null });
+  });
+
+  it('an unassigned row reads `assigneeId: null`', () => {
+    const row = presentMcpReadyRow({ ...readyDto, assignee: null }, undefined, 0);
+    expect(row.assigneeId).toBeNull();
+    expect(row.assignee).toBeNull();
+  });
+
+  it('the dispatch superset adds what a runner needs, keeping the ready half', () => {
+    const dispatch = presentMcpReadyDispatch(
+      {
+        ...readyDto,
+        contextRefs: ['a.ts'],
+        blockerKeys: [],
+        parentKey: 'PROD-1',
+        runCommand: 'motir run PROD-7',
+        sessionBranch: null,
+        targetRepo: 'motir-core',
+        targetRepoCloneUrl: null,
+        targetRepoDefaultBranch: null,
+      },
+      2,
+    );
+    expect(dispatch.runCommand).toBe('motir run PROD-7');
+    expect(dispatch.commentCount).toBe(2);
+    // Still a ready row underneath — the probe reads it as one.
+    expect(sharedResourceSchema('ReadyItem').safeParse(dispatch).success).toBe(true);
+  });
+
+  it('the list/next/claim payloads probe their rows against ReadyItem', () => {
+    const row = presentMcpReadyRow(readyDto, undefined, 0);
+    const page = derived(listReadyPayload, { items: [row], nextCursor: null });
+    for (const probe of listReadyPayload.probes) {
+      for (const part of probe.select(page as never)) {
+        expect(sharedResourceSchema(probe.resource).safeParse(part).success).toBe(true);
+      }
+    }
+    // A PRESENT item probes to that item, and it satisfies ReadyItem…
+    const dispatch = presentMcpReadyDispatch(
+      {
+        ...readyDto,
+        contextRefs: [],
+        blockerKeys: [],
+        parentKey: null,
+        runCommand: 'motir run PROD-7',
+        sessionBranch: null,
+        targetRepo: null,
+        targetRepoCloneUrl: null,
+        targetRepoDefaultBranch: null,
+      },
+      0,
+    );
+    for (const payload of [nextReadyPayload, claimNextReadyPayload]) {
+      const built = derived(payload, { item: dispatch });
+      const parts = payload.probes[0]!.select(built as never);
+      expect(parts).toEqual([dispatch]);
+      expect(sharedResourceSchema('ReadyItem').safeParse(parts[0]).success).toBe(true);
+    }
+    // …and a null item probes to NOTHING rather than crashing.
+    const empty = derived(nextReadyPayload, { item: null });
+    expect(nextReadyPayload.probes[0]!.select(empty as never)).toEqual([]);
+    const emptyClaim = derived(claimNextReadyPayload, {
+      item: null,
+      reason: 'none_ready',
+      advisories: [],
+    });
+    expect(claimNextReadyPayload.probes[0]!.select(emptyClaim as never)).toEqual([]);
+  });
+});
+
+describe('presentMcpComment', () => {
+  const commentDto = {
+    id: 'c-1',
+    workItemId: 'row-9',
+    parentCommentId: null,
+    author: { id: 'user-1', name: 'Yue', image: null },
+    bodyMd: 'a comment',
+    editedAt: null,
+    createdAt: '2026-08-06T00:00:00.000Z',
+    mentionedUserIds: ['user-2'],
+  };
+
+  it('is a WIDENING — `authorId` arrives beside the richer `author` object', () => {
+    const row = presentMcpComment(commentDto);
+    expect(row.authorId).toBe('user-1');
+    expect(row.author).toEqual({ id: 'user-1', name: 'Yue', image: null });
+    expect(row.workItemId).toBe('row-9');
+    expect(row.mentionedUserIds).toEqual(['user-2']);
+  });
+
+  it('validates through its declared schema and the payload constructor', () => {
+    expect(mcpCommentSchema.safeParse(presentMcpComment(commentDto)).success).toBe(true);
+    expect(derived(addCommentPayload, presentMcpComment(commentDto)).id).toBe('c-1');
+  });
+
+  it('carries an edit timestamp when the comment was edited', () => {
+    const edited = presentMcpComment({ ...commentDto, editedAt: '2026-08-06T01:00:00.000Z' });
+    expect(edited.editedAt).toBe('2026-08-06T01:00:00.000Z');
   });
 });

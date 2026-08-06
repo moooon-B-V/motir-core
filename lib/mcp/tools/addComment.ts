@@ -8,7 +8,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { CommentDTO } from '@/lib/dto/comments';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { unmigrated } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { addCommentPayload, presentMcpComment } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `add_comment` (Story 7.8 · Subtask 7.8.5) — post a Markdown comment on a work
@@ -48,7 +49,7 @@ export async function runAddComment(
     const comment = await commentsService.addComment(item.id, { bodyMd: args.body }, ctx);
     return toolOk(
       summarize(item.identifier, comment),
-      unmigrated('add_comment', comment as unknown as Record<string, unknown>),
+      derived(addCommentPayload, presentMcpComment(comment)),
     );
   } catch (err) {
     return toToolError(err);

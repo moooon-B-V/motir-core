@@ -7,7 +7,8 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { unmigrated } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { presentMcpWorkItem, workItemWritePayload } from '../payloads/workItems';
 import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemRef';
 
 // `move_to_parent` (Story 7.8 · bug 7.8 MOTIR-1017) — RE-PARENT an existing work
@@ -85,10 +86,7 @@ export async function runMoveToParent(
     // No `beforeId`/`afterId` → append into the new parent at a freshly-minted
     // valid position (the service's neighbor-less re-parent branch).
     const dto = await workItemsService.moveWorkItem(item.id, { newParentId }, ctx);
-    return toolOk(
-      summarize(dto),
-      unmigrated('move_to_parent', dto as unknown as Record<string, unknown>),
-    );
+    return toolOk(summarize(dto), derived(workItemWritePayload, presentMcpWorkItem(dto)));
   } catch (err) {
     return toToolError(err);
   }

@@ -34,6 +34,19 @@ export const EXEMPT_TOOLS = {
     'Reports a project’s PLANNING PRECONDITIONS (established?, code connected + indexed?, ' +
     'repo set, onboarding run) — an agent-facing readiness report assembled for dispatch, ' +
     'with no REST client asking for it.',
+  link_work_items:
+    'Returns the created EDGE ROW (`WorkItemLinkDto` — `id`, `fromId`, `toId`, `kind`, ' +
+    '`createdById`). v1 has a link-create endpoint, but its 201 body is an inline ' +
+    '`{ toKey, relationship }` declared at the operation — key-addressed, not a registered ' +
+    'component, and a different resource from the row. Nothing shared to derive from (MOTIR-2229).',
+  unlink_work_items:
+    'Returns `{ removed, relationship }` — a removal COUNT. v1’s delete is a 204 with no body ' +
+    'at all (idempotent by post-condition), so there is no shared shape (MOTIR-2229).',
+  delete_work_item:
+    'Returns a cascade-delete summary (`totalCount`, `descendantCount`, `byKind`). ADR §3 ' +
+    'leaves the irreversible cascade delete OUT of v1 entirely, and `tests/helpers/v1RouteAudit.ts` ' +
+    'enforces it with a `reaches-cascade-delete` rule — so no v1 resource exists, by decision ' +
+    'rather than by omission (MOTIR-2229).',
 } as const satisfies Partial<Record<McpToolName, string>>;
 
 /** A tool the exemption registry covers. */
@@ -57,22 +70,7 @@ export type ExemptToolName = keyof typeof EXEMPT_TOOLS;
  * mechanism removes.
  */
 export const MIGRATING_TOOLS = {
-  // ── 11.6.3 (MOTIR-2229) — the work-item family ────────────────────────────
-  search_work_items: 'MOTIR-2229',
-  list_ready: 'MOTIR-2229',
-  next_ready: 'MOTIR-2229',
-  claim_next_ready: 'MOTIR-2229',
-  create_work_item: 'MOTIR-2229',
-  update_work_item: 'MOTIR-2229',
-  transition_status: 'MOTIR-2229',
-  link_work_items: 'MOTIR-2229',
-  unlink_work_items: 'MOTIR-2229',
-  archive_work_item: 'MOTIR-2229',
-  unarchive_work_item: 'MOTIR-2229',
-  change_kind: 'MOTIR-2229',
-  move_to_parent: 'MOTIR-2229',
-  delete_work_item: 'MOTIR-2229',
-  add_comment: 'MOTIR-2229',
+  // ── 11.6.3 (MOTIR-2229) — the work-item family: LANDED, none left ─────────
   // ── 11.6.4 (MOTIR-2230) — project / sprint / backlog / identity ───────────
   list_projects: 'MOTIR-2230',
   whoami: 'MOTIR-2230',

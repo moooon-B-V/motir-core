@@ -92,10 +92,15 @@ describe('search_work_items — FilterAST parity with the /items read', () => {
     // The MCP carrier: the same AST as a tool envelope.
     const toolRes = (
       await runSearchWorkItems({ projectKey: 'PROD', filter: envelopeArg(ast) }, fx.ctx)
-    ).structuredContent as { items: { key: number }[]; total: number; nextCursor: string | null };
+    ).structuredContent as { items: { key: string }[]; total: number; nextCursor: string | null };
 
     expect(toolRes.total).toBe(urlResult.total);
-    expect(toolRes.items.map((i) => i.key)).toEqual(urlResult.items.map((i) => i.key));
+    // ⚠️ `key` on the MCP row is the `PROD-<n>` IDENTIFIER since MOTIR-2229 (ADR
+    // Amendment 7 Q6 addendum — it used to be the numeric key, which disagreed
+    // with /api/v1 and with MCP's own ready rows). The internal /items carrier
+    // still says `identifier`, so the parity this test asserts — the IDENTICAL
+    // result set through both carriers — is compared like for like.
+    expect(toolRes.items.map((i) => i.key)).toEqual(urlResult.items.map((i) => i.identifier));
     // Sanity: it actually filtered (two tasks, not all four items).
     expect(toolRes.total).toBe(2);
     expect(toolRes.nextCursor).toBeNull();
@@ -194,14 +199,14 @@ describe('search_work_items — cursor pagination + tenancy', () => {
     for (const t of ['A', 'B', 'C']) await make(fx, 'task', t);
 
     const p1 = (await runSearchWorkItems({ projectKey: 'PROD', limit: 2 }, fx.ctx))
-      .structuredContent as { items: { key: number }[]; total: number; nextCursor: string | null };
+      .structuredContent as { items: { key: string }[]; total: number; nextCursor: string | null };
     expect(p1.total).toBe(3);
     expect(p1.items).toHaveLength(2);
     expect(p1.nextCursor).toBeTruthy();
 
     const p2 = (
       await runSearchWorkItems({ projectKey: 'PROD', limit: 2, cursor: p1.nextCursor! }, fx.ctx)
-    ).structuredContent as { items: { key: number }[]; nextCursor: string | null };
+    ).structuredContent as { items: { key: string }[]; nextCursor: string | null };
     expect(p2.items).toHaveLength(1);
     expect(p2.items[0]!.key).not.toBe(p1.items[0]!.key);
     // Last page → no further cursor (the past-the-tail case has its own test).

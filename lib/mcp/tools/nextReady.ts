@@ -10,7 +10,8 @@ import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 import type { ReadyItemDispatchDto } from '@/lib/dto/ready';
 import type { McpContextResolver } from '../context';
 import { toToolError, toolOk } from '../toolResult';
-import { unmigrated } from '../payloads/define';
+import { derived } from '../payloads/define';
+import { nextReadyPayload, presentMcpReadyDispatch } from '../payloads/workItems';
 import {
   attachCommentCounts,
   commentCountMarker,
@@ -81,7 +82,7 @@ export async function runNextReady(
   const dispatch = await workItemsService.getNextReady(project.id, filter, ctx);
 
   if (!dispatch) {
-    return toolOk('No ready work items match.', unmigrated('next_ready', { item: null }));
+    return toolOk('No ready work items match.', derived(nextReadyPayload, { item: null }));
   }
   // The DISCUSSION signal on the dispatch payload (MOTIR-2001). This is the read
   // an agent picks a card UP with, so it is the one place the count changes what
@@ -91,8 +92,8 @@ export async function runNextReady(
   const item = attachCommentCounts([dispatch], counts)[0]!;
   return toolOk(
     summarize(dispatch, item.commentCount),
-    unmigrated('next_ready', {
-      item: item as unknown as Record<string, unknown>,
+    derived(nextReadyPayload, {
+      item: presentMcpReadyDispatch(dispatch, item.commentCount),
     }),
   );
 }
