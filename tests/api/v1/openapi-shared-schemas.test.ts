@@ -79,15 +79,24 @@ describe('the v1 status vocabulary', () => {
     expect(undocumentedStatuses(DOMAIN_ERROR_STATUS)).toEqual([]);
   });
 
-  it('carries the ADR §4 table exactly — including 11.2’s additions, 409 and 412', () => {
-    expect([...V1_ERROR_STATUSES]).toEqual([401, 403, 404, 409, 412, 422, 429, 500]);
-    expect([...V1_SUCCESS_STATUSES]).toEqual([200, 201, 204]);
-    // The two statuses Story 11.2 appended as NEW conditions (ADR §8 permits
+  it('carries the ADR §4 table exactly — including every appended condition', () => {
+    expect([...V1_ERROR_STATUSES]).toEqual([401, 402, 403, 404, 409, 412, 422, 429, 500, 503]);
+    expect([...V1_SUCCESS_STATUSES]).toEqual([200, 201, 202, 204]);
+    // Every status a later story APPENDED as a NEW condition (ADR §8 permits
     // that; it forbids an existing condition changing status). Named
     // explicitly, because "the list is right" is only meaningful if the rows
     // that were argued for are the rows that are there.
-    expect(DOMAIN_ERROR_STATUS['DUPLICATE_LINK']).toBe(409);
-    expect(DOMAIN_ERROR_STATUS['STALE_WORK_ITEM']).toBe(412);
+    expect(DOMAIN_ERROR_STATUS['DUPLICATE_LINK']).toBe(409); // 11.2.9
+    expect(DOMAIN_ERROR_STATUS['STALE_WORK_ITEM']).toBe(412); // 11.2.6
+    // Story 11.7: a job-submitting endpoint answers 202 (Amendment 6 Q3), an
+    // exhausted balance answers 402, and an unreachable motir-ai answers 503.
+    expect(DOMAIN_ERROR_STATUS['MOTIR_AI_OUT_OF_CREDITS']).toBe(402); // 11.7.5
+    expect(DOMAIN_ERROR_STATUS['MOTIR_AI_UNAVAILABLE']).toBe(503); // 11.7.5
+    // …and the two motir-ai codes deliberately left OUT of the map, so the
+    // absence is a decision a test holds rather than an oversight: our own bad
+    // request to motir-ai is §4's bare, code-less 500.
+    expect(DOMAIN_ERROR_STATUS['MOTIR_AI_BAD_REQUEST']).toBeUndefined();
+    expect(DOMAIN_ERROR_STATUS['MOTIR_AI_JOB_FAILED']).toBeUndefined();
   });
 
   it('FAILS on a status map carrying a status the vocabulary does not document', () => {

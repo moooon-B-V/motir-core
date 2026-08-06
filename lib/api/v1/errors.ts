@@ -243,6 +243,76 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // 422: the item and the sprint belong to different projects. A request the
   // caller can fix, and one that rejects the WHOLE batch before any write.
   CROSS_PROJECT_SPRINT_ASSIGNMENT: 422,
+
+  // ── Story 11.7, the work-loop operations ──────────────────────────────────
+  // Same discipline again: added by the card whose endpoint can raise it, each
+  // driven through the wrapper by a test.
+
+  // 11.7.5 (MOTIR-2239) — expansion and the plan reads.
+  //
+  // 404, not 403: `plansService.getPlan` is workspace-scoped and then applies
+  // `assertCanBrowse`, so a plan in another tenant and one that never existed
+  // are the same answer (§4's existence-oracle rule).
+  PLAN_NOT_FOUND: 404,
+  // 422, and it means exactly ONE thing here: the target is a LEAF, which
+  // cannot be expanded. The service raises this same error for a key naming no
+  // item too — which would be a 404, not a 422 — so the route reads the item
+  // FIRST and lets that read raise its own `WORK_ITEM_NOT_FOUND`. A status map
+  // cannot split one error class after the fact; the route has to not conflate
+  // them in the first place.
+  INVALID_TARGET: 422,
+  // ⚠️ 402, a status ADR §4's table did not list. A NEW condition getting a
+  // status, which §8 permits (409 and 412 arrived the same way). The request was
+  // valid and was refused for want of BALANCE — 422 would tell a client to fix
+  // its body, 429 would tell it to wait for a window that never refills, and
+  // both are the wrong instruction. The right one is "top up".
+  MOTIR_AI_OUT_OF_CREDITS: 402,
+  CI_CREDITS_EXHAUSTED: 402,
+  // ⚠️ 503, also new, also a new condition. An upstream dependency being down or
+  // misconfigured is not an UNEXPECTED fault, so §4's bare 500 ("no code, no
+  // stack") would tell a client nothing it could act on. 503 says "the request
+  // was fine, come back" — the one answer that makes a retry loop correct rather
+  // than a way to hammer an outage.
+  MOTIR_AI_UNAVAILABLE: 503,
+  MOTIR_AI_CONFIG: 503,
+  MOTIR_AI_UNAUTHORIZED: 503,
+
+  // 11.7.6 (MOTIR-2240) — the planning conversation.
+  //
+  // 404: the thread does not exist for this scope. Same existence-oracle rule —
+  // a scope in another tenant never reaches the service, because the project
+  // read answers 404 first.
+  PLAN_CHANGE_SESSION_NOT_FOUND: 404,
+  // ⚠️ 409, not 422. Two writers appended to one thread and lost the race for a
+  // `seq`; the body was perfectly valid when it was sent. 422 would tell the
+  // caller to fix its body, which is the wrong instruction — the right one is to
+  // re-read and retry.
+  PLAN_CHANGE_TURN_CONFLICT: 409,
+  // 422: a submit on a thread with nothing on it. The caller can fix that by
+  // appending a turn, and it must NOT be a 500 — an empty thread is an ordinary
+  // state, not a fault.
+  PLAN_CHANGE_EMPTY_INTENT: 422,
+  // 422: an empty turn body.
+  PLAN_CHANGE_EMPTY_TURN: 422,
+  // 422: the anchor set exceeds `MAX_SCOPE_TARGETS`. Refused BEFORE the
+  // resolution fan-out, because the cost of a huge set is that fan-out.
+  PLAN_CHANGE_TOO_MANY_TARGETS: 422,
+
+  // 11.7.7 (MOTIR-2241) — the activity read. Its own failure modes are the
+  // wrapper's (401/403/429), the shared cursor 422, and `WORK_ITEM_NOT_FOUND`
+  // above; the view and order parameters raise `InvalidRequestError` directly,
+  // which is already a v1 error rather than a domain one.
+
+  // ⚠️ DELIBERATELY ABSENT, and this comment is the deliberation:
+  //   • `MOTIR_AI_BAD_REQUEST` — motir-ai rejected a payload MOTIR-CORE built.
+  //     That is our bug, not the caller's, and §4's bare 500 is exactly the
+  //     right answer: no `code` to branch on, because there is no stable
+  //     contract for one of our own faults. A row here would leak an internal
+  //     message as a public code.
+  //   • `MOTIR_AI_JOB_NOT_FOUND` / `MOTIR_AI_JOB_FAILED` — neither escapes these
+  //     endpoints. `resolveJobState` catches every `MotirAiError` and reports it
+  //     as `job.reachable: false` / `job.failure`, because the PLAN read already
+  //     succeeded and degrading the job block beats failing an answer we have.
 });
 
 /** The 500 body: no `code`, no stack, no driver text. */

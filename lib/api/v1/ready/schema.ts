@@ -1,7 +1,11 @@
 import { z } from 'zod/v4';
 import { WorkItemKind, WorkItemPriority } from '@prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
-import { workItemKeySchema } from '@/lib/api/v1/workItems/schema';
+import {
+  dependencyEdgesSchema,
+  presentDependencyEdges,
+  workItemKeySchema,
+} from '@/lib/api/v1/workItems/schema';
 import type { ReadyItemDto } from '@/lib/dto/ready';
 import type {
   ExecutorDto,
@@ -80,27 +84,14 @@ const _executorsTotal: AssertTotal<ExecutorDto, (typeof READY_EXECUTORS)[number]
 
 void [_kindsTotal, _prioritiesTotal, _typesTotal, _executorsTotal];
 
-/** One end of a dependency edge — the far item, named by its key. */
-const edgeSchema = z.object({
-  key: workItemKeySchema,
-  title: z.string(),
-  /** The far end's raw workflow status key. */
-  status: z.string(),
-});
-
-/**
- * A row's dependency edges.
- *
- * TOTAL by construction: a row with no edges gets two EMPTY arrays, never a
- * missing key, so a typed client never branches on presence. For a ready row
- * `blockedBy` is terminal by definition — that is what makes it ready — and
- * `blocks` is the payload that matters: what finishing this item unblocks, i.e.
- * why it is worth doing first.
- */
-const dependencyEdgesSchema = z.object({
-  blockedBy: z.array(edgeSchema),
-  blocks: z.array(edgeSchema),
-});
+// The edge block is DECLARED ONCE, in `lib/api/v1/workItems/schema.ts`, and
+// imported here (MOTIR-2236). It used to be a structurally identical private
+// copy; when 11.7 put the same block on the work-item collection row and on the
+// detail's children, a third copy would have been three places for one shape to
+// drift — the same reasoning `workItemLinkSchema` records for `GET …/links` and
+// the detail aggregate. For a ready row `blockedBy` is terminal by definition —
+// that is what makes it ready — and `blocks` is the payload that matters: what
+// finishing this item unblocks, i.e. why it is worth doing first.
 
 /** The v1 ready row. */
 export const readyItemSchema = z.object({
@@ -139,18 +130,7 @@ export function presentReadyItem(
     executor: item.executor,
     assigneeId: item.assignee?.id ?? null,
     descriptionExcerpt: item.descriptionExcerpt,
-    dependencies: {
-      blockedBy: (edges?.blockedBy ?? []).map((edge) => ({
-        key: edge.key,
-        title: edge.title,
-        status: edge.status,
-      })),
-      blocks: (edges?.blocks ?? []).map((edge) => ({
-        key: edge.key,
-        title: edge.title,
-        status: edge.status,
-      })),
-    },
+    dependencies: presentDependencyEdges(edges),
   };
 }
 

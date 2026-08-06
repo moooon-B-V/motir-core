@@ -9,6 +9,7 @@ import {
   presentTransitionTargets,
   presentWorkItemDetail,
 } from '@/lib/api/v1/workItems/schema';
+import { readChildDependencyEdges } from '@/lib/api/v1/workItems/childEdges';
 import { IllegalTransitionError } from '@/lib/workItems/errors';
 import { commentsService } from '@/lib/services/commentsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -79,5 +80,8 @@ export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, 
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
   const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
   ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  return NextResponse.json(presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id)));
+  const childEdges = await readChildDependencyEdges(detail, ctx.service);
+  return NextResponse.json(
+    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
+  );
 });
