@@ -48,24 +48,36 @@ export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async 
     ctx.service,
   );
 
+  // The page's dependency edges, in ONE batched call over the ids just read —
+  // the BOUNDED projection ADR Amendment 3 Q4 permits and Amendment 6 Q4 applies
+  // to this collection. A per-row read here would be an N+1 invisible until a
+  // 100-row page; that is why the service takes an id ARRAY.
+  const edges = await workItemsService.getDependencyEdgesForItems(
+    items.map((item) => item.id),
+    ctx.service,
+  );
+
   const last = items[items.length - 1];
   return NextResponse.json({
     items: items.map((item) =>
-      presentWorkItemSummary({
-        identifier: item.identifier,
-        kind: item.kind,
-        type: item.type,
-        title: item.title,
-        status: item.status,
-        priority: item.priority,
-        assigneeId: item.assigneeId,
-        reporterId: item.reporterId,
-        dueDate: item.dueDate,
-        estimateMinutes: item.estimateMinutes,
-        storyPoints: item.storyPoints,
-        createdAt: item.createdAt.toISOString(),
-        updatedAt: item.updatedAt,
-      }),
+      presentWorkItemSummary(
+        {
+          identifier: item.identifier,
+          kind: item.kind,
+          type: item.type,
+          title: item.title,
+          status: item.status,
+          priority: item.priority,
+          assigneeId: item.assigneeId,
+          reporterId: item.reporterId,
+          dueDate: item.dueDate,
+          estimateMinutes: item.estimateMinutes,
+          storyPoints: item.storyPoints,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt,
+        },
+        edges[item.id],
+      ),
     ),
     // The cursor names the LAST row of THIS page, so the next request resumes
     // strictly after it. `null` on the last page — never an extra empty round
@@ -134,7 +146,9 @@ export const POST = withV1Route<{ projectKey: string }>(
     );
     ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
     ctx.responseHeaders.set('Location', `/api/v1/work-items/${created.identifier}`);
-    return NextResponse.json(presentWorkItemDetail(detail, 0), { status: 201 });
+    // A freshly created item has no children, so there is no sub-graph to
+    // project — `{}` is the honest input, not a skipped read.
+    return NextResponse.json(presentWorkItemDetail(detail, 0, {}), { status: 201 });
   },
 );
 

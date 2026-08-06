@@ -630,6 +630,23 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.5 — the remaining operation declarations.
         'lib/api/v1/identity/schema.ts',
         'lib/api/v1/planning/operations.ts',
+        // Story 11.7 (the work-loop operations) · Subtask 11.7.8 — MOTIR-2242.
+        'lib/api/v1/workLoop/schema.ts',
+        'lib/api/v1/workLoop/operations.ts',
+        'lib/api/v1/workLoop/planScope.ts',
+        'lib/api/v1/workItems/childEdges.ts',
+        'lib/api/v1/workItems/schema.ts',
+        'lib/api/v1/workItems/resolveKey.ts',
+        'app/api/v1/work-items/[key]/dispatch-prompt/route.ts',
+        'app/api/v1/work-items/[key]/integration/route.ts',
+        'app/api/v1/work-items/[key]/expansions/route.ts',
+        'app/api/v1/work-items/[key]/activity/route.ts',
+        'app/api/v1/sessions/complete/route.ts',
+        'app/api/v1/plans/[planId]/route.ts',
+        'app/api/v1/plans/[planId]/status/route.ts',
+        'app/api/v1/projects/[projectKey]/plan-session/route.ts',
+        'app/api/v1/projects/[projectKey]/plan-session/turns/route.ts',
+        'app/api/v1/projects/[projectKey]/plan-session/submissions/route.ts',
         // Story 11.4 · Subtask 11.4.7 — the published reference + both doors.
         'lib/apiDocs/reference.ts',
         // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
@@ -723,6 +740,48 @@ export default defineConfig({
         'lib/api/v1/rateLimit.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/me/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/workspaces/route.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 11.7 · Subtask 11.7.8 — MOTIR-2242. Every file the story added
+        // or widened, named explicitly: an unnamed new file is an ungated one.
+        'lib/api/v1/workLoop/schema.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workLoop/operations.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workLoop/planScope.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workItems/childEdges.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workItems/schema.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/api/v1/workItems/resolveKey.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/work-items/[key]/dispatch-prompt/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/work-items/[key]/integration/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/work-items/[key]/expansions/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/work-items/[key]/activity/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/sessions/complete/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/plans/[planId]/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/plans/[planId]/status/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/v1/projects/[projectKey]/plan-session/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/projects/[projectKey]/plan-session/turns/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/v1/projects/[projectKey]/plan-session/submissions/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph offboarding queue.
         // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
         'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },

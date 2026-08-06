@@ -105,12 +105,21 @@ const GROUPS: readonly { key: string; label: string; test: (path: string) => boo
     label: 'Work items',
     test: (p) => p.startsWith('/api/v1/work-items') || p.endsWith('/work-items'),
   },
+  // Story 11.7's session close-out. It reads BESIDE work items rather than
+  // under them: `POST /api/v1/sessions/complete` closes out every item on a
+  // branch, so it belongs to the work loop but is addressed by the branch, not
+  // by an item.
+  { key: 'sessions', label: 'Session close-out', test: (p) => p.startsWith('/api/v1/sessions') },
   { key: 'sprints', label: 'Sprints', test: (p) => p.startsWith('/api/v1/sprints') },
   {
     key: 'planning',
     label: 'Projects, backlog & ready',
     test: (p) => p.startsWith('/api/v1/projects'),
   },
+  // Story 11.7's plan reads, LAST and labelled for what they hold: a plan
+  // bundles PROPOSALS, and a reader meeting this surface in the navigation
+  // should learn that before they open an endpoint.
+  { key: 'plans', label: 'Plans & proposals', test: (p) => p.startsWith('/api/v1/plans') },
 ];
 
 function groupFor(path: string): { key: string; label: string } {

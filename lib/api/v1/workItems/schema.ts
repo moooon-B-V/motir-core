@@ -6,6 +6,7 @@ import type {
   IssueDetailDto,
   WorkItemImplementationSourceDto,
   WorkItemKindDto,
+  WorkItemDependencyEdgesDto,
   WorkItemPlanningSourceDto,
   WorkItemPriorityDto,
   WorkItemSummaryDto,
@@ -193,11 +194,48 @@ export const workItemRefSchema = z.object({
 export type WorkItemRef = z.infer<typeof workItemRefSchema>;
 
 /**
- * The row every COLLECTION returns. Sourced from the flat List projection plus
- * the keyset read's `createdAt` — the position the cursor encodes, so it is part
- * of the page addressing rather than a new field on an existing read.
+ * One end of a dependency edge — the far item, named by its key.
+ *
+ * Declared HERE and imported by `lib/api/v1/ready/schema.ts`, which had its own
+ * structurally identical copy: one declaration, so the ready row and the
+ * work-item rows cannot drift — the same reason {@link workItemLinkSchema} is
+ * shared between `GET …/links` and the detail aggregate (11.2.9).
  */
-export const workItemSummarySchema = z.object({
+export const dependencyEdgeSchema = z.object({
+  key: workItemKeySchema,
+  title: z.string(),
+  /** The far end's raw workflow status key. */
+  status: z.string(),
+});
+
+/**
+ * A row's dependency edges, in both directions (ADR Amendment 6 Q4).
+ *
+ * TOTAL by construction: a row with no edges gets two EMPTY arrays, never a
+ * missing key, so a typed client never branches on presence. The key names match
+ * `lib/mcp/dependencyEdges.ts` exactly — the two transports attach the same block
+ * so one renderer can read both, which is the property `assignChildWaves` and
+ * `renderSprintItems` depend on.
+ */
+export const dependencyEdgesSchema = z.object({
+  blockedBy: z.array(dependencyEdgeSchema),
+  blocks: z.array(dependencyEdgeSchema),
+});
+export type V1DependencyEdges = z.infer<typeof dependencyEdgesSchema>;
+
+/**
+ * The fields a work item carries wherever it is returned WHOLE — shared by the
+ * collection row and the detail resource.
+ *
+ * Extracted so {@link workItemSummarySchema} can carry `dependencies` without
+ * {@link workItemDetailSchema} inheriting it. The detail already publishes the
+ * item's own edges as `links.blockedBy` / `links.blocks` — richer refs, and the
+ * five groups rather than two — so a second block there would be a redundant
+ * field a client has to pick between. The detail's edge projection lands on its
+ * CHILDREN ({@link workItemChildSchema}), which is the sub-graph nothing else
+ * carries.
+ */
+const workItemFieldsSchema = z.object({
   key: workItemKeySchema,
   kind: kindSchema,
   type: typeSchema.nullable(),
@@ -211,6 +249,19 @@ export const workItemSummarySchema = z.object({
   storyPoints: z.number().nullable(),
   createdAt: isoDateTimeSchema,
   updatedAt: isoDateTimeSchema,
+});
+
+/**
+ * The row every COLLECTION returns. Sourced from the flat List projection plus
+ * the keyset read's `createdAt` — the position the cursor encodes, so it is part
+ * of the page addressing rather than a new field on an existing read.
+ *
+ * `dependencies` is a §8 ADDITION (ADR Amendment 6 Q4), attached by a BOUNDED
+ * page-level projection: one `getDependencyEdgesForItems` call for the whole
+ * page, never one per row.
+ */
+export const workItemSummarySchema = workItemFieldsSchema.extend({
+  dependencies: dependencyEdgesSchema,
 });
 export type WorkItemSummary = z.infer<typeof workItemSummarySchema>;
 
@@ -233,11 +284,25 @@ export const workItemLinkGroupsSchema = z.object({
 });
 export type WorkItemLinkGroups = z.infer<typeof workItemLinkGroupsSchema>;
 
-/** The readiness verdict — whether every `blocked_by` blocker is terminal. */
+/**
+ * The readiness verdict — whether every `blocked_by` blocker is terminal.
+ *
+ * `blockedByAncestorTitle` is a §8 ADDITION (ADR Amendment 6 Q4) and a pure
+ * WIDENING: `IssueDetailDto.readiness.blockedByAncestor` is a full
+ * `WorkItemSummaryDto` the mapper already holds and was discarding down to its
+ * identifier. Nothing new is read. `blockedByAncestorKey` is published API and
+ * stays exactly as it is — the title arrives ALONGSIDE it, never instead of it,
+ * because the CLI's `renderReadinessLine` prints `blocked by ancestor <key> —
+ * <title>` and needs both.
+ *
+ * The two are null together: there is no state in which an ancestor blocks the
+ * item and its title is unknown.
+ */
 export const readinessSchema = z.object({
   ready: z.boolean(),
   openBlockers: z.array(workItemRefSchema),
   blockedByAncestorKey: workItemKeySchema.nullable(),
+  blockedByAncestorTitle: z.string().nullable(),
 });
 
 // A label and a component are named by their NAME, not their cuid: the name is
@@ -246,12 +311,29 @@ export const readinessSchema = z.object({
 const labelSchema = z.object({ name: z.string() });
 const componentSchema = z.object({ name: z.string() });
 
-/** The single-item READ: the summary's fields plus everything a detail adds. */
-export const workItemDetailSchema = workItemSummarySchema.extend({
+/**
+ * A CHILD of the detail aggregate — a reference plus that child's own dependency
+ * edges (ADR Amendment 6 Q4).
+ *
+ * The block rides the CHILD rows and not {@link workItemRefSchema} itself, which
+ * is also an ancestor / link target / open blocker: widening the reference would
+ * oblige every one of those positions to carry edges nothing reads, and force an
+ * edge read on routes that have no use for one. The sibling sub-graph is what
+ * makes the children's build ORDER derivable from this one call — the property
+ * `packages/cli/src/render.ts`'s `assignChildWaves` computes its wave view from —
+ * and it is exactly where `lib/mcp/tools/getWorkItem.ts` attaches it too.
+ */
+export const workItemChildSchema = workItemRefSchema.extend({
+  dependencies: dependencyEdgesSchema,
+});
+export type WorkItemChild = z.infer<typeof workItemChildSchema>;
+
+/** The single-item READ: the work item's fields plus everything a detail adds. */
+export const workItemDetailSchema = workItemFieldsSchema.extend({
   descriptionMd: z.string().nullable(),
   parentKey: workItemKeySchema.nullable(),
   ancestorKeys: z.array(workItemKeySchema),
-  children: z.array(workItemRefSchema),
+  children: z.array(workItemChildSchema),
   links: workItemLinkGroupsSchema,
   readiness: readinessSchema,
   labels: z.array(labelSchema),
@@ -293,8 +375,37 @@ export interface WorkItemSummarySource {
   updatedAt: string;
 }
 
-/** Map a collection row to its wire shape. */
-export function presentWorkItemSummary(source: WorkItemSummarySource): WorkItemSummary {
+/**
+ * Map one row's dependency edges to the wire — field by field, never a spread.
+ *
+ * TOTAL: an id the batched read returned no entry for still gets two EMPTY
+ * arrays. `getDependencyEdgesForItems` pre-seeds every id it is asked about, so
+ * `undefined` is unreachable through the routes — the default is what makes the
+ * promise hold at the SCHEMA rather than at each call site, which is the same
+ * discipline `lib/mcp/dependencyEdges.ts`'s `attachEdges` applies to the MCP
+ * transport.
+ */
+export function presentDependencyEdges(
+  edges: WorkItemDependencyEdgesDto | undefined,
+): V1DependencyEdges {
+  return {
+    blockedBy: (edges?.blockedBy ?? []).map((edge) => ({
+      key: edge.key,
+      title: edge.title,
+      status: edge.status,
+    })),
+    blocks: (edges?.blocks ?? []).map((edge) => ({
+      key: edge.key,
+      title: edge.title,
+      status: edge.status,
+    })),
+  };
+}
+
+/** The fields shared by the collection row and the detail resource. */
+function presentWorkItemFields(
+  source: WorkItemSummarySource,
+): z.infer<typeof workItemFieldsSchema> {
   return {
     key: source.identifier,
     kind: source.kind,
@@ -309,6 +420,23 @@ export function presentWorkItemSummary(source: WorkItemSummarySource): WorkItemS
     storyPoints: source.storyPoints,
     createdAt: source.createdAt,
     updatedAt: source.updatedAt,
+  };
+}
+
+/**
+ * Map a collection row to its wire shape.
+ *
+ * `edges` comes from the page's BATCHED projection — one call for the whole
+ * page — and is a REQUIRED parameter so a caller cannot forget it and silently
+ * publish "this row has no dependencies" for every row.
+ */
+export function presentWorkItemSummary(
+  source: WorkItemSummarySource,
+  edges: WorkItemDependencyEdgesDto | undefined,
+): WorkItemSummary {
+  return {
+    ...presentWorkItemFields(source),
+    dependencies: presentDependencyEdges(edges),
   };
 }
 
@@ -346,10 +474,18 @@ export function presentWorkItemRef(
  * NOT on `IssueDetailDto` (`lib/mcp/commentCounts.ts` records why — widening the
  * aggregate would break every exact-`toEqual` route-shape test that reads it
  * back), so the route reads it from `commentsService` and hands it here.
+ *
+ * `childEdges` arrives the same way and for the same reason — the CHILDREN's
+ * dependency edges are not on `IssueDetailDto.children` either. It is keyed by
+ * the child's internal id, exactly as `workItemsService.getDependencyEdgesForItems`
+ * returns it, and REQUIRED so a route cannot forget the projection and publish an
+ * edge-free sub-graph. Pass `{}` where the caller genuinely has no children to
+ * describe (a create, or the links-only presenter).
  */
 export function presentWorkItemDetail(
   detail: IssueDetailDto,
   commentCount: number,
+  childEdges: Readonly<Record<string, WorkItemDependencyEdgesDto>>,
 ): WorkItemDetail {
   const { item } = detail;
 
@@ -374,7 +510,7 @@ export function presentWorkItemDetail(
   const ref = (source: WorkItemSummaryDto): WorkItemRef => presentWorkItemRef(source, keyOfId);
 
   return {
-    ...presentWorkItemSummary({
+    ...presentWorkItemFields({
       identifier: item.identifier,
       kind: item.kind,
       type: item.type,
@@ -392,7 +528,10 @@ export function presentWorkItemDetail(
     descriptionMd: item.descriptionMd,
     parentKey: detail.parent === null ? null : detail.parent.identifier,
     ancestorKeys: detail.ancestors.map((a) => a.identifier),
-    children: detail.children.map(ref),
+    children: detail.children.map((child) => ({
+      ...ref(child),
+      dependencies: presentDependencyEdges(childEdges[child.id]),
+    })),
     links: {
       blockedBy: detail.blockedBy.map((link) => ref(link.item)),
       blocks: detail.blocks.map((link) => ref(link.item)),
@@ -404,6 +543,7 @@ export function presentWorkItemDetail(
       ready: detail.readiness.ready,
       openBlockers: detail.readiness.openBlockers.map(ref),
       blockedByAncestorKey: detail.readiness.blockedByAncestor?.identifier ?? null,
+      blockedByAncestorTitle: detail.readiness.blockedByAncestor?.title ?? null,
     },
     labels: detail.labels.map((label) => ({ name: label.name })),
     components: detail.components.map((component) => ({ name: component.name })),
@@ -424,7 +564,9 @@ export function presentWorkItemDetail(
 /** Present the five edge groups on their own — the `GET …/links` body (11.2.9),
  *  reusing the SAME declaration the detail resource nests. */
 export function presentWorkItemLinkGroups(detail: IssueDetailDto): WorkItemLinkGroups {
-  return presentWorkItemDetail(detail, 0).links;
+  // No child edges: `links` is the item's OWN five edge groups and reads nothing
+  // from the children, so this presenter owes no projection.
+  return presentWorkItemDetail(detail, 0, {}).links;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
