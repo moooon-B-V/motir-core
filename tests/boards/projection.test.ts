@@ -32,7 +32,15 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-const DEFAULT_KEYS = ['todo', 'blocked', 'in_progress', 'in_review', 'done', 'cancelled'];
+const DEFAULT_KEYS = [
+  'todo',
+  'blocked',
+  'in_progress',
+  'planning',
+  'in_review',
+  'done',
+  'cancelled',
+];
 
 interface Fixture {
   ctx: ServiceContext;
@@ -132,7 +140,7 @@ describe('boardsService.getBoard — projection', () => {
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
 
     expect(board.unmappedStatuses.map((s) => s.key)).toEqual(['needs_triage']);
-    // still the original six columns; the new status is NOT one of them
+    // still the original seven columns; the new status is NOT one of them
     expect(board.columns).toHaveLength(DEFAULT_KEYS.length);
     expect(board.columns.flatMap((c) => c.statusKeys)).not.toContain('needs_triage');
   });

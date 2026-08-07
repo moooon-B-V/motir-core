@@ -459,23 +459,45 @@ test.describe('board-ui @smoke', () => {
 });
 
 // Regression for bug-board-cannot-drag-from-in-review-to-done. The default
-// workflow has SIX columns (todo · blocked · in_progress · in_review · done ·
-// cancelled); on a laptop-width viewport the trailing ones (Done, Cancelled)
-// render PAST the horizontal fold. Before the fix, dragging a card toward an
-// off-screen column did nothing — the row never scrolled, so the off-screen
-// column never became the drop target and the move silently snapped back with
-// no `POST /api/board/move`. The user hit this on the `in_review → done` edge
-// (In Review is the last on-screen column, Done the first off-screen one).
+// workflow's trailing columns render PAST the horizontal fold on a laptop-width
+// viewport. Before the fix, dragging a card toward an off-screen column did
+// nothing — the row never scrolled, so the off-screen column never became the
+// drop target and the move silently snapped back with no `POST /api/board/move`.
+// The user hit this on the `in_review → done` edge, In Review being the last
+// on-screen column and Done the first off-screen one.
 test.describe('board-ui auto-scroll to off-screen columns @smoke', () => {
-  const NARROW = 1500; // In Review fully visible (ends ~1472); Done off-screen (starts ~1488)
+  // ⚠️ MEASURED, NOT PINNED (MOTIR-2425). This was `const NARROW = 1500`, a
+  // number chosen when the default workflow had six columns and In Review was
+  // the fourth — it ended at ~1472, so 1500 put Done just past the fold.
+  // Adding `planning` made In Review the FIFTH column and pushed its right edge
+  // to roughly 1780, so at 1500 the source card would itself have been
+  // off-screen and the drag would have failed for a reason that has nothing to
+  // do with the bug under test.
+  //
+  // A recalibrated literal would only survive until the next status. So the
+  // width is now derived from the layout it depends on: render wide, measure
+  // where In Review actually ends, and shrink to just past it. The test's claim
+  // — "the LAST ON-SCREEN column drags into the FIRST OFF-SCREEN one" — is then
+  // true by construction at whatever width the board happens to need.
+  const WIDE = 2600;
+  const GUTTER = 24;
 
-  // Open the board at a laptop width where Done/Cancelled sit past the fold, and
-  // assert the projection layout actually puts Done off-screen (the precondition
-  // the bug needs — if a layout change ever makes all six fit, this flags it).
-  async function openNarrowBoard(page: Page): Promise<void> {
-    await page.setViewportSize({ width: NARROW, height: 1080 });
+  /**
+   * Open the board at a width where `sourceStatus`'s column is the last one
+   * fully on screen. Returns that width so the callers can assert against it.
+   */
+  async function openNarrowBoard(page: Page, sourceColumnId: string): Promise<number> {
+    await page.setViewportSize({ width: WIDE, height: 1080 });
     await page.goto('/boards');
     await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
+
+    const sourceBox = await page.getByTestId(`board-column-${sourceColumnId}`).boundingBox();
+    expect(sourceBox, 'the source column has a box at full width').not.toBeNull();
+    const narrow = Math.ceil(sourceBox!.x + sourceBox!.width) + GUTTER;
+
+    await page.setViewportSize({ width: narrow, height: 1080 });
+    await expect(page.getByTestId('board')).toBeVisible({ timeout: 15_000 });
+    return narrow;
   }
 
   test('a card drags from the last on-screen column into the OFF-SCREEN Done column — the row auto-scrolls and the move commits', async ({
@@ -493,16 +515,26 @@ test.describe('board-ui auto-scroll to off-screen columns @smoke', () => {
     const doneCol = columnByStatus(board, 'done');
     const card = inReviewCol.cards.find((c) => c.id === item.id)!;
 
-    await openNarrowBoard(page);
+    const narrow = await openNarrowBoard(page, inReviewCol.id);
 
-    // Precondition: Done is genuinely off-screen at this width (otherwise the
-    // test wouldn't exercise the auto-scroll path the bug is about).
+    // Preconditions, BOTH of them: In Review is fully reachable (the card has to
+    // be grabbable) and Done is genuinely off-screen (otherwise the test never
+    // exercises the auto-scroll path the bug is about). The first used to be
+    // implicit in the pinned width, which is how a status added elsewhere could
+    // have turned this into an unexplained drag failure.
+    const inReviewBox = await page.getByTestId(`board-column-${inReviewCol.id}`).boundingBox();
+    expect(inReviewBox, 'In Review column has a box').not.toBeNull();
+    expect(
+      inReviewBox!.x + inReviewBox!.width,
+      'In Review is fully on screen — the card must be grabbable',
+    ).toBeLessThanOrEqual(narrow);
+
     const doneBox = await page.getByTestId(`board-column-${doneCol.id}`).boundingBox();
     expect(doneBox, 'Done column has a box').not.toBeNull();
     expect(
       (doneBox!.x ?? 0) + (doneBox!.width ?? 0),
       'Done column starts off-screen at laptop width',
-    ).toBeGreaterThan(NARROW);
+    ).toBeGreaterThan(narrow);
 
     // Drag In Review → the off-screen Done column. Auto-scroll brings Done in;
     // the move commits to `done` (verified against the authoritative projection,
@@ -544,7 +576,9 @@ test.describe('board-ui auto-scroll to off-screen columns @smoke', () => {
     // the projection carries — createItem returns only { id, status }.
     const ident = columnByStatus(board, 'todo').cards.find((c) => c.id === item.id)!.identifier;
 
-    await openNarrowBoard(page);
+    // Same width rule as above: In Review is the last column fully on screen,
+    // so the final edge of the walk is the one that has to auto-scroll.
+    await openNarrowBoard(page, colId('in_review'));
 
     // Each forward edge of the default workflow, dragged in turn on the SAME
     // card. The last one (in_review → done) targets the off-screen column and
