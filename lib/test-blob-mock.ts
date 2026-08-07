@@ -1,94 +1,122 @@
-// Node-only Vercel Blob API mock for E2E (Subtask 5.2.8).
+// Node-only object-store fake for E2E (Subtask 5.2.8; moved onto the S3 API by
+// MOTIR-2389).
 //
-// CI's Playwright lane runs with a placeholder BLOB_READ_WRITE_TOKEN — "no
-// E2E performs a real upload (the real token lives in Vercel)" is the
+// CI's Playwright lane runs with placeholder blob credentials — "no E2E
+// performs a real upload (the real credentials live on the platform)" is the
 // standing ci.yml decision — so the attachments journey (tests/e2e/
-// attachments.spec.ts) needs the SAME seam the Google OAuth flow already
-// uses: an undici intercept installed by instrumentation.ts behind an
-// E2E_TEST_BLOB=1 env gate, dormant everywhere else. The SERVER-side
-// `put`/`del` calls land here; the BROWSER-side reads of the returned
-// public URLs (thumbnails, the lightbox, downloads) are fulfilled by the
-// spec's own `page.route` — nothing ever leaves localhost.
+// attachments.spec.ts) needs a seam that lets the app upload through its real
+// route with no real store. The SERVER-side put/head/get/delete calls land
+// here; the BROWSER-side reads of the returned URLs (thumbnails, the lightbox,
+// downloads) are fulfilled by the spec's own `page.route` — nothing ever leaves
+// localhost.
 //
-// What the mock does:
-//   - Intercepts the @vercel/blob SDK's API host (https://vercel.com,
-//     paths under /api/blob — see the SDK's defaultVercelBlobApiUrl).
-//   - PUT /api/blob/?pathname=… (uploadAttachment → putAttachment) replies
-//     with a PutBlobResult whose `url` rides the REAL public-host suffix
-//     (.public.blob.vercel-storage.com, the suffix lib/blob/referencedUrls
-//     recognises) with an addRandomSuffix-style infix so same-named uploads
-//     never collide — mirroring the store contract the services rely on.
-//   - POST /api/blob/delete (deleteAttachmentBlob) replies 200 — idempotent
-//     on already-gone URLs, exactly like the real `del`.
+// ⚠️ THIS IS NOT AN UNDICI MOCK, and that is the whole point.
 //
-// The shared MockAgent comes from instrumentation.ts (ONE global dispatcher
-// serves both this and the OAuth mock — a second setGlobalDispatcher would
-// silently disconnect the first).
+// Every other E2E seam here (OAuth, billing, GitHub) intercepts an undici
+// `MockAgent` installed as the global dispatcher. That mechanism CANNOT reach
+// the object store: undici's dispatcher governs `fetch`, and the AWS SDK's
+// default Node transport is `node:https`. `@vercel/blob` used `fetch`, so the
+// interception worked; moving to the S3 SDK silently relocated the traffic to a
+// layer the interceptor does not see, and the suite's uploads left as real DNS
+// lookups (`getaddrinfo ENOTFOUND e2e.s3.invalid`) — passing locally, failing in
+// CI, and surfacing as "the attachment list has one row instead of two."
+//
+// So the fake is installed at the SDK's OWN transport seam
+// (`installObjectStoreTransport`), where nothing can route around it, and it
+// never touches the network at all. The configured endpoint host is therefore
+// irrelevant and unreachable BY DESIGN.
 
-import type { MockAgent } from 'undici';
+import { Readable } from 'node:stream';
+import { installObjectStoreTransport } from '@/lib/blob/s3';
 
-/** The store id the synthetic public URLs carry (any value works — the spec's
- * page.route matches the suffix, and the URL parser only checks the suffix). */
-const MOCK_STORE_HOST = 'https://e2etest.public.blob.vercel-storage.com';
-
-let urlSeq = 0;
-
-/** `shot.png` → `shot-e2e7.png` — the addRandomSuffix shape (infix, so the
- * extension survives for the spec's content-type-by-extension fulfiller). */
-function withSuffix(pathname: string): string {
-  urlSeq += 1;
-  const dot = pathname.lastIndexOf('.');
-  if (dot <= pathname.lastIndexOf('/')) return `${pathname}-e2e${urlSeq}`;
-  return `${pathname.slice(0, dot)}-e2e${urlSeq}${pathname.slice(dot)}`;
+interface StoredObject {
+  body: Buffer;
+  contentType: string;
 }
 
-export function installBlobStoreMock(agent: MockAgent): void {
-  const pool = agent.get('https://vercel.com');
+/** The store, keyed by `<bucket>/<key>` — one Map per server boot. */
+const stored = new Map<string, StoredObject>();
 
-  pool
-    .intercept({
-      path: (path) => path.startsWith('/api/blob') && !path.startsWith('/api/blob/delete'),
-      method: 'PUT',
-    })
-    .reply((req) => {
-      const query = req.path.includes('?') ? req.path.slice(req.path.indexOf('?') + 1) : '';
-      const pathname = new URLSearchParams(query).get('pathname') ?? 'unnamed';
-      const url = `${MOCK_STORE_HOST}/${withSuffix(pathname)}`;
+/** The shape the SDK hands its transport: a serialized, signed request. */
+interface TransportRequest {
+  method: string;
+  path: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}
+
+function objectId(path: string): string {
+  const [withoutQuery] = path.split('?');
+  return decodeURIComponent(withoutQuery ?? '').replace(/^\/+/, '');
+}
+
+function toBuffer(body: unknown): Buffer {
+  if (Buffer.isBuffer(body)) return body;
+  if (typeof body === 'string') return Buffer.from(body);
+  if (body instanceof Uint8Array) return Buffer.from(body);
+  return Buffer.alloc(0);
+}
+
+/** The SDK's body collector pipes what it is given, so this must be a real Node
+ *  `Readable` — an async iterable is not enough (`nodeStream.pipe is not a
+ *  function`). */
+function bodyStream(bytes: Buffer): Readable {
+  return Readable.from(bytes.length > 0 ? [bytes] : []);
+}
+
+/**
+ * The in-process transport. PUT stores the bytes; HEAD/GET answer from what was
+ * stored (404 when absent, which is what `headPrivateBlob` turns into null);
+ * DELETE is idempotent — the same contract the real store gives us.
+ */
+export function createObjectStoreTransport() {
+  return {
+    async handle(request: TransportRequest) {
+      const id = objectId(request.path);
+      const headers = request.headers ?? {};
+      const empty = () => bodyStream(Buffer.alloc(0));
+
+      if (request.method === 'PUT') {
+        stored.set(id, {
+          body: toBuffer(request.body),
+          contentType: headers['content-type'] ?? 'application/octet-stream',
+        });
+        return {
+          response: { statusCode: 200, reason: 'OK', headers: { etag: '"e2e"' }, body: empty() },
+        };
+      }
+
+      if (request.method === 'DELETE') {
+        stored.delete(id);
+        return {
+          response: { statusCode: 204, reason: 'No Content', headers: {}, body: empty() },
+        };
+      }
+
+      const object = stored.get(id);
+      if (!object) {
+        return {
+          response: { statusCode: 404, reason: 'Not Found', headers: {}, body: empty() },
+        };
+      }
       return {
-        statusCode: 200,
-        data: {
-          url,
-          downloadUrl: `${url}?download=1`,
-          pathname,
-          contentType: 'application/octet-stream',
-          contentDisposition: 'attachment',
+        response: {
+          statusCode: 200,
+          reason: 'OK',
+          headers: {
+            'content-length': String(object.body.length),
+            'content-type': object.contentType,
+            etag: '"e2e"',
+          },
+          body: bodyStream(request.method === 'HEAD' ? Buffer.alloc(0) : object.body),
         },
-        responseOptions: { headers: { 'content-type': 'application/json' } },
       };
-    })
-    .persist();
+    },
+  };
+}
 
-  pool
-    .intercept({ path: (path) => path.startsWith('/api/blob/delete'), method: 'POST' })
-    .reply(200, {}, { headers: { 'content-type': 'application/json' } })
-    .persist();
-
-  // Private-attachment signing (MOTIR-1665): `signedDownloadUrl` calls
-  // `issueSignedToken` (POST /api/blob/signed-token) then builds the presigned
-  // URL locally. Reply with synthetic delegation material so the server-side
-  // signing flow completes off-network; the E2E's own `page.route` fulfils the
-  // resulting object-host fetch. (The acceptance E2E — MOTIR-1670 — exercises
-  // this end-to-end and refines it if the delegation shape needs more.)
-  pool
-    .intercept({ path: (path) => path.startsWith('/api/blob/signed-token'), method: 'POST' })
-    .reply(
-      200,
-      {
-        clientSigningToken: 'e2e-client-signing-token',
-        delegationToken: 'e2e-delegation-token',
-        validUntil: 4102444800000, // 2100-01-01, comfortably in the future
-      },
-      { headers: { 'content-type': 'application/json' } },
-    )
-    .persist();
+/** Wire the fake store into the S3 client. Called once, at instrumentation. */
+export function installBlobStoreMock(): void {
+  stored.clear();
+  installObjectStoreTransport(createObjectStoreTransport());
 }
