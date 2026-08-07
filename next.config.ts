@@ -106,6 +106,14 @@ const nextConfig: NextConfig = {
   // server — gated on an env flag the Playwright webServer sets, leaving a
   // normal `pnpm dev` session's indicator untouched.
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
+  output: 'standalone',
+
+  // The standalone artifact is what ships. Without this, `next build` copies the
+  // WHOLE repo root into it — 222 MB of `design/**.png` alone, plus tests and
+  // scripts, none of which a running server can reach. Measured: 374 MB before.
+  outputFileTracingExcludes: {
+    '**/*': ['./design/**', './tests/**', './scripts/**', './docs/**'],
+  },
 };
 
 export default withNextIntl(nextConfig);

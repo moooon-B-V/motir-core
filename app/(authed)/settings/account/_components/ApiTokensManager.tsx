@@ -32,7 +32,7 @@ import { grantedScopeMeta, grantsDelete, summarizeScopes } from './scopeMeta';
 // ⚠️ It used to be `https://github.com/…/blob/main/docs/mcp.md` — a raw file on a
 // source-code host, handed to a user at the exact moment they have just minted
 // their first token and have nothing to do with it. Story MOTIR-2309 published
-// the guide (ADR Amendment 12 Q1), so this points INTO the product.
+// the guide (ADR Amendment 13 Q1), so this points INTO the product.
 //
 // `/docs/mcp` and not `/docs/mcp/tools`: this reader holds a credential and has
 // no client wired yet, so the catalogue is the wrong first thing to hand them —

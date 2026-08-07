@@ -5,16 +5,16 @@ import { CatalogueNav } from '../../_components/CatalogueNav';
 import { DocBlock } from '../../_components/DocBlocks';
 
 // GET /docs/mcp/tools — the MCP tool catalogue (Story MOTIR-2309 · Subtask
-// MOTIR-2327 · design `design/mcp-server/` Panel 2 · ADR Amendment 12 Q1).
+// MOTIR-2327 · design `design/mcp-server/` Panel 2 · ADR Amendment 13 Q1).
 //
 // ── This page is the SUB-AREA's resource index ──────────────────────────────
 // The same thing `/docs/api` is for the REST API, at the same order of size: 39
 // tools against 38 operations. That is why it is a page and not a section of the
-// wiring guide (Amendment 12 Q1), and why it is the MCP sub-area's second-tier
+// wiring guide (Amendment 13 Q1), and why it is the MCP sub-area's second-tier
 // row in the rail.
 //
 // ── Grouped by SCOPE, and the grouping is DERIVED ───────────────────────────
-// A tool's group is its own `TOOL_SCOPES` entry (Amendment 12 Q2), so no
+// A tool's group is its own `TOOL_SCOPES` entry (Amendment 13 Q2), so no
 // per-tool grouping fact is authored and a new tool lands in a group the moment
 // it has a scope. It is also the axis the reader is on: the wiring page just
 // explained that a token carries scopes and that a call is refused without the

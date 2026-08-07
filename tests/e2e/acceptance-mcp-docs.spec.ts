@@ -114,7 +114,7 @@ test('a reader with no session reaches the MCP page from the rail and leaves abl
   });
 
   await chapter('Copy the config for the client you actually use', async () => {
-    // ⚠️ THE POINT OF THE CLIENT MATRIX (ADR Amendment 12 Q3a). Motir does not
+    // ⚠️ THE POINT OF THE CLIENT MATRIX (ADR Amendment 13 Q3a). Motir does not
     // ship the agent — the reader brings their own — so every named client has
     // a block, and each one names the same endpoint.
     for (const client of mcpClients()) {
@@ -148,7 +148,7 @@ test('a reader with no session reaches the MCP page from the rail and leaves abl
   await chapter('Open the catalogue — every tool, from the sub-area’s own tier', async () => {
     const rail = page.getByRole('navigation', { name: 'Documentation' });
     // The MCP's SECOND TIER — it exists only inside `/docs/mcp/*`, and this is
-    // the click that proves it (Amendment 12 Q1).
+    // the click that proves it (Amendment 13 Q1).
     await rail.getByRole('link', { name: 'Tools', exact: true }).click();
     await page.waitForURL('**/docs/mcp/tools');
 

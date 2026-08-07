@@ -13,10 +13,10 @@ import { CodeBlock } from '../_components/CodeBlock';
 import { DocBlock, DocInline } from '../_components/DocBlocks';
 
 // GET /docs/mcp — wiring an agent to the Motir MCP server (Story MOTIR-2309 ·
-// Subtask MOTIR-2327 · design `design/mcp-server/` Panel 1 · ADR Amendment 12).
+// Subtask MOTIR-2327 · design `design/mcp-server/` Panel 1 · ADR Amendment 13).
 //
 // ── This page is the SUB-AREA's index, and it is a PROCEDURE ────────────────
-// Amendment 12 Q1 made the MCP a sub-area: this page is the wiring guide AND the
+// Amendment 13 Q1 made the MCP a sub-area: this page is the wiring guide AND the
 // index, and the tool catalogue is its own page at `/docs/mcp/tools`. So the
 // rhythm here is the sandbox guide's — the fork a reader has to settle first,
 // then numbered steps ending in a call that comes back — and the 39-row index
@@ -26,7 +26,7 @@ import { DocBlock, DocInline } from '../_components/DocBlocks';
 // ── Every FACT comes from `lib/apiDocs/mcp.ts` ──────────────────────────────
 // This file contains no fact a reader learns something from: the endpoint, the
 // header, the token shape and every client block are interpolated from the
-// content module's single source (Amendment 12 Q3a), and the scope legend is
+// content module's single source (Amendment 13 Q3a), and the scope legend is
 // derived from `TOOL_SCOPES`. What is here is layout and chrome, so this page
 // can be wrong about arrangement and never about the MCP.
 //

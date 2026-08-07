@@ -766,6 +766,12 @@ export default defineConfig({
         'lib/codeGraph/liveProjects.ts',
         'lib/services/liveProjectsService.ts',
         'lib/internalApi/serviceAuth.ts',
+        // Subtask MOTIR-2388 — the app-URL contract. Nine lines that decide what
+        // origin every emailed link, OAuth callback and canonical URL carries,
+        // and whose failure mode is a link to nowhere rather than an exception.
+        // It had no coverage entry while the same policy was written out at five
+        // call sites; now that they all route through it, it is worth gating.
+        'lib/baseUrl.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -777,6 +783,8 @@ export default defineConfig({
         // MOTIR-2275 — the ONE definition of the contract version, read by both
         // the emitted document and the header the wrapper stamps.
         'lib/api/v1/contractVersion.ts': { branches: 90, functions: 90, lines: 90 },
+        // MOTIR-2388 — the ONE definition of the app's own origin.
+        'lib/baseUrl.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },

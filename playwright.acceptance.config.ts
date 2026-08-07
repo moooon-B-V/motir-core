@@ -174,7 +174,7 @@ export default defineConfig({
         NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
-        BETTER_AUTH_URL: BASE_URL,
+        MOTIR_BASE_URL: BASE_URL,
         E2E_DISABLE_RATE_LIMIT: '1',
         INNGEST_DEV: '1',
         INNGEST_BASE_URL,

@@ -117,7 +117,12 @@ function DocTable({ block }: { block: Extract<GuideBlock, { kind: 'table' }> }) 
               <th
                 key={index}
                 scope="col"
-                className="border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase"
+                // The optional width is WIDE-ONLY and per column; the narrow arm
+                // below is a `<dl>` and has no columns to size. See the
+                // `columnWidths` note on `GuideBlock`.
+                className={`border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase${
+                  block.columnWidths?.[index] ? ` ${block.columnWidths[index]}` : ''
+                }`}
               >
                 {renderInline(column)}
               </th>

@@ -20,7 +20,7 @@ import {
 } from '@/lib/apiDocs/mcp';
 
 // THE STORY'S TRUTH GATE (Story MOTIR-2309 · Subtask MOTIR-2330 · ADR
-// `public-api-conventions.md` Amendment 12 Q2 and Q3a).
+// `public-api-conventions.md` Amendment 13 Q2 and Q3a).
 //
 // The published catalogue is half derived and half authored. The derived half
 // cannot drift — it IS `TOOL_SCOPES`. This file stands over the half that can:
@@ -36,7 +36,7 @@ import {
 //                     the tool underneath it, which is the failure that has
 //                     actually happened to this project's documentation twice.
 //
-// Plus Amendment 12 Q3a's containment for the client matrix, and the
+// Plus Amendment 13 Q3a's containment for the client matrix, and the
 // dependency-graph boundary that keeps Prisma out of a public page.
 //
 // It reads the tool set from a LIVE handshake — never a fixture, never a
@@ -127,7 +127,7 @@ describe('the published catalogue against the SHIPPED tools/list', () => {
   });
 });
 
-describe('the client matrix containment (Amendment 12 Q3a)', () => {
+describe('the client matrix containment (Amendment 13 Q3a)', () => {
   it('gives every block a checked date and a vendor documentation link', () => {
     for (const client of mcpClients()) {
       expect(client.checkedOn, `${client.id} has no checkedOn`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
@@ -135,7 +135,7 @@ describe('the client matrix containment (Amendment 12 Q3a)', () => {
     }
   });
 
-  // The negative case Amendment 12 Q3a names: build the matrix with a sentinel
+  // The negative case Amendment 13 Q3a names: build the matrix with a sentinel
   // origin. A block that INTERPOLATES the single source carries the sentinel; a
   // block that hard-codes its own URL does not, and fails here.
   it('makes a block that hard-codes its own endpoint a RED BUILD', () => {
@@ -158,7 +158,7 @@ describe('the client matrix containment (Amendment 12 Q3a)', () => {
   });
 });
 
-describe('the dependency-graph boundary (Amendment 12 Q2)', () => {
+describe('the dependency-graph boundary (Amendment 13 Q2)', () => {
   it('imports nothing from lib/mcp except the scope map', () => {
     const source = read('lib/apiDocs/mcp.ts');
     const mcpImports = [...source.matchAll(/from '(@\/lib\/mcp\/[^']+)'/g)].map((m) => m[1]);

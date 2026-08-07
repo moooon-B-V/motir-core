@@ -22,7 +22,7 @@ import {
 // Subtask MOTIR-2325).
 //
 // These cover the module's own logic — the derivation, the grouping, the legend
-// and Amendment 12 Q3a's interpolation contract. What they deliberately do NOT
+// and Amendment 13 Q3a's interpolation contract. What they deliberately do NOT
 // cover is whether each authored summary still describes the tool the server
 // ships: that needs a live `tools/list` handshake and belongs to the story's
 // vitest gate (MOTIR-2330), in a file where importing the registry costs nothing.
@@ -140,7 +140,7 @@ describe('the scope legend', () => {
   });
 });
 
-describe('the transport facts are held once (Amendment 12 Q3a)', () => {
+describe('the transport facts are held once (Amendment 13 Q3a)', () => {
   it('builds the URL from the origin and the shipped path', () => {
     const facts = mcpTransportFacts();
     expect(facts.url).toBe(`${MCP_EXAMPLE_ORIGIN}${MCP_ENDPOINT_PATH}`);
@@ -194,7 +194,7 @@ describe('the client matrix', () => {
     }
   });
 
-  // ⚠️ THE CONTAINMENT ASSERTION (Amendment 12 Q3a). Building with a sentinel
+  // ⚠️ THE CONTAINMENT ASSERTION (Amendment 13 Q3a). Building with a sentinel
   // origin proves each block INTERPOLATES the single source rather than carrying
   // its own copy of the URL — which is what keeps a stale block wrong about a
   // vendor's syntax and never about Motir.
@@ -269,7 +269,7 @@ describe('the reader’s fork', () => {
   });
 });
 
-describe('the dependency-graph boundary (Amendment 12 Q2)', () => {
+describe('the dependency-graph boundary (Amendment 13 Q2)', () => {
   it('exports only serializable data — no functions ride on a row', () => {
     const everything = [
       ...mcpToolRows(),

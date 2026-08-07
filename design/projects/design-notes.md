@@ -329,7 +329,7 @@ so no one loses access" — the visible counterpart of 6.4.4's seeding.
     blocked** — the issue-detail **"Edit"** link (header + per-section
     Description / Explanation edit links) and the relationships **add / remove**
     controls are **not rendered** for a read-only actor, and a direct nav to
-    `/issues/[key]/edit` **redirects back to the read-only detail view** (a
+    `/items/[key]/edit` **redirects back to the read-only detail view** (a
     viewer has no reason to land on an edit form; the server rejects the save
     regardless). A hidden Edit button + a guarded edit route is the
     mirror-product (Jira) behaviour.
@@ -1429,7 +1429,7 @@ new-vs-existing front door & routing) · **Epic 7 · AI Planning Layer.**
 theme, `deviceScaleFactor: 2`).
 
 The **IN-APP door** to Journey 1 (create a project → plan it with AI). The first-login / marketing
-door already exists (MOTIR-1457: root → `/login` → "Plan with AI" → `/onboarding`). This card draws
+door already exists (MOTIR-1457: root → `/sign-in` → "Plan with AI" → `/onboarding`). This card draws
 the OTHER door: an **already-authenticated** user starting a new project from inside the app.
 
 ## The shape (per Yue): keep "Create project", ADD "Plan a new project with AI" as a peer door

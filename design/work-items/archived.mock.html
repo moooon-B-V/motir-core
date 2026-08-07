@@ -37,7 +37,7 @@
       is designed in delete-confirm.mock.html (panels 6–7 there), not here.
 
       PLACEMENT DECISION (rung 1 = Jira, justified deviation): a DEDICATED ROUTE
-      `/issues/archived`, reachable from the work-items navigator toolbar via a
+      `/items/archived`, reachable from the work-items navigator toolbar via a
       low-prominence [Archived] link. Jira surfaces archived work in a dedicated
       "Archived issues" VIEW (not a navigator segment) — we keep the dedicated
       view, but locate it UNDER the work navigator rather than in admin settings,
@@ -68,7 +68,7 @@
       fades out optimistically + the "{key} restored" success toast · (2) empty
       state · (3) loading skeleton (flat) · (4) the VIEW-ONLY state (canBrowse,
       not canEdit/canManage) — no actions column · (5) the navigator entry point
-      (the [Archived] toolbar link on /issues) · (6 · 2.9.7) the row ⋯ menu OPEN
+      (the [Archived] toolbar link on /items) · (6 · 2.9.7) the row ⋯ menu OPEN
       with Restore + Delete… · (7 · 2.9.7) the gate-split matrix (the actions cell
       for every canEdit×canManage combination) · (8 · 2.9.7) the archived-item
       DETAIL ⋯ menu (Restore · Delete…) — where Delete lives on the detail page.
@@ -237,7 +237,7 @@
         margin-right: auto;
       }
 
-      /* ── Page shell — header (mirrors app/(authed)/issues/page.tsx) ───────── */
+      /* ── Page shell — header (mirrors app/(authed)/items/page.tsx) ───────── */
       .page-head {
         display: flex;
         flex-wrap: wrap;
@@ -1008,9 +1008,9 @@
       <div>
         <h1>Archived work items view + Restore UX</h1>
         <p>
-          Story 2.9 · design for 2.9.3. A dedicated <code>/issues/archived</code> route — the
-          durable restore surface that replaces the transient Undo toast. Built from the real
-          design-system tokens / primitives.
+          Story 2.9 · design for 2.9.3. A dedicated <code>/items/archived</code> route — the durable
+          restore surface that replaces the transient Undo toast. Built from the real design-system
+          tokens / primitives.
         </p>
       </div>
       <button
@@ -1254,9 +1254,9 @@
 
     <!-- ════════════ PANEL 0 — Archived view in the page shell ════════════ -->
     <div class="panel-label">
-      0 · The archived view at <code>/issues/archived</code> — a flat, paginated list. Each row
-      keeps its type glyph · key · title · last status, and adds WHO + WHEN it was archived (from
-      the `archived` revision) + a per-row [Restore] (canEdit-gated).
+      0 · The archived view at <code>/items/archived</code> — a flat, paginated list. Each row keeps
+      its type glyph · key · title · last status, and adds WHO + WHEN it was archived (from the
+      `archived` revision) + a per-row [Restore] (canEdit-gated).
     </div>
     <div class="panel">
       <a class="back-link">
@@ -1697,9 +1697,9 @@
 
     <!-- ════════════ PANEL 5 — the navigator entry point ════════════ -->
     <div class="panel-label">
-      5 · Entry point — on the live <code>/issues</code> navigator, a quiet [Archived] ghost link is
+      5 · Entry point — on the live <code>/items</code> navigator, a quiet [Archived] ghost link is
       added to the toolbar (before [Filter]), with a count badge so a user knows there's something
-      there. It navigates to <code>/issues/archived</code>. The rest of the toolbar is unchanged.
+      there. It navigates to <code>/items/archived</code>. The rest of the toolbar is unchanged.
     </div>
     <div class="panel">
       <div class="page-head" style="margin-bottom: 0">

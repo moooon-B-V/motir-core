@@ -45,6 +45,7 @@ export type DocsPage =
   | 'gettingStarted'
   | 'stability'
   | 'sandbox'
+  | 'cli'
   | 'mcp'
   | 'mcpTools';
 
@@ -58,6 +59,7 @@ const ROUTE_BY_PAGE: Record<DocsPage, string> = {
   gettingStarted: '/docs/api/getting-started',
   stability: '/docs/api/stability',
   sandbox: '/docs/sandbox',
+  cli: '/docs/cli',
   mcp: '/docs/mcp',
   mcpTools: '/docs/mcp/tools',
 };
@@ -75,7 +77,7 @@ export function isInApiArea(page: DocsPage): boolean {
  * (Amendment 11 Q1's tier table, Q4's placement rule).
  *
  * ⚠️ This list was `apiPages`, a bare array, when the API was the only sub-area
- * there was. **Amendment 12 Q1 made the MCP the second**, and generalising was
+ * there was. **Amendment 13 Q1 made the MCP the second**, and generalising was
  * the honest fix rather than a second hard-coded array: the tier is now "the
  * CURRENT sub-area's pages" for whatever sub-area the route falls in, which is
  * what Amendment 11 Q1 described all along. A third sub-area is a row here.
@@ -173,8 +175,15 @@ export function CatalogueNav({
     // nothing else in the product routes to it — and since MOTIR-2312 it is also
     // the way BACK to the API for a reader standing on it (design Panel 10, ①).
     { key: 'sandbox', href: ROUTE_BY_PAGE.sandbox, label: t('navSandbox') },
+    // Story MOTIR-2308's CLI guide. ONE page, so it is one row and adds no
+    // second tier (ADR Amendment 12 Q1) — and because tier 2 and the operation
+    // index are both gated on the `/docs/api` prefix, this row acquires neither
+    // by existing. Adding a surface really is one entry here plus a route.
+    { key: 'cli', href: ROUTE_BY_PAGE.cli, label: t('navCli') },
     // Story MOTIR-2309's MCP documentation — the second sub-area, so it is both a
-    // row here and a second tier below (`design/mcp-server/` Panel 6).
+    // row here and a second tier below (`design/mcp-server/` Panel 6). The two
+    // rows above and this one are the whole of "add a surface": an entry here
+    // plus a route, with the tier a surface earns derived from its prefix.
     { key: 'mcp', href: ROUTE_BY_PAGE.mcp, label: t('navMcp') },
   ];
 

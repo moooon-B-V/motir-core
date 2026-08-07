@@ -1137,6 +1137,13 @@ item. `motir doctor` diagnoses it and names the profile's install source.
 
 ## See also
 
+- **[`/docs/cli`](https://app.motir.co/docs/cli) — the published CLI guide.**
+  The first hour, for someone with no checkout: install, `motir login`,
+  `motir link`, `motir doctor`, the ready set, and one item dispatched, plus the
+  command table derived from the CLI's own record. **This file is the
+  reference** — everything past that first successful run (every flag, the three
+  run shapes, session branches, the failure policy, agent wiring,
+  troubleshooting) lives here and is not repeated there.
 - [`docs/mcp.md`](./mcp.md) — the tool surface the CLI consumes: minting a PAT,
   token scopes, and every MCP tool with its input/output shape.
 - [`packages/cli/README.md`](../packages/cli/README.md) — the package's own

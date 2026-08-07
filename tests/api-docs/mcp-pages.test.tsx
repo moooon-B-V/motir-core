@@ -9,7 +9,7 @@ import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { mcpClients, mcpToolCount, mcpToolRows, mcpTransportFacts } from '@/lib/apiDocs/mcp';
 
 // The published MCP pages (Story MOTIR-2309 · Subtask MOTIR-2327 · ADR
-// Amendment 12).
+// Amendment 13).
 //
 // The page is a Server Component, so `getTranslations` is stubbed the way the
 // sibling guide suites do — it returns the KEY, which is why page chrome is
@@ -70,7 +70,7 @@ describe('/docs/mcp — the wiring page', () => {
     const url = mcpTransportFacts().url;
     const code = [...container.querySelectorAll('pre')].map((node) => node.textContent ?? '');
     expect(code.length).toBeGreaterThanOrEqual(mcpClients().length);
-    // Every client block names the same endpoint — the containment Amendment 12
+    // Every client block names the same endpoint — the containment Amendment 13
     // Q3a buys, observed here at the surface a reader actually copies from.
     const blocksWithUrl = code.filter((text) => text.includes(url));
     expect(blocksWithUrl.length).toBe(mcpClients().length);
@@ -161,7 +161,7 @@ describe('/docs/mcp/tools — the catalogue', () => {
   });
 });
 
-describe('the rail carries TWO sub-areas (Amendment 12 Q1)', () => {
+describe('the rail carries TWO sub-areas (Amendment 13 Q1)', () => {
   it('renders the MCP’s second tier inside /docs/mcp/* and its pages only', async () => {
     const { CatalogueNav } = await import('@/app/(public)/docs/_components/CatalogueNav');
     const { container } = renderWithIntl(<CatalogueNav current="mcpTools" />);

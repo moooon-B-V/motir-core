@@ -17,7 +17,7 @@
 //
 // Auth note: the `request` context sends an explicit Origin header equal to the
 // dev-server base URL so Better-Auth's CSRF origin guard accepts the sign-up
-// POST (trustedOrigins includes BETTER_AUTH_URL = BASE_URL — see
+// POST (trustedOrigins includes MOTIR_BASE_URL = BASE_URL — see
 // playwright.config.ts + lib/auth/index.ts).
 
 import { expect, request as playwrightRequest, type APIRequestContext } from '@playwright/test';

@@ -178,11 +178,22 @@ describe('the surfaces tier lists SURFACES, not pages', () => {
     // The guide and the policy are NOT here — they are the API's own pages and
     // belong to tier 2. That separation is the fix; a regression puts them back.
     //
-    // ⚠️ EXACT on purpose. A documented surface earns a row here and this list is
-    // where that is stated, so adding one is a deliberate edit rather than a
-    // silently-widening assertion. `/docs/mcp` joined it with Story MOTIR-2309
-    // (ADR Amendment 12 Q1), which also made the MCP the second sub-area to
-    // carry a tier-2 list of its own.
-    expect(hrefs).toEqual(['/docs/api', '/docs/sandbox', '/docs/mcp']);
+    // ⚠️ EXACT on purpose, and RE-POINTED rather than loosened — twice now, by
+    // Story MOTIR-2308 (`/docs/cli`) and Story MOTIR-2309 (`/docs/mcp`). The
+    // list GROWS by one row per documented surface and stays an exact array, so
+    // the next row is a deliberate edit rather than a silently-widening
+    // assertion. What it must never gain is a PAGE.
+    expect(hrefs).toEqual(['/docs/api', '/docs/sandbox', '/docs/cli', '/docs/mcp']);
+  });
+
+  it('still gives a one-page surface NO second tier', async () => {
+    // The property the exact array above cannot state: `/docs/cli` joining the
+    // tier must not drag a sub-area tier or the operation index along with it
+    // (ADR Amendment 12 Q1 · Amendment 11 Q2 — both are gated on the
+    // `/docs/api` prefix, not on membership of this list).
+    const rail = await renderRail('@/app/(public)/docs/cli/page');
+    expect(rail.querySelector('[data-testid="catalogue-subarea-api"]')).toBeNull();
+    expect(rail.querySelector('[data-operation-id]')).toBeNull();
+    expect(rail.querySelectorAll('a[aria-current="page"]')).toHaveLength(1);
   });
 });

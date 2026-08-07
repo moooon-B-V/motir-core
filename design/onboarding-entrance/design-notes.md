@@ -80,7 +80,7 @@ real structure, it does not redraw a stylised stand-in):
 ## Access path (entry + the two exits)
 
 - **INBOUND (owned by sibling cards — drawn there, not redrawn here):** (a) the first-login / marketing
-  door — motir-core root → `/login` → **"Build with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
+  door — motir-core root → `/sign-in` → **"Build with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
   door — an authenticated user picks **"Build with AI"** in the create-project modal / switcher /
   empty-project state (design MOTIR-1485, code MOTIR-1486). Both land on THIS entrance.
 - **OUTBOUND (drawn here — the point of the card):** each path names its destination in the copy (Start

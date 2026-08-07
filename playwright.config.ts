@@ -27,9 +27,10 @@ loadEnv();
 // already owned :3000 — the parallel-worktree workflow the manual-merge mode
 // assumes. Three things had to move off the fixed port together:
 //   1. Playwright baseURL + webServer.url (below).
-//   2. Better-Auth's CSRF origin guard — handled by passing BETTER_AUTH_URL
-//      into webServer.env; lib/auth/index.ts already threads that through both
-//      baseURL and trustedOrigins, so no auth-code change is needed.
+//   2. Better-Auth's CSRF origin guard — handled by passing MOTIR_BASE_URL
+//      into webServer.env; lib/baseUrl.ts resolves it and lib/auth/index.ts
+//      threads that through both baseURL and trustedOrigins, so no auth-code
+//      change is needed.
 //   3. reuseExistingServer — must be off when a custom port is requested, or a
 //      worktree could silently reuse a sibling's :3000 server (wrong code).
 // Usage from a worktree:  E2E_BASE_URL=http://localhost:3100 pnpm test:e2e
@@ -256,10 +257,11 @@ export default defineConfig({
         E2E_TEST_BLOB: '1',
         BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
         // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
-        // drives. lib/auth/index.ts uses BETTER_AUTH_URL as both its baseURL and
-        // a trustedOrigins entry, so this is what lets /api/auth/* POSTs pass the
-        // CSRF origin guard on a non-default port.
-        BETTER_AUTH_URL: BASE_URL,
+        // drives. lib/baseUrl.ts resolves MOTIR_BASE_URL, and lib/auth/index.ts
+        // uses that as both its baseURL and a trustedOrigins entry, so this is
+        // what lets /api/auth/* POSTs pass the CSRF origin guard on a
+        // non-default port.
+        MOTIR_BASE_URL: BASE_URL,
         // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
         // IP-keyed window (10s / max 3). Multi-user specs sign up several users
         // from localhost inside that window and hit 429s. This flag disables the

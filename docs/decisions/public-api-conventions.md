@@ -2874,14 +2874,6 @@ list, an MCP tool list). Q2 states that a sub-area's second tier is that
 surface's own index _where it has one_; whether the CLI wants one is the CLI
 story's question, answered against its own content.
 
-> ⚠️ **Amended for the MCP** by
-> [Amendment 12, Q1](#q1--the-mcp-is-a-sub-area-docsmcp-is-the-wiring-page-and-index-docsmcptools-is-the-tool-catalogue),
-> which answers this for MOTIR-2309's surface: the MCP sub-area DOES get a
-> second-tier index. That also fires the area-ROOT trigger recorded just above —
-> the MCP is the first `/docs` sub-area that is neither the API reference nor a
-> single page, so MOTIR-2315 is now reopened by its own stated condition. The
-> CLI's half is still open, and still the CLI story's.
-
 #### Consequences of this amendment
 
 - **MOTIR-2311** (design) draws the two-tier rail against the shipped surface —
@@ -2898,9 +2890,332 @@ story's question, answered against its own content.
   this amendment; their bodies are not rewritten, which is the shape every
   amendment here keeps.
 
+### Amendment 12 (2026-08-06) — the CLI documentation is ONE page at `/docs/cli`; its command table DERIVES from a pure command catalog the CLI itself builds from
+
+**Amends:** nothing. It APPLIES Amendment 11 Q4's placement rule and answers the
+two questions Amendment 11 left open for this story — whether the CLI sub-area
+carries a second-tier index (Q2's _"where it has one"_), and, one level down,
+what Amendment 9 Q3's single-importer invariant becomes when a second page needs
+to read the CLI.
+**Leaves unchanged:** §1–§9 in full; **Amendment 4 Q3 — the spec stays at
+`/api/openapi/v1.json`**; **Amendment 9 Q1's `/docs` rename and its
+addresses-move rule** and **Q2's first-run ownership rule**, both APPLIED here
+rather than re-opened; **Amendment 11 Q1's two-tier rail, Q2's route-prefix test
+and Q3's redirect map**, none of which this touches. Amendments 1, 2, 3, 5, 6, 7,
+8 and 10 in full. **No `/api/v1` shape, path, scope or status changes here.**
+**Card:** MOTIR-2322, under Story MOTIR-2308 (the published CLI documentation).
+
+#### The problem
+
+`@motir/cli` is published to npm — `packages/cli/package.json` names it
+`@motir/cli` and ships `files: ["dist"]` — and everything written about how to
+use it is `docs/cli.md`, 1,147 lines inside this repository. The product already
+points at the gap:
+`app/(authed)/settings/account/_components/ConnectCliPanel.tsx` prints
+`npm install -g @motir/cli` and then offers **"Read the CLI guide"** at
+`https://github.com/moooon-B-V/motir-core/blob/main/docs/cli.md`. A person is
+handed a tool and then handed off to its source repository to learn it.
+
+Amendment 11 Q4 already settled WHERE such a page goes, and named this story
+while doing it: _"MOTIR-2308's CLI documentation is `/docs/cli` if it is one page
+and `/docs/cli/_` if it is several."\* So placement is an application, not a
+decision. What is genuinely open is the DERIVATION SEAM, and it is open because
+Amendment 9 Q3 closed it deliberately:
+
+> **`lib/apiDocs/sandbox.ts` is the ONLY module under `app/` or `lib/` that
+> imports from `packages/cli/**`.\*\*
+
+That is not prose. `tests/api-docs/sandbox-page.test.tsx:200` asserts the
+offender list as an **exact array**, `['lib/apiDocs/sandbox.ts']`, so a second
+importer fails a shipped test by construction. A CLI page that derives its
+command list must therefore either widen a recorded invariant or reach its facts
+another way — and the module it would want is not import-safe. Read on
+`origin/main` this pass:
+
+| Module                              | Imports                                                                               | Import-safe from `app/` or `lib/`? |
+| ----------------------------------- | ------------------------------------------------------------------------------------- | ---------------------------------- |
+| `packages/cli/src/program.ts`       | `commander`, `./version.js`, every module under `src/commands/`                       | **No** — the whole CLI graph       |
+| `packages/cli/src/help.ts`          | `commander`, `./agentProfiles.js`, `./errors.js`, `./output.js`, `./serverResolve.js` | **No**                             |
+| `packages/cli/src/serverResolve.ts` | `./errors.js`, `./config/linkConfig.js`, `./config/userConfig.js`                     | **No**                             |
+| `packages/cli/src/agentProfiles.ts` | `node:path`                                                                           | **Yes** — which is why Q3 chose it |
+
+The one module the app is already allowed to reach is the one that imports
+nothing but `node:` builtins. That is the shape, and this amendment supplies a
+second module of it rather than inventing a different mechanism.
+
 ---
 
-### Amendment 12 (2026-08-06) — the MCP is a `/docs/mcp` SUB-AREA whose second-tier index is the tool catalogue; the catalogue DERIVES its names, scopes and grouping from `TOOL_SCOPES`
+#### Q1 — the CLI documentation is ONE page at `/docs/cli`, with no second-tier rail index
+
+##### The decision
+
+**`/docs/cli`, one page, one row in the rail's surface tier, and no second
+tier.**
+
+Amendment 11 Q4's rule decides the first half on the page's content: _"a surface
+earns a prefix when it has more than one page; with one page it IS
+`/docs/<surface>`."_ And Amendment 9 Q2 already bounds the content — the page
+owns the reader's FIRST SUCCESSFUL RUN and hands everything after it to the
+reference. Applied to the CLI, the first run is:
+
+install · `motir login` · `motir link` · `motir doctor` · see the ready set ·
+dispatch one item · where the credential and the link file live · the hand-offs.
+
+That is one page. The 1,147-line reference stays `docs/cli.md`, which the page
+links rather than absorbs.
+
+The second half — no second tier — is Amendment 11 Q2 applied honestly. Its
+generalisation is that _"a sub-area's second-tier navigation is whatever that
+surface's own index is"_, and a second tier lists a surface's **pages**. The CLI
+surface has one page, so a second tier would either list that page (a rail row
+pointing at the rail's own row) or list the page's HEADINGS, which is a table of
+contents and a different thing wearing the tier's clothes. The command table is
+therefore a SECTION of the page, not a rail. If the CLI ever earns a second page
+— a recipes page, an unattended-loop page — that page creates the prefix, moves
+this one inside it as the index, and the tier arrives with real rows.
+
+##### Rejected alternatives
+
+| Rejected                                                                                   | Why                                                                                                                                                                                                                                                                                                                         |
+| ------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A `/docs/cli/*` sub-area now** — an index plus a per-command-group page                  | Splits a first-run PROCEDURE across pages a reader is meant to work down in order, and buys structure for content that does not exist. Amendment 11 Q4 makes growth the trigger for restructuring precisely so this is not decided from taste; today the CLI has one page's worth of first-run content.                     |
+| **A second tier listing the command GROUPS** (SETUP / READ / WORK LOOP) as in-page anchors | Puts a table of contents in a rail whose two tiers mean _surfaces_ and _pages_. The API sub-area's second tier lists resources that are separately addressable; `#setup-commands` is not a page, and a rail that sometimes means "pages" and sometimes means "headings" cannot be read at a glance, which is its whole job. |
+| **Publish the command reference in full** — `docs/cli.md` §§ _Command reference_ onwards   | 850 lines written for a reader who already has the tool working, including three run shapes, session-branch semantics and a failure policy. It fails Amendment 9 Q2's first limb (not needed for a first run) and, for the per-release parts, its second. The page carries the command TABLE and points at the rest.        |
+
+---
+
+#### Q2 — the page DERIVES the command tree from a new pure record, `packages/cli/src/commandCatalog.ts`, which `program.ts` BUILDS FROM
+
+##### The decision
+
+**Add `packages/cli/src/commandCatalog.ts`: a plain, `node:`-only, serializable
+record of the CLI's command tree, which `packages/cli/src/program.ts` reads when
+it registers each command. `lib/apiDocs/cli.ts` imports that record by relative
+path and renders the table from it.**
+
+This is Amendment 9 Q3's shape, reused rather than re-argued: the CLI declares a
+fact once, in a module whose import graph is `node:` builtins, and the
+documentation page reads the declaration instead of a copy of it. The property
+that makes it worth the refactor is the same one Q3 chose it for — _a profile
+added to `AGENT_PROFILES` must APPEAR on the page with no edit_ — restated for
+commands: **a command added to the CLI appears in the published table with no
+edit to any file the page owns.** That property survives the person who wrote the
+page leaving, which is the only durable form of "keep the docs up to date".
+
+##### What the record carries, and the one split inside it
+
+| Fact                                        | Mechanism                                                                      |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| invocation path (`login`, `auth status`, …) | **BUILT FROM** — `program.ts` registers from the record                        |
+| one-line description                        | **BUILT FROM** — `program.ts` passes the record's string to `.description()`   |
+| help group                                  | **BUILT FROM** — `HELP_GROUP` moves into the catalog; `help.ts` re-exports it  |
+| each command's registered option flags      | **PINNED** — the record declares them; a CLI-side test asserts both directions |
+| `DEFAULT_SERVER_URL`                        | **BUILT FROM** — moves into the catalog; `serverResolve.ts` re-exports it      |
+
+The split is deliberate and is the only interesting line in this amendment.
+_Built from_ is stronger — drift becomes structurally impossible — and it is
+available wherever `program.ts` can consume the record without rewriting an
+output surface. Descriptions and help groups qualify: they are strings
+`program.ts` already passes through, so sourcing them changes where the literal
+lives and nothing a user sees. **Option registration does not qualify.** Building
+`.option(...)` calls from data would rewrite the flag order, the negated-boolean
+spellings (`--no-browser`) and the per-flag descriptions that
+`packages/cli/test/help.test.ts` pins as OUTPUT — a large, risky diff whose only
+gain is over a failure a test already catches at the moment it is introduced. So
+option flags are declared in the record and **pinned** by
+`packages/cli/test/commandCatalog.test.ts`, which walks the real `buildProgram()`
+tree and asserts agreement in both directions. That test can import `commander`
+because it runs in the CLI's own environment —
+`packages/cli/test/optionRegistrationAudit.test.ts` already does exactly this.
+
+**Two constants move, and both are re-exported from where they live today**, so
+no existing caller changes: `DEFAULT_SERVER_URL` (today in `serverResolve.ts`,
+which imports two config modules and cannot be reached from the app) and
+`HELP_GROUP` (today in `help.ts`, which imports `commander`). Recording the
+`HELP_GROUP` move here is the point of writing this down: the record cannot carry
+a command's help group while importing the module that declares it, and
+discovering that mid-implementation is how a card acquires an unplanned import
+cycle.
+
+##### Rejected alternatives
+
+| Rejected                                                                                                          | Why                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **(b) A parallel pure record PINNED to the real tree by a CLI-side test, with no `program.ts` refactor**          | The cheapest correct-today option, and it buys a weaker guarantee for a smaller diff. A command added to `program.ts` leaves the published table WRONG until someone edits the parallel record; the test turns that into a red build rather than a silent lie, which is real, but it is exactly the _"restate the table and assert it against the CLI"_ option Amendment 9 Q3 already weighed and rejected for the same reason: it does not make the page GROW with the tool. Adopted in part, for option flags only, where the refactor's cost flips the balance. |
+| **(c) No derivation — type the command list and compare it against the built binary's `--help` output in a test** | Puts `packages/cli/dist` on the critical path of a documentation test, and on Vercel puts the CLI's build before the app's. Amendment 9 Q3 rejected the `exports`-subpath option for the same coupling, and a `--help` diff pins a rendering, not a fact: the curated surface's headings, wrapping and padding are commander's, so the test would fail on a commander upgrade that changed nothing about the CLI.                                                                                                                                                  |
+| **Have the page fetch the command list from a running Motir server**                                              | The API does not expose one, and `lib/apiDocs/reference.ts:8`'s header already records why a page does not fetch its own product at build time: _"a network round trip, a failure mode and a bootstrapping problem for no gain."_                                                                                                                                                                                                                                                                                                                                  |
+| **Generate a checked-in data module from `program.ts` with a script**                                             | A third artifact kept in step by a generator someone must remember to run — the two-artifact drift Story 11.4 exists to prevent, and rejected in these words by Amendment 9 Q3.                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Give `@motir/cli` an `exports` subpath and depend on it from the app**                                          | Unchanged from Amendment 9 Q3: `files: ["dist"]` makes a source-pointing export a dangling path for every npm consumer, and a `dist`-pointing one couples `next build` to the CLI being built first. Verified again this pass — `packages/cli/package.json`'s `exports` map is `{ "./package.json": "./package.json" }`.                                                                                                                                                                                                                                           |
+
+---
+
+#### Q3 — what the page DERIVES, and what it POINTS AT
+
+##### The allocation
+
+| The page states it by DERIVING                                         | Read from                                                                                                                |
+| ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| The command table — path, one-line description, help group             | `packages/cli/src/commandCatalog.ts`                                                                                     |
+| Every command NAME and FLAG printed in the procedure's copyable blocks | the same record — a name or flag it does not carry fails the story gate                                                  |
+| The install command's package name (`@motir/cli`)                      | `packages/cli/package.json`, as `tests/components/ConnectCliPanel.test.tsx` already reads it rather than trusting memory |
+| The default server (`https://app.motir.co`), for the self-hosting note | `DEFAULT_SERVER_URL`, via the catalog                                                                                    |
+
+##### And what it POINTS AT, with the reason named
+
+Amendment 9 Q2's second limb is the test: _a fact whose truth cannot be asserted
+by a check does not go on the page at all._ Four facts fail it, and the page
+names the file for each rather than restating it — the shape Q3 used for the
+vendor auto-approve flags:
+
+| Not on the page                                    | Why it cannot be derived, and where it points                                                                                                                                                                                                                                                                                                                                                                                      |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The published CLI VERSION**                      | A per-release fact on a page no release lane edits — the MOTIR-2131 shape exactly. `npm install -g @motir/cli` needs no version, and the page says how to read one back (`motir --version`) instead of printing one.                                                                                                                                                                                                               |
+| **The credential-resolution LADDER, rung by rung** | It is `resolveServerUrl`'s control flow, not a record: five rungs with an ambiguity branch and a canonical-host exception. Deriving it would mean parsing a function. The page states the ONE rung a first run needs — `--server` beats everything, the default is `DEFAULT_SERVER_URL` — and points at `motir help environment`, which the CLI already renders from its own code, and at `docs/cli.md` § _Files and environment_. |
+| **What `motir doctor` CHECKS, check by check**     | The probe set is `doctor.ts`'s behaviour, and its agent-credential arm is `AGENT_PROFILES.credentialPaths` — which Amendment 9 Q3 established is NOT the same fact as a mount and is easy to publish wrongly. The page says what `doctor` is FOR and prints its invocation; the checks are the reference's.                                                                                                                        |
+| **Anything about the sandbox image**               | Already published at `/docs/sandbox`, derived there. The page links it. Repeating it would create the second copy this whole amendment exists to prevent.                                                                                                                                                                                                                                                                          |
+
+---
+
+#### Q4 — the import boundary: Amendment 9 Q3's invariant becomes a TWO-module allowlist, not a wildcard
+
+##### The decision
+
+Amendment 9 Q3's first invariant is amended from one permitted importer to
+**exactly two**, named individually. The other two invariants are unchanged and
+now apply to both modules:
+
+1. **`lib/apiDocs/cli.ts` and `lib/apiDocs/sandbox.ts` are the ONLY modules under
+   `app/` or `lib/` that import from `packages/cli/**`.** Named, not patterned —
+`lib/apiDocs/\*` as a rule would permit the next one without a decision, and
+   the guard's value is that a third crossing is a deliberate edit someone has to
+   justify in a diff.
+2. **Each reaches a CLI module that imports nothing but `node:` builtins** —
+   `agentProfiles.ts` (`node:path`) and `commandCatalog.ts` (nothing at all).
+3. **What each EXPORTS is plain serializable data**, so a row may cross to a
+   client component.
+
+`tests/api-docs/sandbox-page.test.tsx`'s exact-array assertion therefore becomes
+
+```ts
+expect(offenders).toEqual(['lib/apiDocs/cli.ts', 'lib/apiDocs/sandbox.ts']);
+```
+
+**named here so nobody discovers it from a red test.** It is re-pointed, never
+loosened: no wildcard, no `toContain`. The card that ADDS the second importer is
+the card that amends it — MOTIR-2329 — and MOTIR-2333 asserts the final shape.
+
+##### Why two, and why a number is the right bound at all
+
+The invariant's job is not to keep the count at one; it is to keep every crossing
+a decision. A page that documents a shipped tool must read that tool, and Motir
+now documents two — the sandbox and the CLI — so the honest bound grows with the
+documented surfaces rather than staying at a number that would force the next
+page to lie or to copy. What does NOT grow is the second invariant: a crossing is
+permitted only into a module with no dependency graph, which is the property that
+keeps `commander` out of `next build`, and it is the one to refuse on when a
+third request arrives.
+
+---
+
+#### Q5 — localization: recorded, not re-decided
+
+Unchanged from Amendment 4 Q4 and Amendment 9 Q4. The page's long-form prose
+lives as data in `lib/apiDocs/cli.ts`; the page CHROME goes through the `apiDocs`
+next-intl namespace with `messages/en.json` + `messages/zh.json` parity. Command
+names, flags, the package name and the default server URL are English by the same
+rule that keeps operation text English: they are strings a machine consumes.
+
+The design-asset area for this page is **`design/cli-guide/`** — a new content
+area beside `design/agent-sandbox/`, not a rename of anything. `design/api-docs/`
+keeps the docs shell and the two-tier rail, per Amendment 11 Q3's addresses-move
+rule.
+
+---
+
+#### Consequences of this amendment
+
+- **MOTIR-2324** (the command record) writes `packages/cli/src/commandCatalog.ts`
+  as decided in Q2, moves `DEFAULT_SERVER_URL` **and `HELP_GROUP`** into it with
+  re-exports from `serverResolve.ts` and `help.ts` so no caller changes, sources
+  each command's description and help group in `program.ts` from the record, and
+  adds `packages/cli/test/commandCatalog.test.ts` asserting two-directional
+  agreement — commands, descriptions, help groups **and option flags** — against
+  the real `buildProgram()` tree. `packages/cli/test/help.test.ts` and
+  `packages/cli/test/optionRegistrationAudit.test.ts` pass unedited; that is the
+  proof the refactor changed no output. **Option (a) won, so the card stands as
+  written** — no re-scope and no archive is owed by this pass.
+- **MOTIR-2326** (design) draws ONE page at `/docs/cli` with **no second tier**
+  (Q1), the command table at desktop / tablet / 375px, and both entrances. The
+  rail it draws is Amendment 11's two-tier rail with a fifth surface row; the
+  sub-area tier is absent on this page, and the asset says so rather than leaving
+  a reader to wonder.
+- **MOTIR-2329** (the page) writes `lib/apiDocs/cli.ts` — the SECOND permitted
+  importer — and is the card that amends
+  `tests/api-docs/sandbox-page.test.tsx`'s offender array to the two-element form
+  quoted in Q4, with this amendment named in the test's own comment. It renders
+  the derived table, adds the rail's surface row, and links `/docs/cli` from
+  `docs/cli.md`'s `## See also`.
+- **MOTIR-2333** (the vitest gate) asserts the Q4 boundary in its final shape —
+  an exact two-element set, both targets `node:`-only, both exports serializable
+  — plus the truth gate against the record and the door-to-route seam.
+- **MOTIR-2331** (the in-app door) and **MOTIR-2334** (E2E) are unaffected by
+  this amendment beyond the route it fixes: `/docs/cli`.
+- **`docs/cli.md` remains the reference**, per Amendment 9 Q2, and the only edit
+  this story makes to it is the `## See also` link back.
+- **Amendment 9 Q3's first invariant** now reads through this amendment; its body
+  is not rewritten, which is the shape every amendment here keeps.
+
+> **⚠️ Numbered 12, and a THREE-WAY number race is in flight — read this before
+> merging.** Amendment 11 records the 10-vs-11 race it lost; this is the same
+> thing one round later and wider. The last section on `origin/main` at authoring
+> time was Amendment 11 and no OPEN pull request touched this file — which is
+> exactly the wrong source, because the collisions are on branches with no PR
+> yet. Checked across every unmerged branch after the fact:
+>
+> | Branch                               | Claims                                                |
+> | ------------------------------------ | ----------------------------------------------------- |
+> | `parent/MOTIR-2308-cli-docs` (this)  | **Amendment 12** — the CLI documentation              |
+> | `parent/MOTIR-2309-mcp-docs`         | **Amendment 12** — the MCP is a `/docs/mcp` sub-area  |
+> | `parent/MOTIR-1855-cli-v1-migration` | **Amendment 12** (counting a filtered set) **and 13** |
+>
+> None is merged. The remedy is the one Amendment 11 used and is **not** a
+> blind renumber here — whoever merges SECOND (and third) renumbers to the next
+> free number, records the race in its own header note, and adds a line saying
+> anything citing the old number means that amendment. Every merge after the
+> first will conflict at the append anchor, so the ordering is a decision for
+> whoever holds the merge buttons, not something a branch can settle for itself.
+>
+> The three amendments do not contradict each other — the CLI and MCP ones apply
+> Amendment 11 Q4's placement rule to different surfaces, and MOTIR-1855's is
+> about `/api/v1` — so the conflict is textual, not substantive. **Anything
+> elsewhere in this repository citing "Amendment 12" for the CLI documentation
+> means THIS amendment, whatever number it ends up with**; the citations live in
+> `packages/cli/src/commandCatalog.ts`, `program.ts`, `help.ts`,
+> `serverResolve.ts`, `packages/cli/test/commandCatalog.test.ts`,
+> `lib/apiDocs/cli.ts`, `tests/api-docs/`, and `design/cli-guide/design-notes.md`.
+
+---
+
+### Amendment 13 (2026-08-06) — the MCP is a `/docs/mcp` SUB-AREA whose second-tier index is the tool catalogue; the catalogue DERIVES its names, scopes and grouping from `TOOL_SCOPES`
+
+> **⚠️ Numbered 13, not 12 — the three-way race Amendment 12's header records,
+> resolved.** This amendment was authored as **Amendment 12**, on a branch whose
+> base ended at Amendment 11. So were two others. Amendment 12's own header
+> enumerates all three and states the remedy: whoever merges second renumbers to
+> the next free number, records the race, and says what the old citation means.
+> The CLI documentation (`parent/MOTIR-2308-cli-docs`) merged first and holds
+> **12**; this one merged second and is **13**.
+>
+> The two do not contradict each other — they apply Amendment 11 Q4's placement
+> rule to different surfaces — so the collision was textual, and nothing in
+> either decision moved to resolve it. **Anything in this repository citing
+> "Amendment 12" for the MCP documentation means THIS amendment, now 13.** Those
+> citations were rewritten with the renumber and live in `lib/apiDocs/mcp.ts`,
+> `tests/api-docs/`, `app/(public)/docs/mcp*`, and
+> `design/mcp-server/design-notes.md`.
+>
+> **`parent/MOTIR-1855-cli-v1-migration` is still unmerged and still claims 12
+> and 13.** Both are now taken; it renumbers to 14 and 15 when it lands.
 
 **Amends:** Amendment 11's second open item — _"whether a sub-area other than the
 API gets a second-tier index (a CLI command list, an MCP tool list)"_ — which is

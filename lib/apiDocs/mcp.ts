@@ -2,7 +2,7 @@ import { DEFAULT_TOKEN_SCOPES, TOKEN_SCOPES, TOOL_SCOPES, type TokenScope } from
 import type { GuideBlock } from '@/lib/apiDocs/guide';
 
 // The MCP server documentation, AS DATA (Story MOTIR-2309 · Subtask MOTIR-2325 ·
-// design `design/mcp-server/` · ADR `public-api-conventions.md` Amendment 12).
+// design `design/mcp-server/` · ADR `public-api-conventions.md` Amendment 13).
 //
 // ── The dependency-graph rule this file exists to keep ──────────────────────
 // It imports `lib/mcp/scopes.ts` and NOTHING ELSE from `lib/mcp/`, directly or
@@ -10,7 +10,7 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // registry is `import type { McpToolName }`, erased at build. `registry.ts` is
 // not — it imports all of `lib/mcp/tools/*.ts`, which import the services, which
 // import `@prisma/client` and `lib/db`. None of that belongs in the dependency
-// graph of a page anybody on the internet can request (Amendment 12 Q2).
+// graph of a page anybody on the internet can request (Amendment 13 Q2).
 //
 // That is also why the tool-name type below is `keyof typeof TOOL_SCOPES` rather
 // than an imported `McpToolName`: the two are the same type — `TOOL_SCOPES` is
@@ -21,7 +21,7 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // and that makes {@link TOOL_SUMMARIES} below incomplete, which fails typecheck
 // here. A tool cannot reach the server undocumented.
 //
-// ── What is DERIVED and what is AUTHORED (Amendment 12 Q2) ──────────────────
+// ── What is DERIVED and what is AUTHORED (Amendment 13 Q2) ──────────────────
 // Derived: every tool NAME, its gating SCOPE, the catalogue's GROUPING (a tool's
 // group is its own scope), the scope legend and the default grant. Authored: the
 // reader-facing one-line summaries, because a tool's `title` and `description`
@@ -48,7 +48,7 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 export type McpCatalogueToolName = keyof typeof TOOL_SCOPES;
 
 // ── The four transport facts, held ONCE ─────────────────────────────────────
-// Amendment 12 Q3a: these are OURS and a test can pin them. Every client block
+// Amendment 13 Q3a: these are OURS and a test can pin them. Every client block
 // below is one of them transcribed into a vendor's file format, so a stale block
 // is wrong about that vendor's syntax and never about Motir.
 
@@ -111,7 +111,7 @@ export function mcpTransportFactRows(
   ];
 }
 
-// ── The client matrix (Amendment 12 Q3a) ────────────────────────────────────
+// ── The client matrix (Amendment 13 Q3a) ────────────────────────────────────
 
 /** One client's wiring block. Everything here except `config` is the VENDOR's. */
 export interface McpClient {
@@ -130,7 +130,7 @@ export interface McpClient {
   note: string;
   /** That vendor's own MCP documentation — the authority when this block is stale. */
   docsUrl: string;
-  /** When the FORMAT was last read from `docsUrl`. Amendment 12 Q3a's containment. */
+  /** When the FORMAT was last read from `docsUrl`. Amendment 13 Q3a's containment. */
   checkedOn: string;
 }
 

@@ -1,5 +1,6 @@
 import { Command, Help, type Option } from 'commander';
 import { AGENT_PROFILES } from './agentProfiles.js';
+import { COMMAND_CATALOG, HELP_GROUP } from './commandCatalog.js';
 import { CliError } from './errors.js';
 import { out } from './output.js';
 import { DEFAULT_SERVER_URL } from './serverResolve.js';
@@ -17,29 +18,17 @@ import { DEFAULT_SERVER_URL } from './serverResolve.js';
 // commander's, so this surface cannot drift from the framework's own output.
 
 /**
- * The command-group headings, in the order they render. Group ORDER is decided
- * by first appearance in `program.commands` (commander's `groupItems` builds
- * the map in registration order), so the registration order in `program.ts`
- * is what puts SETUP above READ.
+ * The command-group headings, in the order they render.
  *
- * `workLoop` has no members yet — it is the reserved heading the dispatch
- * commands (`next` / `run` / `done` / `auto` / `batch`) attach to as they land.
- * Commander renders no heading for an empty group, so declaring it early costs
- * nothing.
- *
- * `additional` is the DEFAULT bucket: `applyHelpConfiguration` installs it via
- * `program.commandsGroup()`, so a command registered with no explicit
- * `.helpGroup()` still lands under a heading instead of silently falling into
- * commander's generic `Commands:`. That default is what lets a later subtask
- * add a command without touching this file.
+ * They are DECLARED in `commandCatalog.ts` and re-exported here, because that
+ * record carries each command's group and this module imports `commander` —
+ * a record reaching back into it would lose the no-dependency-graph property
+ * that lets a documentation page read it (ADR
+ * `docs/decisions/public-api-conventions.md` Amendment 12 Q2). The re-export
+ * keeps every existing `HELP_GROUP` importer unchanged, and keeps the headings
+ * from acquiring a second hand-maintained home.
  */
-export const HELP_GROUP = {
-  setup: 'SETUP COMMANDS:',
-  read: 'READ COMMANDS:',
-  workLoop: 'WORK LOOP COMMANDS:',
-  topics: 'HELP TOPICS:',
-  additional: 'ADDITIONAL COMMANDS:',
-} as const;
+export { HELP_GROUP };
 
 const FLAGS_HEADING = 'FLAGS:';
 
@@ -291,10 +280,16 @@ export function registerHelpSurface(program: Command): void {
   // `program.commands` that carries a group like every other command.
   program.helpCommand(false);
 
+  // `help` is a REAL command, so it is built from the catalog like every other
+  // one (`program.ts`'s `register`, spelled out here because this file registers
+  // it). The topic pseudo-commands below are not — they are generated one per
+  // `HELP_TOPICS` entry, which is already their own record.
+  const help = COMMAND_CATALOG.find((entry) => entry.path === 'help');
+  if (!help) throw new Error('commandCatalog.ts has no entry for "help".');
   program
-    .command('help [command...]')
-    .description('Show help for a command, or read a help topic.')
-    .helpGroup(HELP_GROUP.topics)
+    .command(`help ${help.signature}`)
+    .description(help.description)
+    .helpGroup(help.helpGroup ?? HELP_GROUP.topics)
     .action((path: string[] = []) => {
       helpAction(program, path);
     });
