@@ -54,10 +54,16 @@ describe('ConnectCliPanel', () => {
     expect(screen.getByLabelText('Copy sign-in command')).toBeTruthy();
     expect(screen.getByLabelText('Copy install command')).toBeTruthy();
 
+    // The PUBLISHED guide, not a GitHub blob (MOTIR-2331). Still a literal, so
+    // a future silent change fails here — and still the assertion the story
+    // gate crosses with the real route tree, which is what stops the link and
+    // the page from disagreeing about where the page lives.
     const guide = screen.getByRole('link', { name: 'Read the CLI guide' });
-    expect(guide.getAttribute('href')).toBe(
-      'https://github.com/moooon-B-V/motir-core/blob/main/docs/cli.md',
-    );
+    expect(guide.getAttribute('href')).toBe('/docs/cli');
+    // In-product now: the new-tab pair is this pane's mark for a link that
+    // LEAVES the application, and this one does not.
+    expect(guide.getAttribute('target')).toBeNull();
+    expect(guide.getAttribute('rel')).toBeNull();
 
     // The revoke-to-disconnect relationship — the panel points at the pane's
     // EXISTING revoke rather than adding a second disconnect control.
@@ -155,18 +161,31 @@ describe('the commands the panel prints are the shipped ones', () => {
     expect(screen.getByText(`npm install -g ${manifest.name}`)).toBeTruthy();
   });
 
-  it('prints `motir login` — a TOP-LEVEL command, not the `auth login` subcommand', () => {
-    const source = readFileSync(resolve(CLI_PKG_DIR, 'src/program.ts'), 'utf8');
+  it('prints `motir login` — a TOP-LEVEL command, not the `auth login` subcommand', async () => {
+    // RE-POINTED, not weakened, by MOTIR-2324: `program.ts` no longer spells a
+    // command's name, arguments, description or group inline — it builds them
+    // from `commandCatalog.ts`, so the old source-regex for
+    // `program.command('login')` now matches nothing, and a regex for
+    // `register(program, 'login')` would only have moved the same brittleness
+    // one refactor along.
+    //
+    // The record IS the registration, and it is plain data, so read the fact
+    // instead of the syntax. This is strictly stronger than the regex: it
+    // distinguishes the top-level `login` from the `auth login` subcommand by
+    // its PATH rather than by which identifier the call was chained off, and it
+    // sees the argument signature rather than inferring it from a name string.
+    const { COMMAND_CATALOG } = await import('../../packages/cli/src/commandCatalog');
 
-    // The registration the panel's copy depends on: `program.command('login')`.
-    // `auth.command('login')` also exists (the `--token` path CI keeps using), so
-    // matching a bare `.command('login')` would pass even if the top-level command
-    // were deleted — the receiver has to be `program`.
-    expect(/program\s*\n?\s*\.command\('login'\)/.test(source)).toBe(true);
+    const login = COMMAND_CATALOG.find((entry) => entry.path === 'login');
+    expect(login, 'the top-level `login` command the panel tells people to run').toBeDefined();
+    // `auth login` also exists (the `--token` path CI keeps using); the panel
+    // prints the other one, and these two lines are what tell them apart.
+    expect(COMMAND_CATALOG.some((entry) => entry.path === 'auth login')).toBe(true);
+    expect(login!.helpGroup).not.toBeNull();
 
-    // …and it takes no REQUIRED argument, which is why the panel can print the
-    // bare command with nothing to fill in.
-    expect(/\.command\('login <.+>'\)/.test(source)).toBe(false);
+    // …and it takes no argument, which is why the panel can print the bare
+    // command with nothing for the reader to fill in.
+    expect(login!.signature).toBe('');
   });
 });
 
