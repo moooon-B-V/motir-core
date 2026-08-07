@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { canvasLayoutService } from '@/lib/services/canvasLayoutService';
 import { InvalidCanvasPositionError } from '@/lib/canvasLayout/errors';
+import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import type { CanvasNodePositionInput } from '@/lib/dto/canvasLayout';
 
 // /api/canvas-layout (Subtask 7.3.77 / MOTIR-1237) — the CURRENT user's saved
@@ -14,6 +15,11 @@ import type { CanvasNodePositionInput } from '@/lib/dto/canvasLayout';
 // own workspace), never the client — so a cross-tenant project is unreachable and
 // a null context is simply "no active project" → 404 (the no-existence-leak
 // shape). Scope is per-user-per-project: the userId is always the session user.
+//
+// The PROJECT gate is the service's (`project:browse`, MOTIR-2346) — server-resolving
+// the project is not the same question as "may this actor see it". A non-browser is
+// refused as ProjectNotFoundError, which `projectErrorResponse` maps to the same 404
+// as "no active project": the surface stays missing rather than forbidden.
 //
 // GET  → 200 { layout: CanvasLayoutDTO } (empty positions → the consumer's
 //        auto-layout default)
@@ -32,10 +38,18 @@ export async function GET(): Promise<Response> {
     );
   }
 
-  const layout = await canvasLayoutService.getLayout({
-    userId: ctx.userId,
-    projectId: ctx.projectId,
-  });
+  let layout;
+  try {
+    layout = await canvasLayoutService.getLayout({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
+    });
+  } catch (err) {
+    const res = projectErrorResponse(err);
+    if (res) return res;
+    throw err;
+  }
   return NextResponse.json({ layout }, { headers: { 'Cache-Control': 'private, no-store' } });
 }
 
@@ -91,7 +105,7 @@ export async function PATCH(req: Request): Promise<Response> {
 
   try {
     const layout = await canvasLayoutService.savePositions(
-      { userId: ctx.userId, projectId: ctx.projectId },
+      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: ctx.projectId },
       inputs,
       removeKeys,
     );
@@ -100,6 +114,8 @@ export async function PATCH(req: Request): Promise<Response> {
     if (err instanceof InvalidCanvasPositionError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }
+    const res = projectErrorResponse(err);
+    if (res) return res;
     throw err;
   }
 }

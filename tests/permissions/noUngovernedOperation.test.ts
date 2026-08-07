@@ -432,7 +432,19 @@ describe('the PENDING set is bounded and shrinking', () => {
     // ungoverned. NO GATE WAS ADDED by that card — read its diff: two test
     // files and a document. A FALL here means the instrument got better; only a
     // RISE means a hole opened.
-    expect(pending.length).toBe(36);
+    //
+    // 36 → 27 is MOTIR-2346, and it is the FIRST fall on this pin that is not
+    // purely a re-measurement — it is eight rows re-decided plus one real gate.
+    // Nine operations the inventory mapped to `import:run` / `ai:plan` resolve no
+    // project, so no project permission could ever govern them: the six importer
+    // OAuth legs bind a provider credential to a WORKSPACE (`workspace-scoped` /
+    // R3, exactly the GitHub + GitLab legs MOTIR-2294 retired), and the two
+    // `/api/idea-draft` operations run before the visitor has an account at all
+    // (`no-gate` / R48 and `user-scoped` / R49). The ninth, `/api/canvas-layout`,
+    // leaves this set the other way: it GAINED `project:browse` in
+    // `canvasLayoutService`, so the walk now sees a gate and it is no longer
+    // pending. 8 re-decided + 1 gated = 9.
+    expect(pending.length).toBe(27);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
