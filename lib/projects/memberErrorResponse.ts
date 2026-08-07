@@ -6,6 +6,7 @@ import {
   LastProjectAdminError,
   NotAProjectMemberError,
   NotProjectAdminError,
+  PermissionDeniedError,
   ProjectNotFoundError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
@@ -17,13 +18,24 @@ import {
 //
 //   ProjectNotFoundError / NotAProjectMemberError        → 404 (incl. the
 //       no-existence-leak 404 for a cross-tenant / unknown project key)
-//   NotProjectAdminError                                 → 403
+//   NotProjectAdminError / PermissionDeniedError         → 403 (MOTIR-2295 —
+//       these routes now gate on `member:manage` / `project:manage_access` /
+//       `project:browse` through the shared `assertPermission`, so the refusal
+//       arrives as PermissionDeniedError carrying the key. NotProjectAdminError
+//       stays mapped: `assertPermission` still throws it for `project:administer`,
+//       and other callers of this mapper may raise it.)
 //   TargetNotWorkspaceMemberError / InvalidProjectRoleError
 //       / InvalidAccessLevelError                        → 400
 //   AlreadyProjectMemberError / LastProjectAdminError    → 409
 export function projectMemberErrorResponse(err: unknown): NextResponse | null {
   if (err instanceof ProjectNotFoundError || err instanceof NotAProjectMemberError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
+  }
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, permission: err.permission },
+      { status: 403 },
+    );
   }
   if (err instanceof NotProjectAdminError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });

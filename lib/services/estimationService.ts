@@ -1,10 +1,9 @@
 import type { EstimationStatistic, PointScale } from '@prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { toEstimationConfigDto, toSprintPointsDto } from '@/lib/mappers/estimationMappers';
@@ -12,7 +11,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntryRepository';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
-import { EstimationConfigForbiddenError, InvalidScaleConfigError } from '@/lib/estimation/errors';
+import { InvalidScaleConfigError } from '@/lib/estimation/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
@@ -134,7 +133,7 @@ export const estimationService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
-    await assertEstimationAdmin(ctx.userId, ctx.workspaceId);
+    await assertEstimationAdmin(projectId, ctx);
 
     const data = validateConfigPatch(patch, project);
 
@@ -342,18 +341,26 @@ async function resolveStatistic(projectId: string): Promise<EstimationStatistic>
 }
 
 /**
- * Owner-gate for estimation-config changes (finding #36; TODO(6.4) widens the
- * role-set), mirroring `workflowsService.assertProjectAdmin` /
- * `boardsService.assertBoardConfigAdmin`. The project's workspace membership of
- * the actor is the gate; the project↔workspace tenancy check already ran in the
- * caller (so a foreign project 404s before this).
+ * Assert the actor may change this project's ESTIMATION SCHEME (Story MOTIR-2256 ·
+ * Subtask MOTIR-2298).
+ *
+ * ⚠️ A DELIBERATE WIDENING, and the odd one out among the four vocabularies.
+ * Custom fields, components and labels were already gated at project-admin level;
+ * this one asked `isOwnerRole(membership?.role)` — the workspace OWNER alone — for
+ * no reason anyone recorded, the same accident that reached for the nearest
+ * available check in the board and workflow editors. So a project admin could
+ * define a custom field but not change what the story-point scale is, which is not
+ * a policy anybody would write down on purpose. `estimation:manage` is held by the
+ * workspace owner, a workspace admin and a project admin.
+ *
+ * Required rather than optional: MOTIR-2293 put `estimation:manage` into
+ * `BUILTIN_ROLE_PERMISSIONS.admin`, so the old gate would have the catalog
+ * advertise a permission the code refuses.
+ *
+ * The caller's project↔workspace tenancy check still runs first, so a foreign
+ * project 404s before this; the shared gate then re-applies the same posture for a
+ * non-browser.
  */
-async function assertEstimationAdmin(userId: string, workspaceId: string): Promise<void> {
-  const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
-    userId,
-    workspaceId,
-  );
-  if (!isOwnerRole(membership?.role)) {
-    throw new EstimationConfigForbiddenError();
-  }
+async function assertEstimationAdmin(projectId: string, ctx: ServiceContext): Promise<void> {
+  await projectAccessService.assertPermission(projectId, ctx, 'estimation:manage');
 }

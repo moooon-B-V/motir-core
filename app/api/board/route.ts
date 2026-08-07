@@ -6,12 +6,12 @@ import {
   BoardNotFoundError,
   InvalidBoardNameError,
   InvalidSwimlaneGroupByError,
-  NotBoardAdminError,
 } from '@/lib/boards/errors';
 import { decodeFilterParam } from '@/lib/filters/ast';
 import { FilterValidationError } from '@/lib/filters/errors';
 import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
 import type { BoardFilterInput } from '@/lib/dto/boards';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // GET /api/board (Subtask 3.1.6) — the board projection for the ACTIVE project's
 // default board: a BoardProjectionDto (columns in workflow order, each with a
@@ -108,7 +108,8 @@ export async function GET(req: Request): Promise<Response> {
 //
 // Typed errors → status codes:
 //   InvalidSwimlaneGroupByError / InvalidBoardNameError → 400
-//   NotBoardAdminError                                  → 403 (not owner, #36)
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError                                  → 404 (unknown board)
 
 export async function PATCH(req: Request): Promise<Response> {
@@ -173,9 +174,8 @@ export async function PATCH(req: Request): Promise<Response> {
     if (err instanceof InvalidSwimlaneGroupByError || err instanceof InvalidBoardNameError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

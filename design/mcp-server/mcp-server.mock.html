@@ -1,0 +1,2699 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · The MCP server documentation (MOTIR-2309 · MOTIR-2323)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) — THE MCP SERVER DOCUMENTATION.
+      Story MOTIR-2309 · Subtask MOTIR-2323. Routes: /docs/mcp and /docs/mcp/tools.
+
+      A NEW surface, in its OWN design area, drawn to the route set ADR
+      Amendment 12 (MOTIR-2321) fixed:
+
+        Q1  /docs/mcp        the wiring page AND the sub-area's index
+            /docs/mcp/tools  the tool catalogue, as this surface's SECOND-TIER
+                             resource index — the first sub-area other than the
+                             API reference to have one
+        Q2  the catalogue's names, scopes and GROUPING derive from
+            `lib/mcp/scopes.ts`; the one-line summaries are authored and pinned
+            to the shipped `tools/list`
+        Q3  the page owns the FIRST RUN; `docs/mcp.md` keeps the per-tool
+            argument tables
+
+      IT MOUNTS INTO the documentation shell Story 11.4 designed and shipped
+      (`design/api-docs/`) and changes nothing about it except adding one row to
+      the rail's SURFACE tier and one sub-area to its SECOND tier. That asset is
+      not touched; the shell and rail markup reproduced here are 11.4's and
+      MOTIR-2311's, drawn only as the frame this surface sits in.
+
+      DRAWN AGAINST THE RUNNING APP, not from source. `/docs/api` and
+      `/docs/sandbox` were rendered from a local dev server at 1440x900 and
+      375x800 before this was drawn, so the shell, the two-tier rail, the top
+      bar and the block rhythm here are what the app actually shows today —
+      including the operation count, which reads 38 and not the "~28" the ADR
+      recorded before Story 11.7 landed.
+
+      THE CATALOGUE'S 39 ROWS ARE REAL. Names and scopes are generated from
+      `lib/mcp/scopes.ts`'s TOOL_SCOPES by `design/mcp-server/build.py`, so the
+      panel below is the true size, not an abbreviated five. See design-notes.md
+      § "How this file was produced".
+
+      Panels — review EACH (notes.html mistake #31):
+        (1) /docs/mcp at 1180 px — the fork, then the wiring procedure.
+        (2) /docs/mcp/tools at 1180 px — the catalogue at its real length.
+        (3) The catalogue at the tablet width — rail above, table intact.
+        (4) The catalogue at 375 px — one card per row.
+        (5) The catalogue when the derivation yields nothing.
+        (6) THE ACCESS PATH ① — the rail, both tiers, side by side.
+        (7) THE ACCESS PATH ② — the in-app door in Settings → Account.
+
+      Colour strictly via --el-*; shape strictly via element-semantic tokens; NO
+      invented colour. The token block below is copied 1:1 from
+      `design/agent-sandbox/agent-sandbox.mock.html` (which took it from
+      `design/api-docs/`, which took it from app/globals.css), so this surface
+      cannot drift from the one it mounts in. See design-notes.md for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label .note {
+        display: block;
+        margin-top: 4px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+
+      /* ── The shipped marketing chrome — markup mirrored 1:1 from
+           app/(public)/explore/_components/ExploreTopBar.tsx ─────────────── */
+      .site-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px var(--spacing-card-padding);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand .tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .brand .name {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .site-nav {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      /* The SHIPPED treatment: a future page renders as a non-interactive label. */
+      .site-nav .nav-label {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      /* The SHIPPED treatment for a nav item that resolves to a real page. */
+      .site-nav .nav-link {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-nav .nav-current {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+        text-decoration: none;
+      }
+      .site-foot {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 32px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 32px var(--spacing-card-padding);
+      }
+      .site-foot h2 {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .site-foot ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .site-foot a {
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-foot .tagline {
+        margin: 8px 0 0;
+        max-width: 22rem;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The docs shell (THIS design) ───────────────────────────────────── */
+      .docs {
+        display: flex;
+        min-height: 660px;
+      }
+      .docs-nav {
+        flex: none;
+        width: 264px;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-sidebar-bg);
+        padding: 16px 12px 24px;
+        overflow: hidden;
+      }
+      .docs-main {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 36px 40px;
+      }
+      .docs-aside {
+        flex: none;
+        width: 200px;
+        border-left: 1px solid var(--el-border);
+        padding: 28px 16px;
+      }
+      .searchbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text-faint);
+        font-size: 13px;
+      }
+      .searchbox .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        color: var(--el-text-faint);
+      }
+      .navgroup {
+        margin-top: 18px;
+      }
+      .navgroup > h3 {
+        margin: 0 0 6px;
+        padding-left: var(--spacing-control-x);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .navrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .navrow:hover {
+        background: var(--el-sidebar-item-bg-hover);
+      }
+      .navrow.is-active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .navrow .op {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── HTTP method chip — a Pill, hue in the BACKGROUND, --el-text-strong ── */
+      .verb {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .verb--get {
+        background: var(--el-tint-sky);
+      }
+      .verb--post {
+        background: var(--el-tint-mint);
+      }
+      .verb--patch {
+        background: var(--el-tint-peach);
+      }
+      .verb--delete {
+        background: var(--el-tint-rose);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--scope {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-head .hsub {
+        margin-top: 3px;
+        max-width: 54ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+
+      /* ── Docs typography ────────────────────────────────────────────────── */
+      .doc h1 {
+        margin: 0 0 6px;
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h2 {
+        margin: 28px 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h3 {
+        margin: 20px 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .doc p {
+        margin: 0 0 12px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .doc .lede {
+        max-width: 68ch;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .doc code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        padding: 1px 5px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .doc ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+      }
+
+      /* ⚠️ WIDE CONTENT SCROLLS INSIDE ITS OWN CONTAINER, never the page. */
+      .codeblock {
+        position: relative;
+        margin: 0 0 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-code-bg);
+        overflow: hidden;
+      }
+      .codeblock > pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-code-text);
+        white-space: pre;
+      }
+      .codeblock .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+      }
+      .codeblock .cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+
+      .callout {
+        display: flex;
+        gap: 10px;
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        max-width: 68ch;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .callout--warn {
+        background: var(--el-tint-peach);
+      }
+
+      /* ── The operation-detail tables ────────────────────────────────────── */
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 16px;
+        font-size: 13px;
+      }
+      table.spec th {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      table.spec td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      table.spec td .nm {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      table.spec td .ty {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .status {
+        display: inline-flex;
+        min-width: 34px;
+        justify-content: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .status--ok {
+        background: var(--el-tint-mint);
+      }
+      .status--client {
+        background: var(--el-tint-peach);
+      }
+      .status--server {
+        background: var(--el-tint-rose);
+      }
+
+      .op-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .op-path {
+        font-family: var(--font-mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .toc {
+        font-size: 12px;
+      }
+      .toc h4 {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .toc a {
+        display: block;
+        padding: 4px 0;
+        color: var(--el-text-muted);
+        text-decoration: none;
+      }
+      .toc a.is-active {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 72px 24px;
+        text-align: center;
+      }
+      .empty h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        max-width: 46ch;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .empty .glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        font-size: 20px;
+      }
+
+      .phone {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .phone .docs-main {
+        padding: 18px 16px 24px;
+      }
+      .row2 {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      /* The settings-page row grammar (mirrors design/settings/*) */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow .lbl {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .desc {
+        margin-top: 2px;
+        max-width: 58ch;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .settings-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .settings-head p {
+        margin: 4px 0 0;
+        max-width: 34rem;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      .anno {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      /* ── THIS design's own additions (MOTIR-2270) ───────────────────────── */
+      /* Tier 1 = pinned by the sandbox matrix; tier 2 = also-supported. Two tint
+         SLOTS rather than two shades of one hue, so the distinction survives a
+         palette swap and reads without the legend. */
+      .pill--tier1 {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+        font-size: 11px;
+      }
+      .pill--tier2 {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-size: 11px;
+      }
+      /* A credential mount is a PATH, so each is its own code chip; a profile
+         with several gets several, stacked, because wrapping one long line
+         reads as one path. */
+      .mount {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-code-text);
+        background: var(--el-code-bg);
+        border-radius: var(--radius-kbd);
+        padding: 1px 6px;
+        margin-bottom: 3px;
+        width: fit-content;
+      }
+      .mount--none {
+        font-family: var(--font-sans);
+        background: transparent;
+        color: var(--el-text-faint);
+        padding-left: 0;
+      }
+      /* Narrow: the profile matrix as one card per profile. Not a scrolling
+         table and not hidden columns — every fact a reader chooses on stays
+         visible. */
+      .pcard {
+        border: 1px solid var(--el-border-soft);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        background: var(--el-surface);
+      }
+      .pcard-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .pcard-head .nm {
+        font-family: var(--font-mono);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .pcard dl {
+        display: grid;
+        grid-template-columns: 78px 1fr;
+        gap: 4px 10px;
+        margin: 0;
+      }
+      .pcard dt {
+        font-size: 11px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        padding-top: 2px;
+      }
+      .pcard dd {
+        margin: 0;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+    </style>
+
+    <style>
+      /* ── Added by THIS asset (design/mcp-server/) — the catalogue's own bits.
+           Every value routes through an --el-* colour token or an
+           element-semantic shape token; nothing Tier-0, nothing invented. ── */
+      .cat-group {
+        margin-bottom: 26px;
+        scroll-margin-top: 16px;
+      }
+      .cat-group-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 4px;
+      }
+      /* Uppercase DELIBERATELY, matching the rail's own group headings — a
+         catalogue group and a rail group name the same six scopes, so they read
+         as one vocabulary. (.doc h3 already uppercases; this states it.) */
+      .cat-group-head h3 {
+        margin: 0;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text);
+      }
+      .cat-count {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+      .cat-gates {
+        margin: 0 0 8px;
+        max-width: 68ch;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .scope-pill {
+        display: inline-flex;
+        align-items: center;
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .scope-pill--off {
+        background: var(--el-tint-peach);
+      }
+      .cat-table td:first-child {
+        width: 15.5rem;
+        white-space: nowrap;
+      }
+      .cat-table td:first-child code {
+        font-size: 12.5px;
+      }
+      .tablet {
+        width: 820px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .tablet .docs-main {
+        padding: 20px 22px 26px;
+      }
+      .phone.is-375 {
+        width: 375px;
+      }
+      .legend {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        margin-bottom: 22px;
+      }
+      .doorframe {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface-soft);
+        padding: 22px;
+      }
+      .marker {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        margin-right: 6px;
+      }
+      .stepnum {
+        display: inline-block;
+        min-width: 1.1em;
+        margin-right: 8px;
+        font-family: var(--font-mono);
+        font-weight: 500;
+        color: var(--el-text-faint);
+      }
+      .mono-meta {
+        margin: -4px 0 18px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-faint);
+      }
+      .doc .lede + .mono-meta {
+        margin-top: 6px;
+      }
+      .client-h {
+        margin: 22px 0 6px;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .clientmeta {
+        margin: 6px 0 0;
+        max-width: 68ch;
+        font-size: 12px;
+        line-height: 1.6;
+        color: var(--el-text-faint);
+      }
+      .clientmeta code {
+        font-size: 11.5px;
+        overflow-wrap: anywhere;
+      }
+      .anno.anno-block {
+        display: block;
+      }
+      .anno.anno-block .marker {
+        vertical-align: 1px;
+      }
+      .anchorbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: 0 0 20px;
+      }
+      .anchorbar a {
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+        border: 1px solid var(--el-border-soft);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        font-size: 12px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <h1>The MCP server documentation</h1>
+      <p>
+        MOTIR-2309 · MOTIR-2323 · <code>/docs/mcp</code> and <code>/docs/mcp/tools</code> · drawn to
+        ADR Amendment 12. Seven panels; the catalogue's 39 rows are generated from
+        <code>lib/mcp/scopes.ts</code>.
+      </p>
+    </div>
+
+    <div class="panel-label">
+      1 · /docs/mcp — the wiring page<span class="note">the sub-area index · 1180 px</span>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/docs/api">API reference</a>
+              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow is-active" href="/docs/mcp" aria-current="page">MCP server</a>
+            </div>
+            <div class="navgroup">
+              <h3>MCP server</h3>
+              <a class="navrow" href="/docs/mcp/tools">Tools</a>
+            </div>
+          </nav>
+          <main class="docs-main doc">
+            <h1>The Motir MCP server</h1>
+            <p class="lede">
+              Motir's project plan is reachable by any Model Context Protocol client over one
+              endpoint. Point your agent at it with a personal access token and it can read the
+              ready set, claim the next item, create work, move statuses and comment — through the
+              same services, permissions and data the web app uses.
+            </p>
+
+            <h2>Should you use this, or the REST API?</h2>
+            <p>
+              Motir publishes two programmatic surfaces over the same domain. They are not
+              alternatives with the same trade-off, and the difference is worth thirty seconds
+              before you pick.
+            </p>
+            <table class="spec">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>The MCP server</th>
+                  <th>The REST API</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><span class="nm">Endpoint</span></td>
+                  <td><code>POST /api/mcp</code></td>
+                  <td><code>/api/v1/&hellip;</code></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Built for</span></td>
+                  <td>
+                    An <strong>agent you control</strong> — it reads tool descriptions at run time.
+                  </td>
+                  <td>
+                    A <strong>client you ship</strong> — code written once against a fixed shape.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Stability</span></td>
+                  <td>
+                    <strong>Expected to change.</strong> Rewording a description or renaming an
+                    argument is how an agent's behaviour gets tuned.
+                  </td>
+                  <td>
+                    <strong>Additive only.</strong> A breaking change mints <code>/api/v2</code>; v1
+                    keeps its promise.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Shape</span></td>
+                  <td colspan="2">
+                    The same. MCP payloads are derived from the v1 response schemas, so the two
+                    describe provably identical objects.
+                  </td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Auth</span></td>
+                  <td colspan="2">
+                    One personal access token, one scope set. The same credential works on both.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                >Wiring an agent? Stay here. Writing software other people install?
+                <a href="/docs/api">Read the API reference</a>.</span
+              >
+            </div>
+
+            <h2><span class="stepnum">1</span> Mint a token</h2>
+            <p>
+              In the app: <strong>Settings → Account → API tokens → Create</strong>. Give it a label
+              and an expiry. The plaintext is shown <strong>once</strong> — copy it then; Motir
+              keeps only a hash.
+            </p>
+            <p>
+              A new token carries <strong>every scope except <code>work_items:delete</code></strong
+              >, which is the single irreversible one and is opt-in. Which tools that buys you is
+              the <a href="/docs/mcp/tools">tool catalogue</a>.
+            </p>
+
+            <h2><span class="stepnum">2</span> Point your client at the endpoint</h2>
+            <p>
+              Every client needs the same four facts. They are Motir's, they are the same for every
+              agent, and everything below this table is one of them transcribed into a vendor's file
+              format.
+            </p>
+            <table class="spec">
+              <tbody>
+                <tr>
+                  <td><span class="nm">URL</span></td>
+                  <td><code>https://app.motir.co/api/mcp</code></td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Transport</span></td>
+                  <td>Streamable HTTP — <strong>not</strong> SSE, and not a stdio command</td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Header</span></td>
+                  <td><code>Authorization: Bearer &lt;token&gt;</code>, on every request</td>
+                </tr>
+                <tr>
+                  <td><span class="nm">Token</span></td>
+                  <td><code>motir_pat_&hellip;</code> — the one you minted in step 1</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                ><strong>Don&rsquo;t paste the token into a file your repository tracks.</strong>
+                Where your client can read it from somewhere else, the block below does that instead
+                — VS&nbsp;Code prompts you for it, Cursor and Codex read an environment
+                variable.</span
+              >
+            </div>
+
+            <h3 class="client-h">Claude Code</h3>
+            <div class="codeblock">
+              <div class="cap">.mcp.json</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+{
+  "mcpServers": {
+    "motir": {
+      "type": "http",
+      "url": "https://app.motir.co/api/mcp",
+      "headers": { "Authorization": "Bearer motir_pat_&lt;your-token&gt;" }
+    }
+  }
+}</pre
+              >
+            </div>
+            <p class="clientmeta">
+              Or one command:
+              <code
+                >claude mcp add --transport http motir https://app.motir.co/api/mcp --header
+                "Authorization: Bearer motir_pat_&hellip;"</code
+              >
+              · <a href="#">Claude Code MCP docs</a> · format checked 2026-08-06
+            </p>
+
+            <h3 class="client-h">Cursor</h3>
+            <div class="codeblock">
+              <div class="cap">
+                ~/.cursor/mcp.json &nbsp;·&nbsp; or .cursor/mcp.json for one project
+              </div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+{
+  "mcpServers": {
+    "motir": {
+      "url": "https://app.motir.co/api/mcp",
+      "headers": { "Authorization": "Bearer ${env:MOTIR_TOKEN}" }
+    }
+  }
+}</pre
+              >
+            </div>
+            <p class="clientmeta">
+              Cursor interpolates <code>${env:&hellip;}</code>, so the token stays in your
+              environment and out of the file. · <a href="#">Cursor MCP docs</a> · format checked
+              2026-08-06
+            </p>
+
+            <h3 class="client-h">VS Code</h3>
+            <div class="codeblock">
+              <div class="cap">.vscode/mcp.json</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+{
+  "inputs": [
+    { "type": "promptString", "id": "motir-token", "description": "Motir PAT", "password": true }
+  ],
+  "servers": {
+    "motir": {
+      "type": "http",
+      "url": "https://app.motir.co/api/mcp",
+      "headers": { "Authorization": "Bearer ${input:motir-token}" }
+    }
+  }
+}</pre
+              >
+            </div>
+            <p class="clientmeta">
+              VS&nbsp;Code prompts for the token the first time the server starts and stores it
+              securely — nothing secret is written to the file. · <a href="#">VS Code MCP docs</a> ·
+              format checked 2026-08-06
+            </p>
+
+            <h3 class="client-h">Codex CLI</h3>
+            <div class="codeblock">
+              <div class="cap">~/.codex/config.toml</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>
+[mcp_servers.motir]
+url = "https://app.motir.co/api/mcp"
+bearer_token_env_var = "MOTIR_TOKEN"</pre
+              >
+            </div>
+            <p class="clientmeta">
+              <code>bearer_token_env_var</code> takes the variable&rsquo;s <strong>name</strong>,
+              not the token. · <a href="#">Codex MCP docs</a> · format checked 2026-08-06
+            </p>
+
+            <h3 class="client-h">Any other streamable-HTTP client</h3>
+            <p>
+              Windsurf, Zed, Cline, Goose, or something you wrote yourself — they all take the same
+              four facts under different key names.
+            </p>
+            <div class="codeblock">
+              <div class="cap">whatever your client calls its config</div>
+              <pre>
+Transport:  streamable HTTP
+URL:        https://app.motir.co/api/mcp
+Header:     Authorization: Bearer motir_pat_&lt;your-token&gt;</pre
+              >
+            </div>
+
+            <h2><span class="stepnum">3</span> Check it</h2>
+            <p>
+              Call <code>whoami</code>. It takes no arguments and answers with the user the token
+              belongs to, the workspace it is bound to, and the scopes it was granted — so one call
+              confirms all three at once.
+            </p>
+            <div class="codeblock">
+              <div class="cap">tools/call · whoami</div>
+              <pre>
+{
+  "user": { "name": "Zhu Yue", "email": "you@example.com" },
+  "workspace": { "name": "moooon", "slug": "moooon" },
+  "scopes": ["read", "work_items:write", "work_items:archive",
+             "sprints:write", "integration"]
+}</pre
+              >
+            </div>
+            <div class="callout callout--warn">
+              <span aria-hidden="true">▲</span>
+              <span
+                >A <strong>401</strong> means the token is absent, malformed, unknown, revoked or
+                expired — the five are deliberately not distinguished, so a caller cannot probe
+                token state. Mint a fresh one and try again.</span
+              >
+            </div>
+
+            <h2><span class="stepnum">4</span> Do one real thing</h2>
+            <p>
+              <code>list_projects</code> takes no arguments and gives you the
+              <code>projectKey</code> every other tool wants. Then <code>next_ready</code> hands
+              back the single item your agent should pick up — the whole point of the surface.
+            </p>
+
+            <h2>What next</h2>
+            <p>
+              <a href="/docs/mcp/tools">The tool catalogue</a> — all 39 tools, what each does, and
+              the scope that gates it. For a tool's exact arguments and response shape, the full
+              reference is
+              <a href="https://github.com/moooon-B-V/motir-core/blob/main/docs/mcp.md"
+                >docs/mcp.md</a
+              >
+              in the repository.
+            </p>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      2 · /docs/mcp/tools — the catalogue<span class="note"
+        >the second-tier resource index · all 39 tools · 1180 px</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/docs/api">API reference</a>
+              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow" href="/docs/mcp">MCP server</a>
+            </div>
+            <div class="navgroup">
+              <h3>MCP server</h3>
+              <a class="navrow is-active" href="/docs/mcp/tools" aria-current="page">Tools</a>
+            </div>
+          </nav>
+          <main class="docs-main doc">
+            <h1>MCP tools</h1>
+            <p class="lede">
+              Every tool the Motir MCP server exposes, and the scope that gates it. Grouped by
+              scope, because that is the choice you make when you mint the token — leave a scope off
+              and its whole group refuses.
+            </p>
+            <p class="mono-meta">39 tools · 6 scopes · derived from the server's own scope map</p>
+
+            <div class="anchorbar">
+              <a href="#read">Read</a>
+              <a href="#work_items-write">Write work items</a>
+              <a href="#work_items-archive">Archive &amp; restore</a>
+              <a href="#work_items-delete">Delete</a>
+              <a href="#sprints-write">Sprints</a>
+              <a href="#integration">Integration</a>
+            </div>
+
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span
+                >These are the <strong>summaries</strong>. For a tool's exact arguments and response
+                shape, see
+                <a href="https://github.com/moooon-B-V/motir-core/blob/main/docs/mcp.md"
+                  >docs/mcp.md</a
+                >
+                — the reference is kept beside the code because those facts change most.</span
+              >
+            </div>
+
+            <section class="cat-group" id="read">
+              <div class="cat-group-head">
+                <h3>Read</h3>
+                <span class="scope-pill">read</span>
+                <span class="cat-count">15 tools</span>
+              </div>
+              <p class="cat-gates">
+                Every read — items, the ready set, search, sprints, plans, identity. Never mutates.
+              </p>
+              <table class="spec cat-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>get_work_item</code></td>
+                    <td>
+                      One item in full — description, status, parent and children, dependency edges,
+                      and a readiness verdict.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_work_item_activity</code></td>
+                    <td>
+                      One page of an item&#x27;s discussion and change trail: comment threads and
+                      history, interleaved.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>list_ready</code></td>
+                    <td>
+                      The ready-to-start set for a project — every item whose dependencies are all
+                      satisfied, paginated.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>next_ready</code></td>
+                    <td>
+                      The single highest-ranked ready item, as a full dispatch payload. The “what do
+                      I do next” call.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>dispatch_prompt</code></td>
+                    <td>
+                      The server-generated coding-agent prompt for one item — the same text the CLI
+                      hands an agent.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>search_work_items</code></td>
+                    <td>
+                      Search a project&#x27;s items with the same filter grammar the advanced filter
+                      builder writes.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>whoami</code></td>
+                    <td>
+                      Who this token is: the owning user, the active workspace, and the scopes
+                      granted. Call it first.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>list_projects</code></td>
+                    <td>
+                      Every project this token can reach, each with the projectKey every other tool
+                      takes.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_project_state</code></td>
+                    <td>
+                      A project&#x27;s planning preconditions — established, code connected,
+                      indexed, repo set — before you plan.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>list_sprints</code></td>
+                    <td>
+                      A project&#x27;s sprints with state, goal, window and issue count, and the ids
+                      the sprint tools take.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>validate_sprint</code></td>
+                    <td>
+                      Is this sprint finishable? Names every in-sprint item still gated by work
+                      outside it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>validate_work_item</code></td>
+                    <td>
+                      Is this epic, story, task or bug finishable? Names the out-of-subtree work
+                      still gating it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_plan_status</code></td>
+                    <td>
+                      What became of a submitted planning job — its state, and how many proposals it
+                      produced.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_plan</code></td>
+                    <td>
+                      A plan with the proposals it bundles: what the planner actually proposed, not
+                      just how much.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>open_plan_session</code></td>
+                    <td>
+                      Open — or resume — a project&#x27;s planning conversation, and read its
+                      thread.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="cat-group" id="work_items-write">
+              <div class="cat-group-head">
+                <h3>Write work items</h3>
+                <span class="scope-pill">work_items:write</span>
+                <span class="cat-count">12 tools</span>
+              </div>
+              <p class="cat-gates">
+                Create, edit, transition, comment, link, re-parent — and submit a planning job.
+              </p>
+              <table class="spec cat-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>create_work_item</code></td>
+                    <td>
+                      Create an epic, story, task, bug or subtask; points, estimate, type, executor
+                      and repo in one call.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>update_work_item</code></td>
+                    <td>
+                      Edit any subset of an item&#x27;s fields, including the explanation body
+                      create cannot set.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>transition_status</code></td>
+                    <td>
+                      Move an item to another status. An illegal move comes back naming the ones
+                      that are legal.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>claim_next_ready</code></td>
+                    <td>
+                      Atomically claim the next ready subtask in the active sprint and flip it to In
+                      Progress. Race-safe.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>add_comment</code></td>
+                    <td>
+                      Post a Markdown comment as the token owner. Mentions notify the member named.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>expand_item</code></td>
+                    <td>
+                      Submit an AI expansion of one container item. Spends the owner&#x27;s credits;
+                      proposals await approval.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>append_plan_turn</code></td>
+                    <td>
+                      Add one turn to a project&#x27;s planning conversation — what you want changed
+                      about the plan.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>submit_plan_session</code></td>
+                    <td>
+                      Send the conversation&#x27;s accumulated intent to the planner as one change
+                      set.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>link_work_items</code></td>
+                    <td>
+                      Create an edge between two items — blocked_by is the one that holds an item
+                      out of the ready set.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>unlink_work_items</code></td>
+                    <td>Remove an edge, given the same relationship used to create it.</td>
+                  </tr>
+                  <tr>
+                    <td><code>move_to_parent</code></td>
+                    <td>
+                      Re-parent an item, enforcing the kind-parent matrix and refusing a cycle.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>change_kind</code></td>
+                    <td>
+                      Reclassify a leaf&#x27;s kind when it is mis-filed — subtask to task, and
+                      back.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="cat-group" id="work_items-archive">
+              <div class="cat-group-head">
+                <h3>Archive &amp; restore</h3>
+                <span class="scope-pill">work_items:archive</span>
+                <span class="cat-count">2 tools</span>
+              </div>
+              <p class="cat-gates">Soft-remove and restore. Recoverable, so it is on by default.</p>
+              <table class="spec cat-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>archive_work_item</code></td>
+                    <td>
+                      Soft-remove an item: it leaves the ready set and search, and stays fully
+                      restorable.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>unarchive_work_item</code></td>
+                    <td>Restore an archived item — the inverse of archive.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="cat-group" id="work_items-delete">
+              <div class="cat-group-head">
+                <h3>Delete</h3>
+                <span class="scope-pill scope-pill--off">work_items:delete</span>
+                <span class="cat-count">1 tool</span>
+              </div>
+              <p class="cat-gates">
+                Irreversible subtree delete. The only scope OFF by default on a new token.
+              </p>
+              <table class="spec cat-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>delete_work_item</code></td>
+                    <td>
+                      Permanently delete an item and its whole subtree. Irreversible, and off by
+                      default.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="cat-group" id="sprints-write">
+              <div class="cat-group-head">
+                <h3>Sprints</h3>
+                <span class="scope-pill">sprints:write</span>
+                <span class="cat-count">7 tools</span>
+              </div>
+              <p class="cat-gates">The sprint lifecycle and its membership moves.</p>
+              <table class="spec cat-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>create_sprint</code></td>
+                    <td>
+                      Create a planned sprint on a project, with an optional name, goal and planned
+                      window.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>update_sprint</code></td>
+                    <td>Rename a sprint, change its goal, or adjust its planned window.</td>
+                  </tr>
+                  <tr>
+                    <td><code>delete_sprint</code></td>
+                    <td>Delete a planned or complete sprint.</td>
+                  </tr>
+                  <tr>
+                    <td><code>start_sprint</code></td>
+                    <td>Start a planned sprint, making it the project&#x27;s active one.</td>
+                  </tr>
+                  <tr>
+                    <td><code>complete_sprint</code></td>
+                    <td>Complete the active sprint.</td>
+                  </tr>
+                  <tr>
+                    <td><code>move_to_sprint</code></td>
+                    <td>Add items to a sprint in one atomic move, appended in the order given.</td>
+                  </tr>
+                  <tr>
+                    <td><code>move_to_backlog</code></td>
+                    <td>Move items out of their sprint and back to the backlog.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <section class="cat-group" id="integration">
+              <div class="cat-group-head">
+                <h3>Integration</h3>
+                <span class="scope-pill">integration</span>
+                <span class="cat-count">2 tools</span>
+              </div>
+              <p class="cat-gates">Mark work integrated, and close out a session branch.</p>
+              <table class="spec cat-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>What it does</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><code>mark_integrated</code></td>
+                    <td>
+                      Record that an item&#x27;s work landed — the branch, the PR and the commit
+                      that carried it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>complete_session</code></td>
+                    <td>
+                      Close out a session branch after its PR merged: every item recorded on it
+                      moves to Done.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      3 · The catalogue at the tablet width<span class="note"
+        >the rail moves above the content; the table keeps both columns</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="tablet">
+        <div class="docs" style="flex-direction: column">
+          <nav
+            class="docs-nav"
+            aria-label="Documentation"
+            style="width: 100%; border-right: 0; border-bottom: 1px solid var(--el-border)"
+          >
+            <div class="navgroup">
+              <h3>MCP server</h3>
+              <a class="navrow" href="/docs/mcp">Wiring an agent</a>
+              <a class="navrow is-active" href="/docs/mcp/tools" aria-current="page">Tools</a>
+            </div>
+          </nav>
+          <main class="docs-main doc">
+            <h1>MCP tools</h1>
+            <p class="lede">
+              At the docs breakpoint the rail moves above the content and the table keeps both
+              columns — a tool name and one line still fit, so nothing is dropped and nothing
+              becomes a card yet.
+            </p>
+            <section class="cat-group">
+              <div class="cat-group-head">
+                <h3>Read</h3>
+                <span class="scope-pill">read</span>
+                <span class="cat-count">15</span>
+              </div>
+              <table class="spec cat-table">
+                <tbody>
+                  <tr>
+                    <td><code>get_work_item</code></td>
+                    <td>
+                      One item in full — description, status, parent and children, dependency edges,
+                      and a readiness verdict.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_work_item_activity</code></td>
+                    <td>
+                      One page of an item&#x27;s discussion and change trail: comment threads and
+                      history, interleaved.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>list_ready</code></td>
+                    <td>
+                      The ready-to-start set for a project — every item whose dependencies are all
+                      satisfied, paginated.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>next_ready</code></td>
+                    <td>
+                      The single highest-ranked ready item, as a full dispatch payload. The “what do
+                      I do next” call.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>dispatch_prompt</code></td>
+                    <td>
+                      The server-generated coding-agent prompt for one item — the same text the CLI
+                      hands an agent.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>search_work_items</code></td>
+                    <td>
+                      Search a project&#x27;s items with the same filter grammar the advanced filter
+                      builder writes.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>whoami</code></td>
+                    <td>
+                      Who this token is: the owning user, the active workspace, and the scopes
+                      granted. Call it first.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>list_projects</code></td>
+                    <td>
+                      Every project this token can reach, each with the projectKey every other tool
+                      takes.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_project_state</code></td>
+                    <td>
+                      A project&#x27;s planning preconditions — established, code connected,
+                      indexed, repo set — before you plan.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>list_sprints</code></td>
+                    <td>
+                      A project&#x27;s sprints with state, goal, window and issue count, and the ids
+                      the sprint tools take.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>validate_sprint</code></td>
+                    <td>
+                      Is this sprint finishable? Names every in-sprint item still gated by work
+                      outside it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>validate_work_item</code></td>
+                    <td>
+                      Is this epic, story, task or bug finishable? Names the out-of-subtree work
+                      still gating it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_plan_status</code></td>
+                    <td>
+                      What became of a submitted planning job — its state, and how many proposals it
+                      produced.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>get_plan</code></td>
+                    <td>
+                      A plan with the proposals it bundles: what the planner actually proposed, not
+                      just how much.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>open_plan_session</code></td>
+                    <td>
+                      Open — or resume — a project&#x27;s planning conversation, and read its
+                      thread.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="cat-group">
+              <div class="cat-group-head">
+                <h3>Write work items</h3>
+                <span class="scope-pill">work_items:write</span>
+                <span class="cat-count">12</span>
+              </div>
+              <table class="spec cat-table">
+                <tbody>
+                  <tr>
+                    <td><code>create_work_item</code></td>
+                    <td>
+                      Create an epic, story, task, bug or subtask; points, estimate, type, executor
+                      and repo in one call.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>update_work_item</code></td>
+                    <td>
+                      Edit any subset of an item&#x27;s fields, including the explanation body
+                      create cannot set.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>transition_status</code></td>
+                    <td>
+                      Move an item to another status. An illegal move comes back naming the ones
+                      that are legal.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>claim_next_ready</code></td>
+                    <td>
+                      Atomically claim the next ready subtask in the active sprint and flip it to In
+                      Progress. Race-safe.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>add_comment</code></td>
+                    <td>
+                      Post a Markdown comment as the token owner. Mentions notify the member named.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>expand_item</code></td>
+                    <td>
+                      Submit an AI expansion of one container item. Spends the owner&#x27;s credits;
+                      proposals await approval.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>append_plan_turn</code></td>
+                    <td>
+                      Add one turn to a project&#x27;s planning conversation — what you want changed
+                      about the plan.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>submit_plan_session</code></td>
+                    <td>
+                      Send the conversation&#x27;s accumulated intent to the planner as one change
+                      set.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>link_work_items</code></td>
+                    <td>
+                      Create an edge between two items — blocked_by is the one that holds an item
+                      out of the ready set.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>unlink_work_items</code></td>
+                    <td>Remove an edge, given the same relationship used to create it.</td>
+                  </tr>
+                  <tr>
+                    <td><code>move_to_parent</code></td>
+                    <td>
+                      Re-parent an item, enforcing the kind-parent matrix and refusing a cycle.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>change_kind</code></td>
+                    <td>
+                      Reclassify a leaf&#x27;s kind when it is mis-filed — subtask to task, and
+                      back.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="cat-group">
+              <div class="cat-group-head">
+                <h3>Archive &amp; restore</h3>
+                <span class="scope-pill">work_items:archive</span>
+                <span class="cat-count">2</span>
+              </div>
+              <table class="spec cat-table">
+                <tbody>
+                  <tr>
+                    <td><code>archive_work_item</code></td>
+                    <td>
+                      Soft-remove an item: it leaves the ready set and search, and stays fully
+                      restorable.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>unarchive_work_item</code></td>
+                    <td>Restore an archived item — the inverse of archive.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="cat-group">
+              <div class="cat-group-head">
+                <h3>Delete</h3>
+                <span class="scope-pill scope-pill--off">work_items:delete</span>
+                <span class="cat-count">1</span>
+              </div>
+              <table class="spec cat-table">
+                <tbody>
+                  <tr>
+                    <td><code>delete_work_item</code></td>
+                    <td>
+                      Permanently delete an item and its whole subtree. Irreversible, and off by
+                      default.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="cat-group">
+              <div class="cat-group-head">
+                <h3>Sprints</h3>
+                <span class="scope-pill">sprints:write</span>
+                <span class="cat-count">7</span>
+              </div>
+              <table class="spec cat-table">
+                <tbody>
+                  <tr>
+                    <td><code>create_sprint</code></td>
+                    <td>
+                      Create a planned sprint on a project, with an optional name, goal and planned
+                      window.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>update_sprint</code></td>
+                    <td>Rename a sprint, change its goal, or adjust its planned window.</td>
+                  </tr>
+                  <tr>
+                    <td><code>delete_sprint</code></td>
+                    <td>Delete a planned or complete sprint.</td>
+                  </tr>
+                  <tr>
+                    <td><code>start_sprint</code></td>
+                    <td>Start a planned sprint, making it the project&#x27;s active one.</td>
+                  </tr>
+                  <tr>
+                    <td><code>complete_sprint</code></td>
+                    <td>Complete the active sprint.</td>
+                  </tr>
+                  <tr>
+                    <td><code>move_to_sprint</code></td>
+                    <td>Add items to a sprint in one atomic move, appended in the order given.</td>
+                  </tr>
+                  <tr>
+                    <td><code>move_to_backlog</code></td>
+                    <td>Move items out of their sprint and back to the backlog.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+            <section class="cat-group">
+              <div class="cat-group-head">
+                <h3>Integration</h3>
+                <span class="scope-pill">integration</span>
+                <span class="cat-count">2</span>
+              </div>
+              <table class="spec cat-table">
+                <tbody>
+                  <tr>
+                    <td><code>mark_integrated</code></td>
+                    <td>
+                      Record that an item&#x27;s work landed — the branch, the PR and the commit
+                      that carried it.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>complete_session</code></td>
+                    <td>
+                      Close out a session branch after its PR merged: every item recorded on it
+                      moves to Done.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      4 · The catalogue at 375 px<span class="note"
+        >one card per row — DocBlocks&rsquo; own narrow treatment</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="phone is-375">
+        <div class="docs-main doc">
+          <h1 style="font-size: 20px">MCP tools</h1>
+          <p class="lede" style="font-size: 13.5px">
+            Below the docs breakpoint every row becomes a card and each cell keeps its column name
+            as its label — the treatment <code>DocBlocks</code>'s table already ships, applied here
+            rather than invented.
+          </p>
+
+          <div class="cat-group-head">
+            <h3>Read</h3>
+            <span class="scope-pill">read</span>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>get_work_item</code></dd>
+              <dt>Does</dt>
+              <dd>
+                One item in full — description, status, parent and children, dependency edges, and a
+                readiness verdict.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>get_work_item_activity</code></dd>
+              <dt>Does</dt>
+              <dd>
+                One page of an item&#x27;s discussion and change trail: comment threads and history,
+                interleaved.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>list_ready</code></dd>
+              <dt>Does</dt>
+              <dd>
+                The ready-to-start set for a project — every item whose dependencies are all
+                satisfied, paginated.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>next_ready</code></dd>
+              <dt>Does</dt>
+              <dd>
+                The single highest-ranked ready item, as a full dispatch payload. The “what do I do
+                next” call.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>dispatch_prompt</code></dd>
+              <dt>Does</dt>
+              <dd>
+                The server-generated coding-agent prompt for one item — the same text the CLI hands
+                an agent.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>search_work_items</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Search a project&#x27;s items with the same filter grammar the advanced filter
+                builder writes.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>whoami</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Who this token is: the owning user, the active workspace, and the scopes granted.
+                Call it first.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>list_projects</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Every project this token can reach, each with the projectKey every other tool takes.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>get_project_state</code></dd>
+              <dt>Does</dt>
+              <dd>
+                A project&#x27;s planning preconditions — established, code connected, indexed, repo
+                set — before you plan.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>list_sprints</code></dd>
+              <dt>Does</dt>
+              <dd>
+                A project&#x27;s sprints with state, goal, window and issue count, and the ids the
+                sprint tools take.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>validate_sprint</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Is this sprint finishable? Names every in-sprint item still gated by work outside
+                it.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>validate_work_item</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Is this epic, story, task or bug finishable? Names the out-of-subtree work still
+                gating it.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>get_plan_status</code></dd>
+              <dt>Does</dt>
+              <dd>
+                What became of a submitted planning job — its state, and how many proposals it
+                produced.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>get_plan</code></dd>
+              <dt>Does</dt>
+              <dd>
+                A plan with the proposals it bundles: what the planner actually proposed, not just
+                how much.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>open_plan_session</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Open — or resume — a project&#x27;s planning conversation, and read its thread.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="cat-group-head">
+            <h3>Write work items</h3>
+            <span class="scope-pill">work_items:write</span>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>create_work_item</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Create an epic, story, task, bug or subtask; points, estimate, type, executor and
+                repo in one call.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>update_work_item</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Edit any subset of an item&#x27;s fields, including the explanation body create
+                cannot set.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>transition_status</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Move an item to another status. An illegal move comes back naming the ones that are
+                legal.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>claim_next_ready</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Atomically claim the next ready subtask in the active sprint and flip it to In
+                Progress. Race-safe.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>add_comment</code></dd>
+              <dt>Does</dt>
+              <dd>Post a Markdown comment as the token owner. Mentions notify the member named.</dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>expand_item</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Submit an AI expansion of one container item. Spends the owner&#x27;s credits;
+                proposals await approval.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>append_plan_turn</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Add one turn to a project&#x27;s planning conversation — what you want changed about
+                the plan.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>submit_plan_session</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Send the conversation&#x27;s accumulated intent to the planner as one change set.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>link_work_items</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Create an edge between two items — blocked_by is the one that holds an item out of
+                the ready set.
+              </dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>unlink_work_items</code></dd>
+              <dt>Does</dt>
+              <dd>Remove an edge, given the same relationship used to create it.</dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>move_to_parent</code></dd>
+              <dt>Does</dt>
+              <dd>Re-parent an item, enforcing the kind-parent matrix and refusing a cycle.</dd>
+            </dl>
+          </div>
+
+          <div class="pcard">
+            <dl>
+              <dt>Tool</dt>
+              <dd><code>change_kind</code></dd>
+              <dt>Does</dt>
+              <dd>
+                Reclassify a leaf&#x27;s kind when it is mis-filed — subtask to task, and back.
+              </dd>
+            </dl>
+          </div>
+          <p class="anno anno-block">… the remaining four groups continue in the same form.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      5 · The catalogue when the derivation yields nothing<span class="note"
+        >the state a derived page owes</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+        <div class="docs">
+          <nav class="docs-nav" aria-label="Documentation">
+            <div class="navgroup">
+              <h3>Documentation</h3>
+              <a class="navrow" href="/docs/api">API reference</a>
+              <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+              <a class="navrow" href="/docs/mcp">MCP server</a>
+            </div>
+            <div class="navgroup">
+              <h3>MCP server</h3>
+              <a class="navrow is-active" href="/docs/mcp/tools" aria-current="page">Tools</a>
+            </div>
+          </nav>
+          <main class="docs-main doc">
+            <h1>MCP tools</h1>
+            <div class="empty">
+              <span class="glyph" aria-hidden="true">◇</span>
+              <h2>The tool catalogue is unavailable</h2>
+              <p>
+                This page builds its list from the server's own scope map. If that read fails the
+                page says so rather than showing an empty column — the rail, the wiring guide and
+                every other address still work.
+              </p>
+              <p>
+                <a href="/docs/mcp">Back to wiring an agent</a> ·
+                <a href="https://github.com/moooon-B-V/motir-core/blob/main/docs/mcp.md"
+                  >Read docs/mcp.md</a
+                >
+              </p>
+            </div>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      6 · THE ACCESS PATH ① — the rail, both tiers<span class="note"
+        >tier 1 everywhere; tier 2 only inside the sub-area</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="row2">
+        <div class="card">
+          <div class="card-head">
+            <h3>On any docs page</h3>
+            <span class="hsub">tier 1 only</span>
+          </div>
+          <div class="card-body">
+            <nav class="docs-nav" aria-label="Documentation">
+              <div class="navgroup">
+                <h3>Documentation</h3>
+                <a class="navrow" href="/docs/api">API reference</a>
+                <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+                <a class="navrow" href="/docs/mcp">MCP server</a>
+              </div>
+            </nav>
+            <p class="anno anno-block">
+              <span class="marker">1</span>The MCP's row in the SURFACE tier. It is rendered on
+              every page in the area, so a reader on the API reference or the sandbox guide is one
+              click from here. This tier is <code>design/api-docs/</code>'s; this asset adds a row
+              to it and redraws nothing.
+            </p>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3>Inside <code>/docs/mcp/*</code></h3>
+            <span class="hsub">tier 1 + tier 2</span>
+          </div>
+          <div class="card-body">
+            <nav class="docs-nav" aria-label="Documentation">
+              <div class="navgroup">
+                <h3>Documentation</h3>
+                <a class="navrow" href="/docs/api">API reference</a>
+                <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+                <a class="navrow" href="/docs/mcp">MCP server</a>
+              </div>
+              <div class="navgroup">
+                <h3>MCP server</h3>
+                <a class="navrow is-active" href="/docs/mcp/tools" aria-current="page">Tools</a>
+              </div>
+            </nav>
+            <p class="anno anno-block">
+              <span class="marker">2</span>The SECOND TIER appears — the sub-area's own pages, minus
+              its index (which is the tier-1 row, so listing it twice would be two rows to one
+              place). Gated on the route prefix, exactly as the API sub-area's is. The MCP is the
+              second surface to have one, and the first drawn after the rail's own design.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel-label">
+      7 · THE ACCESS PATH ② — the in-app door<span class="note"
+        >Settings &rarr; Account &rarr; API tokens, empty state</span
+      >
+    </div>
+
+    <div class="panel">
+      <div class="doorframe">
+        <div class="settings-head">
+          <h2>API tokens</h2>
+          <p>Personal access tokens let your coding agents talk to Motir over the MCP server.</p>
+        </div>
+        <div class="card" style="max-width: 720px">
+          <div class="card-body">
+            <div class="empty" style="padding: 40px 24px">
+              <span class="glyph" aria-hidden="true">⬦</span>
+              <h2>No tokens yet</h2>
+              <p>Create one to connect a coding agent to this workspace.</p>
+              <p>
+                <a href="/docs/mcp"><span class="marker">3</span>Read the MCP setup guide</a>
+              </p>
+              <p><a class="btn btn-sm btn-primary" href="#">Create token</a></p>
+            </div>
+          </div>
+        </div>
+        <p class="anno anno-block">
+          <span class="marker">3</span><strong>The door this story exists to close.</strong> Today
+          <code>MCP_GUIDE_HREF</code> in <code>ApiTokensManager.tsx</code> is a
+          <code>github.com/&hellip;/docs/mcp.md</code> blob, so a reader who has just minted their
+          first token is sent out of the product to a raw file. It points at
+          <code>/docs/mcp</code> — the WIRING page, not the catalogue: this reader has a credential
+          and no client yet. Re-pointing it is MOTIR-2328's; this asset draws where it lands.
+          Nothing else on the panel changes.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

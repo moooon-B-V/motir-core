@@ -158,7 +158,7 @@ export function WorkflowEditor({
           <div
             role="group"
             aria-label={t('workflow.policyGroupLabel')}
-            className="border-(--el-border) bg-(--el-page-bg) inline-flex shrink-0 rounded-md border p-0.5"
+            className="border-(--el-border) bg-(--el-page-bg) inline-flex shrink-0 rounded-(--radius-btn) border p-0.5"
           >
             {(['restricted', 'open'] as const).map((mode) => {
               const active = policyMode === mode;
@@ -173,7 +173,7 @@ export function WorkflowEditor({
                     if (!active)
                       run(() => setPolicyModeAction(mode), t('workflow.policySetToast', { mode }));
                   }}
-                  className={`rounded px-3 py-1 font-sans text-xs font-medium transition-colors disabled:opacity-50 ${
+                  className={`rounded-(--radius-control) px-3 py-1 font-sans text-xs font-medium transition-colors disabled:opacity-50 ${
                     active
                       ? 'bg-(--el-text) text-(--el-text-inverted)'
                       : 'text-(--el-text-muted) hover:text-(--el-text)'
@@ -220,7 +220,7 @@ export function WorkflowEditor({
               return (
                 <li
                   key={s.id}
-                  className="border-(--el-border) bg-(--el-card) flex items-center gap-3 rounded-lg border p-3"
+                  className="border-(--el-border) bg-(--el-card) flex items-center gap-3 rounded-(--radius-card) border p-3"
                 >
                   <span
                     aria-hidden
@@ -361,7 +361,7 @@ export function WorkflowEditor({
                               })}
                               disabled={!isAdmin || isPending}
                               onClick={() => toggleTransition(from, to)}
-                              className={`h-6 w-6 rounded border ${
+                              className={`h-6 w-6 rounded-(--radius-control) border ${
                                 on
                                   ? 'border-(--el-text) bg-(--el-text) text-(--el-text-inverted)'
                                   : 'border-(--el-border) text-transparent'
@@ -532,7 +532,7 @@ function ReassignModal({
           {t('workflow.reassignMoveTo')}
         </span>
         <select
-          className="border-(--el-border) bg-(--el-card) text-(--el-text) rounded-md border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          className="border-(--el-border) bg-(--el-card) text-(--el-text) rounded-(--radius-input) border px-3 py-2 font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
           value={targetId}
           onChange={(e) => setTargetId(e.target.value)}
         >
@@ -651,7 +651,7 @@ function StatusFormModal({
           <label className="flex flex-col gap-1 font-sans text-sm">
             <span className="text-(--el-text) font-medium">{t('workflow.categoryLabel')}</span>
             <select
-              className="border-(--el-border) bg-(--el-page-bg) rounded-md border px-3 py-2 text-sm"
+              className="border-(--el-border) bg-(--el-page-bg) rounded-(--radius-input) border px-3 py-2 text-sm"
               value={category}
               onChange={(e) => setCategory(e.target.value as StatusCategoryDto)}
               disabled={isPending}

@@ -206,7 +206,7 @@ async function inProject<T>(
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
   if (mode === 'edit') {
-    await projectAccessService.assertCanEdit(projectId, ctx);
+    await projectAccessService.assertPermission(projectId, ctx, 'repository:manage');
   } else {
     await projectAccessService.assertCanBrowse(projectId, ctx);
   }
@@ -229,7 +229,7 @@ async function inLockedRow<T>(
 ): Promise<T> {
   const existing = await projectRepoRepository.findById(rowId, ctx.workspaceId);
   if (!existing) throw new ProjectRepoNotFoundError(rowId);
-  await projectAccessService.assertCanEdit(existing.projectId, ctx);
+  await projectAccessService.assertPermission(existing.projectId, ctx, 'repository:manage');
   return withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: existing.projectId },
     async (tx) => {

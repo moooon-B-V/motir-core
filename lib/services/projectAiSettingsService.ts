@@ -34,10 +34,23 @@ import type {
 // 4-layer (CLAUDE.md): repositories do the single Prisma ops, this service owns
 // the transaction + the gate + ALL validation, mappers produce the DTO. Reads are
 // browse-scoped (any member of a browsable project may see the configuration);
-// WRITES are admin-gated via `projectAccessService.assertCanManage`, exactly like
-// `projectsService.updateDetails` / `setPublicOverview` — changing the cadence
-// spends the workspace's AI credits, so it belongs to the same project-admin tier
-// as the other project settings.
+// the WRITE asks for `ai:configure` via `projectAccessService.assertPermission`
+// (Story MOTIR-2256 · MOTIR-2300) — changing the cadence spends the workspace's
+// AI credits, so it belongs to the project-admin tier, and it now says so by
+// NAME rather than through the umbrella.
+//
+// ⚠️ `ai:configure` IS NOT `ai:plan`, and the distance between them is the whole
+// point of having two keys. This key answers "who may change the auto-plan
+// cadence, the AI sprint-planning switch, the planner model and the
+// drafted-explanation setting" — a settings decision with a spend consequence.
+// "Who may RUN the planner" is `ai:plan`, roughly 26 routes governed by nothing
+// today, and moving those takes capability away from ordinary members — a
+// different kind of change, argued on its own in MOTIR-2291. A diff here that
+// touches one of them is out of scope.
+//
+// The change is BEHAVIOUR-NEUTRAL: `ai:configure` resolves to exactly the actors
+// `project:administer` resolved to, on every access level and both rails, proved
+// over all 64 inputs in `tests/permissions/accessParity.test.ts`.
 //
 // The HTTP / Server-Action surface belongs to the AI-settings panel subtask
 // (MOTIR-919); this service is its single entry point, so no route ever touches
@@ -65,7 +78,7 @@ export const projectAiSettingsService = {
   },
 
   /**
-   * Update a project's AI-planning settings. Admin-gated (`assertCanManage`). A
+   * Update a project's AI-planning settings. Gated on `ai:configure`. A
    * PARTIAL patch: an ABSENT field is left untouched, so the panel can save one
    * toggle without clobbering the others.
    *
@@ -82,8 +95,8 @@ export const projectAiSettingsService = {
    * Returns the updated settings (the inline save reads the success response as
    * its confirmation — no whole-tree refresh; CLAUDE.md § page state).
    *
-   * Throws: `ProjectNotFoundError` (404), `NotProjectAdminError` (403),
-   * `InvalidAiSettingsError` (422).
+   * Throws: `ProjectNotFoundError` (404), `PermissionDeniedError` (403, carrying
+   * `ai:configure`), `InvalidAiSettingsError` (422).
    */
   async updateAiSettings(
     key: string,
@@ -94,7 +107,7 @@ export const projectAiSettingsService = {
 
     return withWorkspaceContext(ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(key, ctx.workspaceId, tx);
-      await projectAccessService.assertCanManage(project.id, ctx, tx);
+      await projectAccessService.assertPermission(project.id, ctx, 'ai:configure', tx);
       const updated = await projectRepository.updateAiSettings(project.id, data, tx);
       return toProjectAiSettingsDto(updated);
     });

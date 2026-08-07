@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
-import { BoardNotFoundError, NotBoardAdminError } from '@/lib/boards/errors';
+import { BoardNotFoundError } from '@/lib/boards/errors';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // DELETE /api/board/columns/[columnId]/statuses/[statusId] (Subtask 3.6.2) —
 // unmap a workflow status from the board: delete its column mapping so it
@@ -18,7 +19,8 @@ import { BoardNotFoundError, NotBoardAdminError } from '@/lib/boards/errors';
 // status maps to at most one column per board. No db / no transaction here.
 //
 // Typed errors → status codes:
-//   NotBoardAdminError  → 403
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError  → 404 (unknown / cross-workspace board)
 
 export async function DELETE(
@@ -52,9 +54,8 @@ export async function DELETE(
     });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

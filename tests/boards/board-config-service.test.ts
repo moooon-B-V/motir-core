@@ -11,8 +11,9 @@ import {
   BoardNotFoundError,
   InvalidSwimlaneGroupByError,
   InvalidWipLimitError,
-  NotBoardAdminError,
 } from '@/lib/boards/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -25,7 +26,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //
 // Authorization: board config is workspace-OWNER-gated (finding #36), mirroring
 // the 2.2.5 workflow editor — so an owner succeeds and a plain member is denied
-// (NotBoardAdminError). Tenancy (finding #26): a board/column from another
+// (PermissionDeniedError). Tenancy (finding #26): a board/column from another
 // workspace is a 404 (no cross-tenant existence leak), proven below.
 
 beforeEach(async () => {
@@ -116,11 +117,11 @@ describe('boardsService.setSwimlaneGroupBy (Subtask 3.3.3)', () => {
     expect(reread.swimlaneGroupBy).toBe(BoardSwimlaneGroupBy.none);
   });
 
-  it('denies a non-owner member with NotBoardAdminError (no write)', async () => {
+  it('denies a non-owner member with PermissionDeniedError (no write)', async () => {
     const fx = await makeFixture('gb-member');
     await expect(
       boardsService.setSwimlaneGroupBy(fx.boardId, 'priority', fx.memberCtx),
-    ).rejects.toBeInstanceOf(NotBoardAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     const reread = await db.board.findUniqueOrThrow({ where: { id: fx.boardId } });
     expect(reread.swimlaneGroupBy).toBe(BoardSwimlaneGroupBy.none);
   });
@@ -177,11 +178,11 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     expect(reread.wipLimit).toBeNull();
   });
 
-  it('denies a non-owner member with NotBoardAdminError (no write)', async () => {
+  it('denies a non-owner member with PermissionDeniedError (no write)', async () => {
     const fx = await makeFixture('wip-member');
     await expect(
       boardsService.setColumnWipLimit(fx.columnId, 4, fx.memberCtx),
-    ).rejects.toBeInstanceOf(NotBoardAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     const reread = await db.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
     expect(reread.wipLimit).toBeNull();
   });
@@ -200,5 +201,90 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     const fx = await makeFixture('wip-repo');
     const column = await boardColumnRepository.findById(fx.columnId, fx.workspaceId);
     expect(column?.id).toBe(fx.columnId);
+  });
+});
+
+describe('the MOTIR-2296 WIDENING — who may configure a board, before and after', () => {
+  // The card this suite belongs to LOOSENS the gate, and that is the assertion
+  // most worth writing down. Board configuration was `assertBoardConfigAdmin` →
+  // `isOwnerRole(...)`: the workspace OWNER and nobody else. Not a workspace
+  // admin, not the project's own admin. `board:configure` is held by all three,
+  // so a project admin can now tune their own board — which is the whole reason
+  // the key exists, and what both mirrors do.
+  //
+  // Stating it as a test rather than a comment is the point: a PR that reads as
+  // a refactor while handing board configuration to a new class of actor is
+  // exactly the change that gets discovered later, by someone surprised.
+
+  async function actorWithRoles(
+    fx: Awaited<ReturnType<typeof makeFixture>>,
+    label: string,
+    roles: { workspaceRole?: 'admin' | 'member'; projectRole?: 'admin' | 'member' | 'viewer' },
+  ): Promise<ServiceContext> {
+    const user = await usersService.createUser({
+      email: `board-widen-${label}@example.com`,
+      password: 'hunter2hunter2',
+      name: label,
+    });
+    await db.workspaceMembership.create({
+      data: { userId: user.id, workspaceId: fx.workspaceId, role: roles.workspaceRole ?? 'member' },
+    });
+    if (roles.projectRole) {
+      await db.projectMembership.create({
+        data: {
+          userId: user.id,
+          projectId: fx.projectId,
+          workspaceId: fx.workspaceId,
+          role: roles.projectRole,
+        },
+      });
+    }
+    return { userId: user.id, workspaceId: fx.workspaceId };
+  }
+
+  it('a PROJECT ADMIN can now configure the board — the capability this card grants', async () => {
+    const fx = await makeFixture('widen-proj-admin');
+    const ctx = await actorWithRoles(fx, 'proj-admin', { projectRole: 'admin' });
+
+    const dto = await boardsService.setSwimlaneGroupBy(fx.boardId, 'priority', ctx);
+    expect(dto.swimlaneGroupBy).toBe('priority');
+    const column = await boardsService.addColumn(fx.boardId, { name: 'Triage' }, ctx);
+    expect(column.name).toBe('Triage');
+  });
+
+  it('a WORKSPACE ADMIN can too — they could not under the workspace-OWNER gate either', async () => {
+    const fx = await makeFixture('widen-ws-admin');
+    const ctx = await actorWithRoles(fx, 'ws-admin', { workspaceRole: 'admin' });
+
+    const dto = await boardsService.setSwimlaneGroupBy(fx.boardId, 'assignee', ctx);
+    expect(dto.swimlaneGroupBy).toBe('assignee');
+  });
+
+  it('a project MEMBER and a VIEWER are still refused, and told which key is missing', async () => {
+    const fx = await makeFixture('widen-denied');
+    for (const role of ['member', 'viewer'] as const) {
+      const ctx = await actorWithRoles(fx, `denied-${role}`, { projectRole: role });
+      const err = await boardsService
+        .addColumn(fx.boardId, { name: 'Nope' }, ctx)
+        .catch((e: unknown) => e);
+      expect(err, `a project ${role} must not configure the board`).toBeInstanceOf(
+        PermissionDeniedError,
+      );
+      expect((err as PermissionDeniedError).permission).toBe('board:configure');
+    }
+  });
+
+  it('a project member can still MOVE a card and still READ the board', async () => {
+    // The regression this card is most likely to cause. Dragging a card between
+    // columns is `work_item:edit` and is deliberately untouched; so is the board
+    // projection read.
+    const fx = await makeFixture('widen-move');
+    const ctx = await actorWithRoles(fx, 'mover', { projectRole: 'member' });
+
+    const board = await boardsService.getBoard(fx.projectId, ctx);
+    expect(board.columns.length).toBeGreaterThan(0);
+    const held = await projectAccessService.getPermissions(fx.projectId, ctx);
+    expect(held.has('work_item:edit')).toBe(true);
+    expect(held.has('board:configure')).toBe(false);
   });
 });

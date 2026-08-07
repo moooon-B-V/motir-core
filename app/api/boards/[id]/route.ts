@@ -2,12 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
-import {
-  BoardNotFoundError,
-  InvalidBoardNameError,
-  LastBoardError,
-  NotBoardAdminError,
-} from '@/lib/boards/errors';
+import { BoardNotFoundError, InvalidBoardNameError, LastBoardError } from '@/lib/boards/errors';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // /api/boards/[id] (Subtask 3.7.3) — per-board lifecycle mutations:
 //   PATCH  { name }            → renameBoard      (3.6.2, reused)
@@ -25,7 +21,8 @@ import {
 //
 // Typed errors → status codes:
 //   InvalidBoardNameError → 400
-//   NotBoardAdminError    → 403 (not owner, #36; TODO(6.4))
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError    → 404
 export async function PATCH(
   req: Request,
@@ -88,9 +85,8 @@ export async function PATCH(
     if (err instanceof InvalidBoardNameError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }
@@ -102,7 +98,8 @@ export async function PATCH(
 // Returns 204 on success.
 //
 // Typed errors → status codes:
-//   NotBoardAdminError → 403 (not owner, #36; TODO(6.4))
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError → 404
 //   LastBoardError     → 409 (a project must keep at least one board)
 export async function DELETE(
@@ -126,9 +123,8 @@ export async function DELETE(
     await boardsService.deleteBoard(id, { userId: ctx.userId, workspaceId: ctx.workspaceId });
     return new NextResponse(null, { status: 204 });
   } catch (err) {
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

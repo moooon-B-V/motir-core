@@ -1,6 +1,7 @@
 import { Prisma, type GithubRepo } from '@prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectRepoRepository } from '@/lib/repositories/projectRepoRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
@@ -1063,8 +1064,10 @@ describe('access gating', () => {
   });
 
   it('refuses a WRITE from a workspace member who may only browse', async () => {
-    // Reads are browse-gated, writes edit-gated — the project's own access policy,
-    // with no second rule in this service.
+    // Reads stay browse-gated; the SET writes moved to `repository:manage`
+    // (MOTIR-2299). This actor was refused before the change too — they hold no
+    // `work_item:edit` on a `limited` project — so what moved is the error CLASS:
+    // `PROJECT_ACCESS_DENIED`/`edit` → `PERMISSION_DENIED` naming the key.
     const fx = await makeWorkItemFixture();
     const viewer = await db.user.create({
       data: { email: 'repo-set-viewer@example.com', name: 'Viewer', emailVerified: true },
@@ -1082,6 +1085,60 @@ describe('access gating', () => {
     // …but not change it.
     await expect(
       projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'nope' }, viewerCtx),
-    ).rejects.toMatchObject({ code: 'PROJECT_ACCESS_DENIED', kind: 'edit' });
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED', permission: 'repository:manage' });
+  });
+
+  it('refuses a PROJECT MEMBER who CAN edit — the hole this card closes', async () => {
+    // THE TIGHTENING, asserted directly (MOTIR-2299). Before this card the set
+    // writes were `assertCanEdit`, so any project MEMBER could detach a
+    // project's repository. They can edit work items and they are refused here.
+    const fx = await makeWorkItemFixture();
+    const member = await db.user.create({
+      data: { email: 'repo-set-member@example.com', name: 'Member', emailVerified: true },
+    });
+    await db.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+    });
+    await db.projectMembership.create({
+      data: {
+        userId: member.id,
+        projectId: fx.projectId,
+        workspaceId: fx.workspaceId,
+        role: 'member',
+      },
+    });
+    const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
+
+    // The capability they DO hold — editing work items — is untouched.
+    const held = await projectAccessService.getPermissions(fx.projectId, memberCtx);
+    expect(held.has('work_item:edit')).toBe(true);
+    expect(held.has('repository:manage')).toBe(false);
+
+    // They still SEE where the code lives…
+    await expect(projectRepoSetService.getSet(fx.projectId, memberCtx)).resolves.toMatchObject({
+      rows: [],
+    });
+    // …and can no longer change the set.
+    await expect(
+      projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'nope' }, memberCtx),
+    ).rejects.toMatchObject({ code: 'PERMISSION_DENIED', permission: 'repository:manage' });
+  });
+
+  it('a NON-BROWSER gets 404, not 403', async () => {
+    const fx = await makeWorkItemFixture();
+    const outsider = await db.user.create({
+      data: { email: 'repo-set-outsider@example.com', name: 'Out', emailVerified: true },
+    });
+    await db.workspaceMembership.create({
+      data: { userId: outsider.id, workspaceId: fx.workspaceId, role: 'member' },
+    });
+    await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await expect(
+      projectRepoSetService.addRow(
+        fx.projectId,
+        { role: 'web', name: 'nope' },
+        { userId: outsider.id, workspaceId: fx.workspaceId },
+      ),
+    ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
   });
 });

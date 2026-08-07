@@ -38,7 +38,7 @@ export function ParentBreadcrumb({ ancestors }: { ancestors: WorkItemSummaryDto[
             </span>
             <Link
               href={`/items/${ancestor.identifier}`}
-              className="text-(--el-text-muted) hover:text-(--el-text) flex min-w-0 items-center gap-1 rounded font-sans text-sm hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="text-(--el-text-muted) hover:text-(--el-text) flex min-w-0 items-center gap-1 rounded-(--radius-control) font-sans text-sm hover:underline focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <IssueTypeIcon type={ancestor.kind} className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">

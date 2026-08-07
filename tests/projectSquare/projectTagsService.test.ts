@@ -7,7 +7,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectTagRepository } from '@/lib/repositories/projectTagRepository';
 import { MAX_TAGS_PER_PROJECT, PROJECT_TAG_VOCABULARY } from '@/lib/projectTags/vocabulary';
 import { InvalidProjectTagError, TooManyProjectTagsError } from '@/lib/projectTags/errors';
-import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { createTestUser } from '../fixtures/userFixtures';
@@ -167,11 +167,11 @@ describe('projectTagsService — the 6.4 two-tier admin gate', () => {
     expect(tags.map((t) => t.slug)).toEqual(['design']);
   });
 
-  it('rejects a plain member with NotProjectAdminError', async () => {
+  it('rejects a plain member with PermissionDeniedError naming `label:manage`', async () => {
     const { fx, memberCtx } = await buildActors();
     await expect(
       projectTagsService.setProjectTags(fx.projectIdentifier, ['design'], memberCtx),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('lets any browsing member READ the tags', async () => {

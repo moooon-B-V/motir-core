@@ -3,9 +3,10 @@
 **Area:** `brand` · **Surface:** `brand-mark` (`brand-mark.mock.html` + `brand-mark.png`)
 **Story:** MOTIR-656 (8.3 Marketing site + brand mark) · **Subtask:** MOTIR-1139 (8.3.1)
 **Consumed by:** MOTIR-1150 (8.3.5, apply the mark across the app) — layout + token source of truth.
-**Current mark:** the **wave band**, traced from Yue's reference drawing on 2026-08-05 and adopted
-"for now" — see §1 for how it was fitted and what it still owes. MOTIR-1140 (8.3.2) stays open until
-that provisional status is resolved.
+**Current mark:** the **wave band** — **APPROVED by Yue on 2026-08-06**, derived from his editable
+draw.io source. MOTIR-1140 (8.3.2) is closed; see §1 for the decision and what it settled. The one
+thing still open against this mark is trademark clearance (MOTIR-2267), which does not block
+MOTIR-1150 but must land before public launch.
 **Assets:** `design/brand/motir-logo.drawio.svg` (the editable **source**) ·
 `design/brand/wave-band.svg` (native 768 × 768.5, the artwork) · `design/brand/wave-band-24.svg`
 (24-grid cut).
@@ -16,8 +17,9 @@ favicon / app-icon set, the 1200 × 630 OG template, and every shipped surface t
 **The mark is not a letterform.** An earlier revision built it from the letter M; that was rejected
 (Yue, 2026-08-05) — an initial says only what the product is _called_, and Motir's name is not the
 interesting thing about it. Every candidate in §1 is a **mathematical object chosen because it is
-true of what Motir does**. Everything outside §1 is glyph-agnostic, so MOTIR-1140 can substitute one
-candidate for another by swapping `<path>` data alone.
+true of what Motir does**. Everything outside §1 is glyph-agnostic — the chosen mark reaches every
+surface as `<path>` data alone, which is why the choice could be revisited so cheaply while it was
+open, and why the alternatives are still worth keeping on record now that it is settled.
 
 ---
 
@@ -59,10 +61,9 @@ literals).
 
 ---
 
-## 1. The logomark — the wave band (current, provisional)
+## 1. The logomark — the wave band (APPROVED)
 
-Yue supplied a reference drawing on 2026-08-05 and asked for it to be used as the logo for now, so
-the mark was **traced from that image** rather than constructed.
+**Approved by Yue on 2026-08-06** (MOTIR-1140, 8.3.2). This is the final mark: build against it.
 
 **It is not a trace.** Yue supplied the mark as an editable **draw.io vector file**
 (`design/brand/motir-logo.drawio.svg`), which draws it as four _open_ strokes: an upper curve, a
@@ -84,34 +85,48 @@ the surface sets — which is how it follows the theme and a `data-palette` swap
 > lesson: ask for the source before tracing the picture** — and if you must trace, measure the
 > result rather than eyeballing it, because a 3% error was invisible by eye.
 
-### What this mark does not yet have
+### What the approval settled
+
+The three items this asset previously listed as open are resolved. They are kept, with their
+resolutions, because each one constrains what MOTIR-1150 may do to the mark.
 
 - **~~It is traced, not constructed.~~ Resolved 2026-08-06** — the draw.io source replaced the
-  screenshot trace, so the mark can be edited at source and re-exported exactly. The items below
-  still stand.
+  screenshot trace, so the mark can be edited at source and re-exported exactly.
 
-- **The two edges are not parallel** — and the source now says so precisely. Both curves start and
-  end exactly **384 units** apart, but their interior control points do not: the upper curve's sit at
-  y 497.25 and −226.75, the lower's at 1025.25 and 165.25, so those offsets are 144 and 8 rather than 384. The band pinches and swells along its length. That is how it was drawn; only worth changing if
-  it was not deliberate.
+- **The two edges are not parallel — DELIBERATE.** Confirmed by Yue, 2026-08-06. Both curves start
+  and end exactly **384 units** apart, but their interior control points do not: the upper curve's
+  sit at y 497.25 and −226.75, the lower's at 1025.25 and 165.25, so those offsets are **144** and
+  **8** rather than 384. The band pinches and swells along its length. **Do not regularise this to a
+  constant-width offset** — the varying width is part of the mark, and a true offset curve would be
+  a different mark.
 
-- **⚠️ At 24 px and below it reads as a letter M.** The two peaks and the central dip land squarely
-  in M territory once the detail closes up. That is the one thing this card ruled out at the start,
-  and it is the reason the mark is provisional rather than settled. It reads as an abstract wave at
-  40 px and above, and on the app tile. **Minimum size is therefore 40 px** — a _reading_ floor, not
-  a legibility one.
-- **No prior-art check has been run on it.** The check below was performed against the _lattice_. A
-  wave band is a much less crowded shape than a concentric rhombus, but "less crowded" is not
-  "checked" — **MOTIR-2267** (trademark clearance) now needs to search this shape, not that one.
+- **~~At 24 px and below it reads as a letter M.~~ ACCEPTED, and not a defect.** What MOTIR-1140
+  rejected at the start was a mark **derived from** the letter M — "an initial says only what the
+  product is _called_." That is a rejection of the concept's _origin_. This mark's concept is a wave;
+  a silhouette that resolves _toward_ an M once detail closes up at 16 px is a coincidence of form,
+  not a return to a letterform. Every mark degrades at 16 px, and what matters in a tab strip is
+  recall, not that a viewer parses the underlying idea. It is also continuity rather than regression:
+  `ExploreTopBar` ships an `--el-accent` tile bearing a literal letter `M` today.
+
+  **The consequence: the 40 px minimum is withdrawn.** It was a _reading_ floor, not a legibility
+  one, so accepting the reading dissolves it. **The wave band ships as one artwork at every size** —
+  no second cut, no simplified small-size variant, no permanent two-artwork tax. Where extra
+  distinctiveness is wanted at favicon size, the tiled form (§5) already supplies it at zero cost.
+
+**Still open, and not blocking:** no prior-art check has been run on this mark. The check below was
+performed against the _lattice_. A wave band is a much less crowded shape than a concentric rhombus,
+but "less crowded" is not "checked" — **MOTIR-2267** (trademark clearance, classes 9 + 42) searches
+this shape, not that one. It does not block MOTIR-1150; it must land before public launch, ahead of
+MOTIR-1130.
 
 ### On record — the lattice, chosen and then set aside
 
 The Hasse diagram of a fork–join, nested inside itself at exactly half scale. A plan is a **finite
 partially ordered set** and the rhombus is how mathematics draws the smallest non-trivial one — one
 start, two independent paths, one convergence; nesting a second at half scale says the other true
-thing, that a plan is **self-similar**. Chosen on 2026-08-05, then set aside in favour of the traced
-wave band. Its argument still stands and so does its prior-art record, which is why both are kept
-rather than deleted.
+thing, that a plan is **self-similar**. Chosen on 2026-08-05, then set aside in favour of the wave
+band, which was approved on 2026-08-06. Its argument still stands and so does its prior-art record,
+which is why both are kept rather than deleted.
 
 ### Prior art — the check that was run on the LATTICE
 
@@ -190,7 +205,7 @@ path.**
 | **paint**             | `fill="currentColor"`, no stroke. The mark carries **no colour of its own** — it inherits `color` from whatever renders it, which is what makes it follow theme and palette (§4).                                                                                                                 |
 | **extent**            | x 1.01 → 22.99, y 1.0 → 23.0 on the 24-grid — **21.98 × 22**, all but square, centred on (12, 12). Aspect preserved from the source, so it is a hair taller than wide; **do not stretch it to fill a square**.                                                                                    |
 | **clear space**       | **3 units** (12.5% of the box edge) on all four sides, measured from the extent. A solid form needs less air than an outline of the same size.                                                                                                                                                    |
-| **minimum size**      | **⚠️ 40 px.** Not a legibility floor — the shape survives far smaller — but a _reading_ floor: at 24 px and below it reads as a letter M (§1).                                                                                                                                                    |
+| **minimum size**      | **16 px**, a legibility floor. The earlier 40 px _reading_ floor was withdrawn on approval (§1): below ~24 px the mark resolves toward a letter M, and that was accepted rather than designed around. Below 16 px use the tiled form (§5).                                                        |
 | **colour**            | ONE colour. Monochrome by construction — never a gradient, a second hue or a shadow.                                                                                                                                                                                                              |
 
 > **⚠️ Never write `--` inside an SVG comment.** XML forbids a double hyphen in a comment, so an
@@ -297,12 +312,19 @@ Everything else is new — and Next.js only auto-wires files it _finds_, so each
 
 - **Corner radius** = **0.22 × the canvas** (32 → 7, 180 → 40). 0.22 is `--radius-lg` (12) over a
   56 px tile — the app's own container ratio, so the icon reads as the same family as the UI.
-- **Safe zone.** Maskable icons are cropped to an arbitrary OS shape, so the glyph must sit inside the
-  centred circle of diameter **0.8 × canvas**. A rhombus makes this cheap: its extreme points lie on
-  the axes, not at bounding-box corners, so its circumradius is only `10.3 / 24 = 0.429 × the glyph
-box`. Rendered at **0.66 × canvas** that is 0.57 × canvas across — comfortably inside 0.8. (A square
-  or a letterform pays √2 for the same extent and has to be shrunk to fit.) Non-maskable icons use the
-  same 0.66, centred.
+- **Safe zone — ⚠️ the wave band is expensive here, and this figure changed with the mark.** Maskable
+  icons are cropped to an arbitrary OS shape, so the glyph must sit inside the centred circle of
+  diameter **0.8 × canvas**. The band's extreme point is its **bounding-box corner** — the end cap at
+  (22.992, 23.0) on the 24-grid — so its circumradius from the centre is the full diagonal,
+  `15.55 / 24 = 0.648 × the glyph box`. It pays the √2 penalty that the earlier rhombus mark avoided,
+  and **the 0.66 scale written here for that rhombus does not carry over**: at 0.66 the glyph spans
+  `2 × 0.648 × 0.66 = 0.855 × canvas` and is **clipped** by the mask.
+
+  **Maskable icons render the glyph at 0.60 × canvas** (0.777 across — inside 0.8, with margin for
+  the OS shapes that crop tighter than a circle). The arithmetic ceiling is 0.617; 0.60 is the round
+  number below it. **Non-maskable icons keep 0.66**, centred — they are not cropped, so the safe
+  circle does not apply and the mark should read as large as the tile allows.
+
 - **`app/manifest.ts`** declares both maskable entries plus `name: 'Motir'`, `short_name: 'Motir'`,
   `theme_color` = the light `--el-accent` literal and `background_color` = the light `--el-page-bg`
   literal. A manifest is static JSON and cannot read a CSS variable, so those two are hex literals —
@@ -390,7 +412,9 @@ decorative; if the glyph stands alone, it carries the name._
 Don't stretch it (scale both axes) · don't recolour it (one token, never a hex, never a second hue) ·
 don't add effects (no shadow, glow, bevel, gradient) · don't crowd it (2 × the stroke weight of clear
 space, minimum) · don't use the bare glyph below 16 px (use the tiled form) · don't put the accent
-glyph on an accent field (on a filled surface it reverses to `--el-accent-text`).
+glyph on an accent field (on a filled surface it reverses to `--el-accent-text`) · **don't regularise
+the band to a constant width** — the pinch and swell is deliberate (§1) · don't hand-edit the path
+(edit the draw.io source and re-derive it — §2).
 
 ---
 
@@ -407,10 +431,19 @@ glyph on an accent field (on a filled surface it reverses to `--el-accent-text`)
 - The artifact this card does **not** produce is the raster set itself (`apple-icon.png`,
   `icon-192/512.png`). Those are build outputs — MOTIR-1150 renders them from the single SVG source
   defined in §2 at the sizes and safe zones in §5.
-- **The glyph is settled** (A, with nodes — §1). Keep the two `<path>` strings and the four node
-  circles in ONE module anyway, so a future change is a single-file edit. - **The prior-art check is done; the trademark clearance is not.** §1 records a visual-similarity
-  check against public sources. A registered-mark search in classes 9 and 42 is a separate `manual`
-  card that must land before launch — it does not block this one.
+- **The glyph is settled** — the wave band, approved 2026-08-06 (§1). It is **one** `<path>`, six
+  segments, `fill="currentColor"`. Keep that path string in ONE module anyway, so a future change is
+  a single-file edit.
+- **One artwork at every size.** The 40 px reading floor was withdrawn on approval (§1), so there is
+  no small-size cut to author and no second file to keep in sync. The only variant is a
+  **baked-colour** export of the same path for the contexts where `currentColor` cannot reach it —
+  `<img>`, favicon, email, `next/og` (§2). That is a colour bake, not a second artwork; do not let it
+  become one.
+- **⚠️ Maskable icons render at 0.60 × canvas, not 0.66** (§5). The band's extreme point is its
+  bounding-box corner, so at 0.66 it overflows the 0.8 safe circle and the OS mask clips it.
+- **Neither prior-art check nor trademark clearance covers this mark.** §1's visual-similarity table
+  was run against the _lattice_, which is a different shape. **MOTIR-2267** searches the wave band in
+  classes 9 and 42 and must land before launch — it does not block this card.
 - **If a motion identity is ever wanted, D is on file** with two motions already built. That would be
   its own card, and the motion surfaces live in `motir-marketing`, not here.
 

@@ -11,7 +11,7 @@ import {
   InvalidProjectRoleError,
   LastProjectAdminError,
   NotAProjectMemberError,
-  NotProjectAdminError,
+  PermissionDeniedError,
   ProjectNotFoundError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
@@ -27,7 +27,10 @@ import { truncateAuthTables } from './helpers/db';
 //   * workspace owner/admin ALWAYS manage (no project membership needed);
 //   * a project `admin` manages;
 //   * a project `member`/`viewer` (or a plain workspace member with no project
-//     row) cannot → NotProjectAdminError.
+//     row) cannot → PermissionDeniedError naming the key (MOTIR-2295; it was
+//     NotProjectAdminError while this service ran its own private admin check);
+//   * an actor who cannot BROWSE the project → ProjectNotFoundError (404), on
+//     the reads as well as the writes.
 //
 // Coverage: add (happy + role validation + target-must-be-workspace-member +
 // duplicate), the authorization matrix, set-role (+ last-admin guard +
@@ -194,26 +197,143 @@ describe('authorization — who may manage', () => {
     expect(added.role).toBe('member');
 
     // A plain workspace member (no project admin row) cannot manage.
+    //
+    // ⚠️ The refusal is now PermissionDeniedError, not NotProjectAdminError
+    // (MOTIR-2295). The gate moved from this file's module-private admin check
+    // to `projectAccessService.assertPermission`, which names the KEY it asked
+    // for. Same HTTP status (403, via `projectMemberErrorResponse`); the `code`
+    // goes from `NOT_PROJECT_ADMIN` to `PERMISSION_DENIED`, which no consumer of
+    // these routes reads — `ProjectMembersSettings` special-cases only
+    // `LAST_PROJECT_ADMIN`. The three places that DO read `NOT_PROJECT_ADMIN`
+    // are on `project:administer`, which still throws it.
     const fresh = await addWorkspaceMember(workspace.id, 'fresh-authz@example.com');
-    await expect(
-      projectMembersService.addMember({
+    const refused = await projectMembersService
+      .addMember({
         key,
         actorUserId: plain.id,
         ctx: ctxFor(plain.id, workspace.id),
         targetUserId: fresh.id,
         role: 'member',
-      }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+      })
+      .catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(PermissionDeniedError);
+    expect((refused as PermissionDeniedError).permission).toBe('member:manage');
 
-    // A project `member` (target, added above) also cannot manage.
-    await expect(
-      projectMembersService.setAccessLevel({
+    // A project `member` (target, added above) also cannot manage — and the key
+    // it is refused is `project:manage_access`, not `member:manage`: who is IN
+    // the project and how open the project is are separate decisions.
+    const refusedAccess = await projectMembersService
+      .setAccessLevel({
         key,
         actorUserId: target.id,
         ctx: ctxFor(target.id, workspace.id),
         level: 'private',
+      })
+      .catch((e: unknown) => e);
+    expect(refusedAccess).toBeInstanceOf(PermissionDeniedError);
+    expect((refusedAccess as PermissionDeniedError).permission).toBe('project:manage_access');
+  });
+
+  it('setRole and removeMember are refused on member:manage too', async () => {
+    const { workspace, key, owner, ownerCtx } = await makeFixture('authz-keys');
+    const target = await addWorkspaceMember(workspace.id, 'target-keys@example.com', 'Target');
+    const plain = await addWorkspaceMember(workspace.id, 'plain-keys@example.com', 'Plain');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: target.id,
+      role: 'member',
+    });
+    const plainCtx = ctxFor(plain.id, workspace.id);
+
+    for (const call of [
+      () =>
+        projectMembersService.setRole({
+          key,
+          actorUserId: plain.id,
+          ctx: plainCtx,
+          targetUserId: target.id,
+          role: 'admin',
+        }),
+      () =>
+        projectMembersService.removeMember({
+          key,
+          actorUserId: plain.id,
+          ctx: plainCtx,
+          targetUserId: target.id,
+        }),
+    ]) {
+      const err = await call().catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PermissionDeniedError);
+      expect((err as PermissionDeniedError).permission).toBe('member:manage');
+    }
+  });
+
+  it('the workspace owner still passes on EVERY access level — the always-pass rail survives', async () => {
+    for (const level of ['open', 'limited', 'private'] as const) {
+      const { workspace, key, owner, ownerCtx } = await makeFixture(`rail-${level}`);
+      await projectMembersService.setAccessLevel({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        level,
+      });
+      const someone = await addWorkspaceMember(workspace.id, `rail-${level}@example.com`, 'Rail');
+      const added = await projectMembersService.addMember({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        targetUserId: someone.id,
+        role: 'member',
+      });
+      expect(added.role, `owner blocked on a ${level} project`).toBe('member');
+      // …and the reads, which this card gated on `project:browse`.
+      expect(
+        (await projectMembersService.listMembers({ key, actorUserId: owner.id, ctx: ownerCtx }))
+          .length,
+      ).toBeGreaterThan(0);
+      expect(
+        (await projectMembersService.getAccess({ key, actorUserId: owner.id, ctx: ownerCtx }))
+          .accessLevel,
+      ).toBe(level);
+    }
+  });
+
+  it('a NON-BROWSER gets 404, not 403 — a private project stays invisible', async () => {
+    const { workspace, key, owner, ownerCtx } = await makeFixture('authz-404');
+    await projectMembersService.setAccessLevel({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      level: 'private',
+    });
+    // Added AFTER the project went private, so no auto-seeded project membership.
+    const outsider = await addWorkspaceMember(workspace.id, 'outsider-404@example.com', 'Out');
+    const outsiderCtx = ctxFor(outsider.id, workspace.id);
+    const target = await addWorkspaceMember(workspace.id, 'target-404@example.com', 'Target');
+
+    // The WRITE — the private assert this replaced returned 403 here; a project
+    // the actor cannot browse must be indistinguishable from a missing one.
+    await expect(
+      projectMembersService.addMember({
+        key,
+        actorUserId: outsider.id,
+        ctx: outsiderCtx,
+        targetUserId: target.id,
+        role: 'member',
       }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+
+    // The READS — ungated before this card, so a workspace member who could not
+    // browse a private project could still read its member list and its access
+    // level. That hole is closed.
+    await expect(
+      projectMembersService.listMembers({ key, actorUserId: outsider.id, ctx: outsiderCtx }),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    await expect(
+      projectMembersService.getAccess({ key, actorUserId: outsider.id, ctx: outsiderCtx }),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 

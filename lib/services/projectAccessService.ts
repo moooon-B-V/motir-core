@@ -21,6 +21,7 @@ import {
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import {
   NotProjectAdminError,
+  PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -28,7 +29,7 @@ import {
   savedFilterCapabilities,
   type SavedFilterProjectCapabilities,
 } from '@/lib/savedFilters/access';
-import { resolvePermissions } from '@/lib/permissions/resolve';
+import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import { toActorPermissionsDTO, toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions';
@@ -561,6 +562,48 @@ export const projectAccessService = {
   },
 
   /**
+   * Assert the actor holds `key` on the project — THE administrative gate
+   * (Story MOTIR-2256 · Subtask MOTIR-2293). One method that takes the KEY,
+   * rather than one method per question: a role is a permission SET, so the
+   * number of questions the code can be asked is the size of the catalog, and a
+   * method per question does not scale to a catalog that grows (nor to Story
+   * MOTIR-2257's custom roles, where the set is chosen by a person).
+   *
+   * The refusal ORDER is `assertCanManage`'s, unchanged, and it is load-bearing:
+   *   1. A NON-BROWSER is rejected as ProjectNotFoundError (→ 404) FIRST. A
+   *      settings surface a viewer cannot even see must look MISSING, not
+   *      forbidden — the no-existence-leak posture (finding #26). This runs
+   *      before the key test, so a 403 never confirms a project the actor may
+   *      not browse.
+   *   2. A BROWSER who does not hold the key is rejected with a typed 403.
+   *
+   * ⚠️ THE 403 SHAPE HAS A COMPATIBILITY BRANCH. `project:administer` keeps
+   * throwing NotProjectAdminError, so the shipped `NOT_PROJECT_ADMIN` wire code
+   * keeps reaching the three places that read it by string (the workflow
+   * settings action, `lib/workflows/errors.ts`, and the components-settings
+   * editor test). Every OTHER key throws PermissionDeniedError, which carries
+   * the key it asked for. Both map to 403 in `projectErrorResponse`. Collapse
+   * the branch once nothing reads the old code — see the note on
+   * PermissionDeniedError.
+   *
+   * One `resolveInputs` round-trip; `tx` threads through it so a caller already
+   * inside a transaction shares the snapshot AND the RLS workspace GUC that
+   * transaction bound.
+   */
+  async assertPermission(
+    projectId: string,
+    ctx: AccessActorContext,
+    key: PermissionKey,
+    tx?: Prisma.TransactionClient,
+  ): Promise<void> {
+    const inputs = await resolveInputs(projectId, ctx, tx);
+    if (!canBrowse(inputs)) throw new ProjectNotFoundError(projectId);
+    if (hasPermission(inputs, key)) return;
+    if (key === 'project:administer') throw new NotProjectAdminError(projectId);
+    throw new PermissionDeniedError(projectId, key);
+  },
+
+  /**
    * Assert the actor may ADMINISTER the project — gate the project-settings
    * write paths (automation CRUD in Story 6.6). A non-browser is rejected as
    * ProjectNotFoundError FIRST (→ 404, the project stays hidden — the same
@@ -568,15 +611,20 @@ export const projectAccessService = {
    * viewer can't even see must look missing, not forbidden); a browser who is
    * not an admin is rejected as NotProjectAdminError (→ 403). One resolve, both
    * checks.
+   *
+   * ⚠️ NOW AN ALIAS for `assertPermission(…, 'project:administer')` — same
+   * signature, same errors, same ordering, so every existing call site behaves
+   * identically and none had to change. It SURVIVES the MOTIR-2256 split as the
+   * gate on the project-level acts that belong to no domain (rename, key change,
+   * archive, alias release); a call site that guards a DOMAIN moves to
+   * `assertPermission` with that domain's key, one card at a time.
    */
   async assertCanManage(
     projectId: string,
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
   ): Promise<void> {
-    const inputs = await resolveInputs(projectId, ctx, tx);
-    if (!canBrowse(inputs)) throw new ProjectNotFoundError(projectId);
-    if (!canManageProject(inputs)) throw new NotProjectAdminError(projectId);
+    return this.assertPermission(projectId, ctx, 'project:administer', tx);
   },
 
   // --- The permission model (Story MOTIR-2255 · Subtask MOTIR-2262) ---------

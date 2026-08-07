@@ -386,10 +386,6 @@
       "label": "Manage saved filters",
       "description": "Create, edit, share and subscribe to the project’s saved filters."
     },
-    "repository_connect": {
-      "label": "Connect a repository",
-      "description": "Connect a GitHub or GitLab installation to the project and start indexing it."
-    },
     "repository_manage": {
       "label": "Manage repositories",
       "description": "Add, remove, move and take over the project’s repositories."
