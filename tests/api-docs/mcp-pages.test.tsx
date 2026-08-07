@@ -239,3 +239,28 @@ describe('the source boundaries', () => {
     }
   });
 });
+
+describe('the in-app door (MOTIR-2328)', () => {
+  it('points the API-tokens empty state at the published page, not a GitHub blob', () => {
+    const source = read('app/(authed)/settings/account/_components/ApiTokensManager.tsx');
+    expect(source).toContain("const MCP_GUIDE_HREF = '/docs/mcp'");
+    // The whole point of the card: a user who has just minted their first token
+    // is no longer sent out of the product to a raw file on a source-code host.
+    expect(source).not.toContain('github.com/moooon-B-V/motir-core/blob/main/docs/mcp.md');
+  });
+
+  it('opens that link in THIS tab — it is in-product navigation now', () => {
+    const source = read('app/(authed)/settings/account/_components/ApiTokensManager.tsx');
+    const anchor = source.slice(
+      source.indexOf('href={MCP_GUIDE_HREF}'),
+      source.indexOf('empty.guideLink'),
+    );
+    expect(anchor).not.toContain('target="_blank"');
+  });
+
+  it('links docs/mcp.md BACK to the published guide and its catalogue', () => {
+    const reference = read('docs/mcp.md');
+    expect(reference).toContain('/docs/mcp');
+    expect(reference).toContain('/docs/mcp/tools');
+  });
+});

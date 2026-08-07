@@ -12,6 +12,18 @@ This document covers the server landed in Story 7.8: the endpoint, the
 bearer-PAT auth gate, how to create a token, how to wire an agent, and the
 complete catalog of every shipped tool with its input and output shape.
 
+> **Just trying to wire an agent? Start with the published guide instead:
+> [`/docs/mcp`](https://app.motir.co/docs/mcp)** — what the MCP is for versus
+> `/api/v1`, a config block for Claude Code, Cursor, VS Code, Codex CLI and any
+> other streamable-HTTP client, and one call that comes back. Its
+> [tool catalogue](https://app.motir.co/docs/mcp/tools) lists every tool with the
+> scope that gates it.
+>
+> **This document is the REFERENCE**, and it is what the guide hands you off to:
+> it keeps the per-tool input tables and output shapes below, which is the part
+> that changes most and is therefore kept beside the code. (ADR
+> `docs/decisions/public-api-conventions.md`, Amendment 12 Q3.)
+
 ## What the Motir MCP server is
 
 - **One endpoint, streamable HTTP.** The server is a single route —
