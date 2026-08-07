@@ -319,21 +319,12 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //    did not contain the other. Their composition is what turned `main` red —
   //    the same shape as two fixes that each pass alone.
   //
-  //    ⚠️ The two `design/cli-guide` rows are TEMPORARY and belong to
-  //    MOTIR-2308, which ships `/docs/cli`. The tightness test below fails on a
-  //    listed pair that no longer fires, so that PR DELETES them in the same
-  //    commit that adds the route — which is the mechanism working, not a
-  //    conflict. Land this PR first; #1910 removes its own two.
-  {
-    file: 'design/cli-guide/design-notes.md',
-    address: '/docs/cli',
-    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
-  {
-    file: 'design/cli-guide/cli-guide.mock.html',
-    address: '/docs/cli',
-    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
+  //    ⚠️ `design/cli-guide`'s two rows lived here and are GONE, deleted by
+  //    MOTIR-2308 in the commit that shipped `/docs/cli`: `/docs/cli` resolves
+  //    now, so the tightness arm below would fail on them. That is the
+  //    mechanism working — a row survives exactly as long as the gap it
+  //    describes, and `design/mcp-server`'s four go the same way when
+  //    MOTIR-2309 ships `/docs/mcp`.
   {
     file: 'design/mcp-server/design-notes.md',
     address: '/docs/mcp',
