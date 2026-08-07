@@ -40,7 +40,7 @@ import { MethodPill } from './MethodPill';
 // signal at 28 operations and rising.
 
 /** Which docs page is being read — the nav's `aria-current` target. */
-export type DocsPage = 'reference' | 'gettingStarted' | 'stability' | 'sandbox';
+export type DocsPage = 'reference' | 'gettingStarted' | 'stability' | 'sandbox' | 'cli';
 
 /**
  * Every docs page's route. This is the SINGLE fact the rail reads: which tier a
@@ -52,6 +52,7 @@ const ROUTE_BY_PAGE: Record<DocsPage, string> = {
   gettingStarted: '/docs/api/getting-started',
   stability: '/docs/api/stability',
   sandbox: '/docs/sandbox',
+  cli: '/docs/cli',
 };
 
 /** The API sub-area's prefix — Amendment 11 Q1's route table. */
@@ -120,6 +121,11 @@ export function CatalogueNav({
     // nothing else in the product routes to it — and since MOTIR-2312 it is also
     // the way BACK to the API for a reader standing on it (design Panel 10, ①).
     { key: 'sandbox', href: ROUTE_BY_PAGE.sandbox, label: t('navSandbox') },
+    // Story MOTIR-2308's CLI guide. ONE page, so it is one row and adds no
+    // second tier (ADR Amendment 12 Q1) — and because tier 2 and the operation
+    // index are both gated on the `/docs/api` prefix, this row acquires neither
+    // by existing. Adding a surface really is one entry here plus a route.
+    { key: 'cli', href: ROUTE_BY_PAGE.cli, label: t('navCli') },
   ];
 
   // TIER 2 — the current sub-area's own pages, minus its index (which is tier 1's

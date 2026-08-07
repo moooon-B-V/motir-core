@@ -5896,7 +5896,16 @@
     "sandboxThTier": "层级",
     "sandboxThInstalled": "安装来源",
     "sandboxThMount": "凭据挂载（只读）",
-    "sandboxRunCaption": "sh · {profile} 这一行 —— 把标签和挂载换成你自己的"
+    "sandboxRunCaption": "sh · {profile} 这一行 —— 把标签和挂载换成你自己的",
+    "navCli": "Motir 命令行",
+    "cliTitle": "Motir 命令行工具",
+    "cliLede": "安装、登录、指向你的项目，然后把一个工作项交给你自己的编码 Agent——大约五分钟，无需克隆任何代码库。",
+    "cliFilesHeading": "Motir 把文件放在哪里",
+    "cliCommandsHeading": "全部命令",
+    "cliCommandsLede": "由命令行工具自身的命令清单派生而来，因此工具新增的命令会自动出现在这里，无需改动本页。运行 `motir help <command>` 查看其参数。",
+    "cliThCommand": "命令",
+    "cliThDoes": "作用",
+    "cliWhatNext": "接下来读什么"
   },
   "auditCoverage": {
     "count": "{count, plural, other {# 个仓库尚无代码健康度审计。}}",

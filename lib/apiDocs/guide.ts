@@ -56,6 +56,22 @@ export type GuideBlock =
       caption?: string;
       columns: readonly string[];
       rows: readonly (readonly string[])[];
+      /**
+       * OPTIONAL per-column width classes for the WIDE rendering only, one entry
+       * per column, `null` to leave a column auto-sized.
+       *
+       * Added by Story MOTIR-2308 (design `design/cli-guide/`), whose CLI page
+       * renders the same two columns as FOUR consecutive tables — one per help
+       * group. Auto-sizing makes each of them measure its own rows, so the
+       * description column walks left and right between groups and four parts of
+       * one list read as four unrelated tables. Pinning the first column is the
+       * whole fix.
+       *
+       * Additive by construction: every shipped `table` block omits it and
+       * renders byte-identically, and the narrow card-per-row arm ignores it —
+       * a `<dl>` has no columns to size.
+       */
+      columnWidths?: readonly (string | null)[];
     };
 
 /** One numbered step of the guide. */

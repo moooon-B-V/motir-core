@@ -365,20 +365,14 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/docs/mcp/tools',
     why: 'Forward-looking: same unbuilt catalogue route, in the mock. Built by MOTIR-2309, which deletes this row.',
   },
-  {
-    file: 'design/cli-guide/cli-guide.mock.html',
-    address: '/docs/cli',
-    why: 'Forward-looking: built by MOTIR-2308, whose PR #1910 was open when this landed — that PR adds app/(public)/docs/cli/page.tsx and MUST delete this row, or the tightness test fails.',
-  },
-  {
-    file: 'design/cli-guide/design-notes.md',
-    address: '/docs/cli',
-    why: 'Forward-looking: same route. Built by MOTIR-2308 (PR #1910), which deletes this row.',
-  },
-  // (MOTIR-2316's first run parked 17 STALE pairs here — 13 assets addressing
-  //  `/issues*` and `/login`. MOTIR-2340 corrected every one of them in the
-  //  assets, so all 17 rows are gone: `expired()` below is what made correcting
-  //  them the only way out, rather than re-approving them.)
+  // `design/cli-guide`'s two rows were here and are GONE, deleted by MOTIR-2308
+  // in the commit that shipped `/docs/cli`. `expired()` below fails on a listed
+  // pair that no longer fires, so a row survives exactly as long as the gap it
+  // describes — `design/mcp-server`'s four go the same way when MOTIR-2309
+  // ships `/docs/mcp`.
+  // (MOTIR-2316's first run parked 17 STALE pairs here too — 13 assets
+  //  addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of them
+  //  in the assets, so all 17 rows are gone as well.)
 ];
 
 type Entry = { file: string; address: string; why: string };
