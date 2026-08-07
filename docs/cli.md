@@ -4,11 +4,17 @@ Terminal dispatch of the Motir work loop: read your project's ready set, hand
 one item's prompt to your own coding agent, and close the work out after you
 merge it.
 
-The CLI is an **MCP client** of the Motir server (`/api/mcp`). Every command
-speaks Model Context Protocol with a personal access token as its bearer
-credential — there is no parallel REST path, so the CLI can never disagree with
-the web app about what "ready" means. See [`docs/mcp.md`](./mcp.md) for the token
-and tool surface it consumes.
+The CLI is a client of **Motir's public REST API** (`/api/v1`). Every command is
+an ordinary HTTPS request with a personal access token as its bearer — the same
+documented endpoints, the same credential and the same scopes any third-party
+integration gets. It reads readiness from the server rather than computing it,
+so the CLI can never disagree with the web app about what "ready" means.
+
+Nothing this tool does is privileged. The reference is at
+[`/docs/api`](https://app.motir.co/docs/api), and the spec the CLI's own types
+are generated from is at
+[`/api/openapi/v1.json`](https://app.motir.co/api/openapi/v1.json) — if you would
+rather script something yourself, everything below is available to you directly.
 
 Motir is **BYOK**: you bring your own coding agent and your own model key. Motir
 launches the agent, hands it a server-generated prompt, and reports its exit
@@ -22,6 +28,7 @@ code. It never reads the agent's credential and never inspects its output.
 [Session branches](#session-branches-what-motir-auto-actually-does) ·
 [Failure policy](#failure-policy) · [Agent wiring](#agent-wiring) ·
 [The sandbox](#the-sandbox) · [Files and environment](#files-and-environment) ·
+[When your server is older](#when-your-server-is-older) ·
 [Troubleshooting](#troubleshooting)
 
 ---
@@ -93,11 +100,26 @@ the boundary, and the approval screen shows it rather than letting you edit it:
 | **Label**     | `CLI · <hostname>`, so you can tell which machine it is      |
 | **Workspace** | the one you choose on the approval screen                    |
 
-Those three scopes are exactly what the CLI's MCP calls resolve to: `read` for
-the selection and prompt tools, `work_items:write` for the status flips, and
-`integration` for `mark_integrated` / `complete_session` (which `motir auto` and
-`motir done --session` use). It calls nothing gated by `work_items:archive`,
-`work_items:delete`, or `sprints:write`.
+Those three scopes are exactly what the CLI's requests need: `read` for the
+selection, detail and prompt endpoints, `work_items:write` for the status flips,
+and `integration` for marking an item integrated and closing a session (which
+`motir auto` and `motir done --session` use). It calls nothing gated by
+`work_items:archive`, `work_items:delete`, or `sprints:write`.
+
+**A missing scope is an HTTP 403, and the CLI names the scope.** Every `/api/v1`
+endpoint declares the scope it requires, and the CLI knows that declaration
+locally — so a refusal reads as _the token lacks `read`_ rather than as
+"forbidden", without the CLI having to parse the server's sentence:
+
+```
+$ motir ready
+Error: This token lacks the 'read' scope required for getProjectReadySet.
+Hint: Create a token with the 'read' scope: Settings → Account → API tokens.
+```
+
+The remedy is a new token, not a retry: scopes are fixed when a token is minted
+and cannot be widened afterwards. `motir doctor` reports which scopes the token
+you are holding actually carries.
 
 The grant cannot **widen** that set, and cannot **narrow** it either — a
 hand-narrowed grant would fail somewhere in the middle of an unattended
@@ -141,9 +163,10 @@ motir auth login --server https://app.motir.co          # prompts for the token
 motir auth login --server https://app.motir.co --token motir_pat_…
 ```
 
-`auth login` validates before storing: it connects, lists the server's tools, and
-resolves the owner with `whoami`, so an invalid or revoked token is rejected
-there rather than halfway through a dispatch. Mint the PAT it wants in the web
+`auth login` validates before storing: it resolves the token against
+`GET /api/v1/me`, so an invalid or revoked one is rejected there rather than
+halfway through a dispatch — and a good one answers with the user and workspace
+the success line prints back to you. Mint the PAT it wants in the web
 app — **Settings → Account → API tokens → Create** — and copy it immediately;
 Motir stores only a hash, so the plaintext is shown exactly once
 ([`docs/mcp.md` § Creating an API token](./mcp.md#creating-an-api-token)).
@@ -351,7 +374,7 @@ motir open MOTIR-42 --print        # print the URL, don't launch a browser
 ```
 
 `--kinds` takes any of `epic,story,task,bug,subtask`; an unknown kind is a hard
-error naming the valid set. These reads ride the same MCP tools the web app's
+error naming the valid set. These reads ride the same service the web app's
 **`/ready`** page uses, so the two can never disagree — `/ready` is the human
 mirror of `motir ready`, and its in-app help popover is the on-surface
 explanation of what "ready" means.
@@ -372,7 +395,7 @@ first rule that yields **exactly one** sprint wins:
 
 1. **Omitted** → the **active** sprint. If no sprint is active, that is an error
    telling you to run `motir sprints`.
-2. **A sprint id** (the opaque `cmq…` string `--json` and the MCP emit).
+2. **A sprint id** (the opaque `cmq…` string `--json` and the API emit).
 3. **An exact name**, case-insensitively.
 4. **A name prefix**, case-insensitively.
 
@@ -571,7 +594,7 @@ come last with `—` in the `WAVE` column, followed by
 
 This is **a planning bug in the tree, not a CLI error** — `show` still exits
 **0**. The fix is to correct the `blocked_by` edges (in the web app, or with the
-`link_work_items` / `unlink_work_items` MCP tools); `motir show` is only
+`POST`/`DELETE …/work-items/{key}/links` endpoints); `motir show` is only
 reporting what the plan says. In `--json`, a cycle member's `wave` is `null`.
 
 ### Work loop
@@ -808,8 +831,8 @@ that is the only thing that would move those items to Done.
 - To redo one, `motir run <key>` re-dispatches it: the CLI moves it back to In
   Progress (a legal edge from In Review) and fetches a fresh prompt.
 - To abandon the run, close the pull request and delete the branch on origin.
-  Moving the items _backwards_ in the workflow is a web-app (or MCP
-  `transition_status`) action — the CLI's only status writes are the dispatch
+  Moving the items _backwards_ in the workflow is a web-app (or direct API)
+  action — the CLI's only status writes are the dispatch
   flips and `motir done`, and it will not silently walk an item through a status
   you did not name.
 
@@ -1055,6 +1078,60 @@ Seven environment variables, none required — each overrides a default
 
 ---
 
+## When your server is older
+
+The CLI is published to npm on its own schedule, and self-hosted Motir upgrades
+on yours. So a newer CLI meeting an older server is a NORMAL state, not a broken
+install — and one message exists to say so out loud rather than leaving you with
+a field that is mysteriously missing.
+
+```
+Error: This CLI needs Motir API >= 1.6.0; https://motir.example.com serves 1.4.0.
+Hint: Upgrade your Motir server, or install a CLI built for it.
+```
+
+**What the numbers are.** Both are the **API contract's** version, not an app
+release number and not the CLI's own `--version`. It is `MAJOR.MINOR.PATCH`,
+where MAJOR is the path version (the `1` in `/api/v1`), MINOR increments when the
+API gains something, and PATCH on a documentation-only correction. A deployment's
+release number would tell you nothing you could act on; this one tells you
+exactly what the server can and cannot do. The server publishes it as
+`info.version` in [`/api/openapi/v1.json`](https://app.motir.co/api/openapi/v1.json),
+and you can read it yourself:
+
+```sh
+curl -s https://motir.example.com/api/openapi/v1.json | jq -r .info.version
+```
+
+**The two remedies**, and there are only two:
+
+1. **Upgrade the server** to a Motir serving at least the version named. This is
+   the right move when you control the deployment — the CLI is asking for
+   something the API genuinely does not have yet.
+2. **Install a CLI built for that server.** `npm install -g @motir/cli@<older>`
+   when you do not control it, or do not want to move it today. Each published
+   CLI records the API version it was generated against, so an older one asks for
+   less.
+
+**A MAJOR mismatch is the other direction** and says so — _"This CLI speaks Motir
+API v1, but … serves v2"_ — with the opposite remedy: upgrade the CLI.
+
+**When you will and will not see it.** Nothing on a normal response carries the
+contract version, so the CLI does not ask on every command; it probes the spec
+only after a failure that skew could explain, at most once per run. Two
+consequences worth knowing:
+
+- **A server at or AHEAD of the CLI's version is never reported as skew.** The
+  API only ever adds within a major version, so a newer server is compatible by
+  construction — and reporting a real bug as an upgrade prompt would send you
+  off to fix the wrong thing.
+- **If the probe cannot reach the spec, you get the original error, not a
+  guess.** A failed probe is not evidence. If a command fails in a way you think
+  is skew and no upgrade message appears, `curl` the spec yourself with the
+  command above.
+
+---
+
 ## Troubleshooting
 
 **`motir login` printed a code but no browser opened.** That is a supported
@@ -1083,9 +1160,10 @@ with `MOTIR_TOKEN` — the environment tier is never written to disk.
 `motir login`. Use the paste path instead: `motir auth login --token <pat>`.
 
 **`Error: Token invalid or expired.`** — the token was revoked, expired, or
-never stored for this server. Every unauthorized MCP response maps to this one
-error with the same hint; the CLI does not guess which of the four it was
-(matching the server's uniform 401). Reconnect with `motir login`, or store a
+never stored for this server. Every 401 maps to this one error with the same
+hint; the CLI does not guess which of the four it was, because the server
+deliberately does not say (a uniform 401 is what stops an attacker learning
+which tokens exist). Reconnect with `motir login`, or store a
 fresh PAT with `motir auth login`. `motir auth status` tells you which token the
 CLI is holding for a server — and which source it came from — without exposing
 it.
@@ -1137,8 +1215,14 @@ item. `motir doctor` diagnoses it and names the profile's install source.
 
 ## See also
 
-- [`docs/mcp.md`](./mcp.md) — the tool surface the CLI consumes: minting a PAT,
-  token scopes, and every MCP tool with its input/output shape.
+- [**`/docs/api`**](https://app.motir.co/docs/api) — the reference for the API
+  this CLI uses, and the machine-readable spec at
+  [`/api/openapi/v1.json`](https://app.motir.co/api/openapi/v1.json). Everything
+  the CLI does is in there.
+- [`docs/mcp.md`](./mcp.md) — Motir's OTHER client surface: the Model Context
+  Protocol, for agents. The CLI does not use it, but the two share one credential
+  and one scope vocabulary, and that page is where minting a PAT and the per-scope
+  detail are written down.
 - [`packages/cli/README.md`](../packages/cli/README.md) — the package's own
   reference: toolchain decisions, module layout, and the two test lanes.
 - [`packages/cli/sandbox/README.md`](../packages/cli/sandbox/README.md) — the

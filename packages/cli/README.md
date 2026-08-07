@@ -1,10 +1,22 @@
 # `@motir/cli` — the `motir` command-line tool
 
-Terminal dispatch of the Motir work loop. The CLI is an **MCP client** of the
-Motir server (`/api/mcp`): every command speaks Model Context Protocol to the
-tenant with a personal access token (PAT) as a bearer credential. There is no
-parallel REST path — if the CLI needs a capability it lands as an MCP tool
-first, then the CLI consumes it (story 7.9 architecture).
+Terminal dispatch of the Motir work loop. The CLI is a client of **Motir's
+public REST API** (`/api/v1`): every command is an ordinary HTTPS request
+carrying a personal access token (PAT) as its bearer. There is no private
+channel — the CLI uses the same documented endpoints, the same credential and
+the same scopes any third-party integration gets, and if it needs a capability
+that capability lands on `/api/v1` first, where everyone can reach it.
+
+That is the point rather than an implementation detail: nothing this tool does
+is unavailable to a script you write yourself. The reference is at
+[`/docs/api`](https://app.motir.co/docs/api) and the machine-readable spec at
+[`/api/openapi/v1.json`](https://app.motir.co/api/openapi/v1.json) — the same
+document this package's types are generated from.
+
+> It was an MCP client until Story 11.5 (`docs/decisions/cli-v1-client.md`).
+> Motir still SERVES the Model Context Protocol at `/api/mcp`, for agents; the
+> CLI is simply no longer one of its clients, and no longer ships an
+> agent-protocol SDK to everyone who installs it.
 
 > **Status (Subtask 7.9.1):** this is the scaffold + auth + link layer. Read
 > commands (`ready` / `status` / `open` — 7.9.2), single dispatch (`next` /
@@ -511,7 +523,7 @@ the run ended badly — are not visible in any single function.
 
 **The story suite** (`tests/cli/cli-story.test.ts`, in the root Vitest lane where
 Postgres is) spawns the BUILT binary as a child process against the real
-`/api/mcp` route, with a scripted fake agent and a recorded fake `gh`. It is what
+`/api/v1` routes, with a scripted fake agent and a recorded fake `gh`. It is what
 proves the assembled tool works: repo routing into real checkouts, the
 session-branch cascade, one pull request per touched repo, a `main` nobody
 advanced, and the help surface of the binary a user actually runs.
