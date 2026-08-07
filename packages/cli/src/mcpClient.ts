@@ -6,6 +6,8 @@ import {
 import { AuthError, CliError } from './errors.js';
 import { normalizeServerUrl } from './config/userConfig.js';
 import { CLI_VERSION } from './version.js';
+import { V1Transport } from './transport.js';
+import { toProjectList, toWhoami } from './adapters/reads.js';
 
 // The MCP client core — the ONE place the CLI talks to a Motir server. Every
 // command speaks to the tenant through the streamable-HTTP `/api/mcp` endpoint
@@ -105,9 +107,7 @@ export interface SprintList {
  * translation. */
 export interface ProjectSummary {
   key: string;
-  id: string;
   name: string;
-  slug: string;
   accessLevel: string;
 }
 
@@ -490,7 +490,8 @@ export interface WorkItemDetail {
     ready: boolean;
     openBlockers: WorkItemSummary[];
     /** The nearest ancestor whose own blockers are still open — the CASCADE
-     * cause. A cascade-blocked item must never read as a bare "blocked". */
+     * cause. A cascade-blocked item must never read as a bare "blocked".
+     */
     blockedByAncestor: WorkItemSummary | null;
   };
 }
@@ -667,10 +668,20 @@ export class MotirClient {
   private readonly token: string;
   private client: Client | null = null;
   private transport: StreamableHTTPClientTransport | null = null;
+  /**
+   * The `/api/v1` transport the READ methods use (11.5.4).
+   *
+   * Built in the constructor, not on `connect()`: it holds no connection, only
+   * a base URL and a bearer, and a read must not require an MCP handshake it no
+   * longer uses. The two paths COEXIST while the port is in flight — 11.5.6 is
+   * what removes the MCP half.
+   */
+  private readonly v1: V1Transport;
 
   constructor(opts: MotirClientOptions) {
     this.serverUrl = normalizeServerUrl(opts.serverUrl);
     this.token = opts.token;
+    this.v1 = new V1Transport({ serverUrl: this.serverUrl, token: this.token });
   }
 
   /** Open the connection. A 401 (bad/revoked/expired PAT) → {@link AuthError}. */
@@ -740,19 +751,58 @@ export class MotirClient {
     return new CliError(errMsg(err));
   }
 
+  /**
+   * Walk a cursor-paged collection to exhaustion, returning every page.
+   *
+   * For the two reads whose VIEW MODEL is a whole list rather than a page —
+   * `listProjects` and `listSprints`, both of which the MCP tool answered in one
+   * shot. The cursor is echoed exactly as received and never inspected.
+   */
+  private async walkPages<P extends { nextCursor: string | null }>(
+    fetchPage: (cursor: string | undefined) => Promise<P>,
+  ): Promise<P[]> {
+    const pages: P[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await fetchPage(cursor);
+      pages.push(page);
+      // ⚠️ Echoed, never inspected — the cursor is opaque and scoped to its own
+      // collection (ADR §5).
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    return pages;
+  }
+
   // ── Typed tool wrappers ──────────────────────────────────────────────────
   // These name the MCP tools the CLI consumes. Listing/auth/link commands use
   // `whoami`; the read (7.9.2) and dispatch (7.9.3) commands use the rest.
 
-  whoami(): Promise<WhoamiResult> {
-    return this.callStructured<WhoamiResult>('whoami');
+  /**
+   * Who this token is, and the workspace it is bound to.
+   *
+   * TWO reads: v1 splits identity from workspace description, and the adapter
+   * matches them on `workspaceId` rather than assuming a position.
+   */
+  async whoami(): Promise<WhoamiResult> {
+    const [me, workspaces] = await Promise.all([
+      this.v1.request('getMe'),
+      this.v1.request('listWorkspaces'),
+    ]);
+    return toWhoami(me, workspaces);
   }
 
   /** The token workspace's browsable projects (MOTIR-1879). Takes no arguments:
    * the workspace is the one the PAT is bound to. An empty workspace is an
    * EMPTY LIST, not an error. */
-  listProjects(): Promise<ProjectList> {
-    return this.callStructured<ProjectList>('list_projects');
+  async listProjects(): Promise<ProjectList> {
+    // The view model has no cursor, so this walks the collection to exhaustion —
+    // the same whole-list answer the MCP tool gave. Projects are bounded by the
+    // workspace, and the alternative would be changing every caller's shape.
+    return toProjectList(
+      await this.walkPages((cursor) =>
+        this.v1.request('listProjects', { query: { ...(cursor ? { cursor } : {}) } }),
+      ),
+    );
   }
 
   listReady(args: {

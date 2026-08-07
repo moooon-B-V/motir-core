@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { MotirClient, mcpEndpoint } from '../src/mcpClient.js';
 import { AuthError, CliError } from '../src/errors.js';
-import { DEFAULT_TOOLS, startTestMcpServer, type TestMcpServer } from './helpers/mcpTestServer.js';
+import {
+  DEFAULT_TOOLS,
+  startTestMcpServer,
+  v1Project,
+  type TestMcpServer,
+} from './helpers/mcpTestServer.js';
 
 // The CLI's CLIENT CORE against a real MCP server (Subtask 7.9.5 · MOTIR-883).
 //
@@ -28,6 +33,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   server.calls.length = 0;
+  server.v1Calls.length = 0;
 });
 
 /** A connected client on the good token. */
@@ -67,45 +73,122 @@ describe('connect', () => {
     await expect(client.connect()).rejects.toThrow(/Could not reach the Motir server/);
   });
 
-  it('refuses to be used before connect()', async () => {
+  it('refuses to be used before connect() — on the paths that still speak MCP', async () => {
     const client = new MotirClient({ serverUrl: server.url, token: 'good-token' });
-    await expect(client.whoami()).rejects.toThrow(/used before connect/);
     await expect(client.listToolNames()).rejects.toThrow(/used before connect/);
+    await expect(client.nextReady({ projectKey: 'PROD' })).rejects.toThrow(/used before connect/);
+  });
+
+  // MOTIR-2212. A READ no longer needs the MCP handshake — that is the point of
+  // the port, not an oversight: `/api/v1` is a bearer and a URL, and the two
+  // transports coexist until 11.5.6 removes the MCP half.
+  it('serves a READ with no connect() at all', async () => {
+    const client = new MotirClient({ serverUrl: server.url, token: 'good-token' });
+    await expect(client.whoami()).resolves.toMatchObject({
+      user: { email: 'yue@motir.test' },
+    });
   });
 });
 
 describe('typed wrappers — each names its tool and forwards its arguments', () => {
-  it('reads: whoami / list_ready / next_ready / get_work_item / list_sprints / search_work_items', async () => {
+  // MOTIR-2212 split this: the six READS moved to `/api/v1`, so what they name
+  // is an OPERATION and a path. `nextReady` and `searchWorkItems` still speak
+  // MCP (11.5.19 retires the first, 11.5.17 ports the second).
+  // MOTIR-2212 moves the IDENTITY reads to `/api/v1`, so what they name is an
+  // operation and a path. The rest still speak MCP; 11.5.21 and 11.5.22 take
+  // them, and the assertion below is what proves this slice moved only its own.
+  it('identity reads over /api/v1: each names its operation and forwards its arguments', async () => {
+    const client = await connected();
+
+    const who = await client.whoami();
+    expect(who.user.email).toBe('yue@motir.test');
+    const { projects } = await client.listProjects();
+    expect(projects).toEqual([{ key: 'PROD', name: 'Prodect', accessLevel: 'open' }]);
+
+    expect(server.v1Calls.map((c) => c.path)).toEqual([
+      '/api/v1/me',
+      '/api/v1/workspaces',
+      '/api/v1/projects',
+    ]);
+    // No MCP tool call was made for either — the whole point of the slice.
+    expect(server.calls).toEqual([]);
+    await client.close();
+  });
+
+  // The two properties this slice's adapters must have, and neither is visible
+  // from a single-workspace / single-page fixture.
+  it('whoami resolves its workspace by ID, never by position', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'GET /api/v1/workspaces': {
+        body: {
+          items: [
+            {
+              id: 'ws-other',
+              name: 'Someone Else',
+              slug: 'other',
+              createdAt: '2026-01-01T00:00:00.000Z',
+            },
+            { id: 'ws-1', name: 'Acme', slug: 'acme', createdAt: '2026-01-01T00:00:00.000Z' },
+          ],
+          nextCursor: null,
+        },
+      },
+    });
+
+    // `/me` says the token is bound to `ws-1`, which is the SECOND row. A client
+    // that took `items[0]` passes every single-workspace fixture and is wrong
+    // the moment a user belongs to two.
+    await expect(client.whoami()).resolves.toMatchObject({ workspace: { slug: 'acme' } });
+    await client.close();
+  });
+
+  it('whoami reports NO workspace when the bound one is not in the list', async () => {
+    const client = await connected();
+    server.scriptV1({ 'GET /api/v1/workspaces': { body: { items: [], nextCursor: null } } });
+
+    // Rendering no workspace is the honest answer; rendering a wrong one is not.
+    await expect(client.whoami()).resolves.toMatchObject({ workspace: null });
+    await client.close();
+  });
+
+  it('listProjects WALKS every page, echoing the cursor verbatim', async () => {
+    const client = await connected();
+    const cursor = 'eyJrIjoiMjAyNi0wOC0wN1QwMDowMDowMFoifQ==';
+    server.scriptV1({
+      'GET /api/v1/projects': (req) =>
+        req.query.get('cursor') === null
+          ? { body: { items: [v1Project('AAA')], nextCursor: cursor } }
+          : { body: { items: [v1Project('BBB')], nextCursor: null } },
+    });
+
+    const { projects } = await client.listProjects();
+
+    expect(projects.map((p) => p.key)).toEqual(['AAA', 'BBB']);
+    // The cursor is opaque: sent back exactly as received, never rebuilt.
+    expect(server.v1Calls[1]?.query.get('cursor')).toBe(cursor);
+    await client.close();
+  });
+
+  it('the UNPORTED reads still name their MCP tools', async () => {
     const client = await connected();
     server.script({
       next_ready: { structured: { item: { id: 'row-1', key: 'PROD-7' } } },
       get_work_item: { structured: { item: { identifier: 'PROD-7' }, readiness: { ready: true } } },
     });
 
-    const who = await client.whoami();
-    expect(who.user.email).toBe('yue@motir.test');
-
-    await client.listReady({ projectKey: 'PROD', kinds: ['subtask'], limit: 200 });
+    await client.listReady({ projectKey: 'PROD', kinds: ['subtask'] });
     await client.nextReady({ projectKey: 'PROD', excludeIds: ['row-9'] });
     await client.getWorkItem('PROD-7');
     await client.listSprints({ projectKey: 'PROD' });
-    await client.searchWorkItems({
-      projectKey: 'PROD',
-      filter: { version: 'v1', combinator: 'and', conditions: [] },
-      limit: 1,
-    });
 
     expect(server.calls.map((c) => c.name)).toEqual([
-      'whoami',
       'list_ready',
       'next_ready',
       'get_work_item',
       'list_sprints',
-      'search_work_items',
     ]);
-    expect(server.calls[1]?.args).toMatchObject({ projectKey: 'PROD', kinds: ['subtask'] });
-    expect(server.calls[2]?.args).toMatchObject({ excludeIds: ['row-9'] });
-    expect(server.calls[3]?.args).toEqual({ key: 'PROD-7' });
+    expect(server.calls[1]?.args).toMatchObject({ excludeIds: ['row-9'] });
     await client.close();
   });
 
@@ -189,22 +272,24 @@ describe('failures', () => {
   it('names the tool when an error result carries no usable text', async () => {
     const client = await connected();
 
-    // An `isError` with an EMPTY content block still has to say WHICH tool failed.
-    server.script({ list_sprints: { error: '' } });
-    await expect(client.listSprints({ projectKey: 'PROD' })).rejects.toThrow(
-      /Tool list_sprints failed/,
+    // An `isError` with an EMPTY content block still has to say WHICH tool
+    // failed. Driven on a tool that still speaks MCP — `list_sprints` moved to
+    // `/api/v1` in MOTIR-2212, where a failure is a status, not a tool result.
+    server.script({ search_work_items: { error: '' } });
+    await expect(client.searchWorkItems({ projectKey: 'PROD' })).rejects.toThrow(
+      /Tool search_work_items failed/,
     );
 
     // …and so does one whose content carries no TEXT part (an image / resource
     // block is not an error message).
     server.script({
-      list_sprints: {
+      search_work_items: {
         error: 'x',
         contentParts: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }],
       },
     });
-    await expect(client.listSprints({ projectKey: 'PROD' })).rejects.toThrow(
-      /Tool list_sprints failed/,
+    await expect(client.searchWorkItems({ projectKey: 'PROD' })).rejects.toThrow(
+      /Tool search_work_items failed/,
     );
     await client.close();
   });

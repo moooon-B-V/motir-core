@@ -42,13 +42,46 @@ export interface ToolReply {
 
 export type ToolScript = Record<string, ToolReply | ((args: Record<string, unknown>) => ToolReply)>;
 
+/** What a scripted `/api/v1` route answers with. */
+export interface V1Reply {
+  status?: number;
+  body?: unknown;
+}
+
+/**
+ * The `/api/v1` routes this server serves, keyed `` `${METHOD} ${pathTemplate}` ``
+ * with `{name}` for a dynamic segment — the same spelling the OpenAPI document
+ * uses, so a key here reads like the operation it stands for.
+ *
+ * Written as REAL v1 payloads, never derived from the MCP script above. A helper
+ * that translated one into the other would be a second adapter running
+ * backwards, and every read test would then be asserting that this file and
+ * `src/adapters/reads.ts` agree with each other rather than that either agrees
+ * with the server.
+ */
+export type V1Script = Record<string, V1Reply | ((req: V1Request) => V1Reply)>;
+
+/** What the server recorded about a `/api/v1` request it served. */
+export interface V1Request {
+  method: string;
+  /** The full path, no query. */
+  path: string;
+  /** The resolved `{name}` segments. */
+  params: Record<string, string>;
+  query: URLSearchParams;
+}
+
 export interface TestMcpServer {
   /** Base URL for the CLI (`--server`), no trailing slash. */
   url: string;
   /** Every tool call the server received, in order. */
   calls: RecordedCall[];
+  /** Every `/api/v1` request the server received, in order. */
+  v1Calls: V1Request[];
   /** Replace / extend the scripted tools mid-test. */
   script(tools: ToolScript): void;
+  /** Replace / extend the scripted `/api/v1` routes mid-test. */
+  scriptV1(routes: V1Script): void;
   close(): Promise<void>;
 }
 
@@ -57,6 +90,8 @@ export interface TestMcpServerOptions {
    *  `withMcpAuth` returns for an absent / invalid / revoked token). */
   token?: string;
   tools?: ToolScript;
+  /** The `/api/v1` routes to serve. Merged over {@link DEFAULT_V1}. */
+  v1?: V1Script;
   /** Start rejecting the (valid) token after this many requests — a token
    *  REVOKED mid-session, which the CLI must report as an auth failure on the
    *  call rather than as a generic crash. */
@@ -66,6 +101,8 @@ export interface TestMcpServerOptions {
 export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promise<TestMcpServer> {
   const token = opts.token ?? 'test-token';
   const calls: RecordedCall[] = [];
+  const v1Calls: V1Request[] = [];
+  let v1: V1Script = { ...DEFAULT_V1, ...(opts.v1 ?? {}) };
   let tools: ToolScript = { ...(opts.tools ?? {}) };
 
   let requestCount = 0;
@@ -79,6 +116,27 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
       if (revoked || authorization !== `Bearer ${token}`) {
         res.writeHead(401, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: 'invalid_token' }));
+        return;
+      }
+
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      if (url.pathname.startsWith('/api/v1')) {
+        const matched = matchV1(v1, req.method ?? 'GET', url);
+        if (!matched) {
+          res.writeHead(404, { 'content-type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              code: 'NOT_FOUND',
+              error: `no scripted v1 route ${req.method} ${url.pathname}`,
+            }),
+          );
+          return;
+        }
+        v1Calls.push(matched.request);
+        const reply =
+          typeof matched.reply === 'function' ? matched.reply(matched.request) : matched.reply;
+        res.writeHead(reply.status ?? 200, { 'content-type': 'application/json' });
+        res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
         return;
       }
 
@@ -142,8 +200,12 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
   return {
     url: `http://127.0.0.1:${port}`,
     calls,
+    v1Calls,
     script: (next) => {
       tools = { ...tools, ...next };
+    },
+    scriptV1: (next) => {
+      v1 = { ...v1, ...next };
     },
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -153,13 +215,54 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
   };
 }
 
+/**
+ * Resolve a request against the v1 script.
+ *
+ * Templates are matched segment by segment, `{name}` capturing one segment —
+ * the same spelling the OpenAPI paths use, so a script key reads like the
+ * operation it stands for. A literal segment always beats a placeholder, so
+ * `…/work-items/{key}/activity` and `…/work-items/{key}` cannot shadow each
+ * other by declaration order.
+ */
+function matchV1(
+  script: V1Script,
+  method: string,
+  url: URL,
+): { reply: V1Reply | ((req: V1Request) => V1Reply); request: V1Request } | undefined {
+  const actual = url.pathname.split('/').filter(Boolean);
+  for (const [key, reply] of Object.entries(script)) {
+    const [scriptMethod, template] = key.split(' ');
+    if (scriptMethod !== method || template === undefined) continue;
+    const expected = template.split('/').filter(Boolean);
+    if (expected.length !== actual.length) continue;
+    const params: Record<string, string> = {};
+    let ok = true;
+    for (const [i, segment] of expected.entries()) {
+      const got = actual[i] ?? '';
+      if (segment.startsWith('{') && segment.endsWith('}')) {
+        params[segment.slice(1, -1)] = decodeURIComponent(got);
+        continue;
+      }
+      if (segment !== got) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) {
+      return {
+        reply,
+        request: { method, path: url.pathname, params, query: url.searchParams },
+      };
+    }
+  }
+  return undefined;
+}
+
 /** One `list_projects` row, with the fields the CLI reads. */
 export function projectRow(key: string, name = key): ProjectSummary {
   return {
     key,
-    id: `proj-${key.toLowerCase()}`,
     name,
-    slug: key.toLowerCase(),
     accessLevel: 'open',
   };
 }
@@ -181,4 +284,45 @@ export const DEFAULT_TOOLS: ToolScript = {
   list_ready: { structured: { items: [], nextCursor: null } },
   list_sprints: { structured: { sprints: [] } },
   search_work_items: { structured: { items: [], total: 0, nextCursor: null } },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The `/api/v1` defaults (Subtask 11.5.4 — MOTIR-2212)
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// The READ methods move to `/api/v1` one slice at a time, so this helper serves
+// it too. These payloads are the DEFAULTS that let `auth login`, `link` and
+// `doctor` complete — the v1 counterpart of `DEFAULT_TOOLS`, and deliberately
+// the same data, so a test that already relied on those defaults keeps passing.
+// Each later slice adds the routes and builders its own methods need.
+//
+// ⚠️ They are written as REAL v1 shapes. Deriving them from `DEFAULT_TOOLS`
+// would make every read test a round-trip through the adapter's own inverse:
+// green whether or not either side matches the server.
+
+/** The plain page envelope. */
+export function v1Page<T>(items: T[], nextCursor: string | null = null) {
+  return { items, nextCursor };
+}
+
+/** One v1 project resource. */
+export function v1Project(key: string, name = key) {
+  return { key, name, accessLevel: 'open', archived: false };
+}
+
+/** The canned `/api/v1` answers, mirroring {@link DEFAULT_TOOLS}' data. */
+export const DEFAULT_V1: V1Script = {
+  'GET /api/v1/me': {
+    body: {
+      user: { id: 'user-1', name: 'Zhu Yue', email: 'yue@motir.test' },
+      workspaceId: 'ws-1',
+      scopes: ['read'],
+    },
+  },
+  'GET /api/v1/workspaces': {
+    body: v1Page([
+      { id: 'ws-1', name: 'Acme', slug: 'acme', createdAt: '2026-01-01T00:00:00.000Z' },
+    ]),
+  },
+  'GET /api/v1/projects': { body: v1Page([v1Project('PROD', 'Prodect')]) },
 };

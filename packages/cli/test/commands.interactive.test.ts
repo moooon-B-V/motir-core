@@ -4,8 +4,9 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_TOOLS,
-  projectRow,
   startTestMcpServer,
+  v1Page,
+  v1Project,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
 
@@ -112,9 +113,9 @@ describe('motir link, interactively', () => {
 
   it('shows a picker when there are several, and links what was picked', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      list_projects: {
-        structured: { projects: [projectRow('PROD', 'Prodect'), projectRow('ACME', 'Acme')] },
+    server.scriptV1({
+      'GET /api/v1/projects': {
+        body: v1Page([v1Project('PROD', 'Prodect'), v1Project('ACME', 'Acme')]),
       },
     });
     prompts.promptLine.mockResolvedValue('2');
@@ -129,9 +130,9 @@ describe('motir link, interactively', () => {
 
   it('refuses an empty answer rather than writing a link with no project', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      list_projects: {
-        structured: { projects: [projectRow('PROD', 'Prodect'), projectRow('ACME', 'Acme')] },
+    server.scriptV1({
+      'GET /api/v1/projects': {
+        body: v1Page([v1Project('PROD', 'Prodect'), v1Project('ACME', 'Acme')]),
       },
     });
     prompts.promptLine.mockResolvedValue('');
@@ -150,6 +151,11 @@ describe('motir link, interactively', () => {
         },
       },
     });
+    // `whoami` is TWO v1 reads now: `/me` names the bound workspace by id, and
+    // `/workspaces` describes it. A token whose workspace the caller cannot see
+    // is an EMPTY list — the adapter then resolves `workspace: null`, which is
+    // the state this test is about.
+    server.scriptV1({ 'GET /api/v1/workspaces': { body: v1Page([]) } });
 
     await expect(linkCommand({ server: server.url, project: 'PROD' })).rejects.toMatchObject({
       hint: expect.stringContaining('--workspace'),

@@ -60,6 +60,10 @@ export default defineConfig({
         'src/commands/read.ts': { branches: 90, functions: 90, lines: 90 },
         'src/config/linkConfig.ts': { branches: 90, functions: 90, lines: 90 },
         'src/config/userConfig.ts': { branches: 90, functions: 90, lines: 90 },
+        // The `/api/v1` adapter boundary (Subtask 11.5.4) — wire shapes in, the
+        // CLI's view models out. Fully gated: it is pure mapping, so every
+        // branch in it is a real shape decision and none is unreachable.
+        'src/adapters/reads.ts': { branches: 90, functions: 90, lines: 90 },
 
         // These two gate on FUNCTIONS + LINES only (both are at 100% / ~98%):
         // each carries DEFENSIVE branches that are unreachable under shipped

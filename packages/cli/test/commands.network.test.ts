@@ -29,8 +29,9 @@ import {
 import { CliError } from '../src/errors.js';
 import {
   DEFAULT_TOOLS,
-  projectRow,
   startTestMcpServer,
+  v1Page,
+  v1Project,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
 
@@ -76,6 +77,7 @@ beforeEach(() => {
   vi.stubEnv('MOTIR_TOKEN', '');
   process.chdir(root);
   server.calls.length = 0;
+  server.v1Calls.length = 0;
   server.script(DEFAULT_TOOLS);
 });
 
@@ -123,7 +125,7 @@ describe('motir auth', () => {
     expect(io.stderr()).toContain('Logged in as yue@motir.test');
     expect(io.stderr()).toContain('workspace Acme');
     // The validation round-trip really happened.
-    expect(server.calls.map((c) => c.name)).toContain('whoami');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/me');
   });
 
   it('login stores NOTHING when the token is rejected', async () => {
@@ -423,18 +425,15 @@ describe('motir link', () => {
     expect(readLink()).toMatchObject({ project: 'PROD' });
     // Resolution replaces the probe: `list_projects` enumerates what the token
     // can reach, which IS proof of access — no `list_ready` round trip needed.
-    const names = server.calls.map((c) => c.name);
-    expect(names).toContain('list_projects');
-    expect(names).not.toContain('list_ready');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects');
+    expect(server.calls.map((c) => c.name)).not.toContain('list_ready');
     expect(io.stderr()).toContain('the only project in workspace acme');
   });
 
   it('refuses without a project when there are SEVERAL and no TTY to ask at', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      list_projects: {
-        structured: { projects: [projectRow('PROD'), projectRow('ACME')] },
-      },
+    server.scriptV1({
+      'GET /api/v1/projects': { body: v1Page([v1Project('PROD'), v1Project('ACME')]) },
     });
     capture();
 
@@ -446,10 +445,8 @@ describe('motir link', () => {
 
   it('an explicit --project still wins, and still goes through the access probe', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      list_projects: {
-        structured: { projects: [projectRow('PROD'), projectRow('ACME')] },
-      },
+    server.scriptV1({
+      'GET /api/v1/projects': { body: v1Page([v1Project('PROD'), v1Project('ACME')]) },
     });
     capture();
 
@@ -460,7 +457,7 @@ describe('motir link', () => {
     // distinct, so an explicit key is never silently replaced by a resolved one.
     const names = server.calls.map((c) => c.name);
     expect(names).toContain('list_ready');
-    expect(names).not.toContain('list_projects');
+    expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects');
   });
 
   it('a bare re-run SHOWS the existing binding instead of rewriting it', async () => {
@@ -596,12 +593,16 @@ describe('motir ready / status / open', () => {
     });
 
     server.calls.length = 0;
+    server.v1Calls.length = 0;
+    server.v1Calls.length = 0;
     await readyCommand({ assignee: 'unassigned' });
     expect(server.calls.find((c) => c.name === 'list_ready')?.args).toMatchObject({
       assigneeId: 'unassigned',
     });
 
     server.calls.length = 0;
+    server.v1Calls.length = 0;
+    server.v1Calls.length = 0;
     await readyCommand({ assignee: 'user-42' });
     expect(server.calls.find((c) => c.name === 'list_ready')?.args).toMatchObject({
       assigneeId: 'user-42',
@@ -744,6 +745,8 @@ describe('motir sprints / sprint', () => {
     expect(JSON.parse(io.stdout())).toMatchObject([{ id: 's2' }]);
 
     server.calls.length = 0;
+    server.v1Calls.length = 0;
+    server.v1Calls.length = 0;
     await expect(sprintsCommand({ state: 'nope' })).rejects.toThrow(/Unknown sprint state/);
     expect(server.calls).toHaveLength(0);
   });
@@ -849,6 +852,8 @@ describe('motir sprints / sprint', () => {
     expect(io.stdout()).toContain('No work items in this sprint.');
 
     server.calls.length = 0;
+    server.v1Calls.length = 0;
+    server.v1Calls.length = 0;
     await expect(sprintCommand(undefined, { kinds: 'widget' })).rejects.toThrow(
       /Unknown work item kind/,
     );

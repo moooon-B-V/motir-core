@@ -6,6 +6,8 @@ import {
   DEFAULT_TOOLS,
   projectRow,
   startTestMcpServer,
+  v1Page,
+  v1Project,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
 // Type-only: the VALUE comes through the post-`vi.mock` dynamic import below,
@@ -129,8 +131,8 @@ describe('resolveProject', () => {
   });
 
   it('offers a numbered picker when there are several, and takes the ORDINAL', async () => {
-    server.script({
-      list_projects: { structured: { projects: [projectRow('PROD'), projectRow('ACME')] } },
+    server.scriptV1({
+      'GET /api/v1/projects': { body: v1Page([v1Project('PROD'), v1Project('ACME')]) },
     });
     prompts.promptLine.mockResolvedValue('2');
 
@@ -143,8 +145,8 @@ describe('resolveProject', () => {
   });
 
   it('also accepts a KEY at the picker, case-insensitively', async () => {
-    server.script({
-      list_projects: { structured: { projects: [projectRow('PROD'), projectRow('ACME')] } },
+    server.scriptV1({
+      'GET /api/v1/projects': { body: v1Page([v1Project('PROD'), v1Project('ACME')]) },
     });
     prompts.promptLine.mockResolvedValue('acme');
 
@@ -154,8 +156,8 @@ describe('resolveProject', () => {
   });
 
   it('refuses an answer that is neither an ordinal nor a key, naming the valid ones', async () => {
-    server.script({
-      list_projects: { structured: { projects: [projectRow('PROD'), projectRow('ACME')] } },
+    server.scriptV1({
+      'GET /api/v1/projects': { body: v1Page([v1Project('PROD'), v1Project('ACME')]) },
     });
     prompts.promptLine.mockResolvedValue('9');
 
@@ -168,8 +170,8 @@ describe('resolveProject', () => {
   });
 
   it('demands --project when there are several and no TTY to ask at', async () => {
-    server.script({
-      list_projects: { structured: { projects: [projectRow('PROD'), projectRow('ACME')] } },
+    server.scriptV1({
+      'GET /api/v1/projects': { body: v1Page([v1Project('PROD'), v1Project('ACME')]) },
     });
     prompts.isInteractive.mockReturnValue(false);
 
@@ -181,7 +183,7 @@ describe('resolveProject', () => {
   });
 
   it('fails CLEARLY on an empty workspace, pointing at where a project is made', async () => {
-    server.script({ list_projects: { structured: { projects: [] } } });
+    server.scriptV1({ 'GET /api/v1/projects': { body: v1Page([]) } });
 
     const failure = await resolveProject(await client(), 'acme', server.url).catch(
       (err: unknown) => err,
