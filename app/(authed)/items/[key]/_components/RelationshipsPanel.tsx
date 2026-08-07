@@ -73,10 +73,10 @@ function LinkRow({
   const { item } = link;
   const statusMeta = workflow.statuses.find((s) => s.key === item.status);
   return (
-    <li className="hover:bg-(--el-surface) flex items-center gap-1 rounded-md pr-1">
+    <li className="hover:bg-(--el-surface) flex items-center gap-1 rounded-(--radius-control) pr-1">
       <RelationshipPeekLink
         identifier={item.identifier}
-        className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="group flex min-w-0 flex-1 items-center gap-2 rounded-(--radius-control) px-2 py-1.5 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {isOpenBlocker ? (
           <span
