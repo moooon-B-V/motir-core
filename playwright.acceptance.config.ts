@@ -174,14 +174,23 @@ export default defineConfig({
         NODE_OPTIONS: '--max-old-space-size=6144',
         EMAIL_PROVIDER: 'file',
         EMAIL_OUTBOX_PATH: path.resolve('/tmp/motir-test-emails.jsonl'),
-        BETTER_AUTH_URL: BASE_URL,
+        MOTIR_BASE_URL: BASE_URL,
         E2E_DISABLE_RATE_LIMIT: '1',
         INNGEST_DEV: '1',
         INNGEST_BASE_URL,
         E2E_DISABLE_DEV_INDICATOR: '1',
-        // Mock @vercel/blob so any in-app upload the spec drives never needs a
-        // real store (mirrors the main lane; CI has no real token).
+        // Mock the object store so any in-app upload the spec drives never needs
+        // a real store (mirrors the main lane; CI has no real credentials).
+        // MOTIR-2389: the store is S3-compatible; the endpoint is the host
+        // lib/test-blob-mock.ts intercepts, so it must match there.
         E2E_TEST_BLOB: '1',
+        MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
+        MOTIR_S3_REGION: 'auto',
+        MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
+        MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
+        MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
+        MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
+        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.blob.vercel-storage.com',
         BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
         // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
         MOTIR_CLOUD: 'true',

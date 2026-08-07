@@ -43,6 +43,8 @@ import { signIn } from './_helpers/shell-session';
 import { seedCliConnect } from './_helpers/cli-connect-seed';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
 import { AGENT_PROFILES } from '../../packages/cli/src/agentProfiles';
+import { COMMAND_CATALOG } from '../../packages/cli/src/commandCatalog';
+import { CLI_INSTALL_COMMAND } from '@/lib/apiDocs/cli';
 import { EXAMPLE_TOKEN, SPEC_PATH } from '@/lib/apiDocs/reference';
 import { DOCS_REDIRECTS } from '../../next.config';
 
@@ -510,4 +512,155 @@ test('every address the docs area ever served still resolves', async ({ page }) 
       );
     }
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story MOTIR-2308 — the published Motir CLI guide, the surface's FIFTH page.
+//
+// It publishes to its OWN story (`acceptanceStory('MOTIR-2308')`) from inside
+// this file, for the reason the sandbox guide gave one story earlier: the file
+// is the SURFACE's journey, and this is a page on that surface. A parallel spec
+// would re-drive the same shell to reach one more link.
+//
+// ⚠️ TWO DOORS, and the second is the one the story exists for. A stranger
+// reaches this page from the rail; a signed-in user reaches it from the panel
+// that told them to install the CLI in the first place — and that link used to
+// hand them off to a raw Markdown file on GitHub. Nobody browses documentation
+// for a tool they have already been handed, so a spec that drove only the rail
+// would leave the whole point of the story untested.
+//
+// ⚠️ Both journeys start by CLICKING. A `goto` to `/docs/cli` proves the page
+// exists and proves nothing about whether anyone can find it, which is the
+// commonest way this kind of work ships with every check green.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('a reader with no session finds the CLI guide by clicking, and a signed-in user gets there from Settings', async ({
+  page,
+  chapter,
+  beat,
+  acceptanceStory,
+}) => {
+  acceptanceStory('MOTIR-2308');
+
+  await chapter('Arrive at the documentation with no account', async () => {
+    await page.goto('/docs/api');
+    await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
+    // Anonymous throughout: the marketing bar's sign-in is still on offer, so
+    // nothing on this surface assumes a session.
+    await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+    await beat();
+  });
+
+  await chapter('Find the Motir CLI in the rail — by CLICKING it', async () => {
+    const rail = page.getByRole('navigation', { name: 'Documentation' });
+    await rail.getByRole('link', { name: 'Motir CLI' }).click();
+    await page.waitForURL('**/docs/cli');
+    await expect(rail.getByRole('link', { name: 'Motir CLI' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(page.getByRole('heading', { name: 'The Motir CLI', level: 1 })).toBeVisible();
+    await beat();
+
+    // ONE page, so ONE tier (ADR Amendment 12 Q1) — and no /api/v1 operation
+    // rows, because the index is gated on the /docs/api prefix and this page is
+    // not under it. Asserting the ABSENCE is the point: it is what a page
+    // acquiring the index by accident would break, which is how the sandbox
+    // guide came to be framed by twenty-eight REST operations (MOTIR-2307).
+    //
+    // ⚠️ Not a degraded state. This page never builds the spec at all, so
+    // "the index is missing" is unconditional here rather than a failure it
+    // survives — the throwing-builder case belongs to the pages that do build
+    // it, and MOTIR-2333's story gate covers this side.
+    await expect(rail.locator('[data-testid="catalogue-subarea-api"]')).toHaveCount(0);
+    await expect(rail.locator('[data-operation-id]')).toHaveCount(0);
+    await beat();
+  });
+
+  await chapter('Work down the procedure — install, sign in, link, check', async () => {
+    // The command it came for, in a copyable block.
+    const install = page.locator('#install');
+    await expect(install.getByText(CLI_INSTALL_COMMAND)).toBeVisible();
+    await beat();
+
+    // …and at least one further step, so this is a PROCEDURE rather than a
+    // single command with prose around it.
+    for (const step of ['Sign in', 'Link your workspace root', 'Check it']) {
+      await expect(page.getByRole('heading', { name: step })).toBeVisible();
+    }
+    await beat();
+
+    await install.getByRole('button', { name: 'Copy' }).click();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    // The whole command — a copy button that yields half of one looks identical
+    // to a working one.
+    expect(copied).toContain(CLI_INSTALL_COMMAND);
+    await beat();
+  });
+
+  await chapter('Read the command table — every row derived from the CLI itself', async () => {
+    const tables = page.locator('#every-command table');
+    await expect(tables.first()).toBeVisible();
+
+    // The row COUNT comes from the CLI's own record, never a literal here: this
+    // spec must fail when the page stops deriving, not when someone adds a
+    // command.
+    await expect(tables.locator('tbody tr')).toHaveCount(COMMAND_CATALOG.length);
+    await beat();
+
+    // …and a command with an ARGUMENT prints its signature, which is the fact a
+    // reader would otherwise get wrong on their first try.
+    const run = COMMAND_CATALOG.find((entry) => entry.path === 'run')!;
+    await expect(
+      page.locator('#every-command').getByText(`motir run ${run.signature}`).first(),
+    ).toBeVisible();
+    await beat();
+  });
+
+  await chapter('Leave for the reference it hands off to', async () => {
+    // The finish line names where the rest lives. The sandbox guide is a
+    // sibling surface, so it is one click in the rail — the access path the
+    // design draws.
+    const rail = page.getByRole('navigation', { name: 'Documentation' });
+    await rail.getByRole('link', { name: 'Agent sandbox' }).click();
+    await page.waitForURL('**/docs/sandbox');
+    await expect(page.getByRole('heading', { name: /sandbox/i, level: 1 })).toBeVisible();
+    await beat();
+  });
+
+  // ── The OTHER door, and the one the story exists for ──────────────────────
+  await chapter('And from inside: the door in Settings that used to point at GitHub', async () => {
+    const seed = await seedCliConnect(`cli-guide-${Date.now()}@example.com`);
+    await signIn(page, seed.email, seed.password);
+    await page.goto('/settings/account/api-tokens');
+    await expect(page.getByRole('heading', { name: 'Connect the CLI' })).toBeVisible();
+    await beat();
+
+    // The panel tells them to install it…
+    await expect(page.getByText(CLI_INSTALL_COMMAND)).toBeVisible();
+    // …and now the guide it offers is the published page, in the same tab,
+    // rather than a raw Markdown file on a source host.
+    const guide = page.getByRole('link', { name: 'Read the CLI guide' });
+    await expect(guide).toHaveAttribute('href', '/docs/cli');
+    await guide.click();
+    await page.waitForURL('**/docs/cli');
+    await expect(page.getByRole('heading', { name: 'The Motir CLI', level: 1 })).toBeVisible();
+    await beat();
+  });
+});
+
+test('the CLI guide renders for an anonymous request — no auth gate, no redirect', async ({
+  page,
+}) => {
+  // A published page that quietly 302s a stranger to sign-in is indistinguishable
+  // from one that works, to everyone except the stranger. Asserted on the RESPONSE
+  // rather than on the render, so a redirect that happened to land somewhere with
+  // an h1 could not pass.
+  const response = await page.goto('/docs/cli', { waitUntil: 'domcontentloaded' });
+  expect(response?.status()).toBe(200);
+  expect(new URL(page.url()).pathname).toBe('/docs/cli');
+  await expect(page.getByRole('heading', { name: 'The Motir CLI', level: 1 })).toBeVisible();
+  // Not an empty shell: the content is there for the anonymous reader too.
+  await expect(page.locator('#every-command table').first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
 });

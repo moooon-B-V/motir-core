@@ -112,7 +112,7 @@ export function registerDeleteWorkItem(
     {
       title: 'Delete work item',
       description:
-        'PERMANENTLY delete a work item by identifier (e.g. "PROD-7") together with its entire ' +
+        'PERMANENTLY delete a work item by identifier (e.g. "ACME-7") together with its entire ' +
         'subtree — every descendant, and all links / comments / history, are removed. This is ' +
         'IRREVERSIBLE: use archive_work_item instead when you want a recoverable soft-remove. ' +
         'Honors the same access checks as the UI (project-admin manage). Returns the deleted ' +

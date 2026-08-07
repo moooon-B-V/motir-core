@@ -21,13 +21,13 @@
       Linear Backlog = a fully filterable view, single Filter button, URL-
       addressable, persistent, saveable Custom View), so the answer is YES,
       wire it — copy Linear's model, which is exactly what Motir's shipped
-      /issues + board filter already are.
+      /items + board filter already are.
 
       REUSE, don't redraw: the filter UI is the SAME quick-filter popover
       (IssueFilterBar — text · Kind · WORK TYPE · Status · Assignee), the SAME
       [Advanced] builder trigger (IssueAdvancedFilter / FilterConditionBuilder),
       and the SAME [Saved] dropdown picker + applied name-chip
-      (SavedFilterDropdown / IssueAppliedFilterBar) the /issues navigator and
+      (SavedFilterDropdown / IssueAppliedFilterBar) the /items navigator and
       the board already ship. This mock shows them ANCHORED ON THE BACKLOG
       page-head toolbar — it is CHROME over the reused backlog, exactly like
       board-filter.mock.html is chrome over the board: it does NOT redraw the
@@ -44,7 +44,7 @@
       containers AND the backlog region show only matching rows; a container
       with no match shows its dashed empty placeholder. State is URL-driven
       (?filter= AST + saved-filter id) — shareable + reload-safe — and the
-      "View all issues" link carries the active filter into /issues (the Jira
+      "View all issues" link carries the active filter into /items (the Jira
       "View in Issue Navigator with filter applied" behaviour the backlog
       design-notes already anticipated). The backlog filter AND-composes WITH a
       sprint's scope; it narrows WITHIN, never widens.
@@ -350,7 +350,7 @@
       }
       /* Filter / Advanced / Saved trigger, ACTIVE — a faint accent ring + accent
          icon while a filter applies, plus the count badge. AA: text stays
-         --el-text on the lavender tint. (Identical to the /issues + board toolbar.) */
+         --el-text on the lavender tint. (Identical to the /items + board toolbar.) */
       .tb-btn.is-active {
         border-color: var(--el-accent);
         background: var(--el-tint-lavender);
@@ -375,7 +375,7 @@
       }
 
       /* ── Quick-filter popover — Popover anchored under the [Filter] trigger ── */
-      /* IDENTICAL chrome to the /issues IssueFilterBar popover (filter.mock.html)
+      /* IDENTICAL chrome to the /items IssueFilterBar popover (filter.mock.html)
          and the board-filter popover: card radius, hairline border, elevated
          shadow, scrolling body. */
       .filter-pop {
@@ -1259,7 +1259,7 @@
           reused IssueFilterBar / [Advanced] / SavedFilterDropdown anchored on the backlog page-head
           toolbar, the applied-filter summary row, the filtered + filtered-empty states, coexistence
           with the sprint-planning containers, and "View all issues" carrying the active filter into
-          /issues. Mirrors design/boards/board-filter.mock.html (same primitives), backlog-scoped.
+          /items. Mirrors design/boards/board-filter.mock.html (same primitives), backlog-scoped.
         </p>
       </div>
       <button
@@ -1758,8 +1758,8 @@
             <div class="toolbar">
               <a
                 class="tb-btn"
-                href="/issues"
-                title="View all issues in the issue navigator (/issues)"
+                href="/items"
+                title="View all issues in the issue navigator (/items)"
               >
                 <span class="ic"
                   ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
@@ -2005,8 +2005,8 @@
     <div class="panel-label">
       1 · OPEN — the quick-filter popover (the reused IssueFilterBar) anchored under [Filter] on the
       BACKLOG toolbar: text · Kind · Work type · Status · Assignee, each a multi-select listbox with
-      a trailing Check. Identical to the /issues + board popover — backlog-scoped, not a new
-      control. The popover SCROLLS at a fixed max-height (Status / Assignee below the fold).
+      a trailing Check. Identical to the /items + board popover — backlog-scoped, not a new control.
+      The popover SCROLLS at a fixed max-height (Status / Assignee below the fold).
     </div>
     <div class="panel">
       <div class="stage is-pop">
@@ -2017,7 +2017,7 @@
               <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
             </div>
             <div class="toolbar">
-              <a class="tb-btn" href="/issues" title="View all issues">
+              <a class="tb-btn" href="/items" title="View all issues">
                 <span class="ic"
                   ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
                 >View all issues
@@ -2236,7 +2236,7 @@
               <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
             </div>
             <div class="toolbar">
-              <a class="tb-btn" href="/issues" title="View all issues">
+              <a class="tb-btn" href="/items" title="View all issues">
                 <span class="ic"
                   ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
                 >View all issues
@@ -2349,7 +2349,7 @@
             <div class="toolbar">
               <a
                 class="tb-btn"
-                href="/issues?filter=eyJraW5kIjpbImJ1ZyJdfQ"
+                href="/items?filter=eyJraW5kIjpbImJ1ZyJdfQ"
                 title="View all matching issues in the issue navigator (filter carried)"
               >
                 <span class="ic"
@@ -2572,7 +2572,7 @@
             <div class="toolbar">
               <a
                 class="tb-btn"
-                href="/issues?filter=eyJ0eXBlIjpbImRlcGxveSJdfQ"
+                href="/items?filter=eyJ0eXBlIjpbImRlcGxveSJdfQ"
                 title="View all matching issues (filter carried)"
               >
                 <span class="ic"
@@ -2644,7 +2644,7 @@
               <p class="sub">motir · plan &amp; groom — rank, sprint, estimate</p>
             </div>
             <div class="toolbar">
-              <a class="tb-btn" href="/issues?filter=…" title="View all issues">
+              <a class="tb-btn" href="/items?filter=…" title="View all issues">
                 <span class="ic"
                   ><svg viewBox="0 0 24 24"><use href="#i-external" /></svg></span
                 >View all issues
@@ -2728,7 +2728,7 @@
         </div>
       </div>
       <p class="legend">
-        The backlog filter REUSES the shipped /issues filter primitives verbatim —
+        The backlog filter REUSES the shipped /items filter primitives verbatim —
         <code>IssueFilterBar</code> (quick popover, incl. the shared Work type facet),
         <code>IssueAdvancedFilter</code> / <code>FilterConditionBuilder</code> (the [Advanced]
         builder), <code>SavedFilterDropdown</code> + <code>IssueAppliedFilterBar</code> (the [Saved]
@@ -2741,7 +2741,7 @@
         >
         + <code>getSprintIssues</code> threaded with the 6.1 compiled predicate), so BOTH the sprint
         containers AND the backlog re-project; the filter AND-composes WITH a sprint's scope. The
-        <b>View all issues</b> link carries the active <code>?filter=</code> into the /issues
+        <b>View all issues</b> link carries the active <code>?filter=</code> into the /items
         navigator. Colour via <code>--el-*</code>, shape via element-semantic tokens.
       </p>
     </div>

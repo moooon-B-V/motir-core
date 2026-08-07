@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { BookOpen, Copy, Terminal } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
@@ -16,9 +17,23 @@ import { useToast } from '@/components/ui/Toast';
 // the tie line points at the EXISTING revoke flow as the disconnect action
 // rather than introducing a second one.
 
-/** The CLI guide the footer links to, using the pane's shipped absolute-GitHub-docs
- * convention (`MCP_GUIDE_HREF` in `ApiTokensManager.tsx`). */
-const CLI_GUIDE_HREF = 'https://github.com/moooon-B-V/motir-core/blob/main/docs/cli.md';
+/**
+ * The CLI guide the footer links to — the PUBLISHED page (Story MOTIR-2308 ·
+ * Subtask MOTIR-2331 · design `design/cli-guide/`), not a raw Markdown file on
+ * GitHub.
+ *
+ * ⚠️ This link no longer follows the pane's absolute-GitHub-docs convention, and
+ * its sibling `MCP_GUIDE_HREF` in `ApiTokensManager.tsx` still does. The two
+ * differ for one reason and it is not a style drift: `/docs/cli` exists and
+ * `/docs/mcp` does not yet, so re-pointing the MCP link here would produce a
+ * link to a route the app does not serve. It follows when MOTIR-2309 publishes
+ * that page.
+ *
+ * Because the target is now in-product, so is the treatment: `next/link`, same
+ * tab, no `target="_blank" rel="noreferrer"` — that pair is how this pane marks
+ * a link that LEAVES the application, and this one no longer does.
+ */
+const CLI_GUIDE_HREF = '/docs/cli';
 
 /** The two commands, verified against `packages/cli/src/program.ts` @ MOTIR-1868:
  * `motir login` is a top-level command in the SETUP help group and takes no
@@ -71,15 +86,13 @@ export function ConnectCliPanel({ hasTokens }: { hasTokens: boolean }) {
       }
       footer={
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <a
+          <Link
             href={CLI_GUIDE_HREF}
-            target="_blank"
-            rel="noreferrer"
             className="inline-flex items-center gap-1.5 font-sans text-sm text-(--el-link) underline underline-offset-2 hover:text-(--el-link-pressed)"
           >
             <BookOpen className="size-4" aria-hidden />
             {t('cli.guide')}
-          </a>
+          </Link>
           {/* The tie to the list below: the CLI's kill switch is the revoke this
               pane already ships, not a second "disconnect" control. Future tense
               while the list is still empty. */}

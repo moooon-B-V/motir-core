@@ -27,9 +27,10 @@ loadEnv();
 // already owned :3000 — the parallel-worktree workflow the manual-merge mode
 // assumes. Three things had to move off the fixed port together:
 //   1. Playwright baseURL + webServer.url (below).
-//   2. Better-Auth's CSRF origin guard — handled by passing BETTER_AUTH_URL
-//      into webServer.env; lib/auth/index.ts already threads that through both
-//      baseURL and trustedOrigins, so no auth-code change is needed.
+//   2. Better-Auth's CSRF origin guard — handled by passing MOTIR_BASE_URL
+//      into webServer.env; lib/baseUrl.ts resolves it and lib/auth/index.ts
+//      threads that through both baseURL and trustedOrigins, so no auth-code
+//      change is needed.
 //   3. reuseExistingServer — must be off when a custom port is requested, or a
 //      worktree could silently reuse a sibling's :3000 server (wrong code).
 // Usage from a worktree:  E2E_BASE_URL=http://localhost:3100 pnpm test:e2e
@@ -245,21 +246,30 @@ export default defineConfig({
         E2E_TEST_OAUTH: '1',
         E2E_TEST_OAUTH_USER_PATH: path.resolve('/tmp/motir-test-oauth-user.json'),
         // Subtask 5.2.8: E2E_TEST_BLOB=1 makes instrumentation.ts mock the
-        // @vercel/blob API (see lib/test-blob-mock.ts), so the attachments
-        // journey uploads through the real route without a real blob store —
-        // CI deliberately has no real token ("no E2E performs a real
-        // upload", ci.yml). The placeholder token only has to PARSE (the SDK
-        // derives a store id from it); the network call it authorizes is
-        // intercepted before it leaves the process. Forced even when a real
-        // token is configured locally, so the suite never writes to (or
-        // depends on) a live store.
+        // object store (see lib/test-blob-mock.ts), so the attachments journey
+        // uploads through the real route without a real blob store — CI
+        // deliberately has no real credentials ("no E2E performs a real
+        // upload", ci.yml). The placeholders below only have to be PRESENT and
+        // well-formed; every request they authorize is intercepted before it
+        // leaves the process. Forced even when real credentials are configured
+        // locally, so the suite never writes to (or depends on) a live store.
         E2E_TEST_BLOB: '1',
+        // MOTIR-2389: the store is now S3-compatible. The endpoint is the host
+        // lib/test-blob-mock.ts intercepts, so it must match there.
+        MOTIR_S3_ENDPOINT: 'https://e2e.s3.invalid',
+        MOTIR_S3_REGION: 'auto',
+        MOTIR_S3_ACCESS_KEY_ID: 'e2e-playwright-only-placeholder',
+        MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
+        MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
+        MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
+        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.blob.vercel-storage.com',
         BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
         // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
-        // drives. lib/auth/index.ts uses BETTER_AUTH_URL as both its baseURL and
-        // a trustedOrigins entry, so this is what lets /api/auth/* POSTs pass the
-        // CSRF origin guard on a non-default port.
-        BETTER_AUTH_URL: BASE_URL,
+        // drives. lib/baseUrl.ts resolves MOTIR_BASE_URL, and lib/auth/index.ts
+        // uses that as both its baseURL and a trustedOrigins entry, so this is
+        // what lets /api/auth/* POSTs pass the CSRF origin guard on a
+        // non-default port.
+        MOTIR_BASE_URL: BASE_URL,
         // PRODECT_FINDINGS #9: Better-Auth buckets /sign-in + /sign-up into one
         // IP-keyed window (10s / max 3). Multi-user specs sign up several users
         // from localhost inside that window and hit 429s. This flag disables the

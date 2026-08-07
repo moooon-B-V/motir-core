@@ -5,27 +5,26 @@
  * owns the PROCESS concerns:
  *
  * **The embedded external-seam stub.** The fixture seeds through the shipped
- * services, and two of those paths call out of process: the Vercel-Blob
+ * services, and two of those paths call out of process: the object-store
  * uploader (`lib/blob/uploader` — every attachment upload) and the Inngest
  * event API (`lib/jobs/sendEvent` — fired post-commit by every comment).
- * Neither external should run at seed time: there is no real blob token in
- * dev/CI (CI's is a placeholder), and 300+ comment events would either THROW
+ * Neither external should run at seed time: there are no real store credentials
+ * in dev/CI (CI's are placeholders), and 300+ comment events would either THROW
  * (no event key — `inngest.send` is not fire-and-forget) or enqueue hundreds
  * of pointless notification jobs against a live dev server. So the runner
  * starts ONE tiny local HTTP server speaking just enough of both APIs and
- * points both SDKs at it via their own documented env overrides
- * (`VERCEL_BLOB_API_URL`, `INNGEST_DEV` + `INNGEST_BASE_URL`). These are
- * exactly the two seams the test suite mocks (`vi.mock('@/lib/blob/uploader')`
- * in 5.2.8; the Playwright harness's Inngest dev server) — every gate,
- * transaction, audit row and link-on-write still runs the real shipped code.
+ * points both SDKs at it via env (`MOTIR_S3_*`, `INNGEST_DEV` +
+ * `INNGEST_BASE_URL`) — every gate, transaction, audit row and link-on-write
+ * still runs the real shipped code.
  *
- * The env vars must be set BEFORE `lib/jobs/client` / `@vercel/blob` load, so
- * the fixture module is imported DYNAMICALLY after the stub is listening.
+ * ⚠️ The blob half is a REAL local HTTP server rather than an undici intercept,
+ * and it must stay one (MOTIR-2389): this seed runs as its own PROCESS with no
+ * instrumentation hook, and the S3 SDK transports over `node:https`, which an
+ * undici dispatcher does not govern. Pointing `MOTIR_S3_ENDPOINT` at a socket
+ * that really exists is what makes it interceptable at all.
  *
- * Blob URLs the stub mints are deterministic in ORDER (an incrementing
- * counter stands in for the real API's random suffix) and carry the
- * `.public.blob.vercel-storage.com` host + `/attachments/<workspaceId>/`
- * pathname the 5.2.3 link-on-write parser requires.
+ * The env vars must be set BEFORE the SDK clients load, so the fixture module
+ * is imported DYNAMICALLY after the stub is listening.
  */
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
 import './_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads
@@ -43,20 +42,12 @@ function startSeamStub(): Promise<{ origin: string; close: () => void }> {
         res.end(JSON.stringify({ ids: [`evt_seed_${++uploadCounter}`], status: 200 }));
         return;
       }
-      // Vercel Blob put API: the SDK passes the target as ?pathname=…
-      const query = new URL(req.url ?? '/', 'http://stub').searchParams;
-      const pathname = query.get('pathname') ?? `attachments/unknown/${++uploadCounter}`;
-      const url = `https://seed-collab.public.blob.vercel-storage.com/${pathname}-s${++uploadCounter}`;
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(
-        JSON.stringify({
-          url,
-          downloadUrl: `${url}?download=1`,
-          pathname,
-          contentType: 'application/octet-stream',
-          contentDisposition: 'attachment',
-        }),
-      );
+      // The object store: an S3 PUT/HEAD/DELETE on `/<bucket>/<key>`. The
+      // uploader computes the key itself, so an empty 200 with an ETag is the
+      // whole contract a seed-time write needs.
+      uploadCounter += 1;
+      res.writeHead(req.method === 'DELETE' ? 204 : 200, { etag: `"seed-${uploadCounter}"` });
+      res.end();
     });
   });
   return new Promise((resolve) => {
@@ -77,8 +68,17 @@ function startSeamStub(): Promise<{ origin: string; close: () => void }> {
 async function main() {
   const stub = await startSeamStub();
   // Both SDK overrides BEFORE the fixture (and thus the SDK clients) load.
-  process.env['VERCEL_BLOB_API_URL'] = stub.origin;
-  process.env['BLOB_READ_WRITE_TOKEN'] ??= 'vercel_blob_rw_seed_collab_local_stub';
+  // The object store points at the stub socket; the credentials only have to
+  // exist for the signer, since the stub never checks a signature.
+  process.env['MOTIR_S3_ENDPOINT'] = stub.origin;
+  process.env['MOTIR_S3_REGION'] ??= 'auto';
+  process.env['MOTIR_S3_ACCESS_KEY_ID'] ??= 'seed-collab-local-stub';
+  process.env['MOTIR_S3_SECRET_ACCESS_KEY'] ??= 'seed-collab-local-stub-secret';
+  process.env['MOTIR_S3_PRIVATE_BUCKET'] ??= 'seed-collab-private';
+  process.env['MOTIR_S3_PUBLIC_BUCKET'] ??= 'seed-collab-public';
+  // Kept on the legacy public host shape so any fixture expectation about an
+  // avatar URL still holds; the bytes never leave this process either way.
+  process.env['MOTIR_S3_PUBLIC_BASE_URL'] ??= 'https://seed-collab.public.blob.vercel-storage.com';
   process.env['INNGEST_DEV'] = '1';
   process.env['INNGEST_BASE_URL'] = stub.origin;
 

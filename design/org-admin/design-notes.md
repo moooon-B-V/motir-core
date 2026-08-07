@@ -149,7 +149,7 @@ have more than one"; Linear's single-workspace view is equally clean.)
     **re-surfaced standalone** at ws ≥ 2. All org-owner/admin gated (404-not-403
     for a non-org member; the forbidden treatment of panel 5d for a non-admin).
 
-The page shells reuse the `/issues` + workspace-settings grammar: a serif `h2`
+The page shells reuse the `/items` + workspace-settings grammar: a serif `h2`
 title + a muted subtitle, then a `stack` of `Card`s.
 
 ---

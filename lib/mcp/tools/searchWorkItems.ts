@@ -126,7 +126,12 @@ const filterSchema = z
   );
 
 const inputSchema = {
-  projectKey: z.string().min(1).describe('The project key, e.g. "PROD".'),
+  projectKey: z
+    .string()
+    .min(1)
+    .describe(
+      'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+    ),
   filter: filterSchema.optional(),
   cursor: z.string().optional().describe('Opaque page cursor from a previous call’s nextCursor.'),
   limit: z

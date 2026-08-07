@@ -1,3 +1,4 @@
+import { DEFAULT_SERVER_URL } from './commandCatalog.js';
 import { CliError } from './errors.js';
 import { findLink } from './config/linkConfig.js';
 import { envServerUrl, listServers, normalizeServerUrl } from './config/userConfig.js';
@@ -6,14 +7,14 @@ import { envServerUrl, listServers, normalizeServerUrl } from './config/userConf
  * The hosted Motir instance — the LAST rung of the ladder below, and the value
  * `motir auth login` offers when it prompts for a server.
  *
- * Motir is open-core and self-hostable, so the host stays overridable at every
- * rung above this one; but the common case is the hosted product, and a CLI
- * whose default is a dev server (`http://localhost:3000`, what `auth login`
- * used to suggest) makes `motir login` a command you cannot type without also
- * knowing a URL. `gh` defaults to `github.com` and takes `--hostname` for
- * Enterprise; this is the same shape.
+ * DECLARED in `commandCatalog.ts` and re-exported here, so this module stays
+ * where every caller already looks for it while the value itself lives in a
+ * module a Next build can read: `/docs/cli` states the default server, and this
+ * file imports both config modules, so the constant had to move rather than be
+ * imported where it stood (ADR `docs/decisions/public-api-conventions.md`
+ * Amendment 12 Q2). One home, two spellings of the same export — never a copy.
  */
-export const DEFAULT_SERVER_URL = 'https://app.motir.co';
+export { DEFAULT_SERVER_URL };
 
 // Resolve WHICH server a command targets, in priority order:
 //   1. an explicit `--server` flag,

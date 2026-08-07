@@ -16,7 +16,7 @@ import { sprintIdField, summarizeMovedItems } from './sprintRef';
 // `backlogService.bulkAssignToSprint`: the same-project guard
 // (CrossProjectSprintAssignmentError), the bounded batch cap
 // (BulkBatchTooLargeError), the per-item revision, and the append-to-tail rank
-// all run in the service unchanged. The tool only resolves the `PROD-<n>` keys
+// all run in the service unchanged. The tool only resolves the `<KEY>-<n>` keys
 // to ids first.
 
 export const MOVE_TO_SPRINT_TOOL_NAME = 'move_to_sprint';
@@ -25,7 +25,7 @@ const inputSchema = {
   keys: z
     .array(z.string().min(1))
     .min(1)
-    .describe('Work item identifiers to move, e.g. ["PROD-7", "PROD-8"].'),
+    .describe('Work item identifiers to move, e.g. ["ACME-7", "ACME-8"].'),
   sprintId: sprintIdField,
 };
 

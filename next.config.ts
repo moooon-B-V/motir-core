@@ -85,6 +85,18 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [...DOCS_REDIRECTS];
   },
+  // The two `next/og` cards read Inter's bytes off disk at request time
+  // (`app/_brand/ogFonts.ts` — satori has no CSS tree and no system font stack,
+  // so `ImageResponse`'s `fonts` option is the ONLY way a card gets a typeface).
+  // A `readFile(join(process.cwd(), …))` is invisible to Next's dependency
+  // tracer, so without these entries the fonts are simply absent from the
+  // deployed function and the cards fall back to a face nobody chose — a failure
+  // that is invisible locally, where the file is always there. Naming the
+  // directory is what makes the deployment carry it.
+  outputFileTracingIncludes: {
+    '/explore/opengraph-image': ['./app/_brand/fonts/**'],
+    '/p/[identifier]/opengraph-image': ['./app/_brand/fonts/**'],
+  },
   // The Next.js dev-mode tools indicator renders a fixed portal in the
   // bottom-left corner by default — directly over the app shell's sidebar
   // footer (the collapse toggle). In `next dev` that portal intercepts pointer
@@ -94,6 +106,14 @@ const nextConfig: NextConfig = {
   // server — gated on an env flag the Playwright webServer sets, leaving a
   // normal `pnpm dev` session's indicator untouched.
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
+  output: 'standalone',
+
+  // The standalone artifact is what ships. Without this, `next build` copies the
+  // WHOLE repo root into it — 222 MB of `design/**.png` alone, plus tests and
+  // scripts, none of which a running server can reach. Measured: 374 MB before.
+  outputFileTracingExcludes: {
+    '**/*': ['./design/**', './tests/**', './scripts/**', './docs/**'],
+  },
 };
 
 export default withNextIntl(nextConfig);

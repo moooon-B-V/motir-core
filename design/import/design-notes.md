@@ -133,7 +133,7 @@ entry.
 - **ErrorState / callout** (`components/ui/ErrorState.tsx`) — the CSV-parse-error, the connect-failed
   and partial-failure notices, the info/gate/warn callouts.
 - **Toast** (`components/ui/Toast.tsx`) — for the post-import "Imported N issues" confirmation on the
-  destination `/issues` surface (referenced, not drawn as a panel).
+  destination `/items` surface (referenced, not drawn as a panel).
 - **Progress bar** — a thin composed bar (`--el-muted` track, `--el-accent` fill, `--el-success` on
   complete); if reused elsewhere it becomes a `components/ui/Progress` primitive (per-component growth,
   not a wizard-local hack).
@@ -246,7 +246,7 @@ token block is copied 1:1 from `app/globals.css` (Tier-0 → Tier-3 wiring), no 
 - **Complete** — chrome "Import complete". An **EmptyState.ok** (`--el-tint-mint` circle,
   `--el-success` check): "**Imported 339 issues into Payments Platform**" / "325 created, 14 updated,
   3 skipped. Comments, labels and issue links came across; 3 users had no Motir match and were left
-  unassigned." Actions: primary **"View imported backlog →"** (to `/issues`) + outline "Download
+  unassigned." Actions: primary **"View imported backlog →"** (to `/items`) + outline "Download
   report (CSV)".
 
 ### Panel 5 — re-run / empty / error states

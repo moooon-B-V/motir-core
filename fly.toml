@@ -1,0 +1,109 @@
+# motir-core on Fly.io — the production runtime configuration (MOTIR-2387).
+#
+# The decision this file implements is `docs/decisions/application-hosting.md`
+# (Q1: the platform and the measured alternatives; Q6: the machine pool and who
+# creates it). Modelled on motir-ai/fly.toml, which has run this pattern for
+# months — same org, same region, same release-command shape.
+#
+# ⚠️ THIS FILE CONFIGURES; IT DOES NOT PROVISION. The Fly app, its secrets and
+# its machines are created by MOTIR-2386 (an operator card), and the first deploy
+# is MOTIR-2392. Nothing here brings anything into existence.
+
+app            = "motir-core"   # claimed by MOTIR-2386 in org `zhu-yue`
+primary_region = "iad"          # Ashburn — co-located with motir-ai AND with the
+                                # Neon database, which stays exactly where it is.
+                                # Moving compute does not move the data: the app
+                                # connects with a plain DATABASE_URL over the
+                                # public internet either way (ADR Q8).
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # Migrations run HERE, not in the image build — Fly runs this once per deploy
+  # in a temporary machine built from the same image, before any new machine
+  # takes traffic, so a migration cannot race a half-rolled-out release.
+  #
+  # It is NOT a bare `prisma migrate deploy`, and not a `pnpm` invocation: the
+  # standalone image has neither pnpm nor a CLI on PATH. `release-migrate.mjs`
+  # runs the whole lane out of /app/migrate — the self-contained directory the
+  # Dockerfile stages, holding the Prisma CLI, prisma.config.ts and the
+  # migrations — and reuses the build lane's P1001 retry wrapper, because Neon's
+  # compute suspends when idle and a cold connection fails a second before it
+  # would have succeeded. A release command that exits non-zero rolls the deploy
+  # back, so that retry matters more here than it does in a build.
+  release_command = "node /app/migrate/release-migrate.mjs"
+
+[env]
+  PORT = "8080"
+  # HOSTNAME=0.0.0.0 is set in the Dockerfile rather than here, because getting
+  # it wrong is silent: Next's standalone server binds the CONTAINER HOSTNAME by
+  # default, the process reports "✓ Ready", and nothing outside can reach it.
+  # Verified the hard way during the spike (MOTIR-2383).
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  # ⚠️ These two knobs are POLICY OVER MACHINES THAT ALREADY EXIST. Fly's proxy
+  # never CREATES one: auto_start starts an existing STOPPED machine and nothing
+  # more, and `flyctl deploy` updates the machines that exist without adding any.
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
+  # NOT scale-to-zero. This app serves interactive page loads, so a cold start is
+  # user-visible in a way motir-ai's service-to-service calls are not.
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type       = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+# ── The intended machine count is 2, and THIS FILE CANNOT CREATE IT ──────────
+#
+# ADR Q6 decides a pool of TWO machines: with one, `auto_start_machines` has
+# nothing to start and `soft_limit` can never fire, so both settings above are
+# decoration — and every rolling deploy and every Fly host drain is a full,
+# user-visible outage.
+#
+# The count is created by `fly scale count 2`, an OPERATOR action owned by
+# MOTIR-2386, and read back FROM THE PLATFORM (`fly status` /
+# `GET https://api.machines.dev/v1/apps/<app>` → machine_count) by MOTIR-2392.
+# `min_machines_running = 1` above is a floor on how many of an existing pool
+# stay warm; it is not a request for a pool, and no key in this file is.
+#
+# This paragraph is deliberately an INTENT and not an assertion. motir-ai's
+# fly.toml stated the same intent in the indicative and ran ONE machine for weeks
+# because no card ever ran the command — three days of an incident filed against
+# the wrong service, closed by one authenticated GET (MOTIR-2102, planning bug
+# MOTIR-2106). A config file is a claim about the deployment, not a reading of it.
+#
+# Cost, from Fly's published pricing (2026-08-07): shared-cpu-2x 2 GB =
+# $11.83/machine/month → ~$24/month for the intended pair, plus $0.02/GB
+# outbound. The standby machine is stopped in steady state and Fly does not bill
+# compute for a stopped machine, so the always-on cost is the one warm machine.
+#
+# ⚠️ The VM size below is INHERITED from motir-ai, not measured for this app. The
+# spike could size the artifact (375 MB) but not the resident set; MOTIR-2392
+# takes the first real memory reading (ADR §10).
+[[vm]]
+  size   = "shared-cpu-2x"
+  memory = "2gb"
+  cpus   = 2
+
+# ── What this file does NOT solve, and must not pretend to ──────────────────
+#
+# 1. PER-PR PREVIEW DEPLOYMENTS are DROPPED (ADR Q4). Vercel gave these free;
+#    Fly does not. This is the single genuine loss in the move, and it is a
+#    recorded decision rather than an omission.
+#
+# 2. @vercel/blob → Tigris (ADR Q2) is MOTIR-2389's code change, and the two
+#    buckets are MOTIR-2386's to create. Nothing here reads blob storage.
+#
+# 3. STATIC ASSET EGRESS. Vercel's CDN was bundled into the plan; here the app
+#    serves its own static output and pays $0.02/GB (ADR Q7).
+#
+# 4. THE DATABASE BILL. `prodect-db` is a Vercel-MANAGED Neon resource, so Vercel
+#    invoices it even with nothing hosted there. Moving it is MOTIR-2391, and it
+#    has an ordering hazard that belongs to that card: ⚠️ do NOT uninstall the
+#    Vercel integration first — Neon's docs say the Neon ORGANIZATION is deleted
+#    when the integration is uninstalled.
