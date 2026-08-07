@@ -357,6 +357,58 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/explore/vantage/pulse-analytics',
     why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
   },
+  // ── Forward-looking, merged AFTER this guard and never listed ─────────────
+  //    MOTIR-2370. `design/cli-guide/` (#1905) and `design/mcp-server/` (#1906)
+  //    both landed on `main` after the guard did, and neither could see it: the
+  //    three PRs were in flight together, so each was green against a base that
+  //    did not contain the other. Their composition is what turned `main` red —
+  //    the same shape as two fixes that each pass alone.
+  //
+  //    ⚠️ The two `design/cli-guide` rows are TEMPORARY and belong to
+  //    MOTIR-2308, which ships `/docs/cli`. The tightness test below fails on a
+  //    listed pair that no longer fires, so that PR DELETES them in the same
+  //    commit that adds the route — which is the mechanism working, not a
+  //    conflict. Land this PR first; #1910 removes its own two.
+  {
+    file: 'design/cli-guide/design-notes.md',
+    address: '/docs/cli',
+    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
+  },
+  {
+    file: 'design/cli-guide/cli-guide.mock.html',
+    address: '/docs/cli',
+    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/mcp',
+    why: 'Forward-looking: the asset proposes the route, and MOTIR-2309 ships it.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs/mcp/tools',
+    why: 'Forward-looking: the second page of the same unbuilt sub-area (MOTIR-2309).',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/docs/mcp',
+    why: 'Forward-looking: the rail row the asset draws for its own unbuilt page (MOTIR-2309).',
+  },
+  {
+    file: 'design/mcp-server/mcp-server.mock.html',
+    address: '/docs/mcp/tools',
+    why: 'Forward-looking: the same unbuilt sub-area’s second rail row (MOTIR-2309).',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/docs',
+    why: 'The ownership row for the unbuilt `/docs` area root (MOTIR-2315), which states that `/docs` still 308s to `/docs/api` — the same note `design/api-docs/` carries.',
+  },
+  {
+    file: 'design/mcp-server/design-notes.md',
+    address: '/API/MCP',
+    why: 'Not an address: prose about how the catalogue’s header row RENDERS the string `/api/mcp` in uppercase.',
+  },
   // ── STALE — real drift this guard found on its first run. Not silenced on
   //    the merits: MOTIR-2340 corrects every one of them and deletes these
   //    rows, and the tightness test below is what stops it re-allowlisting
