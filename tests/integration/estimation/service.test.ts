@@ -6,13 +6,9 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
-import {
-  EstimationConfigForbiddenError,
-  InvalidEstimateError,
-  InvalidScaleConfigError,
-} from '@/lib/estimation/errors';
+import { InvalidEstimateError, InvalidScaleConfigError } from '@/lib/estimation/errors';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -170,12 +166,91 @@ describe('estimationService getEstimationConfig / updateEstimationConfig', () =>
     ).rejects.toBeInstanceOf(InvalidScaleConfigError);
   });
 
-  it('rejects a non-admin actor with EstimationConfigForbiddenError', async () => {
+  it('a NON-MEMBER gets 404, not a permission error', async () => {
+    // MOTIR-2298. The gate is now the shared `assertPermission`, whose refusal
+    // ORDER checks BROWSE first — a stranger must not learn the project is real.
+    // It threw `EstimationConfigForbiddenError` (403) here before.
     const fx = await makeWorkItemFixture({ name: 'Gate' });
     const stranger = { userId: 'not-a-member', workspaceId: fx.workspaceId };
     await expect(
       estimationService.updateEstimationConfig(fx.projectId, { pointScale: 'linear' }, stranger),
-    ).rejects.toBeInstanceOf(EstimationConfigForbiddenError);
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+
+  describe('the MOTIR-2298 WIDENING — who may change the estimation scheme', () => {
+    // The estimation scheme was the odd one out among the four vocabularies:
+    // fields, components and labels were already gated at project-admin level,
+    // while THIS one asked `isOwnerRole(...)` — the workspace OWNER alone. So a
+    // project admin could define a custom field but not change what the
+    // story-point scale is. `estimation:manage` fixes that, and stating it as a
+    // test is what keeps the grant from reading as a refactor.
+
+    async function actor(
+      fx: WorkItemFixture,
+      label: string,
+      roles: { workspaceRole?: 'admin' | 'member'; projectRole?: 'admin' | 'member' | 'viewer' },
+    ) {
+      const user = await db.user.create({
+        data: { email: `est-${label}@example.com`, name: label, emailVerified: true },
+      });
+      await db.workspaceMembership.create({
+        data: {
+          userId: user.id,
+          workspaceId: fx.workspaceId,
+          role: roles.workspaceRole ?? 'member',
+        },
+      });
+      if (roles.projectRole) {
+        await db.projectMembership.create({
+          data: {
+            userId: user.id,
+            projectId: fx.projectId,
+            workspaceId: fx.workspaceId,
+            role: roles.projectRole,
+          },
+        });
+      }
+      return { userId: user.id, workspaceId: fx.workspaceId };
+    }
+
+    it('a PROJECT ADMIN can now change the scheme — the capability this card grants', async () => {
+      const fx = await makeWorkItemFixture({ name: 'Widen admin' });
+      const ctx = await actor(fx, 'proj-admin', { projectRole: 'admin' });
+      const updated = await estimationService.updateEstimationConfig(
+        fx.projectId,
+        { pointScale: 'linear' },
+        ctx,
+      );
+      expect(updated.pointScale).toBe('linear');
+    });
+
+    it('a WORKSPACE ADMIN can too', async () => {
+      const fx = await makeWorkItemFixture({ name: 'Widen ws' });
+      const ctx = await actor(fx, 'ws-admin', { workspaceRole: 'admin' });
+      const updated = await estimationService.updateEstimationConfig(
+        fx.projectId,
+        { pointScale: 'linear' },
+        ctx,
+      );
+      expect(updated.pointScale).toBe('linear');
+    });
+
+    it('a project MEMBER is still refused, and told which key is missing', async () => {
+      const fx = await makeWorkItemFixture({ name: 'Widen denied' });
+      const ctx = await actor(fx, 'proj-member', { projectRole: 'member' });
+      const err = await estimationService
+        .updateEstimationConfig(fx.projectId, { pointScale: 'linear' }, ctx)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(PermissionDeniedError);
+      expect((err as PermissionDeniedError).permission).toBe('estimation:manage');
+    });
+
+    it('a project member can still READ the config — the reads stay browse-gated', async () => {
+      const fx = await makeWorkItemFixture({ name: 'Widen read' });
+      const ctx = await actor(fx, 'proj-reader', { projectRole: 'member' });
+      const config = await estimationService.getEstimationConfig(fx.projectId, ctx);
+      expect(config.pointScale).toBeTruthy();
+    });
   });
 
   it('404s an unknown / cross-workspace project', async () => {

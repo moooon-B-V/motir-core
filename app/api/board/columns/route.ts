@@ -2,11 +2,8 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
-import {
-  BoardNotFoundError,
-  InvalidColumnNameError,
-  NotBoardAdminError,
-} from '@/lib/boards/errors';
+import { BoardNotFoundError, InvalidColumnNameError } from '@/lib/boards/errors';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // POST /api/board/columns (Subtask 3.6.2) — add a column to the active
 // project's board. Body: { boardId, name, position? }. Thin HTTP layer over
@@ -17,7 +14,8 @@ import {
 //
 // Typed errors → status codes:
 //   InvalidColumnNameError → 400 (empty / whitespace name)
-//   NotBoardAdminError     → 403 (not the workspace owner — finding #36)
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError     → 404 (unknown / cross-workspace board)
 
 export async function POST(req: Request): Promise<Response> {
@@ -67,9 +65,8 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof InvalidColumnNameError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BoardNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

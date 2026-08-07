@@ -53,7 +53,7 @@ export function UserMenu({ name, email }: UserMenuProps) {
           <a
             href="/settings/account"
             onClick={() => setOpen(false)}
-            className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+            className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
           >
             <UserCog className="text-(--el-text-muted) h-4 w-4" aria-hidden />
             {t('userMenu.accountSettings')}
@@ -61,7 +61,7 @@ export function UserMenu({ name, email }: UserMenuProps) {
           <a
             href="/settings/workspace"
             onClick={() => setOpen(false)}
-            className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
+            className="hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none"
           >
             <Settings className="text-(--el-text-muted) h-4 w-4" aria-hidden />
             {t('userMenu.workspaceSettings')}
@@ -71,7 +71,7 @@ export function UserMenu({ name, email }: UserMenuProps) {
             onClick={handleSignOut}
             disabled={isPending}
             className={cn(
-              'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-sm) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none',
+              'hover:bg-(--el-surface) focus-visible:bg-(--el-surface) flex w-full items-center gap-2 rounded-(--radius-control) px-2 py-2 text-left font-sans text-sm text-(--el-text) focus-visible:outline-none',
               'disabled:pointer-events-none disabled:opacity-50',
             )}
           >

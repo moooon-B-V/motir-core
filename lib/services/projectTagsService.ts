@@ -101,7 +101,7 @@ export const projectTagsService = {
     const desired = resolveDesiredTags(slugs);
 
     return db.$transaction(async (tx) => {
-      await projectAccessService.assertCanManage(project.id, ctx, tx);
+      await projectAccessService.assertPermission(project.id, ctx, 'label:manage', tx);
 
       // Materialize the curated vocabulary rows (idempotent by slug → shared
       // across projects), giving each desired slug a tag id to link.

@@ -100,7 +100,7 @@ export function CreateIssueLinksField({
       <SectionLabel label={t('links.section')} />
 
       {error ? (
-        <div className="bg-(--el-danger-surface) flex items-start gap-2 rounded-md px-3 py-2">
+        <div className="bg-(--el-danger-surface) flex items-start gap-2 rounded-(--radius-card) px-3 py-2">
           <CircleAlert className="text-(--el-danger) mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span className="text-(--el-danger-surface-text) text-[13px]">{error}</span>
         </div>
@@ -111,7 +111,7 @@ export function CreateIssueLinksField({
           {links.map((l, i) => (
             <li
               key={`${l.relationship}:${l.targetId}`}
-              className="hover:bg-(--el-surface) flex items-center gap-2 rounded-md px-2 py-1.5"
+              className="hover:bg-(--el-surface) flex items-center gap-2 rounded-(--radius-control) px-2 py-1.5"
             >
               <Pill tone="neutral" className="shrink-0">
                 {tl(`relationship.${l.relationship}`)}
@@ -131,7 +131,7 @@ export function CreateIssueLinksField({
                   relationship: tl(`relationship.${l.relationship}`).toLowerCase(),
                   identifier: l.item.identifier,
                 })}
-                className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) shrink-0 rounded-md p-1 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) shrink-0 rounded-(--radius-control) p-1 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
               >
                 <X className="h-4 w-4" aria-hidden />
               </button>

@@ -42,15 +42,23 @@ export default async function ProjectAutomationPage() {
     );
   }
 
-  // Admin-only end to end: a non-admin (member / viewer) gets the no-access
-  // state, never the surface. `getManageCapabilities` reads as 404 for a
-  // non-browser (the surface stays hidden) — here we degrade browsers-who-aren't
-  // -admins to the same no-access page (the nav entry is already filtered away).
-  const { canManage } = await projectAccessService.getManageCapabilities(ctx.projectId, {
+  // Gated on `automation:manage` end to end (MOTIR-2297): an actor without it
+  // gets the no-access state, never the surface. The read resolves the actor's
+  // whole permission SET once and tests membership, rather than asking a second
+  // boolean question — and it still reads as 404 for a NON-BROWSER, so a project
+  // they may not see stays hidden.
+  //
+  // ⚠️ `lib/settings/projectSettingsNav.ts` is deliberately NOT touched. Its
+  // `automation` entry is the one whose `access` predicate is `manage` rather
+  // than `browse`, and moving that one predicate now buys nothing — Admin holds
+  // `automation:manage` exactly when it holds `project:administer`, so the nav
+  // filters identically either way — while colliding with MOTIR-2258, which is
+  // about to redesign `SettingsNavCapabilities` around a resolved permission set.
+  const held = await projectAccessService.getPermissions(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
-  if (!canManage) {
+  if (!held.has('automation:manage')) {
     const ta = await getTranslations('settings.automation.noAccess');
     return (
       <div className="mx-auto max-w-[46rem]">

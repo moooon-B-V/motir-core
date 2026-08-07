@@ -19,7 +19,7 @@ import type { UpdateProjectStatusAutomationInput } from '@/lib/dto/projectStatus
 // Typed errors → status codes (all via the shared `projectErrorResponse`):
 //   ProjectNotFoundError                     → 404 (missing / cross-tenant /
 //                                                   non-browsable)
-//   NotProjectAdminError                     → 403 (PATCH — a member may READ but
+//   PermissionDeniedError (automation:manage) → 403 (PATCH — a member may READ but
 //                                                   not change)
 //   InvalidStatusAutomationSettingsError     → 422 (a non-boolean switch; the body
 //                                                   carries `field` so the panel

@@ -95,13 +95,15 @@ export class BoardColumnNotFoundError extends Error {
  * (decision-ladder rung 2 > the card), and Jira gates board config to admins
  * (rung 1) — so the owner gate is the consistent build. See PRODECT_FINDINGS.
  */
-export class NotBoardAdminError extends Error {
-  readonly code = 'NOT_BOARD_ADMIN' as const;
-  constructor(message = 'You must be a workspace owner to change board configuration.') {
-    super(message);
-    this.name = 'NotBoardAdminError';
-  }
-}
+// ⚠️ `NotBoardAdminError` / `NOT_BOARD_ADMIN` was RETIRED by MOTIR-2296. Board
+// configuration is no longer gated by a workspace-OWNER check of its own — it
+// asks `projectAccessService.assertPermission(…, 'board:configure')` like every
+// other administrative domain, and refuses with `PermissionDeniedError` (403,
+// carrying the key) or `ProjectNotFoundError` (404, for an actor who cannot
+// browse). The old error's message — "You must be a workspace owner to change
+// board configuration." — became false the moment a project admin could do it,
+// and `git grep NOT_BOARD_ADMIN` found no reader outside the route files that
+// raised it. `lib/boards/boardGateResponse.ts` maps the two replacements.
 
 /**
  * The requested swimlane group-by is not a `BoardSwimlaneGroupBy` value (the

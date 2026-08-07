@@ -133,6 +133,27 @@ describe('every domain in the render order earns its heading', () => {
   });
 });
 
+/**
+ * The administrative keys MOTIR-2256 has WIRED so far — each one's gates ship in
+ * its own card, and the card that wires a domain adds its keys here in the same
+ * change. The list is the story's progress bar: it is empty before MOTIR-2295
+ * and holds all twelve when the story closes.
+ */
+const ADMINISTRATIVE_ENFORCED: PermissionKey[] = [
+  'member:manage',
+  'project:manage_access',
+  'ai:configure',
+  'repository:manage',
+  'repository:manage_access',
+  'board:configure',
+  'workflow:manage',
+  'automation:manage',
+  'field:manage',
+  'component:manage',
+  'label:manage',
+  'estimation:manage',
+];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -165,7 +186,18 @@ describe('enforcement — the seam that lets naming and wiring land separately',
       'public_request:comment',
     ];
     for (const key of shipped) expect(isEnforced(key), `${key} must stay enforced`).toBe(true);
-    expect(ENFORCED_PERMISSIONS).toHaveLength(11);
+    // The eleven above are a FLOOR, not the total. MOTIR-2256 flips one domain
+    // at a time from `planned` to `enforced`, so this number rises as the story
+    // lands and the assertion above is what actually guards against a demotion.
+    // Moving it DOWN is the regression to catch.
+    expect(ENFORCED_PERMISSIONS.length).toBeGreaterThanOrEqual(shipped.length);
+    // The twelve administrative keys, as they get wired. Listed explicitly so a
+    // key that flips without a gate behind it — or a gate that lands without the
+    // catalog being told — fails here rather than passing a bare count.
+    expect(ENFORCED_PERMISSIONS.filter((k) => ADMINISTRATIVE_ENFORCED.includes(k)).sort()).toEqual(
+      [...ADMINISTRATIVE_ENFORCED].sort(),
+    );
+    expect(ENFORCED_PERMISSIONS).toHaveLength(shipped.length + ADMINISTRATIVE_ENFORCED.length);
   });
 
   it('renders the WHOLE model by default — the grid must not under-describe the product', () => {

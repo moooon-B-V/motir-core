@@ -73,7 +73,7 @@ export function SidebarHeader({
           onClick={() => setCreateOpen(true)}
           className={cn(
             'bg-(--el-accent) text-(--el-accent-text) mx-auto flex h-8 w-8 items-center justify-center',
-            'rounded-(--radius-sm) font-sans text-sm font-semibold',
+            'rounded-(--radius-control) font-sans text-sm font-semibold',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)',
           )}
         >
@@ -97,7 +97,7 @@ export function SidebarHeader({
           aria-label={t('project.createFirst')}
           className="flex items-center gap-2 p-2"
         >
-          <span className="bg-(--el-accent) text-(--el-accent-text) flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-xs)">
+          <span className="bg-(--el-accent) text-(--el-accent-text) flex h-7 w-7 shrink-0 items-center justify-center rounded-(--radius-control)">
             <Plus className="h-4 w-4" aria-hidden />
           </span>
           <span className="min-w-0 flex-1">

@@ -8,12 +8,12 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import {
   CannotDeleteInitialStatusError,
   DefaultStatusProtectedError,
-  NotProjectAdminError,
   StatusInUseError,
   StatusKeyConflictError,
   WorkflowStatusNotFoundError,
   WorkflowTransitionNotFoundError,
 } from '@/lib/workflows/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -81,7 +81,7 @@ describe('assertProjectAdmin gate', () => {
         projectId: fx.projectId,
         mode: 'open',
       }),
-    ).rejects.toThrow(NotProjectAdminError);
+    ).rejects.toThrow(PermissionDeniedError);
   });
 });
 

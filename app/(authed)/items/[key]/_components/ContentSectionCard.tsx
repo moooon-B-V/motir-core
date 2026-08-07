@@ -47,7 +47,7 @@ export function ContentSectionCard({
           {editHref ? (
             <Link
               href={editHref}
-              className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 font-sans text-sm text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="ml-auto inline-flex items-center gap-1 rounded-(--radius-control) px-1.5 py-0.5 font-sans text-sm text-(--el-text-secondary) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <Pencil className="h-3.5 w-3.5" aria-hidden />
               {t('edit')}

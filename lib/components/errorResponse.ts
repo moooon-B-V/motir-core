@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
   NotProjectAdminError,
+  PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -40,6 +41,21 @@ export function mapComponentError(err: unknown): NextResponse | null {
     err instanceof ComponentNotFoundError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  // MOTIR-2256 — the domain gate now asks `assertPermission(…, '<key>')`, which
+  // refuses with `PermissionDeniedError` CARRYING THE KEY. Its own arm, not a
+  // third alternative bolted onto the one below, because the whole value of the
+  // new error is the `permission` on the body — naming which grant was missing.
+  // A shared arm returns the right status and silently drops that, which is
+  // exactly what the story E2E caught.
+  //
+  // `NotProjectAdminError` stays mapped: `project:administer` still raises it
+  // (the compatibility branch in `projectAccessService.assertPermission`).
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, permission: err.permission },
+      { status: 403 },
+    );
   }
   if (err instanceof NotProjectAdminError || err instanceof ProjectAccessDeniedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });

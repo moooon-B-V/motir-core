@@ -25,7 +25,7 @@ export function CreateIssueButton() {
   if (!canCreate) return null;
 
   const base =
-    'inline-flex h-9 items-center gap-2 rounded-(--radius-sm) border border-(--el-border) px-2.5 font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
+    'inline-flex h-9 items-center gap-2 rounded-(--radius-btn) border border-(--el-border) px-2.5 font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)';
 
   // Read-only (a viewer, or a member on a limited project): keep the affordance
   // VISIBLE but disabled with an explanatory tooltip, rather than hiding it —
@@ -55,7 +55,7 @@ export function CreateIssueButton() {
     >
       <Plus className="h-4 w-4" aria-hidden />
       <span className="hidden sm:inline">{t('createIssue.create')}</span>
-      <kbd className="hidden rounded-(--radius-xs) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] sm:inline">
+      <kbd className="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] sm:inline">
         {displayKey('C')}
       </kbd>
     </button>

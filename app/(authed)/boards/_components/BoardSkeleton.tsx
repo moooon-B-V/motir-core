@@ -15,7 +15,7 @@ const CARDS_PER_COLUMN = [3, 2, 4, 2, 1];
 function Bar({ w, className }: { w?: number; className?: string }) {
   return (
     <span
-      className={`block h-3 rounded bg-(--el-muted) ${className ?? ''}`}
+      className={`block h-3 rounded-(--radius-control) bg-(--el-muted) ${className ?? ''}`}
       style={w ? { width: w } : undefined}
       aria-hidden
     />
@@ -29,7 +29,7 @@ function SkeletonCard() {
       aria-hidden
     >
       <div className="flex items-center gap-2">
-        <span className="h-4 w-4 shrink-0 rounded bg-(--el-muted)" aria-hidden />
+        <span className="h-4 w-4 shrink-0 rounded-(--radius-control) bg-(--el-muted)" aria-hidden />
         <Bar w={48} />
       </div>
       <Bar className="w-full" />

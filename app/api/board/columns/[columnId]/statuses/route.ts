@@ -5,10 +5,10 @@ import { boardsService } from '@/lib/services/boardsService';
 import {
   BoardColumnNotFoundError,
   BoardNotFoundError,
-  NotBoardAdminError,
   StatusMappingConflictError,
 } from '@/lib/boards/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // PUT /api/board/columns/[columnId]/statuses (Subtask 3.6.2) — map (or MOVE) a
 // workflow status onto this column. Body: { boardId, statusId }. Thin HTTP layer
@@ -23,7 +23,8 @@ import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 // delete to this board.
 //
 // Typed errors → status codes:
-//   NotBoardAdminError                                  → 403
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   BoardNotFoundError / BoardColumnNotFoundError       → 404
 //   WorkflowStatusNotFoundError                         → 404
 //   StatusMappingConflictError                          → 409
@@ -70,9 +71,8 @@ export async function PUT(
     });
     return NextResponse.json(mapping);
   } catch (err) {
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (
       err instanceof BoardNotFoundError ||
       err instanceof BoardColumnNotFoundError ||

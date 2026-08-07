@@ -25,7 +25,7 @@ import {
   MAX_OPTIONS_PER_FIELD,
 } from '@/lib/customFields/limits';
 import {
-  NotProjectAdminError,
+  PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -598,7 +598,7 @@ describe('the 6.4 two-tier admin gate', () => {
       label: 'Renamed by project admin',
     });
 
-    // Everyone else: NotProjectAdminError on every mutation family.
+    // Everyone else: PermissionDeniedError on every mutation family.
     for (const denied of [plainMember, projMember, projViewer]) {
       await expect(
         customFieldsService.createField({
@@ -608,7 +608,7 @@ describe('the 6.4 two-tier admin gate', () => {
           label: 'Nope',
           fieldType: 'text',
         }),
-      ).rejects.toBeInstanceOf(NotProjectAdminError);
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
     }
     await expect(
       customFieldsService.deleteField({
@@ -616,14 +616,14 @@ describe('the 6.4 two-tier admin gate', () => {
         actorUserId: projMember.userId,
         ctx: projMember.ctx,
       }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       customFieldsService.archiveOption({
         optionId: field.options[0]!.id,
         actorUserId: projViewer.userId,
         ctx: projViewer.ctx,
       }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 });
 
@@ -720,7 +720,7 @@ describe('the 5.3.6 additions — description edit + per-option usage counts', (
         ctx: { userId: member.id, workspaceId: fx.workspaceId },
         description: 'X',
       }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('listFields and the option mutations carry per-option usage counts', async () => {
