@@ -34,8 +34,22 @@ import {
   v1ReadyRow,
   v1Sprint,
   v1Project,
+  v1WorkItem,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
+
+/**
+ * Peel a `?filter=` parameter back to its compact form.
+ *
+ * Asserted DECODED, never as an opaque string: what matters is the expression
+ * the server will run, and a base64 blob in a test tells a reader nothing about
+ * whether the sprint id or the kinds actually made it onto the wire.
+ */
+function decodeFilter(param: string | null | undefined): unknown {
+  expect(param).toMatch(/^v1:/);
+  const encoded = (param as string).slice('v1:'.length);
+  return JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+}
 
 // The NETWORK commands (Subtask 7.9.5 · MOTIR-883) — `auth`, `link`, the read
 // trio, and the session plumbing under them — exercised as the real functions,
@@ -633,8 +647,8 @@ describe('motir ready / status / open', () => {
         ]),
       },
     });
-    server.script({
-      search_work_items: { structured: { items: [], total: 5, nextCursor: null } },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 5 } },
     });
 
     const io = capture();
@@ -647,6 +661,14 @@ describe('motir ready / status / open', () => {
       totalSprints: 2,
       activeSprint: { name: 'Journey D' },
     });
+    // ⚠️ ONE request for the in-flight number, and it is a COUNT (MOTIR-2319).
+    // Every wrong version of this still prints 5: a search whose row is thrown
+    // away, or a walk that counts the rows. Both get slower the bigger the
+    // project gets, which is exactly when nobody is looking.
+    const counted = server.v1Calls.filter((c) => c.path.endsWith('/work-items/count'));
+    expect(counted).toHaveLength(1);
+    expect(counted[0]?.query.get('filter')).toMatch(/^v1:/);
+    expect(server.v1Calls.filter((c) => c.path.endsWith('/work-items'))).toEqual([]);
 
     vi.restoreAllMocks();
     const text = capture();
@@ -680,14 +702,8 @@ describe('motir ready / status / open', () => {
 
 // ── the sprint reads (7.9.14 · MOTIR-1844) ──────────────────────────────────
 
-/** A `search_work_items` row. */
-const itemRow = (identifier: string) => ({
-  identifier,
-  kind: 'subtask',
-  title: `Work item ${identifier}`,
-  status: 'todo',
-  priority: 'high',
-});
+/** One row of the v1 work-item COLLECTION. */
+const itemRow = (key: string) => v1WorkItem(key, { title: `Work item ${key}`, priority: 'high' });
 
 describe('motir sprints / sprint', () => {
   it('`sprints` tables every sprint, marks the ACTIVE one, and --json emits the rows', async () => {
@@ -757,33 +773,32 @@ describe('motir sprints / sprint', () => {
         ]),
       },
     });
-    server.script({
-      // Two pages: the count the CLI prints must equal the tool's own `total`,
-      // which only holds if it followed the cursor instead of stopping at one.
-      search_work_items: (args) =>
-        args.cursor === undefined
-          ? {
-              structured: {
-                items: [itemRow('PROD-1'), itemRow('PROD-2')],
-                total: 3,
-                nextCursor: 'p2',
-              },
-            }
-          : { structured: { items: [itemRow('PROD-3')], total: 3, nextCursor: null } },
+    server.scriptV1({
+      // Two pages. The count the CLI prints is the rows it COLLECTED — the v1
+      // collection publishes no total (ADR Amendment 11 Q3) — so printing 3
+      // only holds if it followed the cursor instead of stopping at one page.
+      'GET /api/v1/projects/{projectKey}/work-items': (req) =>
+        req.query.get('cursor') === null
+          ? { body: v1Page([itemRow('PROD-1'), itemRow('PROD-2')], 'p2') }
+          : { body: v1Page([itemRow('PROD-3')]) },
     });
 
     const io = capture();
     await sprintCommand(undefined, {});
 
-    const searches = server.calls.filter((c) => c.name === 'search_work_items');
+    const searches = server.v1Calls.filter((c) => c.path.endsWith('/work-items'));
     expect(searches).toHaveLength(2);
-    expect(searches[0]?.args).toMatchObject({
-      filter: {
-        version: 'v1',
-        combinator: 'and',
-        conditions: [{ field: 'sprint', operator: 'is_any_of', value: ['s2'] }],
-      },
+    // The sprint filter, encoded — the SAME carrier the web app's saved filters
+    // use, which is why `motir sprint` cannot disagree with it about what is in
+    // a sprint. Decoded here rather than matched as an opaque string.
+    expect(decodeFilter(searches[0]?.query.get('filter'))).toEqual({
+      c: 'and',
+      f: [['sprint', 'is_any_of', ['s2']]],
     });
+    // The cursor is echoed back verbatim, never rebuilt.
+    expect(searches[1]?.query.get('cursor')).toBe('p2');
+    // And no count was asked for: the walk already has the number.
+    expect(server.v1Calls.filter((c) => c.path.endsWith('/count'))).toEqual([]);
     expect(io.stdout()).toContain('Journey D  [active]');
     expect(io.stdout()).toContain('goal: Ship the CLI');
     expect(io.stdout()).toContain('3 work items:');
@@ -802,8 +817,8 @@ describe('motir sprints / sprint', () => {
         ]),
       },
     });
-    server.script({
-      search_work_items: { structured: { items: [itemRow('PROD-1')], total: 1, nextCursor: null } },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/work-items': { body: v1Page([itemRow('PROD-1')]) },
     });
 
     const io = capture();
@@ -825,7 +840,7 @@ describe('motir sprints / sprint', () => {
 
     await expect(sprintCommand(undefined, {})).rejects.toThrow(/No sprint is active/);
     // It failed on the sprint READ — it never went looking for items.
-    expect(server.calls.filter((c) => c.name === 'search_work_items')).toHaveLength(0);
+    expect(server.v1Calls.filter((c) => c.path.endsWith('/work-items'))).toEqual([]);
   });
 
   it('`sprint --kinds` narrows the query, and rejects an unknown kind before any network call', async () => {
@@ -835,19 +850,15 @@ describe('motir sprints / sprint', () => {
         body: v1Page([v1Sprint('s2', { state: 'active' })]),
       },
     });
-    server.script({
-      search_work_items: { structured: { items: [], total: 0, nextCursor: null } },
-    });
-
     const io = capture();
     await sprintCommand(undefined, { kinds: 'Subtask, BUG' });
-    expect(server.calls.find((c) => c.name === 'search_work_items')?.args).toMatchObject({
-      filter: {
-        conditions: [
-          { field: 'sprint', operator: 'is_any_of', value: ['s2'] },
-          { field: 'kind', operator: 'is_any_of', value: ['subtask', 'bug'] },
-        ],
-      },
+    const search = server.v1Calls.find((c) => c.path.endsWith('/work-items'));
+    expect(decodeFilter(search?.query.get('filter'))).toEqual({
+      c: 'and',
+      f: [
+        ['sprint', 'is_any_of', ['s2']],
+        ['kind', 'is_any_of', ['subtask', 'bug']],
+      ],
     });
     expect(io.stdout()).toContain('No work items in this sprint.');
 

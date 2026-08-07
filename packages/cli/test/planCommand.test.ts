@@ -77,6 +77,13 @@ beforeEach(() => {
     return true;
   });
   server.calls.length = 0;
+  server.v1Calls.length = 0;
+  server.resetV1();
+  // Every test but the un-onboarded guard needs a non-empty tree: the guard
+  // asks the COUNT whether there is a plan here to change.
+  server.scriptV1({
+    'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 12 } },
+  });
 });
 
 afterEach(() => {
@@ -122,8 +129,6 @@ function sessionPayload(turns: { body: string; role?: 'user' | 'system'; jobId?:
 function tools(overrides: ToolScript = {}): ToolScript {
   const appended: string[] = [];
   return {
-    // A non-empty tree: the un-onboarded guard's happy path.
-    search_work_items: { structured: { items: [], total: 12, nextCursor: null } },
     open_plan_session: () => ({ structured: sessionPayload(appended.map((body) => ({ body }))) }),
     append_plan_turn: (args) => {
       appended.push(String(args.body));
@@ -351,9 +356,12 @@ describe('motir plan "<text>" — the non-interactive shorthand', () => {
 
 describe('motir plan — the un-onboarded guard', () => {
   it('refuses an EMPTY project with the onboarding URL, appending and submitting nothing', async () => {
-    server.script(
-      tools({ search_work_items: { structured: { items: [], total: 0, nextCursor: null } } }),
-    );
+    server.script(tools());
+    // A tree with NOTHING in it — the count is what the guard asks for now
+    // (MOTIR-2319); it used to run a `limit: 1` search and read its total.
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 0 } },
+    });
 
     await expect(planCommand(['plan my thing'], {}, reader([]))).rejects.toMatchObject({
       message: expect.stringContaining('PROD has no work items yet'),

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MotirClient, mcpEndpoint } from '../src/mcpClient.js';
+import { MotirClient, mcpEndpoint, type SearchFilterEnvelope } from '../src/mcpClient.js';
 import { AuthError, CliError } from '../src/errors.js';
 import {
   DEFAULT_TOOLS,
@@ -10,6 +10,7 @@ import {
   v1JobHandle,
   v1Page,
   v1Project,
+  v1WorkItem,
   v1ReadyRow,
   v1Sprint,
   type TestMcpServer,
@@ -231,17 +232,79 @@ describe('typed wrappers — each names its operation and forwards its arguments
     await client.close();
   });
 
-  it('the UNPORTED reads still name their MCP tools', async () => {
+  it('the UNPORTED read still names its MCP tool', async () => {
     const client = await connected();
     server.script({ next_ready: { structured: { item: { id: 'row-1', key: 'PROD-7' } } } });
 
     await client.nextReady({ projectKey: 'PROD', excludeIds: ['row-9'] });
-    await client.searchWorkItems({ projectKey: 'PROD' });
 
-    // All six READS now speak `/api/v1`. These two are what is left on MCP:
-    // 11.5.19 retires `next_ready`, 11.5.17 ports `search_work_items`.
-    expect(server.calls.map((c) => c.name)).toEqual(['next_ready', 'search_work_items']);
+    // Every read speaks `/api/v1` now. `next_ready` is the last one left on
+    // MCP, and 11.5.6 retires it outright rather than porting it.
+    expect(server.calls.map((c) => c.name)).toEqual(['next_ready']);
     expect(server.calls[0]?.args).toMatchObject({ excludeIds: ['row-9'] });
+    await client.close();
+  });
+
+  // The work-item COLLECTION and its COUNT (11.5.17 — MOTIR-2319). Two
+  // operations, deliberately: the page carries no total, so the count is one
+  // request that says what it is rather than a search whose row is discarded.
+  it('search sends the filter as ?filter=, and the count is its own request', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/work-items': {
+        body: v1Page([v1WorkItem('PROD-7', { title: 'A row' })], 'cur-2'),
+      },
+      'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 42 } },
+    });
+    const filter: SearchFilterEnvelope = {
+      version: 'v1',
+      combinator: 'and',
+      conditions: [{ field: 'status', operator: 'is_any_of', value: ['todo', 'in_progress'] }],
+    };
+
+    const page = await client.searchWorkItems({ projectKey: 'PROD', filter, limit: 50 });
+    const count = await client.countWorkItems({ projectKey: 'PROD', filter });
+
+    // The wire's `key` becomes the view model's `identifier` at the adapter —
+    // `render.ts` has said `identifier` since long before this port.
+    expect(page).toEqual({
+      items: [
+        {
+          identifier: 'PROD-7',
+          kind: 'subtask',
+          title: 'A row',
+          status: 'todo',
+          priority: 'medium',
+          dependencies: { blockedBy: [], blocks: [] },
+        },
+      ],
+      nextCursor: 'cur-2',
+    });
+    expect(count).toBe(42);
+
+    // BOTH carry the same encoded filter — the count's whole promise is that it
+    // counts what the collection would page, and that only holds if the two
+    // narrow identically.
+    const encoded = server.v1Calls[0]?.query.get('filter');
+    expect(encoded).toMatch(/^v1:/);
+    expect(server.v1Calls[1]?.query.get('filter')).toBe(encoded);
+    expect(server.v1Calls[0]?.query.get('limit')).toBe('50');
+    // The count takes no paging parameters at all: it is not a page.
+    expect(server.v1Calls[1]?.query.get('limit')).toBeNull();
+    expect(server.v1Calls[1]?.query.get('cursor')).toBeNull();
+    await client.close();
+  });
+
+  it('omits ?filter= entirely when there is none — never an empty one', async () => {
+    const client = await connected();
+
+    await client.searchWorkItems({ projectKey: 'PROD' });
+    await client.countWorkItems({ projectKey: 'PROD' });
+
+    // `?filter=` empty is not the same as absent to a decoder that has to tell
+    // "no filter" from "a filter I could not read".
+    expect(server.v1Calls.map((c) => c.query.get('filter'))).toEqual([null, null]);
+    expect(server.v1Calls[0]?.query.get('cursor')).toBeNull();
     await client.close();
   });
 
@@ -443,23 +506,23 @@ describe('failures', () => {
     const client = await connected();
 
     // An `isError` with an EMPTY content block still has to say WHICH tool
-    // failed. Driven on a tool that still speaks MCP — `list_sprints` moved to
-    // `/api/v1` in MOTIR-2212, where a failure is a status, not a tool result.
-    server.script({ search_work_items: { error: '' } });
-    await expect(client.searchWorkItems({ projectKey: 'PROD' })).rejects.toThrow(
-      /Tool search_work_items failed/,
+    // failed. Driven on `next_ready`, the last read still speaking MCP — every
+    // other one moved to `/api/v1`, where a failure is a status, not a result.
+    server.script({ next_ready: { error: '' } });
+    await expect(client.nextReady({ projectKey: 'PROD' })).rejects.toThrow(
+      /Tool next_ready failed/,
     );
 
     // …and so does one whose content carries no TEXT part (an image / resource
     // block is not an error message).
     server.script({
-      search_work_items: {
+      next_ready: {
         error: 'x',
         contentParts: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }],
       },
     });
-    await expect(client.searchWorkItems({ projectKey: 'PROD' })).rejects.toThrow(
-      /Tool search_work_items failed/,
+    await expect(client.nextReady({ projectKey: 'PROD' })).rejects.toThrow(
+      /Tool next_ready failed/,
     );
     await client.close();
   });

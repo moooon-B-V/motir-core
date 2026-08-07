@@ -1,6 +1,8 @@
 import type { SuccessBody } from '../transport.js';
 import type {
   ActivityAllPage,
+  SearchItemSummary,
+  SearchPage,
   CompleteSessionResult,
   DispatchAdvisory,
   DispatchPrompt,
@@ -491,4 +493,56 @@ export function toCompleteSessionResult(body: CloseOutBody): CompleteSessionResu
  */
 export function toExpandSubmitResult(body: JobHandleBody): ExpandSubmitResult {
   return { jobId: body.jobId, planId: body.planId };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The work-item COLLECTION and its COUNT (Subtask 11.5.17 — MOTIR-2319)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One row of the work-item collection. */
+type WorkItemRow = SuccessBody<'listProjectWorkItems'>['items'][number];
+/** The count body. */
+type CountBody = SuccessBody<'countProjectWorkItems'>;
+
+/**
+ * One search result row.
+ *
+ * ⚠️ `key` becomes `identifier`. The wire names every work item by its key
+ * (ADR §7) and the view model has said `identifier` since long before this
+ * port; renaming the view-model field would reach into `render.ts`, which this
+ * card may not touch. So the rename lives HERE, which is the adapter boundary
+ * doing exactly what it exists for — the wire's vocabulary stops at this line.
+ *
+ * `dependencies` is always present on a v1 row, so it is always set. The view
+ * model keeps it OPTIONAL because a CLI meets older servers, and a renderer
+ * that degrades on absence must stay reachable.
+ */
+function toSearchItem(row: WorkItemRow): SearchItemSummary {
+  return {
+    identifier: row.key,
+    kind: row.kind,
+    title: row.title,
+    status: row.status,
+    priority: row.priority,
+    dependencies: {
+      blockedBy: row.dependencies.blockedBy.map((edge) => ({ ...edge })),
+      blocks: row.dependencies.blocks.map((edge) => ({ ...edge })),
+    },
+  };
+}
+
+/** One page of the work-item collection. */
+export function toSearchPage(body: SuccessBody<'listProjectWorkItems'>): SearchPage {
+  return { items: body.items.map(toSearchItem), nextCursor: body.nextCursor };
+}
+
+/**
+ * How many work items match — the whole body, unwrapped to the number.
+ *
+ * The envelope exists because ADR Amendment 12 says a count is its own
+ * operation with its own response object; the CLI has no use for the wrapper,
+ * and a caller asking "how many" should get a number.
+ */
+export function toWorkItemCount(body: CountBody): number {
+  return body.count;
 }

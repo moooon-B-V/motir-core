@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
-import { MotirClient, type SearchPage, type WhoamiResult } from '../mcpClient.js';
+import { MotirClient, type WhoamiResult } from '../mcpClient.js';
 import { CliError } from '../errors.js';
 import { json, out } from '../output.js';
 import { resolveServerUrl } from '../serverResolve.js';
@@ -47,13 +47,12 @@ export interface ReadOnlyServerClient {
   close(): Promise<void>;
   listToolNames(): Promise<string[]>;
   whoami(): Promise<WhoamiResult>;
-  searchWorkItems(args: { projectKey: string; limit?: number }): Promise<SearchPage>;
+  countWorkItems(args: { projectKey: string }): Promise<number>;
 }
 
 /**
  * One server round-trip: handshake → tool list → whoami → (optionally) a
- * single-row project search that proves the linked project is reachable for
- * this token. Every failure is captured into the result rather than thrown, so
+ * work-item COUNT that proves the linked project is reachable for this token. Every failure is captured into the result rather than thrown, so
  * `doctor` reports a red row instead of aborting the whole checklist.
  */
 export async function probeServerWith(
@@ -76,8 +75,8 @@ export async function probeServerWith(
     };
     if (projectKey) {
       try {
-        const page = await client.searchWorkItems({ projectKey, limit: 1 });
-        result.project = { key: projectKey, reachable: true, total: page.total };
+        const total = await client.countWorkItems({ projectKey });
+        result.project = { key: projectKey, reachable: true, total };
       } catch (err) {
         result.project = { key: projectKey, reachable: false, error: describeError(err).message };
       }

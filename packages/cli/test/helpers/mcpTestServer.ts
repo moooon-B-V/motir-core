@@ -515,6 +515,27 @@ export function v1JobHandle(over: Record<string, unknown> = {}) {
   };
 }
 
+/** One row of the work-item COLLECTION (`WorkItemSummary`). */
+export function v1WorkItem(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    kind: 'subtask',
+    type: 'code',
+    title: key,
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    reporterId: 'user-1',
+    dueDate: null,
+    estimateMinutes: null,
+    storyPoints: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    dependencies: v1Edges(),
+    ...over,
+  };
+}
+
 /** The canned `/api/v1` answers, mirroring {@link DEFAULT_TOOLS}' data. */
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
@@ -537,6 +558,10 @@ export const DEFAULT_V1: V1Script = {
     body: { code: 'NOT_FOUND', error: 'No such work item.' },
   },
   'GET /api/v1/work-items/{key}/activity': { body: v1Activity() },
+  'GET /api/v1/projects/{projectKey}/work-items': { body: v1Page([]) },
+  // Its OWN operation, not a field on the page above — a collection either
+  // promises a total or it does not (ADR Amendment 12).
+  'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 0 } },
   // The write half of the work loop. A transition answers with the item at its
   // new status; nothing in the CLI reads that body, but the transport validates
   // every success, so the default has to be a real one.

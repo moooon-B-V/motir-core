@@ -12,14 +12,16 @@ import {
   type ReadOnlyServerClient,
 } from '../src/commands/doctor.js';
 import { AuthError } from '../src/errors.js';
-import type { SearchPage, WhoamiResult } from '../src/mcpClient.js';
+import type { WhoamiResult } from '../src/mcpClient.js';
 
 const WHOAMI: WhoamiResult = {
   user: { id: 'u1', name: 'Yue', email: 'yue@example.com' },
   workspace: { id: 'w1', name: 'moooon', slug: 'moooon' },
 };
 
-const PAGE: SearchPage = { items: [], total: 42, nextCursor: null };
+/** How many work items the probed project holds. A COUNT since MOTIR-2319: the
+ *  probe used to run a `limit: 1` search and read its total. */
+const PROJECT_COUNT = 42;
 
 /** A read-only client that records every method the probe reaches for. */
 function spyClient(over: Partial<ReadOnlyServerClient> = {}): {
@@ -42,9 +44,9 @@ function spyClient(over: Partial<ReadOnlyServerClient> = {}): {
       calls.push('whoami');
       return WHOAMI;
     },
-    searchWorkItems: async () => {
-      calls.push('searchWorkItems');
-      return PAGE;
+    countWorkItems: async () => {
+      calls.push('countWorkItems');
+      return PROJECT_COUNT;
     },
     ...over,
   };
@@ -62,14 +64,14 @@ describe('probeServerWith — read-only by construction', () => {
     expect(result.project).toEqual({ key: 'MOTIR', reachable: true, total: 42 });
     // The whole call list, pinned: connect + three READS + close. No dispatch,
     // no transition, no write — `doctor` may never mutate server state.
-    expect(calls).toEqual(['connect', 'listToolNames', 'whoami', 'searchWorkItems', 'close']);
+    expect(calls).toEqual(['connect', 'listToolNames', 'whoami', 'countWorkItems', 'close']);
   });
 
   it('skips the project read when there is no linked project', async () => {
     const { client, calls } = spyClient();
     const result = await probeServerWith(client);
     expect(result.project).toBeUndefined();
-    expect(calls).not.toContain('searchWorkItems');
+    expect(calls).not.toContain('countWorkItems');
   });
 
   it('reports a token with no active workspace', async () => {
@@ -93,7 +95,7 @@ describe('probeServerWith — read-only by construction', () => {
 
   it('reports a project the token cannot reach without failing the handshake', async () => {
     const { client } = spyClient({
-      searchWorkItems: async () => {
+      countWorkItems: async () => {
         throw new Error('PROJECT_NOT_FOUND');
       },
     });

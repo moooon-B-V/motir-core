@@ -92,21 +92,18 @@ export interface StatusOptions {
 
 export async function statusCommand(opts: StatusOptions): Promise<void> {
   const pulse = await withProjectSession(async ({ client, projectKey }) => {
-    // Ready count: page the whole ready set (no count tool exists; the set is
-    // the small actionable subset). In-flight count: search_work_items returns
-    // the matching `total` directly, so one call suffices. Active sprint:
-    // list_sprints, pick the single `active` one.
+    // Ready count: page the whole ready set (it has no count operation of its
+    // own; the set is the small actionable subset). In-flight count: ONE call to
+    // the collection's count, which is what this always meant — it used to send
+    // a `limit: 1` search and throw the row away. Active sprint: list the
+    // sprints and pick the single `active` one.
     const ready = await collectReady(client, projectKey);
-    const search = await client.searchWorkItems({
-      projectKey,
-      filter: inFlightFilter(),
-      limit: 1,
-    });
+    const inFlight = await client.countWorkItems({ projectKey, filter: inFlightFilter() });
     const { sprints } = await client.listSprints({ projectKey });
     const result: StatusPulse = {
       projectKey,
       readyCount: ready.length,
-      inFlightCount: search.total,
+      inFlightCount: inFlight,
       activeSprint: sprints.find((s) => s.state === 'active') ?? null,
       totalSprints: sprints.length,
     };

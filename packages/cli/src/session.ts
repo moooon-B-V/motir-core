@@ -94,8 +94,16 @@ export const SEARCH_PAGE_SIZE = 50;
 
 export interface SprintItemsResult {
   items: SearchItemSummary[];
-  /** The server's total for the query — what the collected count is checked
-   * against, so an early stop is visible rather than silent. */
+  /**
+   * How many were collected.
+   *
+   * It used to be the SERVER's total for the query, checked against the rows in
+   * hand so an early stop was visible rather than silent. The v1 collection
+   * publishes no total (ADR Amendment 11 Q3), and there is nothing left to
+   * check: this walk runs until `nextCursor` is null, so every matching row IS
+   * in `items`. Asking `…/work-items/count` for a second opinion would be one
+   * more request answering a question the page walk has already answered.
+   */
   total: number;
 }
 
@@ -116,7 +124,6 @@ export async function collectSprintItems(
 ): Promise<SprintItemsResult> {
   const items: SearchItemSummary[] = [];
   let cursor: string | undefined;
-  let total = 0;
   do {
     const page = await client.searchWorkItems({
       projectKey,
@@ -125,8 +132,7 @@ export async function collectSprintItems(
       limit: SEARCH_PAGE_SIZE,
     });
     items.push(...page.items);
-    total = page.total;
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
-  return { items, total };
+  return { items, total: items.length };
 }

@@ -23,6 +23,7 @@ import {
   v1Page,
   v1Ref,
   v1ReadyRow,
+  v1WorkItem,
   v1Sprint,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
@@ -607,20 +608,14 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     v1ReadyRow('PROD-7', { title: 'The unblocker', priority: 'high', dependencies: fanOut }),
   ]);
 
-  const sprintPage = {
-    items: [
-      {
-        identifier: 'PROD-7',
-        kind: 'subtask',
-        title: 'The gated one',
-        status: 'blocked',
-        priority: 'high',
-        dependencies: fanOut,
-      },
-    ],
-    total: 1,
-    nextCursor: null,
-  };
+  const sprintPage = v1Page([
+    v1WorkItem('PROD-7', {
+      title: 'The gated one',
+      status: 'blocked',
+      priority: 'high',
+      dependencies: fanOut,
+    }),
+  ]);
 
   const sprints = v1Page([v1Sprint('sp-1', { name: 'Journey D', state: 'active', issueCount: 1 })]);
 
@@ -660,13 +655,11 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     server.calls.length = 0;
     server.v1Calls.length = 0;
     server.resetV1();
-    server.resetV1();
-    server.v1Calls.length = 0;
     server.scriptV1({
       'GET /api/v1/projects/{projectKey}/ready': { body: readyPage },
       'GET /api/v1/projects/{projectKey}/sprints': { body: sprints },
+      'GET /api/v1/projects/{projectKey}/work-items': { body: sprintPage },
     });
-    server.script({ search_work_items: { structured: sprintPage } });
   });
 
   afterEach(() => {

@@ -7,8 +7,11 @@ import { AuthError, CliError } from './errors.js';
 import { normalizeServerUrl } from './config/userConfig.js';
 import { CLI_VERSION } from './version.js';
 import { V1Transport } from './transport.js';
+import { encodeFilterParam } from './adapters/filterParam.js';
 import {
   toActivityAllPage,
+  toSearchPage,
+  toWorkItemCount,
   toCompleteSessionResult,
   toDispatchPrompt,
   toExpandSubmitResult,
@@ -147,9 +150,17 @@ export interface SearchItemSummary {
   dependencies?: WorkItemDependencyEdges;
 }
 
+/**
+ * One page of search results.
+ *
+ * ⚠️ NO `total`, and its absence is a DECISION (ADR Amendment 11 Q3 · Amendment
+ * 12). A collection either promises a total or it does not; this one does not,
+ * because computing one means a `COUNT` under an arbitrary filter on every page
+ * of every list. A caller that wants the number asks {@link
+ * MotirClient.countWorkItems} for it, which is one request and says what it is.
+ */
 export interface SearchPage {
   items: SearchItemSummary[];
-  total: number;
   nextCursor: string | null;
 }
 
@@ -1095,13 +1106,51 @@ export class MotirClient {
     );
   }
 
-  searchWorkItems(args: {
+  /**
+   * One page of a project's work items, narrowed by a filter.
+   *
+   * The filter rides as `?filter=`, the SAME carrier the product's own list
+   * views and saved filters use, so `motir sprint` and the web app cannot
+   * disagree about what is in a sprint — they run the same expression through
+   * the same registry.
+   */
+  async searchWorkItems(args: {
     projectKey: string;
     filter?: SearchFilterEnvelope;
     cursor?: string;
     limit?: number;
   }): Promise<SearchPage> {
-    return this.callStructured<SearchPage>('search_work_items', { ...args });
+    return toSearchPage(
+      await this.v1.request('listProjectWorkItems', {
+        path: { projectKey: args.projectKey },
+        query: {
+          ...(args.filter ? { filter: encodeFilterParam(args.filter) } : {}),
+          ...(args.cursor ? { cursor: args.cursor } : {}),
+          ...(args.limit === undefined ? {} : { limit: args.limit }),
+        },
+      }),
+    );
+  }
+
+  /**
+   * How many work items match — the ONLY way this client learns a count.
+   *
+   * It replaces a pattern that had accumulated rather than been designed: three
+   * call sites ran a `limit: 1` SEARCH, threw the row away, and read the total,
+   * because the MCP tool's offset paging made a count free. None of them was a
+   * search. Each is one request now, and a project with ten thousand items
+   * costs the same as one with ten.
+   */
+  async countWorkItems(args: {
+    projectKey: string;
+    filter?: SearchFilterEnvelope;
+  }): Promise<number> {
+    return toWorkItemCount(
+      await this.v1.request('countProjectWorkItems', {
+        path: { projectKey: args.projectKey },
+        query: { ...(args.filter ? { filter: encodeFilterParam(args.filter) } : {}) },
+      }),
+    );
   }
 }
 
