@@ -259,9 +259,16 @@ None of that is provider-dependent, which is why none of it changes.
 
 ### Consequences of this amendment
 
-- **MOTIR-2389** reimplements all nine `lib/blob/uploader.ts` exports against the
-  S3 client with their signatures unchanged, binds content type at signing time,
-  keeps the 300 s expiry, and copies the objects already in the old stores.
+- **MOTIR-2389** reimplements all eleven `lib/blob/uploader.ts` exports — eight
+  functions and the three interfaces they return — against the S3 client with
+  their signatures unchanged, binds content type at signing time, and keeps the
+  300 s expiry. It also ships `scripts/migrate-blob-objects.ts`, the script that
+  copies the objects; it does not run it. _Corrected by Amendment 3._
+- **MOTIR-2401** copies the objects already in the old stores, by running that
+  script — a `manual` card, `blocked_by` MOTIR-2386 (which creates the buckets)
+  and MOTIR-2389 (which ships the script), because the copy needs both
+  platforms' credentials held at one moment and a person to accept the result.
+  **It has not run.** _Attribution corrected by Amendment 3._
 - **MOTIR-2386** provisions the two buckets — the public one with public-read —
   and their credentials as Fly secrets.
 - **MOTIR-2393** removes `@vercel/blob` and the four `BLOB_*` env reads; after it,
@@ -273,3 +280,78 @@ None of that is provider-dependent, which is why none of it changes.
 - **Off-cloud / self-host improves.** The original record already claimed the
   model works "against any Blob-compatible store". It is now implemented against
   the **S3 API**, which is what a self-hoster is most likely to have.
+
+---
+
+## Amendment 3 (2026-08-07) — the seam exports eleven, not nine; and MOTIR-2389 did not copy the objects
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2431.** This amendment corrects
+> two FACTS in Amendment 2's _Consequences_ list. **It re-opens no decision** —
+> Q1's presigned-GET signing flow, Q2's two-bucket split, §3's authorization
+> matrix, §4's DTO surface and §5's 300 s TTL all stand exactly as written. What
+> changes is a count, and which card owns a step.
+>
+> **Numbered 3.** Amendment 2 was the highest heading in this file, re-read at
+> edit time rather than taken from the card. The companion correction to the same
+> count in `application-hosting.md` is that record's Amendment 3, landed by this
+> same card.
+
+**Amends:** the **MOTIR-2389 bullet** under _Consequences of this amendment_ — its
+export count, and its final clause. Nothing else in this record changes, and no
+clause is withdrawn.
+
+### What was wrong — 1: the count
+
+The bullet stated that MOTIR-2389 reimplements **"all nine `lib/blob/uploader.ts`
+exports"**. The file exports **eleven** things: eight `async function`s and three
+`interface`s. Nine is neither number.
+
+Observed on `origin/main`, 2026-08-07:
+
+```
+$ git grep -c '^export' origin/main -- lib/blob/uploader.ts
+11
+$ git grep -c '^export async function' origin/main -- lib/blob/uploader.ts
+8
+$ git grep -c '^export interface' origin/main -- lib/blob/uploader.ts
+3
+```
+
+The same greps at `16bef033` — the last commit before MOTIR-2389 was authored —
+return the identical eight function names and three interfaces, so the number was
+wrong when written, not stale. The authoritative name-by-name list lives on
+MOTIR-2389 and MOTIR-2402; this record points at it rather than restating it.
+
+### What was wrong — 2: who copies the objects
+
+The same bullet ended **"and copies the objects already in the old stores."**
+MOTIR-2389 does not. It ships the script — `scripts/migrate-blob-objects.ts`,
+with a `--dry-run` default, an idempotent copy and a verify pass — and the
+**2026-08-07 re-plan moved the running of it onto its own card, MOTIR-2401**,
+which is `manual` / human-executed and `blocked_by` MOTIR-2386 and MOTIR-2389.
+The reason it was carved out is the reason it cannot be inferred from a merged
+PR: the copy reads one platform's object stores and writes another's, needing
+both credentials at one moment plus a person to accept the result. MOTIR-2389 has
+merged; **MOTIR-2401 has not run.**
+
+This is the correction that matters. A decision record stating that a merged card
+copied the objects tells a later reader that a live data migration has already
+happened — which is the single failure mode this Story has been most careful
+about, and the one that a green pipeline cannot contradict, because tests create
+the buckets they read.
+
+### Why an amendment rather than a silent replacement
+
+The convention in this directory is that a correction is recorded, not
+overwritten — Amendment 2 above, `application-hosting.md`'s Amendments 2 and 3,
+`public-api-conventions.md`'s Amendments 9–11. It matters more than usual here:
+anyone who read the old bullet may have concluded the objects were already moved,
+and that conclusion needs to be discoverable as wrong, with a date.
+
+### What this amendment does NOT touch
+
+- **Any decision.** Q1's signing flow, Q2's bucket split, §3, §4 and §5 stand.
+- **`lib/blob/uploader.ts`, the script, or any code.** Nothing is renamed, added
+  or removed.
+- **Anything on either platform.** No object is copied, listed or deleted by this
+  amendment; MOTIR-2401 remains the card that does that, and remains undone.
