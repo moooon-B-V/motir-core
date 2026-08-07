@@ -122,8 +122,12 @@ export interface McpClient {
   file: string;
   /** The snippet, built by interpolating {@link McpTransportFacts}. */
   config: string;
-  /** One line on what this vendor does about the secret, where it does something. */
-  note?: string;
+  /**
+   * One line on what this vendor does about the secret, or what to watch for.
+   * REQUIRED: every block has something worth saying, and an optional field here
+   * bought nothing but a dead branch in the page that renders it.
+   */
+  note: string;
   /** That vendor's own MCP documentation — the authority when this block is stale. */
   docsUrl: string;
   /** When the FORMAT was last read from `docsUrl`. Amendment 12 Q3a's containment. */
