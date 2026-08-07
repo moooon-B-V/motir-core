@@ -178,10 +178,12 @@ describe('the surfaces tier lists SURFACES, not pages', () => {
     // The guide and the policy are NOT here — they are the API's own pages and
     // belong to tier 2. That separation is the fix; a regression puts them back.
     //
-    // RE-POINTED, not loosened, by Story MOTIR-2308 (`/docs/cli`): this list
-    // GROWS by one row per documented surface, and it stays an exact array so
-    // the next row is a deliberate edit. What it must never gain is a PAGE.
-    expect(hrefs).toEqual(['/docs/api', '/docs/sandbox', '/docs/cli']);
+    // ⚠️ EXACT on purpose, and RE-POINTED rather than loosened — twice now, by
+    // Story MOTIR-2308 (`/docs/cli`) and Story MOTIR-2309 (`/docs/mcp`). The
+    // list GROWS by one row per documented surface and stays an exact array, so
+    // the next row is a deliberate edit rather than a silently-widening
+    // assertion. What it must never gain is a PAGE.
+    expect(hrefs).toEqual(['/docs/api', '/docs/sandbox', '/docs/cli', '/docs/mcp']);
   });
 
   it('still gives a one-page surface NO second tier', async () => {

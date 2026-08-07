@@ -270,15 +270,25 @@ describe('seam: the DOOR in Settings resolves to a route that EXISTS', () => {
     expect(element).not.toContain('rel=');
   });
 
-  it('leaves the MCP link pointing at GitHub, because /docs/mcp does not exist', () => {
-    // The boundary MOTIR-2331 draws, asserted so a later sweep cannot "tidy"
-    // the two links into agreement and produce a link to a route the app does
-    // not serve.
+  it('crosses the MCP door’s shipped href with the real route tree too', () => {
+    // ⚠️ RE-POINTED by Story MOTIR-2309, and this is the mechanism working.
+    // MOTIR-2331 wrote this as "leaves the MCP link pointing at GitHub, because
+    // /docs/mcp does not exist" — a boundary that was true and is not any more,
+    // because MOTIR-2309 built the page and repointed the link. What it was
+    // really protecting is not the GitHub URL: it is that a link and its page
+    // must name the same place, so nobody "tidies" the two doors into agreement
+    // and produces a link to a route the app does not serve. That property is
+    // what this asserts now, for the MCP door exactly as above for the CLI's —
+    // and it fails the same two ways, on a page moved without its link and on a
+    // link changed without its page.
     const tokens = read('app/(authed)/settings/account/_components/ApiTokensManager.tsx');
     const match = tokens.match(/const MCP_GUIDE_HREF = '([^']+)';/);
-    expect(match).toBeTruthy();
-    expect(match![1]!.startsWith('https://')).toBe(true);
-    expect(existsSync(join(REPO_ROOT, 'app/(public)/docs/mcp/page.tsx'))).toBe(false);
+    expect(match, 'MCP_GUIDE_HREF not found — has it been renamed?').toBeTruthy();
+    const href = match![1]!;
+
+    expect(href.startsWith('/'), `${href} is not an in-product route`).toBe(true);
+    const routeFile = join(REPO_ROOT, 'app/(public)', `${href}`, 'page.tsx');
+    expect(existsSync(routeFile), `${href} has no route file at ${routeFile}`).toBe(true);
   });
 });
 

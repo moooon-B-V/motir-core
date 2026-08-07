@@ -323,7 +323,7 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/explore/vantage/pulse-analytics',
     why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
   },
-  // ── Forward-looking: the MCP + CLI documentation assets ───────────────────
+  // ── Forward-looking: the MCP + CLI documentation assets — ALL CLEARED ────
   //    `design/mcp-server/` (#1906, MOTIR-2323) and `design/cli-guide/`
   //    (#1905, MOTIR-2326) both merged AFTER this guard, so neither could add
   //    its rows and this table could not name assets that did not yet exist.
@@ -333,46 +333,20 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //
   //    That shape then repeated one level up: MOTIR-2348 (#1913) and
   //    MOTIR-2370 (#1916) diagnosed the same red `main` in parallel and both
-  //    merged, so this table carried TWO rows for each of the eight pairs
-  //    below until MOTIR-2372 deduped them. The uniqueness test further down
-  //    is what stops that recurring; read it before adding a row.
+  //    merged, so this table carried TWO rows for each of the eight pairs until
+  //    MOTIR-2372 deduped them. The uniqueness test further down is what stops
+  //    that recurring; read it before adding a row.
   //
-  //    ⚠️ Every row here is TEMPORARY and belongs to the card that BUILDS its
-  //    route — `/docs/cli` to MOTIR-2308 (#1910), `/docs/mcp[/tools]` to
-  //    MOTIR-2309 (#1911). `expired()` below fails on a listed pair that no
-  //    longer fires, so that PR deletes its rows in the same commit that adds
-  //    the route: the mechanism working, not a conflict. There is now exactly
-  //    ONE row per pair, so deleting the rows you find is sufficient — before
-  //    MOTIR-2372 it was not, and the copy left behind would have re-reddened
-  //    `main` pointing at rows you believed you had removed.
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the route this asset DRAWS. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the catalogue route this asset DRAWS. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the mock renders the address bar of the page it specifies. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: same unbuilt catalogue route, in the mock. Built by MOTIR-2309, which deletes this row.',
-  },
-  // `design/cli-guide`'s two rows were here and are GONE, deleted by MOTIR-2308
-  // in the commit that shipped `/docs/cli`. `expired()` below fails on a listed
-  // pair that no longer fires, so a row survives exactly as long as the gap it
-  // describes — `design/mcp-server`'s four go the same way when MOTIR-2309
-  // ships `/docs/mcp`.
-  // (MOTIR-2316's first run parked 17 STALE pairs here too — 13 assets
-  //  addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of them
-  //  in the assets, so all 17 rows are gone as well.)
+  //    Every one of those eight rows is now GONE, and each left the same way:
+  //    the card that BUILDS the route deleted its own rows in the commit that
+  //    added the route — `/docs/cli` by MOTIR-2308 (#1910), `/docs/mcp` and
+  //    `/docs/mcp/tools` by MOTIR-2309 (#1911). `expired()` below is what made
+  //    that the only way out: a row survives exactly as long as the gap it
+  //    describes, so it cannot quietly outlive the thing it excuses.
+  //
+  //    (MOTIR-2316's first run also parked 17 STALE pairs here — 13 assets
+  //    addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of
+  //    them in the assets, so those rows are gone too.)
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -835,21 +809,12 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(admin)/admin',
     why: 'Forward-looking: the platform-admin console is unbuilt, and this asset proposes both its route group and its directory. The address half is allowlisted above as `/admin`.',
   },
-  {
-    file: 'design/cli-guide/design-notes.md',
-    path: 'packages/cli/src/commandCatalog.ts',
-    why: 'Forward-looking, and the asset names the card that ships it — "(MOTIR-2324 · Amendment 12 Q2)".',
-  },
-  {
-    file: 'design/cli-guide/cli-guide.mock.html',
-    path: 'packages/cli/src/commandCatalog.ts',
-    why: 'Forward-looking: the same unbuilt MOTIR-2324 catalogue, cited by the mock that renders from it.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    path: 'lib/apiDocs/mcp.ts',
-    why: 'Forward-looking: the MCP doc source Amendment 12 Q2 decided; `lib/apiDocs/` exists, `mcp.ts` is not built yet.',
-  },
+  // (`design/cli-guide/`'s two assets cited `packages/cli/src/commandCatalog.ts`
+  //  as forward-looking. MOTIR-2324 built it, so both rows expired and are
+  //  gone — the same mechanism, one sweep down, as the address table above.)
+  // (`design/mcp-server/design-notes.md` cited `lib/apiDocs/mcp.ts` as
+  //  forward-looking. MOTIR-2309 built it, so the row expired and is gone —
+  //  the same mechanism the address table above records, one sweep down.)
   // (§5's favicon set — `app/icon.svg`, `app/apple-icon.png`, `app/manifest.ts`,
   //  cited by both brand assets — was parked here as forward-looking. MOTIR-1150
   //  shipped all three, so the six rows are gone: `expired()` is what turned

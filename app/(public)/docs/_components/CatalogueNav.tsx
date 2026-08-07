@@ -40,7 +40,14 @@ import { MethodPill } from './MethodPill';
 // signal at 28 operations and rising.
 
 /** Which docs page is being read — the nav's `aria-current` target. */
-export type DocsPage = 'reference' | 'gettingStarted' | 'stability' | 'sandbox' | 'cli';
+export type DocsPage =
+  | 'reference'
+  | 'gettingStarted'
+  | 'stability'
+  | 'sandbox'
+  | 'cli'
+  | 'mcp'
+  | 'mcpTools';
 
 /**
  * Every docs page's route. This is the SINGLE fact the rail reads: which tier a
@@ -53,6 +60,8 @@ const ROUTE_BY_PAGE: Record<DocsPage, string> = {
   stability: '/docs/api/stability',
   sandbox: '/docs/sandbox',
   cli: '/docs/cli',
+  mcp: '/docs/mcp',
+  mcpTools: '/docs/mcp/tools',
 };
 
 /** The API sub-area's prefix — Amendment 11 Q1's route table. */
@@ -61,6 +70,51 @@ const API_AREA = '/docs/api';
 /** True when `page` is the API sub-area's index or one of its pages. */
 export function isInApiArea(page: DocsPage): boolean {
   return ROUTE_BY_PAGE[page].startsWith(API_AREA);
+}
+
+/**
+ * A sub-area — a surface with MORE THAN ONE page, so it earns a second tier
+ * (Amendment 11 Q1's tier table, Q4's placement rule).
+ *
+ * ⚠️ This list was `apiPages`, a bare array, when the API was the only sub-area
+ * there was. **Amendment 13 Q1 made the MCP the second**, and generalising was
+ * the honest fix rather than a second hard-coded array: the tier is now "the
+ * CURRENT sub-area's pages" for whatever sub-area the route falls in, which is
+ * what Amendment 11 Q1 described all along. A third sub-area is a row here.
+ *
+ * `pages` deliberately EXCLUDES the sub-area's index — that page is its row in
+ * tier 1, and listing it twice would be two rows to the same place.
+ */
+const SUB_AREAS: readonly {
+  prefix: string;
+  /** The `apiDocs` key for the tier's heading — the SURFACE's name. */
+  headingKey: string;
+  pages: readonly { key: DocsPage; labelKey: string }[];
+}[] = [
+  {
+    prefix: API_AREA,
+    headingKey: 'navReference',
+    pages: [
+      { key: 'gettingStarted', labelKey: 'navGettingStarted' },
+      { key: 'stability', labelKey: 'navStability' },
+    ],
+  },
+  {
+    prefix: '/docs/mcp',
+    headingKey: 'navMcp',
+    pages: [{ key: 'mcpTools', labelKey: 'navMcpTools' }],
+  },
+];
+
+/**
+ * The sub-area a page belongs to, decided by its ROUTE PREFIX and nothing else
+ * (Amendment 11 Q2) — never a per-page prop four call sites can disagree about.
+ * A single-page surface matches nothing here and gets no second tier, which is
+ * why the sandbox guide still adds nothing below.
+ */
+export function subAreaFor(page: DocsPage): (typeof SUB_AREAS)[number] | undefined {
+  const route = ROUTE_BY_PAGE[page];
+  return SUB_AREAS.find((area) => route.startsWith(area.prefix));
 }
 
 export function CatalogueNav({
@@ -126,18 +180,24 @@ export function CatalogueNav({
     // index are both gated on the `/docs/api` prefix, this row acquires neither
     // by existing. Adding a surface really is one entry here plus a route.
     { key: 'cli', href: ROUTE_BY_PAGE.cli, label: t('navCli') },
+    // Story MOTIR-2309's MCP documentation — the second sub-area, so it is both a
+    // row here and a second tier below (`design/mcp-server/` Panel 6). The two
+    // rows above and this one are the whole of "add a surface": an entry here
+    // plus a route, with the tier a surface earns derived from its prefix.
+    { key: 'mcp', href: ROUTE_BY_PAGE.mcp, label: t('navMcp') },
   ];
 
   // TIER 2 — the current sub-area's own pages, minus its index (which is tier 1's
-  // row, so listing it twice would be two rows to the same place).
-  const apiPages: NavRow[] = [
-    {
-      key: 'gettingStarted',
-      href: ROUTE_BY_PAGE.gettingStarted,
-      label: t('navGettingStarted'),
-    },
-    { key: 'stability', href: ROUTE_BY_PAGE.stability, label: t('navStability') },
-  ];
+  // row, so listing it twice would be two rows to the same place). Derived from
+  // the route prefix, so a sub-area added to SUB_AREAS gets its tier with no
+  // change here and a single-page surface gets none.
+  const subArea = subAreaFor(current);
+  const subAreaPages: NavRow[] =
+    subArea?.pages.map((page) => ({
+      key: page.key,
+      href: ROUTE_BY_PAGE[page.key],
+      label: t(page.labelKey),
+    })) ?? [];
 
   const rowClass = (isCurrent: boolean) =>
     isCurrent
@@ -192,12 +252,15 @@ export function CatalogueNav({
       </div>
 
       {/* TIER 2 — this sub-area's own pages. Gated on the route prefix, so a
-          surface that is not the API renders nothing here and a future sub-area
-          gets its own tier by adding a route, not a prop. */}
-      {inApiArea && (
-        <div className="mt-4" data-testid="catalogue-subarea-api">
-          <SectionLabel>{t('navReference')}</SectionLabel>
-          <div className="mt-1.5 flex flex-col">{apiPages.map(renderRow)}</div>
+          single-page surface renders nothing here and a future sub-area gets its
+          own tier by adding a SUB_AREAS row, not a prop. */}
+      {subArea && (
+        <div
+          className="mt-4"
+          data-testid={`catalogue-subarea-${subArea.prefix.replace('/docs/', '')}`}
+        >
+          <SectionLabel>{t(subArea.headingKey)}</SectionLabel>
+          <div className="mt-1.5 flex flex-col">{subAreaPages.map(renderRow)}</div>
         </div>
       )}
 
