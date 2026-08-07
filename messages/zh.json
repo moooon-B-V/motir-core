@@ -932,6 +932,7 @@
     "filterNoMembers": "没有匹配的成员。",
     "viewTree": "树形",
     "viewList": "列表",
+    "viewGraph": "关系图",
     "viewLabel": "视图：{view}",
     "newIssue": "新建工作项",
     "noIssuesTitle": "还没有工作项",
@@ -1128,7 +1129,11 @@
     "sprint": "Sprint",
     "backlog": "待办列表",
     "sprintCompleted": "已完成",
-    "sprintChangeFailed": "无法更改 Sprint"
+    "sprintChangeFailed": "无法更改 Sprint",
+    "childrenViewLabel": "子工作项视图",
+    "childrenGraphAria": "子工作项依赖关系图",
+    "childrenGraphUnavailableTitle": "无法绘制关系图",
+    "childrenGraphUnavailableDescription": "切换回列表即可查看该工作项的子项。"
   },
   "comments": {
     "title": "动态",
@@ -5840,7 +5845,7 @@
   "apiDocs": {
     "metaTitle": "Motir API 参考手册",
     "metaDescription": "Motir 公开 REST API 的全部接口，含权限范围、参数、响应以及可直接复制的鉴权示例。",
-    "navLabel": "API 参考",
+    "navLabel": "文档",
     "navDocumentation": "文档",
     "navReference": "API 参考",
     "navGettingStarted": "快速入门",

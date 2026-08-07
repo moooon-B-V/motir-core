@@ -113,7 +113,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     // The plain envelope: this collection reports no total, because the read
     // behind it does not compute one as a bounded aggregate (ADR Amendment 3 Q2).
     // The count lives at `…/work-items/count` instead — see the operation below
-    // and ADR Amendment 11 for why it is a sibling rather than a field here.
+    // and ADR Amendment 12 for why it is a sibling rather than a field here.
     errorStatuses: [404, 422],
   }),
   defineOperation({

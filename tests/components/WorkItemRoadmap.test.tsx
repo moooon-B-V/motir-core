@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { fireEvent } from '@testing-library/dom';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { WorkItemRoadmap } from '@/components/planning/WorkItemRoadmap';
@@ -276,5 +276,247 @@ describe('WorkItemRoadmap', () => {
         '/items/MOTIR-42',
       ),
     );
+  });
+  // ── SUBTREE ROOT (MOTIR-2287) ─────────────────────────────────────────────
+  // The adapter's ROOT level can be one work item's children instead of the
+  // project's roots. Opt-in: absent, every assertion above still holds.
+
+  describe('subtreeRootId', () => {
+    it('roots the first level at the item: level 0 reads that item, a drill reads the child', async () => {
+      const calls: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          calls.push(u);
+          if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => root };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" />);
+      await screen.findByText('Epic one');
+      // The canvas asked for its ROOT level; the adapter asked the API for P9's
+      // children — never the project roots (`parentId=` with no value).
+      const levelCalls = calls.filter((u) => u.includes('/roadmap'));
+      expect(levelCalls.length).toBe(1);
+      expect(levelCalls[0]).toContain('parentId=P9');
+      // A drill from that level is unchanged — it carries the drilled node's id.
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      expect(await screen.findByText('Story one')).toBeTruthy();
+      expect(calls.some((u) => u.includes('parentId=E1'))).toBe(true);
+    });
+
+    it('never pins the planning-origin cluster, even when showPlanningOrigin is set', async () => {
+      const calls: string[] = [];
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          calls.push(String(url));
+          return { ok: true, json: async () => root };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      expect(screen.queryByTestId('planning-origin')).toBeNull();
+      expect(el('__planning_origin__')).toBeNull();
+      // …and the pre-plan read that feeds its badge is never fired.
+      expect(calls.some((u) => u.includes('preplan'))).toBe(false);
+    });
+
+    it('does NOT auto-descend a single drillable child (MOTIR-1807 opted out)', async () => {
+      // ONE drillable node at the level. Unrooted, the adapter descends past it
+      // (that is MOTIR-1807). Rooted, it must show the item's only child AS the
+      // level — descending would be showing a different item's children.
+      const onlyChild = { nodes: [root.nodes[0]], edges: [] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => onlyChild };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" />);
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+      expect(el('E1')).not.toBeNull();
+      expect(screen.queryByText('Story one')).toBeNull(); // no silent descent
+    });
+
+    it('unrooted, the same single-drillable level DOES auto-descend (the opt-out is the root)', async () => {
+      const onlyChild = { nodes: [root.nodes[0]], edges: [] };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => onlyChild };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" />);
+      expect(await screen.findByText('Story one')).toBeTruthy();
+    });
+
+    it("labels the breadcrumb root with the caller's label once drilled", async () => {
+      render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" rootLabel="MOTIR-2284" />);
+      await screen.findByText('Epic one');
+      fireEvent.keyDown(el('E1')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Story one');
+      const crumbs = screen.getByLabelText('Breadcrumb');
+      expect(crumbs.textContent).toContain('MOTIR-2284');
+      expect(crumbs.textContent).not.toContain('Roadmap'); // not the project default
+    });
+
+    it('keys the level cache by root, so a rooted and an unrooted mount cannot share a root level', async () => {
+      const rootedLevel = {
+        nodes: [
+          {
+            id: 'C1',
+            parentId: 'P9',
+            kind: 'subtask',
+            identifier: 'MOTIR-77',
+            title: 'Rooted child',
+            status: 'todo',
+            isDone: false,
+            hasChildren: false,
+          },
+        ],
+        edges: [],
+      };
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('parentId=P9')) return { ok: true, json: async () => rootedLevel };
+          return { ok: true, json: async () => root };
+        }),
+      );
+      const rooted = render(<WorkItemRoadmap projectKey="MOTIR" subtreeRootId="P9" />);
+      expect(await screen.findByText('Rooted child')).toBeTruthy();
+      rooted.unmount();
+      render(<WorkItemRoadmap projectKey="MOTIR" />);
+      // The unrooted mount reads the PROJECT roots — it must not be served the
+      // rooted mount's cached level (a per-mount ref, plus a root-keyed entry).
+      expect(await screen.findByText('Epic one')).toBeTruthy();
+      expect(screen.queryByText('Rooted child')).toBeNull();
+    });
+  });
+
+  // ── the paths the story gate (MOTIR-2289) found uncovered ────────────────
+  // These are pre-existing behaviours of the adapter that no suite exercised;
+  // the story puts this file under the per-file coverage gate, so they are
+  // asserted rather than left as an untested branch.
+
+  describe('the planning-origin DOOR + the manual refresh', () => {
+    const PREPLAN = {
+      docs: [{ kind: 'discovery' }, { kind: 'vision' }],
+    };
+
+    function stubWithPreplan() {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('/api/ai/pre-plan')) return { ok: true, json: async () => PREPLAN };
+          if (u.includes('/api/work-items/peek')) return { ok: true, json: async () => PEEK };
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => root };
+        }),
+      );
+    }
+
+    it('drills the phase card into a SYNTHETIC pre-plan station level (no roadmap read)', async () => {
+      stubWithPreplan();
+      render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      // The badge's read has landed, so the card reports what the journey produced.
+      await screen.findByText('2 of 4 docs');
+      fireEvent.keyDown(el('__planning_origin__')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      // The stations are built from the pre-plan read, not from a roadmap level —
+      // no work item backs them, so asking the API for ORIGIN_ID's children would
+      // be a request for an id it has never heard of.
+      expect(await screen.findByText('Understanding your project')).toBeTruthy();
+      const calls = (
+        globalThis.fetch as unknown as { mock: { calls: unknown[][] } }
+      ).mock.calls.map((c) => String(c[0]));
+      expect(calls.some((u) => u.includes('__planning_origin__'))).toBe(false);
+    });
+
+    it('opens the tier doc from a produced station’s View, and closes it', async () => {
+      stubWithPreplan();
+      render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      await screen.findByText('2 of 4 docs');
+      fireEvent.keyDown(el('__planning_origin__')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      await screen.findByText('Understanding your project');
+      // A produced station is `viewable`, so the canvas's own View button surfaces
+      // on it — and the adapter routes a TIER id to the doc modal rather than to
+      // the work-item peek (work-item ids are cuids and never a tier kind).
+      fireEvent.keyDown(el('discovery')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('view-button'));
+      const dialog = await screen.findByRole('dialog');
+      expect(dialog).toBeTruthy();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    });
+
+    it('a FAILED pre-plan read leaves the card chip-less and the level upcoming', async () => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          const u = String(url);
+          if (u.includes('/api/ai/pre-plan')) throw new Error('offline');
+          if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+          return { ok: true, json: async () => root };
+        }),
+      );
+      render(<WorkItemRoadmap projectKey="MOTIR" showPlanningOrigin />);
+      await screen.findByText('Epic one');
+      // `null` is the honest "we do not know": no chip, never an error on the
+      // roadmap, and the card still paints (the read never blocks first paint).
+      expect(screen.getByTestId('planning-origin')).toBeTruthy();
+      expect(screen.queryByTestId('planning-origin-chip')).toBeNull();
+      // The drilled level still renders — its four stations, all `upcoming`.
+      fireEvent.keyDown(el('__planning_origin__')!, { key: 'Enter' });
+      fireEvent.click(await screen.findByTestId('drill-button'));
+      expect(await screen.findByText('Understanding your project')).toBeTruthy();
+    });
+
+    it('a refreshSignal bump refetches the CURRENT level in place and settles', async () => {
+      const onRefreshSettled = vi.fn();
+      const fetchSpy = vi.fn(async (url: string) => {
+        const u = String(url);
+        if (u.includes('parentId=E1')) return { ok: true, json: async () => e1Children };
+        return { ok: true, json: async () => root };
+      });
+      vi.stubGlobal('fetch', fetchSpy);
+      const view = render(
+        <WorkItemRoadmap
+          projectKey="MOTIR"
+          refreshSignal={0}
+          onRefreshSettled={onRefreshSettled}
+        />,
+      );
+      await screen.findByText('Epic one');
+      const before = fetchSpy.mock.calls.length;
+      expect(onRefreshSettled).not.toHaveBeenCalled(); // an initial load never settles
+      view.rerender(
+        <WorkItemRoadmap
+          projectKey="MOTIR"
+          refreshSignal={1}
+          onRefreshSettled={onRefreshSettled}
+        />,
+      );
+      await waitFor(() => expect(fetchSpy.mock.calls.length).toBeGreaterThan(before));
+      // The refresh drops the cache and re-reads — and reports settled on the real
+      // fetch-completion signal, which is what lets a caller clear its spinner
+      // without a timer.
+      await waitFor(() => expect(onRefreshSettled).toHaveBeenCalled());
+      expect(await screen.findByText('Epic one')).toBeTruthy(); // same level, in place
+    });
   });
 });

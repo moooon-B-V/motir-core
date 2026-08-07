@@ -808,7 +808,7 @@ export type V1ActivityEntry = z.infer<typeof activityEntrySchema>;
 
 /**
  * The activity page's PER-SOURCE totals, beside the envelope's `totalCount`
- * (ADR Amendment 12).
+ * (ADR Amendment 13).
  *
  * The `all` view merges two streams, and "how many are there" has two answers
  * for it. `totalCount` keeps meaning what it means on every other ranked page —

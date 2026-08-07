@@ -89,13 +89,16 @@ describe('ParentBreadcrumb (2.4.3)', () => {
   });
 });
 
+// ChildList renders the ROWS. The section card around them — the header, the
+// count Pill and the List / Graph switcher — moved up into `ChildPanel`
+// (MOTIR-2288); those are asserted in tests/components/ChildPanel.test.tsx.
 describe('ChildList (2.4.3)', () => {
   it('renders nothing for a leaf (no children → no scaffold)', () => {
     const { container } = render(<ChildList items={[]} workflow={workflow} members={members} />);
     expect(container.firstChild).toBeNull();
   });
 
-  it('lists each child as a link with identifier, title, status pill, and a count', () => {
+  it('lists each child as a link with identifier, title, status pill and assignee', () => {
     const items = [
       summary({
         id: 'c1',
@@ -107,10 +110,6 @@ describe('ChildList (2.4.3)', () => {
       summary({ id: 'c2', identifier: 'PROD-49', title: 'Callback bug', status: 'todo' }),
     ];
     render(<ChildList items={items} workflow={workflow} members={members} />);
-
-    // Section title + count badge reflecting the number of children.
-    screen.getByText('Child work items');
-    screen.getByText('2');
 
     const first = screen.getByRole('link', { name: /PROD-41/ });
     expect(first.getAttribute('href')).toBe('/items/PROD-41');
@@ -124,6 +123,31 @@ describe('ChildList (2.4.3)', () => {
     expect(second.getAttribute('href')).toBe('/items/PROD-49');
     expect(second.textContent).toContain('To Do');
     expect(within(second).queryByTitle(/.+/)).toBeNull(); // unassigned → no avatar
+  });
+
+  it('falls back to the member’s email when they have no name set', () => {
+    // The avatar + its tooltip both read `name || email`, so a member who never
+    // set a display name still gets an identifiable initial rather than a blank.
+    const items = [
+      summary({
+        id: 'c9',
+        identifier: 'PROD-60',
+        title: 'Nameless owner',
+        assigneeId: 'u_nameless',
+      }),
+    ];
+    render(
+      <ChildList
+        items={items}
+        workflow={workflow}
+        members={[
+          ...members,
+          { userId: 'u_nameless', name: '', email: 'zoe@example.com' } as (typeof members)[number],
+        ]}
+      />,
+    );
+    const row = screen.getByRole('link', { name: /PROD-60/ });
+    expect(within(row).getByTitle('zoe@example.com').textContent).toBe('Z');
   });
 
   it('falls back to the raw status key when it is not in the workflow', () => {

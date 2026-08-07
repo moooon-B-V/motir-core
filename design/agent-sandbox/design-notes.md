@@ -36,14 +36,14 @@ not re-decide them.
 
 ## ⚠️ What this design does NOT own
 
-| Element                                              | Owned by                                     | What THIS design does                                                                   |
-| ---------------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------- |
-| The docs shell — rail, content column, `toc` aside   | `design/api-docs/` (Story 11.4 · MOTIR-2188) | Mounts into it unchanged. Reproduced in the panels only as the frame this page sits in. |
-| `DocBlocks`' `prose` / `code` / `callout` kinds      | `design/api-docs/` (11.4.8 · MOTIR-2189)     | Uses them as-is. Adds a `table` kind beside them (below), changing none.                |
-| The marketing top bar and footer                     | `design/project-square/` (Story 6.13)        | Nothing.                                                                                |
-| The sandbox image itself                             | Story MOTIR-809 (`packages/cli/sandbox/`)    | Nothing. Every fact drawn here is READ off the shipped artifact.                        |
-| The route, the ownership rule, the derivation source | ADR Amendment 9 (MOTIR-2269)                 | Draws to them.                                                                          |
-| The `/api-docs` → `/docs` route move                 | MOTIR-2286                                   | Draws the destination, not the migration.                                               |
+| Element                                              | Owned by                                                                  | What THIS design does                                                                                                                                                                    |
+| ---------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The docs shell — rail, content column, `toc` aside   | `design/api-docs/` (Story 11.4 · MOTIR-2188; **regrouped by MOTIR-2311**) | Mounts into it unchanged. Reproduced in the panels only as the frame this page sits in — including its GROUPING, which that asset owns and which MOTIR-2311 restructured into two tiers. |
+| `DocBlocks`' `prose` / `code` / `callout` kinds      | `design/api-docs/` (11.4.8 · MOTIR-2189)                                  | Uses them as-is. Adds a `table` kind beside them (below), changing none.                                                                                                                 |
+| The marketing top bar and footer                     | `design/project-square/` (Story 6.13)                                     | Nothing.                                                                                                                                                                                 |
+| The sandbox image itself                             | Story MOTIR-809 (`packages/cli/sandbox/`)                                 | Nothing. Every fact drawn here is READ off the shipped artifact.                                                                                                                         |
+| The route, the ownership rule, the derivation source | ADR Amendment 9 (MOTIR-2269)                                              | Draws to them.                                                                                                                                                                           |
+| The `/api-docs` → `/docs` route move                 | MOTIR-2286                                                                | Draws the destination, not the migration.                                                                                                                                                |
 
 **The one thing it changes in someone else's surface** is the rail's entry list:
 one row, drawn in Panel 3.
@@ -351,26 +351,35 @@ files explicitly.
 
 ---
 
-## Panel 3 — the rail's fourth entry, the ACCESS PATH
+## Panel 3 — the rail's SECOND entry, the ACCESS PATH
 
 The page's **only** entrance; nothing else in the product routes to it. Drawn in
-place: a plain label row like the other three, `aria-current="page"` on the
-active one, and the check this panel exists to make — at four rows the group
-still reads as a list of documents and needs **no treatment it did not need at
-three**.
+place: a plain label row, `aria-current="page"` on the active one, and the check
+this panel exists to make — the group still reads as a list of documents and
+needs **no treatment it did not need at one row**.
+
+> **⚠️ Re-pointed by MOTIR-2311.** When this asset was written the group was a
+> flat list of four documents and the check was _"does it still read as a list at
+> four rows"_. ADR **Amendment 11** makes the top tier a list of the SURFACES
+> Motir documents — API reference, Agent sandbox, later CLI and MCP — and moves
+> the API's own pages into a second tier that renders only inside `/docs/api`. So
+> this page's row is now the rail's **second**, and the row count question the
+> panel was built to ask is answered even more easily than before. The row this
+> design contributes is unchanged in kind; only its neighbours are.
 
 ---
 
 ## GIVES / TAKES
 
-| `MOTIR-` key                         | GIVES / TAKES | What                                                                                                                        |
-| ------------------------------------ | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **MOTIR-2270** (this card)           | GIVES         | this area's three files: the procedure, the matrix presentation, `.pcard` / `.mount` / `pill--tier*`, the rail's fourth row |
-| **MOTIR-2271** (the page)            | TAKES         | builds the page, the shared `table` block kind, and the rail entry                                                          |
-| **MOTIR-2286** (the route migration) | TAKES         | moves `/api-docs*` → `/docs*`; this asset draws the destination                                                             |
-| **MOTIR-2269** (the decision)        | GIVES         | ADR Amendment 9 — route, ownership rule, derivation source. Drawn to, not re-decided                                        |
-| **MOTIR-2188** (11.4.7, `done`)      | —             | owns the shell, the rail component and `table.spec`. Mounted into, unchanged except the rail's entry LIST                   |
-| **MOTIR-2189** (11.4.8, `done`)      | —             | owns `DocBlocks`' three kinds. The `table` kind is ADDED beside them, changing none                                         |
+| `MOTIR-` key                           | GIVES / TAKES | What                                                                                                                                                                                                                             |
+| -------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-2270** (this card)             | GIVES         | this area's three files: the procedure, the matrix presentation, `.pcard` / `.mount` / `pill--tier*`, the rail's row for this page                                                                                               |
+| **MOTIR-2271** (the page)              | TAKES         | builds the page, the shared `table` block kind, and the rail entry                                                                                                                                                               |
+| **MOTIR-2311** (the rail's regrouping) | TAKES         | owns the rail's GROUPING. Its ADR Amendment 11 makes the top tier a list of SURFACES, so this page's row is the rail's SECOND rather than its fourth. The panels here were re-pointed in that card's PR so the two assets agree. |
+| **MOTIR-2286** (the route migration)   | TAKES         | moves `/api-docs*` → `/docs*`; this asset draws the destination                                                                                                                                                                  |
+| **MOTIR-2269** (the decision)          | GIVES         | ADR Amendment 9 — route, ownership rule, derivation source. Drawn to, not re-decided                                                                                                                                             |
+| **MOTIR-2188** (11.4.7, `done`)        | —             | owns the shell, the rail component and `table.spec`. Mounted into, unchanged except the rail's entry LIST                                                                                                                        |
+| **MOTIR-2189** (11.4.8, `done`)        | —             | owns `DocBlocks`' three kinds. The `table` kind is ADDED beside them, changing none                                                                                                                                              |
 
 **No criterion on a `done` card changes, and `design/api-docs/` is not edited.**
 
@@ -395,7 +404,7 @@ the panel labels and the toggle — which are not part of the design.
 
 - Tier is carried in **text** (`Tier 1` / `Tier 2`); the tint is redundant
   reinforcement, and every tint chip pairs its hue with `--el-text-strong` for AA.
-- The rail is a `<nav aria-label="API reference">` (11.4's, unchanged); the
+- The rail is a `<nav aria-label="Documentation">` (11.4's, re-labelled by MOTIR-2311 — it announced itself as _"API reference"_ on this page, which is a false statement to a screen-reader user); the
   current page carries `aria-current="page"`.
 - Code blocks are `<pre>` inside a labelled container, so a screen reader
   announces the caption — including the two that distinguish the template from
@@ -412,6 +421,6 @@ the panel labels and the toggle — which are not part of the design.
 | Card           | Builds                                                                                                  |
 | -------------- | ------------------------------------------------------------------------------------------------------- |
 | **MOTIR-2286** | the `/api-docs` → `/docs` route migration this page's route depends on                                  |
-| **MOTIR-2271** | the page, the shared `table` block kind in `DocBlocks`, and the rail's fourth entry                     |
+| **MOTIR-2271** | the page, the shared `table` block kind in `DocBlocks`, and the rail's entry for this page              |
 | **MOTIR-2272** | the vitest gate: the derivation seam, the boundary invariants, the coverage floor                       |
 | **MOTIR-2273** | the E2E: a reader with no session finds the guide from the rail and leaves with a runnable `docker run` |

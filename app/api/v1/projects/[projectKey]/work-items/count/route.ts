@@ -5,7 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
 // GET /api/v1/projects/{projectKey}/work-items/count (Story 11.5 · Subtask
-// 11.5.16 — MOTIR-2318), the operation ADR Amendment 11 decided on.
+// 11.5.16 — MOTIR-2318), the operation ADR Amendment 12 decided on.
 //
 // ── Why this is not a field on the collection ───────────────────────────────
 // The collection returns the PLAIN page envelope, because its read is a keyset

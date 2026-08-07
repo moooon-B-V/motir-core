@@ -253,6 +253,11 @@ export default defineConfig({
         // Subtask 11.6.6 (MOTIR-2232) — the drift guard + the tool→payload map.
         'lib/mcp/payloads/driftGuard.ts',
         'lib/mcp/payloads/registry.ts',
+        // Story MOTIR-2284 · Subtask MOTIR-2289 — the Children panel's List ↔
+        // Graph switcher. (`WorkItemRoadmap`, the adapter it mounts, is already
+        // gated above.)
+        'app/(authed)/items/[key]/_components/ChildPanel.tsx',
+        'app/(authed)/items/[key]/_components/ChildList.tsx',
         'lib/mcp/registry.ts',
         'lib/mcp/tools/getWorkItem.ts',
         'lib/mcp/tools/listReady.ts',
@@ -678,8 +683,8 @@ export default defineConfig({
         // be silently useless while every module beneath it is green.
         'app/(public)/docs/layout.tsx',
         'app/(public)/docs/api/page.tsx',
-        'app/(public)/docs/getting-started/page.tsx',
-        'app/(public)/docs/stability/page.tsx',
+        'app/(public)/docs/api/getting-started/page.tsx',
+        'app/(public)/docs/api/stability/page.tsx',
         'app/(public)/docs/_components/CatalogueNav.tsx',
         'app/(public)/docs/_components/CodeBlock.tsx',
         'app/(public)/docs/_components/DocBlocks.tsx',
@@ -880,12 +885,12 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
         'app/(public)/docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/(public)/docs/api/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/docs/getting-started/page.tsx': {
+        'app/(public)/docs/api/getting-started/page.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/(public)/docs/api/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/(public)/docs/_components/CatalogueNav.tsx': {
           branches: 90,
           functions: 90,
@@ -1472,6 +1477,17 @@ export default defineConfig({
         'lib/mcp/payloads/workLoop.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/driftGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/registry.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2284 · Subtask MOTIR-2289.
+        'app/(authed)/items/[key]/_components/ChildPanel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/(authed)/items/[key]/_components/ChildList.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
       },
     },
   },

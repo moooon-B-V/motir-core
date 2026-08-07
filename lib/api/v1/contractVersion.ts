@@ -40,11 +40,11 @@
  *   both with `getAll` since they shipped — and only the document, which
  *   described them as scalars while its own prose said "Repeatable", moves.
  * - `1.4.0` — MOTIR-2318 adds `GET …/work-items/count`, the operation
- *   Amendment 11 decided on so a client can learn how many items match a filter
+ *   Amendment 12 decided on so a client can learn how many items match a filter
  *   without paging the match set. Additive: a new operation, no declared shape
  *   changed.
  * - `1.5.0` — MOTIR-2320 adds `totalComments` / `totalChanges` to the activity
- *   page (Amendment 12). The merged `all` view reports two streams, and one
+ *   page (Amendment 13). The merged `all` view reports two streams, and one
  *   `totalCount` cannot say what it is made of. Additive: two new fields,
  *   `totalCount` unchanged in meaning on every view.
  */

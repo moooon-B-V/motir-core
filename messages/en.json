@@ -932,6 +932,7 @@
     "filterNoMembers": "No matching members.",
     "viewTree": "Tree",
     "viewList": "List",
+    "viewGraph": "Graph",
     "viewLabel": "View: {view}",
     "newIssue": "New work item",
     "noIssuesTitle": "No work items yet",
@@ -1128,7 +1129,11 @@
     "sprint": "Sprint",
     "backlog": "Backlog",
     "sprintCompleted": "completed",
-    "sprintChangeFailed": "Couldn’t change the sprint"
+    "sprintChangeFailed": "Couldn’t change the sprint",
+    "childrenViewLabel": "Children view",
+    "childrenGraphAria": "Child work items as a dependency graph",
+    "childrenGraphUnavailableTitle": "The graph couldn’t be drawn",
+    "childrenGraphUnavailableDescription": "Switch back to List to see this item’s children."
   },
   "comments": {
     "title": "Activity",
@@ -5844,7 +5849,7 @@
   "apiDocs": {
     "metaTitle": "Motir API reference",
     "metaDescription": "Every operation in the Motir public REST API, with its scopes, parameters, responses and a copy-pasteable authenticated example.",
-    "navLabel": "API reference",
+    "navLabel": "Documentation",
     "navDocumentation": "Documentation",
     "navReference": "API reference",
     "navGettingStarted": "Getting started",

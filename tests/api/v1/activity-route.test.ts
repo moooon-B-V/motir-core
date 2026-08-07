@@ -108,7 +108,7 @@ describe('GET /api/v1/work-items/{key}/activity', () => {
     expect(history.items.length).toBeGreaterThanOrEqual(1);
   });
 
-  // ── The per-source totals (ADR Amendment 12 · MOTIR-2320) ────────────────
+  // ── The per-source totals (ADR Amendment 13 · MOTIR-2320) ────────────────
   //
   // The `all` view merges two streams, so "how many are there" has two answers.
   // `render.ts` prints both — "3 of 47 comments, 2 of 18 changes" — and derives

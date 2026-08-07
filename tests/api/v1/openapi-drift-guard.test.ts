@@ -253,7 +253,7 @@ describe('every operation’s REAL response validates against its declared schem
       get(`/api/v1/projects/${pk}/work-items`),
       { projectKey: pk },
     );
-    // The COUNT, driven beside the collection it counts (ADR Amendment 11).
+    // The COUNT, driven beside the collection it counts (ADR Amendment 12).
     await drive(
       'countProjectWorkItems',
       () => import('@/app/api/v1/projects/[projectKey]/work-items/count/route'),

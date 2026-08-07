@@ -46,6 +46,7 @@ import {
 import { IssueExplanation } from './_components/IssueExplanation';
 import { ParentBreadcrumb } from './_components/ParentBreadcrumb';
 import { ChildList } from './_components/ChildList';
+import { ChildPanel } from './_components/ChildPanel';
 import { ActivitySection } from './_components/ActivitySection';
 import { AttachmentsPanel } from './_components/AttachmentsPanel';
 import { RelationshipsPanel } from './_components/RelationshipsPanel';
@@ -514,8 +515,18 @@ export default async function IssueDetailPage({
                 />
               </ContentSectionCard>
             ) : null}
-            {/* 2.4.3: direct children (a leaf renders nothing). */}
-            <ChildList items={detail.children} workflow={detail.workflow} members={members} />
+            {/* 2.4.3: direct children (a leaf renders nothing). MOTIR-2288 wraps
+              the SERVER-rendered rows in the client `ChildPanel`, which owns the
+              section card + its List / Graph switcher; graph mode mounts the
+              roadmap canvas rooted at this item. */}
+            <ChildPanel
+              count={detail.children.length}
+              itemId={item.id}
+              itemIdentifier={item.identifier}
+              projectKey={ctx.project.identifier}
+            >
+              <ChildList items={detail.children} workflow={detail.workflow} members={members} />
+            </ChildPanel>
             {/* 5.2.5: the Attachments panel — after Children, before Activity
               (the reserved Epic-5 slot, per the attachments mockup's panel 0;
               content-width and multi-row, so the left column — the rail is

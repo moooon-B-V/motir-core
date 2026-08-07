@@ -44,6 +44,7 @@ import { seedCliConnect } from './_helpers/cli-connect-seed';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
 import { AGENT_PROFILES } from '../../packages/cli/src/agentProfiles';
 import { EXAMPLE_TOKEN, SPEC_PATH } from '@/lib/apiDocs/reference';
+import { DOCS_REDIRECTS } from '../../next.config';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -149,7 +150,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
   // ── 4 — the first call, and the promise ───────────────────────────────────
   await chapter('Follow getting started — mint, call, paginate, err, back off', async () => {
     await page.getByRole('link', { name: 'Getting started' }).first().click();
-    await page.waitForURL('**/docs/getting-started');
+    await page.waitForURL('**/docs/api/getting-started');
     await expect(page.getByRole('heading', { name: 'Getting started', level: 1 })).toBeVisible();
     await beat();
 
@@ -174,7 +175,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
 
   await chapter('Read what v1 promises — and what it asks in return', async () => {
     await page.getByRole('link', { name: 'Stability & deprecation' }).first().click();
-    await page.waitForURL('**/docs/stability');
+    await page.waitForURL('**/docs/api/stability');
     await expect(
       page.getByRole('heading', { name: 'Stability & deprecation', level: 1 }),
     ).toBeVisible();
@@ -266,7 +267,7 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
   });
 
   await chapter('Find the agent sandbox in the rail — by CLICKING it', async () => {
-    const rail = page.getByRole('navigation', { name: 'API reference' });
+    const rail = page.getByRole('navigation', { name: 'Documentation' });
     await rail.getByRole('link', { name: 'Agent sandbox' }).click();
     await page.waitForURL('**/docs/sandbox');
     // The entry marks itself current, which is what makes the surface read as
@@ -310,18 +311,32 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     expect(copied).not.toContain('motir auto');
   });
 
-  await chapter('Leave for any of the other three pages', async () => {
-    const rail = page.getByRole('navigation', { name: 'API reference' });
+  await chapter('Leave for the API — and reach its pages from inside it', async () => {
+    // Re-pointed by MOTIR-2312. This chapter used to click straight from the
+    // sandbox guide to each of the other three pages, because the rail was one
+    // flat list of four. Under ADR Amendment 11 the rail's top tier lists the
+    // SURFACES, and the API's own pages appear only once a reader is INSIDE the
+    // API — so the walk is now two levels, and that is the behaviour to drive.
+    const rail = page.getByRole('navigation', { name: 'Documentation' });
+
+    // From a guide page the API is one click away — the access path the design
+    // draws. If this ever stops working, the regrouping has stranded the reader.
+    await rail.getByRole('link', { name: 'API reference' }).click();
+    await page.waitForURL('**/docs/api');
+
+    // …and from inside it, its own pages are reachable, and lead back.
     for (const [label, url] of [
-      ['Getting started', '**/docs/getting-started'],
-      ['Stability & deprecation', '**/docs/stability'],
-      ['API reference', '**/docs/api'],
+      ['Getting started', '**/docs/api/getting-started'],
+      ['Stability & deprecation', '**/docs/api/stability'],
     ] as const) {
       await rail.getByRole('link', { name: label }).click();
       await page.waitForURL(url);
-      await rail.getByRole('link', { name: 'Agent sandbox' }).click();
-      await page.waitForURL('**/docs/sandbox');
     }
+
+    // The sandbox row is in the top tier, so it is reachable from anywhere in
+    // the area — including from two levels inside the API.
+    await rail.getByRole('link', { name: 'Agent sandbox' }).click();
+    await page.waitForURL('**/docs/sandbox');
   });
 });
 
@@ -399,4 +414,100 @@ test('the catalogue filters in place, and says so when nothing matches', async (
   await find.fill('zzzznope');
   await expect(page.locator('nav a[data-operation-id]')).toHaveCount(0);
   await expect(page.getByText(/zzzznope/)).toBeVisible();
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MOTIR-2313 — the docs-navigation defect's verification recipe (MOTIR-2307).
+//
+// MOTIR-2312 regrouped the rail so the operation index stays inside the API
+// sub-area. These drive the three claims of that card's recipe that a BROWSER
+// can settle; its fourth ("where would a Self-hosting page go?") is answered by
+// ADR Amendment 11 Q4, not by a test.
+//
+// Every navigation between docs pages is a CLICK, per this file's header rule.
+// The only `goto`s below are to OLD addresses, which is the one case where
+// typing the URL is the point.
+// ─────────────────────────────────────────────────────────────────────────────
+
+test('a reader on the sandbox guide is not framed by the REST API', async ({ page }) => {
+  // Recipe item 1. This page used to render all of the operations below it.
+  await page.goto('/docs/sandbox');
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+  const rail = page.getByRole('navigation', { name: 'Documentation' });
+  await expect(rail).toBeVisible();
+
+  // Not "fewer" — NONE. The registry has real operations (asserted below), so a
+  // zero here is the gate working rather than an empty fixture.
+  expect(V1_OPERATIONS.length).toBeGreaterThan(0);
+  await expect(rail.locator('[data-operation-id]')).toHaveCount(0);
+  await expect(rail.locator('[data-testid^="catalogue-group-"]')).toHaveCount(0);
+
+  // The same defect one layer down: the rail announced itself as "API
+  // reference" to a screen reader on this page. `getByRole` with the new name
+  // already asserts this, but state it so a rename cannot pass silently.
+  await expect(rail).toHaveAttribute('aria-label', 'Documentation');
+
+  // And the second tier belongs to the API, so it is absent here.
+  await expect(page.locator('[data-testid="catalogue-subarea-api"]')).toHaveCount(0);
+});
+
+test('the door out of a guide page reaches a real operation — by CLICKING', async ({ page }) => {
+  // Recipe item 2, and the risk the regrouping creates: taking the operation
+  // list off a guide page owes the reader a way back. If this path cannot be
+  // walked without typing a URL, the fix traded one navigation defect for a
+  // worse one, because nobody reports a page they cannot find.
+  await page.goto('/docs/sandbox');
+  const rail = page.getByRole('navigation', { name: 'Documentation' });
+
+  await rail.getByRole('link', { name: 'API reference' }).click();
+  await page.waitForURL('**/docs/api');
+
+  // Inside the API, both further tiers appear…
+  await expect(page.locator('[data-testid="catalogue-subarea-api"]')).toBeVisible();
+  await expect(rail.locator('[data-operation-id]').first()).toBeVisible();
+
+  // …and a real operation from the shipped registry is reachable by clicking
+  // its row, not by knowing its anchor.
+  // `data-operation-id` carries the operationId (`lib/apiDocs/reference.ts:252`),
+  // which is also what the rendered sections key on — not `operationKey`'s
+  // "METHOD /path" form.
+  const id = V1_OPERATIONS[0]!.operationId;
+  await rail.locator(`[data-operation-id="${id}"]`).click();
+  await expect(page.locator(`section[data-operation-id="${id}"]`)).toBeVisible();
+});
+
+test('every address the docs area ever served still resolves', async ({ page }) => {
+  // Recipe item 3. The map is IMPORTED rather than re-typed, so a rule added
+  // later without coverage fails this test instead of passing by omission —
+  // which matters because a dropped redirect breaks no rendered page and
+  // nobody notices until an external link 404s.
+  expect(DOCS_REDIRECTS.length).toBeGreaterThan(0);
+
+  for (const rule of DOCS_REDIRECTS) {
+    // The wildcard is driven through a concrete path it matches; every other
+    // rule is an exact address a stranger could have bookmarked.
+    const address = rule.source.includes(':path')
+      ? rule.source.replace('/:path*', '/sandbox')
+      : rule.source;
+
+    const response = await page.goto(address, { waitUntil: 'domcontentloaded' });
+
+    // Landed somewhere real — a rendered page, not a 404 and not a redirect
+    // chain that ran out.
+    expect(response?.status(), `${address} did not resolve`).toBeLessThan(400);
+    await expect(
+      page.getByRole('heading', { level: 1 }),
+      `${address} rendered no page`,
+    ).toBeVisible();
+
+    // …and specifically at the destination the map promises, for the exact
+    // rules. (The wildcard's destination is a pattern, so it is covered by the
+    // status + heading assertions above.)
+    if (!rule.source.includes(':path')) {
+      expect(new URL(page.url()).pathname, `${address} landed in the wrong place`).toBe(
+        rule.destination,
+      );
+    }
+  }
 });

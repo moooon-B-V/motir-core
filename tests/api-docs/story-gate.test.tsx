@@ -284,8 +284,8 @@ describe('guard: the reference page does not fetch its own public URL', () => {
   it('reads the emitter directly — the app must not need to be up to describe itself', () => {
     for (const file of [
       'app/(public)/docs/api/page.tsx',
-      'app/(public)/docs/getting-started/page.tsx',
-      'app/(public)/docs/stability/page.tsx',
+      'app/(public)/docs/api/getting-started/page.tsx',
+      'app/(public)/docs/api/stability/page.tsx',
       // Story MOTIR-2268's fourth page. It derives its profile table from the
       // CLI's own record at BUILD time, which is the same principle this guard
       // protects: a documentation page describes the system by reading it, never
@@ -528,13 +528,13 @@ describe('the guide and policy pages survive a broken registry', () => {
       },
     }));
 
-    const { default: Guide } = await import('@/app/(public)/docs/getting-started/page');
+    const { default: Guide } = await import('@/app/(public)/docs/api/getting-started/page');
     render(await Guide());
     expect(screen.getByText('Mint a token')).toBeTruthy();
     expect(document.querySelectorAll('[data-operation-id]')).toHaveLength(0);
     cleanup();
 
-    const { default: Policy } = await import('@/app/(public)/docs/stability/page');
+    const { default: Policy } = await import('@/app/(public)/docs/api/stability/page');
     render(await Policy());
     expect(screen.getByText('A new endpoint.')).toBeTruthy();
   });

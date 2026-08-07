@@ -1,10 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 import { buildApiReference } from '@/lib/apiDocs/reference';
 import { ADR_PATH, POLICY_ADDITIVE, POLICY_FORBIDDEN, POLICY_SECTIONS } from '@/lib/apiDocs/guide';
-import { CatalogueNav } from '../_components/CatalogueNav';
-import { DocBlocks } from '../_components/DocBlocks';
+import { CatalogueNav } from '../../_components/CatalogueNav';
+import { DocBlocks } from '../../_components/DocBlocks';
 
-// GET /docs/stability (Story 11.4 · Subtask 11.4.8 — MOTIR-2189 · design
+// GET /docs/api/stability (Story 11.4 · Subtask 11.4.8 — MOTIR-2189 · design
 // Panel 5).
 //
 // ⚠️ ONE PROMISE IN TWO PLACES. ADR §8 is the INTERNAL record; this page is the

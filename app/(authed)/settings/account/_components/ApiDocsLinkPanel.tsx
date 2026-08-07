@@ -31,7 +31,7 @@ export async function ApiDocsLinkPanel() {
           </p>
         </div>
         <div className="flex flex-none flex-wrap items-center gap-2">
-          <Link href="/docs/getting-started">
+          <Link href="/docs/api/getting-started">
             <Button variant="secondary" size="sm">
               {t('navGettingStarted')}
             </Button>

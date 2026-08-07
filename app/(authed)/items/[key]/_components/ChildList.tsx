@@ -1,8 +1,6 @@
-import { useTranslations } from 'next-intl';
 import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkflowDto, StatusCategoryDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
-import { ContentSectionCard } from './ContentSectionCard';
 import { RelationshipPeekLink } from './RelationshipPeekLink';
 import { Pill, type PillProps } from '@/components/ui/Pill';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
@@ -15,6 +13,12 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // fields a list row shows. A leaf (no children) renders NOTHING — no empty
 // scaffold (the AC: "an item with no children shows nothing").
 //
+// It renders the ROWS ONLY. The section card around them — the header, the count
+// `Pill`, and the List / Graph view switcher — moved up into `ChildPanel`
+// (MOTIR-2288), which needed to be a client component for the switcher. These
+// rows stay SERVER-rendered and are handed to that panel as its `children`, so
+// the list mode's first paint is unchanged.
+//
 // Each row uses `RelationshipPeekLink` (MOTIR-1305) — the same primitive the
 // relationships panel uses — so a PLAIN primary click opens the SHARED
 // quick-view peek (`?peek=<id>`, rendered by the IssueQuickViewController the
@@ -22,6 +26,13 @@ import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 // user is reading; ⌘/ctrl/middle-click still opens the child's full page in a
 // new tab natively, and keyboard Enter opens the peek. The real `/items/<id>`
 // href stays on the anchor (shareable + accessible).
+//
+// The row is a small affordance (a menu/list row), so its own shape — radius and
+// padding — routes through `--radius-control` / `--spacing-control-x|y` (MOTIR-2301).
+// A raw `rounded-md px-2 py-2` is inert: only the element-semantic shape tokens are
+// overridden by a `[data-style]` block, so the row reshapes with every named style
+// instead of holding a fixed 6px/8px while the panel around it changes. The `gap-3`
+// between the row's children is layout spacing, not shape, and stays raw.
 //
 // Status tone reuses the lifecycle mapping (category → Pill variant); children
 // share the item's project, so the bundled `workflow` classifies their status
@@ -54,51 +65,45 @@ export interface ChildListProps {
 }
 
 export function ChildList({ items, workflow, members }: ChildListProps) {
-  const t = useTranslations('issueViews');
   if (items.length === 0) return null;
 
   return (
-    <ContentSectionCard
-      title={t('childIssues')}
-      headerExtra={<Pill tone="neutral">{items.length}</Pill>}
-    >
-      <ul className="-my-1 flex flex-col">
-        {items.map((child) => {
-          const statusMeta = workflow.statuses.find((s) => s.key === child.status);
-          const assignee = child.assigneeId
-            ? members.find((m) => m.userId === child.assigneeId)
-            : undefined;
-          return (
-            <li key={child.id}>
-              <RelationshipPeekLink
-                identifier={child.identifier}
-                className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-md px-2 py-2 focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
-              >
-                <IssueTypeIcon type={child.kind} className="h-4 w-4 shrink-0" />
-                <span className="text-(--el-text-muted) shrink-0 font-mono text-xs">
-                  {child.identifier}
+    <ul className="-my-1 flex flex-col">
+      {items.map((child) => {
+        const statusMeta = workflow.statuses.find((s) => s.key === child.status);
+        const assignee = child.assigneeId
+          ? members.find((m) => m.userId === child.assigneeId)
+          : undefined;
+        return (
+          <li key={child.id}>
+            <RelationshipPeekLink
+              identifier={child.identifier}
+              className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+            >
+              <IssueTypeIcon type={child.kind} className="h-4 w-4 shrink-0" />
+              <span className="text-(--el-text-muted) shrink-0 font-mono text-xs">
+                {child.identifier}
+              </span>
+              <span className="text-(--el-text) min-w-0 flex-1 truncate font-sans text-sm group-hover:underline">
+                {child.title}
+              </span>
+              {statusMeta ? (
+                <Pill status={STATUS_TONE[statusMeta.category]}>{statusMeta.label}</Pill>
+              ) : (
+                <Pill tone="neutral">{child.status}</Pill>
+              )}
+              {assignee ? (
+                <span
+                  className="flex shrink-0 items-center"
+                  title={assignee.name || assignee.email}
+                >
+                  <Avatar name={assignee.name || assignee.email} />
                 </span>
-                <span className="text-(--el-text) min-w-0 flex-1 truncate font-sans text-sm group-hover:underline">
-                  {child.title}
-                </span>
-                {statusMeta ? (
-                  <Pill status={STATUS_TONE[statusMeta.category]}>{statusMeta.label}</Pill>
-                ) : (
-                  <Pill tone="neutral">{child.status}</Pill>
-                )}
-                {assignee ? (
-                  <span
-                    className="flex shrink-0 items-center"
-                    title={assignee.name || assignee.email}
-                  >
-                    <Avatar name={assignee.name || assignee.email} />
-                  </span>
-                ) : null}
-              </RelationshipPeekLink>
-            </li>
-          );
-        })}
-      </ul>
-    </ContentSectionCard>
+              ) : null}
+            </RelationshipPeekLink>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -1,5 +1,4 @@
 import { getTranslations } from 'next-intl/server';
-import { buildApiReference } from '@/lib/apiDocs/reference';
 import {
   SANDBOX_BASE_TAG,
   SANDBOX_IMAGE,
@@ -47,15 +46,16 @@ export default async function SandboxGuidePage() {
   const t = await getTranslations('apiDocs');
   const profiles = sandboxProfileRows();
 
-  // The rail is shared with the reference, so the guide is reachable from the
-  // operation list and vice versa. A failure to build the spec costs the
-  // operation rows, never the guide — this page does not depend on the spec.
-  let groups: Awaited<ReturnType<typeof buildApiReference>>['groups'] = [];
-  try {
-    groups = buildApiReference().groups;
-  } catch {
-    groups = [];
-  }
+  // ⚠️ This page passes NO operation groups, and does not build the spec to get
+  // them (MOTIR-2312 / ADR Amendment 11 Q2). It is a guide about running a
+  // container; the `/api/v1` operation index belongs to the API sub-area, and
+  // the rail gates that index on the route prefix rather than on this call. It
+  // used to build the reference here purely to hand it over, which is how ~28
+  // REST operations came to frame a page that is not about them (MOTIR-2307).
+  //
+  // The rail still lists the API reference as a sibling SURFACE, so a reader
+  // standing here is one click from it — that row is the access path the design
+  // draws (`design/api-docs/` Panel 10, ①).
 
   // The worked example is the FIRST profile rather than a hardcoded `claude`:
   // the page must stay correct if the CLI's list is ever reordered or its head
@@ -64,7 +64,7 @@ export default async function SandboxGuidePage() {
 
   return (
     <>
-      <CatalogueNav current="sandbox" groups={groups} />
+      <CatalogueNav current="sandbox" />
 
       <main className="min-w-0 flex-1 px-4 py-7 sm:px-9">
         <header className="mb-8">
@@ -148,11 +148,11 @@ export default async function SandboxGuidePage() {
             {t('navReference')}
           </a>
           {' · '}
-          <a className="text-(--el-link) underline" href="/docs/getting-started">
+          <a className="text-(--el-link) underline" href="/docs/api/getting-started">
             {t('navGettingStarted')}
           </a>
           {' · '}
-          <a className="text-(--el-link) underline" href="/docs/stability">
+          <a className="text-(--el-link) underline" href="/docs/api/stability">
             {t('navStability')}
           </a>
         </p>

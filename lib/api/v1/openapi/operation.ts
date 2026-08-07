@@ -77,7 +77,7 @@ export type V1ResponseBody =
    * something the envelope cannot express. It exists for exactly one shape
    * today: the activity `all` view merges two streams and reports each one's
    * total separately, which a single `totalCount` cannot carry (ADR Amendment
-   * 12). Reaching for it is a signal to check whether the envelope is really
+   * 13). Reaching for it is a signal to check whether the envelope is really
    * the wrong shape — extending is right when the extra field is a property of
    * THIS read, and wrong when it is a property of paging.
    */

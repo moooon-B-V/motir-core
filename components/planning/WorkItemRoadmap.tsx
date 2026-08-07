@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   ProjectRoadmapCanvas,
@@ -26,6 +26,14 @@ import {
 // `WorkItemNode`: the roots, then a node's children on drill, with the level's
 // `blocked_by` edges drawn. The onboarding canvas is the OTHER consumer of the same
 // foundation (stations + roots at the top level).
+//
+// THE FIRST LEVEL IS NOT ALWAYS THE PROJECT'S ROOTS (MOTIR-2287). `subtreeRootId`
+// roots the canvas at ONE work item: the canvas's own root level becomes that item's
+// children, so an embedded mount (the work-item detail page's Children panel) cannot
+// walk the reader out of the item they are reading — Back at the first level stays
+// inside the subtree. The remap lives here rather than in the shared canvas, which
+// five surfaces mount. See the prop's doc comment for the two ROOT-level behaviours
+// rooting turns off, and why this is not the `initialTrail` seed.
 //
 // It also OWNS the work-item quick-view peek (Subtask 7.20.11 / MOTIR-1352): the
 // canvas surfaces a "View" button on the selected card, and this consumer opens the
@@ -83,6 +91,48 @@ export interface WorkItemRoadmapProps {
   /** Called when a refresh-triggered refetch has SETTLED, so the caller can clear
    *  its loading affordance on the real fetch-completion signal (not a timer). */
   onRefreshSettled?: () => void;
+  /**
+   * ROOT THE CANVAS AT ONE WORK ITEM (MOTIR-2287) — the work-item id whose
+   * CHILDREN become the canvas's own first level, instead of the project's roots.
+   * Absent (the default) is the shipped behaviour: level 0 is `parentId: null`.
+   *
+   * The remap lives HERE, in the adapter, and not in `ProjectRoadmapCanvas` —
+   * that foundation has five consumers and what its root level MEANS is not this
+   * surface's to change. And it is a root, not the shipped `initialTrail` seed
+   * (MOTIR-2070): a seeded trail opens ON a level but leaves the canvas's Back /
+   * root-crumb pointing at the project root, which would walk the reader out of
+   * the item they are reading. Rooting makes the item's children the canvas's own
+   * root, so Back at the first level stays inside the subtree.
+   *
+   * Rooting also turns two ROOT-level behaviours OFF, because both are statements
+   * about the PROJECT's road rather than this subtree's: the planning-origin
+   * cluster (and its pre-plan read) is never pinned, whatever `showPlanningOrigin`
+   * says, and the single-drillable-parent auto-descend (MOTIR-1807) is off — a
+   * panel that says "this item's children" must show them even when there is
+   * exactly one. Both verdicts are the design's (MOTIR-2285).
+   */
+  subtreeRootId?: string | null;
+  /** The breadcrumb ROOT crumb's label. Defaults to the shipped project-scope
+   *  copy; a rooted mount passes the item's own identifier, so Back reads as
+   *  "back to MOTIR-1234" (MOTIR-2285's recorded verdict). */
+  rootLabel?: string;
+  /**
+   * The canvas's three chrome opt-ins, surfaced so an EMBEDDED mount can make its
+   * own call (MOTIR-2288). **All three default to `true`** — what the full-page
+   * `/roadmap` mount has always passed — so every existing consumer is unchanged.
+   * The Children panel turns `searchable` and `locatable` off (a `/` overlay
+   * inside a page section is a page-level key grab, and a canvas already rooted at
+   * the item the reader is on has nothing off-screen to locate) and keeps
+   * `fullScreenable`, which is the bounded panel's only escape.
+   */
+  searchable?: boolean;
+  locatable?: boolean;
+  fullScreenable?: boolean;
+  /** Replace the ROOT level's empty state. Passed straight through to the canvas
+   *  — an embedded mount whose section only renders when children EXIST has a
+   *  different thing to say about an empty first level than "nothing here yet"
+   *  (the read did not come back). Absent → the canvas's own copy. */
+  emptyRoot?: ReactNode;
 }
 
 export function WorkItemRoadmap({
@@ -96,6 +146,12 @@ export function WorkItemRoadmap({
   ariaLabel,
   refreshSignal = 0,
   onRefreshSettled,
+  subtreeRootId = null,
+  rootLabel,
+  searchable = true,
+  locatable = true,
+  fullScreenable = true,
+  emptyRoot,
 }: WorkItemRoadmapProps) {
   const t = useTranslations('roadmap.canvas');
   // Levels cached so re-drilling a node doesn't re-hit the API. Keyed by
@@ -117,8 +173,10 @@ export function WorkItemRoadmap({
 
   // The phase card only renders in the WHOLE-PROJECT scope (the sprint slice's road
   // did not start at onboarding), so neither the badge read nor the station level is
-  // owed anywhere else.
-  const originEnabled = showPlanningOrigin && scope !== 'sprint';
+  // owed anywhere else — and never on a SUBTREE-rooted mount (MOTIR-2287), whose
+  // first level is one item's children, not the project's road.
+  const rooted = subtreeRootId != null;
+  const originEnabled = showPlanningOrigin && scope !== 'sprint' && !rooted;
 
   // ONE pre-plan read, shared by the badge and the drilled station level, held as a
   // PROMISE so a drill that lands while the badge's read is still in flight joins it
@@ -184,14 +242,20 @@ export function WorkItemRoadmap({
         if (parentId === ORIGIN_ID) {
           return buildPreplanStationLevel(await readPreplan());
         }
+        // THE SUBTREE ROOT (MOTIR-2287) — the canvas's own root level (`parentId`
+        // null) resolves to the ROOTED item's children instead of the project's
+        // roots. Every deeper drill already carries a real id and is untouched.
+        const readParentId = parentId === null && rooted ? subtreeRootId : parentId;
         // Scope is part of the cache key so a project-scope level is never reused
-        // for sprint scope (MOTIR-1382). The page also remounts this component on a
-        // scope change (its React `key`), so the canvas re-loads the ROOT in the new
-        // scope; the scoped key is the belt-and-suspenders guard.
-        const key = `${projectKey}:${scope}:${parentId ?? ROOT_KEY}`;
+        // for sprint scope (MOTIR-1382); the ROOT is part of it for the same reason,
+        // so a rooted and an unrooted mount in one session cannot serve each other's
+        // root level. The page also remounts this component on a scope change (its
+        // React `key`), so the canvas re-loads the ROOT in the new scope; the scoped
+        // key is the belt-and-suspenders guard.
+        const key = `${projectKey}:${scope}:${subtreeRootId ?? ROOT_KEY}:${readParentId ?? ROOT_KEY}`;
         let wi = cacheRef.current.get(key);
         if (!wi) {
-          wi = await fetchRoadmapLevel(projectKey, parentId, scope);
+          wi = await fetchRoadmapLevel(projectKey, readParentId, scope);
           cacheRef.current.set(key, wi);
         }
         registerItems(wi);
@@ -234,6 +298,8 @@ export function WorkItemRoadmap({
       onRefreshSettled,
       readPreplan,
       produced,
+      rooted,
+      subtreeRootId,
       t,
     ],
   );
@@ -247,15 +313,16 @@ export function WorkItemRoadmap({
         // the resolved produced set (MOTIR-2205) so the phase card's badge UPGRADES
         // in place when the late read lands. That rebuild is served from the level
         // cache — it re-renders the card, it does not re-hit the roadmap API.
-        reloadKey={`${scope}:${refreshSignal}:${produced ? produced.join(',') : '-'}`}
+        reloadKey={`${scope}:${subtreeRootId ?? '-'}:${refreshSignal}:${produced ? produced.join(',') : '-'}`}
         positions={positions}
         onNodeMove={onNodeMove}
         onResetPositions={onResetPositions}
         onSelect={onSelect}
         onView={handleView}
-        searchable
-        fullScreenable
-        locatable
+        searchable={searchable}
+        fullScreenable={fullScreenable}
+        locatable={locatable}
+        emptyRoot={emptyRoot}
         // AUTO-DRILL (MOTIR-1807): a level that resolves to exactly ONE drillable node
         // offers no choice, so the canvas descends into it and the roadmap opens on the
         // WORK rather than on one card. Opted in for BOTH scopes, not sprint-only — the
@@ -263,9 +330,12 @@ export function WorkItemRoadmap({
         // single-epic project has the same shape in project scope, and the rung-1
         // precedent (VS Code's compact folders) compacts every single-child chain rather
         // than one special case. This adapter is the only opt-in: the other four
-        // consumers of the shared canvas keep the `false` default.
-        autoDescendSingleParent
-        rootLabel={t('breadcrumbRoot')}
+        // consumers of the shared canvas keep the `false` default. A SUBTREE-rooted
+        // mount (MOTIR-2287) opts back OUT: a surface that says "this item's
+        // children" must show them even when there is exactly one, because the
+        // descent would then be showing something else's children entirely.
+        autoDescendSingleParent={!rooted}
+        rootLabel={rootLabel ?? t('breadcrumbRoot')}
         ariaLabel={ariaLabel ?? t('ariaWorkItem')}
         warningLegend={
           scope === 'sprint'

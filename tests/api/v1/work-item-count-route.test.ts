@@ -7,7 +7,7 @@ import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV
 import { truncateAuthTables } from '../../helpers/db';
 
 // GET /api/v1/projects/{projectKey}/work-items/count (Story 11.5 · Subtask
-// 11.5.16 — MOTIR-2318), the operation ADR Amendment 11 decided on.
+// 11.5.16 — MOTIR-2318), the operation ADR Amendment 12 decided on.
 //
 // The endpoint's entire promise is that it counts what the COLLECTION would
 // page. So the assertions here are mostly not about a number in isolation —
