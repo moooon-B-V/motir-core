@@ -334,6 +334,49 @@ describe('a PRE-MIGRATION object — written behind the module’s back — stil
   });
 });
 
+describe('the E2E seam is wired at the SDK TRANSPORT, not at undici', () => {
+  // The regression this locks down cost a CI round trip and looked like a UI
+  // bug. Every other E2E seam intercepts an undici MockAgent; undici's
+  // dispatcher governs `fetch`, and the AWS SDK transports over `node:https` —
+  // so an undici intercept cannot see this traffic at all. `@vercel/blob` used
+  // `fetch`, which is why the old mock worked and why the swap broke it
+  // SILENTLY: uploads left as real DNS lookups (`ENOTFOUND e2e.s3.invalid`) and
+  // the failure surfaced as "the attachment list has one row instead of two."
+  //
+  // The endpoint below is deliberately unresolvable. If this seam ever stops
+  // being installed at the transport, these tests do not fall back to a mock —
+  // they fail trying to reach the network, which is the honest signal.
+  it('an upload + head + delete round-trips entirely in process', async () => {
+    const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
+    installBlobStoreMock();
+
+    const { pathname } = await putPrivateAttachment(
+      'attachments/w1/e2e.png',
+      new Blob(['12345']),
+      'image/png',
+    );
+
+    // The HEAD reports what was actually stored — the register step's
+    // authoritative read, answered without a network.
+    expect(await headPrivateBlob(pathname)).toEqual({ size: 5, contentType: 'image/png' });
+
+    await deleteAttachmentBlob(pathname);
+    expect(await headPrivateBlob(pathname)).toBeNull();
+  });
+
+  it('keeps the two buckets separate in the fake, exactly as the real one does', async () => {
+    const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
+    installBlobStoreMock();
+
+    const priv = await putPrivateAttachment('shared/name.png', new Blob(['ab']), 'image/png');
+    await putPublicAsset('shared/name.png', new Blob(['abcd']), 'image/png');
+
+    // A same-named key in the PUBLIC bucket must not answer a private HEAD with
+    // the wrong bytes — the fake keys on `<bucket>/<key>`, not on the key.
+    expect(await headPrivateBlob(priv.pathname)).toEqual({ size: 2, contentType: 'image/png' });
+  });
+});
+
 describe('configuration', () => {
   it('an unset bucket fails LOUDLY rather than writing somewhere unexpected', async () => {
     delete process.env['MOTIR_S3_PRIVATE_BUCKET'];

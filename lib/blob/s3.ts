@@ -17,7 +17,7 @@
 // `importOriginal` the uploader to stub one function while keeping the rest,
 // and `next build` traces the module without any secret present.
 
-import { S3Client } from '@aws-sdk/client-s3';
+import { S3Client, type S3ClientConfig } from '@aws-sdk/client-s3';
 
 /** Env var names, in one place — `MOTIR-2386` sets exactly these as Fly secrets. */
 export const S3_ENV = {
@@ -43,15 +43,54 @@ function required(name: string): string {
 let cached: { client: S3Client; key: string } | null = null;
 
 /**
+ * An E2E-only transport, installed at boot by `instrumentation.ts`.
+ *
+ * ⚠️ TWO things about this are load-bearing, and both were learned the hard way.
+ *
+ * **It is installed at the SDK's transport, not at undici.** Every other E2E
+ * seam intercepts an undici `MockAgent`, which cannot reach this one: undici's
+ * global dispatcher governs `fetch`, and the AWS SDK's default Node transport is
+ * `node:https`. `@vercel/blob` used `fetch`, so intercepting it worked; the swap
+ * silently moved the traffic to a layer the interceptor does not see, and the
+ * suite's uploads left as real DNS lookups.
+ *
+ * **It is held on `globalThis`, not in a module variable.** Next.js loads
+ * `instrumentation.ts` in a DIFFERENT module graph from the route handlers, so
+ * a module-level `let` set at instrumentation is simply not the same binding the
+ * routes read — the boot log says "installed" and the routes still hit the
+ * network. A `Symbol.for` key is process-global and crosses that boundary, which
+ * is the same reason the other seams reach for `setGlobalDispatcher`.
+ *
+ * Typed loosely and set by injection, so this production module never imports
+ * the test one; unset in every real deployment.
+ */
+const TRANSPORT_KEY = Symbol.for('motir.blob.e2eObjectStoreTransport');
+
+type TransportHolder = { [TRANSPORT_KEY]?: unknown };
+
+function e2eTransport(): unknown {
+  return (globalThis as TransportHolder)[TRANSPORT_KEY] ?? null;
+}
+
+/**
+ * Install an in-process transport for the object store (E2E only). Called from
+ * `instrumentation.ts` behind `E2E_TEST_BLOB=1`, before any handler runs.
+ */
+export function installObjectStoreTransport(handler: unknown): void {
+  (globalThis as TransportHolder)[TRANSPORT_KEY] = handler;
+  cached = null;
+}
+
+/**
  * The shared S3 client, built on first use and re-built if the configuration
  * changes (which only happens in tests — the cache key is the credential tuple,
  * so a suite that re-points the env gets a client for the NEW endpoint rather
  * than a stale one).
  *
  * `forcePathStyle` is deliberate: it keeps every request on ONE host (the
- * endpoint), instead of `https://<bucket>.<endpoint>`. Tigris serves both, and
- * a single stable host is what makes the E2E's undici interception (and any
- * self-hosted MinIO) work without per-bucket wiring.
+ * endpoint) with the bucket in the PATH, instead of `https://<bucket>.<endpoint>`.
+ * Tigris serves both, and one stable host with a readable bucket segment is what
+ * lets the E2E transport (and a self-hosted MinIO) work without per-bucket wiring.
  */
 export function s3Client(): S3Client {
   const endpoint = required(S3_ENV.endpoint);
@@ -60,7 +99,8 @@ export function s3Client(): S3Client {
   // Tigris is region-less; `auto` is the conventional value and the SDK
   // requires SOMETHING to sign with, so it is defaulted rather than required.
   const region = process.env[S3_ENV.region] || 'auto';
-  const key = `${endpoint}|${region}|${accessKeyId}|${secretAccessKey}`;
+  const transport = e2eTransport();
+  const key = `${endpoint}|${region}|${accessKeyId}|${secretAccessKey}|${transport ? 'e2e' : 'net'}`;
 
   if (cached && cached.key === key) return cached.client;
   const client = new S3Client({
@@ -68,14 +108,17 @@ export function s3Client(): S3Client {
     region,
     forcePathStyle: true,
     credentials: { accessKeyId, secretAccessKey },
+    ...(transport ? { requestHandler: transport as S3ClientConfig['requestHandler'] } : {}),
   });
   cached = { client, key };
   return client;
 }
 
-/** Test seam: drop the memoized client so the next call re-reads the env. */
+/** Test seam: drop the memoized client AND any installed transport, so the next
+ *  call re-reads the env and goes back to the real one. */
 export function resetS3ClientForTests(): void {
   cached = null;
+  delete (globalThis as TransportHolder)[TRANSPORT_KEY];
 }
 
 /** The PRIVATE bucket — content attachments, acceptance video + trace. */
