@@ -1,4 +1,4 @@
-import { Prisma, type ProjectTag, type ProjectTagAssignment } from '@/lib/generated/prisma/client';
+import { Prisma, type ProjectTag, type ProjectTagAssignment } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // projectTagAssignmentRepository (Story 6.13 · Subtask 6.13.5) — single-op

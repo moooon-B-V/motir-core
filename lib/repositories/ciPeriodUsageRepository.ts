@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma, type CiPeriodUsage } from '@/lib/generated/prisma/client';
+import { Prisma, type CiPeriodUsage } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the per-period CI-consumption ROLLUP (Story MOTIR-1775 ·

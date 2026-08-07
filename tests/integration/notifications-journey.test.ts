@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Prisma, type User } from '@/lib/generated/prisma/client';
+import { Prisma, type User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   notificationFanInService,

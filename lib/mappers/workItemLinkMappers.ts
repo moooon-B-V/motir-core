@@ -1,4 +1,4 @@
-import type { WorkItemLink } from '@/lib/generated/prisma/client';
+import type { WorkItemLink } from '@/generated/prisma/client';
 import type { WorkItemLinkDto } from '@/lib/dto/workItemLinks';
 
 // Prisma → DTO converter for the work-item-link domain (Subtask 1.4.3). The

@@ -1,4 +1,4 @@
-import { Prisma, type CiWorkflowRunUsage } from '@/lib/generated/prisma/client';
+import { Prisma, type CiWorkflowRunUsage } from '@/generated/prisma/client';
 
 // Data access for the per-run CI-metering AUDIT rows (Story MOTIR-1775 ·
 // MOTIR-1896). Single-op methods only (CLAUDE.md 4-layer); every write requires

@@ -1,4 +1,4 @@
-import type { JobRun, JobRunDlq } from '@/lib/generated/prisma/client';
+import type { JobRun, JobRunDlq } from '@/generated/prisma/client';
 import type { JobRunDTO, JobRunDlqDTO, JobRunFailure, JobRunStatus } from '@/lib/dto/jobs';
 
 // Prisma JobRun → JobRunDTO. Dates → ISO strings; the JSON `failure` column is

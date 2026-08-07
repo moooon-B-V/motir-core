@@ -1,4 +1,4 @@
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';

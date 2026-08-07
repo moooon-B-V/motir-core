@@ -1,4 +1,4 @@
-import { Prisma, type AcceptanceEvidenceStatus } from '@/lib/generated/prisma/client';
+import { Prisma, type AcceptanceEvidenceStatus } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { AcceptanceEvidenceWithAttachment } from '@/lib/mappers/acceptanceEvidenceMappers';
 

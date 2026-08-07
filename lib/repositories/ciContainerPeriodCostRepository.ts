@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@/lib/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import type { CiContainerWorkload } from './ciContainerUsageRepository';
 
 // Data access for the per-period FLEET-COST rollup (Story MOTIR-1916 ·

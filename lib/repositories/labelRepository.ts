@@ -1,4 +1,4 @@
-import { Prisma, type Label } from '@/lib/generated/prisma/client';
+import { Prisma, type Label } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Label repository — single Prisma operations on the `label` table (Story

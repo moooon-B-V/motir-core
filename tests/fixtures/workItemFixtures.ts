@@ -8,7 +8,7 @@ import type {
   WorkItemLink,
   WorkItemLinkKind,
   WorkItemType,
-} from '@/lib/generated/prisma/client';
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import { projectRepository } from '@/lib/repositories/projectRepository';

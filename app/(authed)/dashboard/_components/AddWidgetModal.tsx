@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import type { DashboardWidgetType } from '@/lib/generated/prisma/client';
+import type { DashboardWidgetType } from '@/generated/prisma/client';
 import { Modal } from '@/components/ui/Modal';
 import { WIDGET_REGISTRY, WIDGET_TYPES } from '@/lib/dashboards/widgetRegistry';
 

@@ -1,4 +1,4 @@
-import { Prisma, type JobRunDlq } from '@/lib/generated/prisma/client';
+import { Prisma, type JobRunDlq } from '@/generated/prisma/client';
 
 // Data access for the dead-letter queue (Story 1.6 · Subtask 1.6.4). Single-op
 // methods only; writes require `tx` (the 4-layer contract). jobRunsService owns

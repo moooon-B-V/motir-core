@@ -1,4 +1,8 @@
-import { Prisma, type Project, type SavedFilterSubscriptionSchedule } from '@/lib/generated/prisma/client';
+import {
+  Prisma,
+  type Project,
+  type SavedFilterSubscriptionSchedule,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';

@@ -1,4 +1,4 @@
-import type { DashboardWidgetType } from '@/lib/generated/prisma/client';
+import type { DashboardWidgetType } from '@/generated/prisma/client';
 import {
   CREATED_VS_RESOLVED_BUCKETS_MAX,
   CREATED_VS_RESOLVED_DAYS_BACK_MAX,

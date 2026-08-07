@@ -1,4 +1,4 @@
-import { Prisma, type ProjectRepoCollaborator } from '@/lib/generated/prisma/client';
+import { Prisma, type ProjectRepoCollaborator } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on `project_repository_collaborator` — ONE person's

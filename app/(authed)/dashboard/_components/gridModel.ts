@@ -1,4 +1,4 @@
-import type { DashboardLayout } from '@/lib/generated/prisma/client';
+import type { DashboardLayout } from '@/generated/prisma/client';
 import { LAYOUT_COLUMN_COUNT } from '@/lib/dashboards/constants';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import type { DashboardWidgetDto } from '@/lib/dto/dashboards';

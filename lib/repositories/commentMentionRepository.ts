@@ -1,4 +1,4 @@
-import { Prisma, type CommentMention } from '@/lib/generated/prisma/client';
+import { Prisma, type CommentMention } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Comment-mention repository — single Prisma operations on the

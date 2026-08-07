@@ -1,4 +1,4 @@
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 // Data access for the PROVISIONING GATE's serialization anchors (Story
 // MOTIR-1916 · MOTIR-1922). Two single-op methods, no logic — the decision they

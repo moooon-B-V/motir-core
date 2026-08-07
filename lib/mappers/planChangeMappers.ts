@@ -1,4 +1,4 @@
-import type { PlanChangeSession, PlanChangeTurn } from '@/lib/generated/prisma/client';
+import type { PlanChangeSession, PlanChangeTurn } from '@/generated/prisma/client';
 import type {
   PlanChangeSessionDto,
   PlanChangeTurnDto,

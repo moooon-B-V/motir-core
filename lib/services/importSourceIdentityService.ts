@@ -1,4 +1,4 @@
-import type { ImportSource, Prisma } from '@/lib/generated/prisma/client';
+import type { ImportSource, Prisma } from '@/generated/prisma/client';
 import { withUserContext } from '@/lib/workspaces/context';
 import { createTokenCrypto } from '@/lib/crypto/tokenCrypto';
 import { importSourceIdentityRepository } from '@/lib/repositories/importSourceIdentityRepository';

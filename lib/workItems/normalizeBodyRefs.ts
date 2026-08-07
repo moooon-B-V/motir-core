@@ -1,4 +1,4 @@
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { normalizeWorkItemRefs, parseWorkItemKeys } from '@/lib/mentions/workItemRefs';
 

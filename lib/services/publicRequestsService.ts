@@ -1,4 +1,4 @@
-import { Prisma } from '@/lib/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';

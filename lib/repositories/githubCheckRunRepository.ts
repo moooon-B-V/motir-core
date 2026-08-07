@@ -1,4 +1,4 @@
-import { type GithubCheckRun, type Prisma } from '@/lib/generated/prisma/client';
+import { type GithubCheckRun, type Prisma } from '@/generated/prisma/client';
 
 // GitHub check-run repository — single Prisma operations on the
 // `github_check_run` table (Story 7.10 · Subtask 7.10.6 / MOTIR-894). One row per

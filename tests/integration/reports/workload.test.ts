@@ -6,7 +6,7 @@ import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import type { WorkItem } from '@/lib/generated/prisma/client';
+import type { WorkItem } from '@/generated/prisma/client';
 
 const HIGH_AST: FilterAst = {
   combinator: 'and',

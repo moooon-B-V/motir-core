@@ -1,4 +1,4 @@
-import type { Workspace } from '@/lib/generated/prisma/client';
+import type { Workspace } from '@/generated/prisma/client';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';

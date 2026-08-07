@@ -36,7 +36,11 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import Link from 'next/link';
-import type { DashboardAccess, DashboardLayout, DashboardWidgetType } from '@/lib/generated/prisma/client';
+import type {
+  DashboardAccess,
+  DashboardLayout,
+  DashboardWidgetType,
+} from '@/generated/prisma/client';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';

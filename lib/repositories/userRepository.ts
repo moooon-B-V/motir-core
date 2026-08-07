@@ -1,4 +1,4 @@
-import { Prisma, type User } from '@/lib/generated/prisma/client';
+import { Prisma, type User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // User repository — single Prisma operations on the `user` table.

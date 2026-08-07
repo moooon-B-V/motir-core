@@ -1,4 +1,4 @@
-import { Prisma, type AutomationRule, type AutomationTriggerType } from '@/lib/generated/prisma/client';
+import { Prisma, type AutomationRule, type AutomationTriggerType } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single-op data access for the `automation_rule` table (Story 6.6 · Subtask

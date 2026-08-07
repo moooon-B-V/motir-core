@@ -1,4 +1,4 @@
-import { Prisma, type PlanChangeTurn, type PlanChangeTurnRole } from '@/lib/generated/prisma/client';
+import { Prisma, type PlanChangeTurn, type PlanChangeTurnRole } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_turn` table (Story 7.30 ·

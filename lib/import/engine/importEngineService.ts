@@ -10,7 +10,7 @@
 // connectors' `fetchImpl`) so the engine is unit-testable without Postgres,
 // while wiring the real repositories by default.
 
-import type { ImportedIssue, ImportSource } from '@/lib/generated/prisma/client';
+import type { ImportedIssue, ImportSource } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import { workflowsService } from '@/lib/services/workflowsService';

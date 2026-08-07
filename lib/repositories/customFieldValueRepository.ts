@@ -1,4 +1,4 @@
-import { Prisma, type CustomFieldValue } from '@/lib/generated/prisma/client';
+import { Prisma, type CustomFieldValue } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Custom-field-value repository — single Prisma operations on the typed-EAV

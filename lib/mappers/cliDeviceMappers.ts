@@ -1,4 +1,4 @@
-import type { DeviceCode, User, Workspace } from '@/lib/generated/prisma/client';
+import type { DeviceCode, User, Workspace } from '@/generated/prisma/client';
 import type { ApiTokenDto } from '@/lib/dto/apiTokens';
 import type {
   DeviceGrantDescriptionDTO,

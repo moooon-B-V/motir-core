@@ -1,4 +1,4 @@
-import type { EstimationStatistic, PointScale } from '@/lib/generated/prisma/client';
+import type { EstimationStatistic, PointScale } from '@/generated/prisma/client';
 import type {
   EstimationConfigDto,
   EstimationStatisticDto,

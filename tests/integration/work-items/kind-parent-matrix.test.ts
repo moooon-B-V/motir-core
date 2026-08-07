@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkItemKind } from '@/lib/generated/prisma/client';
+import type { WorkItemKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';

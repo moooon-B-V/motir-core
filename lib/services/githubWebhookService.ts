@@ -1,4 +1,4 @@
-import { Prisma } from '@/lib/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { getGitProvider } from '@/lib/git';
 import type {

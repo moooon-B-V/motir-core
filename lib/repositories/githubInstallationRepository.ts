@@ -1,4 +1,4 @@
-import { type GithubInstallation, type Prisma } from '@/lib/generated/prisma/client';
+import { type GithubInstallation, type Prisma } from '@/generated/prisma/client';
 
 // GitHub-installation repository — single Prisma operations on the
 // `github_installation` table (Story 7.10 · MOTIR-891). The service

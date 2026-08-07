@@ -42,7 +42,7 @@
 // `pnpm test:e2e` run and runs in the dedicated seam-configured CI step.
 
 import { expect, test, type Page } from '@playwright/test';
-import { BoardSwimlaneGroupBy, BoardType } from '@/lib/generated/prisma/client';
+import { BoardSwimlaneGroupBy, BoardType } from '@/generated/prisma/client';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {

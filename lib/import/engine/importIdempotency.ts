@@ -8,7 +8,7 @@
 // re-run creates zero duplicates. No DB, no writes.
 
 import { createHash } from 'node:crypto';
-import type { ImportedIssue } from '@/lib/generated/prisma/client';
+import type { ImportedIssue } from '@/generated/prisma/client';
 import type { ImportPlan, ResolvedWorkItemPayload } from './types';
 
 /**

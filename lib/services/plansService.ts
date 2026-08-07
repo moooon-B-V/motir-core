@@ -1,4 +1,10 @@
-import { Prisma, type Plan, type PlanItem, type WorkItem, type WorkItemKind } from '@/lib/generated/prisma/client';
+import {
+  Prisma,
+  type Plan,
+  type PlanItem,
+  type WorkItem,
+  type WorkItemKind,
+} from '@/generated/prisma/client';
 
 import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';

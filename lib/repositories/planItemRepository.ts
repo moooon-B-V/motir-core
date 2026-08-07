@@ -1,4 +1,4 @@
-import { Prisma, type PlanItem } from '@/lib/generated/prisma/client';
+import { Prisma, type PlanItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // PlanItem repository — single Prisma operations on the `plan_item` table

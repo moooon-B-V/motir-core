@@ -1,4 +1,4 @@
-import type { Prisma, ProjectRepoTakeoverState } from '@/lib/generated/prisma/client';
+import type { Prisma, ProjectRepoTakeoverState } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import {

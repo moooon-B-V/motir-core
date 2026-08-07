@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { SavedFilterSubscriptionSchedule } from '@/lib/generated/prisma/client';
+import type { SavedFilterSubscriptionSchedule } from '@/generated/prisma/client';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { mapSavedFilterError } from '@/lib/savedFilters/errorResponse';

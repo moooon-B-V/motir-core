@@ -1,4 +1,4 @@
-import { type GithubInstallation, type GithubRepo, type Prisma } from '@/lib/generated/prisma/client';
+import { type GithubInstallation, type GithubRepo, type Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // GitHub-repo repository — single Prisma operations on the `github_repo` table

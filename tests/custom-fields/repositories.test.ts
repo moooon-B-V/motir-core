@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { CustomFieldDefinition, WorkItem } from '@/lib/generated/prisma/client';
+import type { CustomFieldDefinition, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';

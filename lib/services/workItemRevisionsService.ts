@@ -21,7 +21,7 @@
 // mapping (it returns only the created row's id; reads + mapping live on the
 // read path).
 
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 
 /**

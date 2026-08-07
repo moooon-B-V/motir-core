@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '@/lib/generated/prisma/client';
+import type { User } from '@/generated/prisma/client';
 
 // Better-Auth's rate limiter buckets /sign-in|/sign-up per IP (window 10s, max 3),
 // and every test here signs in to obtain the real session cookie the plugin's

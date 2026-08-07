@@ -3,7 +3,7 @@ import {
   type PlanChangeSession,
   type PlanChangeTurn,
   type PlanChangeTurnRole,
-} from '@/lib/generated/prisma/client';
+} from '@/generated/prisma/client';
 
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';

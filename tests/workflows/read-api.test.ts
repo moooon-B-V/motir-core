@@ -1,4 +1,4 @@
-import type { StatusCategory } from '@/lib/generated/prisma/client';
+import type { StatusCategory } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workflowsService } from '@/lib/services/workflowsService';

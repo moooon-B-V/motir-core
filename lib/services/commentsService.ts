@@ -1,4 +1,4 @@
-import type { Comment, Prisma, WorkItem } from '@/lib/generated/prisma/client';
+import type { Comment, Prisma, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { commentMentionRepository } from '@/lib/repositories/commentMentionRepository';

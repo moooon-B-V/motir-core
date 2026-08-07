@@ -1,4 +1,10 @@
-import type { Board, BoardColumn, BoardColumnStatus, Sprint, WorkItem } from '@/lib/generated/prisma/client';
+import type {
+  Board,
+  BoardColumn,
+  BoardColumnStatus,
+  Sprint,
+  WorkItem,
+} from '@/generated/prisma/client';
 import type {
   BoardCardDto,
   BoardColumnConfigDto,

@@ -1,4 +1,4 @@
-import type { GithubRepo, ProjectRepoRole, ProjectRepoState } from '@/lib/generated/prisma/client';
+import type { GithubRepo, ProjectRepoRole, ProjectRepoState } from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import { resolveRepoRoles } from '@/lib/projectRepos/roleResolution';
 import { PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';

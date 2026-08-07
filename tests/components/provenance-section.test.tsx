@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
-import { $Enums } from '@/lib/generated/prisma/client';
+import { $Enums } from '@/generated/prisma/client';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import type { WorkItemDto, WorkItemPlanningSourceDto } from '@/lib/dto/workItems';
 import { ProvenanceSection } from '@/app/(authed)/items/[key]/_components/ProvenanceSection';

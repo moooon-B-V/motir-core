@@ -1,4 +1,4 @@
-import { Prisma, type ProjectKeyAlias } from '@/lib/generated/prisma/client';
+import { Prisma, type ProjectKeyAlias } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Project-key-alias repository — single Prisma operations on the

@@ -1,4 +1,4 @@
-import { type Import, type Prisma } from '@/lib/generated/prisma/client';
+import { type Import, type Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Import repository — single Prisma operations on the `import` RUN table

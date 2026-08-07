@@ -1,4 +1,4 @@
-import type { Sprint, WorkItem } from '@/lib/generated/prisma/client';
+import type { Sprint, WorkItem } from '@/generated/prisma/client';
 import type {
   SprintDto,
   SprintReportDto,

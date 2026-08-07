@@ -3,7 +3,7 @@ import type {
   WorkItemImplementationSource,
   WorkItemPlanningSource,
   WorkItemType,
-} from '@/lib/generated/prisma/client';
+} from '@/generated/prisma/client';
 
 // Provenance BACKFILL rules (MOTIR-1758, docs/decisions/work-item-provenance.md)
 // — the pure decision table behind `pnpm db:backfill:provenance`.

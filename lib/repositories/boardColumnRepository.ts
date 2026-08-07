@@ -1,4 +1,4 @@
-import { Prisma, type BoardColumn } from '@/lib/generated/prisma/client';
+import { Prisma, type BoardColumn } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the `board_column` table (Story 3.1 · Subtask 3.1.3).

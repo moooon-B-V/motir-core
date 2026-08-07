@@ -32,8 +32,8 @@
 // for a parent imported in a PRIOR run). The kind-parent matrix is honoured —
 // an illegal edge is a surfaced WARNING, never a 500.
 
-import { Prisma } from '@/lib/generated/prisma/client';
-import type { Import, ImportSource } from '@/lib/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
+import type { Import, ImportSource } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { labelsService } from '@/lib/services/labelsService';

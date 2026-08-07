@@ -1,4 +1,4 @@
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Runtime half of the workspace-RLS pair (the DB half lives in

@@ -1,4 +1,4 @@
-import type { User, Workspace } from '@/lib/generated/prisma/client';
+import type { User, Workspace } from '@/generated/prisma/client';
 import type { ValidateInviteResultDTO } from '@/lib/dto/invites';
 
 export function toValidateInviteResultDTO(args: {

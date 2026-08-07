@@ -1,4 +1,4 @@
-import type { Attachment, Prisma, WorkItem } from '@/lib/generated/prisma/client';
+import type { Attachment, Prisma, WorkItem } from '@/generated/prisma/client';
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';

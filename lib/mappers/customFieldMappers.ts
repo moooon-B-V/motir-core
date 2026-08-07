@@ -1,4 +1,4 @@
-import type { CustomFieldDefinition, CustomFieldOption } from '@/lib/generated/prisma/client';
+import type { CustomFieldDefinition, CustomFieldOption } from '@/generated/prisma/client';
 import type {
   CustomFieldDefinitionDTO,
   CustomFieldOptionDTO,

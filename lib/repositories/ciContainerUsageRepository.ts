@@ -1,4 +1,4 @@
-import { Prisma, type CiContainerUsage } from '@/lib/generated/prisma/client';
+import { Prisma, type CiContainerUsage } from '@/generated/prisma/client';
 
 // Data access for the per-container CONTAINER-SECONDS rows (Story MOTIR-1916 ·
 // MOTIR-1924 · MOTIR-1995) — what the fleet cost MOTIR, as opposed to what the

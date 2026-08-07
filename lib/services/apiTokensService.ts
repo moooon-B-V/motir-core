@@ -1,4 +1,4 @@
-import type { User } from '@/lib/generated/prisma/client';
+import type { User } from '@/generated/prisma/client';
 import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationsService } from '@/lib/services/organizationsService';

@@ -1,4 +1,4 @@
-import type { ProjectRepoState } from '@/lib/generated/prisma/client';
+import type { ProjectRepoState } from '@/generated/prisma/client';
 
 // The per-row establish state machine (Story MOTIR-1775 · MOTIR-1780), exactly as
 // `docs/decisions/project-repository-set.md` §4.1 draws it:

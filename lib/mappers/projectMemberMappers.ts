@@ -1,4 +1,4 @@
-import type { Project } from '@/lib/generated/prisma/client';
+import type { Project } from '@/generated/prisma/client';
 import type { ProjectMembershipWithUser } from '@/lib/repositories/projectMembershipRepository';
 import type { ProjectMemberDTO, ProjectAccessDTO } from '@/lib/dto/projectMembers';
 import type { ProjectRole } from '@/lib/projects/roles';

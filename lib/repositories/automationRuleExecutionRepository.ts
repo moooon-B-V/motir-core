@@ -2,7 +2,7 @@ import {
   Prisma,
   type AutomationRuleExecution,
   type AutomationExecutionStatus,
-} from '@/lib/generated/prisma/client';
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 /** A rule execution joined to the triggering item's key + title (the audit-log

@@ -2,7 +2,7 @@
 // Services call these just before returning, so no Prisma row (Date objects,
 // the enum types, the raw Json columns) ever crosses the API boundary.
 
-import type { Plan, PlanItem } from '@/lib/generated/prisma/client';
+import type { Plan, PlanItem } from '@/generated/prisma/client';
 import type {
   PlanDto,
   PlanItemDto,

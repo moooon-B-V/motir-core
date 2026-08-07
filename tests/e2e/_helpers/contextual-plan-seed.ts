@@ -22,7 +22,7 @@
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemKind } from '@/lib/generated/prisma/client';
+import type { WorkItemKind } from '@/generated/prisma/client';
 
 /** The stubbed contextual-planning jobs — one per run the spec drives. */
 export const CONTEXTUAL_JOB_ID = 'job_e2e_contextual_1';

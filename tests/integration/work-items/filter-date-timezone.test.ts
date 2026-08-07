@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { Prisma } from '@/lib/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { compileFilterConditionsSql } from '@/lib/repositories/workItemRepository';
 import { customFieldFilterFieldId, type FilterAst } from '@/lib/filters/ast';

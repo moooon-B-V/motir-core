@@ -1,4 +1,4 @@
-import type { AcceptanceEvidence, Attachment } from '@/lib/generated/prisma/client';
+import type { AcceptanceEvidence, Attachment } from '@/generated/prisma/client';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import type {
   AcceptanceEvidenceChapterDTO,

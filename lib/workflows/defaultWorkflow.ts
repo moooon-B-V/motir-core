@@ -1,4 +1,4 @@
-import type { StatusCategory } from '@/lib/generated/prisma/client';
+import type { StatusCategory } from '@/generated/prisma/client';
 import { keyForAppend } from '@/lib/workItems/positioning';
 
 // The v1 default per-project workflow (Story 2.2 · Subtask 2.2.2) — the typed

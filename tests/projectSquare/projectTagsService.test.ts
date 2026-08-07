@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { User } from '@/lib/generated/prisma/client';
+import type { User } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectTagsService } from '@/lib/services/projectTagsService';
 import { workspacesService } from '@/lib/services/workspacesService';

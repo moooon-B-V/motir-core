@@ -1,4 +1,4 @@
-import { Prisma } from '@/lib/generated/prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 
 /**
  * Run a write flow once, retrying exactly once on a unique-constraint race

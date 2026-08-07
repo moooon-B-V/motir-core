@@ -8,7 +8,7 @@ import { bucketAxis, bucketKey, reportWindow, type ReportPeriod } from '@/lib/re
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 // Story 6.3 · Subtask 6.3.2 — reportsService.getCreatedVsResolved. Real
 // Postgres, the burndown-test conventions: the resolved series is

@@ -1,4 +1,4 @@
-import { type OrganizationRole, Prisma } from '@/lib/generated/prisma/client';
+import { type OrganizationRole, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';

@@ -1,4 +1,4 @@
-import { Prisma, type WorkItem } from '@/lib/generated/prisma/client';
+import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';

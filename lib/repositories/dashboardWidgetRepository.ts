@@ -1,4 +1,4 @@
-import { Prisma, type DashboardWidget } from '@/lib/generated/prisma/client';
+import { Prisma, type DashboardWidget } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { DashboardWidgetWithNames } from '@/lib/mappers/dashboardMappers';
 

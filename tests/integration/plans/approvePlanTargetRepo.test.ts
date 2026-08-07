@@ -1,4 +1,4 @@
-import { type GithubRepo } from '@/lib/generated/prisma/client';
+import { type GithubRepo } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';

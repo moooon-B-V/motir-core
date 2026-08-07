@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardingRepository';

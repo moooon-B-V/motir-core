@@ -9,7 +9,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { EmailSendData } from '@/lib/jobs/types';
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Dead-letter queue + replay (Story 1.6 · Subtask 1.6.4, REWORKED in 1.6.6).

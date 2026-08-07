@@ -52,7 +52,7 @@
  * (tests/e2e/_helpers/collab.ts) all read the same numbers.
  */
 /* eslint-disable no-console -- a CLI dev script: console IS its output surface */
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';

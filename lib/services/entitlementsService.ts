@@ -1,4 +1,4 @@
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { entitlementsFor, pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
 import { EntitlementExceededError } from '@/lib/billing/errors';

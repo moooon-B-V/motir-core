@@ -1,4 +1,4 @@
-import { Prisma, type SprintState } from '@/lib/generated/prisma/client';
+import { Prisma, type SprintState } from '@/generated/prisma/client';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';

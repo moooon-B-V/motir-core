@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { ProjectAccessLevel } from '@/lib/generated/prisma/client';
+import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';

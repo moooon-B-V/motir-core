@@ -12,7 +12,7 @@ import {
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { EmailSendData } from '@/lib/jobs/types';
-import type { Prisma } from '@/lib/generated/prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { captureConsoleEmails, runEmailSendJob, seedHealthyJobSchedules } from '../helpers/jobs';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 

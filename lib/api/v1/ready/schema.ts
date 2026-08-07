@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { WorkItemKind, WorkItemPriority } from '@/lib/generated/prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import {
   dependencyEdgesSchema,

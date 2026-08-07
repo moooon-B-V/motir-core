@@ -5,7 +5,7 @@ import type { ReactElement } from 'react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { WIDGET_TYPES } from '@/lib/dashboards/widgetRegistry';
-import type { DashboardWidgetType } from '@/lib/generated/prisma/client';
+import type { DashboardWidgetType } from '@/generated/prisma/client';
 import type { ReportWidgetResultDto } from '@/lib/dto/reports';
 import { AddWidgetModal } from '@/app/(authed)/dashboard/_components/AddWidgetModal';
 import {

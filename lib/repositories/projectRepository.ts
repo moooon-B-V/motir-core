@@ -6,7 +6,7 @@ import {
   type ProjectAccessLevel,
   type ProjectRepoOwnership,
   type WorkflowPolicyMode,
-} from '@/lib/generated/prisma/client';
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectSquareRank } from '@/lib/projectSquare/rank';

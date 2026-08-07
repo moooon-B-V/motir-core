@@ -1,4 +1,4 @@
-import type { User } from '@/lib/generated/prisma/client';
+import type { User } from '@/generated/prisma/client';
 import { usersService } from '@/lib/services/usersService';
 
 // Shared test fixtures — user rows (Subtask 1.4.7).

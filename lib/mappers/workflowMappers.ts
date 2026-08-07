@@ -1,4 +1,4 @@
-import type { WorkflowStatus, WorkflowTransition } from '@/lib/generated/prisma/client';
+import type { WorkflowStatus, WorkflowTransition } from '@/generated/prisma/client';
 import type {
   StatusCategoryDto,
   WorkflowStatusDto,

@@ -1,4 +1,4 @@
-import type { Attachment, User } from '@/lib/generated/prisma/client';
+import type { Attachment, User } from '@/generated/prisma/client';
 import { isImageType, isPdfType } from '@/lib/blob/allowlist';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import type { AttachmentDTO, AttachmentUploaderDTO } from '@/lib/dto/attachments';

@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkItem, WorkItemRevision } from '@/lib/generated/prisma/client';
+import type { WorkItem, WorkItemRevision } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   labelsService,

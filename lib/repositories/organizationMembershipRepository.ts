@@ -4,7 +4,7 @@ import {
   type OrganizationRole,
   Prisma,
   type User,
-} from '@/lib/generated/prisma/client';
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // A membership row joined with the slice of its user the cross-workspace member

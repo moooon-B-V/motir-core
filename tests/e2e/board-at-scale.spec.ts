@@ -33,7 +33,7 @@
 // here — so it does NOT re-assert 3.8.6's unit-level predicates.
 
 import { expect, test, type Page } from '@playwright/test';
-import { BoardSwimlaneGroupBy } from '@/lib/generated/prisma/client';
+import { BoardSwimlaneGroupBy } from '@/generated/prisma/client';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import {

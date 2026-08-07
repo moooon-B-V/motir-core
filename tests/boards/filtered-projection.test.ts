@@ -9,7 +9,7 @@ import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemKind, WorkItemType } from '@/lib/generated/prisma/client';
+import type { WorkItemKind, WorkItemType } from '@/generated/prisma/client';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 

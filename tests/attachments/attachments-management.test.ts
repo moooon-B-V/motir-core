@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Attachment, User, WorkItem } from '@/lib/generated/prisma/client';
+import type { Attachment, User, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';

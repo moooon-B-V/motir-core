@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
-import type { WorkItem } from '@/lib/generated/prisma/client';
+import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
 import { truncateAuthTables } from './helpers/db';

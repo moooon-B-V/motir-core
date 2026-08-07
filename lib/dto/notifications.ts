@@ -1,4 +1,4 @@
-import type { NotificationCategory } from '@/lib/generated/prisma/client';
+import type { NotificationCategory } from '@/generated/prisma/client';
 
 // Wire DTOs for the notifications domain (Story 5.7 · Subtask 5.7.4). The
 // service maps Prisma rows to these via lib/mappers/notificationMappers.ts

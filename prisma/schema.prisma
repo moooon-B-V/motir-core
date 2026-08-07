@@ -46,9 +46,9 @@
 
 generator client {
   provider            = "prisma-client"
-  output              = "../lib/generated/prisma"
+  output              = "../generated/prisma"
   runtime             = "nodejs"
-  moduleFormat        = "esm"
+  moduleFormat        = "cjs"
   importFileExtension = ""
 }
 

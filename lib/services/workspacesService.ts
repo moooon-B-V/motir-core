@@ -1,4 +1,9 @@
-import { type MemberRole, Prisma, type Workspace, type WorkspaceMembership } from '@/lib/generated/prisma/client';
+import {
+  type MemberRole,
+  Prisma,
+  type Workspace,
+  type WorkspaceMembership,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';

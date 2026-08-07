@@ -1,4 +1,4 @@
-import type { Dashboard, DashboardWidget } from '@/lib/generated/prisma/client';
+import type { Dashboard, DashboardWidget } from '@/generated/prisma/client';
 import { widgetDefinition } from '@/lib/dashboards/widgetRegistry';
 import type {
   DashboardDetailDto,
