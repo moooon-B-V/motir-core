@@ -5849,7 +5849,7 @@
   "apiDocs": {
     "metaTitle": "Motir API reference",
     "metaDescription": "Every operation in the Motir public REST API, with its scopes, parameters, responses and a copy-pasteable authenticated example.",
-    "navLabel": "API reference",
+    "navLabel": "Documentation",
     "navDocumentation": "Documentation",
     "navReference": "API reference",
     "navGettingStarted": "Getting started",

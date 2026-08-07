@@ -1883,7 +1883,7 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
       <span class="note">
         Left: a reader inside the API sub-area. Right: a reader on the sandbox guide. Today these
         two are IDENTICAL — both list every one of the 28 operations — which is the defect
-        (MOTIR-2307). Under ADR Amendment 10 the top tier lists the SURFACES Motir documents, and
+        (MOTIR-2307). Under ADR Amendment 11 the top tier lists the SURFACES Motir documents, and
         the second tier appears only inside the surface you are in. A guide page therefore shows two
         rows and nothing else. The ACCESS PATH out is the row marked ①: it is the only thing a
         sandbox reader needs in order to reach the API, and it is visible without scrolling.
@@ -1987,7 +1987,7 @@ curl https://app.motir.co/api/v1/work-items/MOTIR-1854 -H "Authorization: Bearer
               <p style="margin: 0 0 8px; font-weight: 600">What decides it — the route prefix</p>
               <p style="margin: 0 0 8px">
                 A page renders the second tier and the operation index if and only if its route is
-                <code>/docs/api</code> or below (Amendment 10, Q2). One fact decides both which
+                <code>/docs/api</code> or below (Amendment 11, Q2). One fact decides both which
                 sub-area a page belongs to and what its rail shows, so the two cannot drift apart —
                 and a page added anywhere else cannot acquire the operation list by accident, which
                 is exactly how the sandbox guide acquired it.

@@ -44,9 +44,19 @@ describe('/docs/sandbox', () => {
 
     const current = document.querySelector('nav a[aria-current="page"]');
     expect(current?.getAttribute('href')).toBe('/docs/sandbox');
-    // The other three pages stay one click away.
+
+    // ⚠️ Re-pointed by MOTIR-2312. This used to assert that "the other three
+    // pages stay one click away", which was true when the rail was one flat
+    // list — and was the defect: the API's guide and policy sat beside a
+    // container guide as if they were peers, under all ~28 operations.
+    //
+    // Under ADR Amendment 11 the rail's top tier lists the SURFACES, so from
+    // here the API REFERENCE is one click away (the access path) and its own
+    // pages are one level in. The assertion follows the structure rather than
+    // being deleted: what must stay true is that this page is not a dead end.
     expect(screen.getAllByText('API reference').length).toBeGreaterThan(0);
-    expect(screen.getAllByText('Getting started').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Getting started')).toBeNull();
+    expect(screen.queryByText('Stability & deprecation')).toBeNull();
   });
 
   it('renders its content when the spec cannot be built', async () => {

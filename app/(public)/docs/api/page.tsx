@@ -48,7 +48,7 @@ export default async function ApiReferencePage() {
               {t('unavailableBody')}
             </p>
             <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-              <Link href="/docs/getting-started">
+              <Link href="/docs/api/getting-started">
                 <Button variant="primary" size="sm">
                   {t('navGettingStarted')}
                 </Button>

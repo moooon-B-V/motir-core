@@ -214,7 +214,7 @@ describe('THE IN-APP DOOR — the API-tokens settings page', () => {
       '/docs/api',
     );
     expect(screen.getByText('navGettingStarted').closest('a')?.getAttribute('href')).toBe(
-      '/docs/getting-started',
+      '/docs/api/getting-started',
     );
   });
 
@@ -264,9 +264,11 @@ describe('the catalogue rail', () => {
     // that stopped at three would let it go missing silently.
     const reference = screen.getByText('API reference', { selector: 'a' });
     expect(reference.getAttribute('aria-current')).toBe('page');
-    expect(screen.getByText('Getting started').getAttribute('href')).toBe('/docs/getting-started');
+    expect(screen.getByText('Getting started').getAttribute('href')).toBe(
+      '/docs/api/getting-started',
+    );
     expect(screen.getByText('Stability & deprecation').getAttribute('href')).toBe(
-      '/docs/stability',
+      '/docs/api/stability',
     );
     expect(screen.getByText('Agent sandbox').getAttribute('href')).toBe('/docs/sandbox');
   });

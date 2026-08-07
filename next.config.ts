@@ -52,16 +52,32 @@ if (process.env['NODE_ENV'] !== 'production') {
  * so the exact rule is declared FIRST and the reference keeps its own
  * destination (`/docs/api`) rather than landing on the area root.
  *
- * The third entry exists because the reference deliberately does NOT own the
+ * The LAST entry exists because the reference deliberately does NOT own the
  * area root: `/docs` is a directory, not a page, and a reader who trims the URL
- * should land on the reference rather than a 404.
+ * should land on the reference rather than a 404. (Whether it should keep
+ * landing there is Amendment 11's one recorded open question — MOTIR-2315.)
  *
  * Exported separately from `nextConfig` so `tests/api-docs/docs-redirects.test.ts`
  * can assert the map without booting a server.
  */
 export const DOCS_REDIRECTS = [
+  // ── MOTIR-2312 / ADR Amendment 11 Q3 ──────────────────────────────────────
+  // The API's guide and policy moved INSIDE the reference's own prefix, so the
+  // two `/api-docs/*` addresses that pointed at them get their own exact rules
+  // AHEAD of the wildcard below. Without these they would still resolve, but in
+  // TWO hops (`/api-docs/stability` → `/docs/stability` → `/docs/api/stability`),
+  // and a chain is a thing that breaks one rule at a time.
+  {
+    source: '/api-docs/getting-started',
+    destination: '/docs/api/getting-started',
+    permanent: true,
+  },
+  { source: '/api-docs/stability', destination: '/docs/api/stability', permanent: true },
   { source: '/api-docs', destination: '/docs/api', permanent: true },
   { source: '/api-docs/:path*', destination: '/docs/:path*', permanent: true },
+  // The addresses those two pages served between Amendment 9 and Amendment 11.
+  { source: '/docs/getting-started', destination: '/docs/api/getting-started', permanent: true },
+  { source: '/docs/stability', destination: '/docs/api/stability', permanent: true },
   { source: '/docs', destination: '/docs/api', permanent: true },
 ] as const;
 

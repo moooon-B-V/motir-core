@@ -27,7 +27,7 @@ designs and would otherwise read as a redesign of them.
 | The API-tokens settings page header + CLI panel                | `design/settings/` (`account-settings.mock.html` Panels 3–8) · `design/cli-connect/` | Places ONE link row above them. Redraws neither.                                                |
 | The token manager (list, create modal, scopes)                 | `design/settings/` (`account-settings.mock.html` · `token-scopes.mock.html`)         | Nothing. Drawn at 55% opacity in Panel 8 purely as position context.                            |
 | The sandbox guide's CONTENT (its procedure, its profile table) | `design/agent-sandbox/` (Story MOTIR-2268 · MOTIR-2270)                              | Draws its ROW in the rail's first tier and the rail it sees. Redraws none of its page.          |
-| The `/docs` area ROOT (an index page)                          | nobody yet — MOTIR-2315                                                              | Nothing. Amendment 10 records it as open; `/docs` still 308s to `/docs/api`.                    |
+| The `/docs` area ROOT (an index page)                          | nobody yet — MOTIR-2315                                                              | Nothing. Amendment 11 records it as open; `/docs` still 308s to `/docs/api`.                    |
 | The app shell / authed nav                                     | `design/shell/`                                                                      | Nothing — the docs surface is PUBLIC and does not render inside the authed shell.               |
 | The renderer, the routes, the spec URL                         | ADR Amendment 4 (Subtask 11.4.1)                                                     | Draws to them.                                                                                  |
 
@@ -48,7 +48,7 @@ already established for unauthenticated, indexable pages.
 
 > **⚠️ These addresses have moved twice, and this asset is drawn to the current
 > ones.** They were `/api-docs*` when this asset was first written;
-> **Amendment 9 Q1** renamed the area to `/docs`, and **Amendment 10 Q1**
+> **Amendment 9 Q1** renamed the area to `/docs`, and **Amendment 11 Q1**
 > ([MOTIR-2310](motir:cmshyscjx001d04jyhvr1lwc6)) nested the guide and the policy
 > inside the reference's own prefix. Every old address keeps a permanent 308.
 > **The FOLDER name does not move**: `design/api-docs/`, `lib/apiDocs/`, the
@@ -147,7 +147,7 @@ of fact from a verb and must not be mistaken for one.
 
 **Added by [MOTIR-2311](motir:cmshysgbl001g04jytj8r5cl0), under
 [MOTIR-2307](motir:cmshyic5q000604jyjq7mm0dr). Drawn to ADR
-`public-api-conventions.md` **Amendment 10** ([MOTIR-2310](motir:cmshyscjx001d04jyhvr1lwc6)),
+`public-api-conventions.md` **Amendment 11** ([MOTIR-2310](motir:cmshyscjx001d04jyhvr1lwc6)),
 which decides the structure. This asset draws to that answer; it does not
 re-decide it.** Panels 10 and 11.
 
@@ -167,7 +167,7 @@ was the literal string `"API reference"` on that page too.
 | 2    | the surface's name, e.g. `API reference` | that surface's own pages — Getting started, Stability & deprecation | only inside that surface           |
 | 3    | the resource groups                      | the operation rows                                                  | only inside the API (`/docs/api…`) |
 
-**What decides it is the ROUTE PREFIX, not the page** (Amendment 10 Q2): tiers 2
+**What decides it is the ROUTE PREFIX, not the page** (Amendment 11 Q2): tiers 2
 and 3 render if and only if the route is `/docs/api` or below. One fact decides
 both which sub-area a page is in and what its rail shows, so the two cannot drift
 apart — and a page added anywhere else cannot acquire the operation list by

@@ -383,10 +383,12 @@ Within `v1`:
 **Therefore a client MUST tolerate unknown fields.** That obligation is the other
 half of the promise and is stated in the reference docs (11.4).
 
-> **⚠️ Published as `/docs/stability` — see
+> **⚠️ Published as `/docs/api/stability` — see
 > [Amendment 4, Q5](#q5--what-the-published-stability--deprecation-policy-says)**
 > (the area was renamed from `/api-docs` by
-> [Amendment 9, Q1](#q1--the-area-is-renamed-to-docs-with-permanent-redirects-the-sandbox-guide-is-docssandbox)).
+> [Amendment 9, Q1](#q1--the-area-is-renamed-to-docs-with-permanent-redirects-the-sandbox-guide-is-docssandbox),
+> and the page moved inside the reference's own prefix by
+> [Amendment 11, Q3](#q3--what-moves-what-redirects-and-what-does-not-rename)).
 > The public page is generated from THIS clause's lists rather than re-typed, so the
 > internal record and the published promise cannot say different things. Amendment 4
 > also pins the deprecation channel (`deprecated: true` in the spec) and how a `v2`
@@ -1104,6 +1106,13 @@ Routes: **`/docs/api`** for the reference, `/docs/getting-started` for the guide
 > redirects from every `/api-docs*` path. Only the ADDRESSES moved: the `apiDocs`
 > next-intl namespace, `lib/apiDocs/`, `design/api-docs/` and `tests/api-docs/` keep
 > their names.
+>
+> **⚠️ Amended again 2026-08-06 — the guide and the policy moved INSIDE the
+> reference's prefix.** [Amendment 11, Q1](#q1--the-area-is-a-set-of-sub-areas-one-per-documented-surface-the-api-reference-owns-docsapi)
+> makes `/docs` a set of sub-areas, one per documented surface, and gives the API
+> reference `/docs/api/*`: the guide is now **`/docs/api/getting-started`** and the
+> policy **`/docs/api/stability`**, each with a permanent redirect from its former
+> address. `/docs/api` itself is unchanged, and so is the addresses-move rule above.
 
 ##### Renderer — our own primitives; the third-party renderers are REJECTED
 
@@ -1162,8 +1171,10 @@ English; if only a human reads it, it is localized._
 
 #### Q5 — what the PUBLISHED stability + deprecation policy says
 
-§8 is the internal record; `/docs/stability` (`/api-docs/stability` as originally
-routed — Amendment 9 Q1) is the promise a third party
+§8 is the internal record; **`/docs/api/stability`** (`/api-docs/stability` as
+originally routed — Amendment 9 Q1; moved inside the reference's prefix by
+[Amendment 11, Q3](#q3--what-moves-what-redirects-and-what-does-not-rename)) is the
+promise a third party
 integrates against. **They are the same promise, stated twice for two audiences, and
 the page is generated from §8's lists rather than re-typed** — a second hand-written
 copy of a stability promise is the same drift this story exists to prevent, applied
@@ -2617,3 +2628,264 @@ A client with a persisted exclusion list keyed by internal id migrates it to
   the rule is general and does not need re-deciding per resource.
 - **Story 11.6's `list_ready` re-base** becomes a true no-op on the MCP payload
   once this lands, rather than a change that would drop `assignee` from it.
+
+---
+
+### Amendment 11 (2026-08-06) — the documentation area is a set of SUB-AREAS; the API reference owns `/docs/api/*`, and the operation index renders only inside it
+
+**Amends:** Amendment 4 Q4's **route list** and Amendment 9 Q1's **route table** —
+the guide and the policy move from `/docs/getting-started` and `/docs/stability`
+to `/docs/api/getting-started` and `/docs/api/stability`. Q4's home
+(`motir-core`, `app/(public)/`), its renderer decision and its language rule are
+untouched, and this amendment is written INSIDE them.
+**Leaves unchanged:** §1–§9 in full; **Amendment 4 Q3 — the spec stays at
+`/api/openapi/v1.json`**; **Amendment 9 Q1's `/docs` rename and its
+addresses-move rule**, which this amendment APPLIES rather than re-opens, and its
+`/docs/sandbox` route, which does not move; Amendments 1, 2, 3, 5, 6, 7 and 8 in
+full. **No `/api/v1` shape, path, scope or status changes here.**
+**Card:** MOTIR-2310, under MOTIR-2307 (the docs-navigation defect).
+
+> **Numbered 11, not 10.** This amendment was authored as _Amendment 10_ and lost
+> the merge race to [Amendment 10](#amendment-10-2026-08-06--a-v1-collection-row-embeds-a-minimal-actor-targetrepo-stays-off-it-and-how-a-key-addressed-collection-is-enumerated)
+> (MOTIR-2279, the collection-row actor), which landed on `main` first — the same
+> race its own header records for 8 → 9 → 10, one round later. The content is
+> unaffected. **Anything citing "Amendment 10" for the docs information
+> architecture means THIS amendment**; the design assets under `design/api-docs/`
+> and `design/agent-sandbox/` were corrected in the same run that found the
+> collision.
+
+#### The problem
+
+Amendment 9 Q1 moved the area's ADDRESS from `/api-docs` to `/docs` and said so
+explicitly: it changed where the surface lives, not how it is organised inside.
+That was correct at the time and it is what made the next problem visible.
+
+On `origin/main` today, `app/(public)/docs/_components/CatalogueNav.tsx` renders
+ONE group — `t('navDocumentation')`, _"Documentation"_ — holding four rows:
+
+| Row                     | Route                   | What it is about                               |
+| ----------------------- | ----------------------- | ---------------------------------------------- |
+| API reference           | `/docs/api`             | the REST API                                   |
+| Getting started         | `/docs/getting-started` | **the REST API** — a PAT, a first call, errors |
+| Stability & deprecation | `/docs/stability`       | **the REST API** — §8's additive-only promise  |
+| Agent sandbox           | `/docs/sandbox`         | **a container you run a coding agent in**      |
+
+Three of the four are about the API and none of them says so. Beneath that group
+the same component renders every group in its `groups` prop, which all four pages
+supply from `buildApiReference()` — so the ~28 `/api/v1` operations are listed on
+the sandbox guide as well, and the rail's accessible name there is the literal
+string _"API reference"_ (`messages/en.json` `apiDocs.navLabel`).
+
+The structure was right when every page in the area was about the API. It became
+wrong when a page about something else arrived, and it gets worse — not more
+visible — with each additional page. Two are already queued (MOTIR-2308, the CLI;
+MOTIR-2309, the MCP), which is what makes now the cheap moment: four rows, no
+external links, one repository.
+
+---
+
+#### Q1 — the area is a set of SUB-AREAS, one per documented surface; the API reference owns `/docs/api/*`
+
+##### The decision
+
+**`/docs` is a set of sub-areas, one per product surface Motir documents. Every
+page about a surface lives under that surface's prefix, and the rail lists the
+SURFACES at its top level — not their pages.**
+
+The API reference is the first such sub-area. It owns `/docs/api/*`: the
+reference itself is the sub-area's index at `/docs/api`, and the guide and the
+policy become pages inside it.
+
+The rail therefore renders in two tiers:
+
+| Tier                     | What it lists                                                         | Rendered on               |
+| ------------------------ | --------------------------------------------------------------------- | ------------------------- |
+| **Documentation**        | one row per SURFACE — API reference, Agent sandbox, later CLI and MCP | every page in the area    |
+| **The current sub-area** | that surface's own pages, and its resource index where it has one     | only inside that sub-area |
+
+A single-page surface is a single row and gets no second tier, which is why
+`/docs/sandbox` does not move and needs nothing added.
+
+##### What three shipped developer-documentation surfaces actually do — observed, 2026-08-06
+
+Read rather than remembered, per the mirror-product rung:
+
+| Product        | Where the API reference lives                                      | Where the guides live                                                        | Observed                                                                                                                                                                |
+| -------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stripe**     | `docs.stripe.com/api` — its own index, its own resource navigation | sibling top-level prefixes: `/get-started/…`, `/payments/…`, `/stripe-cli/…` | The reference is not a row in a flat list beside the guides; it is a prefix with an index of its own, and it links back OUT to the quickstart rather than absorbing it. |
+| **GitHub**     | `docs.github.com/en/rest` — resource subsections under one prefix  | sibling top-level sections: `/en/actions`, `/en/graphql`, `/en/billing`      | Individual endpoints are addressed _under_ `/en/rest/`; guide-shaped pages sit at `/en/rest/guides/` — inside the API's prefix, because they are about the API.         |
+| **Cloudflare** | `developers.cloudflare.com/api/resources/…`                        | a different prefix entirely                                                  | Operations are nested resource → subresource → method under the API prefix; nothing outside that prefix carries the operation index.                                    |
+
+All three place the API reference in **its own prefix with its own navigation**,
+and all three keep API-specific guides **inside** that prefix rather than beside
+the product's other documentation. That is the arrangement decided above, and the
+convergence is the reason for choosing the more expensive option: the two rows
+this moves are API-specific guides in exactly GitHub's `/en/rest/guides/` sense.
+
+##### Rejected alternatives
+
+| Rejected                                                                                                                        | Why                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Labelled sections in one flat rail** — a _Guides_ group above an _API reference_ group, no route change (the cheapest option) | Fixes the appearance and leaves the addresses lying. `/docs/getting-started` still promises getting started with Motir to anyone who reads a URL, links one, or lands on it from a search result — and a URL is the part of this surface strangers quote. It also has no answer for the second API guide: a flat rail with eight rows and two headings is the same problem at twice the size. Cheapness here buys one release of quiet. |
+| **Scope the operation list only, change no grouping** (the parent card's third option)                                          | Necessary but not sufficient, and it is not an alternative — it is Q2 below, which this decision adopts. On its own it removes the loudest symptom while leaving "Getting started" at the top level of an area named Docs, which is the defect a reader meets first.                                                                                                                                                                    |
+| **A separate `/api` top-level area outside `/docs`**                                                                            | Re-opens Amendment 9 Q1 one day after it settled, and splits the shell: the reference would lose the rail that lists Motir's other documentation, so the only route from the API to the sandbox guide would be a link someone remembers to add. The observed surfaces keep the reference INSIDE the documentation site, one prefix down.                                                                                                |
+| **Move `/docs/sandbox` under a `/docs/guides/` prefix at the same time**                                                        | Re-opens Amendment 9 Q1's route for a page that shipped yesterday, to buy symmetry the rule below does not need. A one-page surface is a one-row surface; `guides` is not a product surface, it is a word for "everything else", and grouping by it would re-create the flat list one level down.                                                                                                                                       |
+
+---
+
+#### Q2 — the operation index renders inside the API sub-area and nowhere else, decided by the ROUTE PREFIX
+
+##### The decision
+
+**A page renders the `/api/v1` operation index if and only if it is inside the
+API sub-area — that is, its route is `/docs/api` or below.** The route prefix
+decides it. Not the page (which would be a per-page flag four call sites can
+disagree about), and not the nav group (which is derived from the prefix anyway).
+
+One fact decides both which sub-area a page belongs to and whether it shows that
+sub-area's resource index, so the two cannot drift apart. A page added under
+`/docs/api/*` inherits the index with no edit; a page added anywhere else cannot
+acquire it by accident — which is exactly how the sandbox guide acquired it.
+
+The generalisation, for the sub-areas that do not exist yet: **a sub-area's
+second-tier navigation is whatever that surface's own index is** — the operation
+list for the API, and, if the CLI story wants one, a command list for the CLI.
+Nothing says every sub-area must have one.
+
+##### Rejected alternatives
+
+| Rejected                                                                                | Why                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **A `showOperations` prop each page passes**                                            | Four call sites that can disagree with the grouping, and a fifth page's author has to know the prop exists. The defect being fixed is precisely that every page passed `groups` without anyone deciding it should.                          |
+| **Render the index only on `/docs/api` itself, not on its guide pages**                 | The guide and the policy ARE about the operations; a reader following the getting-started steps is the likeliest person to want the operation beside them. The prefix rule keeps them, which is also what GitHub's `/en/rest/guides/` does. |
+| **Keep rendering it everywhere, but collapse it behind a disclosure off the API pages** | Still answers "what is this surface about" with the API on a page that is not, and adds an interaction to a rail whose whole job is to be read at a glance.                                                                                 |
+
+---
+
+#### Q3 — what moves, what redirects, and what does NOT rename
+
+##### The routes
+
+| Page                    | Today                   | After                           |
+| ----------------------- | ----------------------- | ------------------------------- |
+| API reference           | `/docs/api`             | `/docs/api` — unchanged         |
+| Getting started         | `/docs/getting-started` | **`/docs/api/getting-started`** |
+| Stability & deprecation | `/docs/stability`       | **`/docs/api/stability`**       |
+| Agent sandbox           | `/docs/sandbox`         | `/docs/sandbox` — unchanged     |
+
+Two pages move. The other two do not.
+
+##### The redirect map, in full and in order
+
+`next.config.ts`'s `DOCS_REDIRECTS` becomes the following. **Order is
+load-bearing** — Next matches top to bottom, and `/api-docs/:path*` also matches
+`/api-docs`, so every exact `/api-docs/*` rule must precede the wildcard. That
+ordering is already asserted by `tests/api-docs/docs-redirects.test.ts`, which
+compares the array exactly; it is updated to this map, never loosened.
+
+| #   | Source                      | Destination                 | Status | Origin                                   |
+| --- | --------------------------- | --------------------------- | ------ | ---------------------------------------- |
+| 1   | `/api-docs/getting-started` | `/docs/api/getting-started` | 308    | **new** — one hop, not two, via rule 4   |
+| 2   | `/api-docs/stability`       | `/docs/api/stability`       | 308    | **new** — same                           |
+| 3   | `/api-docs`                 | `/docs/api`                 | 308    | Amendment 9 Q1                           |
+| 4   | `/api-docs/:path*`          | `/docs/:path*`              | 308    | Amendment 9 Q1                           |
+| 5   | `/docs/getting-started`     | `/docs/api/getting-started` | 308    | **new** — this amendment's own move      |
+| 6   | `/docs/stability`           | `/docs/api/stability`       | 308    | **new** — same                           |
+| 7   | `/docs`                     | `/docs/api`                 | 308    | Amendment 9 Q1 — see the open item below |
+
+Rules 1 and 2 exist for the same reason Amendment 9 gave for putting the exact
+`/api-docs` rule before the wildcard: without them, an old bookmark to
+`/api-docs/stability` would take two hops (`→ /docs/stability → /docs/api/stability`),
+and a chain is a thing that breaks one rule at a time.
+
+##### What does NOT rename — the addresses-move rule, applied not re-decided
+
+Amendment 9 Q1 settled this and it settles it again here: **a name that is a
+promise to a stranger moves with the surface; a name only this repository can see
+does not.** So the following are untouched by this amendment, and a future card
+proposing to "tidy" them is answered by that rule:
+
+- the **`apiDocs`** next-intl namespace (54 keys × 2 catalogs),
+- the content module directory **`lib/apiDocs/`**,
+- the design-asset area **`design/api-docs/`**, which owns this rail,
+- the test directory **`tests/api-docs/`**.
+
+The one string that is NOT an internal identifier and DOES change is
+`apiDocs.navLabel`, whose value is the literal `"API reference"` and is the
+rail's accessible name on every page in the area, including the sandbox guide. A
+name a screen reader speaks is read by a stranger; it moves with the surface.
+
+---
+
+#### Q4 — the placement rule for the NEXT documentation page
+
+##### The rule
+
+> **A documentation page lives under the prefix of the product surface it
+> documents. A surface earns a prefix when it has more than one page: with one
+> page it IS `/docs/<surface>`; the second page about that surface creates
+> `/docs/<surface>/…`, moves the first inside it, and leaves a permanent
+> redirect behind.**
+
+Two properties are worth naming, because they are why this is a rule and not a
+preference. It answers the question from the CONTENT of the page rather than
+from what the rail currently looks like, so two people asking it a year apart get
+the same answer. And it makes growth the trigger for restructuring, at the moment
+restructuring is cheapest — which is the same argument Amendment 9 made about
+addresses, one level up.
+
+##### The worked example, applied rather than asserted
+
+_"Where does a new Self-hosting page go?"_
+
+Self-hosting is a product surface — running Motir yourself — and it is not the
+API, the CLI or the MCP. It is one page. So it is **`/docs/self-hosting`**, a
+fifth row in the rail's surface tier, with no second tier and no operation index
+(Q2: it is not under `/docs/api`). If a second self-hosting page later lands —
+say, upgrades — then that surface earns its prefix: `/docs/self-hosting` becomes
+the sub-area index, the new page is `/docs/self-hosting/upgrades`, and nothing
+about the first page's address changes because it was already the index.
+
+The same rule, applied to the two queued stories: MOTIR-2308's CLI documentation
+is `/docs/cli` if it is one page and `/docs/cli/*` if it is several; MOTIR-2309's
+MCP documentation is `/docs/mcp` or `/docs/mcp/*` on the same test. Neither story
+has to re-open this question, which is the point of writing it down.
+
+---
+
+#### What this amendment deliberately does NOT decide
+
+**The area ROOT.** Rule 7 above keeps `/docs` redirecting to `/docs/api`, and
+both shipped entrances — `ExploreTopBar.tsx:52` and `ExploreFooter.tsx:62` —
+link to `/docs/api` directly. So the front door of an area named _Docs_ is the
+API reference, which is this amendment's own complaint one level up. Amendment 9
+Q1 called `/docs` an address held open _"until an index page earns its place"_,
+and the sub-area structure decided here is arguably what earns it.
+
+It is left open here rather than settled quietly, because an index is a NEW PAGE
+with content, a design and a card, and MOTIR-2307's boundary is the navigation of
+the pages that exist. **It is filed as its own card rather than left as a
+sentence** — the disposition this ADR gives every deferral. What would reopen it:
+the first `/docs` sub-area that is not the API reference and not a single page,
+i.e. whichever of MOTIR-2308 or MOTIR-2309 ships more than one page.
+
+**Whether a sub-area other than the API gets a second-tier index** (a CLI command
+list, an MCP tool list). Q2 states that a sub-area's second tier is that
+surface's own index _where it has one_; whether the CLI wants one is the CLI
+story's question, answered against its own content.
+
+#### Consequences of this amendment
+
+- **MOTIR-2311** (design) draws the two-tier rail against the shipped surface —
+  the rail on an API page beside the rail on a guide page — plus the access path
+  between them. Its asset area stays `design/api-docs/` per the addresses-move
+  rule above.
+- **MOTIR-2312** (code) implements Q1's two tiers and Q2's prefix test, performs
+  Q3's two route moves, and rewrites `DOCS_REDIRECTS` to the seven-rule map with
+  `tests/api-docs/docs-redirects.test.ts` updated to match it exactly.
+- **MOTIR-2313** (E2E) drives the recipe: no operation rows on `/docs/sandbox`,
+  the door between a guide and the reference walked by CLICKING it, and every
+  rule in the redirect map resolved for real.
+- **Amendment 4 Q4's route line and Q5's opening** gain `⚠️ Amended` pointers to
+  this amendment; their bodies are not rewritten, which is the shape every
+  amendment here keeps.

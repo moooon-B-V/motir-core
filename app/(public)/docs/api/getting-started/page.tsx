@@ -1,10 +1,10 @@
 import { getTranslations } from 'next-intl/server';
 import { buildApiReference } from '@/lib/apiDocs/reference';
 import { GUIDE_STEPS } from '@/lib/apiDocs/guide';
-import { CatalogueNav } from '../_components/CatalogueNav';
-import { DocBlocks } from '../_components/DocBlocks';
+import { CatalogueNav } from '../../_components/CatalogueNav';
+import { DocBlocks } from '../../_components/DocBlocks';
 
-// GET /docs/getting-started (Story 11.4 · Subtask 11.4.8 — MOTIR-2189 ·
+// GET /docs/api/getting-started (Story 11.4 · Subtask 11.4.8 — MOTIR-2189 ·
 // design Panel 4).
 //
 // A single LINEAR read, and the order is the deliverable: mint → first call →
@@ -65,7 +65,7 @@ export default async function GettingStartedPage() {
             {t('navReference')}
           </a>
           {' · '}
-          <a className="text-(--el-link) underline" href="/docs/stability">
+          <a className="text-(--el-link) underline" href="/docs/api/stability">
             {t('navStability')}
           </a>
         </p>

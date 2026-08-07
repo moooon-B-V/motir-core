@@ -360,7 +360,7 @@ needs **no treatment it did not need at one row**.
 
 > **⚠️ Re-pointed by MOTIR-2311.** When this asset was written the group was a
 > flat list of four documents and the check was _"does it still read as a list at
-> four rows"_. ADR **Amendment 10** makes the top tier a list of the SURFACES
+> four rows"_. ADR **Amendment 11** makes the top tier a list of the SURFACES
 > Motir documents — API reference, Agent sandbox, later CLI and MCP — and moves
 > the API's own pages into a second tier that renders only inside `/docs/api`. So
 > this page's row is now the rail's **second**, and the row count question the
@@ -375,7 +375,7 @@ needs **no treatment it did not need at one row**.
 | -------------------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **MOTIR-2270** (this card)             | GIVES         | this area's three files: the procedure, the matrix presentation, `.pcard` / `.mount` / `pill--tier*`, the rail's row for this page                                                                                               |
 | **MOTIR-2271** (the page)              | TAKES         | builds the page, the shared `table` block kind, and the rail entry                                                                                                                                                               |
-| **MOTIR-2311** (the rail's regrouping) | TAKES         | owns the rail's GROUPING. Its ADR Amendment 10 makes the top tier a list of SURFACES, so this page's row is the rail's SECOND rather than its fourth. The panels here were re-pointed in that card's PR so the two assets agree. |
+| **MOTIR-2311** (the rail's regrouping) | TAKES         | owns the rail's GROUPING. Its ADR Amendment 11 makes the top tier a list of SURFACES, so this page's row is the rail's SECOND rather than its fourth. The panels here were re-pointed in that card's PR so the two assets agree. |
 | **MOTIR-2286** (the route migration)   | TAKES         | moves `/api-docs*` → `/docs*`; this asset draws the destination                                                                                                                                                                  |
 | **MOTIR-2269** (the decision)          | GIVES         | ADR Amendment 9 — route, ownership rule, derivation source. Drawn to, not re-decided                                                                                                                                             |
 | **MOTIR-2188** (11.4.7, `done`)        | —             | owns the shell, the rail component and `table.spec`. Mounted into, unchanged except the rail's entry LIST                                                                                                                        |
