@@ -89,8 +89,18 @@ test('a reader with no session reaches the MCP page from the rail and leaves abl
   await chapter('Settle the first question: this, or the REST API?', async () => {
     // The fork is the first thing under the lede because it is the first choice
     // a reader makes, and the expensive one to get wrong.
-    await expect(page.getByText('Expected to change', { exact: false })).toBeVisible();
-    await expect(page.getByText('Additive only', { exact: false })).toBeVisible();
+    //
+    // ⚠️ `.filter({ visible: true })` because the shipped `DocTable` renders every
+    // row TWICE — a wide `<table>` and a stack of narrow cards, each `display:
+    // none` at the other width — so a bare `getByText` resolves to two elements
+    // and trips strict mode. Filtering by visibility asserts what the reader at
+    // THIS viewport can actually see, and stays correct at either width.
+    await expect(
+      page.getByText('Expected to change', { exact: false }).filter({ visible: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText('Additive only', { exact: false }).filter({ visible: true }),
+    ).toBeVisible();
     // …and the other half is one click away for the reader who took it.
     await expect(page.locator('main a[href="/docs/api"]').first()).toBeVisible();
     await beat();

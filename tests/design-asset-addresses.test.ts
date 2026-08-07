@@ -323,26 +323,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   // red (MOTIR-2348). Each row below names the card that BUILDS its route and
   // therefore deletes the row — the tightness test enforces that.
   {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the route this asset DRAWS. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the catalogue route this asset DRAWS. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the mock renders the address bar of the page it specifies. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: same unbuilt catalogue route, in the mock. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
     file: 'design/cli-guide/cli-guide.mock.html',
     address: '/docs/cli',
     why: 'Forward-looking: built by MOTIR-2308, whose PR #1910 was open when this landed — that PR adds app/(public)/docs/cli/page.tsx and MUST delete this row, or the tightness test fails.',
@@ -378,26 +358,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/cli-guide/cli-guide.mock.html',
     address: '/docs/cli',
     why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the asset proposes the route, and MOTIR-2309 ships it.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the second page of the same unbuilt sub-area (MOTIR-2309).',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the rail row the asset draws for its own unbuilt page (MOTIR-2309).',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the same unbuilt sub-area’s second rail row (MOTIR-2309).',
   },
   {
     file: 'design/mcp-server/design-notes.md',
