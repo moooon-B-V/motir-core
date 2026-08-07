@@ -159,7 +159,7 @@ function StatusFilter({ activeTab, status }: { activeTab: JobsTab; status?: JobR
 // ── Detail dialog ───────────────────────────────────────────────────────────
 function JsonBlock({ value }: { value: unknown }) {
   return (
-    <pre className="max-h-[40vh] overflow-auto rounded-(--radius-sm) bg-(--el-surface) p-3 font-mono text-xs text-(--el-text)">
+    <pre className="max-h-[40vh] overflow-auto rounded-(--radius-control) bg-(--el-surface) p-3 font-mono text-xs text-(--el-text)">
       {JSON.stringify(value, null, 2)}
     </pre>
   );

@@ -75,7 +75,7 @@ export function LinkAddForm({
     label: tLabels(`relationship.${r.kind}`),
   }));
   return (
-    <div className="bg-(--el-surface-soft) border-(--el-border) flex flex-col gap-2.5 rounded-md border p-3">
+    <div className="bg-(--el-surface-soft) border-(--el-border) flex flex-col gap-2.5 rounded-(--radius-card) border p-3">
       <div className="flex flex-wrap items-center gap-2">
         <div className="w-[140px] shrink-0">
           <Combobox
@@ -112,7 +112,7 @@ export function LinkAddForm({
         </div>
       </div>
       {error ? (
-        <div className="bg-(--el-tint-rose) flex items-start gap-2 rounded-md px-3 py-2">
+        <div className="bg-(--el-tint-rose) flex items-start gap-2 rounded-(--radius-card) px-3 py-2">
           <CircleAlert className="text-(--el-danger) mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span className="text-(--el-text-strong) font-sans text-[13px]">{error}</span>
         </div>

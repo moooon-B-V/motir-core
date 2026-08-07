@@ -360,7 +360,7 @@ function SortHeader({
       type="button"
       onClick={onSort}
       className={cn(
-        'group/sort relative z-10 -ml-1 flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase hover:text-(--el-text)',
+        'group/sort relative z-10 -ml-1 flex min-w-0 items-center gap-1 rounded-(--radius-control) px-1 py-0.5 text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase hover:text-(--el-text)',
         'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
         alignEnd && '-mr-1 ml-auto flex-row-reverse',
       )}

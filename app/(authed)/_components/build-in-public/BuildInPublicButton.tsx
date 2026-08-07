@@ -31,7 +31,7 @@ export function BuildInPublicButton({ projectKey }: { projectKey: string }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex h-9 items-center gap-2 rounded-(--radius-sm) border border-transparent bg-(--el-build-bg) px-2.5 font-sans text-sm font-medium text-(--el-text-strong) transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_18%,var(--el-page-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
+        className="inline-flex h-9 items-center gap-2 rounded-(--radius-btn) border border-transparent bg-(--el-build-bg) px-2.5 font-sans text-sm font-medium text-(--el-text-strong) transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_18%,var(--el-page-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
       >
         <Megaphone className="h-4 w-4 text-(--el-build-glyph)" aria-hidden />
         <span className="hidden sm:inline">{t('entryButton')}</span>

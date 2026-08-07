@@ -30,14 +30,20 @@ const ROWS = [0, 1, 2, 3, 4, 5, 6, 7];
 const INDENT = [0, 22, 22, 44, 44, 66, 44, 22];
 
 function Bar({ w }: { w: number }) {
-  return <span className="block h-3 rounded bg-(--el-muted)" style={{ width: w }} aria-hidden />;
+  return (
+    <span
+      className="block h-3 rounded-(--radius-control) bg-(--el-muted)"
+      style={{ width: w }}
+      aria-hidden
+    />
+  );
 }
 
 export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
   const t = useTranslations('issueViews');
   return (
     <div
-      className="overflow-hidden rounded-xl border border-(--el-border)"
+      className="overflow-hidden rounded-(--radius-card) border border-(--el-border)"
       aria-hidden
       data-testid="issue-tree-skeleton"
     >
@@ -67,9 +73,15 @@ export function IssueTreeSkeleton({ flat = false }: { flat?: boolean } = {}) {
             {/* Title — flat List drops the indent + the chevron slot. */}
             <span className="flex items-center gap-2" style={{ paddingLeft: flat ? 0 : INDENT[i] }}>
               {flat ? null : (
-                <span className="h-3.5 w-3.5 shrink-0 rounded bg-(--el-muted)" aria-hidden />
+                <span
+                  className="h-3.5 w-3.5 shrink-0 rounded-(--radius-control) bg-(--el-muted)"
+                  aria-hidden
+                />
               )}
-              <span className="h-4 w-4 shrink-0 rounded bg-(--el-muted)" aria-hidden />
+              <span
+                className="h-4 w-4 shrink-0 rounded-(--radius-control) bg-(--el-muted)"
+                aria-hidden
+              />
               <Bar w={56} />
               <Bar w={140 + (i % 3) * 50} />
             </span>
