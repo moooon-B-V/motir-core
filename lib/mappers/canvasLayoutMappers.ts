@@ -1,4 +1,4 @@
-import type { CanvasNodePosition } from '@prisma/client';
+import type { CanvasNodePosition } from '@/generated/prisma/client';
 import type { CanvasLayoutDTO, CanvasNodePositionDTO } from '@/lib/dto/canvasLayout';
 
 // Prisma row → DTO (CLAUDE.md: services map via lib/mappers before returning).

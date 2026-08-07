@@ -1,4 +1,4 @@
-import type { ImportSource } from '@prisma/client';
+import type { ImportSource } from '@/generated/prisma/client';
 
 // DTOs for the import-source OAuth identity store (Story 7.16 · MOTIR-1653).
 // Two shapes cross two very different boundaries:

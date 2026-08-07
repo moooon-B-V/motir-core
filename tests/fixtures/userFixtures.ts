@@ -1,5 +1,6 @@
-import type { User } from '@prisma/client';
+import type { User } from '@/generated/prisma/client';
 import { usersService } from '@/lib/services/usersService';
+import { randomToken } from '../helpers/random';
 
 // Shared test fixtures — user rows (Subtask 1.4.7).
 //
@@ -29,11 +30,11 @@ export interface CreateTestUserOptions {
 /**
  * Create a real user. The email defaults to a per-call random address so
  * concurrent fixtures never collide on the unique email constraint (the
- * inlined helpers all did this via `owner+${Math.random()}@example.com`).
+ * inlined helpers all did this with a random base-36 suffix).
  */
 export async function createTestUser(opts: CreateTestUserOptions = {}): Promise<User> {
   return usersService.createUser({
-    email: opts.email ?? `owner+${Math.random().toString(36).slice(2)}@example.com`,
+    email: opts.email ?? `owner+${randomToken()}@example.com`,
     password: opts.password ?? TEST_PASSWORD,
     name: opts.name ?? 'Owner',
   });

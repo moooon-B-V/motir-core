@@ -5,7 +5,7 @@ import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboarding
 import { toGithubInstallationDTO } from '@/lib/mappers/githubMappers';
 import { getGitProvider } from '@/lib/git';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
-import type { GithubRepo } from '@prisma/client';
+import type { GithubRepo } from '@/generated/prisma/client';
 import type { GithubInstallationDTO } from '@/lib/dto/github';
 import type { GitProviderId, InstallationToken, NormalizedRepo } from '@/lib/git/types';
 

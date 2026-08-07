@@ -6,7 +6,7 @@ import { registerSchedule } from './schedules';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import type { JobEventName } from './types';
 import type { JobRunFailure } from '@/lib/dto/jobs';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 // The canonical wrapper around `inngest.createFunction` (Story 1.6 · Subtask
 // 1.6.2, extended in 1.6.4). Every background job is defined through this —

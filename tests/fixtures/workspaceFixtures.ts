@@ -1,4 +1,4 @@
-import type { User, Workspace } from '@prisma/client';
+import type { User, Workspace } from '@/generated/prisma/client';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { createTestUser } from './userFixtures';

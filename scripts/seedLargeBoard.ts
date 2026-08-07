@@ -37,7 +37,12 @@
  * created, so callers (and the test) can assert the distribution without
  * re-deriving it.
  */
-import { BoardType, Prisma, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
+import {
+  BoardType,
+  Prisma,
+  type WorkItemKind,
+  type WorkItemPriority,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';

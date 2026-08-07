@@ -1,4 +1,4 @@
-import type { SavedFilterVisibility } from '@prisma/client';
+import type { SavedFilterVisibility } from '@/generated/prisma/client';
 import { canBrowse, canEdit, type ProjectAccessInputs } from '@/lib/projects/access';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 

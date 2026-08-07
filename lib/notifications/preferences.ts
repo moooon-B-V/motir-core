@@ -1,4 +1,4 @@
-import type { $Enums } from '@prisma/client';
+import type { $Enums } from '@/generated/prisma/client';
 
 // Notification-preference domain constants (Story 5.7 · Subtask 5.7.6).
 //

@@ -11,7 +11,7 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
   return { ...actual, getWorkspaceContext: async () => wsCtx.current };
 });
 
-import { DashboardWidgetType } from '@prisma/client';
+import { DashboardWidgetType } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';

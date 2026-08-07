@@ -4,7 +4,7 @@ import {
   type User,
   type Workspace,
   type WorkspaceMembership,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // A membership row joined with the slice of its user the members list

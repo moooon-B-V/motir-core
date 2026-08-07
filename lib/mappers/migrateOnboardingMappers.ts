@@ -1,4 +1,4 @@
-import type { MigrateOnboarding } from '@prisma/client';
+import type { MigrateOnboarding } from '@/generated/prisma/client';
 import type {
   MigrateOnboardingDto,
   MigrateOnboardingKindDto,

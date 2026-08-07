@@ -1,4 +1,4 @@
-import { type Prisma, type Project } from '@prisma/client';
+import { type Prisma, type Project } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectKeyAliasRepository } from '@/lib/repositories/projectKeyAliasRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';

@@ -24,7 +24,13 @@
 //      (lib/activity/renderers.ts): every audited diff key has an explicit
 //      disposition, unknown keys render the generic entry (mistake #29).
 
-import type { Sprint, User, WorkItem, WorkflowStatus, WorkItemRevision } from '@prisma/client';
+import type {
+  Sprint,
+  User,
+  WorkItem,
+  WorkflowStatus,
+  WorkItemRevision,
+} from '@/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';

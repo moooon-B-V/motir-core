@@ -5,7 +5,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 // Story 8.14 · Subtask 8.14.3 — workItemRevisionRepository.aggregateSprintCycleByDay.
 // Real Postgres (no mocks). Drives the per-day scope / completed / started deltas

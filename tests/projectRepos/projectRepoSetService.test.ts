@@ -1,4 +1,4 @@
-import { Prisma, type GithubRepo } from '@prisma/client';
+import { Prisma, type GithubRepo } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -22,6 +22,7 @@ import {
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // The project REPOSITORY SET over real Postgres (Story MOTIR-1775 · MOTIR-1780) —
 // the substrate every other card in the Story stands on, so what is pinned here is
@@ -78,7 +79,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
-      repoId: `${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `${name}-${randomToken(8)}`,
       owner,
       name,
       defaultBranch: 'main',

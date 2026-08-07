@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Session repository — single Prisma operations on the `session` table

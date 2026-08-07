@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -13,6 +13,7 @@ import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { ContainerAccrual, ContainerUsage } from '@/lib/orchestrator/types';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken, randomInt } from '../helpers/random';
 
 // THE FLEET COST METER against real Postgres (Story MOTIR-1916 · MOTIR-1924 ·
 // MOTIR-1995) — `docs/decisions/ci-minutes-allowance.md` §P, `ci-runner-fleet.md`
@@ -75,7 +76,7 @@ afterAll(async () => {
 });
 
 async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> {
-  const email = `fleet-cost-${Math.random().toString(36).slice(2, 8)}@example.com`;
+  const email = `fleet-cost-${randomToken(6)}@example.com`;
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
     name: `WS ${email}`,
@@ -85,7 +86,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
     await db.organization.update({
@@ -113,7 +114,7 @@ function usageFor(fx: Fixture, overrides: Partial<ContainerUsage> = {}): Contain
   const billableSeconds = overrides.billableSeconds ?? 240;
   const stoppedAt = overrides.stoppedAt ?? STOPPED_AT;
   return {
-    handleId: `m-${Math.random().toString(36).slice(2, 10)}`,
+    handleId: `m-${randomToken(8)}`,
     provider: 'fake',
     region: 'iad',
     orgId: fx.organizationId,
@@ -151,7 +152,7 @@ function accrualFor(fx: Fixture, overrides: Partial<ContainerAccrual> = {}): Con
   const accruedSeconds = overrides.accruedSeconds ?? 90;
   const observedAt = overrides.observedAt ?? STOPPED_AT;
   return {
-    handleId: `m-${Math.random().toString(36).slice(2, 10)}`,
+    handleId: `m-${randomToken(8)}`,
     provider: 'fake',
     region: 'iad',
     orgId: fx.organizationId,

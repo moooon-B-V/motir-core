@@ -1,4 +1,4 @@
-import { Prisma, type SavedFilter, type SavedFilterVisibility } from '@prisma/client';
+import { Prisma, type SavedFilter, type SavedFilterVisibility } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { SavedFilterWithStars } from '@/lib/mappers/savedFilterMappers';
 

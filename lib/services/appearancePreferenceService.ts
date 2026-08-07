@@ -1,4 +1,4 @@
-import type { UserAppearancePreference } from '@prisma/client';
+import type { UserAppearancePreference } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { userAppearancePreferenceRepository } from '@/lib/repositories/userAppearancePreferenceRepository';
 import type { UpsertUserAppearancePreferenceInput } from '@/lib/repositories/userAppearancePreferenceRepository';

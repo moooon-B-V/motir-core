@@ -11,9 +11,19 @@ on:
     # Weekly sweep so alerts surface even in a quiet week (Mondays 05:30 UTC).
     - cron: '30 5 * * 1'
 
+# Cancel superseded analyses on a PR branch — a new push makes the old one
+# irrelevant. NEVER cancel one on `main`: that analysis is the BASELINE every
+# PR's "new alerts in code changed by this pull request" diff is computed
+# against, and a cancelled run still records an analysis carrying ZERO results.
+# A zero-result baseline makes every pre-existing alert look new, so the next
+# PR to be checked inherits an alert it did not introduce — preferentially a
+# large one, which CodeQL then explains away as "the code changes were too
+# large". Measured on 2026-08-07: merging three PRs inside eight minutes
+# cancelled two main analyses (results 25 → 0 → 0 → 18), and PR #1921 was
+# checked against one of the zeroes.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:

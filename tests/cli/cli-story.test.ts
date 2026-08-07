@@ -28,6 +28,7 @@ import {
   type FakeAgent,
   type FakeGh,
 } from '../helpers/cliHarness';
+import { randomToken } from '../helpers/random';
 
 // STORY-CLOSING suite for the Motir CLI (Story 7.9 · Subtask 7.9.5 · MOTIR-883).
 //
@@ -132,7 +133,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
-      repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `repo-${name}-${randomToken(8)}`,
       owner: 'moooon',
       name,
       defaultBranch: 'main',

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { commentsService } from '@/lib/services/commentsService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';

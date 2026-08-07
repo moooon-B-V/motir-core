@@ -24,7 +24,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemFixture } from '../../fixtures';
-import type { PlanStatus } from '@prisma/client';
+import type { PlanStatus } from '@/generated/prisma/client';
 
 // Story 7.13 · MOTIR-916 — the auto-plan CADENCE trigger. A watcher on the 1.6
 // cron substrate fires the shipped 7.4 `expand_item` job for a project whose

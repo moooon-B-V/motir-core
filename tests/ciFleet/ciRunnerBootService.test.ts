@@ -25,6 +25,7 @@ import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken, randomInt } from '../helpers/random';
 
 // THE PROVISIONER against real Postgres (Story MOTIR-1916 · MOTIR-1921).
 //
@@ -90,7 +91,7 @@ interface Fixture {
 }
 
 async function seedTenant(options: { withRunnerGroup?: boolean; email?: string } = {}) {
-  const email = options.email ?? `fleet-boot-${Math.random().toString(36).slice(2, 8)}@example.com`;
+  const email = options.email ?? `fleet-boot-${randomToken(6)}@example.com`;
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
     name: `WS ${email}`,
@@ -100,7 +101,7 @@ async function seedTenant(options: { withRunnerGroup?: boolean; email?: string }
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.withRunnerGroup !== false) {
     await db.project.update({
@@ -132,7 +133,7 @@ async function seedIntent(
       installationId: '556677',
       runId: '7001',
       runAttempt: 1,
-      jobId: overrides.jobId ?? String(44000 + Math.floor(Math.random() * 900)),
+      jobId: overrides.jobId ?? String(44000 + randomInt(900)),
       jobName: 'build',
       workflowName: 'CI',
       repoOwner: MOTIR_ORG,
@@ -1114,9 +1115,9 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
         organizationId: fx.organizationId,
         projectId: overrides.projectId === undefined ? fx.projectId : overrides.projectId,
         installationId: '556677',
-        runId: `orphan-${Math.random().toString(36).slice(2, 8)}`,
+        runId: `orphan-${randomToken(6)}`,
         runAttempt: 1,
-        jobId: overrides.jobId ?? String(45_000 + Math.floor(Math.random() * 900)),
+        jobId: overrides.jobId ?? String(45_000 + randomInt(900)),
         jobName: 'build',
         workflowName: 'CI',
         repoOwner: MOTIR_ORG,

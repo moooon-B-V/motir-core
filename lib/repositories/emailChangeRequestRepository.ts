@@ -1,4 +1,4 @@
-import { Prisma, type EmailChangeRequest } from '@prisma/client';
+import { Prisma, type EmailChangeRequest } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Email-change-request repository (Subtask 8.8.22) — single Prisma operations on

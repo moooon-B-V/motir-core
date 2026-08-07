@@ -4,6 +4,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // Route-transport tests for the resumable migrate-onboarding API (Story 7.15 ·
 // MOTIR-931): POST /api/onboarding/migrate (start), GET …/:id (resume), POST
@@ -61,7 +62,7 @@ function useProject(fx: WorkItemFixture) {
 }
 
 async function seedConnectedRepo(fx: WorkItemFixture) {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomToken(6);
   const inst = await db.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,

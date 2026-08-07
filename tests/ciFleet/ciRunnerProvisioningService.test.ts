@@ -10,6 +10,7 @@ import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunne
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // The runner-FLEET entry point against real Postgres (Story MOTIR-1916 ·
 // MOTIR-1920) — `docs/decisions/ci-minutes-allowance.md`'s 2026-07-31 amendment.
@@ -116,7 +117,7 @@ async function seedTenant(options?: {
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
 
   await githubInstallationService.persistInstallation({

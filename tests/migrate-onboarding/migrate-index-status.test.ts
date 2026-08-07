@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { MigrateOnboardingNotFoundError } from '@/lib/migrateOnboarding/errors';
+import { randomToken } from '../helpers/random';
 
 // migrateOnboardingService.getIndexStatus — the Index step's per-repo progress
 // (Story 7.15 · MOTIR-934), against a REAL Postgres (the motir-core convention).
@@ -41,7 +42,7 @@ const { migrateOnboardingService } = await import('@/lib/services/migrateOnboard
  *  to be visible together MUST share one installation — call this once, then
  *  {@link seedRepo} for each repo under it. */
 async function seedInstallation(fx: WorkItemFixture, account = 'acme') {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomToken(6);
   return db.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
@@ -60,7 +61,7 @@ async function seedRepo(
   owner: string,
   name: string,
 ) {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomToken(6);
   if (!inst.workspaceId) throw new Error('seedRepo needs a workspace-bound installation');
   await db.githubRepo.create({
     data: {
@@ -83,7 +84,7 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: 'succeeded',
       finishedAt: new Date(),
@@ -101,7 +102,7 @@ async function seedRunningIndexJob(fx: WorkItemFixture) {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: 'running',
       output: {},

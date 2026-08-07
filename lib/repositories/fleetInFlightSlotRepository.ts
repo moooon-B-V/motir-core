@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { FleetInFlightSlot, Prisma } from '@prisma/client';
+import type { FleetInFlightSlot, Prisma } from '@/generated/prisma/client';
 
 // Data access for the FLEET IN-FLIGHT SLOTS (Story MOTIR-1916 · MOTIR-1997) —
 // one row per container held by a workload that does not own a table of its own.

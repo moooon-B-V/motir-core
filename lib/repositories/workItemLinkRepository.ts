@@ -1,4 +1,4 @@
-import { Prisma, type WorkItemLink, type WorkItemLinkKind } from '@prisma/client';
+import { Prisma, type WorkItemLink, type WorkItemLinkKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   CrossWorkspaceLinkError,

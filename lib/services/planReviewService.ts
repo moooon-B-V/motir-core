@@ -1,4 +1,4 @@
-import type { WorkItem } from '@prisma/client';
+import type { WorkItem } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';

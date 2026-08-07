@@ -1,7 +1,7 @@
 // Prisma `Import` → `ImportDto` (Story 7.16 · MOTIR-941). Pure mapping, no I/O —
 // the service calls it just before returning (the 4-layer rule).
 
-import type { Import } from '@prisma/client';
+import type { Import } from '@/generated/prisma/client';
 import type { ImportDto } from '@/lib/dto/import';
 import type { ImportMapping } from '@/lib/import/engine/types';
 

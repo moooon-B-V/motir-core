@@ -1,4 +1,4 @@
-import { Prisma, type IdeaDraft } from '@prisma/client';
+import { Prisma, type IdeaDraft } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Idea-draft repository (Subtask 7.22.2 / MOTIR-1458) — single Prisma operations

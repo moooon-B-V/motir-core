@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { SprintState } from '@prisma/client';
+import type { SprintState } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sprintsService, assertSprintTransition } from '@/lib/services/sprintsService';
 import { usersService } from '@/lib/services/usersService';

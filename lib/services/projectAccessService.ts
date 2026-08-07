@@ -1,9 +1,9 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import type { Project } from '@prisma/client';
+import type { Project } from '@/generated/prisma/client';
 import {
   canBrowse,
   canComment,

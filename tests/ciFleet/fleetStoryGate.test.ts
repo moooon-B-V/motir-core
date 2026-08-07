@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
@@ -31,6 +31,7 @@ import {
 } from '../helpers/actionsVariableFake';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // THE STORY GATE for Motir's ephemeral CI runner fleet (Story MOTIR-1916 ·
 // MOTIR-1927) — the coverage the story's SUBTASKS structurally cannot give
@@ -151,7 +152,7 @@ async function seedTenant(
   options: { withRunnerGroup?: boolean; withProjectRepo?: boolean; isMeta?: boolean } = {},
 ): Promise<Fixture> {
   tenantSeq += 1;
-  const suffix = `${tenantSeq}-${Math.floor(Math.random() * 1_000_000)}`;
+  const suffix = `${tenantSeq}-${randomInt(1_000_000)}`;
   const installationId = String(55_900 + tenantSeq);
   const providerRepoId = String(99_900 + tenantSeq);
   const repoName = `acme-web-${tenantSeq}`;
@@ -169,7 +170,7 @@ async function seedTenant(
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
 
   if (options.isMeta) {

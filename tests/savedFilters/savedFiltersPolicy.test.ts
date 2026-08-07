@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import type { ProjectAccessInputs } from '@/lib/projects/access';
 import {
   canChangeSavedFilterOwner,

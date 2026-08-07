@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { BoardSwimlaneGroupBy } from '@prisma/client';
+import { BoardSwimlaneGroupBy } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   boardsService,

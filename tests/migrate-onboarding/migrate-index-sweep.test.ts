@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { MigrateOnboardingStep } from '@prisma/client';
+import type { MigrateOnboardingStep } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import {
@@ -10,6 +10,7 @@ import { jobFunctions } from '@/lib/jobs/registry';
 import { jobSchedules } from '@/lib/jobs/schedules';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // THE MIGRATE-ONBOARDING INDEX SWEEP (MOTIR-2082) — against a REAL Postgres (the
 // motir-core convention). Nothing is mocked: the cross-workspace scan, the RLS
@@ -68,7 +69,7 @@ async function seedSucceededIndexJob(workspaceId: string, repoRef: string) {
       workspaceId,
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: 'succeeded',
       finishedAt: new Date(),

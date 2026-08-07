@@ -1,4 +1,4 @@
-import type { Notification, User } from '@prisma/client';
+import type { Notification, User } from '@/generated/prisma/client';
 import type {
   NotificationActorDTO,
   NotificationData,

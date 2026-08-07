@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 
 // Shared zod fields for the ready-set tools (`list_ready`, `next_ready`) — the
 // MCP-side mirror of the `ReadyListFilter` facets the `/api/ready` routes parse

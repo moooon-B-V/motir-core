@@ -1,4 +1,9 @@
-import { type MemberRole, Prisma, type ProjectMembership, type User } from '@prisma/client';
+import {
+  type MemberRole,
+  Prisma,
+  type ProjectMembership,
+  type User,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // A project-membership row joined with the slice of its user the members list

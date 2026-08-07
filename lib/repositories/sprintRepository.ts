@@ -1,4 +1,4 @@
-import { Prisma, type Sprint, type SprintState } from '@prisma/client';
+import { Prisma, type Sprint, type SprintState } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the `sprint` table (Story 4.1 · Subtask 4.1.2). Single-

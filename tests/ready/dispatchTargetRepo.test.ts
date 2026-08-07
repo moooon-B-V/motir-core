@@ -13,6 +13,7 @@ import { runUpdateWorkItem } from '@/lib/mcp/tools/updateWorkItem';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // Per-item REPO ATTRIBUTION over real Postgres (Story 7.9 · MOTIR-1804) — the
 // rebuilt producer half of the cancelled 7.7.3 contract that the CLI's repo
@@ -60,7 +61,7 @@ async function connectRepo(
   name: string,
   opts: { owner?: string; provider?: string } = {},
 ): Promise<void> {
-  const rand = Math.random().toString(36).slice(2, 10);
+  const rand = randomToken(8);
   const owner = opts.owner ?? 'moooon';
   const provider = opts.provider ?? 'github';
   const inst = await db.githubInstallation.upsert({

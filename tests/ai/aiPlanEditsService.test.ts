@@ -18,7 +18,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent, JobContextBag } from '@/lib/ai/types';
 import type { PlanDto } from '@/lib/dto/plans';
-import type { WorkItem } from '@prisma/client';
+import type { WorkItem } from '@/generated/prisma/client';
 
 const ctx = {
   userId: 'user_1',

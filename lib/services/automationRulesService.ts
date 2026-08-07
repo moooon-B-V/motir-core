@@ -1,4 +1,4 @@
-import { Prisma, type AutomationTriggerType } from '@prisma/client';
+import { Prisma, type AutomationTriggerType } from '@/generated/prisma/client';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';

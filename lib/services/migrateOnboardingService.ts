@@ -1,4 +1,8 @@
-import { Prisma, type MigrateOnboarding, type MigrateOnboardingStep } from '@prisma/client';
+import {
+  Prisma,
+  type MigrateOnboarding,
+  type MigrateOnboardingStep,
+} from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ProjectContext } from '@/lib/projects';

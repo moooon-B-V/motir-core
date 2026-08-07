@@ -9,7 +9,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Modal } from '@/components/ui/Modal';
 import { Segmented } from '@/components/ui/Segmented';
 import { useToast } from '@/components/ui/Toast';
-import type { DashboardWidgetType } from '@prisma/client';
+import type { DashboardWidgetType } from '@/generated/prisma/client';
 import type { DashboardWidgetDto } from '@/lib/dto/dashboards';
 import type { CustomFieldDefinitionDTO } from '@/lib/dto/customFields';
 import {

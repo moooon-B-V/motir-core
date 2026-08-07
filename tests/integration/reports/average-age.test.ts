@@ -8,7 +8,7 @@ import { bucketKey, type ReportPeriod } from '@/lib/reports/buckets';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 const HIGH_AST: FilterAst = {
   combinator: 'and',

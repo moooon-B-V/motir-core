@@ -1,4 +1,4 @@
-import type { ProjectTag } from '@prisma/client';
+import type { ProjectTag } from '@/generated/prisma/client';
 import type { ProjectCategoryDto, ProjectTagDto } from '@/lib/dto/projectTags';
 
 // Prisma → DTO converters for the project-tags domain (Story 6.13 · Subtask

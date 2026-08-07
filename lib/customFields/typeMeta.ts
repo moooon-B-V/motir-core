@@ -1,4 +1,4 @@
-import type { CustomFieldType } from '@prisma/client';
+import type { CustomFieldType } from '@/generated/prisma/client';
 import { Calendar, CircleUserRound, Hash, SquareChevronDown, Type } from 'lucide-react';
 
 // Custom-field type presentation metadata (Story 5.3) — the per-type glyph +
