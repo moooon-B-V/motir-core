@@ -176,7 +176,7 @@ export function registerUpdateWorkItem(
     {
       title: 'Update work item',
       description:
-        'Edit a work item (by identifier, e.g. "PROD-7"): patch any subset of title, ' +
+        'Edit a work item (by identifier, e.g. "ACME-7"): patch any subset of title, ' +
         'description, explanation, priority, type, executor, estimate, story points, target ' +
         'repo, assignee, or due date. Use transition_status for the workflow status. Honors ' +
         'the same leaf-only type rules, connected-repo validation, assignee-membership check, ' +

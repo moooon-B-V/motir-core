@@ -50,7 +50,7 @@ export const LIST_PROJECTS_TOOL_NAME = 'list_projects';
  * that as a scale bug.
  */
 export interface McpProjectRow {
-  /** The project KEY, e.g. `"PROD"` — what `projectKey` elsewhere expects. */
+  /** The project KEY, e.g. `"ACME"` — what `projectKey` elsewhere expects. */
   key: string;
   /** The opaque project id. */
   id: string;

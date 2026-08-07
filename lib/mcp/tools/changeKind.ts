@@ -32,7 +32,7 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 // against the new kind (converting a typed leaf into a container kind without
 // first clearing its type is rejected with `TypeNotAllowedOnKindError`); the DB
 // trigger backstops kind/depth/cycle and the 6.4 edit gate + revision row all
-// run in the service UNCHANGED. This tool only resolves the `PROD-<n>` key.
+// run in the service UNCHANGED. This tool only resolves the `<KEY>-<n>` key.
 //
 // `epic` is NOT an offered target — epics are structural plan scaffolding the
 // planner/seed owns, exactly as `create_work_item` excludes it.
@@ -86,7 +86,7 @@ export function registerChangeKind(server: McpServer, resolveContext: McpContext
     {
       title: 'Change work item kind',
       description:
-        'Reclassify a work item (by identifier, e.g. "PROD-7"): change its KIND between story, ' +
+        'Reclassify a work item (by identifier, e.g. "ACME-7"): change its KIND between story, ' +
         'task, bug, and subtask. The item keeps its identifier, history, comments, and links. ' +
         'The new kind must stay legal under the current parent and over all existing children, ' +
         'and a container kind cannot keep a leaf-only work type — same rules and access checks ' +

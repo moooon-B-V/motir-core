@@ -21,7 +21,7 @@ complete catalog of every shipped tool with its input and output shape.
   state change constantly). It runs on the Vercel `mcp-handler` adapter, which
   bridges Next.js's Web `Request`/`Response` to the MCP SDK transport.
 - **Every tool is a thin adapter over a service.** A tool resolves the
-  `PROD-<n>` keys in its input to ids, then calls the **same service method an
+  `<KEY>-<n>` keys in its input to ids, then calls the **same service method an
   HTTP route calls** — `workItemsService`, `commentsService`, `sprintsService`,
   `backlogService`, … No tool contains business logic and no tool re-implements
   authorization.
@@ -186,19 +186,20 @@ tuned, and nothing in the guard constrains it.
 
 > ⚠️ **One field changed meaning**, and it is the only non-additive change in
 > Story 11.6. On the work-item rows `key` used to be the NUMERIC key while
-> `/api/v1` — and MCP's own `list_ready` rows — used it for the `PROD-<n>`
+> `/api/v1` — and MCP's own `list_ready` rows — used it for the `<KEY>-<n>`
 > identifier. `key` is now the **identifier everywhere**, and the numeric key
 > rides beside it as **`numericKey`**, so nothing is lost. Readers of
 > `identifier` are unaffected.
 
 Shared input conventions:
 
-- A **work item** is addressed by its `PROD-<n>` **identifier** (case-insensitive),
-  e.g. `"PROD-7"`. The owning project is derived from the key prefix.
-- A **project** is addressed by its **key**, e.g. `"PROD"` (case-insensitive) —
-  obtain it from `list_projects`, which returns the `key` of every project the
-  token can reach.
-- A **sprint** is addressed by its opaque **id** (not a `PROD-<n>` key) — obtain
+- A **work item** is addressed by its `<KEY>-<n>` **identifier** (case-insensitive),
+  e.g. `"ACME-7"`. The owning project is derived from the key prefix.
+- A **project** is addressed by its **key**, e.g. `"ACME"` (case-insensitive) —
+  the prefix chosen for that project at creation, not a reserved or
+  platform-wide value. Obtain it from `list_projects`, which returns the `key`
+  of every project the token can reach.
+- A **sprint** is addressed by its opaque **id** (not a `<KEY>-<n>` key) — obtain
   it from `list_sprints`.
 - Paginated reads take an opaque **`cursor`** in and return a **`nextCursor`**
   out (null at the tail); there is no load-everything path.
@@ -213,7 +214,7 @@ view shows.
 
 | Input        | Type                     | Required | Notes                                                          |
 | ------------ | ------------------------ | -------- | -------------------------------------------------------------- |
-| `projectKey` | string                   | yes      | Project key, e.g. `"PROD"`.                                    |
+| `projectKey` | string                   | yes      | Project key, e.g. `"ACME"`.                                    |
 | `kinds`      | array of work-item kinds | no       | Restrict to these kinds; omit for any.                         |
 | `priority`   | array of priorities      | no       | Restrict to these priorities; omit for any.                    |
 | `assigneeId` | string \| null           | no       | A user id; `null` or `"unassigned"` for the unassigned bucket. |
@@ -221,7 +222,7 @@ view shows.
 | `limit`      | integer (1–200)          | no       | Page size; default 50.                                         |
 
 **Output** — `structuredContent`: `{ items: ReadyItemDto[], nextCursor: string | null }`.
-Each `ReadyItemDto` has `id`, `key` (the `PROD-<n>` identifier), `kind`, `title`,
+Each `ReadyItemDto` has `id`, `key` (the `<KEY>-<n>` identifier), `kind`, `title`,
 `priority`, `status: { key, category }`, `assignee` (or null), and
 `descriptionExcerpt` — **plus the `dependencies` block** and the
 **[`commentCount`](#the-commentcount-field)** below.
@@ -233,13 +234,13 @@ per-row dependency projection, so one client renderer covers both:
 
 ```jsonc
 "dependencies": {
-  "blockedBy": [{ "key": "PROD-3", "title": "Ship the schema", "status": "done" }],
-  "blocks": [{ "key": "PROD-9", "title": "Wire the UI", "status": "todo" }]
+  "blockedBy": [{ "key": "ACME-3", "title": "Ship the schema", "status": "done" }],
+  "blocks": [{ "key": "ACME-9", "title": "Wire the UI", "status": "todo" }]
 }
 ```
 
 - `blockedBy` — what gates this item; `blocks` — what this item gates.
-- Each entry is `{ key, title, status }`: `key` is the `PROD-<n>` identifier,
+- Each entry is `{ key, title, status }`: `key` is the `<KEY>-<n>` identifier,
   `status` the raw workflow status key.
 - **Both arrays are ALWAYS present** — empty when the item has no edge in that
   direction, so a renderer never branches on presence.
@@ -253,8 +254,8 @@ per-row dependency projection, so one client renderer covers both:
   `get_work_item`.
 
 The human-readable text block carries the same graph in compact form, appended
-to each row's line: `PROD-7 [task/high] Wire the dispatch — unassigned · blocked
-by PROD-3 · blocks PROD-9`.
+to each row's line: `ACME-7 [task/high] Wire the dispatch — unassigned · blocked
+by ACME-3 · blocks ACME-9`.
 
 ##### The `commentCount` field
 
@@ -292,9 +293,9 @@ item they return:
 
 ```jsonc
 "advisories": [
-  { "item": "PROD-7", "referenced": "PROD-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" },
-  { "kind": "shape", "item": "PROD-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
-  { "kind": "shape", "item": "PROD-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 }
+  { "item": "ACME-7", "referenced": "ACME-5", "referencedStatus": "in_review", "severity": "likely-missing-edge" },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-ordering-violation", "phrase": "once it lands", "criterionIndex": 5 },
+  { "kind": "shape", "item": "ACME-7", "severity": "likely-repo-straddle", "path": "motir-ai/src/x.ts", "repo": "motir-ai", "reason": "contradiction", "criterionIndex": 2 }
 ]
 ```
 
@@ -350,8 +351,8 @@ happen to know), so it narrows the human check rather than replacing it.
   prompt. The array is the same content, handed over for the human watching.
 
 The human-readable text block carries it in the same compact form the
-`dependencies` marker uses, and renders **nothing at zero**: `PROD-7
-[task/high] Wire the dispatch — unassigned · blocks PROD-9 · 3 comments`.
+`dependencies` marker uses, and renders **nothing at zero**: `ACME-7
+[task/high] Wire the dispatch — unassigned · blocks ACME-9 · 3 comments`.
 
 #### `next_ready`
 
@@ -459,7 +460,7 @@ not only a ready one — so re-printing an in-progress item's prompt is safe.
 
 | Input           | Type   | Required | Notes                                                                                                              |
 | --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                             |
+| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
 | `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
 
 **Output** — `structuredContent`:
@@ -513,7 +514,7 @@ shape the detail page reads.
 
 | Input           | Type   | Required | Notes                                                                                                              |
 | --------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `key`           | string | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                             |
+| `key`           | string | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                             |
 | `sessionBranch` | string | no       | Branch to FALL BACK to when the item carries no lineage of its own — the unattended-run seed (see `workflowMode`). |
 
 **Output** — `structuredContent`: the `IssueDetailDto` aggregate: the item
@@ -529,14 +530,14 @@ Each **CHILD** row additionally carries the same
 — identical shape, identical guarantees — so the children's build ORDER is
 derivable from this one call. Since MOTIR-2228 the child rows are the SHARED
 schema's output (v1's `WorkItemChild`) widened with the fields the aggregate has
-always carried, so a child row's `key` is now its `PROD-<n>` identifier and the
+always carried, so a child row's `key` is now its `<KEY>-<n>` identifier and the
 numeric key rides as `numericKey`:
 
 ```jsonc
 "children": [
   {
-    "identifier": "PROD-8", "kind": "subtask", "title": "Ship the schema", "status": "todo",
-    "dependencies": { "blockedBy": [], "blocks": [{ "key": "PROD-9", "title": "Wire the UI", "status": "todo" }] }
+    "identifier": "ACME-8", "kind": "subtask", "title": "Ship the schema", "status": "todo",
+    "dependencies": { "blockedBy": [], "blocks": [{ "key": "ACME-9", "title": "Wire the UI", "status": "todo" }] }
   }
 ]
 ```
@@ -556,7 +557,7 @@ stays one, so a card with 200 comments never slows an ordinary read.
 
 | Input    | Type                                   | Required | Notes                                                                                 |
 | -------- | -------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
-| `key`    | string                                 | yes      | Work item identifier, e.g. `"PROD-7"`.                                                |
+| `key`    | string                                 | yes      | Work item identifier, e.g. `"ACME-7"`.                                                |
 | `view`   | `"all"` \| `"comments"` \| `"history"` | no       | Which stream to read. Default `"all"`.                                                |
 | `cursor` | string                                 | no       | Opaque continuation token from a previous call's `nextCursor`. Echo it back verbatim. |
 | `order`  | `"asc"` \| `"desc"`                    | no       | Page-walk direction. Omit for each view's shipped default (below).                    |
@@ -610,7 +611,7 @@ epics included, so the agent surface can create one).
 
 | Input                | Type                                                | Required | Notes                                                                                                                                                                                         |
 | -------------------- | --------------------------------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"PROD"`.                                                                                                                                            |
+| `projectKey`         | string                                              | yes      | The project the item is created in, e.g. `"ACME"`.                                                                                                                                            |
 | `kind`               | `"epic" \| "story" \| "task" \| "bug" \| "subtask"` | yes      | The work item kind. `epic` is root-only (reject if `parentKey` is given).                                                                                                                     |
 | `title`              | string                                              | yes      | The title (one line).                                                                                                                                                                         |
 | `parentKey`          | string                                              | no       | Parent identifier — must be a kind-legal, same-project parent.                                                                                                                                |
@@ -706,7 +707,7 @@ an edit of the FROM item, so the same Story-6.4 edit gate as the UI applies.
 
 | Input          | Type                                                                   | Required | Notes                                                     |
 | -------------- | ---------------------------------------------------------------------- | -------- | --------------------------------------------------------- |
-| `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"PROD-3"`.             |
+| `fromKey`      | string                                                                 | yes      | The first item's identifier, e.g. `"ACME-3"`.             |
 | `toKey`        | string                                                                 | yes      | The second item's identifier (may be in another project). |
 | `relationship` | `"blocked_by" \| "blocks" \| "relates_to" \| "duplicates" \| "clones"` | yes      | Read `fromKey <relationship> toKey`.                      |
 
@@ -745,7 +746,7 @@ the UI; the same Story-6.4 edit gate gates the call.
 
 | Input             | Type                                | Required | Notes                                                                                                    |
 | ----------------- | ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
-| `key`             | string                              | yes      | Work item identifier, e.g. `"PROD-7"`.                                                                   |
+| `key`             | string                              | yes      | Work item identifier, e.g. `"ACME-7"`.                                                                   |
 | `title`           | string                              | no       | New title.                                                                                               |
 | `descriptionMd`   | string \| null                      | no       | New description; `null` clears it.                                                                       |
 | `explanationMd`   | string \| null                      | no       | New explanation ("why"); `null` clears it.                                                               |
@@ -788,7 +789,7 @@ indistinguishable 404.
 
 | Input  | Type                                      | Required | Notes                                           |
 | ------ | ----------------------------------------- | -------- | ----------------------------------------------- |
-| `key`  | string                                    | yes      | Work item identifier, e.g. `"PROD-7"`.          |
+| `key`  | string                                    | yes      | Work item identifier, e.g. `"ACME-7"`.          |
 | `kind` | `"story" \| "task" \| "bug" \| "subtask"` | yes      | The new hierarchy kind. `epic` is not a target. |
 
 **Output** — `structuredContent`: the reclassified `WorkItemDto` (its `kind`
@@ -862,7 +863,7 @@ UI; a missing / cross-tenant key is an indistinguishable 404.
 
 | Input       | Type           | Required | Notes                                                                                     |
 | ----------- | -------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `key`       | string         | yes      | The work item to move, e.g. `"PROD-7"`.                                                   |
+| `key`       | string         | yes      | The work item to move, e.g. `"ACME-7"`.                                                   |
 | `parentKey` | string \| null | yes      | The new parent's identifier, or `null` to promote to a top-level root. Same-project only. |
 
 **Output** — `structuredContent`: the re-parented `WorkItemDto` (its `parentId`
@@ -878,7 +879,7 @@ N carriers). Omit `filter` to page the whole project. Cursor-paginated.
 
 | Input        | Type               | Required | Notes                                                          |
 | ------------ | ------------------ | -------- | -------------------------------------------------------------- |
-| `projectKey` | string             | yes      | Project key, e.g. `"PROD"`.                                    |
+| `projectKey` | string             | yes      | Project key, e.g. `"ACME"`.                                    |
 | `filter`     | FilterAST envelope | no       | `{ version, combinator, conditions }`; omit for whole project. |
 | `cursor`     | string             | no       | Opaque page cursor from a previous `nextCursor`.               |
 | `limit`      | integer (1–50)     | no       | Page size; default 50 (the List's server cap).                 |
@@ -927,7 +928,7 @@ read every other sprint tool depends on.
 
 | Input        | Type   | Required | Notes                           |
 | ------------ | ------ | -------- | ------------------------------- |
-| `projectKey` | string | yes      | The project key, e.g. `"PROD"`. |
+| `projectKey` | string | yes      | The project key, e.g. `"ACME"`. |
 
 **Output** — `structuredContent`: `{ sprints: SprintDto[] }`.
 
@@ -943,7 +944,7 @@ runs after any plan/re-plan that touches sprint membership or a sprint item's
 
 | Input        | Type             | Required | Notes                                                                                                                                            |
 | ------------ | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `projectKey` | string           | yes      | The project key, e.g. `"PROD"`.                                                                                                                  |
+| `projectKey` | string           | yes      | The project key, e.g. `"ACME"`.                                                                                                                  |
 | `sprintId`   | string           | no       | The sprint to validate; omit to validate the **active** sprint.                                                                                  |
 | `condition`  | `loose`\|`tight` | no       | Default `loose` — a `done` gating item outside the sprint counts as satisfied. `tight` requires it to be IN the sprint, else it gates. (7.8.22.) |
 
@@ -965,7 +966,7 @@ kind — epic / story / task / bug (a `subtask` is the leaf). Read-only.
 
 | Input       | Type             | Required | Notes                                                                                                                                                 |
 | ----------- | ---------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `key`       | string           | yes      | The work item identifier, e.g. `"MOTIR-1337"` (case-insensitive).                                                                                     |
+| `key`       | string           | yes      | The work item identifier, e.g. `"ACME-7"` (case-insensitive).                                                                                         |
 | `condition` | `loose`\|`tight` | no       | Default `loose` — a `done` dependency outside the subtree counts as satisfied. `tight` requires every dependency to be IN the subtree, else it gates. |
 
 **Output** — `structuredContent`: a `WorkItemValidityDto` —
@@ -1056,7 +1057,7 @@ appended in selection order. All items must belong to the sprint's project.
 
 | Input      | Type             | Required | Notes                                              |
 | ---------- | ---------------- | -------- | -------------------------------------------------- |
-| `keys`     | array of strings | yes      | Work item identifiers, e.g. `["PROD-7","PROD-8"]`. |
+| `keys`     | array of strings | yes      | Work item identifiers, e.g. `["ACME-7","ACME-8"]`. |
 | `sprintId` | string           | yes      | The target sprint id.                              |
 
 **Output** — `structuredContent`: `{ items: WorkItemDto[] }` (the moved items).
@@ -1113,7 +1114,7 @@ backlog when the ready set drains.
 
 | Input | Type   | Required | Notes                                                                                |
 | ----- | ------ | -------- | ------------------------------------------------------------------------------------ |
-| `key` | string | yes      | The container's identifier, e.g. `"PROD-7"`. Epic / story / task / bug — not a leaf. |
+| `key` | string | yes      | The container's identifier, e.g. `"ACME-7"`. Epic / story / task / bug — not a leaf. |
 
 **Output** — `structuredContent`: `{ jobId, planId }`.
 
@@ -1226,7 +1227,7 @@ optional `targetKeys` and never a session id:
 
 | Input        | Type     | Required | Notes                                                                                                                                                                                |
 | ------------ | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `projectKey` | string   | yes      | The project key, e.g. `"PROD"` (case-insensitive).                                                                                                                                   |
+| `projectKey` | string   | yes      | The project key, e.g. `"ACME"` (case-insensitive).                                                                                                                                   |
 | `targetKeys` | string[] | no       | Work-item identifiers to ANCHOR the conversation at (max 20, case-insensitive). Omit for the **project-wide** thread. The SET is the identity — order and duplicates are irrelevant. |
 | `body`       | string   | yes\*    | `append_plan_turn` only — what you want changed about the plan.                                                                                                                      |
 
@@ -1311,7 +1312,7 @@ which workspace", this answers "which projects are in it".
 | `slug`        | string                                         | URL slug.                                                    |
 | `accessLevel` | `"open" \| "limited" \| "private" \| "public"` | Browse-access level — disambiguates same-named projects.     |
 
-The text block lists one project per line: `PROD — Prodect · open`.
+The text block lists one project per line: `ACME — Acme Corp · open`.
 
 **Access + tenancy.** Backed by the SAME service the app shell's project switcher
 calls, so the checks are the UI's: workspace membership is asserted, then every
@@ -1343,7 +1344,7 @@ Four questions, one call:
 
 | Field        | Type   | Required | Notes                       |
 | ------------ | ------ | -------- | --------------------------- |
-| `projectKey` | string | yes      | Project key, e.g. `"PROD"`. |
+| `projectKey` | string | yes      | Project key, e.g. `"ACME"`. |
 
 **Output** — `structuredContent`: a `ProjectStateDto`:
 
@@ -1402,7 +1403,7 @@ dependents while the session PR awaits a human merge. Optionally self-report the
 
 | Field                   | Type                 | Required | Notes                                                                                                             |
 | ----------------------- | -------------------- | -------- | ----------------------------------------------------------------------------------------------------------------- |
-| `key`                   | string               | yes      | The work item identifier, e.g. `PROD-7`.                                                                          |
+| `key`                   | string               | yes      | The work item identifier, e.g. `ACME-7`.                                                                          |
 | `sessionBranch`         | string               | yes      | The integration branch the work was merged onto.                                                                  |
 | `implementationSource`  | `"byok" \| "manual"` | no       | Self-reported execution lane; defaults to `byok` when a harness/model is reported. `hosted` is not accepted here. |
 | `implementationHarness` | string               | no       | Self-reported harness (e.g. `opencode`, `Claude Code`). Recorded as-is (no verification implied).                 |
