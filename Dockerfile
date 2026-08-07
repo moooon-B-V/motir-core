@@ -11,9 +11,13 @@
 # measurements are `docs/decisions/application-hosting.md` Q1; the spike that
 # produced them is MOTIR-2383.
 #
-#   standalone server   375 MB  (of which 222 MB is design/ — see the note below)
+#   standalone server   381 MB  →  135 MB after the prune step in the builder
 #   static assets         7 MB
 #   against Vercel    4,240 MB  traced across 490 function bundles
+#
+# The prune is a Dockerfile step and not `next.config.ts`'s
+# `outputFileTracingExcludes` because that key is inert under Turbopack — see the
+# comment on the RUN below, and MOTIR-2403.
 #
 # ── Multi-stage, and why the builder is fat ─────────────────────────────────
 # The builder needs the FULL dependency set: `postinstall` runs `prisma generate`
@@ -63,6 +67,42 @@ RUN pnpm prisma generate \
 # non-prod. DATABASE_URL is read at RUNTIME.
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm exec next build
+
+# ── prune the standalone output — THE step that actually removes the payload ─
+# Next's tracer sweeps the repo root into `.next/standalone`: 381 MB, of which
+# `design/` is 222 MB, `tests/` 15 MB, `scripts/` 6 MB and `docs/` 5 MB. Nothing
+# serving a request reads any of them (the only runtime file reads in app code
+# are `app/_brand/fonts/*.ttf` and an env-supplied test-only path in
+# `lib/email.ts`), and the release lane gets `prisma/` + its two scripts by
+# explicit COPY in the runner below, never from the trace.
+#
+# ⚠️ TWO things about the shape of this step, both load-bearing (MOTIR-2403):
+#
+#   1. It runs HERE, in the builder, NOT in the runner. A `RUN rm -rf` after the
+#      runner's `COPY --from=builder … .next/standalone` would delete the files
+#      from the filesystem and shrink the image by NOTHING: the bytes are already
+#      committed in the COPY layer, and a later layer that deletes them only adds
+#      a whiteout on top. Pruning before the COPY is what makes the copied layer
+#      small.
+#   2. It FAILS if a target is missing, rather than removing nothing. `rm -rf` on
+#      an absent path exits 0 in silence — which is precisely the failure mode
+#      this replaces: `next.config.ts` carried an `outputFileTracingExcludes`
+#      that Turbopack never reads, so it pruned nothing while reading as solved.
+#      A prune that can silently become a no-op is the same bug in a new file. If
+#      a Next upgrade stops sweeping one of these directories in, this build
+#      stops with the message below and someone edits the list on purpose.
+RUN set -eu; \
+    cd .next/standalone; \
+    echo "standalone before prune: $(du -sm . | cut -f1) MB"; \
+    for d in design tests docs scripts; do \
+      if [ ! -d "$d" ]; then \
+        echo "prune target '$d' is not in the standalone output — the tracing" >&2; \
+        echo "layout changed. Update this step deliberately; do not delete it." >&2; \
+        exit 1; \
+      fi; \
+      rm -rf "$d"; \
+    done; \
+    echo "standalone after prune:  $(du -sm . | cut -f1) MB"
 
 # ── the migration toolchain ─────────────────────────────────────────────────
 # `fly.toml`'s release_command runs `prisma migrate deploy` inside THIS image,

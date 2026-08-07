@@ -57,6 +57,15 @@ describe('the fonts the cards are set in (§6)', () => {
     // `contains: true`, against `normalizeAppPath(entryName)` — which strips the
     // route group and the `/route` suffix, and leaves the content hash Next
     // appends to a metadata route in place).
+    //
+    // ⚠️ This asserts the key WOULD match, not that it currently runs (MOTIR-2403).
+    // `collect-build-traces.js` is skipped entirely under Turbopack, so on this
+    // repo's build the key is inert and Turbopack's own tracer is what carries
+    // the fonts — verified in the built
+    // `.next/server/app/(public)/explore/opengraph-image-*/route.js.nft.json`.
+    // The assertion is kept because the key is the webpack-path safety net, and
+    // a net with a wrong key in it is worse than no net. Do not read a green
+    // result here as evidence the fonts shipped; read the `.nft.json`.
     const { default: config } = await import('@/next.config');
     const includes = (config as { outputFileTracingIncludes?: Record<string, string[]> })
       .outputFileTracingIncludes;
