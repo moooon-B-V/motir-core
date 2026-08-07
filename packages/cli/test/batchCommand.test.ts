@@ -9,8 +9,12 @@ import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import {
   startTestMcpServer,
+  v1Detail,
+  v1DispatchPrompt,
   type TestMcpServer,
   type ToolScript,
+  type V1Request,
+  type V1Script,
 } from './helpers/mcpTestServer.js';
 
 // `motir batch` as the COMMAND (Subtask 7.9.5b · MOTIR-1829).
@@ -57,6 +61,8 @@ beforeEach(() => {
   );
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   server.calls.length = 0;
+  server.v1Calls.length = 0;
+  server.resetV1();
   // `batchCommand` reports the run through `process.exitCode`; restoring it in
   // afterEach keeps a scripted failure from failing the test PROCESS.
   exitCode = process.exitCode;
@@ -75,9 +81,9 @@ const AGENT = { agent: `${process.execPath} -e ""` };
 /** A ready set of `keys`, served over the real protocol. The enumeration
  *  advances by `excludeIds`, so the tool honours it exactly as the server
  *  does — otherwise the snapshot could never terminate. */
-function planTools(keys: string[]): ToolScript {
+function planScripts(keys: string[]): { tools: ToolScript; v1: V1Script } {
   const statuses = new Map<string, string>();
-  return {
+  const tools: ToolScript = {
     next_ready: (args) => {
       const excluded = new Set((args['excludeIds'] as string[] | undefined) ?? []);
       const key = keys.find(
@@ -101,21 +107,44 @@ function planTools(keys: string[]): ToolScript {
         },
       };
     },
-    dispatch_prompt: (args) => ({
-      structured: {
-        key: String(args['key']),
-        prompt: `PROMPT ${String(args['key'])}`,
-        targetRepo: 'motir-core',
-        workflowMode: 'per_item_pr',
-        sessionBranch: null,
-      },
-    }),
-    transition_status: (args) => {
-      statuses.set(String(args['key']), String(args['status']));
-      return { structured: { ok: true } };
-    },
-    mark_integrated: () => ({ error: '`motir batch` must NEVER integrate onto a session branch.' }),
   };
+  const v1: V1Script = {
+    'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
+      body: v1DispatchPrompt(String(req.params['key']), {
+        prompt: `PROMPT ${String(req.params['key'])}`,
+        targetRepo: 'motir-core',
+      }),
+    }),
+    'POST /api/v1/work-items/{key}/transitions': (req) => {
+      const key = String(req.params['key']);
+      const status = String((req.body as { status: string }).status);
+      statuses.set(key, status);
+      return { body: v1Detail(key, { status }) };
+    },
+    // A TRIPWIRE, not a fixture: `motir batch` opens a pull request per item and
+    // must never record one onto a session lineage. Scripted to refuse, so a
+    // regression that starts integrating fails loudly here.
+    'POST /api/v1/work-items/{key}/integration': {
+      status: 422,
+      body: {
+        code: 'UNPROCESSABLE',
+        error: '`motir batch` must NEVER integrate onto a session branch.',
+      },
+    },
+  };
+  return { tools, v1 };
+}
+
+/** Script both halves of the plan onto the server. */
+function scriptPlan(keys: string[]): void {
+  const { tools, v1 } = planScripts(keys);
+  server.script(tools);
+  server.scriptV1(v1);
+}
+
+/** Every `/api/v1` request to one operation, in order. */
+function v1CallsTo(method: string, suffix: string): V1Request[] {
+  return server.v1Calls.filter((c) => c.method === method && c.path.endsWith(suffix));
 }
 
 describe('motir batch refuses to start without an agent', () => {
@@ -177,7 +206,7 @@ describe('motir batch refuses to start without an agent', () => {
 
 describe('motir batch — a whole run through the real session', () => {
   it('drains the snapshot, prints the summary, and exits 0', async () => {
-    server.script(planTools(['PROD-1', 'PROD-2']));
+    scriptPlan(['PROD-1', 'PROD-2']);
     const prompts: string[] = [];
 
     await batchCommand(
@@ -194,11 +223,11 @@ describe('motir batch — a whole run through the real session', () => {
     expect(prompts).toEqual(['PROMPT PROD-1', 'PROMPT PROD-2']);
     // Each item walked its own lifecycle to In Review — its own pull request.
     expect(
-      server.calls.filter((c) => c.name === 'transition_status').map((c) => c.args['status']),
+      v1CallsTo('POST', '/transitions').map((c) => (c.body as { status: string }).status),
     ).toEqual(['in_progress', 'in_review', 'in_progress', 'in_review']);
-    // No session branch was ever created: `mark_integrated` is scripted to fail,
-    // so calling it at all would surface here.
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(false);
+    // No session branch was ever created: the integration route is scripted to
+    // refuse, so calling it at all would surface here.
+    expect(v1CallsTo('POST', '/integration')).toEqual([]);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
@@ -206,7 +235,7 @@ describe('motir batch — a whole run through the real session', () => {
     // The shape the binary runs in: no injected deps at all. The ready set is
     // empty, so the real `runAgent` is reached for but never launched — the run
     // still opens the session, prints the summary and reports cleanly.
-    server.script(planTools([]));
+    scriptPlan([]);
 
     await batchCommand({ ...AGENT, kinds: 'subtask' });
 
@@ -214,12 +243,12 @@ describe('motir batch — a whole run through the real session', () => {
     expect(server.calls.find((c) => c.name === 'next_ready')?.args).toMatchObject({
       kinds: ['subtask'],
     });
-    expect(server.calls.some((c) => c.name === 'dispatch_prompt')).toBe(false);
+    expect(v1CallsTo('GET', '/dispatch-prompt')).toEqual([]);
     expect(process.exitCode ?? 0).toBe(0);
   });
 
   it('exits non-zero when an agent failed, leaving the item In Progress', async () => {
-    server.script(planTools(['PROD-1', 'PROD-2']));
+    scriptPlan(['PROD-1', 'PROD-2']);
 
     await batchCommand(
       { ...AGENT },
@@ -228,15 +257,14 @@ describe('motir batch — a whole run through the real session', () => {
 
     expect(process.exitCode).toBe(1);
     // Halted on the first failure: the second item was never touched.
-    const dispatched = server.calls.filter((c) => c.name === 'dispatch_prompt');
-    expect(dispatched.map((c) => c.args['key'])).toEqual(['PROD-1']);
+    expect(v1CallsTo('GET', '/dispatch-prompt').map((c) => c.params['key'])).toEqual(['PROD-1']);
     expect(
-      server.calls.filter((c) => c.name === 'transition_status').map((c) => c.args['status']),
+      v1CallsTo('POST', '/transitions').map((c) => (c.body as { status: string }).status),
     ).toEqual(['in_progress']);
   });
 
   it('--max caps the run and --keep-going carries it past a failure', async () => {
-    server.script(planTools(['PROD-1', 'PROD-2', 'PROD-3']));
+    scriptPlan(['PROD-1', 'PROD-2', 'PROD-3']);
     const prompts: string[] = [];
 
     await batchCommand(

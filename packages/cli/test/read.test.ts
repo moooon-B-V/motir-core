@@ -343,6 +343,48 @@ describe('motir show', () => {
     });
   });
 
+  // The blocked-by-an-ANCESTOR readiness line: an item whose own blockers are
+  // clear but whose parent is not. The two fields arrive separately on the wire
+  // (`blockedByAncestorKey` / `…Title`) and the adapter pairs them, so a server
+  // that sends the key with no title must still produce a printable line rather
+  // than the word `undefined` in the middle of a readiness sentence.
+  it('reports an ancestor blocker, titled or not', async () => {
+    const read = capture();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        body: v1Detail('PROD-7', {
+          readiness: {
+            ready: false,
+            openBlockers: [],
+            blockedByAncestorKey: 'PROD-1',
+            blockedByAncestorTitle: 'The parent story',
+          },
+        }),
+      },
+    });
+    await showCommand('PROD-7', {});
+    expect(read()).toContain('PROD-1');
+    expect(read()).toContain('The parent story');
+
+    vi.restoreAllMocks();
+    const untitled = capture();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        body: v1Detail('PROD-7', {
+          readiness: {
+            ready: false,
+            openBlockers: [],
+            blockedByAncestorKey: 'PROD-1',
+            blockedByAncestorTitle: null,
+          },
+        }),
+      },
+    });
+    await showCommand('PROD-7', {});
+    expect(untitled()).toContain('PROD-1');
+    expect(untitled()).not.toContain('undefined');
+  });
+
   it('rejects a malformed key BEFORE it opens a session', async () => {
     capture();
 

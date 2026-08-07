@@ -1,6 +1,10 @@
 import type { SuccessBody } from '../transport.js';
 import type {
   ActivityAllPage,
+  CompleteSessionResult,
+  DispatchAdvisory,
+  DispatchPrompt,
+  ExpandSubmitResult,
   ActivityComment,
   ActivityCommentThread,
   ActivityEntry,
@@ -422,4 +426,69 @@ export function toActivityHistoryPage(body: ActivityBody): ActivityHistoryPage {
     .filter((entry): entry is Extract<WireEntry, { type: 'change' }> => entry.type === 'change')
     .map((entry) => toActivityEntry(entry.change));
   return { entries, nextCursor: body.nextCursor, totalCount: body.totalCount };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The dispatch + session operations (Subtask 11.5.5 — MOTIR-2213)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The assembled dispatch prompt. */
+type PromptBody = SuccessBody<'getWorkItemDispatchPrompt'>;
+/** The bulk session close-out. */
+type CloseOutBody = SuccessBody<'completeSession'>;
+/** The planner job handle an expansion submit returns. */
+type JobHandleBody = SuccessBody<'submitWorkItemExpansion'>;
+
+/**
+ * The dispatch prompt.
+ *
+ * `targetRepoCloneUrl` and `targetRepoDefaultBranch` are DROPPED: nothing in
+ * `packages/cli/src` reads either, and a view-model field with no reader is not
+ * carried over. `resolveDispatchTarget` routes on `targetRepo` alone.
+ *
+ * ⚠️ `advisories` is re-shaped by PASSING THROUGH, deliberately. The wire's
+ * union is open — `severity` is a bare string, and ADR §8 documents it as
+ * open-ended — so a build that has never heard of a severity must hand the
+ * object to `renderDispatchAdvisories` intact and let its fall-through print
+ * nothing. Narrowing here would turn a forward-compatible client into one that
+ * drops, or crashes on, the next advisory type someone adds.
+ */
+export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
+  return {
+    key: body.key,
+    prompt: body.prompt,
+    targetRepo: body.targetRepo,
+    workflowMode: body.workflowMode,
+    sessionBranch: body.sessionBranch,
+    advisories: body.advisories as DispatchAdvisory[],
+  };
+}
+
+/**
+ * The bulk close-out result.
+ *
+ * The per-item outcomes are reported VERBATIM — the client never re-derives one.
+ * A partial close (some items done, others refused with a reason) is a real
+ * answer the server computed transactionally, not a failure to smooth over.
+ */
+export function toCompleteSessionResult(body: CloseOutBody): CompleteSessionResult {
+  return {
+    sessionBranch: body.sessionBranch,
+    results: body.results.map((result) => ({
+      key: result.key,
+      outcome: result.outcome,
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
+    })),
+  };
+}
+
+/**
+ * The planner job handle.
+ *
+ * `statusUrl` is dropped for the reason the prompt's two extra fields are: no
+ * reader. The CLI submits and returns; `motir auto --include-planning` never
+ * polls, because what comes back is a plan a human must approve.
+ */
+export function toExpandSubmitResult(body: JobHandleBody): ExpandSubmitResult {
+  return { jobId: body.jobId, planId: body.planId };
 }

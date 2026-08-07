@@ -71,6 +71,13 @@ type RequestBody<Id extends V1OperationId> = operations[Id]['requestBody'] exten
  *
  * `void` for a 204 (`deleteWorkItemLink`), which declares no content at all —
  * a real shape rather than a gap, and the one operation with no validator.
+ *
+ * The three success codes are tried in turn because an operation declares
+ * exactly one of them, and which one is a property of the operation rather than
+ * of the caller. 202 is not a lesser 200: an expansion submit ANSWERS with a
+ * job handle it has already committed, and typing that body `void` would have
+ * left the one shape the caller needs unreachable without a cast — which is the
+ * defect the whole no-`as`-on-a-wire-payload discipline exists to prevent.
  */
 export type SuccessBody<Id extends V1OperationId> = operations[Id]['responses'] extends {
   200: { content: { 'application/json': infer B } };
@@ -78,7 +85,9 @@ export type SuccessBody<Id extends V1OperationId> = operations[Id]['responses'] 
   ? B
   : operations[Id]['responses'] extends { 201: { content: { 'application/json': infer B } } }
     ? B
-    : void;
+    : operations[Id]['responses'] extends { 202: { content: { 'application/json': infer B } } }
+      ? B
+      : void;
 
 /** What one call supplies, beyond the operation's identity. */
 export interface RequestInput<Id extends V1OperationId> {
@@ -106,6 +115,34 @@ function readEnvelope(body: unknown): V1ErrorEnvelope | undefined {
   const { code, error } = candidate;
   if (typeof code !== 'string' || typeof error !== 'string') return undefined;
   return { code, error };
+}
+
+/**
+ * The legal targets an illegal-transition refusal names, as one printable list.
+ *
+ * Reads DEFENSIVELY — every element is checked for a string `label` — because
+ * this runs on a FAILURE path, where nothing has been validated: `mapFailure`
+ * gets the raw parsed body, and an error response has no generated validator to
+ * stand behind it. A malformed enrichment must cost the hint, never the error
+ * the user was already being shown.
+ *
+ * Labels, not keys: it lands inside a sentence the server wrote for a person,
+ * so "To Do, In Review" belongs there rather than `todo, in_review`.
+ */
+function readAllowedTransitions(body: unknown): string | undefined {
+  if (typeof body !== 'object' || body === null) return undefined;
+  const raw = (body as { allowedTransitions?: unknown }).allowedTransitions;
+  if (!Array.isArray(raw)) return undefined;
+  const labels = raw
+    .map((entry) =>
+      typeof entry === 'object' && entry !== null
+        ? (entry as { label?: unknown }).label
+        : undefined,
+    )
+    .filter((label): label is string => typeof label === 'string');
+  // An EMPTY list is a real answer — a terminal status has nowhere to go — but
+  // "Allowed: ." reads as a bug, so the sentence stands alone.
+  return labels.length > 0 ? labels.join(', ') : undefined;
 }
 
 /**
@@ -363,7 +400,26 @@ export class V1Transport {
     // Every other 4xx the API documents (402 / 409 / 412 / 422) carries the
     // envelope, and the server's own sentence is more specific than anything a
     // client could add — so it is reported verbatim, with NO hint.
-    if (envelope) return new CliError(envelope.error);
+    //
+    // ⚠️ ONE refusal enriches its envelope, and reading that enrichment is not
+    // optional. `POST …/transitions` answers an illegal move with the legal
+    // targets in `allowedTransitions`, DELIBERATELY as data rather than folded
+    // into the sentence (the route calls this "the refusal TEACHES"). The MCP
+    // tool it replaces put that list inside its message, so ignoring the field
+    // here would silently downgrade "In Progress → Done is not allowed.
+    // Allowed: To Do, In Review." into a dead end the user cannot act on.
+    //
+    // It joins the MESSAGE rather than the hint, and that placement is load
+    // bearing: `motir done` catches this error and re-raises it as
+    // `new CliError(err.message, { hint: … })` to add its own one-hop advice,
+    // so anything parked in `hint` is discarded on the one command where the
+    // targets matter most. Composing the sentence here — not parsing one, which
+    // ADR §8 forbids — keeps "the error text names the allowed targets" true
+    // for every caller, exactly as it was under MCP.
+    if (envelope) {
+      const allowed = readAllowedTransitions(parsed);
+      return new CliError(allowed ? `${envelope.error} Allowed: ${allowed}.` : envelope.error);
+    }
     return new CliError(`${this.serverUrl} answered ${response.status} for ${operationId}.`);
   }
 

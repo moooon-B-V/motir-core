@@ -9,6 +9,9 @@ import { CLI_VERSION } from './version.js';
 import { V1Transport } from './transport.js';
 import {
   toActivityAllPage,
+  toCompleteSessionResult,
+  toDispatchPrompt,
+  toExpandSubmitResult,
   toActivityHistoryPage,
   toCommentsPage,
   toProjectList,
@@ -925,8 +928,24 @@ export class MotirClient {
     return { page, payload: body };
   }
 
-  transitionStatus(args: { key: string; status: string }): Promise<unknown> {
-    return this.callStructured('transition_status', { ...args });
+  /**
+   * Move one item to a status.
+   *
+   * Returns nothing, where the MCP wrapper returned `unknown`. The v1 operation
+   * answers with the item at its new status, and no caller reads it — all four
+   * call sites `await` the promise for its EFFECT. Handing back a body nothing
+   * consumes would put a wire shape in reach of a renderer without a mapper
+   * between them, which is the boundary this port exists to establish.
+   *
+   * An ILLEGAL transition is still fully diagnosable: it comes back as a 422
+   * whose envelope carries the allowed targets, and the transport raises it
+   * before this method returns.
+   */
+  async transitionStatus(args: { key: string; status: string }): Promise<void> {
+    await this.v1.request('transitionWorkItem', {
+      path: { key: args.key },
+      body: { status: args.status },
+    });
   }
 
   /**
@@ -941,49 +960,71 @@ export class MotirClient {
    * CLI can start a run's first item on the run's branch without ever being able
    * to redirect an existing chain.
    */
-  dispatchPrompt(
+  async dispatchPrompt(
     key: string,
     opts: { sessionBranch?: string | null } = {},
   ): Promise<DispatchPrompt> {
-    return this.callStructured<DispatchPrompt>('dispatch_prompt', {
-      key,
-      ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}),
+    // A GET, which is what a pure read should have looked like all along: the
+    // MCP tool took a POST-shaped call because that is the only shape MCP has.
+    const body = await this.v1.request('getWorkItemDispatchPrompt', {
+      path: { key },
+      query: { ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}) },
     });
+    return toDispatchPrompt(body);
   }
 
   /** Record an item's work as integrated on a session branch (7.8.11): moves it
    * to `in_review` AND stamps `session_branch` in one transaction. */
-  markIntegrated(args: {
+  async markIntegrated(args: {
     key: string;
     sessionBranch: string;
     implementationHarness?: string;
-  }): Promise<unknown> {
-    return this.callStructured('mark_integrated', { ...args });
+  }): Promise<void> {
+    await this.v1.request('recordWorkItemIntegration', {
+      path: { key: args.key },
+      body: {
+        sessionBranch: args.sessionBranch,
+        ...(args.implementationHarness === undefined
+          ? {}
+          : { implementationHarness: args.implementationHarness }),
+      },
+    });
   }
 
   /** Bulk close-out for a merged session PR (7.8.11): every item recorded on
    * the branch → done, `session_branch` cleared, with per-item outcomes. */
-  completeSession(args: {
+  async completeSession(args: {
     sessionBranch: string;
     implementationHarness?: string;
   }): Promise<CompleteSessionResult> {
-    return this.callStructured<CompleteSessionResult>('complete_session', { ...args });
+    const body = await this.v1.request('completeSession', {
+      body: {
+        sessionBranch: args.sessionBranch,
+        ...(args.implementationHarness === undefined
+          ? {}
+          : { implementationHarness: args.implementationHarness }),
+      },
+    });
+    return toCompleteSessionResult(body);
   }
 
   /**
    * Submit an AI expansion of one CONTAINER item (MOTIR-1825) and return the
    * moment the job is accepted — `{ jobId, planId }`, no streaming, no poll.
    *
-   * There is deliberately no REST fallback here: expansion also has a
-   * cookie-authed `POST /api/ai/expand`, but the CLI is an MCP client only (the
-   * Story 7.9 header — one auth path), so the tool IS the mechanism.
+   * The one operation on this client that answers 202 rather than 200, and the
+   * distinction is load-bearing: the body describes a job that has been QUEUED,
+   * not work that has been done. Nothing here waits for the planner.
    *
    * Firing this does NOT grow the tree. `motir auto --include-planning` calls it
    * for an unexpanded epic/story and moves on; what comes back is a plan awaiting
-   * a human's approval in Motir.
+   * a human's approval in Motir. And because a submit SPENDS the token owner's
+   * AI credits, it is never retried blindly — a timeout here is not a licence to
+   * send it twice.
    */
-  expandItem(key: string): Promise<ExpandSubmitResult> {
-    return this.callStructured<ExpandSubmitResult>('expand_item', { key });
+  async expandItem(key: string): Promise<ExpandSubmitResult> {
+    const body = await this.v1.request('submitWorkItemExpansion', { path: { key } });
+    return toExpandSubmitResult(body);
   }
 
   /**

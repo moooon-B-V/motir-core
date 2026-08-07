@@ -69,6 +69,16 @@ export interface V1Request {
   /** The resolved `{name}` segments. */
   params: Record<string, string>;
   query: URLSearchParams;
+  /**
+   * The parsed JSON request body, or `undefined` when the request sent none.
+   *
+   * A read is fully described by its path and query, so this stayed unrecorded
+   * until the work loop's WRITES arrived (MOTIR-2213) — and for those it is the
+   * only place the interesting argument lives. `implementationHarness` rides in
+   * the body, so a test that cannot see the body cannot tell a client that
+   * forwards it from one that silently drops it.
+   */
+  body: unknown;
 }
 
 export interface TestMcpServer {
@@ -130,6 +140,13 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
 
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (url.pathname.startsWith('/api/v1')) {
+        // Drained BEFORE the route match, because an unmatched request must not
+        // leave an unread socket behind.
+        const v1Chunks: Buffer[] = [];
+        for await (const chunk of req) v1Chunks.push(chunk as Buffer);
+        const v1Raw = Buffer.concat(v1Chunks).toString('utf8');
+        const v1Body: unknown = v1Raw.length > 0 ? JSON.parse(v1Raw) : undefined;
+
         const matched = matchV1(v1, req.method ?? 'GET', url);
         if (!matched) {
           res.writeHead(404, { 'content-type': 'application/json' });
@@ -141,9 +158,9 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
           );
           return;
         }
-        v1Calls.push(matched.request);
-        const reply =
-          typeof matched.reply === 'function' ? matched.reply(matched.request) : matched.reply;
+        const request: V1Request = { ...matched.request, body: v1Body };
+        v1Calls.push(request);
+        const reply = typeof matched.reply === 'function' ? matched.reply(request) : matched.reply;
         res.writeHead(reply.status ?? 200, { 'content-type': 'application/json' });
         res.end(reply.body === undefined ? '' : JSON.stringify(reply.body));
         return;
@@ -263,7 +280,9 @@ function matchV1(
     if (ok) {
       return {
         reply,
-        request: { method, path: url.pathname, params, query: url.searchParams },
+        // The body is attached by the caller, which is where it is read off the
+        // socket; matching is a function of the path alone.
+        request: { method, path: url.pathname, params, query: url.searchParams, body: undefined },
       };
     }
   }
@@ -439,6 +458,63 @@ export function v1Activity(
   };
 }
 
+/**
+ * The v1 dispatch prompt.
+ *
+ * Carries `targetRepoCloneUrl` and `targetRepoDefaultBranch` even though no CLI
+ * view model declares them, because a fixture's job is to be what the SERVER
+ * sends: a payload trimmed to what the client happens to read would stop
+ * exercising the adapter's decision to drop them, which is the only place that
+ * decision is expressible.
+ */
+export function v1DispatchPrompt(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    prompt: `Prompt for ${key}`,
+    targetRepo: null,
+    targetRepoCloneUrl: null,
+    targetRepoDefaultBranch: null,
+    workflowMode: 'per_item_pr',
+    sessionBranch: null,
+    advisories: [],
+    ...over,
+  };
+}
+
+/** The integration record — the item's new status and its stamped provenance. */
+export function v1Integration(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    status: 'in_review',
+    sessionBranch: 'motir/session-1',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    implementationSource: null,
+    implementationHarness: null,
+    implementationModel: null,
+    ...over,
+  };
+}
+
+/** One item's outcome in a session close-out. */
+export function v1CloseOutItem(key: string, over: Record<string, unknown> = {}) {
+  return { key, outcome: 'completed', ...over };
+}
+
+/** The bulk session close-out. */
+export function v1CloseOut(sessionBranch: string, results: unknown[] = []) {
+  return { sessionBranch, results };
+}
+
+/** The planner job handle an expansion submit answers with. */
+export function v1JobHandle(over: Record<string, unknown> = {}) {
+  return {
+    jobId: 'job-1',
+    planId: 'plan-1',
+    statusUrl: '/api/v1/plans/plan-1',
+    ...over,
+  };
+}
+
 /** The canned `/api/v1` answers, mirroring {@link DEFAULT_TOOLS}' data. */
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
@@ -461,4 +537,14 @@ export const DEFAULT_V1: V1Script = {
     body: { code: 'NOT_FOUND', error: 'No such work item.' },
   },
   'GET /api/v1/work-items/{key}/activity': { body: v1Activity() },
+  // The write half of the work loop. A transition answers with the item at its
+  // new status; nothing in the CLI reads that body, but the transport validates
+  // every success, so the default has to be a real one.
+  'POST /api/v1/work-items/{key}/transitions': { body: v1Detail('PROD-1') },
+  'GET /api/v1/work-items/{key}/dispatch-prompt': { body: v1DispatchPrompt('PROD-1') },
+  'POST /api/v1/work-items/{key}/integration': { body: v1Integration('PROD-1') },
+  'POST /api/v1/sessions/complete': { body: v1CloseOut('motir/session-1') },
+  // 202, not 200: the submit is ACCEPTED, and the handle describes a job that
+  // has not run yet.
+  'POST /api/v1/work-items/{key}/expansions': { status: 202, body: v1JobHandle() },
 };

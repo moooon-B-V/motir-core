@@ -4,6 +4,10 @@ import { AuthError, CliError } from '../src/errors.js';
 import {
   DEFAULT_TOOLS,
   startTestMcpServer,
+  v1CloseOut,
+  v1CloseOutItem,
+  v1DispatchPrompt,
+  v1JobHandle,
   v1Page,
   v1Project,
   v1ReadyRow,
@@ -93,13 +97,13 @@ describe('connect', () => {
   });
 });
 
-describe('typed wrappers — each names its tool and forwards its arguments', () => {
-  // MOTIR-2212 split this: the six READS moved to `/api/v1`, so what they name
-  // is an OPERATION and a path. `nextReady` and `searchWorkItems` still speak
-  // MCP (11.5.19 retires the first, 11.5.17 ports the second).
-  // MOTIR-2212 moves the IDENTITY reads to `/api/v1`, so what they name is an
-  // operation and a path. The rest still speak MCP; 11.5.21 and 11.5.22 take
-  // them, and the assertion below is what proves this slice moved only its own.
+describe('typed wrappers — each names its operation and forwards its arguments', () => {
+  // The port has moved the reads (MOTIR-2212 / 2344 / 2345) and now the dispatch
+  // and session WRITES (MOTIR-2213) onto `/api/v1`, so what a wrapper names is an
+  // OPERATION and a path rather than a tool. What still speaks MCP: `nextReady`
+  // (retired by 11.5.6), `searchWorkItems` (11.5.17), and the planning
+  // conversation (11.5.20). Each test below asserts on the WIRE, which is what
+  // proves a slice moved its own methods and no others.
   it('identity reads over /api/v1: each names its operation and forwards its arguments', async () => {
     const client = await connected();
 
@@ -241,16 +245,14 @@ describe('typed wrappers — each names its tool and forwards its arguments', ()
     await client.close();
   });
 
-  it('writes: transition_status / mark_integrated / complete_session', async () => {
+  // The write half of the work loop over `/api/v1` (11.5.5 — MOTIR-2213). Each
+  // one names a METHOD and a PATH now, and the argument that used to ride in a
+  // tool's `arguments` object rides in a request BODY.
+  it('writes: transitions / integration / session complete', async () => {
     const client = await connected();
-    server.script({
-      transition_status: { structured: { status: 'in_progress' } },
-      mark_integrated: { structured: { ok: true } },
-      complete_session: {
-        structured: {
-          sessionBranch: 'motir/auto-1',
-          results: [{ key: 'PROD-7', outcome: 'completed' }],
-        },
+    server.scriptV1({
+      'POST /api/v1/sessions/complete': {
+        body: v1CloseOut('motir/auto-1', [v1CloseOutItem('PROD-7')]),
       },
     });
 
@@ -263,58 +265,177 @@ describe('typed wrappers — each names its tool and forwards its arguments', ()
     const done = await client.completeSession({ sessionBranch: 'motir/auto-1' });
 
     expect(done.results[0]?.outcome).toBe('completed');
-    expect(server.calls.map((c) => c.name)).toEqual([
-      'transition_status',
-      'mark_integrated',
-      'complete_session',
+    expect(server.v1Calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST /api/v1/work-items/PROD-7/transitions',
+      'POST /api/v1/work-items/PROD-7/integration',
+      'POST /api/v1/sessions/complete',
     ]);
-    expect(server.calls[1]?.args).toMatchObject({ implementationHarness: 'motir-cli/0.1.0' });
+    expect(server.v1Calls[0]?.body).toEqual({ status: 'in_progress' });
+    // The provenance stamp is the argument most easily lost in a transport
+    // swap: nothing renders it, so only the wire can prove it was sent.
+    expect(server.v1Calls[1]?.body).toEqual({
+      sessionBranch: 'motir/auto-1',
+      implementationHarness: 'motir-cli/0.1.0',
+    });
+    // …and it is OMITTED, not sent as null, when the caller has none.
+    expect(server.v1Calls[2]?.body).toEqual({ sessionBranch: 'motir/auto-1' });
+    // No MCP tool call for any of the three.
+    expect(server.calls).toEqual([]);
     await client.close();
   });
 
-  it('dispatch_prompt sends the session-branch SEED only when there is one', async () => {
+  it('the dispatch prompt is a GET, and seeds the session branch only when there is one', async () => {
     const client = await connected();
-    server.script({
-      dispatch_prompt: {
-        structured: {
-          key: 'PROD-7',
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}/dispatch-prompt': {
+        body: v1DispatchPrompt('PROD-7', {
           prompt: 'do the thing\n',
           targetRepo: 'motir-core',
-          workflowMode: 'per_item_pr',
-          sessionBranch: null,
-        },
+          targetRepoCloneUrl: 'https://github.com/motir/motir-core.git',
+          targetRepoDefaultBranch: 'main',
+        }),
       },
     });
 
     const bare = await client.dispatchPrompt('PROD-7');
     await client.dispatchPrompt('PROD-7', { sessionBranch: 'motir/auto-1' });
-    // An explicit null seed must not put a null on the wire (the tool's schema
-    // takes an optional string, and `motir auto` passes `repo?.branch ?? null`).
+    // An explicit null seed must not put a null on the wire (the query takes an
+    // optional string, and `motir auto` passes `repo?.branch ?? null`).
     await client.dispatchPrompt('PROD-7', { sessionBranch: null });
 
     expect(bare.prompt).toBe('do the thing\n');
-    expect(server.calls[0]?.args).toEqual({ key: 'PROD-7' });
-    expect(server.calls[1]?.args).toEqual({ key: 'PROD-7', sessionBranch: 'motir/auto-1' });
-    expect(server.calls[2]?.args).toEqual({ key: 'PROD-7' });
+    // A GET: reading a prompt has never changed anything, and the verb now says so.
+    expect(server.v1Calls.map((c) => c.method)).toEqual(['GET', 'GET', 'GET']);
+    expect(server.v1Calls[0]?.query.get('sessionBranch')).toBeNull();
+    expect(server.v1Calls[1]?.query.get('sessionBranch')).toBe('motir/auto-1');
+    expect(server.v1Calls[2]?.query.get('sessionBranch')).toBeNull();
+    // The two repo-plumbing fields the payload carries are NOT on the view
+    // model: nothing routes on them, and a field with no reader is dropped at
+    // the adapter rather than carried in case someone wants it later.
+    expect(Object.keys(bare).sort()).toEqual([
+      'advisories',
+      'key',
+      'prompt',
+      'sessionBranch',
+      'targetRepo',
+      'workflowMode',
+    ]);
+    await client.close();
+  });
+
+  // A PARTIAL close-out is a real answer, not a failure: the server closes what
+  // it can, transactionally, and says why for the rest. The client reports the
+  // outcomes verbatim — it neither re-derives one nor drops the reason, which is
+  // the only thing that tells the operator what to do about the item.
+  it('reports every close-out outcome verbatim, reasons included', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'POST /api/v1/sessions/complete': {
+        body: v1CloseOut('motir/auto-1', [
+          v1CloseOutItem('PROD-7'),
+          v1CloseOutItem('PROD-8', { outcome: 'already_done' }),
+          v1CloseOutItem('PROD-9', {
+            outcome: 'failed',
+            reason: 'Its pull request is not merged.',
+          }),
+        ]),
+      },
+    });
+
+    const done = await client.completeSession({ sessionBranch: 'motir/auto-1' });
+
+    expect(done).toEqual({
+      sessionBranch: 'motir/auto-1',
+      results: [
+        { key: 'PROD-7', outcome: 'completed' },
+        { key: 'PROD-8', outcome: 'already_done' },
+        { key: 'PROD-9', outcome: 'failed', reason: 'Its pull request is not merged.' },
+      ],
+    });
+    await client.close();
+  });
+
+  it('an expansion submit returns the job handle from a 202', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/expansions': {
+        status: 202,
+        body: v1JobHandle({ jobId: 'job-7', planId: 'plan-7' }),
+      },
+    });
+
+    // 202 is a SUCCESS the transport must accept on its own terms — the job is
+    // accepted, not finished, and the handle is the whole answer.
+    await expect(client.expandItem('PROD-7')).resolves.toEqual({
+      jobId: 'job-7',
+      planId: 'plan-7',
+    });
+    expect(server.v1Calls.at(-1)).toMatchObject({
+      method: 'POST',
+      path: '/api/v1/work-items/PROD-7/expansions',
+      // No body: the item's key is the whole request.
+      body: undefined,
+    });
     await client.close();
   });
 });
 
 describe('failures', () => {
-  it("surfaces a tool error VERBATIM as a CliError — it carries the server's guidance", async () => {
+  // ⚠️ The refusal has to keep TEACHING across the transport swap. The MCP tool
+  // put the legal targets inside its sentence; v1 puts them beside it, in
+  // `allowedTransitions`. Same information, different place — so a client that
+  // reads only the envelope's two pinned fields silently turns actionable
+  // guidance into a dead end, and this test is what forbids that.
+  it('an illegal transition still names what IS allowed — from the field, not the sentence', async () => {
     const client = await connected();
-    server.script({
-      transition_status: {
-        error: 'ILLEGAL_TRANSITION: In Progress → Done is not allowed. Allowed: To Do, In Review.',
+    server.scriptV1({
+      'POST /api/v1/work-items/{key}/transitions': {
+        status: 422,
+        body: {
+          code: 'ILLEGAL_TRANSITION',
+          error: 'Illegal status transition: "in_progress" → "done".',
+          allowedTransitions: [
+            { key: 'todo', label: 'To Do', category: 'todo' },
+            { key: 'in_review', label: 'In Review', category: 'in_progress' },
+          ],
+        },
       },
     });
 
-    await expect(client.transitionStatus({ key: 'PROD-7', status: 'done' })).rejects.toThrow(
-      /Allowed: To Do, In Review/,
+    const failure = await client
+      .transitionStatus({ key: 'PROD-7', status: 'done' })
+      .catch((err: unknown) => err);
+
+    expect(failure).toBeInstanceOf(CliError);
+    // The server's sentence, then the targets — in the MESSAGE, because `motir
+    // done` re-raises this error with a hint of its own and would drop them.
+    expect((failure as CliError).message).toBe(
+      'Illegal status transition: "in_progress" → "done". Allowed: To Do, In Review.',
     );
-    await expect(client.transitionStatus({ key: 'PROD-7', status: 'done' })).rejects.toBeInstanceOf(
-      CliError,
-    );
+    expect((failure as CliError).hint).toBeUndefined();
+    await client.close();
+  });
+
+  it('a refusal with no usable target list still reports the refusal', async () => {
+    const client = await connected();
+    // Three ways the enrichment can be useless — absent, empty (a terminal
+    // status really has nowhere to go), and malformed. None may cost the user
+    // the error itself, because this runs on a path where nothing is validated.
+    for (const allowedTransitions of [undefined, [], [{ key: 'todo' }, 7]]) {
+      server.scriptV1({
+        'POST /api/v1/work-items/{key}/transitions': {
+          status: 422,
+          body: { code: 'ILLEGAL_TRANSITION', error: 'Nope.', allowedTransitions },
+        },
+      });
+
+      const failure = await client
+        .transitionStatus({ key: 'PROD-7', status: 'done' })
+        .catch((err: unknown) => err);
+
+      expect((failure as CliError).message).toBe('Nope.');
+      expect((failure as CliError).hint).toBeUndefined();
+    }
     await client.close();
   });
 
@@ -375,12 +496,14 @@ describe('failures', () => {
 
   it('reports a tool the server does not expose rather than hanging', async () => {
     const client = await connected();
-    // `dispatch_prompt` is not in DEFAULT_TOOLS on this fresh server.
+    // Driven on a tool that still speaks MCP and is NOT in DEFAULT_TOOLS —
+    // `open_plan_session`, which 11.5.20 ports. `dispatch_prompt` used to play
+    // this part; on `/api/v1` a missing endpoint is a 404, not a missing tool.
     const bare = await startTestMcpServer({ token: 't', tools: DEFAULT_TOOLS });
     const other = new MotirClient({ serverUrl: bare.url, token: 't' });
     await other.connect();
 
-    await expect(other.dispatchPrompt('PROD-7')).rejects.toThrow(/no scripted tool/);
+    await expect(other.openPlanSession({ projectKey: 'PROD' })).rejects.toThrow(/no scripted tool/);
 
     await other.close();
     await bare.close();

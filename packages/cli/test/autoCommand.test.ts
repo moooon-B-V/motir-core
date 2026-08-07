@@ -10,8 +10,13 @@ import { CliError } from '../src/errors.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import {
   startTestMcpServer,
+  v1Detail,
+  v1DispatchPrompt,
+  v1Integration,
   type TestMcpServer,
   type ToolScript,
+  type V1Request,
+  type V1Script,
 } from './helpers/mcpTestServer.js';
 
 // `motir auto` as the COMMAND (Subtask 7.9.5 · MOTIR-883).
@@ -59,6 +64,8 @@ beforeEach(() => {
   );
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
   server.calls.length = 0;
+  server.v1Calls.length = 0;
+  server.resetV1();
   // `autoCommand` reports the run through `process.exitCode`; restoring it in
   // afterEach keeps a failing scripted run from failing the test PROCESS.
   exitCode = process.exitCode;
@@ -73,13 +80,21 @@ afterEach(() => {
 
 const AGENT = { agent: `${process.execPath} -e ""` };
 
-/** A two-item plan where the second only becomes ready once the first is
- *  integrated — the cascade, served over the real protocol. */
-function planTools(): ToolScript {
+/**
+ * A two-item plan where the second only becomes ready once the first is
+ * integrated — the cascade, served over the real protocol.
+ *
+ * ⚠️ ONE state machine, TWO transports (MOTIR-2213). `next_ready` still speaks
+ * MCP while the prompt / transition / integration calls moved to `/api/v1`, and
+ * the cascade only works if all four read the same `integrated` set — so they
+ * share this closure rather than being scripted independently. Splitting them
+ * into two fixtures would let the run "drain a chain" that no longer exists.
+ */
+function planScripts(): { tools: ToolScript; v1: V1Script } {
   const integrated = new Set<string>();
   const statuses = new Map<string, string>();
   const dispatched = new Set<string>();
-  return {
+  const tools: ToolScript = {
     next_ready: () => {
       const key = !dispatched.has('PROD-1')
         ? 'PROD-1'
@@ -105,28 +120,46 @@ function planTools(): ToolScript {
         },
       };
     },
-    dispatch_prompt: (args) => {
-      const key = String(args['key']);
-      const seed = (args['sessionBranch'] as string | undefined) ?? null;
+  };
+  const v1: V1Script = {
+    'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => {
+      const key = String(req.params['key']);
+      const seed = req.query.get('sessionBranch');
       return {
-        structured: {
-          key,
+        body: v1DispatchPrompt(key, {
           prompt: `PROMPT ${key}`,
           targetRepo: 'motir-core',
           workflowMode: seed ? 'session_lineage' : 'per_item_pr',
           sessionBranch: seed,
-        },
+        }),
       };
     },
-    transition_status: (args) => {
-      statuses.set(String(args['key']), String(args['status']));
-      return { structured: { ok: true } };
+    'POST /api/v1/work-items/{key}/transitions': (req) => {
+      const key = String(req.params['key']);
+      const status = String((req.body as { status: string }).status);
+      statuses.set(key, status);
+      return { body: v1Detail(key, { status }) };
     },
-    mark_integrated: (args) => {
-      integrated.add(String(args['key']));
-      return { structured: { ok: true } };
+    'POST /api/v1/work-items/{key}/integration': (req) => {
+      const key = String(req.params['key']);
+      integrated.add(key);
+      const sent = req.body as { sessionBranch: string };
+      return { body: v1Integration(key, { sessionBranch: sent.sessionBranch }) };
     },
   };
+  return { tools, v1 };
+}
+
+/** Script both halves of the plan onto the server. */
+function scriptPlan(): void {
+  const { tools, v1 } = planScripts();
+  server.script(tools);
+  server.scriptV1(v1);
+}
+
+/** Every `/api/v1` request to one operation, in order. */
+function v1CallsTo(method: string, suffix: string): V1Request[] {
+  return server.v1Calls.filter((c) => c.method === method && c.path.endsWith(suffix));
 }
 
 /** A git runner that answers like a healthy repo, recording every command. */
@@ -204,7 +237,7 @@ describe('motir auto refuses to start without an agent', () => {
 
 describe('motir auto — a whole run through the real session', () => {
   it('drains the chain onto one branch, opens one pull request, and exits 0', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
     const prompts: string[] = [];
 
@@ -224,11 +257,12 @@ describe('motir auto — a whole run through the real session', () => {
     expect(prompts).toEqual(['PROMPT PROD-1', 'PROMPT PROD-2']);
     // Both items were reported as integrated on the run's ONE branch…
     const branch = 'motir/auto-20260729-010203';
-    const integrated = server.calls.filter((c) => c.name === 'mark_integrated');
-    expect(integrated.map((c) => c.args['key'])).toEqual(['PROD-1', 'PROD-2']);
-    expect(new Set(integrated.map((c) => c.args['sessionBranch']))).toEqual(new Set([branch]));
+    const integrated = v1CallsTo('POST', '/integration');
+    expect(integrated.map((c) => c.params['key'])).toEqual(['PROD-1', 'PROD-2']);
+    const bodies = integrated.map((c) => c.body as Record<string, unknown>);
+    expect(new Set(bodies.map((b) => b['sessionBranch']))).toEqual(new Set([branch]));
     // …the harness identified itself (MOTIR-1685 provenance)…
-    expect(String(integrated[0]?.args['implementationHarness'])).toMatch(/^motir-cli\//);
+    expect(String(bodies[0]?.['implementationHarness'])).toMatch(/^motir-cli\//);
     // …and the close-out opened exactly one pull request, never a merge.
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     expect(git.log.some((cmd) => cmd.includes('pr merge'))).toBe(false);
@@ -236,7 +270,7 @@ describe('motir auto — a whole run through the real session', () => {
   });
 
   it('runs on its OWN clock and its OWN agent launcher when nothing is injected', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
 
     // Only git is injected: the run id comes from the real clock, and the agent
@@ -247,7 +281,7 @@ describe('motir auto — a whole run through the real session', () => {
       { run: git.run },
     );
 
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(true);
+    expect(v1CallsTo('POST', '/integration')).toHaveLength(1);
     // `--kinds` reached the server's own filter rather than being dropped.
     expect(server.calls.find((c) => c.name === 'next_ready')?.args).toMatchObject({
       kinds: ['subtask'],
@@ -260,7 +294,7 @@ describe('motir auto — a whole run through the real session', () => {
   });
 
   it('--reset clears the persisted exclude list before the run starts', async () => {
-    server.script(planTools());
+    scriptPlan();
     const { addExclude, readExcludes } = await import('../src/sessionExcludes.js');
     addExclude(server.url, 'PROD', { key: 'PROD-99' });
 
@@ -282,7 +316,7 @@ describe('motir auto — a whole run through the real session', () => {
   // again. Without this the upgrade would silently re-dispatch every item a
   // previous run failed on.
   it('holds out an item excluded by a PREVIOUS run, translating its key to an id', async () => {
-    server.script(planTools());
+    scriptPlan();
     const { addExclude } = await import('../src/sessionExcludes.js');
     addExclude(server.url, 'PROD', { key: 'PROD-1' });
 
@@ -302,11 +336,11 @@ describe('motir auto — a whole run through the real session', () => {
     // Having been handed the excluded row, it feeds that id back and asks again.
     expect(asks[1]?.args).toMatchObject({ excludeIds: ['row-PROD-1'] });
     // And PROD-1 was never dispatched.
-    expect(server.calls.some((c) => c.name === 'get_work_item_dispatch_prompt')).toBe(false);
+    expect(v1CallsTo('GET', '/dispatch-prompt')).toEqual([]);
   });
 
   it('exits non-zero when an agent failed, and still opens the pull request', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
 
     await autoCommand(
@@ -322,7 +356,7 @@ describe('motir auto — a whole run through the real session', () => {
     expect(process.exitCode).toBe(1);
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     // The failed item was NOT reported as integrated.
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(false);
+    expect(v1CallsTo('POST', '/integration')).toEqual([]);
   });
 
   // MOTIR-1836. The exclude store used to live in the credential dir, which the
@@ -332,7 +366,7 @@ describe('motir auto — a whole run through the real session', () => {
   // and opened NO pull request: the exact case `closeOutRepos` exists to prevent.
   // The item that failed is a footnote; the run's whole output was the damage.
   it('closes out even when the store is UNWRITABLE and an agent fails (MOTIR-1836)', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
 
     // The sandbox's own shape — an exclude store that cannot be written while
@@ -363,13 +397,11 @@ describe('motir auto — a whole run through the real session', () => {
     // THE regression assertion: the pull request still opened.
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     // …carrying the work that landed before the failure, and only that.
-    expect(
-      server.calls.filter((c) => c.name === 'mark_integrated').map((c) => c.args['key']),
-    ).toEqual(['PROD-1']);
+    expect(v1CallsTo('POST', '/integration').map((c) => c.params['key'])).toEqual(['PROD-1']);
   });
 
   it('halts when git fails in a REAL checkout — before the item is touched', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner((bin, args) =>
       bin === 'git' && args[0] === 'fetch'
         ? { exitCode: 1, stdout: '', stderr: 'origin unreachable' }
@@ -392,15 +424,17 @@ describe('motir auto — a whole run through the real session', () => {
 
     expect(dispatches).toBe(0);
     // Nothing was claimed or transitioned — the failure precedes the status flip.
-    expect(server.calls.some((c) => c.name === 'transition_status')).toBe(false);
+    expect(v1CallsTo('POST', '/transitions')).toEqual([]);
     expect(git.log.some((cmd) => cmd.includes('pr create'))).toBe(false);
   });
 
   it('runs an item whose repo has NO checkout with no lineage rather than failing the run', async () => {
     // `motir-ai` has no checkout under the root, so there is no repository to
     // open a session branch in: the item ships as its own pull request instead.
+    const plan = planScripts();
+    server.scriptV1(plan.v1);
     server.script({
-      ...planTools(),
+      ...plan.tools,
       next_ready: (() => {
         let served = false;
         return () => {
@@ -442,8 +476,8 @@ describe('motir auto — a whole run through the real session', () => {
       },
     );
 
-    expect(server.calls.some((c) => c.name === 'transition_status')).toBe(true);
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(false);
+    expect(v1CallsTo('POST', '/transitions').length).toBeGreaterThan(0);
+    expect(v1CallsTo('POST', '/integration')).toEqual([]);
     expect(process.exitCode).toBe(1);
   });
 });
