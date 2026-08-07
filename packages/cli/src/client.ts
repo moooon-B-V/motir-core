@@ -1,7 +1,6 @@
 import { normalizeServerUrl } from './config/userConfig.js';
 import { V1Transport } from './transport.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
-import type { SuccessBody } from './transport.js';
 import {
   toActivityAllPage,
   toDispatchItem,
@@ -189,9 +188,6 @@ export interface DispatchItem {
    */
   inheritedSessionBranch: string | null;
 }
-
-/** One row of the v1 ready collection, as the generated client types it. */
-type ReadyRow = SuccessBody<'getProjectReadySet'>['items'][number];
 
 /** WHICH `GIT WORKFLOW` variant the server-assembled prompt carries — chosen
  * server-side from the item's inherited lineage, never selectable by the CLI
@@ -803,8 +799,8 @@ export class MotirClient {
     excludeKeys?: readonly string[];
   }): Promise<{ item: DispatchItem | null }> {
     const excluded = new Set((args.excludeKeys ?? []).map((key) => key.toUpperCase()));
-    for await (const row of this.walkReady(args)) {
-      if (!excluded.has(row.key.toUpperCase())) return { item: toDispatchItem(row) };
+    for await (const item of this.walkReady(args)) {
+      if (!excluded.has(item.key.toUpperCase())) return { item };
     }
     return { item: null };
   }
@@ -822,15 +818,24 @@ export class MotirClient {
     kinds?: string[];
   }): Promise<DispatchItem[]> {
     const items: DispatchItem[] = [];
-    for await (const row of this.walkReady(args)) items.push(toDispatchItem(row));
+    for await (const item of this.walkReady(args)) items.push(item);
     return items;
   }
 
-  /** The ready collection, page by page, in the server's rank. */
+  /**
+   * The ready collection, page by page, in the server's rank — ADAPTED.
+   *
+   * ⚠️ It yields the VIEW MODEL, not the wire row, and that is the Q4 boundary
+   * rather than a preference. Yielding `SuccessBody<'getProjectReadySet'>
+   * ['items'][number]` would put a generated type on a signature in this file,
+   * where the ADR allows one only inside `src/transport.ts` and `src/adapters/`
+   * — and a derived type reads as innocuous precisely because it does not look
+   * like an import. `test/architecture.test.ts` fails on either form.
+   */
   private async *walkReady(args: {
     projectKey: string;
     kinds?: string[];
-  }): AsyncGenerator<ReadyRow> {
+  }): AsyncGenerator<DispatchItem> {
     let cursor: string | undefined;
     do {
       const body = await this.v1.request('getProjectReadySet', {
@@ -840,7 +845,7 @@ export class MotirClient {
           ...(cursor ? { cursor } : {}),
         },
       });
-      yield* body.items;
+      for (const row of body.items) yield toDispatchItem(row);
       cursor = body.nextCursor ?? undefined;
     } while (cursor);
   }

@@ -64,6 +64,14 @@ export default defineConfig({
         // CLI's view models out. Fully gated: it is pure mapping, so every
         // branch in it is a real shape decision and none is unreachable.
         'src/adapters/reads.ts': { branches: 90, functions: 90, lines: 90 },
+        // ⚠️ ADDED BY THE STORY GATE (11.5.7). Both shipped mid-story with no
+        // threshold entry, and both were at 100% — which is exactly why it went
+        // unnoticed: an ungated file at 100% is indistinguishable from a gated
+        // one until the day it regresses, and then it is indistinguishable from
+        // a file nobody ever gated. A module the config does not NAME is not
+        // held; that is how a floor stops being one.
+        'src/adapters/filterParam.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/version.ts': { branches: 90, functions: 90, lines: 90 },
 
         // These two gate on FUNCTIONS + LINES only (both are at 100% / ~98%):
         // each carries DEFENSIVE branches that are unreachable under shipped

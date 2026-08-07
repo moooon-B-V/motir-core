@@ -80,4 +80,33 @@ describe('the CLI does not depend on the MCP SDK', () => {
         'if a capability is missing, add the v1 endpoint rather than a second protocol.',
     ).toEqual([]);
   });
+
+  // ⚠️ THE GUARD, WATCHED GOING RED (added by the story gate, 11.5.7). Every
+  // form a reintroduction could take, plus the two mentions that must NOT trip
+  // it. Without this, a `SDK_IMPORT` regex that quietly stopped matching would
+  // pass forever by finding nothing — which is exactly how the scope-seam guard
+  // this story retired decayed across five cards.
+  //
+  // ⚠️ The samples are BUILT from `SDK` rather than written out. Spelling a real
+  // import line here would put one in a file under `test/` — and the guard,
+  // correctly, flagged this very file the first time. Interpolation keeps the
+  // sample honest (it is the exact string a violator would write) without the
+  // guard's own evidence becoming a violation.
+  it.each([
+    [`import { Client } from '${SDK}/client/index.js';`, 'a static import'],
+    [`export * from '${SDK}/types.js';`, 're-export'],
+    [`const sdk = require('${SDK}');`, 'require'],
+    [`await import('${SDK}/client/streamableHttp.js');`, 'dynamic import'],
+  ])('FAILS on %s (%s)', (line) => {
+    expect(SDK_IMPORT.test(line)).toBe(true);
+  });
+
+  it('does NOT fire on prose that merely names the package', () => {
+    // `client.ts`'s header explains why it no longer imports the SDK, this file
+    // names it in its own failure message, and an ADR quotes the specifier. A
+    // guard that fired on all three would be deleted — and the property would
+    // go with it.
+    expect(SDK_IMPORT.test(`// 11.5.6 removed ${SDK} from this package.`)).toBe(false);
+    expect(SDK_IMPORT.test(`const SDK = '${SDK}';`)).toBe(false);
+  });
 });
