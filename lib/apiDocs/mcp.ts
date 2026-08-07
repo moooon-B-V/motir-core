@@ -359,6 +359,16 @@ export interface McpToolSummary {
 }
 
 /**
+ * ⚠️ REGENERATE A FINGERPRINT FROM THE LIVE SERVER, NEVER BY RE-READING THE
+ * SOURCE. The first pass here derived them by parsing the `registerTool(...)`
+ * literals out of `lib/mcp/tools/*.ts`, and **nine of thirty-nine came out
+ * wrong** — the descriptions are concatenated across many lines and several
+ * contain typographic quotes, so a source-level parse silently truncates some of
+ * them. The gate caught all nine, which is the system working; the lesson is
+ * that the only trustworthy source for this value is the same one the gate
+ * reads. Get it from a `tools/list` handshake (the pattern in
+ * `tests/api-docs/mcp-truth.test.ts`) and copy the result.
+ *
  * The stored fingerprints are computed by `fingerprintToolText` in
  * `lib/apiDocs/mcpFingerprint.ts` — which lives in its OWN module because it
  * needs `node:crypto`, and nothing a public page imports may. The story's vitest
@@ -377,7 +387,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   get_work_item: {
     summary:
       'One item in full — description, status, parent and children, dependency edges, and a readiness verdict.',
-    descriptionFingerprint: '53d3b644d6c3',
+    descriptionFingerprint: '02a36a0010a3',
   },
   get_work_item_activity: {
     summary:
@@ -387,12 +397,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   list_ready: {
     summary:
       'The ready-to-start set for a project — every item whose dependencies are all satisfied, paginated.',
-    descriptionFingerprint: 'dd7ec700d4af',
+    descriptionFingerprint: '647066c26c91',
   },
   next_ready: {
     summary:
       'The single highest-ranked ready item, as a full dispatch payload. The “what do I do next” call.',
-    descriptionFingerprint: 'd8539bb087bc',
+    descriptionFingerprint: '8283986decf5',
   },
   dispatch_prompt: {
     summary:
@@ -402,7 +412,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   search_work_items: {
     summary:
       "Search a project's items with the same filter grammar the advanced filter builder writes.",
-    descriptionFingerprint: 'afe786646383',
+    descriptionFingerprint: '99a46a63c07f',
   },
   whoami: {
     summary:
@@ -441,11 +451,11 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   get_plan: {
     summary:
       'A plan with the proposals it bundles: what the planner actually proposed, not just how much.',
-    descriptionFingerprint: '1e367f04f5c7',
+    descriptionFingerprint: 'c23f12cfee90',
   },
   open_plan_session: {
     summary: "Open — or resume — a project's planning conversation, and read its thread.",
-    descriptionFingerprint: 'fcc5b5e22948',
+    descriptionFingerprint: 'aa4e7ce9b277',
   },
   create_work_item: {
     summary:
@@ -465,7 +475,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   claim_next_ready: {
     summary:
       'Atomically claim the next ready subtask in the active sprint and flip it to In Progress. Race-safe.',
-    descriptionFingerprint: '14fd05fd1fd7',
+    descriptionFingerprint: 'ef64f059efb9',
   },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
@@ -474,12 +484,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   expand_item: {
     summary:
       "Submit an AI expansion of one container item. Spends the owner's credits; proposals await approval.",
-    descriptionFingerprint: '418be3e9ecd9',
+    descriptionFingerprint: '48e5bcd4dddd',
   },
   append_plan_turn: {
     summary:
       "Add one turn to a project's planning conversation — what you want changed about the plan.",
-    descriptionFingerprint: 'c46ed47624e7',
+    descriptionFingerprint: 'b1ad0d0eb3f9',
   },
   submit_plan_session: {
     summary: "Send the conversation's accumulated intent to the planner as one change set.",
