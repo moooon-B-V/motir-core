@@ -75,6 +75,13 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'derives from `commentSchema`, the thread resource’s base. No MCP tool returns a root comment ' +
     'WITH its reply thread: `get_work_item_activity` pages an activity stream whose envelope is ' +
     'MCP’s own.',
+  WorkItemCount:
+    'ADR Amendment 12 made COUNTING a filtered set its own v1 operation, and the MCP surface has ' +
+    'no counterpart: `search_work_items` still reports a `total` on the page itself, which is the ' +
+    'shape that amendment moved AWAY from for v1 and deliberately left alone for MCP (an agent ' +
+    'reading a page usually wants the number with it). So there is no MCP payload to compare — ' +
+    'not a narrowing, an absence. ⚠️ If the MCP search ever drops its `total`, this entry closes ' +
+    'and the count becomes a tool that probes this resource.',
   Me:
     '`whoami` answers a different question. v1’s `/me` describes the TOKEN — its `workspaceId` ' +
     'and granted `scopes`; `whoami` returns the RESOLVED user and workspace objects an agent ' +
