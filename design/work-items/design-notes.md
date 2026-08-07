@@ -311,7 +311,7 @@ Reused **with zero new primitives** (satisfies the AC "no new visual primitive
 invented; consistent with tree.png"): the **whole column set** the shipped
 `IssueTreeTable` already renders, the cell vocabulary, the container chrome
 (`rounded-(--radius-card)` bordered box, `--el-surface-soft` header), and the
-whole-row link to `/issues/[identifier]`.
+whole-row link to `/items/[key]`.
 
 ### Columns — the SAME set the shipped Tree renders
 
@@ -450,7 +450,7 @@ chevrons are lucide.
 
 ### States in the mockup
 
-Panels: **(0)** the List view in the `/issues` shell (toolbar + flat table,
+Panels: **(0)** the List view in the `/items` shell (toolbar + flat table,
 default key asc) · **(1)** the switcher menu open (Tree / List, List checked) ·
 **(2)** re-sorted by Priority desc (the active-sort indicator moved + the desc
 caret) · **(3)** empty state · **(4)** the flat loading skeleton · **(5)** the
@@ -577,7 +577,7 @@ steps into children, <kbd>←</kbd> collapses or steps to the parent,
 
 ### States in the mockup
 
-Panels: **(0)** the Tree in the `/issues` shell — sortable headers, nested rows,
+Panels: **(0)** the Tree in the `/items` shell — sortable headers, nested rows,
 default sort key asc, a **collapsed** parent (PROD-23) showing its chevron with
 no children loaded · **(1)** sorted by **Priority desc** — siblings re-ordered
 **within** every parent, hierarchy preserved, the active caret moved ·
@@ -689,7 +689,7 @@ vocabulary (`IssueTypeIcon` · identifier · `Pill`), not a new surface.
 ### States in the mockup
 
 Panels: **(0)** the `[Filter]` trigger — closed-inactive vs. closed-active
-(accent ring + count badge) in the `/issues` toolbar · **(1)** the popover open,
+(accent ring + count badge) in the `/items` toolbar · **(1)** the popover open,
 **empty** (nothing selected, "Clear filters" disabled) · **(2)** the popover
 open, **populated** (text "oauth" · Bug · In Progress + In Review · Dana Kim +
 Unassigned → badge 5, "Clear filters" active) · **(3)** the applied filter on the
@@ -758,7 +758,7 @@ addressed here. Date ranges / relative presets / time-of-day stay out (the
 
 ## Work-item quick view (peek) modal (Story 2.5 · 2.5.18 → 2.5.19; readiness 2.5.20 → 2.5.21)
 
-`quick-view.mock.html` is the design for the `/issues` **quick view** — a _peek_
+`quick-view.mock.html` is the design for the `/items` **quick view** — a _peek_
 overlay that previews a work item **without leaving the list**, with a prominent
 path to the full detail page. Neither `tree.png` nor the 2.4 detail design (`detail.pen`)
 draws this surface, so the planning-time design gate (`notes.html` mistake #31)
@@ -794,7 +794,7 @@ visual primitive is invented** (AC).
 ### The row trigger — resolving the nested-interactive problem
 
 The Tree (2.5.3) and List (2.5.8) rows are **already a whole-row link** to
-`/issues/[key]`, shipped as a wrapping `<a class="lt-row" href>`. A quick-view
+`/items/[key]`, shipped as a wrapping `<a class="lt-row" href>`. A quick-view
 `<button>` **cannot nest inside that `<a>`** (no nested interactive elements; it
 breaks AT semantics and HTML validity). Resolution:
 
@@ -822,7 +822,7 @@ the detail page, scoped to a peek.
 
 | Region                 | Content                                                                                                                                                                                                                                                                                                         |
 | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Header bar (sticky)    | `IssueTypeIcon` (type hue) · **`PROD-N`** (mono, a **link** to `/issues/[key]`) · Status `Pill` · spacer · **`btn-primary` "Open full page →"** · `×` close `icon-btn`                                                                                                                                          |
+| Header bar (sticky)    | `IssueTypeIcon` (type hue) · **`PROD-N`** (mono, a **link** to `/items/[key]`) · Status `Pill` · spacer · **`btn-primary` "Open full page →"** · `×` close `icon-btn`                                                                                                                                           |
 | Main (scrollable, 1fr) | the title (serif `--font-serif` 27px, matches the detail header), then the **full Markdown description** (`MarkdownView`) under a "Description" label, then a quiet `--el-text-muted` footer line naming what's full-page-only                                                                                  |
 | Rail (300px)           | the detail page's **core-fields rail, condensed** — **Status** (`Pill`) · **Assignee** (Avatar + name) · **Reporter** (Avatar + name) · **Priority** (`PRIORITY_META` chip) · **Due date** · **Estimate** (clock glyph + duration) · **Parent** (breadcrumb link). `--el-surface-soft` bg, left hairline border |
 
@@ -863,12 +863,12 @@ blockers resolved`); and **no blockers → NO banner at all** — mirror the det
   moot once work has started or finished (2.5.21). So the banner shows iff the item is
   todo-category AND has blockers.
 - **Blocker links swap the peek** — a named blocker link pushes **`?peek=<blockerKey>`**
-  (staying on `/issues`, swapping the peeked item) rather than navigating to
-  `/issues/[key]`. Rationale: the peek exists to inspect _without losing your place_, so
+  (staying on `/items`, swapping the peeked item) rather than navigating to
+  `/items/[key]`. Rationale: the peek exists to inspect _without losing your place_, so
   swapping keeps the user in-list and Back / `Esc` steps back through peeked items. This
   is a **justified deviation** from the detail-page badge (which links straight to
-  `/issues/[key]` because there is no peek there): the only delta 2.5.21 passes to the
-  shared component is each blocker's `href` (`?peek=…` instead of `/issues/[key]`) — the
+  `/items/[key]` because there is no peek there): the only delta 2.5.21 passes to the
+  shared component is each blocker's `href` (`?peek=…` instead of `/items/[key]`) — the
   `ReadinessBadge` component itself is unchanged.
 - **Data — no new query.** `readiness` is **already part of the core detail read** the
   peek issues: `getIssueDetail` returns `readiness: { ready, openBlockers }` — the same
@@ -906,7 +906,7 @@ blockers resolved`); and **no blockers → NO banner at all** — mirror the det
 
 The trigger lives in the **shared row-actions cell**, so the peek opens
 identically from a Tree row or a List row. The modal is **URL-driven**
-(`?peek=PROD-N` on `/issues`) so it survives a refresh, is shareable/deep-linkable,
+(`?peek=PROD-N` on `/items`) so it survives a refresh, is shareable/deep-linkable,
 and Back closes it — the standard "preview as a URL state" pattern (Linear's peek,
 GitHub's issue hovercard→modal). 2.5.19's data load reuses `getWorkItemByIdentifier`
 / the detail aggregate read (the same source the full page uses) — the peek shows
@@ -1932,7 +1932,7 @@ title + description — its menu row carries the "title + description" secondary
 
 - **[Advanced]** is a `ToolbarButton` (the `.tb-btn` grammar) with the lucide
   `funnel-plus` glyph, placed **immediately after the shipped [Filter]** facet
-  button in the `/issues` toolbar. Active state = the 2.5.4 grammar extended:
+  button in the `/items` toolbar. Active state = the 2.5.4 grammar extended:
   accent ring + lavender fill + a count badge of **applied (complete) rows**.
 - **Upgrade (one-way, lossless)** — the facet popover gains a footer row,
   `Edit in Advanced` (link-styled, `funnel-plus`), which opens the builder with
@@ -2067,7 +2067,7 @@ badge`, `--spacing-control/input/chip/icon-btn/tooltip-*`,
 `filter-builder.mock.html` (6.1.3) designs ONLY the builder, so saving,
 applying, managing, sharing, and subscribing were the design-gate NONE-exists
 case. This asset closes it for code Subtasks **6.2.3** (save + apply UI on
-/issues), **6.2.4** (the filters directory), and **6.2.5** (subscriptions) —
+/items), **6.2.4** (the filters directory), and **6.2.5** (subscriptions) —
 and pins the "Filter missing" widget state Story 6.3 inherits. Mirrors
 (verified in the Story 6.2 seed module, 2026-06-10): Jira's Save / Save-as
 ownership split, its Filters-directory columns (name / owner / visibility /
@@ -2078,15 +2078,15 @@ the HTML is the source of truth (toggle dark in it for token parity).
 
 ### The seven panels
 
-| Panel | Surface                                                                                                                                                              |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0     | The /issues toolbar: the **[Saved]** ToolbarButton (bookmark glyph, right of [Advanced]) + the applied-filter **name chip**; clean vs dirty-owner vs dirty-non-owner |
-| 1     | The **save dialog** (Modal `size="md"`): name / description / visibility; the duplicate-name error; the viewer private-only state                                    |
-| 2     | The **[Saved] dropdown**: Starred → My filters → Project filters → Defaults, server search, per-row star, View-all footer; the empty-group states                    |
-| 3     | The **filters directory** at `/filters`: searchable paginated table, role-gated row actions, built-ins read-only, empty + no-access states                           |
-| 4     | The **visibility control** (Edit details) + the **delete-with-dependents** confirm                                                                                   |
-| 5     | The **subscription editor** (preset schedule) + the subscribed state + its mounts                                                                                    |
-| 6     | The **“Filter missing”** widget state (the 6.3 degraded card)                                                                                                        |
+| Panel | Surface                                                                                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0     | The /items toolbar: the **[Saved]** ToolbarButton (bookmark glyph, right of [Advanced]) + the applied-filter **name chip**; clean vs dirty-owner vs dirty-non-owner |
+| 1     | The **save dialog** (Modal `size="md"`): name / description / visibility; the duplicate-name error; the viewer private-only state                                   |
+| 2     | The **[Saved] dropdown**: Starred → My filters → Project filters → Defaults, server search, per-row star, View-all footer; the empty-group states                   |
+| 3     | The **filters directory** at `/filters`: searchable paginated table, role-gated row actions, built-ins read-only, empty + no-access states                          |
+| 4     | The **visibility control** (Edit details) + the **delete-with-dependents** confirm                                                                                  |
+| 5     | The **subscription editor** (preset schedule) + the subscribed state + its mounts                                                                                   |
+| 6     | The **“Filter missing”** widget state (the 6.3 degraded card)                                                                                                       |
 
 ### Entry + the applied state (panel 0 → 6.2.3)
 
@@ -2150,14 +2150,14 @@ the HTML is the source of truth (toggle dark in it for token parity).
 
 ### The directory (panel 3 → 6.2.4)
 
-- **Route: `/filters`** — project-scoped, a sibling of `/issues` in the
+- **Route: `/filters`** — project-scoped, a sibling of `/items` in the
   authed shell. Entries: the dropdown's "View all filters" footer + the
   command palette. **Deliberately NOT a primary sidebar item** — Jira's
   "Filters" nav entry belongs to its site-global model; in Motir's
-  project-contained model the /issues toolbar is the home of filtering, and
+  project-contained model the /items toolbar is the home of filtering, and
   the sidebar stays lean (recorded deviation).
 - The table (the list-table grammar): **Name** (bookmark/lock glyph + linked
-  name — clicking applies the filter on /issues — + truncated description) ·
+  name — clicking applies the filter on /items — + truncated description) ·
   **Owner** (Avatar + name; built-ins "—") · **Visibility** (`Pill`:
   Project = users glyph on `--el-tint-sky`; Private = lock, neutral tone;
   Built-in = neutral) · **Stars** (my-star toggle + the SQL-aggregated
@@ -2178,7 +2178,7 @@ the HTML is the source of truth (toggle dark in it for token parity).
   Defaults group. ("Viewed recently" omitted — no view-history substrate;
   extension.)
 - States: the EmptyState ("No saved filters yet" + "Go to Issues" — creation
-  lives in the /issues builder, the directory manages) and the 6.4.6
+  lives in the /items builder, the directory manages) and the 6.4.6
   ErrorState verbatim for a no-access deep link. Loading = the standard
   table skeleton (the 2.5.8 grammar, not redrawn).
 
@@ -2610,9 +2610,9 @@ active list already uses (`list.mock.html`), so 2.9.3 composes the same
 vocabulary with no Pencil→code gap and **no new primitive**. Mirror product:
 Jira's dedicated **Archived issues** view with per-item Restore.
 
-### Placement — a dedicated `/issues/archived` route (rung-1 decision)
+### Placement — a dedicated `/items/archived` route (rung-1 decision)
 
-**Decision: a dedicated route `/issues/archived`, reachable from the work-items
+**Decision: a dedicated route `/items/archived`, reachable from the work-items
 navigator toolbar via a low-prominence `[Archived]` ghost link** (panel 5). The
 three options the card named were a dedicated route, a navigator filter/segment,
 or a project-settings page.
@@ -2632,14 +2632,14 @@ or a project-settings page.
   navigator read filters `archivedAt IS NULL` (`workItemRepository` forest CTE +
   every flat/count arm), and the navigator's sort, Tree view, inline-edit,
   advanced + saved filters are all built around **live** items. Bolting an
-  "archived" mode onto `/issues` would fork all of those paths for a rarely-used
+  "archived" mode onto `/items` would fork all of those paths for a rarely-used
   read. A dedicated **flat** route keeps the archived surface simple and leaves
   the live navigator untouched.
 
 **Entry point (panel 5):** a quiet `[Archived]` ghost link (lucide `archive`)
-is added to the `/issues` toolbar **before** `[Filter]`, with a small count
+is added to the `/items` toolbar **before** `[Filter]`, with a small count
 badge so a user knows there's something there without opening it. It links to
-`/issues/archived`; the archived page carries a `← Work items` back link
+`/items/archived`; the archived page carries a `← Work items` back link
 (`--el-link`) home. This is the one change 2.9.3 makes to the live navigator
 toolbar (`IssueListToolbar`).
 
@@ -2665,7 +2665,7 @@ Assignee / Reporter / Due / Est. columns — the archived view answers "what did
 we archive, by whom, when, and can I get it back," so it keeps the row identity
 
 - archive provenance and drops the planning columns ("no complexity for
-  nothing"). The whole row (minus the action cell) links to `/issues/[identifier]`
+  nothing"). The whole row (minus the action cell) links to `/items/[key]`
   so the item is still reachable; the `[Restore]` button is a sibling control
   outside the link (it doesn't navigate).
 
@@ -2710,9 +2710,9 @@ restoring needs no undo because re-archiving is the inverse).
 Two distinct gates, matching the shipped service:
 
 - **View the page = `canBrowse`.** Anyone who can browse the project may open
-  `/issues/archived` and audit what was archived (mirrors the `/issues`
+  `/items/archived` and audit what was archived (mirrors the `/items`
   navigator's `canBrowse` gate, `projectAccessService.getSavedFilterCapabilities`).
-  A non-browsable project renders the `NoAccessState` (same as `/issues`).
+  A non-browsable project renders the `NoAccessState` (same as `/items`).
 - **Restore = `canEdit`.** `unarchiveWorkItem` is `assertCanEdit`-gated (same as
   archive). A viewer who can browse but **not** edit sees the list with the
   **Restore column dropped entirely** (panel 4) — hidden, never shown-disabled,
@@ -2755,12 +2755,12 @@ arm filtering **`archivedAt IS NOT NULL`** (every existing arm filters
 
 ### States in the mockup
 
-Panels: **(0)** the archived view in the `/issues/archived` shell (back link +
+Panels: **(0)** the archived view in the `/items/archived` shell (back link +
 header + flat table + pager) · **(1)** Restore in flight (the row faded/locked +
 the "{key} restored" success toast) · **(2)** empty state · **(3)** flat loading
 skeleton · **(4)** the view-only state (canBrowse, not canEdit — Restore column
 dropped) · **(5)** the navigator entry point (the `[Archived]` toolbar link on
-`/issues`).
+`/items`).
 
 ### Out of scope (documented extension slots)
 
@@ -2920,7 +2920,7 @@ Detail `⋯` menu (archived): `Restore` · `Delete…` · |
 `detail-archived.mock.html` is the design asset for the **archived banner on the
 work-item detail page** — the design gate for the code subtask **2.9.6
 (MOTIR-995)**. The 2.9 list view (above) answers "what did we archive, by whom,
-when, and can I get it back" from the dedicated `/issues/archived` route; this
+when, and can I get it back" from the dedicated `/items/archived` route; this
 banner answers the complementary question on the **item's own detail page**: a
 viewer who opens an archived item directly (a bookmarked link, a link from
 activity / a comment, a board peek) must immediately see that it is archived and

@@ -1,0 +1,82 @@
+# motir-core on Fly.io — SPIKE (MOTIR-2383).
+#
+# ⚠️ NOT a deployment. `app` is a placeholder and no Fly app exists under this
+# name. This file is the spike's second deliverable: what the config would say,
+# and which decisions it forces. Deploying it is a separate, deliberate card.
+#
+# Modelled on motir-ai/fly.toml, which has been running this pattern for months
+# — same account, same region, same release-command shape.
+
+app            = "motir-core"   # placeholder; `fly launch` claims the real name
+primary_region = "iad"          # Ashburn — co-located with motir-ai AND with the
+                                # Neon database, which stays exactly where it is.
+                                # Moving compute does not move the data: the app
+                                # connects with a plain DATABASE_URL over the
+                                # public internet either way (MOTIR-2371 notes).
+
+[build]
+  dockerfile = "Dockerfile"
+
+[deploy]
+  # The same command CI already runs, and the same one motir-ai/fly.toml uses.
+  # Fly runs it ONCE per deploy, before new machines take traffic — so a
+  # migration cannot race a half-rolled-out release.
+  release_command = "pnpm prisma migrate deploy"
+
+[env]
+  PORT = "8080"
+  # HOSTNAME=0.0.0.0 is set in the Dockerfile rather than here, because getting
+  # it wrong is silent: Next's standalone server binds the CONTAINER HOSTNAME by
+  # default, the process reports "✓ Ready", and nothing outside can reach it.
+  # Verified the hard way during this spike.
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  # ⚠️ These two knobs are policy over machines that ALREADY EXIST. Fly's proxy
+  # never CREATES a machine (motir-ai's own notes, MOTIR-2102): auto_start only
+  # starts an existing STOPPED one. With a single machine both settings are
+  # inert, which is why the count below is 2.
+  auto_stop_machines   = "stop"
+  auto_start_machines  = true
+  # NOT scale-to-zero. This app serves interactive page loads, so a cold start
+  # is user-visible in a way motir-ai's service-to-service calls are not.
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type       = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+# Sized from motir-ai's shared-cpu-2x/2048MB, NOT measured for this app. The
+# standalone server's real resident set is one of the things a deploy would
+# settle; the spike could only measure the ARTIFACT (374 MB), not the RSS.
+#
+# Cost at this size (fly.io/docs/about/pricing, 2026-08-07):
+#   shared-cpu-2x 2GB = $11.83/machine/month -> ~$24/month for the two machines
+#   the auto_start policy above requires. Outbound $0.02/GB.
+[[vm]]
+  size   = "shared-cpu-2x"
+  memory = "2gb"
+  cpus   = 2
+
+# ── What this file does NOT solve, and must not pretend to ──────────────────
+#
+# 1. PER-PR PREVIEW DEPLOYMENTS. Vercel gives these free; Fly does not. This is
+#    the single genuine loss in the move and it needs its own decision — build
+#    it (an app per PR, plus a Neon branch per PR through Neon's API) or drop
+#    it. It is the same piece of work as replacing the preview DATABASE branches.
+#
+# 2. @vercel/blob. Five files import it. Fly's Tigris is S3-compatible and would
+#    replace it, but that is a code change this spike did not make.
+#
+# 3. STATIC ASSET EGRESS. Vercel's CDN is bundled into the plan; here the app
+#    serves its own static output and pays $0.02/GB. Fronting it with Cloudflare
+#    (free tier) is the normal answer and is not set up.
+#
+# 4. THE DATABASE BILL. `prodect-db` is a Vercel-MANAGED Neon resource, so Vercel
+#    invoices it even with nothing hosted there. ⚠️ Do NOT uninstall that
+#    integration to change this: Neon's docs say the Neon ORGANIZATION is deleted
+#    when the integration is uninstalled. Migrating to a direct Neon account is
+#    its own operation, done in this order: create the direct project, dump and
+#    restore, repoint DATABASE_URL, verify, and only then uninstall.

@@ -64,7 +64,7 @@ duplicate/Merge · Snooze**. This asset mirrors that surface shape and taxonomy.
 ## Where it lives
 
 - **Inbox** — a per-project admin route (mirror the established project-settings /
-  `/issues` page-header grammar): `app/(authed)/.../triage/page.tsx`, reached from
+  `/items` page-header grammar): `app/(authed)/.../triage/page.tsx`, reached from
   the project nav, gated by 6.4 admin permission. The page reads the 6.11.3
   triage-queue read (paginated/cursor'd) and drives the 6.11.5 actions service.
 - **In-app widget** — a `Modal` launched from a shell affordance (a "Report"
