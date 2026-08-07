@@ -94,6 +94,50 @@ const nextConfig: NextConfig = {
   // server — gated on an env flag the Playwright webServer sets, leaving a
   // normal `pnpm dev` session's indicator untouched.
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
+
+  // ── Keep BUILD-ONLY packages out of every function bundle (MOTIR-2378) ────
+  //
+  // `app/**` holds 335 serverless functions (252 route handlers + 83 pages),
+  // and Next traces each one's dependencies into its OWN bundle. With no
+  // excludes declared, anything reachable from a traced module is copied per
+  // function — so a package's size is multiplied by 335, not counted once.
+  //
+  // That is what exhausted the Vercel build container's 32 GB disk (ENOSPC,
+  // confirmed by Vercel support 2026-08-07; MOTIR-2371). The final artifacts
+  // are small — a real deployment measured node_modules 1215 MB, source 394 MB,
+  // output 276 MB — so the 30 GB is intermediate, generated during packaging.
+  //
+  // ⚠️ EVERY ENTRY HERE MUST BE UNABLE TO EXECUTE AT RUNTIME. An exclude is not
+  // a size optimisation, it is an assertion that a serverless function will
+  // never load this file — and getting it wrong trades a slow build for
+  // production 500s, which is strictly worse because it fails silently in the
+  // one environment nobody is watching. Each entry below states why it cannot
+  // run in a function.
+  //
+  // ⚠️ PRISMA IS DELIBERATELY ABSENT. `@prisma/client` is the heaviest
+  // candidate at 96 MB installed, and its query engines ARE loaded when a
+  // request runs. Excluding it is the obvious next lever and the wrong one to
+  // pull from a laptop; if tracing still needs trimming, it gets its own card
+  // with a real deployment behind it.
+  outputFileTracingExcludes: {
+    '**/*': [
+      // The Rust compiler that PRODUCES the bundle. 120 MB, build-time only —
+      // by the time a function runs, its work is already done.
+      './node_modules/.pnpm/@next+swc-*/**',
+      // 91 MB dev/test CLI for running the Inngest dev server. The RUNTIME
+      // client is the separate `inngest` package, which is NOT excluded.
+      './node_modules/.pnpm/inngest-cli@*/**',
+      // The E2E browser harness and its driver — test-only, and never imported
+      // by anything under `app/` or `lib/`.
+      './node_modules/.pnpm/@playwright+test@*/**',
+      './node_modules/.pnpm/playwright@*/**',
+      './node_modules/.pnpm/playwright-core@*/**',
+      // Source maps are read by debuggers, never executed.
+      '**/*.js.map',
+      '**/*.mjs.map',
+      '**/*.d.ts.map',
+    ],
+  },
 };
 
 export default withNextIntl(nextConfig);
