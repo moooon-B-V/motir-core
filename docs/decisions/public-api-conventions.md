@@ -3165,7 +3165,31 @@ rule.
 - **Amendment 9 Q3's first invariant** now reads through this amendment; its body
   is not rewritten, which is the shape every amendment here keeps.
 
-> **Numbered 12, read off the file rather than assumed.** Amendment 11 records
-> the 10-vs-11 merge race it lost; the last section on `origin/main` at authoring
-> time is Amendment 11, and no open pull request touches this file. A later
-> amendment authored in parallel renumbers itself, not this one.
+> **⚠️ Numbered 12, and a THREE-WAY number race is in flight — read this before
+> merging.** Amendment 11 records the 10-vs-11 race it lost; this is the same
+> thing one round later and wider. The last section on `origin/main` at authoring
+> time was Amendment 11 and no OPEN pull request touched this file — which is
+> exactly the wrong source, because the collisions are on branches with no PR
+> yet. Checked across every unmerged branch after the fact:
+>
+> | Branch                               | Claims                                                |
+> | ------------------------------------ | ----------------------------------------------------- |
+> | `parent/MOTIR-2308-cli-docs` (this)  | **Amendment 12** — the CLI documentation              |
+> | `parent/MOTIR-2309-mcp-docs`         | **Amendment 12** — the MCP is a `/docs/mcp` sub-area  |
+> | `parent/MOTIR-1855-cli-v1-migration` | **Amendment 12** (counting a filtered set) **and 13** |
+>
+> None is merged. The remedy is the one Amendment 11 used and is **not** a
+> blind renumber here — whoever merges SECOND (and third) renumbers to the next
+> free number, records the race in its own header note, and adds a line saying
+> anything citing the old number means that amendment. Every merge after the
+> first will conflict at the append anchor, so the ordering is a decision for
+> whoever holds the merge buttons, not something a branch can settle for itself.
+>
+> The three amendments do not contradict each other — the CLI and MCP ones apply
+> Amendment 11 Q4's placement rule to different surfaces, and MOTIR-1855's is
+> about `/api/v1` — so the conflict is textual, not substantive. **Anything
+> elsewhere in this repository citing "Amendment 12" for the CLI documentation
+> means THIS amendment, whatever number it ends up with**; the citations live in
+> `packages/cli/src/commandCatalog.ts`, `program.ts`, `help.ts`,
+> `serverResolve.ts`, `packages/cli/test/commandCatalog.test.ts`,
+> `lib/apiDocs/cli.ts`, `tests/api-docs/`, and `design/cli-guide/design-notes.md`.
