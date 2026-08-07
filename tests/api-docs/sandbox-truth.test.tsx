@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
+import { escapeRegExp } from '@/lib/utils/regexp';
 import {
   SANDBOX_IMAGE,
   sandboxProfileRows,
@@ -292,7 +293,7 @@ describe('the coverage floor covers what this story shipped', () => {
     for (const file of ['app/(public)/docs/sandbox/page.tsx', 'lib/apiDocs/sandbox.ts']) {
       expect(config, `${file} is not in the coverage include list`).toContain(`'${file}'`);
       expect(
-        new RegExp(`'${file.replace(/[()/.]/g, '\\$&')}':\\s*\\{[^}]*lines:\\s*9\\d`).test(config),
+        new RegExp(`'${escapeRegExp(file)}':\\s*\\{[^}]*lines:\\s*9\\d`).test(config),
         `${file} has no ≥90% per-file threshold`,
       ).toBe(true);
     }
