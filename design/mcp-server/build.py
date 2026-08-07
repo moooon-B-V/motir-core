@@ -246,6 +246,16 @@ EXTRA_CSS = '''
       .mono-meta { margin: -4px 0 18px; font-family: var(--font-mono);
         font-size: 12px; color: var(--el-text-faint); }
       .doc .lede + .mono-meta { margin-top: 6px; }
+      .client-h {
+        margin: 22px 0 6px; font-family: var(--font-sans); font-size: 13px;
+        font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .clientmeta {
+        margin: 6px 0 0; max-width: 68ch; font-size: 12px; line-height: 1.6;
+        color: var(--el-text-faint);
+      }
+      .clientmeta code { font-size: 11.5px; overflow-wrap: anywhere; }
       .anno.anno-block { display: block; }
       .anno.anno-block .marker { vertical-align: 1px; }
       .anchorbar { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 20px; }
@@ -375,9 +385,28 @@ WIRING_MAIN = '''          <main class="docs-main doc">
 
             <h2><span class="stepnum">2</span> Point your client at the endpoint</h2>
             <p>
-              One URL, streamable HTTP only, with the token on the
-              <code>Authorization</code> header of every request.
+              Every client needs the same four facts. They are Motir's, they are the same for every
+              agent, and everything below this table is one of them transcribed into a vendor's file
+              format.
             </p>
+            <table class="spec">
+              <tbody>
+                <tr><td><span class="nm">URL</span></td><td><code>https://app.motir.co/api/mcp</code></td></tr>
+                <tr><td><span class="nm">Transport</span></td><td>Streamable HTTP — <strong>not</strong> SSE, and not a stdio command</td></tr>
+                <tr><td><span class="nm">Header</span></td><td><code>Authorization: Bearer &lt;token&gt;</code>, on every request</td></tr>
+                <tr><td><span class="nm">Token</span></td><td><code>motir_pat_&hellip;</code> — the one you minted in step 1</td></tr>
+              </tbody>
+            </table>
+
+            <div class="callout">
+              <span aria-hidden="true">◆</span>
+              <span><strong>Don&rsquo;t paste the token into a file your repository tracks.</strong>
+                Where your client can read it from somewhere else, the block below does that
+                instead — VS&nbsp;Code prompts you for it, Cursor and Codex read an environment
+                variable.</span>
+            </div>
+
+            <h3 class="client-h">Claude Code</h3>
             <div class="codeblock">
               <div class="cap">.mcp.json</div>
               <button class="copy" type="button">Copy</button>
@@ -391,11 +420,68 @@ WIRING_MAIN = '''          <main class="docs-main doc">
   }
 }</pre>
             </div>
+            <p class="clientmeta">Or one command:
+              <code>claude mcp add --transport http motir https://app.motir.co/api/mcp --header "Authorization: Bearer motir_pat_&hellip;"</code>
+              · <a href="#">Claude Code MCP docs</a> · format checked 2026-08-06</p>
+
+            <h3 class="client-h">Cursor</h3>
             <div class="codeblock">
-              <div class="cap">claude code</div>
+              <div class="cap">~/.cursor/mcp.json &nbsp;·&nbsp; or .cursor/mcp.json for one project</div>
               <button class="copy" type="button">Copy</button>
-              <pre>claude mcp add --transport http motir https://app.motir.co/api/mcp \\
-  --header "Authorization: Bearer motir_pat_&lt;your-token&gt;"</pre>
+              <pre>{
+  "mcpServers": {
+    "motir": {
+      "url": "https://app.motir.co/api/mcp",
+      "headers": { "Authorization": "Bearer ${env:MOTIR_TOKEN}" }
+    }
+  }
+}</pre>
+            </div>
+            <p class="clientmeta">Cursor interpolates <code>${env:&hellip;}</code>, so the token stays in
+              your environment and out of the file. · <a href="#">Cursor MCP docs</a> · format checked 2026-08-06</p>
+
+            <h3 class="client-h">VS Code</h3>
+            <div class="codeblock">
+              <div class="cap">.vscode/mcp.json</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>{
+  "inputs": [
+    { "type": "promptString", "id": "motir-token", "description": "Motir PAT", "password": true }
+  ],
+  "servers": {
+    "motir": {
+      "type": "http",
+      "url": "https://app.motir.co/api/mcp",
+      "headers": { "Authorization": "Bearer ${input:motir-token}" }
+    }
+  }
+}</pre>
+            </div>
+            <p class="clientmeta">VS&nbsp;Code prompts for the token the first time the server starts and
+              stores it securely — nothing secret is written to the file. · <a href="#">VS Code MCP docs</a>
+              · format checked 2026-08-06</p>
+
+            <h3 class="client-h">Codex CLI</h3>
+            <div class="codeblock">
+              <div class="cap">~/.codex/config.toml</div>
+              <button class="copy" type="button">Copy</button>
+              <pre>[mcp_servers.motir]
+url = "https://app.motir.co/api/mcp"
+bearer_token_env_var = "MOTIR_TOKEN"</pre>
+            </div>
+            <p class="clientmeta"><code>bearer_token_env_var</code> takes the variable&rsquo;s <strong>name</strong>,
+              not the token. · <a href="#">Codex MCP docs</a> · format checked 2026-08-06</p>
+
+            <h3 class="client-h">Any other streamable-HTTP client</h3>
+            <p>
+              Windsurf, Zed, Cline, Goose, or something you wrote yourself — they all take the same
+              four facts under different key names.
+            </p>
+            <div class="codeblock">
+              <div class="cap">whatever your client calls its config</div>
+              <pre>Transport:  streamable HTTP
+URL:        https://app.motir.co/api/mcp
+Header:     Authorization: Bearer motir_pat_&lt;your-token&gt;</pre>
             </div>
 
             <h2><span class="stepnum">3</span> Check it</h2>

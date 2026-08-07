@@ -74,6 +74,8 @@ leaves with a wired agent.
 | Both callouts  | `DocBlocks`' `callout`                        | info `--el-tint-sky`, warning `--el-tint-peach`, ink `--el-text-strong`, `--radius-card` |
 | Step headings  | `h2` + `.stepnum`                             | ordinal in `--font-mono` / `--el-text-faint`, matching the shipped `StepHeading`         |
 | Code samples   | `CodeBlock` — `.codeblock` + `.cap` + `.copy` | `--el-code-bg`, `--el-code-text`, `--radius-card`, caption `--el-text-faint`             |
+| Client heading | `h3.client-h`                                 | `--el-text-secondary`, uppercase — a label above a block, not a section start            |
+| Client meta    | `p.clientmeta`                                | `--el-text-faint`; carries the vendor link and the `format checked` date                 |
 | Inline code    | `.doc code`                                   | `--el-code-bg` / `--el-code-text`, `--radius-kbd`                                        |
 
 **The fork is the first thing on the page below the lede, and it is a table.**
@@ -86,6 +88,39 @@ that says the choice costs them nothing to reverse.
 ⚠️ **No path goes in a `th`.** `table.spec th` uppercases, which renders
 `/api/mcp` as `/API/MCP`. The header row carries the two surface NAMES and the
 endpoints are the first body row. Worth knowing before adding a column here.
+
+**Step 2 wires FIVE clients, and the shape is the argument.** ADR Amendment 12
+**Q3a** replaced _"one wired client"_ with a client matrix, for two reasons — one
+factual (`docs/mcp.md` holds no other client either, so the original allocation
+pointed nowhere) and one about the product (Motir does not ship the agent; the
+reader brings their own, so wiring one vendor tells everyone else they are
+unsupported). The panel draws the containment Q3a requires:
+
+1. **The four transport facts are stated ONCE**, in a `table.spec` above the
+   blocks — URL, transport, header, token shape. These are Motir's, a test can
+   pin them, and every block below is one of them transcribed. A stale block is
+   then wrong about a vendor's _syntax_, never about Motir.
+2. **Each block is captioned with the vendor's file path** (`.mcp.json`,
+   `~/.cursor/mcp.json`, `.vscode/mcp.json`, `~/.codex/config.toml`) — the
+   shipped `CodeBlock`'s `caption` doing the work, so the reader knows _where_ the
+   snippet goes without a sentence saying so.
+3. **Each block carries `format checked <date>` and a vendor documentation
+   link**, in `.clientmeta`. This is the honest marker on a fact no test of ours
+   can hold true.
+4. **Each block prefers the vendor's own secret indirection** over a pasted PAT —
+   VS Code's `inputs` + `${input:…}` prompt, Cursor's `${env:…}`, Codex's
+   `bearer_token_env_var`. The info callout above the blocks says why in one
+   sentence. A guide that opens by telling a reader to paste a live credential
+   into a tracked file has taught the wrong habit in the first five minutes.
+5. **The generic block is last and is a first-class block**, not a consolation
+   paragraph — it is the one that actually covers the tail (Windsurf, Zed, Cline,
+   Goose, a bespoke agent).
+
+The blocks are **stacked, not tabbed.** A tab strip hides four of five options
+behind an interaction, on a page a reader arrives at _already knowing which
+client they use_ — so tabs would cost a click for every reader and save length
+only for the ones who scroll past. Stacked also survives Ctrl-F, printing, and
+the 375px width with no extra treatment.
 
 **The procedure is four steps and ends in a real call.** Mint → point → check →
 do one real thing. Step 3 is `whoami` on purpose: it takes no arguments and
@@ -259,6 +294,14 @@ check, which is what makes Panel 4's claim a measurement rather than a hope.
    this story's boundary excludes. ⚠️ It also collides with flag 2's fingerprint
    pin — whichever of MOTIR-2342 and MOTIR-2330 lands second re-pins, and
    MOTIR-2342's criteria say so.
+
+6. **Q3a's client matrix adds obligations to three cards, recorded in the
+   amendment's own consequences and amended onto the cards in the same pass.**
+   MOTIR-2325 carries the client blocks as data — each declaring the vendor file
+   path, its `checkedOn` date and its documentation URL — with the four transport
+   facts held once and interpolated in, so a block cannot disagree with the
+   endpoint. MOTIR-2330 asserts exactly that (a block hard-coding its own URL is a
+   red build) plus the presence of every date and link. MOTIR-2327 renders them.
 
 **No element is TAKEN from a sibling card by this asset.** The two cards whose
 scope this design touches — MOTIR-2327 (the rail's second tier) and MOTIR-2323's
