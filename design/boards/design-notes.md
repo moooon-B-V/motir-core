@@ -71,7 +71,7 @@ Kanban board (Story 3.1 auto-seeds one per project).
 ## Card anatomy (`BoardCard` — subtask 3.2.3) — REUSES the issue primitives
 
 A board card is the same issue, compact. It composes the EXACT primitives from
-`app/(authed)/issues/_components/issueCellPrimitives.tsx` + `components/ui/*` —
+`app/(authed)/items/_components/issueCellPrimitives.tsx` + `components/ui/*` —
 **no new card vocabulary**:
 
 - **Top row**: `IssueTypeIcon` (lucide glyph in the kind hue via `--el-type-*` —
