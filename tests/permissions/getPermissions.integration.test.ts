@@ -131,32 +131,81 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   };
 }
 
+/**
+ * The six MOTIR-2291 keys a project MEMBER holds — `docs/decisions/member-facing-permissions.md`
+ * §1. Written out rather than derived from `BUILTIN_ROLE_PERMISSIONS.member`, for
+ * the same reason the sets below are: deriving the expectation from the constant
+ * under test proves only that the constant equals itself.
+ *
+ * ⚠️ `import:run` and `work_item:delete` are DELIBERATELY absent — both mirrors
+ * put a bulk import and a delete cascade at admin, so a project member loses
+ * them when their wiring cards land.
+ */
+function MEMBER_FACING_AT_MEMBER(): PermissionKey[] {
+  return [
+    'sprint:manage',
+    'report:view',
+    'saved_filter:manage',
+    'work_item:triage',
+    'ai:plan',
+    'ai:view_plan',
+  ];
+}
+
 /** The permissions each role holds, per access level — read off real DB rows. */
 const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], PermissionKey[]>> = {
   open: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
-    plainMember: ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'],
-    viewer: ['project:browse'],
-    member: ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'],
+    // + report:view (MOTIR-2349): the implicit workspace-member grant takes
+    // exactly one of the eight — charts of a project they can already read.
+    plainMember: [
+      'project:browse',
+      'work_item:edit',
+      'comment:add',
+      'attachment:create',
+      'report:view',
+    ],
+    viewer: ['project:browse', 'report:view'],
+    member: [
+      'project:browse',
+      'work_item:edit',
+      'comment:add',
+      'attachment:create',
+      ...MEMBER_FACING_AT_MEMBER(),
+    ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
   limited: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
     // view + comment, but NOT edit — the level subtracts it from a non-member.
-    plainMember: ['project:browse', 'comment:add', 'attachment:create'],
-    viewer: ['project:browse'],
-    member: ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'],
+    // `report:view` survives: `levelGrants` names only the three edit-ish keys
+    // (MOTIR-2347 §3 added no branch), so every other key takes the default arm.
+    plainMember: ['project:browse', 'comment:add', 'attachment:create', 'report:view'],
+    viewer: ['project:browse', 'report:view'],
+    member: [
+      'project:browse',
+      'work_item:edit',
+      'comment:add',
+      'attachment:create',
+      ...MEMBER_FACING_AT_MEMBER(),
+    ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
   private: {
     owner: [...ROLE_GATED_PERMISSIONS],
     wsAdmin: [...ROLE_GATED_PERMISSIONS],
-    // Invisible without a project membership.
+    // Invisible without a project membership — including for `report:view`.
     plainMember: [],
-    viewer: ['project:browse'],
-    member: ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'],
+    viewer: ['project:browse', 'report:view'],
+    member: [
+      'project:browse',
+      'work_item:edit',
+      'comment:add',
+      'attachment:create',
+      ...MEMBER_FACING_AT_MEMBER(),
+    ],
     admin: [...ROLE_GATED_PERMISSIONS],
   },
   public: {
@@ -167,14 +216,16 @@ const EXPECTED: Record<ProjectAccessLevel, Record<keyof Scenario['ctxs'], Permis
       'work_item:edit',
       'comment:add',
       'attachment:create',
+      'report:view',
       ...PUBLIC_KEYS(),
     ],
-    viewer: ['project:browse', ...PUBLIC_KEYS()],
+    viewer: ['project:browse', 'report:view', ...PUBLIC_KEYS()],
     member: [
       'project:browse',
       'work_item:edit',
       'comment:add',
       'attachment:create',
+      ...MEMBER_FACING_AT_MEMBER(),
       ...PUBLIC_KEYS(),
     ],
     admin: [...ROLE_GATED_PERMISSIONS, ...PUBLIC_KEYS()],
@@ -283,9 +334,19 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     }
 
     // The sets the grid will render, spelled out so a silent widening fails here.
-    expect(catalog.roles.find((r) => r.role === 'viewer')?.permissions).toEqual(['project:browse']);
+    // MOTIR-2349 widened two of them ON PURPOSE — a viewer gains `report:view`,
+    // a member gains six — and those are the only additions this assertion admits.
+    expect([...(catalog.roles.find((r) => r.role === 'viewer')?.permissions ?? [])].sort()).toEqual(
+      ['project:browse', 'report:view'].sort(),
+    );
     expect([...(catalog.roles.find((r) => r.role === 'member')?.permissions ?? [])].sort()).toEqual(
-      ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'].sort(),
+      [
+        'project:browse',
+        'work_item:edit',
+        'comment:add',
+        'attachment:create',
+        ...MEMBER_FACING_AT_MEMBER(),
+      ].sort(),
     );
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed
     // when it grouped the keys by domain. The membership is the contract, not
