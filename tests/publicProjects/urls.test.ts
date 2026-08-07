@@ -20,12 +20,12 @@ describe('publicProjectUrl', () => {
   });
 
   it('prefixes the configured site origin to the public path (no double slash)', () => {
-    vi.stubEnv('BETTER_AUTH_URL', 'https://motir.co/');
+    vi.stubEnv('MOTIR_BASE_URL', 'https://motir.co/');
     expect(publicProjectUrl('MOTIR')).toBe('https://motir.co/p/MOTIR');
   });
 
   it('composes from the same path helper (identifier stays encoded)', () => {
-    vi.stubEnv('BETTER_AUTH_URL', 'https://motir.co');
+    vi.stubEnv('MOTIR_BASE_URL', 'https://motir.co');
     expect(publicProjectUrl('a b')).toBe(`https://motir.co${publicProjectPath('a b')}`);
   });
 });

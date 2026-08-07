@@ -2,17 +2,18 @@
 // OpenGraph / sitemap absolute-URL base for the crawlable public surface.
 //
 // SEO requires ABSOLUTE URLs (canonical, og:url, sitemap entries), so we resolve
-// a site origin once here. `BETTER_AUTH_URL` is the deployed app origin already
-// configured for auth; we reuse it (no new env). A local/CI checkout whose .env
-// omits it falls back to the dev origin — harmless for crawling (no bot reads a
-// localhost canonical), and the routes still render.
+// a site origin once here — through `lib/baseUrl`, which owns the precedence for
+// the whole app (MOTIR-2388). This module previously read the origin variable
+// itself and carried its own localhost fallback: the same policy, written twice,
+// and free to drift. A local/CI checkout with nothing configured still falls back
+// to the dev origin — harmless for crawling (no bot reads a localhost canonical),
+// and the routes still render.
 
-const FALLBACK_ORIGIN = 'http://localhost:3000';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 
 /** The site origin (no trailing slash) for absolute public URLs. */
 export function publicSiteOrigin(): string {
-  const raw = process.env['BETTER_AUTH_URL'] ?? FALLBACK_ORIGIN;
-  return raw.replace(/\/+$/, '');
+  return resolveBaseUrlTrimmed();
 }
 
 /** The site-relative path for a public project (e.g. `/p/PROD`). */
