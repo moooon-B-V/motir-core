@@ -317,11 +317,33 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/explore/seedling/grove-cms',
     why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
   },
-  // The MCP + CLI documentation assets (MOTIR-2323, MOTIR-2326) merged AFTER
-  // this guard, so neither could add its rows and this table could not name
-  // assets that did not yet exist. Both green; the composition turned `main`
-  // red (MOTIR-2348). Each row below names the card that BUILDS its route and
-  // therefore deletes the row — the tightness test enforces that.
+  {
+    file: 'design/project-square/project-square.mock.html',
+    address: '/explore/vantage/pulse-analytics',
+    why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
+  },
+  // ── Forward-looking: the MCP + CLI documentation assets ───────────────────
+  //    `design/mcp-server/` (#1906, MOTIR-2323) and `design/cli-guide/`
+  //    (#1905, MOTIR-2326) both merged AFTER this guard, so neither could add
+  //    its rows and this table could not name assets that did not yet exist.
+  //    The three PRs were in flight together, so each was green against a base
+  //    that did not contain the other, and their composition is what turned
+  //    `main` red — the same shape as two fixes that each pass alone.
+  //
+  //    That shape then repeated one level up: MOTIR-2348 (#1913) and
+  //    MOTIR-2370 (#1916) diagnosed the same red `main` in parallel and both
+  //    merged, so this table carried TWO rows for each of the eight pairs
+  //    below until MOTIR-2372 deduped them. The uniqueness test further down
+  //    is what stops that recurring; read it before adding a row.
+  //
+  //    ⚠️ Every row here is TEMPORARY and belongs to the card that BUILDS its
+  //    route — `/docs/cli` to MOTIR-2308 (#1910), `/docs/mcp[/tools]` to
+  //    MOTIR-2309 (#1911). `expired()` below fails on a listed pair that no
+  //    longer fires, so that PR deletes its rows in the same commit that adds
+  //    the route: the mechanism working, not a conflict. There is now exactly
+  //    ONE row per pair, so deleting the rows you find is sufficient — before
+  //    MOTIR-2372 it was not, and the copy left behind would have re-reddened
+  //    `main` pointing at rows you believed you had removed.
   {
     file: 'design/cli-guide/cli-guide.mock.html',
     address: '/docs/cli',
@@ -331,43 +353,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/cli-guide/design-notes.md',
     address: '/docs/cli',
     why: 'Forward-looking: same route. Built by MOTIR-2308 (PR #1910), which deletes this row.',
-  },
-  {
-    file: 'design/project-square/project-square.mock.html',
-    address: '/explore/vantage/pulse-analytics',
-    why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
-  },
-  // ── Forward-looking, merged AFTER this guard and never listed ─────────────
-  //    MOTIR-2370. `design/cli-guide/` (#1905) and `design/mcp-server/` (#1906)
-  //    both landed on `main` after the guard did, and neither could see it: the
-  //    three PRs were in flight together, so each was green against a base that
-  //    did not contain the other. Their composition is what turned `main` red —
-  //    the same shape as two fixes that each pass alone.
-  //
-  //    ⚠️ The two `design/cli-guide` rows are TEMPORARY and belong to
-  //    MOTIR-2308, which ships `/docs/cli`. The tightness test below fails on a
-  //    listed pair that no longer fires, so that PR DELETES them in the same
-  //    commit that adds the route — which is the mechanism working, not a
-  //    conflict. Land this PR first; #1910 removes its own two.
-  {
-    file: 'design/cli-guide/design-notes.md',
-    address: '/docs/cli',
-    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
-  {
-    file: 'design/cli-guide/cli-guide.mock.html',
-    address: '/docs/cli',
-    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs',
-    why: 'The ownership row for the unbuilt `/docs` area root (MOTIR-2315), which states that `/docs` still 308s to `/docs/api` — the same note `design/api-docs/` carries.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/API/MCP',
-    why: 'Not an address: prose about how the catalogue’s header row RENDERS the string `/api/mcp` in uppercase.',
   },
   // ── STALE — real drift this guard found on its first run. Not silenced on
   //    the merits: MOTIR-2340 corrects every one of them and deletes these
@@ -480,6 +465,23 @@ function expired(findings: Finding[], known: Entry[]): string[] {
   return known.map(idOf).filter((id) => !live.has(id));
 }
 
+/**
+ * `KNOWN` pairs listed more than once. Neither test above can see a duplicate:
+ * `unlisted()` matches findings against a `Set`, so the second row is a no-op,
+ * and `expired()` only reports a row matching NOTHING, which a duplicate still
+ * does. Uniqueness is the third axis, and it is the one a parallel merge
+ * attacks — reported once per pair however many copies exist.
+ */
+function duplicated(known: Entry[]): string[] {
+  const seen = new Set<string>();
+  const twice = new Set<string>();
+  for (const id of known.map(idOf)) {
+    if (seen.has(id)) twice.add(id);
+    seen.add(id);
+  }
+  return [...twice].sort();
+}
+
 describe('a design asset addresses pages that still exist', () => {
   it('finds no address the app no longer serves', () => {
     expect(
@@ -500,6 +502,22 @@ describe('a design asset addresses pages that still exist', () => {
     ).toEqual([]);
   });
 
+  it('lists each (asset, address) pair exactly once', () => {
+    // MOTIR-2372. MOTIR-2348 (#1913) and MOTIR-2370 (#1916) diagnosed the same
+    // red `main` in parallel and both merged, so the SAME eight pairs were
+    // listed twice — invisible to both tests above, and green. Every one of
+    // these rows exists to be DELETED by the card that builds its route, so a
+    // second copy is a trap laid for that card: it removes the pair it finds,
+    // the survivor stops matching, and `expired()` reddens `main` naming rows
+    // that author believes they already removed.
+    expect(
+      duplicated(KNOWN),
+      'These pairs are listed more than once — delete the extra copies, keeping the ' +
+        'reason that reads best. A duplicate silences nothing today and reddens `main` ' +
+        'the day the pair is cleared.',
+    ).toEqual([]);
+  });
+
   it('lists every KNOWN entry with a reason', () => {
     expect(KNOWN.filter((entry) => entry.why.trim().length < 20)).toEqual([]);
   });
@@ -514,7 +532,7 @@ describe('a design asset addresses pages that still exist', () => {
   });
 });
 
-describe('the allowlist is checked in both directions', () => {
+describe('the allowlist is checked in both directions, and for uniqueness', () => {
   const finding = (file: string, address: string): Finding => ({
     file,
     address,
@@ -539,6 +557,40 @@ describe('the allowlist is checked in both directions', () => {
     expect(unlisted([finding('design/b/notes.md', '/gone')], rows)).toEqual([
       'design/b/notes.md:7 — /gone (resolves-to-nothing)',
     ]);
+  });
+
+  it('names a pair listed twice, so a parallel merge cannot double a row unseen', () => {
+    const a = entry('design/a/notes.md', '/gone');
+    expect(duplicated([a, a])).toEqual(['design/a/notes.md /gone']);
+    // Reported ONCE per pair however many copies there are, and the reported
+    // string is the pair itself — the same id `expired()` prints, so both
+    // failures read the same way.
+    expect(duplicated([a, a, a])).toEqual(['design/a/notes.md /gone']);
+  });
+
+  it('stays silent on rows that share only the file, or only the address', () => {
+    const rows = [
+      entry('design/a/notes.md', '/gone'),
+      entry('design/a/notes.md', '/other'),
+      entry('design/b/notes.md', '/gone'),
+    ];
+    expect(duplicated(rows)).toEqual([]);
+    // Uniqueness is per PAIR, not per file or per address: one asset naming two
+    // dead addresses, and two assets naming the same one, are both legitimate —
+    // the second is exactly what the four /docs/mcp[/tools] rows are.
+    expect(duplicated([])).toEqual([]);
+  });
+
+  it('the duplicate axis is the one the two tightness tests cannot see', () => {
+    // The regression MOTIR-2372 cleaned up, in miniature: two rows for one
+    // pair, matched by a single live finding. `unlisted()` is satisfied (the
+    // finding is covered) and `expired()` is satisfied (both rows match), so
+    // the table is green — while carrying a row that will outlive its pair.
+    const a = entry('design/a/notes.md', '/gone');
+    const findings = [finding('design/a/notes.md', '/gone')];
+    expect(unlisted(findings, [a, a])).toEqual([]);
+    expect(expired(findings, [a, a])).toEqual([]);
+    expect(duplicated([a, a])).toEqual(['design/a/notes.md /gone']);
   });
 });
 

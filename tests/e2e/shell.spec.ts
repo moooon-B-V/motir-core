@@ -68,7 +68,16 @@ test('@smoke shell: sidebar nav renders, navigates, and marks the active item', 
   await expect(page.getByRole('link', { name: 'Reports' })).toBeVisible();
 
   // On /dashboard the Dashboard item is current, Issues is not.
-  await expect(page.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+  //
+  // Scoped to the rail, as `shell-flows` and `shell-a11y` already scope the same
+  // assertion. Playwright matches an accessible name by SUBSTRING unless
+  // `exact`, and the top bar's brand link is labelled "Motir — go to dashboard"
+  // (MOTIR-1150 · design/brand/design-notes.md §8 — mark-only, so the link
+  // carries the name), which an unscoped `name: 'Dashboard'` also matches. The
+  // rail is what this test is about, so naming it is the fix rather than
+  // tightening the string.
+  const rail = page.getByRole('navigation', { name: 'Primary' });
+  await expect(rail.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
     'aria-current',
     'page',
   );

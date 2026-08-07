@@ -35,7 +35,7 @@ interface ArchiveArgs {
   key: string;
 }
 
-/** Resolve a `PROD-<n>` key to its work-item id within its own project. */
+/** Resolve a `<KEY>-<n>` key to its work-item id within its own project. */
 async function resolveItemId(key: string, ctx: ServiceContext): Promise<string> {
   const identifier = normalizeIdentifier(key);
   const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
@@ -86,7 +86,7 @@ export function registerArchiveWorkItem(
     {
       title: 'Archive work item',
       description:
-        'Soft-delete (archive) a work item by identifier (e.g. "PROD-7"): it leaves the ready ' +
+        'Soft-delete (archive) a work item by identifier (e.g. "ACME-7"): it leaves the ready ' +
         'set and search but is fully recoverable with unarchive_work_item. Archives only this ' +
         'item — children are left intact. Honors the same access checks as the UI.',
       inputSchema,
@@ -98,7 +98,7 @@ export function registerArchiveWorkItem(
     {
       title: 'Unarchive work item',
       description:
-        'Restore an archived work item by identifier (e.g. "PROD-7") — the inverse of ' +
+        'Restore an archived work item by identifier (e.g. "ACME-7") — the inverse of ' +
         'archive_work_item; it returns to active views. Honors the same access checks as the UI.',
       inputSchema,
     },

@@ -85,6 +85,18 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [...DOCS_REDIRECTS];
   },
+  // The two `next/og` cards read Inter's bytes off disk at request time
+  // (`app/_brand/ogFonts.ts` — satori has no CSS tree and no system font stack,
+  // so `ImageResponse`'s `fonts` option is the ONLY way a card gets a typeface).
+  // A `readFile(join(process.cwd(), …))` is invisible to Next's dependency
+  // tracer, so without these entries the fonts are simply absent from the
+  // deployed function and the cards fall back to a face nobody chose — a failure
+  // that is invisible locally, where the file is always there. Naming the
+  // directory is what makes the deployment carry it.
+  outputFileTracingIncludes: {
+    '/explore/opengraph-image': ['./app/_brand/fonts/**'],
+    '/p/[identifier]/opengraph-image': ['./app/_brand/fonts/**'],
+  },
   // The Next.js dev-mode tools indicator renders a fixed portal in the
   // bottom-left corner by default — directly over the app shell's sidebar
   // footer (the collapse toggle). In `next dev` that portal intercepts pointer

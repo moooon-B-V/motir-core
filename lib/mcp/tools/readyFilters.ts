@@ -9,7 +9,9 @@ import { WorkItemKind, WorkItemPriority } from '@prisma/client';
 export const projectKeyField = z
   .string()
   .min(1)
-  .describe('The project key, e.g. "PROD" (case-insensitive).');
+  .describe(
+    'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
+  );
 
 export const kindsField = z
   .array(z.nativeEnum(WorkItemKind))

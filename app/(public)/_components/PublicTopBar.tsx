@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { UserMenu } from '@/app/(authed)/_components/UserMenu';
+import { BrandMark } from '@/components/brand/BrandMark';
 import { PublicAuthDialog } from '@/app/(public)/_components/PublicAuthDialog';
 import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBadge';
 import { publicProjectPath } from '@/lib/publicProjects/urls';
@@ -55,6 +57,17 @@ export async function PublicTopBar({
         </div>
       </div>
       <div className="flex flex-none items-center gap-2">
+        {/* The brand is the HOST here, not the subject — a visitor came for the
+            PROJECT — so it takes a quiet 18px "on Motir" lockup on the right,
+            before the auth CTAs, and the project's tile on the left is left
+            alone (design/brand/design-notes.md §7d). The 8.3.1 renders
+            established that that tile is `name.charAt(0)`, the PROJECT's
+            initial: overwriting it would delete project identity to gain brand,
+            on the one page whose whole job is the project. */}
+        <Link href="/" className="flex flex-none items-center">
+          <BrandMark size={18} tone="quiet" prefix={t('hostedOnPrefix')} label={t('brand')} />
+        </Link>
+        <span aria-hidden className="mx-1 h-5 w-px flex-none bg-(--el-border)" />
         {user ? (
           <UserMenu name={user.name} email={user.email} />
         ) : (
