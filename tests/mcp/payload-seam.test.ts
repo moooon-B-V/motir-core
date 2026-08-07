@@ -512,6 +512,7 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
     status: { key: 'todo', category: 'todo' },
     assignee: { id: 'user-2', name: 'Yue', avatarUrl: null },
     descriptionExcerpt: 'excerpt',
+    inheritedSessionBranch: null,
     type: 'code' as const,
     executor: 'coding_agent' as const,
     descriptionMd: 'the body',

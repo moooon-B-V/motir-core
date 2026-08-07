@@ -21,6 +21,14 @@ export interface ReadyItemContext {
    *  `done`. (A ready item is never `done`, but the field is always carried.) */
   statusCategory: string;
   assignee: ReadyAssignee | null;
+  /**
+   * The single branch this item's blockers are integrated on, or null when it is
+   * ready from the trunk. Passed IN rather than read off the row: it is a fact
+   * about the item's dependencies, and the list read resolves it for the whole
+   * page in one query (`getInheritedSessionBranches`) so a 50-row page does not
+   * become 50 readiness computations.
+   */
+  inheritedSessionBranch: string | null;
 }
 
 /** The extra resolved bits the dispatch DTO needs on top of {@link ReadyItemContext}. */
@@ -85,6 +93,7 @@ export function toReadyItemDto(row: WorkItem, ctx: ReadyItemContext): ReadyItemD
     status: { key: row.status, category: ctx.statusCategory },
     assignee: toAssigneeDto(ctx.assignee),
     descriptionExcerpt: markdownToExcerpt(row.descriptionMd),
+    inheritedSessionBranch: ctx.inheritedSessionBranch,
     type: row.type,
     executor: row.executor,
     // Ship the full body ONLY for a manual row (the *Show instruction* modal's

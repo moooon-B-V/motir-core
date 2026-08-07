@@ -47,5 +47,10 @@
  *   page (Amendment 13). The merged `all` view reports two streams, and one
  *   `totalCount` cannot say what it is made of. Additive: two new fields,
  *   `totalCount` unchanged in meaning on every view.
+ * - `1.6.0` — MOTIR-2400 adds `inheritedSessionBranch` to the READY row
+ *   (Amendment 15). The row asserted that an item is ready without saying what
+ *   that readiness is measured against — from the trunk, or on top of unmerged
+ *   work. Additive: one new field, and the `blockedBy` it sits beside is
+ *   unchanged.
  */
-export const V1_CONTRACT_VERSION = '1.5.0';
+export const V1_CONTRACT_VERSION = '1.6.0';

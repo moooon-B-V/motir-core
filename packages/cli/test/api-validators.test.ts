@@ -104,6 +104,7 @@ const READY_SET = {
       // field existed it printed "unassigned" for every assigned row.
       assignee: { id: 'user_1', name: 'Zhu Yue' },
       descriptionExcerpt: null,
+      inheritedSessionBranch: null,
       dependencies: { blockedBy: [], blocks: [] },
     },
   ],

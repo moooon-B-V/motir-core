@@ -1098,6 +1098,7 @@ export interface components {
                 name: string;
             } | null;
             descriptionExcerpt: string | null;
+            inheritedSessionBranch: string | null;
             dependencies: {
                 blockedBy: {
                     key: string;

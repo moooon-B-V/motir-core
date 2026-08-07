@@ -414,6 +414,7 @@ describe('top-up — the ready filter parser and mapper, as units', () => {
         status: { key: 'todo', category: 'todo' },
         assignee: null,
         descriptionExcerpt: null,
+        inheritedSessionBranch: null,
         type: null,
         executor: null,
         descriptionMd: null,

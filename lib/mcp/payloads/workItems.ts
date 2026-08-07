@@ -362,6 +362,12 @@ function readyRowFields(
     // The v1 field, derived from the object MCP already carried. Additive.
     assigneeId: item.assignee?.id ?? null,
     descriptionExcerpt: item.descriptionExcerpt,
+    // Amendment 15's readiness qualifier, arriving here because this payload
+    // DERIVES from the v1 row (Amendment 7). The dispatch superset below still
+    // carries `sessionBranch` — the same value addressed as an instruction —
+    // and the two coexist for the reason the ready schema records: one is a fact
+    // about the item's dependencies, the other is what to do about it.
+    inheritedSessionBranch: item.inheritedSessionBranch,
     dependencies: edges ?? { blockedBy: [], blocks: [] },
     id: item.id,
     assignee: item.assignee,

@@ -57,6 +57,20 @@ export interface ReadyItemDto {
   /** First ~200 chars of the description, Markdown stripped to plain text. */
   descriptionExcerpt: string | null;
   /**
+   * The single session branch this item's blockers are integrated on, or `null`
+   * when it is ready from the trunk (Story 11.5 · Subtask 11.5.24 — MOTIR-2400).
+   *
+   * A QUALIFIER on the readiness this row already asserts: ready *from `main`*
+   * and ready *on top of unmerged work* are materially different answers, and a
+   * consumer that acts on "ready" without knowing which one it has will open a
+   * pull request against a base that does not exist yet.
+   *
+   * Distinct from `ReadyItemDispatchDto.sessionBranch`, which is the same value
+   * addressed as "the branch to work on". Here it is a fact about the item's
+   * dependencies, which is why it reads as `inherited`.
+   */
+  inheritedSessionBranch: string | null;
+  /**
    * The work item's NATURE (Story 2.7) — `code` / `design` / `manual` / … or
    * `null` on a container kind (epic/story) or an untyped leaf. Drives the
    * row's `WorkItemTypeChip` (the chip is OMITTED when null) and, together with

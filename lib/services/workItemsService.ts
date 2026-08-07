@@ -3886,7 +3886,61 @@ export const workItemsService = {
       more && last
         ? encodeReadyCursor({ kind: last.kind, priority: last.priority, key: last.key })
         : null;
-    return { items: window.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
+    // The inherited lineage, for the WHOLE window in one query (MOTIR-2400).
+    // `getReadiness` computes the same value per item; calling it here would be
+    // one readiness computation per row of every page.
+    const lineages = await workItemsService.getInheritedSessionBranches(
+      window.map((r) => r.id),
+      ctx,
+    );
+    return {
+      items: window.map((r) =>
+        toReadyItemDto(r, {
+          ...rowReadyContext(r),
+          inheritedSessionBranch: lineages[r.id] ?? null,
+        }),
+      ),
+      nextCursor,
+    };
+  },
+
+  /**
+   * The INHERITED SESSION BRANCH for a page of items — for each id, the single
+   * branch its blockers are integrated on, or `null` when it is ready from the
+   * trunk (Story 11.5 · Subtask 11.5.24 — MOTIR-2400).
+   *
+   * ⚠️ A ready item can never span more than one branch — that is what makes a
+   * single value the right answer, and it is the same collapse `getReadiness`
+   * performs. An item whose blockers name TWO branches is therefore not ready,
+   * and this returns `null` for it rather than picking one: reporting a lineage
+   * for an item that has no single lineage would be a confident wrong answer,
+   * where `null` is the same thing the row says for "ready from `main`" — and a
+   * not-ready item never reaches a ready page anyway.
+   *
+   * ONE query for a page of any size. Empty input short-circuits.
+   */
+  async getInheritedSessionBranches(
+    itemIds: string[],
+    ctx: ServiceContext,
+  ): Promise<Record<string, string | null>> {
+    const byItem: Record<string, string | null> = {};
+    for (const id of itemIds) byItem[id] = null;
+    if (itemIds.length === 0) return byItem;
+
+    const rows = await workItemLinkRepository.findBlockerSessionBranchesForItems(
+      itemIds,
+      ctx.workspaceId,
+    );
+    const branches = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const seen = branches.get(row.fromId) ?? new Set<string>();
+      seen.add(row.sessionBranch);
+      branches.set(row.fromId, seen);
+    }
+    for (const [itemId, seen] of branches) {
+      if (seen.size === 1) byItem[itemId] = [...seen][0] ?? null;
+    }
+    return byItem;
   },
 
   /**
@@ -4293,10 +4347,18 @@ function isAfterReadyCursor(
   return compareReadyRows(row, cursor) > 0;
 }
 
-/** The resolved status-category + assignee bits the 7.0.3 mapper needs beyond
- *  the `WorkItem` row — both already carried on the candidate row (joined in the
- *  single read), so this is a pure projection, no DB call. */
-function rowReadyContext(row: ReadyCandidateRow): ReadyItemContext {
+/**
+ * The resolved status-category + assignee bits the 7.0.3 mapper needs beyond
+ * the `WorkItem` row — both already carried on the candidate row (joined in the
+ * single read), so this is a pure projection, no DB call.
+ *
+ * `inheritedSessionBranch` is deliberately NOT part of it and is why the return
+ * type is an `Omit`: it is a fact about the item's DEPENDENCIES, not a column on
+ * the row, so a pure row projection cannot supply it. Each caller adds it from
+ * wherever it can afford to — the list read in batch for a whole page, a
+ * dispatch from the `getReadiness` it already paid for.
+ */
+function rowReadyContext(row: ReadyCandidateRow): Omit<ReadyItemContext, 'inheritedSessionBranch'> {
   return {
     statusCategory: row.statusCategory,
     assignee: row.assigneeId
@@ -4349,6 +4411,12 @@ async function buildReadyDispatchDto(
     parent: parentRow ? { identifier: parentRow.identifier } : null,
     contextRefs: extractContextRefs(row.descriptionMd),
     sessionBranch: readiness.inheritedSessionBranch,
+    // The SAME value the list read resolves in batch (MOTIR-2400). Taken from
+    // `getReadiness` here because a dispatch decorates ONE item and has already
+    // paid for it; `sessionBranch` above is this fact addressed as an
+    // instruction, and both names are kept so neither surface has to explain
+    // itself in terms of the other.
+    inheritedSessionBranch: readiness.inheritedSessionBranch,
     // WHICH repo to run this in (Story 7.9 · MOTIR-1804 · MOTIR-1783): the
     // item's explicit pin, else the project's SINGLE repo, else null — never a
     // guess across an ambiguous set. The CLI maps this name to a checkout path;

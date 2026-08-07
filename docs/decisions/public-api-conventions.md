@@ -3166,3 +3166,111 @@ the `MOTIR-<n>` key, which is the only identifier v1 publishes.
   note recorded there: every member of an `allOf` must be a composition base,
   because a validator applies one branch's `additionalProperties: false` to the
   whole instance.
+
+### Amendment 15 (2026-08-07) — a collection row that asserts a DERIVED state must carry what QUALIFIES it: the ready row's inherited lineage
+
+> **Written by Story 11.5 · Subtask 11.5.24 (MOTIR-2400), from a consumer the port could not migrate.**
+
+Amendment 10 called Story 11.5 "the first case where that consumer contradicted a
+decision recorded here." This is the second, and it is the same mistake with a
+different surface — which is what makes it worth a rule rather than a patch.
+
+#### The conflict
+
+`lib/api/v1/ready/schema.ts` excluded four fields in one bullet:
+
+> `runCommand` / `contextRefs` / `sessionBranch` / `targetRepo` — those live on
+> `ReadyItemDispatchDto`, the payload for Motir's OWN CLI dispatch path. They
+> encode assumptions about a local checkout that a third-party integration does
+> not share.
+
+`motir batch` opens ONE pull request per item, off `main`, and its snapshot
+refuses an item whose dependencies are integrated on a session branch —
+`classifySnapshotItem` → `integrated_dep`. That refusal is printed in the plan a
+human reads BEFORE the run. Moving the snapshot onto `/api/v1` leaves it unable
+to make the distinction at all.
+
+#### Why the recorded reason does not hold — for one of the four
+
+Three of the four exclusions are right and stay. `runCommand` would freeze the
+CLI's invocation string as public API. `contextRefs` and `targetRepo` describe a
+local checkout, and Amendment 10 Q2 already named the dispatch prompt as where a
+client reads the last of them.
+
+The fourth was grouped by PROXIMITY, not by meaning. It sat on the same DTO and
+had a CLI-shaped name, so it read as another checkout concept — and
+`sessionBranch` genuinely does read that way. What it actually carries is a
+**qualifier on the readiness the row is already asserting**:
+
+- **ready from `main`** — every dependency is merged; the work starts from the trunk.
+- **ready on an inherited LINEAGE** — the dependencies are integrated onto a
+  branch that has not merged; starting the work means building on unmerged code.
+
+Both are "ready", and any consumer that acts on the word wants to know which one
+it has. An agent loop that takes a lineage item without knowing opens a pull
+request against a base that does not exist yet — a failure it cannot diagnose,
+because everything it was told was true.
+
+#### Why the two available workarounds were rejected
+
+- **Read `GET …/dispatch-prompt` per candidate.** N requests to build a snapshot
+  of N rows, and it moves a classification the PLAN prints into the drain that
+  happens after the plan is printed. Amendment 12 rejected a per-page `COUNT` for
+  the same reason it is rejected here: work proportional to rows, to answer a
+  question the collection should have answered once.
+- **Drop the refusal.** `motir batch` would take lineage items. That is not a
+  smaller API, it is a broken command.
+
+#### The decision
+
+**A `/api/v1` collection row that asserts a DERIVED state carries what qualifies
+that state.** A derived claim is only actionable with its qualifiers; without
+them a consumer must either re-derive the state itself — which is what the field
+existed to save — or act on a word whose meaning it cannot pin down.
+
+The ready row already carried one qualifier: `blockedBy`, empty for a ready item,
+present so a consumer can see WHY it is ready. `inheritedSessionBranch` is the
+other half of the same question and belongs beside it.
+
+**It arrives RENAMED**, and the rename is part of the decision. On the dispatch
+payload `sessionBranch` means "the branch to work on" — an instruction. On the
+row the fact is "this item's dependencies are integrated somewhere that is not
+`main` yet". Shipping the CLI's name would leave the next reader of the omission
+list regrouping it with the checkout fields, for exactly the reason it was
+grouped there the first time.
+
+#### The general lesson, which is about NAMES
+
+**A field's name is evidence about what it is, and grouping fields by where they
+currently live is not the same as grouping them by what they mean.** Four fields
+were removed together because they shared a DTO; three deserved it and the fourth
+was carried along by its neighbours and its own misleading name.
+
+Amendment 10 Q1 made the identical correction for `assignee.name` — removed for
+fear of an accidental user resource, restored once it was clear that an embedded
+read-only field is a field, not a resource. Twice now, a v1 row has been narrowed
+by a category error about what a field IS. When excluding a field from a public
+shape, state what the field MEANS in the exclusion, not which internal type it
+happens to sit on.
+
+#### What this amendment does NOT reopen
+
+`runCommand`, `contextRefs` and `targetRepo` stay off the ready row. Amendment 10
+Q2's answer for `targetRepo` — read the dispatch prompt — is unchanged and is
+what MOTIR-2398 uses. This amendment moves ONE field, on the argument that it was
+never a checkout concept; it is not a general reopening of the dispatch payload.
+
+#### Consequences of this amendment
+
+- **The contract MINOR moves to `1.6.0`.** A new field on a shipped response is
+  additive under §8; no declared shape changed meaning.
+- **The value must ride a BATCHED read.** `getReadiness` computes it per item —
+  correct for the one item a dispatch decorates, a per-row query storm for a
+  50-row page. `workItemsService.getInheritedSessionBranches` resolves a whole
+  page in one query, and the ready list calls it beside the edge projection it
+  already batches.
+- **It reaches the MCP ready row too**, because that payload DERIVES from the v1
+  row (Amendment 7). The dispatch superset keeps `sessionBranch` — the same value
+  addressed as an instruction — and the two coexist deliberately.
+- **MOTIR-2398 consumes it**, which is what lets `nextReady` leave MCP and
+  11.5.6 delete the SDK.

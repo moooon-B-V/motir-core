@@ -124,6 +124,53 @@ describe('GET /api/v1/projects/{projectKey}/ready', () => {
   });
 
   // ⚠️ THE case a flat blocker check gets wrong.
+  // ⚠️ READY RELATIVE TO WHAT (Amendment 15 · MOTIR-2400). Both sides are
+  // asserted because the distinction IS the field: a row that always said null
+  // would pass any test that only checked the ready-from-main case, and a
+  // consumer reading it would open pull requests against a base that does not
+  // exist yet.
+  it('reports the inherited lineage — null from the trunk, the branch when a blocker is integrated', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    await makeItem(caller, 'Nothing blocks it');
+    const blocker = await makeItem(caller, 'Merged already');
+    const afterDone = await makeItem(caller, 'Its blocker is done');
+    await blockedBy(caller, afterDone.id, blocker.id);
+    await markDone(caller, blocker.id);
+
+    const lineageBlocker = await makeItem(caller, 'Integrated, not merged');
+    const onLineage = await makeItem(caller, 'Builds on unmerged work');
+    await blockedBy(caller, onLineage.id, lineageBlocker.id);
+    // `markIntegrated` lands the item at In Review, which the workflow only
+    // allows from In Progress — the same walk `markDone` makes.
+    await workItemsService.updateStatus(lineageBlocker.id, 'in_progress', caller.ctx);
+    await workItemsService.markIntegrated(lineageBlocker.id, 'motir/auto-20260807', caller.ctx);
+
+    const byKey = new Map((await page(caller)).items.map((r) => [r.title, r]));
+
+    // Ready from the trunk — whether it never had a blocker or its blocker MERGED.
+    expect(byKey.get('Nothing blocks it')?.inheritedSessionBranch).toBeNull();
+    expect(byKey.get('Its blocker is done')?.inheritedSessionBranch).toBeNull();
+    // Ready, but on top of work that has not merged.
+    expect(byKey.get('Builds on unmerged work')?.inheritedSessionBranch).toBe(
+      'motir/auto-20260807',
+    );
+  });
+
+  // The reason the field rides a batched read rather than `getReadiness`: the
+  // cost must not grow with the page. Asserted on the QUERY COUNT, because a
+  // per-row implementation produces identical output.
+  it('resolves the lineage for a whole page WITHOUT a per-row readiness call', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    for (let i = 0; i < 8; i++) await makeItem(caller, `Row ${i}`);
+    const readiness = vi.spyOn(workItemsService, 'getReadiness');
+
+    const rows = (await page(caller)).items;
+
+    expect(rows.length).toBeGreaterThanOrEqual(8);
+    expect(readiness).not.toHaveBeenCalled();
+    readiness.mockRestore();
+  });
+
   it('EXCLUDES an item whose own blockers are done but whose ANCESTOR is not ready', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
 

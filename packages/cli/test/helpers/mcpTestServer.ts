@@ -359,6 +359,9 @@ export function v1ReadyRow(key: string, over: Record<string, unknown> = {}) {
     assigneeId: null,
     assignee: null,
     descriptionExcerpt: null,
+    // Amendment 15's readiness qualifier — null is "ready from the trunk", which
+    // is what a fixture row should be unless a test is about the other case.
+    inheritedSessionBranch: null,
     dependencies: v1Edges(),
     ...over,
   };
