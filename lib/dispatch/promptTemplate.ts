@@ -464,6 +464,102 @@ function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string
   ];
 }
 
+/**
+ * REPORTING THE OUTCOME (MOTIR-2406) — the two signals the loop cannot infer.
+ *
+ * ⚠️ WHY THIS IS IN THE PROMPT AND CANNOT BE ANYWHERE ELSE. `motir auto` runs
+ * `claude --dangerously-skip-permissions` in a sandbox against the user's own
+ * key. There is no wrapper, no policy layer and no second channel: the prompt is
+ * the ENTIRE contract with the agent, and whatever is not in it does not happen.
+ * An instruction that lives in a runbook, a CLAUDE.md or a reviewer's
+ * expectations is an instruction the sandboxed agent never receives.
+ *
+ * Unconditional — no mode, no parameter. A human-driven `motir run` should
+ * report the same way, and a signal that only some dispatches carry is a signal
+ * the loop cannot rely on.
+ *
+ * The FAILURE THIS PREVENTS IS THE QUIET ONE. An agent that cannot do what the
+ * card says will still do something — that is what makes it useful the rest of
+ * the time. Faced with a false premise it finds the nearest satisfiable
+ * interpretation and ships that, with a green test run and a confident pull
+ * request, and the defect surfaces later as a change nobody asked for sitting on
+ * a card nobody re-read. Telling it to stop and describe what it found turns the
+ * most expensive failure mode into the cheapest one.
+ */
+function outcomeProtocol(src: DispatchPromptSource): string[] {
+  return [
+    'Two outcomes end this work, and the loop can only tell them apart if you SAY',
+    'which one happened. A process that exits 0 proves the process ended, nothing',
+    'more.',
+    '',
+    'FINISHED — the work is done and committed:',
+    '',
+    `  Move ${src.key} to In Review with the transition_status tool`,
+    `  (key ${src.key}, status in_review). This is REQUIRED, not a courtesy: it is`,
+    '  the only positive confirmation the run gets, and without it a finished card',
+    '  is indistinguishable from an agent that died quietly.',
+    '',
+    'THE CARD IS WRONG — its premise is false, a precondition it names has not',
+    'shipped, or an acceptance criterion cannot be satisfied. Do NOT find the',
+    'nearest thing that works and build that. In order:',
+    '',
+    '  1. REVERT FIRST. Put the tree back the way you found it and commit',
+    '     NOTHING. Do this before anything else — every later step is a step in',
+    '     which you might otherwise have committed a half-change.',
+    '  2. Do not improvise. No adjacent fix, no widening the card so it becomes',
+    '     satisfiable, and do not create or edit work items yourself. A plan is',
+    "     PROPOSALS awaiting a human's approval; writing the cards would be doing",
+    '     the approving.',
+    `  3. Comment the finding on ${src.key}: what is false, and the evidence — the`,
+    '     file you read, the command you ran, what it said.',
+    `  4. Move ${src.key} to Planning with the transition_status tool (key`,
+    `     ${src.key}, status planning). That status is in the in-progress`,
+    '     category, which is what actually takes the card out of the pickable set',
+    '     — the card is not stuck on a dependency, it is being re-planned, and it',
+    '     must not be handed out again until a human has acted on the plan.',
+    '  5. Submit it for re-planning, exactly like this:',
+    '',
+    `         motir plan --detach ${src.key} "<what you found>"`,
+    '',
+    `     The leading ${src.key} anchors the thread to this card; without it you`,
+    "     get a project-wide plan about one card's defect. `--detach` because you",
+    '     must not sit waiting on a planner.',
+    '  6. Run that command ONCE. Never retry it, even on a timeout — a submission',
+    "     spends the token owner's AI credits, and a blind retry in an unattended",
+    '     run costs them twice for one finding.',
+    '  7. Stop. Do not pick up other work.',
+  ];
+}
+
+/**
+ * ONE CARD, ONE COMMIT — and what that commit message is FOR (MOTIR-2406).
+ *
+ * `motir auto` runs every card onto one session branch and opens ONE pull
+ * request at close-out, whose body is assembled from the commits on that branch
+ * (11.5.27). So the message is not bookkeeping: it is the only per-card
+ * narrative that reaches a reviewer, and nobody reading the pull request opens
+ * the card.
+ */
+function commitContract(src: DispatchPromptSource): string[] {
+  return [
+    '',
+    'YOUR COMMIT',
+    '',
+    `  ONE commit for ${src.key}, and only if the work is finished. A run puts many`,
+    '  cards on one branch and a reviewer reads the pull request as the list of',
+    '  cards it delivers — a commit with no card behind it, from an agent that got',
+    '  halfway and committed anyway, is worse than either finishing or stopping.',
+    '',
+    '  ⚠️ THE MESSAGE BECOMES THE PULL REQUEST. The run assembles its pull-request',
+    '  body from these commit messages, so write yours for a REVIEWER WHO WAS NOT',
+    '  THERE and who will not open the card. Subject: what changed. Body: why, and',
+    '  whatever they need in order to decide whether to merge — including what',
+    '  surfaced while you worked that the card could not have known. A subject that',
+    '  restates the card title tells them nothing they cannot already see, and a',
+    '  one-liner leaves the pull request with a heading and no reasoning under it.',
+  ];
+}
+
 /** The closing note a MANUAL item gets in place of a GIT WORKFLOW section. */
 const MANUAL_CLOSING = [
   'There is no git workflow for this work item: it is human work with no branch and',
@@ -504,12 +600,26 @@ export function assembleDispatchPrompt(src: DispatchPromptSource): AssembledDisp
   if (manual) whatToDo = MANUAL_WHAT_TO_DO;
   else if (src.type) whatToDo = WHAT_TO_DO[src.type];
 
+  // A MANUAL item gets neither the git workflow nor the outcome protocol: it is
+  // human work with no branch, no commit and no MCP session, and `motir auto`
+  // skips it entirely. Its closing note already says how to report completion.
   let closing = MANUAL_CLOSING;
   if (!manual) {
-    closing = section(
-      'GIT WORKFLOW',
-      sessionBranch !== null ? sessionLineageWorkflow(src, sessionBranch) : perItemPrWorkflow(src),
-    );
+    closing = [
+      ...section('GIT WORKFLOW', [
+        ...(sessionBranch !== null
+          ? sessionLineageWorkflow(src, sessionBranch)
+          : perItemPrWorkflow(src)),
+        ...commitContract(src),
+      ]),
+      '',
+      // LAST, deliberately. The protocol is what the agent does at the end of
+      // the work, and the last thing in a prompt is the thing it is holding when
+      // it starts acting. Placing it earlier would leave the git workflow as the
+      // final word, which is how "set the card to In Review" becomes the step
+      // that gets forgotten.
+      ...section('REPORTING THE OUTCOME — say which one happened', outcomeProtocol(src)),
+    ];
   }
 
   const lines = [
