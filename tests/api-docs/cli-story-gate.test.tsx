@@ -55,21 +55,33 @@ async function renderCliPage(): Promise<string> {
   return renderPageToHtml(await CliGuidePage());
 }
 
+/**
+ * What a READER sees — the rendered page's text, with the markup gone and the
+ * entities decoded, so `motir run &lt;key&gt;` reads back as `motir run <key>`.
+ *
+ * ⚠️ Parsed, never regex-stripped. The obvious spelling — drop `<[^>]+>` and
+ * then turn `&lt;` back into `<` — strips markup once and then RE-INTRODUCES
+ * the characters it just removed, which is the incomplete-multi-character
+ * sanitization shape CodeQL flags as high severity (js/incomplete-multi-character-sanitization,
+ * caught on this file's first CI run). It is inert here, since the only input
+ * is our own render — but a sanitizer-shaped helper in the test tree is exactly
+ * the thing somebody copies somewhere it is not inert. The parser decodes
+ * entities as part of parsing, so there is no second pass to get wrong.
+ */
+function renderedText(html: string): string {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent ?? '';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SEAM 1 — the TRUTH GATE: the page cannot claim what the CLI does not have
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('truth: every command the RENDERED page prints is one the CLI registers', () => {
   it('resolves every `motir …` the page prints against the CLI’s own record', async () => {
-    const html = await renderCliPage();
-    // Strip tags first: the renderer wraps inline code in elements, so a naive
-    // sweep over the raw HTML would split `motir link add` across three nodes.
-    const text = html
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&#x27;|&#39;/g, "'")
-      .replace(/&amp;/g, '&');
+    // Read it the way a reader does: the renderer wraps inline code in
+    // elements, so a sweep over raw HTML would split `motir link add` across
+    // three nodes.
+    const text = renderedText(await renderCliPage());
 
     const paths = new Set(COMMAND_CATALOG.map((entry) => entry.path));
     const mentions = [...text.matchAll(/\bmotir ([a-z-]+(?: [a-z-]+)?)/g)].map((m) => m[1]!);
@@ -91,8 +103,7 @@ describe('truth: every command the RENDERED page prints is one the CLI registers
   });
 
   it('resolves every FLAG the page prints against that command’s registered options', async () => {
-    const html = await renderCliPage();
-    const text = html.replace(/<[^>]+>/g, ' ');
+    const text = renderedText(await renderCliPage());
     const registered = new Set(
       COMMAND_CATALOG.flatMap((entry) =>
         entry.options.flatMap((option) =>
@@ -127,11 +138,7 @@ describe('truth: every command the RENDERED page prints is one the CLI registers
   });
 
   it('renders a row for EVERY command in the record, and none that is not in it', async () => {
-    const html = await renderCliPage();
-    const text = html
-      .replace(/<[^>]+>/g, '')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>');
+    const text = renderedText(await renderCliPage());
     for (const invocation of cliCommandInvocations()) {
       expect(text, `${invocation} missing from the rendered table`).toContain(invocation);
     }
