@@ -42,8 +42,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **25** are
-enforced by a gate today; **6** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **26** are
+enforced by a gate today; **5** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -62,7 +62,7 @@ A `planned` key is never offered in the grid or the role editor.
 > whole twelve are now wired.
 >
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
-> (MOTIR-2350) · **`report:view`** (MOTIR-2351). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -207,7 +207,7 @@ worse failure than a gap.
 
 **R15.** Project identity + settings; already covered by the shipped predicates.
 
-**R16.** Project-scoped saved queries; savedFilterCapabilities already derives from canBrowse/canEdit but has no key of its own.
+**R16.** Project-scoped saved queries. The WRITES (author / own / star / subscribe) ask `saved_filter:manage`; the READS (list / resolve / dependents) stay at `project:browse`, because running a saved query is reading the project's work items. The per-ROW rules in `lib/savedFilters/access.ts` — an owner manages their own filter, an admin any project-shared one — sit on top and are a different question from the project-level key.
 
 **R17.** AI cadence + planner model settings. Splits out of project:administer.
 
@@ -505,26 +505,26 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `report`
 
-| Operation                                                   | Verbs            | Gate today                                                     | Permission            | Decision         | Why |
-| ----------------------------------------------------------- | ---------------- | -------------------------------------------------------------- | --------------------- | ---------------- | --- |
-| `/api/dashboards`                                           | GET/POST         | workspace only                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets/[widgetId]`          | DELETE/PATCH     | workspace only                                                 | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets/[widgetId]/move`     | POST             | workspace only                                                 | —                     | workspace-scoped | R34 |
-| `/api/projects/[key]/roadmap`                               | GET              | `workItemsService.getProjectRoadmap` → `assertPermission`      | `report:view`         | existing         | R19 |
-| `/api/projects/[key]/saved-filters`                         | GET/POST         | workspace only                                                 | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]`              | DELETE/GET/PATCH | `getCapabilities`                                              | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | workspace only                                                 | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | workspace only                                                 | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | workspace only                                                 | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/velocity`                              | GET              | `reportsService.getVelocity` → `assertPermission`              | `report:view`         | existing         | R19 |
-| `/api/reports/average-age`                                  | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
-| `/api/reports/created-vs-resolved`                          | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
-| `/api/reports/distribution`                                 | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
-| `/api/reports/filter-results`                               | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
-| `/api/reports/resolution-time`                              | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
-| `/api/reports/workload`                                     | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
+| Operation                                                   | Verbs            | Gate today                                                                     | Permission            | Decision         | Why |
+| ----------------------------------------------------------- | ---------------- | ------------------------------------------------------------------------------ | --------------------- | ---------------- | --- |
+| `/api/dashboards`                                           | GET/POST         | workspace only                                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only                                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only                                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets/[widgetId]`          | DELETE/PATCH     | workspace only                                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets/[widgetId]/move`     | POST             | workspace only                                                                 | —                     | workspace-scoped | R34 |
+| `/api/projects/[key]/roadmap`                               | GET              | `workItemsService.getProjectRoadmap` → `assertPermission`                      | `report:view`         | existing         | R19 |
+| `/api/projects/[key]/saved-filters`                         | GET/POST         | `savedFiltersService.{list,create}` → `assertPermission`                       | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]`              | DELETE/GET/PATCH | `savedFiltersService.{update,delete,changeOwner}` → `assertPermission`         | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | `savedFiltersService.getDependents` → `getSavedFilterCapabilities`             | `project:browse`      | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | `savedFiltersService.{star,unstar}` → `assertPermission`                       | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | `savedFilterSubscriptionsService.{subscribe,unsubscribe}` → `assertPermission` | `saved_filter:manage` | existing         | R16 |
+| `/api/projects/[key]/velocity`                              | GET              | `reportsService.getVelocity` → `assertPermission`                              | `report:view`         | existing         | R19 |
+| `/api/reports/average-age`                                  | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
+| `/api/reports/created-vs-resolved`                          | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
+| `/api/reports/distribution`                                 | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
+| `/api/reports/filter-results`                               | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
+| `/api/reports/resolution-time`                              | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
+| `/api/reports/workload`                                     | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission`                 | `report:view`         | existing         | R46 |
 
 ### `repository`
 

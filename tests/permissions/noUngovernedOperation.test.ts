@@ -458,7 +458,15 @@ describe('the PENDING set is bounded and shrinking', () => {
     // end to end. The six `/api/reports/*` widget reads were already gated — they
     // ran through `resolveReportScope`'s `canBrowse` check — so re-pointing them at
     // the key moves no count, which is what a re-pointing looks like from here.
-    expect(pending.length).toBe(18);
+    //
+    // 18 → 17 is MOTIR-2352 wiring `saved_filter:manage`. Only ONE row moves,
+    // and that is the honest shape of this card: the saved-filter domain already
+    // consulted the access policy through `getSavedFilterCapabilities`, so nine
+    // of its ten rows were gated and merely mis-NAMED.
+    // `/api/projects/[key]/saved-filters/[filterId]/subscription` was the
+    // exception — it reached the SEE gate and no project gate at all, so a
+    // viewer could put a recurring email on somebody else's shared query.
+    expect(pending.length).toBe(17);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

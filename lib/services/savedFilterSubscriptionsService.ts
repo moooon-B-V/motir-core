@@ -139,6 +139,26 @@ async function resolveVisibleFilter(
   return { project, savedFilterId: row.id };
 }
 
+/**
+ * Assert the actor may MANAGE this project's saved filters — `saved_filter:manage`
+ * (Story MOTIR-2291 · Subtask MOTIR-2352).
+ *
+ * ⚠️ SUBSCRIBING IS THE ONE OPERATION IN THIS DOMAIN THAT REACHED NO PROJECT GATE
+ * AT ALL. `resolveVisibleFilter` above answers *can this actor SEE the filter*,
+ * which every browser can for a shared one — so a project `viewer` could put a
+ * recurring email on somebody else's shared query. `getMine` and the
+ * token-authenticated unsubscribe deliberately keep only the see-gate: reading
+ * your own subscription state, and removing it from an email link with no session
+ * at all, are not project management.
+ */
+async function assertCanManageSavedFilters(
+  projectId: string,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  await projectAccessService.assertPermission(projectId, ctx, 'saved_filter:manage', tx);
+}
+
 export const savedFilterSubscriptionsService = {
   /** The actor's subscription to a visible filter, or `null` — the
    * subscribed-state read behind the row action. */
@@ -170,6 +190,7 @@ export const savedFilterSubscriptionsService = {
     const { weekday } = normalizeSchedule(input);
     return db.$transaction(async (tx) => {
       const { project, savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx, tx);
+      await assertCanManageSavedFilters(project.id, ctx, tx);
       const existing = await savedFilterSubscriptionRepository.findByFilterAndUser(
         savedFilterId,
         ctx.userId,
@@ -200,7 +221,8 @@ export const savedFilterSubscriptionsService = {
    * never-subscribed filter is a no-op. */
   async unsubscribe(projectKey: string, filterId: string, ctx: ServiceContext): Promise<void> {
     await db.$transaction(async (tx) => {
-      const { savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx, tx);
+      const { project, savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx, tx);
+      await assertCanManageSavedFilters(project.id, ctx, tx);
       await savedFilterSubscriptionRepository.deleteByFilterAndUser(savedFilterId, ctx.userId, tx);
     });
   },

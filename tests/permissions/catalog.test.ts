@@ -166,7 +166,11 @@ const ADMINISTRATIVE_ENFORCED: PermissionKey[] = [
  * (`accessParity.test.ts`); these eight are deliberately not, so a reader must
  * never take membership of one list as evidence about the other.
  */
-const MEMBER_FACING_ENFORCED: PermissionKey[] = ['sprint:manage', 'report:view'];
+const MEMBER_FACING_ENFORCED: PermissionKey[] = [
+  'sprint:manage',
+  'report:view',
+  'saved_filter:manage',
+];
 
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {

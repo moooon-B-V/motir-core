@@ -106,8 +106,44 @@ async function resolveProjectAndCaps(
   const project = await projectRepository.findByIdentifier(ctx.workspaceId, key, tx);
   if (!project) throw new ProjectNotFoundError(projectKey);
   const caps = await projectAccessService.getSavedFilterCapabilities(project.id, ctx, tx);
+  // This IS the `project:browse` gate the three READ paths ask for (MOTIR-2352):
+  // `canBrowse` is `hasPermission(inputs, 'project:browse')` by construction in
+  // `lib/permissions/resolve.ts`, resolved in the SAME round-trip that produces
+  // the row-level tier. Calling `assertPermission` here as well would resolve the
+  // actor's membership twice on every saved-filter read — the same answer, paid
+  // for twice on the issues page's hottest sidebar read.
   if (!caps.canBrowse) throw new ProjectNotFoundError(projectKey);
   return { project, caps };
+}
+
+/**
+ * Assert the actor may MANAGE this project's saved filters — `saved_filter:manage`
+ * (Story MOTIR-2291 · Subtask MOTIR-2352), on every write path.
+ *
+ * ⚠️ IT SITS BESIDE the per-row rules, it does not replace them. Two different
+ * questions are being asked and both still have to be answered: this key says
+ * *may this actor author, own, star or subscribe to saved filters in this project
+ * at all*, and `lib/savedFilters/access.ts` then says *may they do it to THIS
+ * row* — an owner always manages their own, an admin manages any project-shared
+ * one, nobody rewrites somebody else's private filter. Collapsing the two would
+ * either hand every filter to every member or make the key mean nothing.
+ *
+ * What changes: a project `viewer` could author, star and reassign shared queries
+ * — a governance oddity rather than a security incident, but this is the story
+ * where the oddities get answered. The READ paths (`list` / `resolve` /
+ * `getDependents`) deliberately do NOT ask it: running a saved query is reading
+ * the project's work items, which every browser may already do.
+ *
+ * ⚠️ NO `getXCapabilities` METHOD IS TOUCHED by this card. They are called from
+ * ~40 places and re-pointing them belongs with the surfaces that consume the set
+ * (MOTIR-2258), so the two stories never edit the same method from opposite ends.
+ */
+async function assertCanManageSavedFilters(
+  projectId: string,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  await projectAccessService.assertPermission(projectId, ctx, 'saved_filter:manage', tx);
 }
 
 function rowFacts(row: { ownerId: string; visibility: SavedFilterVisibility }, userId: string) {
@@ -267,6 +303,7 @@ export const savedFiltersService = {
     return retryOnceOnUniqueRace(() =>
       db.$transaction(async (tx) => {
         const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+        await assertCanManageSavedFilters(pc.project.id, ctx, tx);
         if (!canCreateSavedFilter(pc.caps, input.visibility)) {
           throw new SavedFilterForbiddenError('share');
         }
@@ -421,6 +458,7 @@ export const savedFiltersService = {
     return retryOnceOnUniqueRace(() =>
       db.$transaction(async (tx) => {
         const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+        await assertCanManageSavedFilters(pc.project.id, ctx, tx);
         await savedFilterRepository.lockById(filterId, tx);
         const row = await getVisibleFilter(filterId, pc, ctx, tx);
         const facts = rowFacts(row, ctx.userId);
@@ -475,6 +513,7 @@ export const savedFiltersService = {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
     return db.$transaction(async (tx) => {
       const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+      await assertCanManageSavedFilters(pc.project.id, ctx, tx);
       await savedFilterRepository.lockById(filterId, tx);
       const row = await getVisibleFilter(filterId, pc, ctx, tx);
       if (!canChangeSavedFilterOwner(pc.caps, rowFacts(row, ctx.userId))) {
@@ -506,6 +545,7 @@ export const savedFiltersService = {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
     await db.$transaction(async (tx) => {
       const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+      await assertCanManageSavedFilters(pc.project.id, ctx, tx);
       await savedFilterRepository.lockById(filterId, tx);
       const row = await getVisibleFilter(filterId, pc, ctx, tx);
       if (!canManageSavedFilter(pc.caps, rowFacts(row, ctx.userId))) {
@@ -558,6 +598,7 @@ export const savedFiltersService = {
     return retryOnceOnUniqueRace(() =>
       db.$transaction(async (tx) => {
         const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+        await assertCanManageSavedFilters(pc.project.id, ctx, tx);
         const row = await getVisibleFilter(filterId, pc, ctx, tx);
         const existing = await savedFilterStarRepository.findByFilterAndUser(
           row.id,
@@ -582,6 +623,7 @@ export const savedFiltersService = {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
     return db.$transaction(async (tx) => {
       const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+      await assertCanManageSavedFilters(pc.project.id, ctx, tx);
       const row = await getVisibleFilter(filterId, pc, ctx, tx);
       await savedFilterStarRepository.deleteByFilterAndUser(row.id, ctx.userId, tx);
       const updated = await savedFilterRepository.findByIdWithStars(filterId, ctx.userId, tx);

@@ -121,7 +121,7 @@ const POLICY_OWNERS = [
 const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
   {
     file: 'lib/savedFilters/access.ts',
-    why: "the saved-filter capability derivation — `saved_filter:manage` is MOTIR-2291's, not this story's",
+    why: 'the saved-filter ROW-LEVEL tier — an owner manages their own filter, an admin any project-shared one. MOTIR-2352 wired `saved_filter:manage` beside it as the project-level question; this derivation answers the per-ROW one and stays',
   },
   {
     file: 'lib/services/jobsDashboardService.ts',
@@ -317,7 +317,7 @@ describe('the story leaves exactly MOTIR-2291 behind', () => {
         'work_item:triage',
         // 'sprint:manage' — wired by MOTIR-2350.
         // 'report:view' — wired by MOTIR-2351.
-        'saved_filter:manage',
+        // 'saved_filter:manage' — wired by MOTIR-2352.
         'import:run',
         'ai:plan',
         'ai:view_plan',
