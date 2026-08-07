@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
 import { ArrowRight } from 'lucide-react';
+import { BrandMark } from '@/components/brand/BrandMark';
 import { buttonVariants } from '@/components/ui/Button';
 
 // The marketing-site top bar for the project square (Story 6.13 · Subtask 6.13.6
@@ -33,14 +34,16 @@ export async function ExploreTopBar({
   ];
   return (
     <header className="flex items-center justify-between gap-4 border-b border-(--el-border) bg-(--el-surface-soft) px-(--spacing-card-padding) py-3">
-      <Link href="/" className="flex flex-none items-center gap-2">
-        <span
-          aria-hidden
-          className="inline-flex h-7 w-7 items-center justify-center rounded-(--radius-control) bg-(--el-accent) text-sm font-extrabold text-(--el-accent-text)"
-        >
-          M
-        </span>
-        <span className="text-[15px] font-bold text-(--el-text)">{t('brand')}</span>
+      {/* The real brand lockup at 26px replaces the tile + letter M at the same
+          optical height, so this bar's `py-3` rhythm is unchanged
+          (design/brand/design-notes.md §7c). The wordmark also gains its pinned
+          face here, which is the fix for the type-axis defect §3 records: the
+          old `font-bold` span carried no font class, so it inherited
+          `--font-sans` and re-lettered itself under a `[data-type]` pairing.
+          The link keeps its accessible name "Motir" from the visible wordmark —
+          `tests/e2e/acceptance-api-docs.spec.ts` asserts exactly that. */}
+      <Link href="/" className="flex flex-none items-center">
+        <BrandMark size={26} label={t('brand')} />
       </Link>
       <nav aria-label={t('navProduct')} className="hidden items-center gap-5 md:flex">
         {navItems.map((item) => (

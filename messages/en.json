@@ -659,6 +659,7 @@
     }
   },
   "auth": {
+    "brand": "Motir",
     "welcomeBack": "Welcome back!",
     "signInSubhead": "Use Motir to turn any product idea into reality.",
     "planWithAiLead": "Have a project idea?",
@@ -753,7 +754,8 @@
       "resumeOnboardingInProgress": "Resume onboarding, in progress"
     },
     "topNav": {
-      "global": "Global"
+      "global": "Global",
+      "brandHome": "Motir — go to dashboard"
     },
     "sidebarHeader": {
       "activeProject": "Active project",
@@ -3996,6 +3998,8 @@
     }
   },
   "publicProjects": {
+    "brand": "Motir",
+    "hostedOnPrefix": "on",
     "publicChip": "Public",
     "signIn": "Sign in",
     "startFree": "Start free",

@@ -302,13 +302,22 @@ Three rules follow:
 `app/favicon.ico` (16 + 32) is the only icon that ships today and stays as the legacy fallback.
 Everything else is new — and Next.js only auto-wires files it _finds_, so each of these has to exist:
 
-| File                 | Size    | Radius | Notes                                                                                                                                                             |
-| -------------------- | ------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `app/icon.svg`       | 32      | rx 7   | Modern browsers; resolution-free. Uses the **tiled** form (glyph knocked out of an `--el-accent` field) — a browser tab has no surface behind it to tint against. |
-| `app/apple-icon.png` | 180     | rx 40  | iOS masks corners itself but supplies **no background** — the tile must be opaque `--el-accent`, and the file must be PNG, not SVG.                               |
-| `app/icon-192.png`   | 192     | rx 0   | `purpose: 'maskable'`, full bleed.                                                                                                                                |
-| `app/icon-512.png`   | 512     | rx 0   | `purpose: 'maskable'`, full bleed.                                                                                                                                |
-| `app/favicon.ico`    | 16 + 32 | rx 7   | Kept for old clients and anything requesting `/favicon.ico` by path. Re-cut from the same glyph so the two never disagree.                                        |
+| File                  | Size    | Radius | Notes                                                                                                                                                             |
+| --------------------- | ------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app/icon.svg`        | 32      | rx 7   | Modern browsers; resolution-free. Uses the **tiled** form (glyph knocked out of an `--el-accent` field) — a browser tab has no surface behind it to tint against. |
+| `app/apple-icon.png`  | 180     | rx 40  | iOS masks corners itself but supplies **no background** — the tile must be opaque `--el-accent`, and the file must be PNG, not SVG.                               |
+| `public/icon-192.png` | 192     | rx 0   | `purpose: 'maskable'`, full bleed. **In `public/`, not `app/` — see the note below.**                                                                             |
+| `public/icon-512.png` | 512     | rx 0   | `purpose: 'maskable'`, full bleed. **In `public/`, not `app/`.**                                                                                                  |
+| `app/favicon.ico`     | 16 + 32 | rx 7   | Kept for old clients and anything requesting `/favicon.ico` by path. Re-cut from the same glyph so the two never disagree.                                        |
+
+> **⚠️ The two maskable icons moved to `public/` during MOTIR-1150 — shipped reality, not preference.**
+> This table originally put them in `app/`, where Next's static-metadata matcher would never have found
+> them: it accepts one optional **digit** after `icon` (`variantsMatcher = '\d?'`,
+> `next/dist/lib/metadata/is-metadata-route.js`), so `app/icon-192.png` matches nothing, is served at no
+> URL, and the manifest entry naming it would 404. Renaming them to `app/icon1.png` / `icon2.png` matches
+> but is worse: Next would then inject the full-bleed maskable renders as browser favicons, and it serves
+> them from a content-hashed URL a static manifest cannot name. `public/` gives them the stable root path
+> the manifest promises. `app/icon.svg` and `app/apple-icon.png` DO match the convention and stay put.
 
 - **Corner radius** = **0.22 × the canvas** (32 → 7, 180 → 40). 0.22 is `--radius-lg` (12) over a
   56 px tile — the app's own container ratio, so the icon reads as the same family as the UI.
