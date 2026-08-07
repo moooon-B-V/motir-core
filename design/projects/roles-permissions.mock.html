@@ -11,8 +11,10 @@
       THE SURFACE: Project settings -> Access -> Roles & permissions. It shows a
       project's roles and, for each, the permissions it holds. This story ships
       it READ-ONLY over the three built-in roles; MOTIR-2257 turns the same page
-      into an editor, which is why panel 3 fixes where "Create role" and the
-      per-role edit affordance land before either is built.
+      into an editor, which is why panels 1 and 2 fix where "Create role", the
+      per-role edit affordance and the whole authoring surface land before any of
+      them is built. The editor is NOT a separate screen: a role is authored IN
+      the grid, in the column it will occupy (panel 2).
 
       THIS ASSET COMPOSES; IT DOES NOT REDRAW.
         * The settings-area chrome (the rail, its groups, the back-link header,
@@ -56,9 +58,9 @@
 
       Covers (multi-panel — review EACH):
         (0) the populated page, project-ADMIN view, inside the settings shell
-        (1) the grid AT WIDTH — how a dense domain reads without becoming a wall
-        (2) the MEMBER (non-admin) view — same page, one different note
-        (3) the ROOM RESERVED FOR EDITING — where MOTIR-2257's controls land
+        (1) a custom role as one more COLUMN, with its edit/delete affordances
+        (2) CREATING a role — authored IN the grid, in the column it will occupy
+        (3) the MEMBER (non-admin) view — same page, one different note
       Toggle dark mode to confirm token parity. See design-notes.md
       "Roles & permissions grid (MOTIR-2255)" for the spec.
     -->
@@ -1055,6 +1057,96 @@
         color: var(--el-text-strong);
       }
 
+      /* ── CREATE MODE — the role is authored IN the grid, not in a dialog ────
+         The dialog this replaces was 2165px tall in a 900px viewport: it
+         re-rendered all 28 permissions a SECOND time, as a checkbox list, so one
+         catalog carried two layouts and the author could no longer see the roles
+         they were deciding against. Authoring in the column the role will
+         occupy costs no new layout at all, and keeps the comparison — "Member
+         holds this, Viewer does not" — on the row being ticked.
+
+         Create mode adds exactly two things: this bar, and a column whose cells
+         are checkboxes.                                                       */
+      .createbar {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+        padding: var(--spacing-card-padding);
+        border: 1px solid var(--el-accent);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-card);
+      }
+      .cb-fields {
+        display: flex;
+        align-items: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .cb-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .cb-field .input {
+        min-width: 190px;
+      }
+      .cb-acts {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* The help line sits OUTSIDE the bar: it explains the grid below it, and
+         belongs next to the thing it describes rather than inside the controls. */
+      .cb-help {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        margin: 10px 2px 0;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .cb-help svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-info);
+      }
+
+      /* The column being authored. Accent — not the sky tint a SAVED custom role
+         carries — so "this one is live and unsaved" is never confused with "this
+         one is a custom role". */
+      .mhead.editing {
+        background: var(--el-accent);
+        gap: 3px;
+      }
+      .mhead.editing .rname,
+      .mhead.editing .rmeta {
+        color: var(--el-accent-text);
+      }
+      .editing-chip {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-accent-text);
+        opacity: 0.85;
+      }
+      .mcell.editing {
+        background: var(--el-surface-soft);
+      }
+      .mcell.editing .cbox {
+        margin: 0;
+      }
+      .matrix.editing {
+        --role-cols: 4;
+        border-color: var(--el-accent);
+      }
+
       /* The level-gated card — three rows, kept OUT of the role matrix. */
       .level-card {
         padding: var(--spacing-card-padding);
@@ -1121,36 +1213,18 @@
         color: var(--el-text-muted);
       }
 
-      /* ── Create-role modal (MOTIR-2257's surface, specified here) ────────── */
-      .modal.wide {
-        width: 560px;
-      }
-      .base-help {
-        font-size: 12px;
-        color: var(--el-text-muted);
-        margin-top: 6px;
-        line-height: 1.45;
-      }
-      .permlist {
-        border: 1px solid var(--el-border);
-        border-radius: var(--radius-card);
-        overflow: hidden;
-        margin-top: 4px;
-      }
-      .permlist .mgroup {
-        grid-column: auto;
-      }
-      .prow {
-        display: grid;
-        grid-template-columns: 18px minmax(0, 1fr);
-        gap: 10px;
-        align-items: start;
-        padding: 8px var(--spacing-card-padding);
-        border-bottom: 1px solid var(--el-border-soft);
-      }
-      .prow:last-child {
-        border-bottom: 0;
-      }
+      /* ── The permission CHECKBOX (MOTIR-2257's surface, specified here) ─────
+         ⚠️ THIS IS THE ONE NEW PRIMITIVE THIS ASSET ASKS FOR, and only the
+         EDITOR half needs it — MOTIR-2263's read-only page (panels 0/3) composes
+         shipped primitives alone. `components/ui/` ships `Switch` and
+         `MultiSelectPicker` but NO Checkbox; the only checkbox in the product is
+         a raw unstyled `<input type="checkbox">` in WorkflowEditor.tsx, which is
+         not something to put 28 of on a settings page. So MOTIR-2257 adds
+         `components/ui/Checkbox.tsx` to this spec: `--radius-control` (a small
+         affordance), `--el-border-strong` unchecked, `--el-accent` +
+         `--el-accent-text` checked. A Switch is the wrong grammar here — it says
+         "this setting is on/off now", where a checkbox says "this is part of the
+         set I am composing", which is what authoring a role is. */
       .cbox {
         width: 16px;
         height: 16px;
@@ -1178,23 +1252,6 @@
         background: var(--el-muted);
         border-color: var(--el-border-strong);
         color: var(--el-text-secondary);
-      }
-      .prow .plabel {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--el-text);
-      }
-      .prow .pdesc {
-        font-size: 12px;
-        color: var(--el-text-muted);
-        line-height: 1.4;
-        margin-top: 1px;
-      }
-      .prow .from {
-        font-family: var(--font-mono);
-        font-size: 10.5px;
-        color: var(--el-text-faint);
-        margin-left: 6px;
       }
       .count-note {
         font-size: 12px;
@@ -1263,10 +1320,12 @@
           the three level-gated public-request grants in their own card. The marks are the model as
           it will BE, not today’s partial enforcement — Admin 28, Member 10, Viewer 2. Built-in
           roles are IMMUTABLE (lock, no control); only a custom role carries edit/delete. Panel 2
-          specifies creating a role, the surface MOTIR-2257 builds. COMPOSES
+          specifies creating a role — authored IN the grid, in the column it will occupy, replacing
+          a 2165px dialog that re-rendered the whole catalog a second time. COMPOSES
           design/projects/settings-area.mock.html (rail + chrome), access-members.mock.html
-          (role-chip grammar) and details.mock.html (Input, Modal) — none is re-specified here. See
-          design-notes.md “Roles &amp; permissions grid (MOTIR-2255)”.
+          (role-chip grammar) and details.mock.html (Input) — none is re-specified here. The one new
+          primitive this asks for is a `Checkbox`, and only MOTIR-2257 needs it. See design-notes.md
+          “Roles &amp; permissions grid (MOTIR-2255)”.
         </p>
       </div>
       <button
@@ -1899,7 +1958,9 @@
       role and downward only by a permission. “Contractor” is the epic’s own motivating gap — may
       comment and attach but not edit work items — which none of the three built-ins can express
       (Viewer can’t comment, Member can edit). Note the affordance split: the built-in columns carry
-      a LOCK and no control, the custom column carries EDIT and DELETE.
+      a LOCK and no control, the custom column carries EDIT and DELETE. The pencil puts THIS column
+      into the create-mode state panel 2 draws — editing a role and authoring one are the same
+      surface, so there is no second editor to build or to learn.
     </div>
     <div class="panel">
       <div class="stage">
@@ -2423,327 +2484,749 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 2 — CREATE A ROLE (the MOTIR-2257 surface) ════════════ -->
+    <!-- ════════════ PANEL 2 — CREATE A ROLE, IN THE GRID (the MOTIR-2257 surface) ════════════ -->
     <div class="panel-label">
-      2 · Creating a role — the surface “Create role” opens, and the one thing this page lets anyone
-      DO (the built-ins being immutable). A role is named, STARTS FROM a built-in base, and then
-      adds to it: the base’s permissions arrive already checked and visually distinct (grey, “from
-      Viewer”) from what the author adds on top (accent). Starting from a base rather than an empty
-      grid is the GitHub custom-role pattern — it keeps a new role comprehensible instead of making
-      the author derive 28 booleans from nothing. The footer counts the result so the author sees
-      what they are about to create. Every one of the 28 is a real switch here, because MOTIR-2257
-      lands after MOTIR-2291 has wired the last of them — the editor never offers a control over a
-      permission nothing enforces. MOTIR-2257 builds this; MOTIR-2263 builds only panels 0/3.
+      2 · Creating a role — authored IN the matrix, not in a dialog. “Create role” puts the page
+      into create mode: a bar takes the name and the base, and the new role arrives as a LIVE COLUMN
+      whose cells are checkboxes. The base’s grants land grey-checked (“from Viewer”), what the
+      author adds is accent-checked, and nothing is written until “Create role”. THE MODAL THIS
+      REPLACES WAS 2165px TALL IN A 900px VIEWPORT — it re-rendered all 28 permissions a second
+      time, as a checkbox LIST, so the page carried two layouts for one catalog and the author lost
+      sight of the roles they were deciding against. Here the comparison IS the surface: you tick
+      “Add comments” for Contractor while reading, on the same row, that Member holds it and Viewer
+      does not. The pencil on a saved custom column (panel 1) opens this same mode. The level-gated
+      “Public requests” card sits below the grid unchanged and is cropped from this panel — no role
+      can hold or withhold those three, so create mode does not touch them. MOTIR-2257 builds this;
+      MOTIR-2263 builds only panels 0/3.
     </div>
     <div class="panel">
-      <div class="stage" style="padding: 26px 0">
-        <div class="modal-scrim">
-          <div class="modal wide">
-            <div class="modal-body">
-              <div class="modal-head">
-                <span class="modal-icon key"
-                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
-                ></span>
-                <span class="mtitle">Create a role</span>
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span class="pmeta">
+                  <span class="pname">motir</span>
+                  <span class="pkey">MOTIR</span>
+                </span>
               </div>
-              <p class="modal-lede">
-                A role is a set of permissions with a name your team chose. It applies to this
-                project only.
-              </p>
-
-              <div class="field">
-                <span class="field-label">Name</span>
-                <div class="input focus">Contractor</div>
-              </div>
-
-              <div class="field">
-                <span class="field-label">Start from</span>
-                <div class="input select">
-                  <span>Viewer</span>
-                  <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
                 </div>
-                <p class="base-help">
-                  The new role begins with everything <strong>Viewer</strong> holds. Add to it below
-                  — you can always take something back off.
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="crumbs">Settings · motir · Roles &amp; permissions</div>
+            <div class="rp-headrow">
+              <div>
+                <h2>Roles &amp; permissions</h2>
+                <p class="page-lede">
+                  What each role in <strong>motir</strong> can do. Workspace owners and admins
+                  always hold everything.
                 </p>
               </div>
-
-              <div class="field">
-                <span class="field-label">Permissions</span>
-                <div class="permlist">
-                  <div class="mgroup">Project</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Administer project</span>
-                      <span class="pdesc"
-                        >Change project settings — members, workflow, boards, fields.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox frombase"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
-                    ><span
-                      ><span class="plabel">View project</span>
-                      <span class="from">from Viewer</span>
-                      <span class="pdesc"
-                        >Open the project and read its work items, boards and reports.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Work items</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Edit work items</span>
-                      <span class="pdesc"
-                        >Create, update, assign and move work items on the board.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Delete work items</span>
-                      <span class="pdesc"
-                        >Archive or delete a work item and everything beneath it.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Triage requests</span>
-                      <span class="pdesc"
-                        >Accept, decline, promote or snooze an item in the triage queue.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Comments</div>
-                  <div class="prow">
-                    <span class="cbox on"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
-                    ><span
-                      ><span class="plabel">Add comments</span>
-                      <span class="pdesc">Post comments, and edit or delete your own.</span></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Moderate comments</span>
-                      <span class="pdesc"
-                        >Edit and delete anyone’s comments, not only your own.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Attachments</div>
-                  <div class="prow">
-                    <span class="cbox on"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
-                    ><span
-                      ><span class="plabel">Add attachments</span>
-                      <span class="pdesc"
-                        >Upload files, and delete the ones you uploaded.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Delete any attachment</span>
-                      <span class="pdesc">Remove attachments uploaded by anyone.</span></span
-                    >
-                  </div>
-                  <div class="mgroup">Watchers</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage watchers</span>
-                      <span class="pdesc"
-                        >Add and remove other people from a work item’s watcher list.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Members & access</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage members</span>
-                      <span class="pdesc"
-                        >Add and remove project members, and set their roles.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Change project access</span>
-                      <span class="pdesc"
-                        >Set whether the project is public, open, limited or private.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Boards</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Configure boards</span>
-                      <span class="pdesc"
-                        >Change board columns, swimlanes and WIP limits.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Sprints & backlog</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage sprints</span>
-                      <span class="pdesc"
-                        >Start and complete Sprints, and rank the backlog.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Workflow & automation</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage automation rules</span>
-                      <span class="pdesc"
-                        >Create, edit and enable automation and status-derivation rules.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage the workflow</span>
-                      <span class="pdesc"
-                        >Change the statuses a board column projects, and their transitions.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Fields & components</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage components</span>
-                      <span class="pdesc"
-                        >Create, rename and delete the project’s components.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage custom fields</span>
-                      <span class="pdesc"
-                        >Create, edit and remove custom field definitions.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage labels</span>
-                      <span class="pdesc"
-                        >Create, rename and delete the project’s labels and tags.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Estimation</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage estimation</span>
-                      <span class="pdesc">Change the project’s estimation scheme.</span></span
-                    >
-                  </div>
-                  <div class="mgroup">Reports & filters</div>
-                  <div class="prow">
-                    <span class="cbox frombase"
-                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
-                    ><span
-                      ><span class="plabel">View reports</span>
-                      <span class="from">from Viewer</span>
-                      <span class="pdesc"
-                        >Open the project’s reports — distribution, workload, velocity,
-                        roadmap.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage saved filters</span>
-                      <span class="pdesc"
-                        >Create, edit, share and subscribe to saved filters.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Repositories</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage repositories</span>
-                      <span class="pdesc"
-                        >Add, remove, move and take over the project’s repositories.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Manage code access</span>
-                      <span class="pdesc"
-                        >Decide which team members may clone the project’s code.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">Import</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Import work items</span>
-                      <span class="pdesc"
-                        >Bulk-create work items from Jira, Linear or Plane.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="mgroup">AI planning</div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Configure AI planning</span>
-                      <span class="pdesc"
-                        >Set the planning cadence, planner model and drafted explanations.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">Run AI planning</span>
-                      <span class="pdesc"
-                        >Submit a planning job that spends AI credits and proposes changes.</span
-                      ></span
-                    >
-                  </div>
-                  <div class="prow">
-                    <span class="cbox"></span
-                    ><span
-                      ><span class="plabel">View AI plans</span>
-                      <span class="pdesc">Open a generated plan and read its proposals.</span></span
-                    >
-                  </div>
+            </div>
+            <div class="rp-stack">
+              <!-- THE CREATE BAR — the only chrome create mode adds: the name, the
+                   base, and the commit affordances, directly above the grid it
+                   is editing. It replaces a 2165px dialog. -->
+              <div class="createbar">
+                <div class="cb-fields">
+                  <span class="cb-field">
+                    <span class="field-label">Name</span>
+                    <span class="input focus">Contractor</span>
+                  </span>
+                  <span class="cb-field">
+                    <span class="field-label">Start from</span>
+                    <span class="input select">
+                      <span>Viewer</span>
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </span>
+                  </span>
+                </div>
+                <div class="cb-acts">
+                  <span class="count-note">Holds <strong>4</strong> of 28</span>
+                  <span class="btn btn-ghost">Cancel</span>
+                  <span class="btn btn-primary">Create role</span>
                 </div>
               </div>
-            </div>
-            <div class="modal-foot">
-              <span class="count-note">Holds <strong>4</strong> of 28 permissions</span>
-              <span class="btn btn-ghost">Cancel</span>
-              <span class="btn btn-primary">Create role</span>
+              <p class="cb-help">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  >The new role begins with everything <strong>Viewer</strong> holds — those arrive
+                  ticked and greyed. Tick or untick anything in the
+                  <strong>Contractor</strong> column; nothing is saved until you choose
+                  <strong>Create role</strong>.</span
+                >
+              </p>
+              <div class="matrix editing">
+                <div class="mhead mcorner"><span class="clabel">Permission</span></div>
+                <div class="mhead">
+                  <span class="rname">Admin</span><span class="rmeta">28 of 28</span
+                  ><span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
+                </div>
+                <div class="mhead">
+                  <span class="rname">Member</span><span class="rmeta">10 of 28</span
+                  ><span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
+                </div>
+                <div class="mhead">
+                  <span class="rname">Viewer</span><span class="rmeta">2 of 28</span
+                  ><span class="lockchip"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                  >
+                </div>
+                <div class="mhead editing">
+                  <span class="editing-chip">Editing</span><span class="rname">Contractor</span
+                  ><span class="rmeta">4 of 28</span>
+                </div>
+                <div class="mgroup">Project</div>
+                <div class="mperm">
+                  <span class="plabel">Administer project</span
+                  ><span class="pdesc"
+                    >Change project settings — members, workflow, boards, fields.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">View project</span
+                  ><span class="pdesc"
+                    >Open the project and read its work items, boards and reports.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-label="Held — from Viewer"
+                    tabindex="0"
+                    ><span class="cbox frombase"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ></span>
+                </div>
+                <div class="mgroup">Work items</div>
+                <div class="mperm">
+                  <span class="plabel">Edit work items</span
+                  ><span class="pdesc"
+                    >Create, update, assign and move work items on the board.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Delete work items</span
+                  ><span class="pdesc"
+                    >Archive or delete a work item and everything beneath it.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Triage requests</span
+                  ><span class="pdesc"
+                    >Accept, decline, promote or snooze an item in the triage queue.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Comments</div>
+                <div class="mperm">
+                  <span class="plabel">Add comments</span
+                  ><span class="pdesc">Post comments, and edit or delete your own.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="true" aria-label="Held — added" tabindex="0"
+                    ><span class="cbox on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Moderate comments</span
+                  ><span class="pdesc">Edit and delete anyone’s comments, not only your own.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Attachments</div>
+                <div class="mperm">
+                  <span class="plabel">Add attachments</span
+                  ><span class="pdesc">Upload files, and delete the ones you uploaded.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="true" aria-label="Held — added" tabindex="0"
+                    ><span class="cbox on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Delete any attachment</span
+                  ><span class="pdesc">Remove attachments uploaded by anyone.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Watchers</div>
+                <div class="mperm">
+                  <span class="plabel">Manage watchers</span
+                  ><span class="pdesc"
+                    >Add and remove other people from a work item’s watcher list.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Members & access</div>
+                <div class="mperm">
+                  <span class="plabel">Manage members</span
+                  ><span class="pdesc">Add and remove project members, and set their roles.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Change project access</span
+                  ><span class="pdesc"
+                    >Set whether the project is public, open, limited or private.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Boards</div>
+                <div class="mperm">
+                  <span class="plabel">Configure boards</span
+                  ><span class="pdesc">Change board columns, swimlanes and WIP limits.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Sprints & backlog</div>
+                <div class="mperm">
+                  <span class="plabel">Manage sprints</span
+                  ><span class="pdesc">Start and complete Sprints, and rank the backlog.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Workflow & automation</div>
+                <div class="mperm">
+                  <span class="plabel">Manage automation rules</span
+                  ><span class="pdesc"
+                    >Create, edit and enable automation and status-derivation rules.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage the workflow</span
+                  ><span class="pdesc"
+                    >Change the statuses a board column projects, and their transitions.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Fields & components</div>
+                <div class="mperm">
+                  <span class="plabel">Manage components</span
+                  ><span class="pdesc">Create, rename and delete the project’s components.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage custom fields</span
+                  ><span class="pdesc">Create, edit and remove custom field definitions.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage labels</span
+                  ><span class="pdesc"
+                    >Create, rename and delete the project’s labels and tags.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Estimation</div>
+                <div class="mperm">
+                  <span class="plabel">Manage estimation</span
+                  ><span class="pdesc">Change the project’s estimation scheme.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Reports & filters</div>
+                <div class="mperm">
+                  <span class="plabel">View reports</span
+                  ><span class="pdesc"
+                    >Open the project’s reports — distribution, workload, velocity, roadmap.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-label="Held — from Viewer"
+                    tabindex="0"
+                    ><span class="cbox frombase"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage saved filters</span
+                  ><span class="pdesc">Create, edit, share and subscribe to saved filters.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Repositories</div>
+                <div class="mperm">
+                  <span class="plabel">Manage repositories</span
+                  ><span class="pdesc"
+                    >Add, remove, move and take over the project’s repositories.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Manage code access</span
+                  ><span class="pdesc"
+                    >Decide which team members may clone the project’s code.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">Import</div>
+                <div class="mperm">
+                  <span class="plabel">Import work items</span
+                  ><span class="pdesc">Bulk-create work items from Jira, Linear or Plane.</span>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mgroup">AI planning</div>
+                <div class="mperm">
+                  <span class="plabel">Configure AI planning</span
+                  ><span class="pdesc"
+                    >Set the planning cadence, planner model and drafted explanations.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm">
+                  <span class="plabel">Run AI planning</span
+                  ><span class="pdesc"
+                    >Submit a planning job that spends AI credits and proposes changes.</span
+                  >
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+                <div class="mperm mlast">
+                  <span class="plabel">View AI plans</span
+                  ><span class="pdesc">Open a generated plan and read its proposals.</span>
+                </div>
+                <div class="mcell on mlast" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell on mlast" role="img" aria-label="Held">
+                  <svg viewBox="0 0 24 24"><use href="#i-check" /></svg>
+                </div>
+                <div class="mcell off mlast" role="img" aria-label="Not held">
+                  <svg viewBox="0 0 24 24"><use href="#i-minus" /></svg>
+                </div>
+                <div class="mcell editing mlast">
+                  <span role="checkbox" aria-checked="false" aria-label="Not held" tabindex="0"
+                    ><span class="cbox"></span
+                  ></span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -1546,12 +1546,56 @@ no project role could ever govern them.
    Shows the affordance split: built-ins carry a LOCK and no control, the custom column carries EDIT
    and DELETE. The page grows **sideways by a role and downward only by a permission**, which is the
    argument for the matrix over a card per role.
-2. **Creating a role** (MOTIR-2257) — name, a **base role to start from**, then the permission list.
-   The base's grants arrive checked and visually distinct (grey, `from Viewer`) from what the author
-   adds (accent). All 28 are real switches: MOTIR-2257 lands after MOTIR-2291 has wired the last of
-   them, so the editor never offers a control over a permission nothing enforces.
+2. **Creating a role — IN the grid** (MOTIR-2257) — a bar takes the name and the base, and the role
+   arrives as a **live column whose cells are checkboxes**. The base's grants land grey-checked, what
+   the author adds is accent-checked, nothing is written until `Create role`. See _Why the create
+   dialog was replaced_ below. All 28 are real switches: MOTIR-2257 lands after MOTIR-2291 has wired
+   the last of them, so the editor never offers a control over a permission nothing enforces.
 3. **The member (non-admin) view** — browse-gated, so a member reads the same matrix. Two differences,
    both admin-only WRITE affordances: no `Create role`, and a custom column shows no edit/delete.
+
+## Why the create dialog was replaced — author the role IN the column it will occupy
+
+The revision before this one put role authoring in a modal: name, base, then all 28 permissions as a
+checkbox list. Measured in a 1200×900 chromium: **the dialog was 2165px tall — 2.4× the viewport**,
+of which 1675px was the permission list. It was the tallest thing in the asset by a wide margin.
+
+Height was the symptom. The cause is that **it rendered the catalog a second time, in a second
+grammar** — a checkbox LIST, when the page it opened on top of is a MATRIX of the same 28 rows. That
+is two layouts, two sets of i18n plumbing and two components for one catalog, and it contradicted
+this asset's own argument for the matrix (_a role is one more COLUMN_) at the exact moment a role was
+being made. It also covered the page: the author lost sight of the three roles they were deciding
+against, which is the one piece of information that makes the decision possible — "Contractor should
+be like Viewer, but able to comment" is a **comparison**, and the matrix is the comparison.
+
+So create mode adds exactly two things to the page it is already on:
+
+|                                            |                                                                                      |
+| ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| **The create bar** (120px, above the grid) | Name · Start from · the running count · `Cancel` / `Create role`                     |
+| **A live column**                          | headed accent with an `EDITING` chip; its cells are checkboxes instead of read marks |
+
+The author ticks `Add comments` for Contractor while reading, **on that same row**, that Member holds
+it and Viewer does not. Nothing is written until `Create role`; `Cancel` drops the column.
+
+**Editing an existing custom role is the same surface** — the pencil on a saved column (panel 1) puts
+that column into this state. One authoring surface, not two, so MOTIR-2257 builds it once.
+
+Three alternatives were considered and rejected: a **shorter modal** (a two-column domain navigator
+inside the dialog) — still a second rendering of the catalog, and still hides the page; a **two-step
+dialog** (name/base, then permissions) — moves the height into step 2 rather than removing it; a
+**dedicated `/roles/new` page** — the GitHub pattern, honest about the room the task needs, but a
+THIRD rendering of the catalog and it navigates away from the comparison. Authoring in place costs no
+new layout at all.
+
+> **This is the one place the asset asks for a NEW PRIMITIVE, and only the editor half needs it.**
+> `components/ui/` ships `Switch` and `MultiSelectPicker` but **no `Checkbox`** — the only checkbox in
+> the product is a raw unstyled `<input type="checkbox">` in `WorkflowEditor.tsx`, which is not
+> something to put 28 of on a settings page. **MOTIR-2257 adds `components/ui/Checkbox.tsx`**
+> (`--radius-control`, `--el-border-strong` unchecked, `--el-accent` + `--el-accent-text` checked).
+> A `Switch` is the wrong grammar: it says _this setting is on now_, where a checkbox says _this is
+> part of the set I am composing_ — which is what authoring a role is. **MOTIR-2263's read-only page
+> (panels 0 and 3) still needs no new primitive.**
 
 ## Access path (drawn, not just named)
 
@@ -1570,13 +1614,15 @@ one new glyph this surface adds, from the package the registry already imports.
 | `Input` / editable-field rows, and the `Modal` (scrim, head, body, foot) | `design/projects/details.mock.html` (6.8.3)        |
 
 All three are inherited **verbatim** — their CSS is copied in unchanged so this asset cannot drift
-from them. A change to any belongs in _that_ asset.
+from them. A change to any belongs in _that_ asset. (The `Modal` block is inherited but **no longer
+used** by this surface: role authoring moved into the grid. It stays byte-identical rather than being
+pruned, so the inheritance is still a copy rather than an edit.)
 
 > Two `color: #fff` literals survive inside the inherited blocks (`.proj .pav`, the unused
 > `.btn-danger`). They are **pre-existing**, carried byte-identical rather than silently diverged;
 > this asset introduces no colour literal of its own.
 
-## Primitives composed — NO NEW PRIMITIVE IS REQUIRED
+## Primitives composed — MOTIR-2263 needs NO new primitive; MOTIR-2257 needs exactly ONE
 
 | Element                            | Shipped primitive                               | Token role                                                              |
 | ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------- |
@@ -1585,19 +1631,32 @@ from them. A change to any belongs in _that_ asset.
 | Held / withheld / level-gated mark | icon + `aria-label`                             | `--el-success` · `--el-text-faint`                                      |
 | Custom-role column tint            | `Pill` tint grammar                             | `--el-tint-sky` bg + `--el-text-strong` ink                             |
 | Edit / Delete on a custom role     | `Button` (icon)                                 | `--spacing-icon-btn` (PADDING) · `--radius-control`                     |
-| `Create role`                      | `Button` (primary)                              | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md` |
-| Create-role dialog                 | `Modal`                                         | `--radius-modal` · `--shadow-modal`                                     |
+| `Create role` · `Cancel`           | `Button` (primary / ghost)                      | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md` |
+| The create BAR                     | `Card` + `FormField` row                        | `--radius-card` · `--spacing-card-padding` · border `--el-accent`       |
 | Name field · Start-from picker     | `Input` / `FormField`                           | `--radius-input` · `--height-input` · `--spacing-input-x/y`             |
-| Permission checkbox                | `Switch`/checkbox grammar                       | `--el-accent` (added) vs `--el-muted` (from base)                       |
+| Editing column head                | `Card` head + `Pill` grammar                    | `--el-accent` bg + `--el-accent-text` ink                               |
 | Rail, groups, rows                 | `Sidebar` / `SidebarSection` / `SidebarNavItem` | `--el-sidebar-*` · `--radius-control` · `--height-control`              |
+| **Permission checkbox** — **NEW**  | ⚠️ **`Checkbox`, to be added by MOTIR-2257**    | `--radius-control` · `--el-border-strong` · `--el-accent`               |
+
+**The one new primitive.** `components/ui/` ships `Switch` and `MultiSelectPicker` but no `Checkbox`;
+the product's only checkbox is a raw unstyled `<input type="checkbox">` in `WorkflowEditor.tsx`.
+Twenty-eight of those on a settings page is not acceptable, and a `Switch` is the wrong grammar (it
+says _this setting is on now_; a checkbox says _this is part of the set I am composing_). So
+MOTIR-2257 adds one — and **MOTIR-2263's read-only page is unaffected**, since panels 0 and 3 draw
+marks, not controls.
 
 ### Colour + shape rules (mock === component)
 
 - **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated**
   = `eye`. Each mark is a `role="img"` with an `aria-label` (_Held_ / _Not held_ / _Granted by
   access level_), so state is never carried by colour or glyph ALONE.
-- In the create-role list, a permission **from the base** is a grey check; one the author **added**
-  is an accent check. Two visual states, both with the same checkbox affordance.
+- In the column being **edited**, a permission **from the base** is a grey-filled checkbox and one
+  the author **added** is an accent-filled one — two visual states, one affordance. Each is a
+  `role="checkbox"` with `aria-checked` and a label that names the state (_Held — from Viewer_ /
+  _Held — added_ / _Not held_), so "who granted this" is never carried by fill colour alone.
+- The **editing** column head is `--el-accent`, not the `--el-tint-sky` a SAVED custom role carries,
+  so "live and unsaved" can never be misread as "this is a custom role". It also carries an `EDITING`
+  word, so the distinction is not colour-only.
 - No Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*` outside the inherited token block.
   `data-theme="dark"` verified on every panel.
 - **`--spacing-icon-btn` is a PADDING token (4px), not a size.** Using it as `width`/`height`
