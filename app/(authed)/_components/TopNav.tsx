@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { getTranslations } from 'next-intl/server';
+import { BrandMark } from '@/components/brand/BrandMark';
 import { ShellTierNav } from './ShellTierNav';
 import { UserMenu } from './UserMenu';
 import { ThemeToggle } from './ThemeToggle';
@@ -26,8 +28,20 @@ import type { OrgControlActiveOrg } from './OrgControl';
 // The project switcher MOVED to the sidebar header in Subtask 1.5.3 — the
 // "Story 1.5 will move project nav into a left sidebar" promise from the
 // 1.3.4 minimal form is now fulfilled, so the project switcher (and its
-// workspace-gated hairline divider) is gone from here. No wordmark slot
-// (brand-mark deferral, MOTIR.md).
+// workspace-gated hairline divider) is gone from here.
+//
+// The brand slot this file's docstring used to defer ("No wordmark slot
+// (brand-mark deferral)") is now FILLED — MOTIR-1150, design/brand/
+// design-notes.md §7a. It sits at the extreme left of the left cluster, before
+// the mobile hamburger, with a hairline divider separating it from
+// `ShellTierNav`. MARK ONLY, 24px: this cluster already carries org › workspace
+// as text, so a wordmark would read as a fourth level of context — and the
+// brand sits OUTSIDE that hierarchy, which is what the divider says.
+//
+// It is a NEW slot, not a substitution. `SidebarHeader` is entirely project
+// context (`ProjectSwitcher`, or the create-project CTA when there is no
+// project); the 8.3.1 renders established that putting the brand there costs
+// the project its identity (design-notes.md §0 finding #3).
 
 export interface TopNavProps {
   activeOrg: OrgControlActiveOrg | null;
@@ -95,6 +109,19 @@ export async function TopNav({
         className="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
       >
         <div className="flex min-w-0 items-center gap-2">
+          {/* The brand slot (design/brand/design-notes.md §7a). The glyph is
+              `aria-hidden`, so this link is the mark's ONLY accessible name —
+              the "informative" row of §8's table. Never add a visible wordmark
+              here as well: a label plus visible text makes a screen reader
+              announce the brand twice. */}
+          <Link
+            href="/dashboard"
+            aria-label={t('topNav.brandHome')}
+            className="flex h-8 w-8 flex-none items-center justify-center rounded-(--radius-control)"
+          >
+            <BrandMark variant="mark" size={24} />
+          </Link>
+          <span aria-hidden className="mx-1 h-5 w-px flex-none bg-(--el-border)" />
           {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
               where the persistent rail takes over. */}
           <div className="md:hidden">

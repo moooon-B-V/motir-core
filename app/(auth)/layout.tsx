@@ -1,4 +1,7 @@
+import Link from 'next/link';
+import { getTranslations } from 'next-intl/server';
 import { type ReactNode } from 'react';
+import { BrandMark } from '@/components/brand/BrandMark';
 
 /**
  * Shared frame for the auth pages (sign-in, sign-up, reset-password,
@@ -6,12 +9,29 @@ import { type ReactNode } from 'react';
  * background — see design/auth/* for the original Story-1.1 mockups
  * and the v1.1.10 update note in MOTIR.md.
  *
- * Wordmark is intentionally absent. In a real Motir-planned project,
- * the brand mark (wordmark + logomark) is scheduled as a late-Epic-4
- * Subtask (agent or human task) once the product has enough surface
- * for the brand decision to be informed. Until then we ship without
- * placeholder branding rather than letting a filler "P" tile become
- * load-bearing across every auth screen.
+ * THE WORDMARK IS NO LONGER ABSENT. The deferral this docstring used to record
+ * is closed by MOTIR-1150: the horizontal lockup at 28px, top-left of the card,
+ * `design/brand/design-notes.md` §7b. It lives HERE rather than on each page so
+ * all five auth screens inherit it from one place.
+ *
+ * ⚠️ WITH ONE EXCEPTION — `/device`, and it is a MEASUREMENT, not a taste call.
+ * That screen's confirm step is the product's one auth-time DECISION screen, and
+ * its fold budget is measured: `design/cli-connect/design-notes.md` recorded the
+ * single-column form at 1106px (which is why `AuthShell`'s `tight` mode and this
+ * layout's `data-auth-wide` widening exist at all), and the wide rebuild landed
+ * at a 622px page inside a 1366×648 viewport — 26px of headroom, all of it.
+ *
+ * So the question this card had to answer was how tall the new row actually is.
+ * Measured in Chromium at 1366×648 against `design/brand/brand-mark.mock.html`
+ * (which inlines the real Tailwind output and the real theme.css, so the numbers
+ * are the shipped ones): the 28px lockup renders 28px tall and the mark-only
+ * form 24px. Both then pay this column's `gap-8` on top — 60px and 56px — which
+ * puts the page at 682px or 678px against a 648px viewport and pushes
+ * Approve/Deny below the fold. That is precisely the failure the wide rebuild
+ * bought back, on the one screen where the reader must SEE what they are
+ * approving. Neither of §7b's two options fits, so the third thing it allows is
+ * what ships: the lockup is SUPPRESSED on the wide screen. Every other auth
+ * screen keeps it.
  *
  * Width pinned to a literal value rather than `max-w-md`: the design
  * system's @theme block defines a custom `--spacing-md` (= 16px)
@@ -36,11 +56,24 @@ import { type ReactNode } from 'react';
  * in Chromium at 1366×648 after the change — card 558px, page 622px,
  * both CTAs ending at 590px, no scroll.
  */
-export default function AuthLayout({ children }: { children: ReactNode }) {
+export default async function AuthLayout({ children }: { children: ReactNode }) {
+  const t = await getTranslations('auth');
   return (
     <div className="flex min-h-screen w-full items-center justify-center overflow-x-clip bg-(--el-auth-wash) px-6 py-12 has-[[data-auth-wide]]:py-8 sm:px-10">
       <main className="w-full max-w-[28rem] has-[[data-auth-wide]]:max-w-[40rem]">
-        <div className="rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8">
+        {/* The card is the brand row's column: `gap-8` matches the rhythm
+            `AuthShell` already sets inside itself, so the lockup reads as the
+            first item of one stack rather than a header bolted on top.
+            `display:none` (not `invisible`) is what removes the gap too, so the
+            wide screen is byte-identical to what it measured at. The variant is
+            written as ONE arbitrary selector rather than a stacked
+            `has-…:[&_…]` pair so what it compiles to is not in doubt. */}
+        <div className="flex flex-col gap-8 rounded-(--radius-card) bg-(--el-page-bg) px-6 py-10 shadow-(--shadow-elevated) [&:has([data-auth-wide])_[data-brand-lockup]]:hidden sm:px-10 has-[[data-auth-wide]]:py-5 sm:has-[[data-auth-wide]]:px-8">
+          {/* Decorative glyph + visible wordmark, so the link takes its name
+              from the text and carries NO `aria-label` — §8's "never both". */}
+          <Link href="/" data-brand-lockup className="self-start">
+            <BrandMark size={28} label={t('brand')} />
+          </Link>
           {children}
         </div>
       </main>

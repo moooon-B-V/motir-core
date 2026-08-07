@@ -659,6 +659,7 @@
     }
   },
   "auth": {
+    "brand": "Motir",
     "welcomeBack": "欢迎回来！",
     "signInSubhead": "用Motir把任何产品创意变为现实。",
     "planWithAiLead": "有产品创意？",
@@ -753,7 +754,8 @@
       "resumeOnboardingInProgress": "继续引导，进行中"
     },
     "topNav": {
-      "global": "全局"
+      "global": "全局",
+      "brandHome": "Motir — 前往工作台"
     },
     "sidebarHeader": {
       "activeProject": "当前项目",
@@ -3996,6 +3998,8 @@
     }
   },
   "publicProjects": {
+    "brand": "Motir",
+    "hostedOnPrefix": "基于",
     "publicChip": "公开",
     "signIn": "登录",
     "startFree": "免费开始",
