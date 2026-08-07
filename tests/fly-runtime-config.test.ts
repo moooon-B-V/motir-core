@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import {
+  mkdtempSync,
+  mkdirSync,
+  copyFileSync,
+  writeFileSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -35,12 +43,62 @@ const nextConfig = readFileSync(join(root, 'next.config.ts'), 'utf8');
 /** The runner stage — everything after the last `FROM … AS runner`. */
 const runnerStage = dockerfile.slice(dockerfile.indexOf('AS runner'));
 
+/** The builder stage — from `AS builder` up to the runner. */
+const builderStage = dockerfile.slice(
+  dockerfile.indexOf('AS builder'),
+  dockerfile.indexOf('AS runner'),
+);
+
+/**
+ * The prune step's shell body, lifted verbatim out of the Dockerfile so the
+ * tests below can RUN it rather than pattern-match it. Takes the `RUN set -eu;`
+ * line and every continued line after it, and strips the `RUN ` prefix and the
+ * trailing backslashes that make it one Docker instruction.
+ */
+function extractPruneScript(): string {
+  const lines = dockerfile.split('\n');
+  const start = lines.findIndex((l) => l.startsWith('RUN set -eu;'));
+  if (start === -1) throw new Error('the standalone prune step is gone from the Dockerfile');
+  const body = [lines[start]!.replace(/^RUN /, '')];
+  for (let i = start; lines[i]!.trimEnd().endsWith('\\'); i++) body.push(lines[i + 1]!);
+  return body.map((l) => l.replace(/\\$/, '')).join('\n');
+}
+
 describe('next.config.ts — the standalone artifact', () => {
   it("sets output: 'standalone'", () => {
     // The load-bearing half of the whole move (ADR Q1). Without it `next build`
     // emits a per-route artifact and the Dockerfile's runner stage copies a
     // directory that does not exist.
     expect(nextConfig).toMatch(/output:\s*'standalone'/);
+  });
+
+  it('carries NO outputFileTracingExcludes, and says why (MOTIR-2403)', () => {
+    // The key is read in exactly one module, `collect-build-traces.js`, which
+    // `next/dist/build/index.js` calls behind
+    // `if (bundler !== Bundler.Turbopack && …)`. Next 16 builds with Turbopack,
+    // so the module never runs. The version that shipped here excluded
+    // `./design/**` + three more directories and removed none of them, while
+    // reading — with a measured byte figure attached — as a solved problem. That
+    // second half is the defect: MOTIR-2102 is the same shape one file over, a
+    // config asserting a behaviour the tool does not perform.
+    expect(nextConfig).not.toMatch(/^\s*outputFileTracingExcludes:/m);
+    // Absence alone would leave the next reader to rediscover why, and re-adding
+    // the key is the obvious-looking fix. The comment is the deliverable.
+    expect(nextConfig).toMatch(/outputFileTracingExcludes/); // named in prose
+    expect(nextConfig).toMatch(/Turbopack/);
+    expect(nextConfig).toMatch(/collect-build-traces/);
+    expect(nextConfig).toMatch(/MOTIR-2403/);
+  });
+
+  it('marks outputFileTracingIncludes as inert under this build, not as working', () => {
+    // Same mechanism, same skipped module — so the OG-font entry does not take
+    // effect either. It is KEPT (it is the only record of why those bytes must
+    // ship, and it is the webpack-path net), but it must not read as the thing
+    // delivering them: Turbopack's own tracer is, verified in the built
+    // `route.js.nft.json`. A reader who believes this key works will debug a
+    // missing font in the wrong place.
+    expect(nextConfig).toMatch(/outputFileTracingIncludes:/);
+    expect(nextConfig).toMatch(/does NOT currently do anything/);
   });
 });
 
@@ -69,6 +127,26 @@ describe('Dockerfile — the runner image', () => {
     // dev dependency set (next build needs it); the runner must carry only the
     // traced standalone bundle plus the migration toolchain.
     expect(runnerStage).not.toMatch(/COPY --from=builder[^\n]*\/app\/node_modules(\s|$)/);
+  });
+
+  it('prunes the standalone output in the BUILDER, before the runner copies it', () => {
+    // Docker layers are additive: `COPY --from=builder … .next/standalone` in the
+    // runner commits every byte it copies, and a later `RUN rm -rf` only writes a
+    // whiteout over them. The image would not shrink at all. Pruning before the
+    // COPY is the whole reason this step sits where it does, so its POSITION is
+    // the assertion — MOTIR-2403.
+    expect(builderStage).toMatch(/^RUN set -eu;/m);
+    // Not "no `rm -rf` in the runner" — the apt-cache cleanup is a legitimate
+    // one, and it shrinks the image precisely because it shares a layer with the
+    // `apt-get install` that created those files. What must not appear is a
+    // prune of the standalone payload, which would land in a layer of its own.
+    for (const d of ['design', 'tests', 'docs', 'scripts']) {
+      expect(runnerStage, d).not.toMatch(new RegExp(String.raw`rm -rf[^\n]*\b${d}\b`));
+    }
+    // …and after `next build`, which is what produces the directory it prunes.
+    expect(builderStage.indexOf('RUN pnpm exec next build')).toBeLessThan(
+      builderStage.indexOf('RUN set -eu;'),
+    );
   });
 
   it('builds with `next build`, never the `build` script that migrates', () => {
@@ -110,6 +188,75 @@ describe('Dockerfile — the migration toolchain', () => {
     // The two trees both contain `@prisma`, `react` and `react-dom`. Merging
     // them lets the CLI's copies shadow the ones the server was traced against.
     expect(runnerStage).not.toMatch(/\/migrate\/node_modules \.\/node_modules/);
+  });
+});
+
+describe('Dockerfile — the standalone prune, RUN rather than read (MOTIR-2403)', () => {
+  const ALL = ['design', 'tests', 'docs', 'scripts'];
+  /** Directories the running server needs — the prune must not touch them. */
+  const KEEP = ['app/_brand/fonts', 'node_modules', 'prisma'];
+
+  /**
+   * Build a fake `.next/standalone` holding `present` (plus the KEEP set), run
+   * the real prune script over it, and hand the result + the tree to `assert`
+   * before the temp directory goes away.
+   */
+  function withPrune(
+    present: string[],
+    assert: (res: { status: number; stdout: string; stderr: string }, standalone: string) => void,
+  ): void {
+    const dir = mkdtempSync(join(tmpdir(), 'standalone-prune-'));
+    try {
+      const standalone = join(dir, '.next/standalone');
+      for (const d of [...present, ...KEEP]) {
+        mkdirSync(join(standalone, d), { recursive: true });
+        writeFileSync(join(standalone, d, 'payload.bin'), 'x'.repeat(1024));
+      }
+      const res = spawnSync('sh', ['-c', extractPruneScript()], { cwd: dir, encoding: 'utf8' });
+      assert(
+        { status: res.status ?? -1, stdout: res.stdout ?? '', stderr: res.stderr ?? '' },
+        standalone,
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  it('removes every payload directory and leaves the runtime ones alone', () => {
+    // The behavioural assertion the old `outputFileTracingExcludes` could never
+    // pass: it named these same four directories and removed none of them. The
+    // KEEP set matters as much — the OG cards read `app/_brand/fonts/*.ttf` off
+    // disk at request time, so a prune that reached `app/` would 404 the cards.
+    withPrune(ALL, (res, standalone) => {
+      expect(res.status, res.stderr).toBe(0);
+      for (const d of ALL) expect(existsSync(join(standalone, d)), d).toBe(false);
+      for (const d of KEEP) expect(existsSync(join(standalone, d)), d).toBe(true);
+    });
+  });
+
+  it.each(ALL)('FAILS instead of silently pruning nothing when %s is absent', (missing) => {
+    // The bug this card is about, in its general form: `rm -rf` on a path that
+    // does not exist exits 0 in silence, exactly as the inert config key did. If
+    // a Next upgrade stops sweeping one of these directories into the standalone
+    // output, the build must stop and say so rather than quietly become a step
+    // that reads as pruning and prunes nothing.
+    withPrune(
+      ALL.filter((d) => d !== missing),
+      (res) => {
+        expect(res.status).not.toBe(0);
+        expect(res.stderr).toContain(`prune target '${missing}'`);
+      },
+    );
+  });
+
+  it('reports the before and after size, so the log carries the evidence', () => {
+    // A number in the build log is what lets the next person confirm the prune
+    // is still doing something, without reproducing a build to find out.
+    withPrune(ALL, (res) => {
+      expect(res.status, res.stderr).toBe(0);
+      expect(res.stdout).toMatch(/standalone before prune: \d+ MB/);
+      expect(res.stdout).toMatch(/standalone after prune:\s+\d+ MB/);
+    });
   });
 });
 
