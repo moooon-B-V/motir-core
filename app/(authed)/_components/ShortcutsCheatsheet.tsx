@@ -34,7 +34,7 @@ export function ShortcutsCheatsheet({
         {SHELL_SHORTCUTS.map((shortcut) => (
           <li
             key={shortcut.combo}
-            className="flex items-center justify-between gap-4 rounded-(--radius-sm) px-1 py-1.5"
+            className="flex items-center justify-between gap-4 rounded-(--radius-control) px-1 py-1.5"
           >
             <span className="font-sans text-sm text-(--el-text)">{shortcut.label}</span>
             <span className="flex shrink-0 items-center gap-1">
@@ -43,7 +43,7 @@ export function ShortcutsCheatsheet({
                   {i > 0 ? (
                     <span className="text-(--el-text-muted) font-mono text-xs">+</span>
                   ) : null}
-                  <kbd className="text-(--el-text-muted) rounded-(--radius-xs) border border-(--el-border) bg-(--el-surface) px-1.5 py-0.5 font-mono text-xs">
+                  <kbd className="text-(--el-text-muted) rounded-(--radius-kbd) border border-(--el-border) bg-(--el-surface) px-1.5 py-0.5 font-mono text-xs">
                     {displayKey(key)}
                   </kbd>
                 </Fragment>

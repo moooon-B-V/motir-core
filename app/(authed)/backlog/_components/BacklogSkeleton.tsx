@@ -11,7 +11,7 @@ function SkeletonRegion() {
     >
       <div className="flex items-center gap-2 border-b border-(--el-border) px-(--spacing-card-padding) py-(--spacing-control-y)">
         <span className="h-[18px] w-[18px] animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
-        <span className="h-3.5 w-24 animate-pulse rounded bg-(--el-muted)" />
+        <span className="h-3.5 w-24 animate-pulse rounded-(--radius-control) bg-(--el-muted)" />
         <span className="flex-1" />
         <span className="h-[18px] w-14 animate-pulse rounded-(--radius-badge) bg-(--el-muted)" />
       </div>

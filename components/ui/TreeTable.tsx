@@ -584,7 +584,7 @@ export function TreeTable<Row>({
                           e.stopPropagation();
                           toggle(row.id);
                         }}
-                        className="relative z-10 flex h-4 w-4 shrink-0 items-center justify-center rounded text-(--el-text-muted) hover:text-(--el-text)"
+                        className="relative z-10 flex h-4 w-4 shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:text-(--el-text)"
                       >
                         <ChevronRight
                           className={cn(

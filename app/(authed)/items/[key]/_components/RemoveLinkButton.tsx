@@ -55,7 +55,7 @@ export function RemoveLinkButton({
       }}
     >
       <Popover.Trigger
-        className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="text-(--el-text-muted) hover:bg-(--el-tint-rose) hover:text-(--el-danger) inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-(--radius-control) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         aria-label={t('removeLinkAria', {
           relationship: relationshipLabel,
           target: targetIdentifier,
@@ -71,7 +71,7 @@ export function RemoveLinkButton({
             {t('removeConfirmAfter', { relationship: relationshipLabel.toLowerCase() })}
           </p>
           {error ? (
-            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-md px-2.5 py-1.5 font-sans text-xs">
+            <p className="text-(--el-text-strong) bg-(--el-tint-rose) rounded-(--radius-control) px-2.5 py-1.5 font-sans text-xs">
               {error}
             </p>
           ) : null}
