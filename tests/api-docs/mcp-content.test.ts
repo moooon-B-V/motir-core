@@ -157,7 +157,7 @@ describe('the transport facts are held once (Amendment 12 Q3a)', () => {
   it('states the four facts as rows, carrying the resolved URL', () => {
     const rows = mcpTransportFactRows();
     expect(rows.map((row) => row.label)).toEqual(['URL', 'Transport', 'Header', 'Token']);
-    expect(rows[0].value).toContain(mcpTransportFacts().url);
+    expect(rows[0]?.value).toContain(mcpTransportFacts().url);
     expect(rows.find((row) => row.label === 'Header')?.value).toContain(MCP_AUTH_HEADER);
   });
 
@@ -253,7 +253,7 @@ describe('the reader’s fork', () => {
   });
 
   it('names the MCP endpoint from the shipped path', () => {
-    expect(mcpForkRows()[0].mcp).toContain(MCP_ENDPOINT_PATH);
+    expect(mcpForkRows()[0]?.mcp).toContain(MCP_ENDPOINT_PATH);
   });
 
   it('publishes the churn-versus-stability REASONING, not the internal shorthand', () => {
