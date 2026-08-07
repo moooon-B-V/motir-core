@@ -56,7 +56,7 @@ per-pull-request preview environments, and to the order of the pipeline.
 
 | #      | Question                                 | Decision                                                                                                 |
 | ------ | ---------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| **Q1** | Where does motir-core run?               | **Fly.io**, as ONE long-running process (`output: 'standalone'`), org `zhu-yue`, region `iad`            |
+| **Q1** | Where does motir-core run?               | **Fly.io**, as ONE long-running process (`output: 'standalone'`), org `moooon`, region `iad`             |
 | **Q2** | What replaces Vercel Blob?               | **Tigris**, S3-compatible, **two buckets** (public assets / private content); S3 presigned URLs          |
 | **Q3** | What replaces the three `VERCEL_*` URLs? | **`MOTIR_BASE_URL`**, one variable, one accessor (`lib/baseUrl.ts`), two-rung precedence                 |
 | **Q4** | Do per-PR preview environments survive?  | **No. They are DROPPED** — a decision, with what is lost and what reverses it recorded                   |
@@ -73,8 +73,8 @@ per-pull-request preview environments, and to the order of the pipeline.
 
 **motir-core runs on Fly.io as a single long-running Node process**, built by a
 multi-stage `Dockerfile` from Next's `output: 'standalone'` artifact, in the Fly
-org that already holds `motir-ai`, primary region **`iad`** (Ashburn) — the same
-region as motir-ai and as the Neon database.
+org that already holds `motir-ai` — **`moooon`** — primary region **`iad`**
+(Ashburn) — the same region as motir-ai and as the Neon database.
 
 `output: 'standalone'` is the load-bearing half. Next traces the app **once** and
 emits one server in which every route shares one process and one `node_modules`,
@@ -309,7 +309,7 @@ should not need a local checkout to see the change.
 
 ### The decision
 
-**Production runs TWO machines** — org `zhu-yue`, region `iad`,
+**Production runs TWO machines** — org `moooon`, region `iad`,
 `shared-cpu-2x` / 2 GB, `min_machines_running = 1`, `auto_stop_machines = "stop"`,
 `auto_start_machines = true`.
 
@@ -425,7 +425,7 @@ card's own acceptance criteria did not already carry it, the card was amended as
 part of this subtask (a work-item edit; no file outside `docs/decisions/` changes
 here).
 
-- **MOTIR-2386 (provisioning, human)** — creates the Fly app in org `zhu-yue`,
+- **MOTIR-2386 (provisioning, human)** — creates the Fly app in org `moooon`,
   region `iad`; creates **two** Tigris buckets per Q2, the public one with
   public-read; sets the secrets including **`MOTIR_BASE_URL`** (Q3) and the
   Tigris credentials; creates `FLY_API_TOKEN`. **And runs `fly scale count 2`
@@ -552,6 +552,11 @@ decision above depends on it: private networking works **because both apps are i
 one org**, and a reader checking that premise against a non-existent org name
 would conclude the premise is false.
 
+> _Discharged by **Amendment 2** (below, 2026-08-07): §1, §2, §7 and the
+> `Consequences` bullet now read `moooon`. The paragraph above is left as
+> written — it records what was true when Amendment 1 landed, and the pointer is
+> the only thing added to it._
+
 **The "free" claim is region-conditional, and that is why it is written this way
 rather than as "not billed".** Both apps are in `iad` today, so the transfer is
 free. If either app is ever given a second region, the same traffic becomes
@@ -666,3 +671,105 @@ close.
 | Everything `MOTIR_BASE_URL` ends up inside                      | `lib/baseUrl.ts`'s header and its call sites on `origin/main` (MOTIR-2388)          |
 | Why provisioning set the public value                           | MOTIR-2386's closing comment                                                        |
 | The org name correction in §1 / §2 / §7                         | MOTIR-2410                                                                          |
+
+---
+
+## Amendment 2 (2026-08-07) — the Fly org is `moooon`; `zhu-yue` never existed
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2410.** This amendment corrects a
+> NAME. **It re-opens no decision** — Q1 still chooses Fly.io and region `iad`,
+> Q6 still chooses two machines created by `fly scale count 2`, and every other
+> section stands exactly as written. What changes is that the three places which
+> stated _which org_ the application runs in now state an org that exists.
+>
+> **Numbered 2.** Amendment 1 (the core→ai private-networking seam, MOTIR-2420)
+> was written against this same file in parallel and merged first; it reserved
+> this number for this correction and deliberately left these lines alone. The
+> two amendments touch no common text.
+
+**Amends:** the org NAME in **§1**'s Q1 decision-table row, **§7**'s Q6 decision
+paragraph, and the **MOTIR-2386 bullet** under _Consequences_; **§2**'s Q1
+paragraph, which named the org only by description ("the Fly org that already
+holds `motir-ai`"), now also carries the slug. It also **discharges Amendment
+1's ⚠️ paragraph**, which stated that those sections name a non-existent org and
+left the correction to this card — that paragraph now carries a pointer here and
+is otherwise unchanged. Nothing else in this record changes, and no clause is
+withdrawn.
+
+### What was wrong
+
+Three sections of this record stated the Fly organisation as **`zhu-yue`**. **No
+organisation of that name has ever existed.** It is the personal org's DISPLAY
+name (`Zhu Yue`) slugified by hand rather than read back from the platform — and
+the personal org's actual slug is `personal`, which holds neither service.
+
+The error was self-concealing in a specific way: §2's Q1 paragraph described the
+org correctly and by reference ("the Fly org that already holds `motir-ai`"),
+which is true and unambiguous, while the three sections that named it gave a
+slug that resolves to nothing. A reader who followed the description would have
+reached the right place; a reader who copied the slug would have found nothing
+there, and the most likely reaction to that is to conclude the app must live
+somewhere else and create a second one.
+
+### What the platform reports — read, not assumed
+
+Observed 2026-08-07, first on MOTIR-2386 (which created the app) and again while
+writing this amendment:
+
+```
+$ fly orgs list
+Name                 Slug                 Type
+----                 ----                 ----
+Zhu Yue              personal             PERSONAL
+motir-fleet          motir-fleet          SHARED
+MOOOON               moooon               SHARED
+
+$ fly apps list
+ NAME                │ OWNER       │ STATUS    │ LATEST DEPLOY
+ motir-ai            │ moooon      │ deployed  │ 7h47m ago
+ motir-core          │ moooon      │ pending   │
+ motir-gateway       │ moooon      │ deployed  │ Aug 5 2026 01:52
+ motir-ci-runners    │ motir-fleet │ suspended │
+ motir-index-runners │ motir-fleet │ pending   │
+```
+
+| Fact                         | Value                                              |
+| ---------------------------- | -------------------------------------------------- |
+| The org this record means    | **`moooon`** (display name `MOOOON`)               |
+| What `zhu-yue` resolves to   | **nothing** — no org carries that slug             |
+| The personal org's real slug | `personal` — holds neither motir-ai nor motir-core |
+| Apps owned by `moooon`       | `motir-ai`, `motir-gateway`, **`motir-core`**      |
+
+So `moooon` is not a new choice being made here — it is what Q1's own reasoning
+already meant ("the Fly org that already holds `motir-ai`"), and it is where
+MOTIR-2386 actually created the app.
+
+### Why an amendment rather than a silent replacement
+
+A find-and-replace would leave this record looking as though it had always been
+right. It has not: it carried a non-existent org name for the whole window in
+which the cards downstream of it were being executed, and anyone who acted on the
+old value needs to be able to discover that it changed and why. The convention in
+this directory — `attachment-access-control.md`'s Amendment 2,
+`public-api-conventions.md`'s Amendments 9–11 — is that a correction is recorded,
+not overwritten.
+
+### The general lesson this record now carries
+
+**An org, project or account has a display name and a separate short identifier,
+and only the identifier is real to the tooling.** Writing the display name in the
+shape identifiers usually take produces a value that reads perfectly and resolves
+to nothing. Every such value in this directory should be pasted from the
+platform's own output — `fly orgs list`, `fly apps list`, `vercel env ls` — never
+transcribed from a console header. That is the same rule MOTIR-2102 arrived at
+from the other direction: read the platform, not our own file.
+
+### What this amendment does NOT touch
+
+- **`fly.toml`.** Its line 12 comment (`claimed by MOTIR-2386 in org 'zhu-yue'`)
+  carries the same wrong name and is corrected by **MOTIR-2428**, its own card —
+  the file is runtime configuration, not this record, and it pins no org (an
+  app's org is fixed at creation and cannot be set from `fly.toml`).
+- **Any decision.** Q1's choice of Fly, Q6's count of 2, and every other Q stand.
+- **Anything on the platform.** Nothing is created, moved or renamed; MOTIR-2386
+  already created `motir-core` under `moooon`.
