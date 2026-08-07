@@ -49,6 +49,6 @@ say "no credential mount, no $CONFIG_DIR/config.json — the env tier is the onl
 
 # ── the run ─────────────────────────────────────────────────────────────────
 # `loop-smoke.sh` asserts the tier it resolved, runs `motir ready`, then drives
-# the whole `motir auto` loop and checks the MCP call sequence.
+# the whole `motir auto` loop and checks the request sequence.
 
 exec "$SMOKE_DIR/loop-smoke.sh" "$WORKSPACE"

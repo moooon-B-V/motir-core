@@ -90,12 +90,12 @@ run_leg() {
 }
 JSON
 
-    CALL_LOG="$run_dir/mcp-calls.ndjson"
+    CALL_LOG="$run_dir/api-calls.ndjson"
     GH_LOG="$run_dir/gh-calls.log"
     AUTO_LOG="$run_dir/auto.log"
     : > "$GH_LOG"
 
-    say "leg $label — starting the stub MCP server on $PORT"
+    say "leg $label — starting the stub server on $PORT"
     node "$SMOKE_DIR/stub-server.mjs" \
         --port "$PORT" --log "$CALL_LOG" --items "$ITEMS" --project SMOKE \
         > "$run_dir/stub.url" 2> "$run_dir/stub.err" &

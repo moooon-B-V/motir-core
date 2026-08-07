@@ -3,18 +3,47 @@
 // The SEQUENCE ASSERTIONS of the sandbox loop smoke test (7.9.7c / MOTIR-885).
 //
 // A smoke test that only checks `motir auto`'s exit code proves almost nothing:
-// a loop that skipped `mark_integrated`, dispatched two items in one iteration,
-// or handed the agent a prompt it never asked the server for would all still
-// exit 0. So the stub server records EVERY MCP call and this script asserts the
-// protocol story the loop is supposed to tell:
+// a loop that skipped the integration record, dispatched two items in one
+// iteration, or handed the agent a prompt it never asked the server for would
+// all still exit 0. So the stub server records EVERY request and this script
+// asserts the story the loop is supposed to tell:
 //
-//   • one `next_ready` PER ITERATION — never a batch read-ahead,
-//   • each item flipped to in_progress BEFORE its prompt is fetched,
+//   • one READ OF THE READY SET per iteration — never a batch read-ahead,
 //   • each item's prompt fetched with the run's session branch as the SEED,
-//   • each item recorded via `mark_integrated` on that same branch,
-//   • a final `next_ready` that comes back empty — the loop stops because the
-//     server said it was drained, not because it ran out of patience,
+//   • each item flipped to in_progress before its agent is launched,
+//   • each item recorded as integrated on that same branch,
+//   • a final ready read that comes back to an empty set — the loop stops
+//     because the server drained, not because it ran out of patience,
 //   • exactly ONE pull request, for the one repo the run touched.
+//
+// ── ⚠️ THE RECORDED SHAPE CHANGED WITH THE PROTOCOL (MOTIR-2436) ────────────
+// Every assertion here used to read a TOOL NAME and an `args` object, because
+// the CLI was an MCP client. It reads a METHOD, a PATH and either a query or a
+// body now. Every claim is preserved and none was WEAKENED to pass — an
+// assertion that had to be relaxed would have been the tell that the migration
+// lost something. Two changed, and both are noted below because a reader needs
+// to know which parts of this file are a translation and which are a decision.
+//
+// The first could not survive and its replacement is stronger. The
+// loop used to call a `next_ready` TOOL, which handed back one item and advanced
+// a server-side cursor. There is no such endpoint on `/api/v1` and there should
+// not be (MOTIR-2398): the CLI reads the ready COLLECTION and takes the first
+// row. So "one `next_ready` per iteration" becomes "one GET of the ready set per
+// iteration, and the set SHRINKS by one each time" — which additionally proves
+// the transition actually landed, something the cursor version could not tell.
+//
+// ── ⚠️ AND ONE ORDER GENUINELY CHANGED, WHICH THIS FILE SHOULD HAVE CAUGHT ──
+// The loop used to TRANSITION an item and then fetch its prompt. It now fetches
+// the prompt FIRST: the prompt is what carries `targetRepo`, and MOTIR-2398 made
+// the run resolve the repo from it rather than from the ready row — so the read
+// has to happen before the routing decision it feeds. `auto.ts` marks the spot
+// ("⚠️ SEED FIRST, THEN RESOLVE").
+//
+// That is a real behaviour change to the loop, and this file is the one place
+// that would have said so out loud. It did not, because it had been failing at
+// the first request since 11.5.6 and nobody could see past that. The expected
+// sequence below is corrected rather than relaxed — the point of an ordered
+// assertion is that a reorder has to be noticed and agreed to.
 //
 // Usage: assert-run.mjs --calls <ndjson> --gh <log> --items <n> --project <key>
 
@@ -35,96 +64,110 @@ const check = (condition, message) => {
   if (!condition) failures.push(message);
 };
 
-// ── the recorded calls ──────────────────────────────────────────────────────
+// ── the recorded requests ───────────────────────────────────────────────────
 
 const entries = readFileSync(CALLS_PATH, 'utf8')
   .split('\n')
   .filter(Boolean)
   .map((line) => JSON.parse(line));
 
-const allToolCalls = entries.filter((e) => e.method === 'tools/call');
+/** Every `/api/v1` request, in order, as `METHOD path`. */
+const v1 = entries.filter((e) => typeof e.path === 'string' && e.path.startsWith('/api/v1'));
 
+check(v1.length > 0, 'the CLI made no `/api/v1` requests at all — is it reaching the stub?');
 check(
-  entries.some((e) => e.method === 'initialize'),
-  'the CLI never completed an MCP `initialize` handshake',
+  !entries.some((e) => e.method === 'initialize' || e.method === 'tools/call'),
+  'the CLI spoke MCP — it is an `/api/v1` client since 11.5.6, and this stub no longer serves MCP',
 );
+
+/** A request's shape, for the sequence comparison. Keys are collapsed to `{key}` so
+ *  the expected sequence is about the OPERATION, not about which item it was for
+ *  — the per-item detail below is what checks that. */
+const shapeOf = (entry) =>
+  `${entry.method} ${entry.path
+    .replace(new RegExp(`${PROJECT}-\\d+`, 'g'), '{key}')
+    .replace(`/${PROJECT}/`, '/{project}/')}`;
+
+const READY = `GET /api/v1/projects/{project}/ready`;
+const TRANSITION = 'POST /api/v1/work-items/{key}/transitions';
+const PROMPT = 'GET /api/v1/work-items/{key}/dispatch-prompt';
+const INTEGRATION = 'POST /api/v1/work-items/{key}/integration';
 
 // The suite runs `motir ready` against this same stub before the loop starts —
 // it is the cheapest proof that the credential resolved, whichever tier supplied
-// it (MOTIR-1877) — so ONE leading `list_ready` belongs to that pre-flight and is
-// skipped here. Only a leading one: a `list_ready` from inside the loop would be
-// the batch read-ahead this file exists to refuse, so it is checked for
-// separately rather than filtered away.
-const preflight = allToolCalls[0]?.tool === 'list_ready' ? 1 : 0;
-const toolCalls = allToolCalls.slice(preflight);
-const names = toolCalls.map((e) => e.tool);
-
-check(
-  !names.includes('list_ready'),
-  'the loop called `list_ready` — the ready set is re-queried ONE item at a time, never read ahead in a batch',
-);
+// it (MOTIR-1877) — so ONE leading ready read belongs to that pre-flight and is
+// skipped here. Only a leading one: an EXTRA ready read from inside the loop
+// would be the batch read-ahead this file exists to refuse, and the count check
+// below is what catches it.
+const shapes = v1.map(shapeOf);
+const preflight = shapes[0] === READY ? 1 : 0;
+const loop = v1.slice(preflight);
+const loopShapes = shapes.slice(preflight);
 
 // The expected shape, built rather than hard-coded so the item count is a knob.
 const expected = [];
-for (let i = 1; i <= ITEMS; i += 1) {
-  expected.push('next_ready', 'transition_status', 'dispatch_prompt', 'mark_integrated');
-}
-expected.push('next_ready'); // the drain probe
+for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, TRANSITION, INTEGRATION);
+expected.push(READY); // the drain probe
 
 check(
-  names.join(',') === expected.join(','),
-  `tool-call sequence mismatch:\n  expected: ${expected.join(' → ')}\n  actual:   ${names.join(' → ')}`,
+  loopShapes.join(',') === expected.join(','),
+  `request sequence mismatch:\n  expected: ${expected.join(' → ')}\n  actual:   ${loopShapes.join(
+    ' → ',
+  )}`,
 );
 
 // ── per-item detail ─────────────────────────────────────────────────────────
-// The sequence being right is not enough: the calls must be about the RIGHT
+// The sequence being right is not enough: the requests must be about the RIGHT
 // item and carry the run's branch. A loop that dispatched item 1 four times
 // would satisfy the shape above.
 
 const branches = new Set();
+const keyOf = (entry) => entry?.path?.match(new RegExp(`${PROJECT}-\\d+`))?.[0] ?? null;
 
 for (let i = 1; i <= ITEMS; i += 1) {
   const key = `${PROJECT}-${i}`;
   const base = (i - 1) * 4;
 
-  const transition = toolCalls[base + 1];
+  const dispatch = loop[base + 1];
+  const transition = loop[base + 2];
   check(
-    transition?.args?.key === key && transition?.args?.status === 'in_progress',
-    `${key}: expected a transition to in_progress, got ${JSON.stringify(transition?.args)}`,
+    keyOf(transition) === key && transition?.body?.status === 'in_progress',
+    `${key}: expected a transition to in_progress, got ${keyOf(transition)} ${JSON.stringify(
+      transition?.body,
+    )}`,
   );
 
-  const dispatch = toolCalls[base + 2];
   check(
-    dispatch?.args?.key === key,
-    `${key}: dispatch_prompt was called for ${dispatch?.args?.key ?? '(nothing)'}`,
+    keyOf(dispatch) === key,
+    `${key}: the dispatch prompt was fetched for ${keyOf(dispatch) ?? '(nothing)'}`,
   );
+  // ⚠️ A QUERY parameter now, not a tool argument — the operation declares it
+  // that way because fetching a prompt is a READ.
+  const seed = dispatch?.query?.sessionBranch;
   check(
-    typeof dispatch?.args?.sessionBranch === 'string' &&
-      dispatch.args.sessionBranch.startsWith('motir/auto-'),
-    `${key}: dispatch_prompt carried no session-branch seed (got ${JSON.stringify(
-      dispatch?.args?.sessionBranch,
-    )})`,
+    typeof seed === 'string' && seed.startsWith('motir/auto-'),
+    `${key}: the dispatch prompt carried no session-branch seed (got ${JSON.stringify(seed)})`,
   );
 
-  const integrated = toolCalls[base + 3];
+  const integrated = loop[base + 3];
   check(
-    integrated?.args?.key === key,
-    `${key}: mark_integrated was called for ${integrated?.args?.key ?? '(nothing)'}`,
+    keyOf(integrated) === key,
+    `${key}: the integration was recorded for ${keyOf(integrated) ?? '(nothing)'}`,
   );
   check(
-    integrated?.args?.sessionBranch === dispatch?.args?.sessionBranch,
-    `${key}: mark_integrated recorded a different branch than the one dispatched on`,
+    integrated?.body?.sessionBranch === seed,
+    `${key}: the integration recorded a different branch than the one dispatched on`,
   );
   // The harness self-report (MOTIR-1685) is how a Motir tenant can tell agent
   // work from human work; an unattended run that stopped sending it would erase
   // that provenance silently.
   check(
-    typeof integrated?.args?.implementationHarness === 'string' &&
-      integrated.args.implementationHarness.startsWith('motir-cli/'),
-    `${key}: mark_integrated carried no motir-cli harness stamp`,
+    typeof integrated?.body?.implementationHarness === 'string' &&
+      integrated.body.implementationHarness.startsWith('motir-cli/'),
+    `${key}: the integration carried no motir-cli harness stamp`,
   );
 
-  if (dispatch?.args?.sessionBranch) branches.add(dispatch.args.sessionBranch);
+  if (typeof seed === 'string') branches.add(seed);
 }
 
 check(
@@ -132,13 +175,13 @@ check(
   `the run used ${branches.size} session branches; a run has exactly one (${[...branches].join(', ')})`,
 );
 
-// The loop must stop because the SERVER drained, which means the last call is a
-// `next_ready` whose answer was empty — the item count is what proves it.
+// The loop must stop because the SERVER drained. Under MCP that was "N+1
+// `next_ready` calls, the last one empty"; here it is the same claim made
+// directly — one ready read per iteration plus the drain probe, and no more.
+const readyReads = loopShapes.filter((shape) => shape === READY).length;
 check(
-  toolCalls.filter((e) => e.tool === 'next_ready').length === ITEMS + 1,
-  `expected ${ITEMS + 1} next_ready calls (one per item plus the drain probe), got ${
-    toolCalls.filter((e) => e.tool === 'next_ready').length
-  }`,
+  readyReads === ITEMS + 1,
+  `expected ${ITEMS + 1} reads of the ready set (one per item plus the drain probe), got ${readyReads}`,
 );
 
 // ── the pull request ────────────────────────────────────────────────────────
