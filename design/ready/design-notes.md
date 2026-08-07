@@ -40,14 +40,14 @@ from a new **"Ready"** entry in the primary nav of
 `app/(authed)/_components/SidebarNav.tsx` (and therefore the mobile
 `SidebarDrawer`, which renders the same `SidebarNav`). The page resolves the
 active project via the established `getActiveProject()` pattern (mirror
-`/dashboard`, `/issues`) and reads `workItemsService.listReady` directly
+`/dashboard`, `/items`) and reads `workItemsService.listReady` directly
 (server-component path; the HTTP endpoints are for the OTHER consumers).
 
 The board is flat — there is **no `/ready` board view**; readiness is a set.
 
 ## Layout (panel 1 — the page)
 
-- **Page shell** inside the app shell (1.5.1): the `/issues` page-header grammar
+- **Page shell** inside the app shell (1.5.1): the `/items` page-header grammar
   — a serif `h1` title + a muted subtitle — extended with a count chip and a
   help button:
   - **Title** — `font-serif text-2xl font-semibold text-(--el-text)` reading
@@ -66,7 +66,7 @@ The board is flat — there is **no `/ready` board view**; readiness is a set.
 - **The list** is a vertical stack of **dispatch cards** (`gap-2`), each a
   `Card`-shaped row (`--radius-card` + `--el-border` + `--shadow-subtle`, on
   `--el-page-bg`). Whole-card clickable → opens the existing **`IssueQuickView`
-  peek** (the `/issues` interaction — NOT a full-page navigation, notes.html #7).
+  peek** (the `/items` interaction — NOT a full-page navigation, notes.html #7).
   Hover raises `--el-border-strong` + `--el-surface-soft` and underlines the
   title.
 - **Sort** — `(priority desc, key asc)`, the SAME order `POST /api/ready/next`
@@ -155,7 +155,7 @@ action), shown when the active project has zero ready items:
   in progress and what it's waiting on."** (`t('ready.empty.body')`) — explains
   the predicate AND points elsewhere for not-ready work.
 - **Action** — a `Button variant="secondary"` (rendered as a `Link`) **"View all
-  issues"** → `/issues`, leading lucide `circle-dot` (the Issues nav glyph).
+  issues"** → `/items`, leading lucide `circle-dot` (the Issues nav glyph).
 
 ## Copy-confirmation toast (panel 4)
 
@@ -199,7 +199,7 @@ success)`, `CheckCircle2` icon in `--el-success`), bottom-right of the viewport:
 - **A11y**: the list is a `role="list"` of `role="listitem"` rows; the copy
   button is keyboard-reachable with an explicit `aria-label`; the toast is a
   `role="status"`; the page header is a single `h1`; row click opens the peek
-  (no full-page nav), matching `/issues`.
+  (no full-page nav), matching `/items`.
 
 ## Primitives composed (no hand-rolling)
 

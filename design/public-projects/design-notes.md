@@ -706,7 +706,7 @@ It is the host surface for two code subtasks: **6.14.11** (build the page) and
 - Public chrome on top. **Header:** `IssueTypeIcon` (epic, `--el-type-epic`, lucide
   `zap`) + the mono identifier + serif title + a status `Pill`. **No edit
   affordances** (read-only) — the distinguishing difference from the authed
-  `/issues/[key]` detail page.
+  `/items/[key]` detail page.
 - **Body:** a public-safe description (`.motir-prose`); the public projection
   strips internal fields, so no assignee / estimate / points anywhere.
 - **Child issues panel** (`Card` + `SectionLabel`): a list of public-safe child

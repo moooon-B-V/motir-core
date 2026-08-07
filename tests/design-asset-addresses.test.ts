@@ -224,10 +224,11 @@ function sweep(): Finding[] {
 // stay. Adding a row is a deliberate act with a written reason; the tightness
 // test below deletes the row for you the moment it stops applying.
 //
-// Genuinely-stale addresses found by this guard's first run are NOT silenced
-// here on the merits — every one is marked STALE and fixed by MOTIR-2340, per
-// this card's scope boundary (running the guard IS the audit; what it finds is
-// its own card).
+// Genuinely-stale addresses are NOT silenced here on the merits. This guard's
+// first run found 17 of them; they were parked as STALE rows naming MOTIR-2340
+// (per MOTIR-2316's scope boundary — running the guard IS the audit, and what
+// it finds is its own card), and MOTIR-2340 then corrected the assets and
+// deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
   // ── Prose that names an address without using it ──────────────────────────
   {
@@ -374,96 +375,10 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/docs/cli',
     why: 'Forward-looking: same route. Built by MOTIR-2308 (PR #1910), which deletes this row.',
   },
-  // ── STALE — real drift this guard found on its first run. Not silenced on
-  //    the merits: MOTIR-2340 corrects every one of them and deletes these
-  //    rows, and the tightness test below is what stops it re-allowlisting
-  //    them instead. `/issues*` is the work-item rename; `/login` never
-  //    shipped (the route is `/sign-in`).
-  {
-    file: 'design/backlog/backlog-filter.mock.html',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/backlog/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/boards/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/import/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/org-admin/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/ready/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/triage/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/notifications/design-notes.md',
-    address: '/issues/[key]',
-    why: 'STALE — /items/[key] since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/public-projects/design-notes.md',
-    address: '/issues/[key]',
-    why: 'STALE — /items/[key] since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues/[key]',
-    why: 'STALE — /items/[key] since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues/[identifier]',
-    why: 'STALE — /items/[key] since the work-item rename; the parameter name is wrong too. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/issues/[key]/edit',
-    why: 'STALE — /items/[key]/edit since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/archived.mock.html',
-    address: '/issues/archived',
-    why: 'STALE — /items/archived since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues/archived',
-    why: 'STALE — /items/archived since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/onboarding-entrance/design-notes.md',
-    address: '/login',
-    why: 'STALE — the sign-in route is /sign-in; /login never shipped. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/login',
-    why: 'STALE — the sign-in route is /sign-in; /login never shipped. Fixed by MOTIR-2340, not here.',
-  },
+  // (MOTIR-2316's first run parked 17 STALE pairs here — 13 assets addressing
+  //  `/issues*` and `/login`. MOTIR-2340 corrected every one of them in the
+  //  assets, so all 17 rows are gone: `expired()` below is what made correcting
+  //  them the only way out, rather than re-approving them.)
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -542,13 +457,16 @@ describe('a design asset addresses pages that still exist', () => {
     expect(KNOWN.filter((entry) => entry.why.trim().length < 20)).toEqual([]);
   });
 
-  it('lists each STALE row against the card that clears it', () => {
-    // The STALE rows are the guard's own first-run findings, parked rather than
-    // fixed here. Each has to name where it IS fixed, or "parked" quietly
-    // becomes "accepted".
+  it('parks no finding as STALE without naming the card that clears it', () => {
+    // MOTIR-2316 parked its own first-run findings here rather than fixing
+    // them, and asserted each named where it WAS fixed — or "parked" quietly
+    // becomes "accepted". MOTIR-2340 cleared all 17, so the table holds none
+    // today; the rule outlives them, because parking the NEXT batch is the
+    // same temptation. It no longer requires a STALE row to exist (that would
+    // oblige the table to keep one forever) — only that any row calling itself
+    // STALE cites a card.
     const stale = KNOWN.filter((entry) => entry.why.startsWith('STALE'));
-    expect(stale.length).toBeGreaterThan(0);
-    expect(stale.filter((entry) => !entry.why.includes('MOTIR-2340'))).toEqual([]);
+    expect(stale.filter((entry) => !/MOTIR-\d+/.test(entry.why))).toEqual([]);
   });
 });
 
