@@ -229,15 +229,14 @@ describe('typed wrappers — each names its tool and forwards its arguments', ()
 
   it('the UNPORTED reads still name their MCP tools', async () => {
     const client = await connected();
-    server.script({
-      next_ready: { structured: { item: { id: 'row-1', key: 'PROD-7' } } },
-      get_work_item: { structured: { item: { identifier: 'PROD-7' }, readiness: { ready: true } } },
-    });
+    server.script({ next_ready: { structured: { item: { id: 'row-1', key: 'PROD-7' } } } });
 
     await client.nextReady({ projectKey: 'PROD', excludeIds: ['row-9'] });
-    await client.getWorkItem('PROD-7');
+    await client.searchWorkItems({ projectKey: 'PROD' });
 
-    expect(server.calls.map((c) => c.name)).toEqual(['next_ready', 'get_work_item']);
+    // All six READS now speak `/api/v1`. These two are what is left on MCP:
+    // 11.5.19 retires `next_ready`, 11.5.17 ports `search_work_items`.
+    expect(server.calls.map((c) => c.name)).toEqual(['next_ready', 'search_work_items']);
     expect(server.calls[0]?.args).toMatchObject({ excludeIds: ['row-9'] });
     await client.close();
   });

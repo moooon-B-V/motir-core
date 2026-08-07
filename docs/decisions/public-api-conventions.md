@@ -2889,6 +2889,7 @@ story's question, answered against its own content.
 - **Amendment 4 Q4's route line and Q5's opening** gain `⚠️ Amended` pointers to
   this amendment; their bodies are not rewritten, which is the shape every
   amendment here keeps.
+
 ---
 
 ### Amendment 12 (2026-08-06) — COUNTING a filtered set is its OWN operation, not a field on the page
@@ -3066,3 +3067,102 @@ it.
   into the numbers the `all` page's view model declares.
 - **A future page whose read answers something the envelope cannot express**
   uses `extend`, having first checked that the field is not really about paging.
+
+> **⚠️ CORRECTION (2026-08-07, MOTIR-2345) — EVERY member of an `allOf` must be a
+> COMPOSITION BASE.** As first shipped, this amendment emitted the envelope and
+> the extension as ordinary schema objects, and both carried
+> `additionalProperties: false` (the envelope is `.strict()`; zod emits the flag
+> for any object). **A validator applies that flag to the WHOLE instance, not to
+> its own branch** — so the strict envelope rejected `totalComments`, and the
+> strict extension rejected `items`. Every extended ranked-page response failed.
+>
+> It was invisible to the drift guard and to the work-loop conformance suite
+> because both validate with ZOD, where `responseSchemaFor` builds ONE object via
+> `.extend()`. Only the CLI compiles the emitted document into an **Ajv**
+> validator, so the defect surfaced the first time a real read ran through the
+> transport. The emitter now strips the flag from both members
+> (`compositionBase`); the zod schemas keep `.strict()`, so drift detection is
+> unaffected.
+
+---
+
+### Amendment 14 (2026-08-07) — `motir show --json` emits the v1 RESOURCE; a client's machine-readable output is the API's own
+
+**Status:** accepted. Forced by **11.5.22** (MOTIR-2345), the last of Story 11.5's
+read slices.
+
+#### The problem, and why there was no do-nothing option
+
+`@motir/cli`'s `--json` flags printed the MCP tool's payload. The CLI's view
+models were a structural MIRROR of those payloads, so _"`--json` is unchanged"_
+was free — the two were the same object.
+
+`/api/v1` returns a different shape, so **`--json` changes whichever way it
+goes.** The card's original acceptance criterion, _"output identical to the
+MCP-era implementation"_, was unsatisfiable for this flag the day it was
+written.
+
+#### Q1 — the RESOURCE or the VIEW MODEL? **The resource.**
+
+The view model is deliberately LOSSY, and `packages/cli/src/mcpClient.ts` says
+why in as many words: heavier fields are left off _"because `--json` prints the
+tool payload itself, so nothing is lost by omitting them here."_
+
+**`--json` is the escape hatch that makes that narrowing safe.** Pointing it at
+the narrowed thing removes `labels`, `components`, `commentCount`, `createdAt`,
+`reporterId`, `dueDate` and the provenance triple from every script that reads
+it — a capability removal wearing a shape change, and one no test would have
+caught because the remaining fields would all still be correct.
+
+Two further reasons, both about what a promise can be made ABOUT:
+
+- **It is documentable.** _"`motir show --json` returns the `/api/v1` work-item
+  resource"_ has an OpenAPI document behind it, versioned, additive-only under
+  §8. _"…returns the CLI's internal view model"_ is a promise about a type that
+  changes whenever a renderer does.
+- **It makes the story's claim observable.** `motir show KEY --json` and a direct
+  request to `/api/v1/work-items/KEY` now return the same fields. The CLI being
+  a client of the public API stops being an architecture statement.
+
+#### Q2 — does this break the adapter boundary? **No, and the reason is worth stating.**
+
+Amendment 4 Q4 / the CLI ADR's Q4 exist so **RENDERERS** do not become a second
+consumer of the wire contract — that is what protects `render.ts` from every
+future shape change. `--json` is a PASS-THROUGH, not a renderer, and it needs
+BYTES rather than a type.
+
+So the client exposes the raw body typed **`unknown`** (`readWorkItem` /
+`readWorkItemActivity` return `{ view, payload }`), the command `JSON.stringify`s
+it, and **no generated type is IMPORTED outside `src/adapters/` and
+`src/transport.ts`**. The freshness guard's import rule is untouched, and the
+renderers still see only view models.
+
+#### Q3 — what does the CLI still ADD? **The build order, exactly as before.**
+
+`--json` has always emitted children sorted into build order, each carrying the
+`wave` the table computed, _"so a script never re-derives the graph."_ That is a
+real capability and it is KEPT: the order and the wave are derived from the view
+model and applied to the payload's own children, **matched by key rather than by
+position** so the two representations cannot drift.
+
+So the payload is the resource plus one documented addition, not a verbatim
+echo. A script that wanted the untouched resource always had `curl`.
+
+#### Q4 — what is LOST, named rather than discovered
+
+`--json` no longer carries the work item's internal row `id`. §7 keeps the cuid
+off the wire, and this is the same deliberate loss Amendment 10 Q3 recorded when
+the CLI's exclusion list moved to keys — a client that keyed on it migrates to
+the `MOTIR-<n>` key, which is the only identifier v1 publishes.
+
+#### Consequences of this amendment
+
+- **11.5.22** ships it, and asserts the payload against the exact body the
+  server returned rather than a hand-written expectation.
+- **A future `--json` on any other command** emits that command's v1 resource by
+  the same rule. `ready --json` and `sprint --json` already emit collections of
+  view models; aligning them is a follow-on, not this amendment's scope.
+- **Amendment 13's `extend` needed a fix to make any of this work** — see the
+  note recorded there: every member of an `allOf` must be a composition base,
+  because a validator applies one branch's `additionalProperties: false` to the
+  whole instance.

@@ -1,5 +1,13 @@
 import type { SuccessBody } from '../transport.js';
 import type {
+  ActivityAllPage,
+  ActivityComment,
+  ActivityCommentThread,
+  ActivityEntry,
+  ActivityHistoryPage,
+  ActivityPart,
+  ActivityValue,
+  CommentsPage,
   ProjectList,
   ProjectSummary,
   ReadyItemSummary,
@@ -7,6 +15,10 @@ import type {
   SprintList,
   SprintSummary,
   WhoamiResult,
+  WorkItemChild,
+  WorkItemDetail,
+  WorkItemLink,
+  WorkItemSummary,
 } from '../mcpClient.js';
 
 // The READ ADAPTERS — wire shapes in, the CLI's own view models out
@@ -37,9 +49,9 @@ import type {
 // one layer below every renderer.
 //
 // ── It grows one SLICE at a time ────────────────────────────────────────────
-// It arrived with the IDENTITY mappers (11.5.4) and gained the COLLECTION ones
-// (11.5.21); the detail + activity reshapes (11.5.22) add theirs here too,
-// rather than defining a second boundary — one module is the whole point.
+// It arrived with the IDENTITY mappers (11.5.4), gained the COLLECTION ones
+// (11.5.21), and is completed by the detail + activity reshapes (11.5.22) —
+// one module for the whole boundary, which was the point.
 
 /**
  * The literal `?assigneeId=` takes to mean the UNASSIGNED bucket.
@@ -62,6 +74,10 @@ type ProjectsBody = SuccessBody<'listProjects'>;
 type ReadyBody = SuccessBody<'getProjectReadySet'>;
 /** One page of a project's sprints. */
 type SprintsBody = SuccessBody<'listProjectSprints'>;
+/** The work-item detail aggregate. */
+type DetailBody = SuccessBody<'getWorkItem'>;
+/** One page of the activity stream, in whichever view was asked for. */
+type ActivityBody = SuccessBody<'getWorkItemActivity'>;
 
 /** One row of a paged body, with the envelope's optional `items` resolved. */
 type RowOf<B extends { items?: unknown[] }> = NonNullable<B['items']>[number];
@@ -182,4 +198,228 @@ export function toSprintList(pages: readonly SprintsBody[]): SprintList {
   const sprints: SprintSummary[] = [];
   for (const page of pages) sprints.push(...rowsOf(page).map(toSprintSummary));
   return { sprints };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The work-item detail aggregate — the sharpest reshape
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** A v1 work-item REFERENCE as the CLI's summary shape. */
+function toSummary(ref: {
+  key: string;
+  kind: string;
+  title: string;
+  status: string;
+}): WorkItemSummary {
+  return { identifier: ref.key, kind: ref.kind, title: ref.title, status: ref.status };
+}
+
+/**
+ * The detail aggregate.
+ *
+ * Three reshapes, each recorded where it happens:
+ *
+ * • `ancestorKeys` → `ancestors`. The wire sends keys; `renderLineage` reads
+ *   `.identifier` and nothing else, so the view model's element type narrowed to
+ *   `{ identifier }` rather than this function inventing a kind/title/status.
+ * • `links` (five groups of refs) → the three arrays the CLI declares. `linkId`
+ *   is gone from the view model — nothing read it, and v1 does not publish it.
+ * • `readiness.blockedByAncestorKey` + `…Title` → one `{ identifier, title }`.
+ *   The two are null together on the wire, so the object is null or complete.
+ */
+export function toWorkItemDetail(body: DetailBody): WorkItemDetail {
+  const children: WorkItemChild[] = body.children.map((child) => ({
+    ...toSummary(child),
+    dependencies: {
+      blockedBy: child.dependencies.blockedBy.map((edge) => ({ ...edge })),
+      blocks: child.dependencies.blocks.map((edge) => ({ ...edge })),
+    },
+  }));
+
+  const link = (ref: Parameters<typeof toSummary>[0]): WorkItemLink => ({ item: toSummary(ref) });
+  const ancestorKey = body.readiness.blockedByAncestorKey;
+
+  return {
+    item: {
+      identifier: body.key,
+      kind: body.kind,
+      title: body.title,
+      status: body.status,
+      priority: body.priority,
+      assigneeId: body.assigneeId,
+      type: body.type,
+      executor: body.executor,
+      storyPoints: body.storyPoints,
+      estimateMinutes: body.estimateMinutes,
+      targetRepo: body.targetRepo,
+      sprintId: body.sprintId,
+      descriptionMd: body.descriptionMd,
+    },
+    ancestors: body.ancestorKeys.map((key) => ({ identifier: key })),
+    children,
+    blockedBy: body.links.blockedBy.map(link),
+    blocks: body.links.blocks.map(link),
+    relatesTo: body.links.relatesTo.map(link),
+    readiness: {
+      ready: body.readiness.ready,
+      openBlockers: body.readiness.openBlockers.map(toSummary),
+      blockedByAncestor:
+        ancestorKey === null
+          ? null
+          : { identifier: ancestorKey, title: body.readiness.blockedByAncestorTitle ?? '' },
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The activity stream
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One wire activity entry, whichever arm of the union it is. */
+type WireEntry = RowOf<ActivityBody>;
+/** The `comment` arm's payload. */
+type WireCommentThread = Extract<WireEntry, { type: 'comment' }>['comment'];
+/** The `change` arm's payload. */
+type WireChange = Extract<WireEntry, { type: 'change' }>['change'];
+/** One wire activity VALUE. */
+type WireValue = Extract<WireChange['parts'][number], { kind: 'field' }>['from'];
+
+/**
+ * One resolved value inside a history entry.
+ *
+ * The CLI's `ActivityValue` is deliberately LOOSER than the wire's closed union
+ * — `type` a `string` with optional members — because the CLI is published to
+ * npm on its own release train and routinely meets a server NEWER than itself.
+ * `activityValueText`'s default branch has to stay REACHABLE; a faithful
+ * re-narrowing here would make it unreachable-by-type and turn an unfamiliar
+ * value into a crash instead of a generic rendering.
+ *
+ * The one RENAME: the wire's `workItemKey` becomes `identifier`, which is what
+ * `render.ts:850` reads.
+ */
+function toActivityValue(value: WireValue): ActivityValue {
+  switch (value.type) {
+    case 'text':
+      return { type: 'text', text: value.text };
+    case 'status':
+      return { type: 'status', key: value.key, label: value.label };
+    case 'user':
+      return { type: 'user', userId: value.userId, name: value.name };
+    case 'date':
+      return { type: 'date', date: value.date };
+    case 'sprint':
+      return { type: 'sprint', sprintId: value.sprintId, name: value.name };
+    case 'issue':
+      return { type: 'issue', identifier: value.workItemKey };
+    default:
+      return { type: value.type };
+  }
+}
+
+/** One renderable piece of a history entry. */
+function toActivityPart(part: WireChange['parts'][number]): ActivityPart {
+  switch (part.kind) {
+    case 'field':
+      return {
+        kind: 'field',
+        field: part.field,
+        from: toActivityValue(part.from),
+        to: toActivityValue(part.to),
+      };
+    case 'fieldEdited':
+      return { kind: 'fieldEdited', field: part.field };
+    case 'link':
+      return {
+        kind: 'link',
+        op: part.op,
+        linkKind: part.linkKind,
+        target: toActivityValue(part.target),
+      };
+    case 'collection':
+      return { kind: 'collection', field: part.field, op: part.op, items: [...part.items] };
+    case 'commentDeleted':
+      return {
+        kind: 'commentDeleted',
+        author: toActivityValue(part.author),
+        replyCount: part.replyCount,
+      };
+    case 'generic':
+      return { kind: 'generic', key: part.key, from: part.from, to: part.to };
+    default:
+      // `created` / `archived` / `unarchived` carry nothing but their kind, and
+      // so does any kind a newer server invents.
+      return { kind: part.kind };
+  }
+}
+
+/** One CHANGE-trail entry. */
+function toActivityEntry(change: WireChange): ActivityEntry {
+  return {
+    id: change.id,
+    changeKind: change.changeKind,
+    changedAt: change.changedAt,
+    actor: { userId: change.actor.userId, name: change.actor.name },
+    parts: change.parts.map(toActivityPart),
+  };
+}
+
+/** One comment, without its replies. */
+function toComment(comment: Omit<WireCommentThread, 'replies'>): ActivityComment {
+  return {
+    id: comment.id,
+    author: { id: comment.author.id, name: comment.author.name },
+    bodyMd: comment.bodyMd,
+    editedAt: comment.editedAt,
+    createdAt: comment.createdAt,
+  };
+}
+
+/** A root comment with its single-level replies. */
+function toCommentThread(thread: WireCommentThread): ActivityCommentThread {
+  return { ...toComment(thread), replies: thread.replies.map(toComment) };
+}
+
+/**
+ * The merged `all` page.
+ *
+ * `totalComments` / `totalChanges` are what MOTIR-2320 put on the wire, and they
+ * are why that card exists: `renderActivityStream`'s footer derives "44 more
+ * comments, 16 more changes" as `total − shown`, which the page's own item
+ * counts cannot supply. They are nullable on the wire because the NARROW views
+ * do not count both sources; on THIS view the server always sends both.
+ */
+export function toActivityAllPage(body: ActivityBody): ActivityAllPage {
+  return {
+    entries: rowsOf(body).map((entry) =>
+      entry.type === 'comment'
+        ? ({ type: 'comment', thread: toCommentThread(entry.comment) } as const)
+        : ({ type: 'history', entry: toActivityEntry(entry.change) } as const),
+    ),
+    nextCursor: body.nextCursor,
+    totalComments: body.totalComments ?? 0,
+    totalChanges: body.totalChanges ?? 0,
+  };
+}
+
+/**
+ * The `comments` page.
+ *
+ * `order` is not on the wire and does not need to be: it is what the CLI ITSELF
+ * asked for, so echoing the requested value (or this view's shipped default,
+ * `asc`) reports the direction the page was actually read in without inventing a
+ * fact the server never stated.
+ */
+export function toCommentsPage(body: ActivityBody, order: 'asc' | 'desc'): CommentsPage {
+  const threads = rowsOf(body)
+    .filter((entry): entry is Extract<WireEntry, { type: 'comment' }> => entry.type === 'comment')
+    .map((entry) => toCommentThread(entry.comment));
+  return { threads, nextCursor: body.nextCursor, totalCount: body.totalCount, order };
+}
+
+/** The `history` page. */
+export function toActivityHistoryPage(body: ActivityBody): ActivityHistoryPage {
+  const entries = rowsOf(body)
+    .filter((entry): entry is Extract<WireEntry, { type: 'change' }> => entry.type === 'change')
+    .map((entry) => toActivityEntry(entry.change));
+  return { entries, nextCursor: body.nextCursor, totalCount: body.totalCount };
 }

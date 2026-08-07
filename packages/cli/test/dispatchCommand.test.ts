@@ -66,7 +66,6 @@ function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
 function workItem(over: Partial<WorkItemDetail> = {}): WorkItemDetail {
   return {
     item: {
-      id: 'row-7',
       identifier: 'PROD-7',
       kind: 'subtask',
       title: 'Add the thing',
@@ -82,7 +81,6 @@ function workItem(over: Partial<WorkItemDetail> = {}): WorkItemDetail {
       descriptionMd: null,
     },
     ancestors: [],
-    parent: null,
     children: [],
     blockedBy: [],
     blocks: [],

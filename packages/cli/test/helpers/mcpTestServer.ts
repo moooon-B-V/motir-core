@@ -363,6 +363,82 @@ export function v1Sprint(id: string, over: Record<string, unknown> = {}) {
   };
 }
 
+/** One v1 work-item REFERENCE — a link target, a child, an open blocker. */
+export function v1Ref(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    kind: 'subtask',
+    title: key,
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    estimateMinutes: null,
+    storyPoints: null,
+    parentKey: null,
+    archived: false,
+    ...over,
+  };
+}
+
+/** The v1 work-item DETAIL aggregate. */
+export function v1Detail(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    kind: 'subtask',
+    type: 'code',
+    title: key,
+    status: 'todo',
+    priority: 'medium',
+    assigneeId: null,
+    reporterId: 'user-1',
+    dueDate: null,
+    estimateMinutes: null,
+    storyPoints: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    descriptionMd: null,
+    parentKey: null,
+    ancestorKeys: [],
+    children: [],
+    links: { blockedBy: [], blocks: [], relatesTo: [], duplicates: [], clones: [] },
+    readiness: {
+      ready: true,
+      openBlockers: [],
+      blockedByAncestorKey: null,
+      blockedByAncestorTitle: null,
+    },
+    labels: [],
+    components: [],
+    commentCount: 0,
+    sprintId: null,
+    targetRepo: null,
+    executor: 'coding_agent',
+    planningSource: null,
+    planningHarness: null,
+    planningModel: null,
+    implementationSource: null,
+    implementationHarness: null,
+    implementationModel: null,
+    archivedAt: null,
+    ...over,
+  };
+}
+
+/** The activity page — the ranked envelope plus its two per-source totals. */
+export function v1Activity(
+  items: unknown[] = [],
+  over: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    items,
+    nextCursor: null,
+    totalCount: items.length,
+    totalComments: 0,
+    totalChanges: 0,
+    ...over,
+  };
+}
+
 /** The canned `/api/v1` answers, mirroring {@link DEFAULT_TOOLS}' data. */
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
@@ -380,4 +456,9 @@ export const DEFAULT_V1: V1Script = {
   'GET /api/v1/projects': { body: v1Page([v1Project('PROD', 'Prodect')]) },
   'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([]) },
   'GET /api/v1/projects/{projectKey}/sprints': { body: v1Page([]) },
+  'GET /api/v1/work-items/{key}': {
+    status: 404,
+    body: { code: 'NOT_FOUND', error: 'No such work item.' },
+  },
+  'GET /api/v1/work-items/{key}/activity': { body: v1Activity() },
 };

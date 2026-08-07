@@ -121,14 +121,12 @@ function toCliReadiness(readiness: WorkItemDetail['readiness']): CliWorkItemDeta
         ? null
         : {
             identifier: readiness.blockedByAncestorKey,
-            title: readiness.blockedByAncestorTitle,
-            // The readiness LINE renders the key and the title and nothing else;
-            // the two below are on the CLI's shared summary type and are not read
-            // on this path, so they carry the values v1 does publish about the
-            // ancestor: none. Marked here so a future reader does not mistake
-            // them for data the projection forgot.
-            kind: '',
-            status: '',
+            // The readiness LINE renders the key and the title and nothing
+            // else — which, since MOTIR-2345, is exactly what the view model
+            // declares. The two placeholder fields this used to carry are gone
+            // rather than empty: the CLI no longer asks for data v1 does not
+            // publish about a blocking ancestor.
+            title: readiness.blockedByAncestorTitle ?? '',
           },
   };
 }

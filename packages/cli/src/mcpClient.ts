@@ -8,10 +8,14 @@ import { normalizeServerUrl } from './config/userConfig.js';
 import { CLI_VERSION } from './version.js';
 import { V1Transport } from './transport.js';
 import {
+  toActivityAllPage,
+  toActivityHistoryPage,
+  toCommentsPage,
   toProjectList,
   toReadyPage,
   toSprintList,
   toWhoami,
+  toWorkItemDetail,
   UNASSIGNED,
 } from './adapters/reads.js';
 
@@ -434,7 +438,6 @@ export interface WorkItemSummary {
 /** ONE dependency / relationship EDGE (`RelationshipLinkDto`): the linked item
  * plus the `work_item_link.id` of the edge itself. */
 export interface WorkItemLink {
-  linkId: string;
   item: WorkItemSummary;
 }
 
@@ -468,9 +471,15 @@ export interface WorkItemChild extends WorkItemSummary {
  * out — `--json` prints the tool payload itself, so nothing is lost by omitting
  * them here.
  */
+/** An ancestor, as the LINEAGE renders it. v1 sends the parent chain as KEYS,
+ *  and `renderLineage` reads `.identifier` and nothing else — so this is the
+ *  whole shape, rather than a summary with three invented fields. */
+export interface AncestorRef {
+  identifier: string;
+}
+
 export interface WorkItemDetail {
   item: {
-    id: string;
     identifier: string;
     kind: string;
     title: string;
@@ -486,8 +495,7 @@ export interface WorkItemDetail {
     descriptionMd: string | null;
   };
   /** The full parent chain, ordered root→self and EXCLUDING the item itself. */
-  ancestors: WorkItemSummary[];
-  parent: WorkItemSummary | null;
+  ancestors: AncestorRef[];
   children: WorkItemChild[];
   blockedBy: WorkItemLink[];
   blocks: WorkItemLink[];
@@ -497,8 +505,9 @@ export interface WorkItemDetail {
     openBlockers: WorkItemSummary[];
     /** The nearest ancestor whose own blockers are still open — the CASCADE
      * cause. A cascade-blocked item must never read as a bare "blocked".
-     */
-    blockedByAncestor: WorkItemSummary | null;
+     * `renderReadinessLine` prints its key and its title, which is all v1
+     * publishes and all this needs to be. */
+    blockedByAncestor: { identifier: string; title: string } | null;
   };
 }
 
@@ -847,8 +856,24 @@ export class MotirClient {
     return this.callStructured('next_ready', { ...args });
   }
 
-  getWorkItem(key: string): Promise<WorkItemDetail> {
-    return this.callStructured<WorkItemDetail>('get_work_item', { key });
+  async getWorkItem(key: string): Promise<WorkItemDetail> {
+    return (await this.readWorkItem(key)).detail;
+  }
+
+  /**
+   * The detail read, returning BOTH the view model and the payload it was
+   * mapped from.
+   *
+   * `--json` emits the server's own resource rather than the CLI's narrowed
+   * view of it (ADR Amendment 14): the view model deliberately omits fields
+   * nothing renders, and `--json` is the escape hatch that makes that omission
+   * safe. The payload is typed `unknown` on purpose — a command needs BYTES
+   * here, not a shape, and typing it would put a generated wire type outside
+   * the adapter boundary that Q4 draws.
+   */
+  async readWorkItem(key: string): Promise<{ detail: WorkItemDetail; payload: unknown }> {
+    const body = await this.v1.request('getWorkItem', { path: { key } });
+    return { detail: toWorkItemDetail(body), payload: body };
   }
 
   /**
@@ -863,13 +888,41 @@ export class MotirClient {
    * never construct, parse or merge one. Omitting `order` leaves each view on
    * its own shipped default rather than the client inventing one.
    */
-  getWorkItemActivity(args: {
+  async getWorkItemActivity(args: {
     key: string;
     view?: ActivityView;
     cursor?: string;
     order?: 'asc' | 'desc';
   }): Promise<ActivityPage> {
-    return this.callStructured<ActivityPage>('get_work_item_activity', { ...args });
+    return (await this.readWorkItemActivity(args)).page;
+  }
+
+  /** The activity read, returning both the page and its payload — see
+   *  {@link readWorkItem} for why `--json` needs the second. */
+  async readWorkItemActivity(args: {
+    key: string;
+    view?: ActivityView;
+    cursor?: string;
+    order?: 'asc' | 'desc';
+  }): Promise<{ page: ActivityPage; payload: unknown }> {
+    const view = args.view ?? 'all';
+    // ONE operation serves all three views, so a cursor stays scoped to the view
+    // that issued it and the two per-source totals arrive from the same place.
+    const body = await this.v1.request('getWorkItemActivity', {
+      path: { key: args.key },
+      query: {
+        view,
+        ...(args.cursor ? { cursor: args.cursor } : {}),
+        ...(args.order ? { order: args.order } : {}),
+      },
+    });
+    const page =
+      view === 'comments'
+        ? toCommentsPage(body, args.order ?? 'asc')
+        : view === 'history'
+          ? toActivityHistoryPage(body)
+          : toActivityAllPage(body);
+    return { page, payload: body };
   }
 
   transitionStatus(args: { key: string; status: string }): Promise<unknown> {

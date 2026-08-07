@@ -147,10 +147,37 @@ function responseBodySchema(body: V1ResponseBody): JsonObject | undefined {
           // read's stay separately readable in the emitted document, which is
           // what lets a reader see at a glance which fields are paging and
           // which belong to this operation.
-          ...(body.extend ? [toOpenApiSchema(body.extend, 'output')] : []),
+          // Also a composition BASE — EVERY member of an `allOf` must be. Zod
+          // emits `additionalProperties: false` for an object schema, and a
+          // validator applies that to the WHOLE instance, so a strict extension
+          // rejects `items` exactly as a strict envelope rejected the totals.
+          ...(body.extend ? [compositionBase(body.extend)] : []),
         ],
       };
   }
+}
+
+/**
+ * A page ENVELOPE as a composition BASE — the same shape, with its
+ * `additionalProperties: false` removed.
+ *
+ * ⚠️ This is not a weakening, it is what makes `allOf` mean anything here. A
+ * `false` in one `allOf` branch is applied by a validator to the WHOLE instance,
+ * not to that branch's own properties — so a strict envelope forbids the very
+ * per-operation extension (ADR Amendment 13) a page body composes onto it, and
+ * every real response fails.
+ *
+ * The zod schema KEEPS `.strict()`: `tests/helpers/v1SpecConformance.ts` builds
+ * one object from it and validates real responses against that, so the drift
+ * guard still catches a field nothing declared. Only the DOCUMENT's copy — the
+ * one a generated client compiles into an Ajv validator — drops the flag.
+ *
+ * It surfaced from the CLI, the only consumer that validates against the
+ * emitted document rather than against zod (MOTIR-2345 / MOTIR-2320).
+ */
+function compositionBase(schema: z.ZodType): JsonObject {
+  const { additionalProperties: _composable, ...rest } = toOpenApiSchema(schema);
+  return rest;
 }
 
 /** The shared response headers, as a 3.1 `headers` object. */
@@ -255,8 +282,8 @@ function sharedComponentSchemas(): JsonObject {
     // The two envelopes, emitted with an UNCONSTRAINED `items` so an operation
     // can narrow it in its `allOf`. They are the reusable half of the shape; the
     // row type is the operation's.
-    [V1_PAGE_ENVELOPE_COMPONENT]: toOpenApiSchema(v1PageEnvelopeSchema(z.unknown())),
-    [V1_RANKED_PAGE_ENVELOPE_COMPONENT]: toOpenApiSchema(v1RankedPageEnvelopeSchema(z.unknown())),
+    [V1_PAGE_ENVELOPE_COMPONENT]: compositionBase(v1PageEnvelopeSchema(z.unknown())),
+    [V1_RANKED_PAGE_ENVELOPE_COMPONENT]: compositionBase(v1RankedPageEnvelopeSchema(z.unknown())),
   };
 }
 

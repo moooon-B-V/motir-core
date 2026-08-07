@@ -459,7 +459,6 @@ const summary = (over: Partial<WorkItemSummary> = {}): WorkItemSummary => ({
 /** An item with EVERY optional field populated. */
 const fullDetail = (over: Partial<WorkItemDetail> = {}): WorkItemDetail => ({
   item: {
-    id: 'row-7',
     identifier: 'PROD-7',
     kind: 'subtask',
     title: 'Read commands',
@@ -475,11 +474,10 @@ const fullDetail = (over: Partial<WorkItemDetail> = {}): WorkItemDetail => ({
     descriptionMd: '## Why\n\nThe CLI cannot show you a work item.\n',
   },
   ancestors: [summary({ identifier: 'PROD-1', kind: 'epic', title: 'Epic 7' })],
-  parent: summary({ identifier: 'PROD-1', kind: 'epic', title: 'Epic 7' }),
   children: [summary({ identifier: 'PROD-8' }), summary({ identifier: 'PROD-9', status: 'done' })],
-  blockedBy: [{ linkId: 'l1', item: summary({ identifier: 'PROD-2', status: 'in_review' }) }],
-  blocks: [{ linkId: 'l2', item: summary({ identifier: 'PROD-3', status: 'blocked' }) }],
-  relatesTo: [{ linkId: 'l3', item: summary({ identifier: 'PROD-4', status: 'done' }) }],
+  blockedBy: [{ item: summary({ identifier: 'PROD-2', status: 'in_review' }) }],
+  blocks: [{ item: summary({ identifier: 'PROD-3', status: 'blocked' }) }],
+  relatesTo: [{ item: summary({ identifier: 'PROD-4', status: 'done' }) }],
   readiness: { ready: true, openBlockers: [], blockedByAncestor: null },
   ...over,
 });
@@ -487,7 +485,6 @@ const fullDetail = (over: Partial<WorkItemDetail> = {}): WorkItemDetail => ({
 /** The SAME item with every nullable field null and nothing related to it. */
 const bareDetail = (over: Partial<WorkItemDetail> = {}): WorkItemDetail => ({
   item: {
-    id: 'row-7',
     identifier: 'PROD-7',
     kind: 'bug',
     title: 'Read commands',
@@ -503,7 +500,6 @@ const bareDetail = (over: Partial<WorkItemDetail> = {}): WorkItemDetail => ({
     descriptionMd: null,
   },
   ancestors: [],
-  parent: null,
   children: [],
   blockedBy: [],
   blocks: [],
@@ -608,18 +604,14 @@ describe('childRows / edgeRows / renderRelationTable', () => {
   });
 
   it('edgeRows builds key · status · title cells from the link’s item', () => {
-    expect(edgeRows([{ linkId: 'l1', item: summary({ status: 'done' }) }])).toEqual([
+    expect(edgeRows([{ item: summary({ status: 'done' }) }])).toEqual([
       ['PROD-9', 'done', 'Wire the thing'],
     ]);
     expect(EDGE_HEADERS).toEqual(['KEY', 'STATUS', 'TITLE']);
   });
 
   it('counts the rows in the heading and draws the table under it', () => {
-    const block = renderRelationTable(
-      'BLOCKS',
-      edgeRows([{ linkId: 'l', item: summary({}) }]),
-      'none',
-    );
+    const block = renderRelationTable('BLOCKS', edgeRows([{ item: summary({}) }]), 'none');
     const lines = block.split('\n');
 
     expect(lines[0]).toBe('BLOCKS (1)');
