@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // MOTIR-1276 · 1266.5 — the new INTERACTION / AGILE element tokens (selection /
 // drop-target / board-column accent / overdue / due-soon / sprint+epic accent /
@@ -32,9 +33,7 @@ const BASE_BLOCK = (() => {
 })();
 
 function mappingOf(token: string): string | null {
-  const m = BASE_BLOCK.match(
-    new RegExp(`${token.replace(/[-]/g, '\\-')}:\\s*var\\((--color-[a-z-]+)\\)`),
-  );
+  const m = BASE_BLOCK.match(new RegExp(`${escapeRegExp(token)}:\\s*var\\((--color-[a-z-]+)\\)`));
   return m?.[1] ?? null;
 }
 

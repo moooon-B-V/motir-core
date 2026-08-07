@@ -1,4 +1,5 @@
 import { replaceInProse } from '@/lib/markdown/proseRanges';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // Work-item reference parsing (Story 5.8 · Subtask 5.8.2). A reference to
 // ANOTHER work item serializes into stored Markdown as a durable token —
@@ -33,11 +34,6 @@ export const WORKITEM_TOKEN_RE = /\[[^\]]*\]\(motir:([A-Za-z0-9_-]+)\)/g;
  */
 export const WORKITEM_HREF_RE = /^motir:[A-Za-z0-9_-]+$/;
 
-/** Escape a project identifier for safe interpolation into a RegExp. */
-function escapeRe(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 /**
  * Build the bare-key matcher for a project. A work item's identifier is
  * `${project.identifier}-${number}` (lib/issues/aliasRedirect.ts), so a bare
@@ -46,7 +42,7 @@ function escapeRe(s: string): string {
  * canonicalise the capture to upper-case via {@link parseWorkItemRefs}.
  */
 export function buildWorkItemKeyRe(projectIdentifier: string): RegExp {
-  return new RegExp(`\\b${escapeRe(projectIdentifier)}-(\\d+)\\b`, 'gi');
+  return new RegExp(`\\b${escapeRegExp(projectIdentifier)}-(\\d+)\\b`, 'gi');
 }
 
 /**

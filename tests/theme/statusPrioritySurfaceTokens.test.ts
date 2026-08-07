@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // MOTIR-1273 · 1266.2 — the new status / priority / semantic-surface element
 // tokens, plus the StatusPicker swap-layer fix. The COMPREHENSIVE per-palette
@@ -33,9 +34,7 @@ const BASE_BLOCK = (() => {
 })();
 
 function mappingOf(token: string): string | null {
-  const m = BASE_BLOCK.match(
-    new RegExp(`${token.replace(/[-]/g, '\\-')}:\\s*var\\((--color-[a-z-]+)\\)`),
-  );
+  const m = BASE_BLOCK.match(new RegExp(`${escapeRegExp(token)}:\\s*var\\((--color-[a-z-]+)\\)`));
   return m?.[1] ?? null;
 }
 
