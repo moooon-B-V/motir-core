@@ -325,3 +325,133 @@ describe('the story leaves exactly MOTIR-2291 behind', () => {
     );
   });
 });
+
+/**
+ * The service METHODS that can now raise `PermissionDeniedError` — those whose
+ * body calls `assertPermission`, directly or through a module-local helper in the
+ * same file (the adapters MOTIR-2296/2297/2298 kept for readability).
+ *
+ * The same-file hop is the one MOTIR-2304 taught the ungoverned-operation walk;
+ * without it `boardsService.addColumn` looks unreachable because its gate sits
+ * behind `assertBoardConfigAdmin`.
+ */
+function raisingMethods(): Set<string> {
+  const dir = join(ROOT, 'lib', 'services');
+  const raising = new Set<string>();
+  for (const file of readdirSync(dir)) {
+    if (!file.endsWith('.ts')) continue;
+    const svc = file.slice(0, -3);
+    const src = readFileSync(join(dir, file), 'utf8');
+
+    const locals = new Map<string, string>();
+    const localRe = /^(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm;
+    for (let m = localRe.exec(src); m !== null; m = localRe.exec(src)) {
+      const body = bodyAfterSignature(src, m.index + m[0].length);
+      if (body) locals.set(m[1]!, body);
+    }
+
+    const methodRe = /^ {2}(?:async\s+)?([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm;
+    for (let m = methodRe.exec(src); m !== null; m = methodRe.exec(src)) {
+      const name = m[1]!;
+      if (['if', 'for', 'while', 'switch', 'catch', 'return'].includes(name)) continue;
+      const body = bodyAfterSignature(src, m.index + m[0].length);
+      if (!body) continue;
+      let hit = body.includes('assertPermission(');
+      if (!hit) {
+        for (const [localName, localBody] of locals) {
+          if (
+            new RegExp(`(?<![.\\w$])${localName}\\s*\\(`).test(body) &&
+            localBody.includes('assertPermission(')
+          ) {
+            hit = true;
+            break;
+          }
+        }
+      }
+      if (hit) raising.add(`${svc}.${name}`);
+    }
+  }
+  return raising;
+}
+
+/** A method/function body, given the offset just past its signature's opening paren. */
+function bodyAfterSignature(src: string, afterOpenParen: number): string | null {
+  let depth = 1;
+  let i = afterOpenParen;
+  for (; i < src.length && depth > 0; i++) {
+    if (src[i] === '(') depth += 1;
+    else if (src[i] === ')') depth -= 1;
+  }
+  if (depth > 0) return null;
+  const open = src.indexOf('{', i);
+  if (open < 0) return null;
+  let braces = 0;
+  let j = open;
+  for (; j < src.length; j++) {
+    if (src[j] === '{') braces += 1;
+    else if (src[j] === '}' && --braces === 0) break;
+  }
+  return src.slice(open, j + 1);
+}
+
+/** Whether a route file, or a `@/lib/**` module it imports, knows the error. */
+function mapsPermissionDenied(src: string): boolean {
+  if (src.includes('PermissionDeniedError')) return true;
+  const importRe = /from '(@\/lib\/[^']+)'/g;
+  for (let m = importRe.exec(src); m !== null; m = importRe.exec(src)) {
+    const mod = join(ROOT, `${m[1]!.replace('@/', '')}.ts`);
+    try {
+      if (readFileSync(mod, 'utf8').includes('PermissionDeniedError')) return true;
+    } catch {
+      // a directory import or a .tsx module — not an error mapper
+    }
+  }
+  return false;
+}
+
+describe('guard 3 — every route that can RAISE the new refusal can also MAP it', () => {
+  it('finds no route reaching an assertPermission method without a PermissionDeniedError arm', () => {
+    // ⚠️ THIS GUARD EXISTS BECAUSE THE GAP IT CHECKS SHIPPED. The domain cards
+    // re-pointed nine services to `assertPermission`, which raises a NEW error
+    // class — and six error mappers still knew only `NotProjectAdminError`, so
+    // the refusal fell through to a **500** instead of a 403. Every service test
+    // stayed green, because they exercise the SERVICE; only the route knows the
+    // mapper. CI found it across `epic6-journey` (Vitest + E2E), the components
+    // routes and the estimation route.
+    //
+    // Method-precise on purpose. At SERVICE granularity this flags five read
+    // paths — `workflowsService.getWorkflow`, `estimationService.rollupForSprint`
+    // and friends — that never reach a gate, and a guard with five standing false
+    // positives is a guard that gets deleted.
+    const raising = raisingMethods();
+    expect(
+      raising.size,
+      'no service appears to call assertPermission — the walk is broken',
+    ).toBeGreaterThan(10);
+
+    const offenders: string[] = [];
+    let reached = 0;
+    walk(join(ROOT, 'app', 'api'), (p) => {
+      if (!p.endsWith(`${'route'}.ts`)) return;
+      const src = readFileSync(p, 'utf8');
+      const called = new Set(
+        [...src.matchAll(/\b([a-z][A-Za-z0-9]*Service)\.([A-Za-z_]\w*)\s*\(/g)].map(
+          (m) => `${m[1]}.${m[2]}`,
+        ),
+      );
+      const hits = [...called].filter((k) => raising.has(k));
+      if (hits.length === 0) return;
+      reached += 1;
+      if (!mapsPermissionDenied(src)) {
+        offenders.push(`${relative(ROOT, p).replace(/\\/g, '/')} — reaches ${hits.join(', ')}`);
+      }
+    });
+
+    expect(reached, 'no route reaches a gated method — the walk is broken').toBeGreaterThan(10);
+    expect(
+      offenders,
+      'these routes can receive a PermissionDeniedError and have no arm for it, so the refusal ' +
+        'becomes a 500 instead of a 403. Add the error to the route or to the mapper it imports.',
+    ).toEqual([]);
+  });
+});

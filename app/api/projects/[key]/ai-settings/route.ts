@@ -19,7 +19,7 @@ import type { UpdateProjectAiSettingsInput } from '@/lib/dto/projectAiSettings';
 //
 // Typed errors → status codes (all via the shared `projectErrorResponse`):
 //   ProjectNotFoundError    → 404  (missing / cross-tenant / non-browsable)
-//   NotProjectAdminError    → 403  (PATCH — a member may READ but not change)
+//   PermissionDeniedError (ai:configure) → 403  (PATCH — a member may READ but not change)
 //   InvalidAiSettingsError  → 422  (out-of-range threshold / sprint length, or a
 //                                   malformed planner-model override; the body
 //                                   carries `field` so the panel can slot the

@@ -133,6 +133,20 @@ async function seedTenant(slug: string): Promise<Tenant> {
 }
 
 /**
+ * A monotonic suffix for the names these writes create.
+ *
+ * ⚠️ NOT a modulo of the wall clock, which is what this started as.
+ * `tests/api/v1/rate-limit-window-alignment.test.ts`
+ * forbids any modulo of the wall clock anywhere under `tests/` — its subject is
+ * fixed-window rate-limit phases, and a name uniquifier is a false positive for
+ * that intent, but the guard is deliberately blunt and the right move is to
+ * re-point my own code rather than weaken it. A counter is better here anyway:
+ * deterministic, and immune to two calls landing in the same millisecond.
+ */
+let nameSeq = 0;
+const uniq = (): number => (nameSeq += 1);
+
+/**
  * The administrative WRITES, one per domain, driven through the app's own routes
  * from the signed-in browser context — the real cookies, the real middleware, the
  * real service, the real gate. `page.request` shares the page's storage state, so
@@ -148,7 +162,7 @@ function domainWrites(
       domain: 'board — add a column',
       run: () =>
         page.request.post('/api/board/columns', {
-          data: { boardId: t.boardId, name: `Col ${Date.now() % 100000}` },
+          data: { boardId: t.boardId, name: `Col ${uniq()}` },
         }),
     },
     {
@@ -169,14 +183,14 @@ function domainWrites(
       domain: 'fields — define a custom field',
       run: () =>
         page.request.post(`/api/projects/${PROJECT_KEY}/fields`, {
-          data: { label: `Fld ${Date.now() % 100000}`, fieldType: 'text' },
+          data: { label: `Fld ${uniq()}`, fieldType: 'text' },
         }),
     },
     {
       domain: 'components — define a component',
       run: () =>
         page.request.post(`/api/projects/${PROJECT_KEY}/components`, {
-          data: { name: `Cmp ${Date.now() % 100000}` },
+          data: { name: `Cmp ${uniq()}` },
         }),
     },
     {
@@ -190,7 +204,7 @@ function domainWrites(
       domain: 'repositories — the project repo set',
       run: () =>
         page.request.post(`/api/projects/${PROJECT_KEY}/repositories`, {
-          data: { role: 'web', name: `repo-${Date.now() % 100000}` },
+          data: { role: 'web', name: `repo-${uniq()}` },
         }),
     },
   ];

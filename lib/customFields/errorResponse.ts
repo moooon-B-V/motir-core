@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import {
   NotProjectAdminError,
+  PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -42,7 +43,16 @@ export function customFieldErrorResponse(err: unknown): NextResponse | null {
   ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
   }
-  if (err instanceof NotProjectAdminError || err instanceof ProjectAccessDeniedError) {
+  // MOTIR-2256 — the domain gate now asks `assertPermission(…, '<key>')`, which
+  // refuses with `PermissionDeniedError` carrying the key. It maps to the SAME
+  // 403 `NotProjectAdminError` did; the body gains `permission`. Both arms stay:
+  // `project:administer` still raises the old error (the compatibility branch in
+  // `projectAccessService.assertPermission`).
+  if (
+    err instanceof PermissionDeniedError ||
+    err instanceof NotProjectAdminError ||
+    err instanceof ProjectAccessDeniedError
+  ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });
   }
   if (

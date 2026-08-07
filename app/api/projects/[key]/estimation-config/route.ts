@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { estimationService } from '@/lib/services/estimationService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { EstimationConfigForbiddenError, InvalidScaleConfigError } from '@/lib/estimation/errors';
 import type { UpdateEstimationConfigInput } from '@/lib/dto/estimation';
 
@@ -79,6 +79,17 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
   } catch (err) {
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    // MOTIR-2298 — the write asks `estimation:manage` through the shared gate, so
+    // the refusal is `PermissionDeniedError` carrying the key. Same 403; the body
+    // gains `permission`. `EstimationConfigForbiddenError` is kept mapped because
+    // nothing guarantees no other path raises it, and an unmapped throw here is a
+    // 500 — which is exactly how this was found (the story E2E, first CI run).
+    if (err instanceof PermissionDeniedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, permission: err.permission },
+        { status: 403 },
+      );
     }
     if (err instanceof EstimationConfigForbiddenError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
