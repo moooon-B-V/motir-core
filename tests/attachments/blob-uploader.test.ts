@@ -219,11 +219,20 @@ describe('signedDownloadUrl — a presigned GET at the ADR’s 300 s', () => {
     );
   });
 
-  it('short-circuits to the mock host under E2E_TEST_BLOB', async () => {
+  // The regression guard for MOTIR-2395. This test used to assert the OPPOSITE
+  // — that E2E_TEST_BLOB short-circuited to a fabricated, signature-free URL on
+  // the old Vercel host — which meant every "private" download in the E2E suite
+  // proved nothing about access control. `signedDownloadUrl` now has ONE code
+  // path; the browser-side interception moved to a `page.route` on the endpoint
+  // (tests/e2e/_helpers/object-store.ts), which is where the fetch actually is.
+  it('E2E_TEST_BLOB changes NOTHING — there is one code path, and it signs', async () => {
     process.env['E2E_TEST_BLOB'] = '1';
-    expect(await signedDownloadUrl('a/b.png')).toBe(
-      'https://e2etest.public.blob.vercel-storage.com/a/b.png',
-    );
+    const underFlag = new URL(await signedDownloadUrl('a/b.png'));
+
+    expect(underFlag.pathname).toBe('/motir-private/a/b.png');
+    expect(underFlag.searchParams.get('X-Amz-Signature')).toBeTruthy();
+    expect(underFlag.searchParams.get('X-Amz-Expires')).toBe('300');
+    expect(underFlag.host).not.toContain('blob.vercel-storage.com');
   });
 });
 

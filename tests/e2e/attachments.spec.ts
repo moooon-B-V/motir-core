@@ -18,21 +18,27 @@
 //   3. Role pass — a plain member deletes OWN files only; a project `viewer`
 //      sees the panel read-only (no Attach, no delete — absent, not
 //      disabled).
+//   4. Signature gate (MOTIR-2395) — the content route's 302 carries a REAL
+//      presigned URL, and the same URL with the signature removed is refused.
+//   5. The app-URL contract (MOTIR-2395) — an absolute link the app itself
+//      generated is followed and resolves.
 //
-// Blob plumbing: the dev server runs with E2E_TEST_BLOB=1 (playwright.config
-// webServer env), so lib/test-blob-mock intercepts the SERVER-side
-// @vercel/blob put/del calls — CI deliberately has no real blob token ("no
-// E2E performs a real upload", ci.yml). The BROWSER-side reads of the
-// returned public URLs (thumbnails, the lightbox image, downloads) are
-// fulfilled here by page.route serving tiny fixture bytes by extension —
-// nothing leaves localhost in either direction.
+// Blob plumbing (rewired by MOTIR-2395): the dev server runs with
+// E2E_TEST_BLOB=1 (playwright.config webServer env), so lib/test-blob-mock
+// intercepts the SERVER-side S3 put/head/get/delete at the SDK's transport —
+// CI deliberately has no real blob credentials ("no E2E performs a real
+// upload", ci.yml). The BROWSER-side reads (thumbnails, the lightbox image,
+// downloads) follow the content route's 302 to a REAL presigned URL on the
+// configured endpoint, and are fulfilled by _helpers/object-store's page.route,
+// which refuses anything unsigned exactly as S3 does. Nothing leaves localhost
+// in either direction, and the URL under test is the one production mints.
 
 import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
+import { PRIVATE_STORE_ORIGIN, servePrivateObjectStore } from './_helpers/object-store';
 import {
   ATTACHMENTS_PASSWORD,
-  MOCK_BLOB_HOST_GLOB,
   seedAttachmentsFixture,
   seedMember,
   seedPanelAttachment,
@@ -48,38 +54,9 @@ const PNG_BYTES = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
   'base64',
 );
-const PDF_BYTES = Buffer.from(
-  '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 9 9]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF',
-);
 const ZIP_BYTES = Buffer.from('504b0506000000000000000000000000000000000000', 'hex'); // empty zip
-
-/**
- * Fulfil browser reads of the mock store's public URLs with fixture bytes by
- * extension; `?download=1` (the store's content-disposition switch the
- * download affordances append) forces the attachment disposition so the
- * browser download event fires like the real store.
- */
-async function serveMockBlobHost(page: Page): Promise<void> {
-  await page.route(MOCK_BLOB_HOST_GLOB, async (route) => {
-    const url = new URL(route.request().url());
-    const byExt: Record<string, { type: string; body: Buffer }> = {
-      '.png': { type: 'image/png', body: PNG_BYTES },
-      '.pdf': { type: 'application/pdf', body: PDF_BYTES },
-      '.zip': { type: 'application/zip', body: ZIP_BYTES },
-    };
-    const match = Object.entries(byExt).find(([ext]) => url.pathname.includes(ext));
-    const { type, body } = match?.[1] ?? { type: 'text/plain', body: Buffer.from('x') };
-    await route.fulfill({
-      status: 200,
-      contentType: type,
-      body,
-      headers:
-        url.searchParams.get('download') === '1'
-          ? { 'content-disposition': 'attachment' }
-          : undefined,
-    });
-  });
-}
+// (The PDF the drag-drop step synthesises is built in the browser context; the
+// bytes the STORE serves back live in _helpers/object-store, keyed by extension.)
 
 /** The attachments file list (ul[aria-label="Attachments"]). */
 function fileList(page: Page) {
@@ -124,7 +101,7 @@ test('@smoke attach → cards → preview → download split → editor-sourced 
   page,
 }) => {
   const fx = await seedAttachmentsFixture(page, 'e2e-attachments-pm@example.com');
-  await serveMockBlobHost(page);
+  await servePrivateObjectStore(page);
   await page.goto(`/items/${fx.issue.identifier}`);
   await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
 
@@ -230,7 +207,7 @@ test('at scale the read stays cursor-paged: 50 + "Show more", view toggle withou
 }) => {
   const fx = await seedAttachmentsFixture(page, 'e2e-attachments-scale@example.com');
   await seedScaleAttachments(fx, 120);
-  await serveMockBlobHost(page);
+  await servePrivateObjectStore(page);
 
   // Track every attachments-API response; none may carry more than the page
   // size (the unbounded-read guard). The first 50 are server-rendered, so
@@ -294,7 +271,7 @@ test('role pass: a member deletes OWN only; a viewer gets the read-only panel', 
   const viewerEmail = 'e2e-attachments-viewer@example.com';
   await seedMember(fx, memberEmail);
   await seedViewer(fx, viewerEmail);
-  await serveMockBlobHost(page);
+  await servePrivateObjectStore(page);
 
   // ── The plain member: uploads, deletes own, can't delete the PM's ────────
   await page.context().clearCookies();
@@ -339,4 +316,85 @@ test('role pass: a member deletes OWN only; a viewer gets the read-only panel', 
   await row.hover();
   await expect(row.getByRole('button', { name: 'Download pm-file.txt' })).toHaveCount(2);
   await expect(page.getByRole('button', { name: /^Delete / })).toHaveCount(0);
+});
+
+test('the private store is SIGNATURE-gated: the content route mints a signed URL, and the same URL unsigned is refused', async ({
+  page,
+}) => {
+  const fx = await seedAttachmentsFixture(page, 'e2e-attachments-signed@example.com');
+  await servePrivateObjectStore(page);
+  await page.goto(`/items/${fx.issue.identifier}`);
+  await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();
+
+  // Upload through the real route so the object under test is one the app
+  // actually stored, not a seeded row.
+  await pickFiles(page, page.getByRole('button', { name: 'Attach', exact: true }), [
+    { name: 'confidential.png', mimeType: 'image/png', buffer: PNG_BYTES },
+  ]);
+  await expect(fileList(page).getByRole('listitem')).toHaveCount(1);
+  const stored = await db.attachment.findFirstOrThrow({ where: { workItemId: fx.issue.id } });
+
+  // ── The app hands out the AUTHENTICATED route, never a store URL ──────────
+  // Arm on the 302 rather than following it: the Location header is the thing
+  // under test (the same technique acceptance-video.spec uses).
+  const redirect = await page.request.get(`/api/attachments/${stored.id}/content`, {
+    maxRedirects: 0,
+  });
+  expect(redirect.status()).toBe(302);
+
+  const signed = new URL(redirect.headers()['location']!);
+  expect(signed.origin).toBe(PRIVATE_STORE_ORIGIN);
+  // `forcePathStyle` keeps every object on ONE host with the bucket as the
+  // first path segment; asserting the SUFFIX (not the whole path) proves the
+  // key round-tripped without pinning a second copy of the bucket name that
+  // would drift from playwright.config.
+  expect(signed.pathname.endsWith(`/${stored.blobPathname}`)).toBe(true);
+  // The ADR's §5 TTL, read off the URL the browser was actually handed.
+  expect(signed.searchParams.get('X-Amz-Expires')).toBe('300');
+  expect(signed.searchParams.get('X-Amz-Signature')).toBeTruthy();
+
+  // ── Signed: readable. Unsigned: refused ──────────────────────────────────
+  // The private half of the two-store split (attachment-access-control.md
+  // Amendment 2), asserted through the browser. The public half is
+  // profile.spec.ts, where the avatar is fetched off MOTIR_S3_PUBLIC_BASE_URL
+  // with no signature at all.
+  expect((await page.goto(signed.toString()))?.status()).toBe(200);
+
+  const unsigned = new URL(signed.toString());
+  unsigned.searchParams.delete('X-Amz-Signature');
+  expect((await page.goto(unsigned.toString()))?.status()).toBe(403);
+});
+
+test('an absolute link the app BUILDS resolves — the app-URL contract from the outside (MOTIR-2388)', async ({
+  page,
+  baseURL,
+}) => {
+  // The sitemap is the cheapest surface that EMITS the app's own origin: every
+  // <loc> comes from publicSiteOrigin() → resolveBaseUrlTrimmed(), the single
+  // accessor MOTIR-2388 collapsed the four VERCEL_* / BETTER_AUTH_URL rungs
+  // into. It needs no seeding (the origin, /explore and its rank tabs are
+  // unconditional) and no session, so it exercises the accessor and nothing
+  // else.
+  const sitemap = await page.request.get('/sitemap.xml');
+  expect(sitemap.status()).toBe(200);
+
+  const locations = [...(await sitemap.text()).matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]!);
+  expect(locations.length).toBeGreaterThan(0);
+  // ABSOLUTE, and on the origin this run is actually driving. A relative link,
+  // or one carrying some other host, is precisely what an unset or mis-set
+  // MOTIR_BASE_URL produces — and it fails silently everywhere else, because a
+  // wrong origin in an email is only discovered by the person who clicks it.
+  for (const location of locations) expect(location.startsWith(`${baseURL}`)).toBe(true);
+
+  const explore = locations.find((location) => location.endsWith('/explore'));
+  expect(explore, 'the sitemap advertises /explore').toBeTruthy();
+
+  // Follow it the way an outside reader would — with the absolute URL, not a
+  // path — and land on the page it claims.
+  const landed = await page.goto(explore!);
+  expect(landed?.status()).toBe(200);
+  // `startsWith`, not equality: the assertion is that the generated origin is
+  // the one the browser stays on, and the page is free to append its own query.
+  expect(page.url().startsWith(explore!)).toBe(true);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
 });

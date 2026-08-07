@@ -179,20 +179,23 @@ function basename(pathname: string): string {
  * than appending a query switch afterwards — on S3 an unsigned response-header
  * override is simply rejected, so the old `?download=1` suffix would not have
  * survived the move.
+ *
+ * ⚠️ ONE code path, deliberately — there is no `E2E_TEST_BLOB` branch here and
+ * re-adding one would silently un-test the seam (MOTIR-2395). MOTIR-2389 left
+ * such a branch because a presigned URL is derived CLIENT-side and points at a
+ * host the BROWSER fetches, which the in-process transport in `lib/blob/s3.ts`
+ * cannot reach; the consequence was that every "private" E2E download resolved
+ * through a fabricated, signature-free URL, so the suite asserted nothing about
+ * access control. The interception now happens where the fetch actually is — a
+ * Playwright `page.route` on the endpoint host (`tests/e2e/_helpers/object-store.ts`),
+ * which refuses a request carrying no `X-Amz-Signature` exactly as S3 does. So
+ * the URL the E2E exercises is minted by this line, not around it.
  */
 export async function signedDownloadUrl(
   pathname: string,
   opts: { ttlSeconds?: number; download?: boolean } = {},
 ): Promise<string> {
   const { ttlSeconds = 300, download = false } = opts;
-  // E2E: the undici mock (E2E_TEST_BLOB) intercepts server-side HTTP, but a
-  // presigned URL is derived CLIENT-side and points at a host the browser then
-  // fetches — so short-circuit to the mock blob host the specs' own
-  // `page.route` already serves. Re-pointing this at the real seam belongs to
-  // the story's E2E card (MOTIR-2395).
-  if (process.env['E2E_TEST_BLOB'] === '1') {
-    return `https://e2etest.public.blob.vercel-storage.com/${pathname}${download ? '?download=1' : ''}`;
-  }
   return getSignedUrl(
     s3Client(),
     new GetObjectCommand({
