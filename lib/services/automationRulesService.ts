@@ -174,7 +174,12 @@ async function resolveManageableProject(
   const key = projectKey.trim().toUpperCase();
   const project = await projectRepository.findByIdentifier(ctx.workspaceId, key, tx);
   if (!project) throw new ProjectNotFoundError(projectKey);
-  await projectAccessService.assertCanManage(project.id, ctx, tx);
+  // `automation:manage` (MOTIR-2297). BEHAVIOUR-NEUTRAL: this already asked
+  // `project:administer` via `assertCanManage`, and the new key resolves to
+  // exactly the same actors on every access level and both rails (proved over
+  // all 64 inputs in tests/permissions/accessParity.test.ts). What changes is
+  // that the 403 names the grant that was missing.
+  await projectAccessService.assertPermission(project.id, ctx, 'automation:manage', tx);
   return project.id;
 }
 

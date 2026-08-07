@@ -319,7 +319,11 @@ describe('board config API routes (Subtask 3.3.3)', () => {
 
     const res = await boardPatchReq({ boardId: bId, swimlaneGroupBy: 'epic' });
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { code: string }).code).toBe('NOT_BOARD_ADMIN');
+    // MOTIR-2296 retired `NOT_BOARD_ADMIN`. The gate is now the shared
+    // `assertPermission(…, 'board:configure')`, so the refusal names the key.
+    const body = (await res.json()) as { code: string; permission?: string };
+    expect(body.code).toBe('PERMISSION_DENIED');
+    expect(body.permission).toBe('board:configure');
   });
 
   it('PATCH column → 200 sets + 200 clears the WIP limit for the owner', async () => {

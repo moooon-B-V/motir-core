@@ -38,41 +38,99 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**32 permissions across 16 domains.** **11** are
-enforced by a gate today; **21** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **23** are
+enforced by a gate today; **8** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
 `saved_filter:manage`, `import:run`, `work_item:triage`, `work_item:delete`) — those are governed by
 nothing at all today, so wiring them takes capability away from real actors and is argued on its own.
-(`repository:connect` is the twenty-first, and MOTIR-2256 RETIRES it: its six operations bind a
-provider installation to a WORKSPACE and name no project, so no project role can govern them.)
 A `planned` key is never offered in the grid or the role editor.
+
+> **The enforced / planned split moves as MOTIR-2256 lands, one domain per card.** The counts above
+> are read on this branch, not as of the day the document was written — `tests/permissions/catalog.test.ts`
+> pins them against the code, so a key that flips without a gate behind it (or a gate that lands
+> without the catalog being told) fails the build rather than drifting here. Wired so far:
+> **`member:manage` · `project:manage_access`** (MOTIR-2295) · **`ai:configure`** (MOTIR-2300) ·
+> **`repository:manage` · `repository:manage_access`** (MOTIR-2299) · **`board:configure`** (MOTIR-2296) ·
+> **`workflow:manage` · `automation:manage`** (MOTIR-2297) ·
+> **`field:manage` · `component:manage` · `label:manage` · `estimation:manage`** (MOTIR-2298) — the
+> whole twelve are now wired.
+
+> **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
+> MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
+> `/api/github/setup`, `/api/github/organizations`, and the two GitLab OAuth legs — were read on the
+> branch and NONE resolves a project: they bind a provider installation to a WORKSPACE, and
+> `app/api/gitlab/oauth/start/route.ts` says so in its own header. A project permission cannot gate an
+> operation that never names a project, and the catalog's opening rule forbids a key with no operation
+> behind it. Their rows below now read `workspace-scoped` / R3. The concern is NOT left ungoverned:
+> attaching a repository row TO a project is `/api/projects/[key]/repositories`, which is
+> `repository:manage`. Both mirrors split it the same way — Jira and Plane put the provider connection
+> at the org/workspace level and repository linking at the project level.
 
 | Domain               | Permissions                                                                       |
 | -------------------- | --------------------------------------------------------------------------------- |
-| `ai` (3)             | `ai:configure` ᵖ · `ai:plan` ᵖ · `ai:view_plan` ᵖ                                 |
+| `ai` (3)             | `ai:configure` · `ai:plan` ᵖ · `ai:view_plan` ᵖ                                   |
 | `attachment` (2)     | `attachment:create` · `attachment:delete_any`                                     |
-| `board` (1)          | `board:configure` ᵖ                                                               |
+| `board` (1)          | `board:configure`                                                                 |
 | `comment` (2)        | `comment:add` · `comment:moderate`                                                |
-| `estimation` (1)     | `estimation:manage` ᵖ                                                             |
-| `field` (3)          | `component:manage` ᵖ · `field:manage` ᵖ · `label:manage` ᵖ                        |
+| `estimation` (1)     | `estimation:manage`                                                               |
+| `field` (3)          | `component:manage` · `field:manage` · `label:manage`                              |
 | `import` (1)         | `import:run` ᵖ                                                                    |
-| `member` (2)         | `member:manage` ᵖ · `project:manage_access` ᵖ                                     |
+| `member` (2)         | `member:manage` · `project:manage_access`                                         |
 | `project` (2)        | `project:administer` · `project:browse`                                           |
 | `public_request` (3) | `public_request:comment` · `public_request:submit` · `public_request:upvote`      |
 | `report` (2)         | `report:view` ᵖ · `saved_filter:manage` ᵖ                                         |
-| `repository` (3)     | `repository:connect` ᵖ · `repository:manage` ᵖ · `repository:manage_access` ᵖ     |
+| `repository` (2)     | `repository:manage` · `repository:manage_access`                                  |
 | `sprint` (1)         | `sprint:manage` ᵖ                                                                 |
 | `watcher` (1)        | `watcher:manage`                                                                  |
 | `work_item` (4)      | `project:browse` · `work_item:delete` ᵖ · `work_item:edit` · `work_item:triage` ᵖ |
-| `workflow` (2)       | `automation:manage` ᵖ · `workflow:manage` ᵖ                                       |
+| `workflow` (2)       | `automation:manage` · `workflow:manage`                                           |
 
 ᵖ = `planned` — justified here, not yet enforced.
+
+## GATE TODAY, MEASURED (MOTIR-2304)
+
+**⚠️ `project:administer` is NOT the tightest administrative gate in the product.** Three domains are
+gated to the workspace **OWNER** — a strictly narrower actor set than the umbrella this story is
+splitting. So MOTIR-2256's split is not one movement: it TIGHTENS some domains, LOOSENS others, and
+leaves the rest exactly where they were. The per-domain card is where each is argued, and a card that
+claims neutrality for a row in the LOOSENS column is wrong.
+
+| Domain       | The gate that actually runs                                      | Admits today                                        | The split |
+| ------------ | ---------------------------------------------------------------- | --------------------------------------------------- | --------- |
+| `board`      | `assertPermission(board:configure)` (wired, MOTIR-2296)          | was workspace OWNER only                            | LOOSENED  |
+| `workflow`   | `assertPermission(workflow:manage)` (wired, MOTIR-2297)          | was workspace OWNER only                            | LOOSENED  |
+| `estimation` | `assertPermission(estimation:manage)` (wired, MOTIR-2298)        | was workspace OWNER only                            | LOOSENED  |
+| `automation` | `assertPermission(automation:manage)` (wired, MOTIR-2297)        | `project:administer`-equivalent                     | neutral   |
+| `component`  | `assertPermission(component:manage)` (wired, MOTIR-2298)         | was a module-private `assertCanManage`, same answer | neutral   |
+| `field`      | `assertPermission(field:manage)` (wired, MOTIR-2298)             | was a module-private `assertCanManage`, same answer | neutral   |
+| `label`      | `assertPermission(label:manage)` (wired, MOTIR-2298)             | was `project:administer`                            | neutral   |
+| `ai`         | `assertPermission(ai:configure)` (wired, MOTIR-2300)             | was `project:administer`                            | neutral   |
+| `member`     | `assertPermission(member:manage / project:manage_access)` (2295) | was `project:administer`                            | neutral   |
+| `repository` | `assertPermission(repository:manage / …_access)` (MOTIR-2299)    | was project MEMBER via `assertCanEdit`              | TIGHTENED |
+
+**Why this had to be written down.** The `Gate today` cells for `board`, `workflow` and `estimation`
+read **`session only`** until 2026-08-06. They were produced by the guard in
+`tests/permissions/noUngovernedOperation.test.ts`, whose `GATE` pattern recognised only CALLS TO
+KNOWN GATE FUNCTIONS — so a service that factors its authorization into a privately-named module-local
+helper and branches on `isOwnerRole(...)` was invisible twice over: the walk never entered the helper,
+and would not have recognised the decision if it had. MOTIR-2304 added both limbs (a same-file call
+hop, and the two role predicates), and the guard's PENDING pin fell **75 → 36**: thirty-nine
+operations that were never ungoverned. No gate was added to close that gap.
+
+It is the MOTIR-2292 failure one level up — that repair fixed WHERE the walk looks and left WHAT it
+recognises alone — and it is the reason three cards under MOTIR-2256 were written claiming their
+domains had _"no project gate at all"_ when the gates were there and tighter than the umbrella.
 
 ## Reasons
 
 Every row cites one of these. A row with no reason is the failure this card exists to prevent.
+
+**The list is numbered, not renumbered.** A reason nothing cites is deleted, leaving its number
+retired — R7 (_"connects a provider installation and triggers indexing"_) went that way in MOTIR-2294,
+when its six rows moved to R3. Renumbering would silently re-point every row below it, which is a far
+worse failure than a gap.
 
 **R1.** The public REST API mirrors in-app operations. Gated by token scopes AND, once the split lands, by the same permission as its in-app twin — it inherits, it does not get its own key.
 
@@ -85,8 +143,6 @@ Every row cites one of these. A row with no reason is the failure this card exis
 **R5.** Submits a planning job that spends the workspace’s AI credits and proposes plan changes. Today session-only.
 
 **R6.** Inbound provider webhook, signature-verified. No actor.
-
-**R7.** Connects a provider installation and triggers indexing.
 
 **R8.** TEST-SUPPORT route (Next escapes the leading underscore as %5F). It creates work items with no project gate. Must be unreachable in production — verify the build excludes it, else it is an ungated write path. Logged as a finding, not a permission.
 
@@ -177,45 +233,46 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `ai`
 
-| Operation                                     | Verbs     | Gate today                                                     | Permission     | Decision | Why |
-| --------------------------------------------- | --------- | -------------------------------------------------------------- | -------------- | -------- | --- |
-| `/api/ai/access`                              | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/augment`                             | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/chat`                                | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`             | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`         | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`        | `ai:plan`      | new      | R5  |
-| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`              | `ai:plan`      | new      | R5  |
-| `/api/ai/expand`                              | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/explanation`                         | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/explanation/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/jobs/[jobId]`                        | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session`                 | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session/planner-turn`    | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session/submit`          | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan-change/session/turns`           | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/generate`                       | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/generate/[jobId]/stream`        | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint`                         | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint/[jobId]/review`          | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/plan/sprint/approve`                 | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/pre-plan`                            | GET/PATCH | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/replan`                              | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/ai/replan/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/canvas-layout`                          | GET/PATCH | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/idea-draft`                             | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/idea-draft/[id]/claim`                  | POST      | session only                                                   | `ai:plan`      | new      | R5  |
-| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                 | `ai:view_plan` | new      | R11 |
-| `/api/plans/[id]/approve`                     | POST      | workspace only                                                 | `ai:view_plan` | new      | R11 |
-| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                | `ai:view_plan` | new      | R11 |
-| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                 | `ai:view_plan` | new      | R11 |
-| `/api/projects/[key]/ai-settings`             | GET/PATCH | `assertCanBrowse`, `assertCanManage`                           | `ai:configure` | new      | R17 |
-| `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService.getSessionForWorkItem` (transitive) | `ai:plan`      | new      | R5  |
-| `/api/work-items/[id]/ai/plan/[jobId]/stream` | GET       | `contextualPlanningService.streamPlanJob` (transitive)         | `ai:plan`      | new      | R5  |
+| Operation                                     | Verbs     | Gate today                                                     | Permission       | Decision | Why |
+| --------------------------------------------- | --------- | -------------------------------------------------------------- | ---------------- | -------- | --- |
+| `/api/ai/access`                              | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/augment`                             | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/chat`                                | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`             | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`         | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`        | `ai:plan`        | new      | R5  |
+| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`              | `ai:plan`        | new      | R5  |
+| `/api/ai/expand`                              | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/explanation`                         | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/explanation/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/jobs/[jobId]`                        | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session`                 | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session/planner-turn`    | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session/submit`          | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan-change/session/turns`           | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/generate`                       | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/generate/[jobId]/stream`        | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint`                         | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint/[jobId]/review`          | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint/[jobId]/stream`          | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/plan/sprint/approve`                 | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/pre-plan`                            | GET/PATCH | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/replan`                              | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/ai/replan/[jobId]/stream`               | GET       | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/canvas-layout`                          | GET/PATCH | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/idea-draft`                             | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/idea-draft/[id]/claim`                  | POST      | session only                                                   | `ai:plan`        | new      | R5  |
+| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                 | `ai:view_plan`   | new      | R11 |
+| `/api/plans/[id]/approve`                     | POST      | workspace only                                                 | `ai:view_plan`   | new      | R11 |
+| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                | `ai:view_plan`   | new      | R11 |
+| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                 | `ai:view_plan`   | new      | R11 |
+| `/api/projects/[key]/ai-settings`             | GET       | `assertCanBrowse`                                              | `project:browse` | existing | R17 |
+| `/api/projects/[key]/ai-settings`             | PATCH     | `assertPermission(ai:configure)`                               | `ai:configure`   | existing | R17 |
+| `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService.getSessionForWorkItem` (transitive) | `ai:plan`        | new      | R5  |
+| `/api/work-items/[id]/ai/plan/[jobId]/stream` | GET       | `contextualPlanningService.streamPlanJob` (transitive)         | `ai:plan`        | new      | R5  |
 
 ### `api`
 
@@ -263,14 +320,16 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `board`
 
-| Operation                       | Verbs        | Gate today        | Permission        | Decision | Why |
-| ------------------------------- | ------------ | ----------------- | ----------------- | -------- | --- |
-| `/api/board`                    | GET/PATCH    | `assertCanBrowse` | `board:configure` | new      | R9  |
-| `/api/board/columns`            | POST         | session only      | `board:configure` | new      | R9  |
-| `/api/board/columns/[columnId]` | DELETE/PATCH | session only      | `board:configure` | new      | R9  |
-| `/api/board/move`               | POST         | `assertCanEdit`   | `board:configure` | new      | R9  |
-| `/api/boards`                   | GET/POST     | session only      | `board:configure` | new      | R9  |
-| `/api/boards/[id]`              | DELETE/PATCH | session only      | `board:configure` | new      | R9  |
+| Operation                       | Verbs        | Gate today                                      | Permission        | Decision | Why |
+| ------------------------------- | ------------ | ----------------------------------------------- | ----------------- | -------- | --- |
+| `/api/board`                    | GET          | `assertCanBrowse` (`boardsService.getBoard`)    | `project:browse`  | existing | R9  |
+| `/api/board`                    | PATCH        | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/board/columns`            | POST         | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/board/columns/[columnId]` | DELETE/PATCH | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/board/move`               | POST         | `assertCanEdit`                                 | `work_item:edit`  | existing | R9  |
+| `/api/boards`                   | GET          | none (`listBoards` has no gate)                 | `project:browse`  | new      | R9  |
+| `/api/boards`                   | POST         | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| `/api/boards/[id]`              | DELETE/PATCH | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
 
 ### `comment`
 
@@ -281,22 +340,26 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `estimation`
 
-| Operation                               | Verbs     | Gate today     | Permission          | Decision | Why |
-| --------------------------------------- | --------- | -------------- | ------------------- | -------- | --- |
-| `/api/projects/[key]/estimation-config` | GET/PATCH | workspace only | `estimation:manage` | new      | R25 |
+| Operation                               | Verbs | Gate today                                                       | Permission          | Decision | Why |
+| --------------------------------------- | ----- | ---------------------------------------------------------------- | ------------------- | -------- | --- |
+| `/api/projects/[key]/estimation-config` | GET   | browse via the service read                                      | `project:browse`    | existing | R25 |
+| `/api/projects/[key]/estimation-config` | PATCH | `assertPermission(estimation:manage)` — was workspace OWNER only | `estimation:manage` | existing | R25 |
 
 ### `field`
 
-| Operation                                  | Verbs        | Gate today                           | Permission         | Decision | Why |
-| ------------------------------------------ | ------------ | ------------------------------------ | ------------------ | -------- | --- |
-| `/api/components/[id]`                     | DELETE/PATCH | `assertCanManage`                    | `component:manage` | new      | R24 |
-| `/api/fields/[fieldId]`                    | DELETE/PATCH | workspace only                       | `field:manage`     | new      | R26 |
-| `/api/fields/[fieldId]/options`            | POST         | workspace only                       | `field:manage`     | new      | R26 |
-| `/api/fields/[fieldId]/options/[optionId]` | DELETE/PATCH | workspace only                       | `field:manage`     | new      | R26 |
-| `/api/projects/[key]/components`           | GET/POST     | `assertCanBrowse`, `assertCanManage` | `component:manage` | new      | R24 |
-| `/api/projects/[key]/fields`               | GET/POST     | `assertCanBrowse`                    | `field:manage`     | new      | R26 |
-| `/api/projects/[key]/labels`               | GET          | `assertCanBrowse`                    | `label:manage`     | new      | R20 |
-| `/api/projects/[key]/tags`                 | GET/PUT      | `assertCanBrowse`, `assertCanManage` | `label:manage`     | new      | R20 |
+| Operation                                  | Verbs        | Gate today                                                                    | Permission         | Decision | Why |
+| ------------------------------------------ | ------------ | ----------------------------------------------------------------------------- | ------------------ | -------- | --- |
+| `/api/components/[id]`                     | DELETE/PATCH | `assertPermission(component:manage)` — was a module-private `assertCanManage` | `component:manage` | existing | R24 |
+| `/api/fields/[fieldId]`                    | DELETE/PATCH | `assertPermission(field:manage)` — was a module-private `assertCanManage`     | `field:manage`     | existing | R26 |
+| `/api/fields/[fieldId]/options`            | POST         | `assertPermission(field:manage)`                                              | `field:manage`     | existing | R26 |
+| `/api/fields/[fieldId]/options/[optionId]` | DELETE/PATCH | `assertPermission(field:manage)`                                              | `field:manage`     | existing | R26 |
+| `/api/projects/[key]/components`           | GET          | `assertCanBrowse` — the create/edit FORM reads this                           | `project:browse`   | existing | R24 |
+| `/api/projects/[key]/components`           | POST         | `assertPermission(component:manage)`                                          | `component:manage` | existing | R24 |
+| `/api/projects/[key]/fields`               | GET          | `assertCanBrowse` — the create/edit FORM reads this                           | `project:browse`   | existing | R26 |
+| `/api/projects/[key]/fields`               | POST         | `assertPermission(field:manage)`                                              | `field:manage`     | existing | R26 |
+| `/api/projects/[key]/labels`               | GET          | `assertCanBrowse` — a member must be able to PICK a label                     | `project:browse`   | existing | R20 |
+| `/api/projects/[key]/tags`                 | GET          | `assertCanBrowse`                                                             | `project:browse`   | existing | R20 |
+| `/api/projects/[key]/tags`                 | PUT          | `assertPermission(label:manage)`                                              | `label:manage`     | existing | R20 |
 
 ### `import`
 
@@ -359,11 +422,12 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `member`
 
-| Operation                              | Verbs        | Gate today     | Permission              | Decision | Why |
-| -------------------------------------- | ------------ | -------------- | ----------------------- | -------- | --- |
-| `/api/projects/[key]/access`           | PATCH        | workspace only | `project:manage_access` | new      | R18 |
-| `/api/projects/[key]/members`          | GET/POST     | workspace only | `member:manage`         | new      | R27 |
-| `/api/projects/[key]/members/[userId]` | DELETE/PATCH | workspace only | `member:manage`         | new      | R27 |
+| Operation                              | Verbs        | Gate today                                                          | Permission              | Decision | Why |
+| -------------------------------------- | ------------ | ------------------------------------------------------------------- | ----------------------- | -------- | --- |
+| `/api/projects/[key]/access`           | PATCH        | `projectMembersService.setAccessLevel` → `assertPermission`         | `project:manage_access` | existing | R18 |
+| `/api/projects/[key]/members`          | GET          | `projectMembersService.listMembers` → `assertPermission`            | `project:browse`        | existing | R27 |
+| `/api/projects/[key]/members`          | POST         | `projectMembersService.addMember` → `assertPermission`              | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/members/[userId]` | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission` | `member:manage`         | existing | R27 |
 
 ### `project`
 
@@ -411,22 +475,24 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `repository`
 
-| Operation                                           | Verbs        | Gate today                                              | Permission                 | Decision | Why |
-| --------------------------------------------------- | ------------ | ------------------------------------------------------- | -------------------------- | -------- | --- |
-| `/api/github/oauth/callback`                        | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/github/oauth/start`                           | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/github/organizations`                         | GET          | workspace only                                          | `repository:connect`       | new      | R7  |
-| `/api/github/setup`                                 | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/gitlab/oauth/callback`                        | GET          | session only                                            | `repository:connect`       | new      | R7  |
-| `/api/gitlab/oauth/start`                           | GET          | workspace only                                          | `repository:connect`       | new      | R7  |
-| `/api/projects/[key]/repositories`                  | GET/POST     | workspace only                                          | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]`          | DELETE/PATCH | `assertCanEdit`                                         | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]/move`     | POST         | workspace only                                          | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]/state`    | POST         | `projectRepoSetService.attachRealizedRepo` (transitive) | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/[rowId]/takeover` | POST         | workspace only                                          | `repository:manage`        | new      | R21 |
-| `/api/projects/[key]/repositories/access`           | GET/POST     | workspace only                                          | `repository:manage_access` | new      | R22 |
-| `/api/projects/[key]/repositories/access/team`      | GET/POST     | workspace only                                          | `repository:manage_access` | new      | R22 |
-| `/api/projects/[key]/repositories/establish`        | POST         | workspace only                                          | `repository:manage`        | new      | R21 |
+| Operation                                           | Verbs        | Gate today                                                                                                                  | Permission                 | Decision         | Why |
+| --------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------------- | -------------------------- | ---------------- | --- |
+| `/api/github/oauth/callback`                        | GET          | session only — binds the installation to a WORKSPACE; redirects to `/settings/workspace/github`                             | —                          | workspace-scoped | R3  |
+| `/api/github/oauth/start`                           | GET          | session only — no project; redirects to `/settings/workspace/github`                                                        | —                          | workspace-scoped | R3  |
+| `/api/github/organizations`                         | GET          | workspace only — `getWorkspaceContext()`; no project resolved                                                               | —                          | workspace-scoped | R3  |
+| `/api/github/setup`                                 | GET          | session only — binds the installation to a WORKSPACE                                                                        | —                          | workspace-scoped | R3  |
+| `/api/gitlab/oauth/callback`                        | GET          | session only — no project resolved                                                                                          | —                          | workspace-scoped | R3  |
+| `/api/gitlab/oauth/start`                           | GET          | workspace only — the file header: "WORKSPACE-scoped, so we resolve the acting member’s active workspace"                    | —                          | workspace-scoped | R3  |
+| `/api/projects/[key]/repositories`                  | GET          | `assertCanBrowse` (`inProject('browse')`)                                                                                   | `project:browse`           | existing         | R21 |
+| `/api/projects/[key]/repositories`                  | POST         | `assertPermission(repository:manage)` — was `assertCanEdit`, i.e. any project MEMBER                                        | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]`          | DELETE/PATCH | `assertPermission(repository:manage)` — was `assertCanEdit`                                                                 | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]/move`     | POST         | `assertPermission(repository:manage)` (`inLockedRow`)                                                                       | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]/state`    | POST         | `assertPermission(repository:manage)` — ACTOR-initiated: the route resolves `getWorkspaceContext()`, not serviceAuth        | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/[rowId]/takeover` | POST         | `assertPermission(repository:manage)` (takeover `inLockedRow`)                                                              | `repository:manage`        | existing         | R21 |
+| `/api/projects/[key]/repositories/access`           | GET/POST     | browse, via `listByProject` — the SELF-connect path (`grantAccess` invites the actor's OWN identity). Stays open: ADR §3 Q3 | `project:browse`           | existing         | R22 |
+| `/api/projects/[key]/repositories/access/team`      | GET          | browse, via `listTeamAccess` → `listByProject` — reads the matrix                                                           | `project:browse`           | existing         | R22 |
+| `/api/projects/[key]/repositories/access/team`      | POST         | `assertPermission(repository:manage_access)` — was `assertCanEdit`; granting ANOTHER member's clone access                  | `repository:manage_access` | existing         | R22 |
+| `/api/projects/[key]/repositories/establish`        | POST         | `assertPermission(repository:manage)` (via the set service's helpers)                                                       | `repository:manage`        | existing         | R21 |
 
 ### `sprint`
 
@@ -501,15 +567,16 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `workflow`
 
-| Operation                                                  | Verbs            | Gate today                           | Permission          | Decision | Why |
-| ---------------------------------------------------------- | ---------------- | ------------------------------------ | ------------------- | -------- | --- |
-| `/api/board/columns/[columnId]/statuses`                   | PUT              | session only                         | `workflow:manage`   | new      | R10 |
-| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | session only                         | `workflow:manage`   | new      | R10 |
-| `/api/projects/[key]/automation-rules`                     | GET/POST         | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | workspace only                       | `automation:manage` | new      | R28 |
-| `/api/projects/[key]/status-automation`                    | GET/PATCH        | `assertCanBrowse`, `assertCanManage` | `automation:manage` | new      | R28 |
+| Operation                                                  | Verbs            | Gate today                                                    | Permission          | Decision | Why |
+| ---------------------------------------------------------- | ---------------- | ------------------------------------------------------------- | ------------------- | -------- | --- |
+| `/api/board/columns/[columnId]/statuses`                   | PUT              | `assertPermission(workflow:manage)` — was ws OWNER only       | `workflow:manage`   | existing | R10 |
+| `/api/board/columns/[columnId]/statuses/[statusId]`        | DELETE           | `assertPermission(workflow:manage)` — was ws OWNER only       | `workflow:manage`   | existing | R10 |
+| `/api/projects/[key]/automation-rules`                     | GET/POST         | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]`            | DELETE/GET/PATCH | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/enabled`    | PUT              | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/automation-rules/[ruleId]/executions` | GET              | `assertPermission(automation:manage)` — was `assertCanManage` | `automation:manage` | existing | R28 |
+| `/api/projects/[key]/status-automation`                    | GET              | `assertCanBrowse`                                             | `project:browse`    | existing | R28 |
+| `/api/projects/[key]/status-automation`                    | PATCH            | `assertPermission(automation:manage)`                         | `automation:manage` | existing | R28 |
 
 ### `workspace`
 

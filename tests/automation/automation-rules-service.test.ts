@@ -8,7 +8,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
-import { ProjectNotFoundError, NotProjectAdminError } from '@/lib/projects/errors';
+import { ProjectNotFoundError, PermissionDeniedError } from '@/lib/projects/errors';
 import { FilterValidationError } from '@/lib/filters/errors';
 import {
   AutomationActionLimitError,
@@ -294,7 +294,7 @@ describe('admin gating (the whole surface is admin-only)', () => {
     for (const u of [s.member, s.viewer, s.plainWs]) {
       await expect(
         automationRulesService.create(s.key, ruleInput(), ctxFor(u.id, s.workspace.id)),
-      ).rejects.toBeInstanceOf(NotProjectAdminError);
+      ).rejects.toBeInstanceOf(PermissionDeniedError);
     }
   });
 
@@ -313,19 +313,19 @@ describe('admin gating (the whole surface is admin-only)', () => {
     const rule = await automationRulesService.create(s.key, ruleInput(), s.ownerCtx);
     const memberCtx = ctxFor(s.member.id, s.workspace.id);
     await expect(automationRulesService.list(s.key, memberCtx)).rejects.toBeInstanceOf(
-      NotProjectAdminError,
+      PermissionDeniedError,
     );
     await expect(automationRulesService.get(s.key, rule.id, memberCtx)).rejects.toBeInstanceOf(
-      NotProjectAdminError,
+      PermissionDeniedError,
     );
     await expect(
       automationRulesService.update(s.key, rule.id, ruleInput(), memberCtx),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       automationRulesService.setEnabled(s.key, rule.id, false, memberCtx),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(automationRulesService.delete(s.key, rule.id, memberCtx)).rejects.toBeInstanceOf(
-      NotProjectAdminError,
+      PermissionDeniedError,
     );
   });
 });

@@ -6,7 +6,7 @@ import { automationRuleExecutionRepository } from '@/lib/repositories/automation
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { NotProjectAdminError } from '@/lib/projects/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { AutomationRuleNotFoundError } from '@/lib/automation/errors';
 import { AUTOMATION_EXECUTIONS_PAGE_SIZE } from '@/lib/services/automationRulesService';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
@@ -255,7 +255,7 @@ describe('listExecutions — admin gate + cross-tenant hide', () => {
         { page: 1 },
         { userId: member.id, workspaceId: fx.workspaceId },
       ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('a rule not owned by the project key reads 404 (no cross-project leak)', async () => {

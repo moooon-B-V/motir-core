@@ -29,9 +29,12 @@
 //   * MOTIR-2291 — the eight MEMBER-FACING keys, whose operations are governed
 //     by NOTHING today; wiring them removes capability from real actors, which
 //     is a different kind of change and is argued on its own.
-// (`repository:connect` is the twenty-first and is RETIRED by MOTIR-2256 rather
-// than wired — its operations bind an installation to a WORKSPACE and name no
-// project, so no project role could ever govern them.)
+// (`repository:connect` WAS the twenty-first. MOTIR-2294 RETIRED it rather than
+// wiring it: all six of its operations — the GitHub and GitLab OAuth legs,
+// `/api/github/setup` and `/api/github/organizations` — bind an installation to a
+// WORKSPACE and resolve no project at all, so no project role could ever govern
+// them. Attaching a repository TO a project is `repository:manage`, which stays.
+// A key with no operation behind it is exactly the lie the opening rule forbids.)
 //
 // The `resource:action` form is the mirror convention (Plane names permissions
 // `workitem:edit`; Jira's permission names read the same way).
@@ -114,7 +117,6 @@ export const PERMISSIONS = [
   'estimation:manage',
   'report:view',
   'saved_filter:manage',
-  'repository:connect',
   'repository:manage',
   'repository:manage_access',
   'import:run',
@@ -174,23 +176,22 @@ const PERMISSION_META: Record<
   'public_request:comment': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:submit': { domain: 'public_request', enforcement: 'enforced' },
   'public_request:upvote': { domain: 'public_request', enforcement: 'enforced' },
-  'member:manage': { domain: 'member', enforcement: 'planned' },
-  'project:manage_access': { domain: 'member', enforcement: 'planned' },
-  'board:configure': { domain: 'board', enforcement: 'planned' },
+  'member:manage': { domain: 'member', enforcement: 'enforced' },
+  'project:manage_access': { domain: 'member', enforcement: 'enforced' },
+  'board:configure': { domain: 'board', enforcement: 'enforced' },
   'sprint:manage': { domain: 'sprint', enforcement: 'planned' },
-  'automation:manage': { domain: 'workflow', enforcement: 'planned' },
-  'workflow:manage': { domain: 'workflow', enforcement: 'planned' },
-  'component:manage': { domain: 'field', enforcement: 'planned' },
-  'field:manage': { domain: 'field', enforcement: 'planned' },
-  'label:manage': { domain: 'field', enforcement: 'planned' },
-  'estimation:manage': { domain: 'estimation', enforcement: 'planned' },
+  'automation:manage': { domain: 'workflow', enforcement: 'enforced' },
+  'workflow:manage': { domain: 'workflow', enforcement: 'enforced' },
+  'component:manage': { domain: 'field', enforcement: 'enforced' },
+  'field:manage': { domain: 'field', enforcement: 'enforced' },
+  'label:manage': { domain: 'field', enforcement: 'enforced' },
+  'estimation:manage': { domain: 'estimation', enforcement: 'enforced' },
   'report:view': { domain: 'report', enforcement: 'planned' },
   'saved_filter:manage': { domain: 'report', enforcement: 'planned' },
-  'repository:connect': { domain: 'repository', enforcement: 'planned' },
-  'repository:manage': { domain: 'repository', enforcement: 'planned' },
-  'repository:manage_access': { domain: 'repository', enforcement: 'planned' },
+  'repository:manage': { domain: 'repository', enforcement: 'enforced' },
+  'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
   'import:run': { domain: 'import', enforcement: 'planned' },
-  'ai:configure': { domain: 'ai', enforcement: 'planned' },
+  'ai:configure': { domain: 'ai', enforcement: 'enforced' },
   'ai:plan': { domain: 'ai', enforcement: 'planned' },
   'ai:view_plan': { domain: 'ai', enforcement: 'planned' },
 };

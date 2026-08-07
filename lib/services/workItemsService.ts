@@ -65,13 +65,7 @@ import {
 } from '@/lib/workItems/errors';
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ComponentNotFoundError, CrossProjectComponentError } from '@/lib/components/errors';
-import {
-  NotProjectAdminError,
-  ProjectAccessDeniedError,
-  ProjectNotFoundError,
-} from '@/lib/projects/errors';
-import { isWorkspaceManager } from '@/lib/projects/roles';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { validateStoryPoints } from '@/lib/estimation/validate';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -4151,21 +4145,15 @@ async function assertCanManageProject(
   projectId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const wsMembership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-    actorUserId,
-    workspaceId,
-    tx,
-  );
-  if (wsMembership && isWorkspaceManager(wsMembership.role)) return;
-
-  const projectMembership = await projectMembershipRepository.findByUserAndProject(
-    actorUserId,
-    projectId,
-    tx,
-  );
-  if (projectMembership?.role === 'admin') return;
-
-  throw new NotProjectAdminError(projectId);
+  // The SIXTH module-private copy of the two-tier admin check, found by
+  // MOTIR-2302's no-second-policy-implementation guard and folded into the shared
+  // gate here rather than exempted. It asked the UMBRELLA question — workspace
+  // manager, else project-role `admin` — which is exactly
+  // `project:administer`, so this is behaviour-neutral: same actors, same
+  // `NotProjectAdminError` (the compatibility branch `assertPermission` keeps for
+  // that one key), same 404-before-403 ordering. It reuses no new permission,
+  // exactly as the note above says; it just stops deriving the answer itself.
+  await projectAccessService.assertCanManage(projectId, { userId: actorUserId, workspaceId }, tx);
 }
 
 // Quick-search bounds (Subtask 6.9.1) live in the pure `lib/workItems/quickSearch`

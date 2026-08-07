@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectNotFoundError,
+  ProjectAccessDeniedError,
+} from '@/lib/projects/errors';
 import {
   GithubIdentityRequiredError,
   ProjectRepoInvalidFieldError,
@@ -38,6 +42,16 @@ import {
 export function mapProjectRepoError(err: unknown): NextResponse | null {
   if (err instanceof ProjectNotFoundError || err instanceof ProjectRepoNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+  }
+  // MOTIR-2299 — the SET writes and the code-access grant ask
+  // `repository:manage` / `repository:manage_access` through the shared gate, so
+  // the refusal arrives as `PermissionDeniedError` carrying the key rather than
+  // as `ProjectAccessDeniedError`. Same 403; the body gains `permission`.
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, permission: err.permission },
+      { status: 403 },
+    );
   }
   if (err instanceof ProjectAccessDeniedError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });

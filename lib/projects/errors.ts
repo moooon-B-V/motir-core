@@ -229,6 +229,31 @@ export class NotProjectAdminError extends Error {
   }
 }
 
+/**
+ * The generic permission refusal (Story MOTIR-2256 · Subtask MOTIR-2293) — the
+ * browser held the project but not the KEY the gate asked for. Carries
+ * `permission` so a caller can say WHICH grant is missing rather than "forbidden".
+ * Maps to 403 in `projectErrorResponse`, alongside `NotProjectAdminError`.
+ *
+ * ⚠️ `project:administer` is NOT thrown as this error — {@link
+ * NotProjectAdminError} keeps that one. That is a deliberate COMPATIBILITY
+ * BRANCH in `projectAccessService.assertPermission`: `NOT_PROJECT_ADMIN` is a
+ * shipped wire code that `app/(authed)/settings/project/workflow/actions.ts`,
+ * `lib/workflows/errors.ts` and `tests/components/components-settings-editor.test.tsx`
+ * read by string. Splitting the umbrella must not change what any of them
+ * receive. Remove the branch — and this note — once nothing reads the old code.
+ */
+export class PermissionDeniedError extends Error {
+  readonly code = 'PERMISSION_DENIED' as const;
+  constructor(
+    projectId: string,
+    readonly permission: string,
+  ) {
+    super(`You do not hold the "${permission}" permission on project ${projectId}.`);
+    this.name = 'PermissionDeniedError';
+  }
+}
+
 export class TargetNotWorkspaceMemberError extends Error {
   readonly code = 'TARGET_NOT_WORKSPACE_MEMBER' as const;
   constructor(userId: string, workspaceId: string) {

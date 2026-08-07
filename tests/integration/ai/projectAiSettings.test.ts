@@ -6,7 +6,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { toProjectAiSettingsDto } from '@/lib/mappers/projectAiSettingsMappers';
 import {
   InvalidAiSettingsError,
-  NotProjectAdminError,
+  PermissionDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
@@ -337,10 +337,51 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
         { aiAutoPlanEnabled: true },
         ctxFor(fx, member.id),
       ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
 
     const after = await projectAiSettingsService.getAiSettings(fx.projectIdentifier, ctxFor(fx));
     expect(after.aiAutoPlanEnabled).toBe(false);
+  });
+
+  it('names `ai:configure` on the refusal — not the umbrella, and not `ai:plan`', async () => {
+    // MOTIR-2300. The write moved from `assertCanManage` to
+    // `assertPermission(…, 'ai:configure')`, so the refusal carries the KEY.
+    // Behaviour is unchanged for every actor — `ai:configure` resolves exactly
+    // as `project:administer` does, proved over all 64 inputs in
+    // accessParity.test.ts — but the 403 now says WHICH grant is missing, and
+    // the key it names is the settings one. `ai:plan` (who may RUN the planner)
+    // is MOTIR-2291's, governed by nothing today, and must not appear here.
+    const fx = await makeFixture();
+    const member = await createTestUser({ email: 'ai-key-member@example.com' });
+    await db.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+    });
+
+    const err = await projectAiSettingsService
+      .updateAiSettings(
+        fx.projectIdentifier,
+        { aiPlannerModel: 'some-model' },
+        ctxFor(fx, member.id),
+      )
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('ai:configure');
+    expect((err as PermissionDeniedError).code).toBe('PERMISSION_DENIED');
+  });
+
+  it('a NON-BROWSER gets 404, not 403 — the settings surface stays hidden', async () => {
+    // The 404-before-403 ordering `assertPermission` inherited from
+    // `assertCanManage`: an actor who cannot browse the project must not learn
+    // it exists from a permission error.
+    const fx = await makeFixture();
+    const outsider = await createTestUser({ email: 'ai-outsider@example.com' });
+    await expect(
+      projectAiSettingsService.updateAiSettings(
+        fx.projectIdentifier,
+        { aiAutoPlanEnabled: true },
+        ctxFor(fx, outsider.id),
+      ),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 
   it('settings are per-project: changing one project leaves its sibling on the defaults', async () => {

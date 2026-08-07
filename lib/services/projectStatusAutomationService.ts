@@ -24,7 +24,9 @@ import type {
 // 4-layer (CLAUDE.md): the repository does the single Prisma ops, this service
 // owns the transaction + the gate + validation, the mapper produces the DTO.
 // Reads are browse-scoped (any member of a browsable project may see the
-// configuration); WRITES are admin-gated via `projectAccessService.assertCanManage`
+// configuration); WRITES ask `automation:manage` via `assertPermission`
+// (MOTIR-2297 — behaviour-neutral; it was `assertCanManage`, i.e. the same
+// `project:administer` answer, and the key now says WHICH grant is required)
 // — exactly like `projectAiSettingsService` / `projectsService.updateDetails`,
 // since flipping a derivation switch changes how every status move in the project
 // behaves.
@@ -61,7 +63,7 @@ export const projectStatusAutomationService = {
 
   /**
    * Update a project's status-automation settings. Admin-gated
-   * (`assertCanManage`). A PARTIAL patch: an ABSENT field is left untouched, so
+   * (`automation:manage`). A PARTIAL patch: an ABSENT field is left untouched, so
    * the panel can save one toggle without clobbering the other.
    *
    * Values are validated BEFORE the transaction opens (no DB touch on a rejected
@@ -81,7 +83,7 @@ export const projectStatusAutomationService = {
 
     return withWorkspaceContext(ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(key, ctx.workspaceId, tx);
-      await projectAccessService.assertCanManage(project.id, ctx, tx);
+      await projectAccessService.assertPermission(project.id, ctx, 'automation:manage', tx);
       const updated = await projectRepository.updateStatusAutomation(project.id, data, tx);
       return toProjectStatusAutomationDto(updated);
     });
