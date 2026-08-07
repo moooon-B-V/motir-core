@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
@@ -22,7 +22,7 @@ import {
 } from '@/lib/automation/constants';
 import type { AutomationRuleWithOwner } from '@/lib/repositories/automationRuleRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { AutomationTriggerType } from '@prisma/client';
+import type { AutomationTriggerType } from '@/lib/generated/prisma/client';
 
 // The automation EXECUTION ENGINE (Story 6.6 · Subtask 6.6.2) — events in,
 // attributed service calls out, every run audited. The heart of the story:

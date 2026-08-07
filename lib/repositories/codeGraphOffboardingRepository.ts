@@ -1,4 +1,4 @@
-import type { CodeGraphOffboarding, Prisma } from '@prisma/client';
+import type { CodeGraphOffboarding, Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the CODE-GRAPH OFFBOARDING QUEUE (MOTIR-2166 ·

@@ -1,4 +1,4 @@
-import { Prisma, type SavedFilterSubscription } from '@prisma/client';
+import { Prisma, type SavedFilterSubscription } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Saved-filter subscription data access (Story 6.2 · Subtask 6.2.5). Single

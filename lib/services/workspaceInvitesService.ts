@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import type { MemberRole } from '@prisma/client';
+import type { MemberRole } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';

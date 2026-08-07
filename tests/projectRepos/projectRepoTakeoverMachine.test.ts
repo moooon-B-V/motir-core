@@ -1,6 +1,6 @@
 import { generateKeyPairSync } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProjectRepoTakeoverState } from '@prisma/client';
+import type { ProjectRepoTakeoverState } from '@/lib/generated/prisma/client';
 import {
   PROJECT_REPO_TAKEOVER_STATES,
   PROJECT_REPO_TAKEOVER_TRANSITIONS,

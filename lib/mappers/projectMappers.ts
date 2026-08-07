@@ -1,4 +1,4 @@
-import type { Project, ProjectKeyAlias } from '@prisma/client';
+import type { Project, ProjectKeyAlias } from '@/lib/generated/prisma/client';
 import type { ProjectDTO } from '@/lib/dto/projects';
 
 // Prisma → DTO converter for the project domain. The service calls this

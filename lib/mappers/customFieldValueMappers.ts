@@ -1,4 +1,4 @@
-import type { CustomFieldOption } from '@prisma/client';
+import type { CustomFieldOption } from '@/lib/generated/prisma/client';
 import type { CustomFieldDefinitionWithItemValue } from '@/lib/repositories/customFieldDefinitionRepository';
 import type { CustomFieldValueWithRefs } from '@/lib/repositories/customFieldValueRepository';
 import type {

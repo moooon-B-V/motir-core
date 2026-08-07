@@ -1,4 +1,4 @@
-import { type Prisma } from '@prisma/client';
+import { type Prisma } from '@/lib/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';

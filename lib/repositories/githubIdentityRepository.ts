@@ -1,4 +1,4 @@
-import { Prisma, type GithubIdentity } from '@prisma/client';
+import { Prisma, type GithubIdentity } from '@/lib/generated/prisma/client';
 
 // GitHub-identity repository — single Prisma operations on the `github_identity`
 // table (Story 7.10 · MOTIR-1498). The service (githubIdentityService) owns the

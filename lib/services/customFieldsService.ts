@@ -1,4 +1,4 @@
-import { Prisma, type CustomFieldDefinition, type CustomFieldType } from '@prisma/client';
+import { Prisma, type CustomFieldDefinition, type CustomFieldType } from '@/lib/generated/prisma/client';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import { customFieldValueRepository } from '@/lib/repositories/customFieldValueRepository';

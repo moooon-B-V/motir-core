@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Prisma, type CiPeriodCharge } from '@prisma/client';
+import { Prisma, type CiPeriodCharge } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the per-period CI CHARGE row (Story MOTIR-1775 · MOTIR-1901) —

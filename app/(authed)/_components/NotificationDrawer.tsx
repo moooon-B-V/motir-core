@@ -16,7 +16,7 @@ import { Segmented } from '@/components/ui/Segmented';
 import { Button } from '@/components/ui/Button';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils/cn';
-import type { NotificationCategory } from '@prisma/client';
+import type { NotificationCategory } from '@/lib/generated/prisma/client';
 import type {
   MarkAllReadResultDTO,
   MarkReadResultDTO,

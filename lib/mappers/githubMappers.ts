@@ -1,4 +1,4 @@
-import type { GithubIdentity, GithubInstallation, GithubRepo } from '@prisma/client';
+import type { GithubIdentity, GithubInstallation, GithubRepo } from '@/lib/generated/prisma/client';
 import type {
   GithubIdentityDTO,
   GithubInstallationDTO,

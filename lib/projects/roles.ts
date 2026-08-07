@@ -1,4 +1,4 @@
-import type { MemberRole, ProjectAccessLevel } from '@prisma/client';
+import type { MemberRole, ProjectAccessLevel } from '@/lib/generated/prisma/client';
 
 // Project + workspace role helpers for the Story 6.4 access model. The
 // `MemberRole` enum (owner / admin / member / viewer) is shared by

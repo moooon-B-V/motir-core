@@ -1,4 +1,4 @@
-import type { WorkItem, WorkItemKind } from '@prisma/client';
+import type { WorkItem, WorkItemKind } from '@/lib/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';

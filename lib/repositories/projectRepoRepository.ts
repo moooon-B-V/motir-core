@@ -4,7 +4,7 @@ import {
   type ProjectRepoCollaboratorPermission,
   type ProjectRepoRole,
   type ProjectRepoTakeoverState,
-} from '@prisma/client';
+} from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import { ESTABLISHED_PROJECT_REPO_STATES } from '@/lib/projectRepos/vocabulary';

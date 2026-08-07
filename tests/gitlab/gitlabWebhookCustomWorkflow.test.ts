@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StatusCategory } from '@prisma/client';
+import type { StatusCategory } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';

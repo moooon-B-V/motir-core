@@ -1,4 +1,4 @@
-import type { User, Workspace } from '@prisma/client';
+import type { User, Workspace } from '@/lib/generated/prisma/client';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import type { TokenScope } from '@/lib/mcp/scopes';
 import { createTestWorkspace } from './workspaceFixtures';

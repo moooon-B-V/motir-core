@@ -1,4 +1,4 @@
-import type { SavedFilter, SavedFilterSubscription } from '@prisma/client';
+import type { SavedFilter, SavedFilterSubscription } from '@/lib/generated/prisma/client';
 import type { BuiltinFilterDef } from '@/lib/savedFilters/builtins';
 import { builtinFilterId } from '@/lib/savedFilters/builtins';
 import type {

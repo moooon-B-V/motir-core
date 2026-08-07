@@ -1,4 +1,4 @@
-import { Prisma, type ApiToken } from '@prisma/client';
+import { Prisma, type ApiToken } from '@/lib/generated/prisma/client';
 
 /** An `api_token` row with its owning user eager-loaded — the verify lookup's
  * return shape, so the bearer gate resolves token → user in one round-trip. */

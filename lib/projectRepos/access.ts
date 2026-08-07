@@ -1,4 +1,4 @@
-import type { ProjectRepoCollaborator, ProjectRepoState } from '@prisma/client';
+import type { ProjectRepoCollaborator, ProjectRepoState } from '@/lib/generated/prisma/client';
 import type {
   ProjectRepoAccessDto,
   ProjectRepoAccessStateDto,

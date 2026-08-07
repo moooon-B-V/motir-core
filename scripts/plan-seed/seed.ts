@@ -64,7 +64,7 @@
  */
 /* eslint-disable no-console -- a CLI script: console IS its output surface */
 import '../_loadEnv'; // MUST be first — populates DATABASE_URL before @/lib/db loads (helper is in scripts/, one level up)
-import type { OrganizationRole, Prisma, SprintState, WorkItemPriority } from '@prisma/client';
+import type { OrganizationRole, Prisma, SprintState, WorkItemPriority } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';

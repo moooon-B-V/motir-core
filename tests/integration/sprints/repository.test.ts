@@ -5,7 +5,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
-import type { WorkItem } from '@prisma/client';
+import type { WorkItem } from '@/lib/generated/prisma/client';
 
 // Repository-layer tests for the Story-4.1 sprint + backlog-rank data-access
 // leaves (Subtask 4.1.2): sprintRepository + the new work_item sprint/rank

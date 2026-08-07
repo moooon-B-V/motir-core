@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/lib/generated/prisma/client';
 import { getGitProvider } from '@/lib/git';
 import type {
   GitProviderId,

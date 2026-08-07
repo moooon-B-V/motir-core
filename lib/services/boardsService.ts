@@ -1,5 +1,5 @@
-import { Prisma, BoardSwimlaneGroupBy, BoardType } from '@prisma/client';
-import type { BoardColumn, WorkItem } from '@prisma/client';
+import { Prisma, BoardSwimlaneGroupBy, BoardType } from '@/lib/generated/prisma/client';
+import type { BoardColumn, WorkItem } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';

@@ -1,4 +1,4 @@
-import type { EstimationStatistic, PointScale } from '@prisma/client';
+import type { EstimationStatistic, PointScale } from '@/lib/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';

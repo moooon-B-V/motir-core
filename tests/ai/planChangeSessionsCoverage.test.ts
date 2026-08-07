@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';

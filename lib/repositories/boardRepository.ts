@@ -1,4 +1,4 @@
-import { Prisma, type Board } from '@prisma/client';
+import { Prisma, type Board } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the `board` table (Story 3.1 · Subtask 3.1.3). Single-

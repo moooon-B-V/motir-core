@@ -1,4 +1,4 @@
-import { Prisma, type Comment } from '@prisma/client';
+import { Prisma, type Comment } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Comment repository — single Prisma operations on the `comment` table

@@ -1,4 +1,4 @@
-import type { CiRunnerProvisioningIntent } from '@prisma/client';
+import type { CiRunnerProvisioningIntent } from '@/lib/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';

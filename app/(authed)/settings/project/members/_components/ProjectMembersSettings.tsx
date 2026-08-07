@@ -16,7 +16,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
-import type { ProjectAccessLevel } from '@prisma/client';
+import type { ProjectAccessLevel } from '@/lib/generated/prisma/client';
 import { Card } from '@/components/ui/Card';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';

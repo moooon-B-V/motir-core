@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkItemImplementationSource, WorkItemPlanningSource } from '@prisma/client';
+import type { WorkItemImplementationSource, WorkItemPlanningSource } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { MOTIR_SEED_BURST_END } from '@/lib/workItems/provenanceBackfill';

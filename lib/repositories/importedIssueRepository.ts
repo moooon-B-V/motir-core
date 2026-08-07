@@ -1,4 +1,4 @@
-import { type ImportedIssue, type ImportSource, type Prisma } from '@prisma/client';
+import { type ImportedIssue, type ImportSource, type Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // ImportedIssue repository — single Prisma operations on the `imported_issue`

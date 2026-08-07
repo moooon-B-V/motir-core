@@ -1,4 +1,4 @@
-import type { Organization } from '@prisma/client';
+import type { Organization } from '@/lib/generated/prisma/client';
 import type { ScaledTrackerStateDTO, AiIncludedSeatDTO } from '@/lib/dto/billing';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 

@@ -3,7 +3,7 @@
 // the mapper is pure assembly: anchor/diff parts via the renderer registry,
 // actor via the same batched user map every other reference resolved through.
 
-import type { WorkItemRevision } from '@prisma/client';
+import type { WorkItemRevision } from '@/lib/generated/prisma/client';
 import type { ActivityEntryDto } from '@/lib/dto/activity';
 import { buildEntryParts, type DisplayResolvers } from '@/lib/activity/renderers';
 

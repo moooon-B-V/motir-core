@@ -1,4 +1,4 @@
-import type { ImportSourceIdentity } from '@prisma/client';
+import type { ImportSourceIdentity } from '@/lib/generated/prisma/client';
 import type {
   ImportSourceIdentityDTO,
   ImportSourceIdentityMetadata,

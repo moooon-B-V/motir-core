@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { User, WorkItem } from '@prisma/client';
+import type { User, WorkItem } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { componentsService, COMPONENT_NAME_MAX_LENGTH } from '@/lib/services/componentsService';
 import { workItemsService } from '@/lib/services/workItemsService';

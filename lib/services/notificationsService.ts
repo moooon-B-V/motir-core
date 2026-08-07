@@ -1,4 +1,4 @@
-import type { NotificationCategory, Prisma, User } from '@prisma/client';
+import type { NotificationCategory, Prisma, User } from '@/lib/generated/prisma/client';
 import { withWorkspaceContext } from '@/lib/workspaces';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
 import { userRepository } from '@/lib/repositories/userRepository';

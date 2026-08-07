@@ -1,4 +1,4 @@
-import { Prisma, type WorkItemRevision } from '@prisma/client';
+import { Prisma, type WorkItemRevision } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { ProjectFilterReferents } from '@/lib/filters/registry';

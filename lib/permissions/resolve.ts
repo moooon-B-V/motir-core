@@ -1,4 +1,4 @@
-import type { MemberRole, ProjectAccessLevel } from '@prisma/client';
+import type { MemberRole, ProjectAccessLevel } from '@/lib/generated/prisma/client';
 import { isWorkspaceManager } from '@/lib/projects/roles';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import {

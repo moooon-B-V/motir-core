@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';

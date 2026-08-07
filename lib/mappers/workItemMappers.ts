@@ -1,4 +1,4 @@
-import type { WorkItem } from '@prisma/client';
+import type { WorkItem } from '@/lib/generated/prisma/client';
 import type {
   ArchivedWorkItemRow,
   WorkItemForestRow,

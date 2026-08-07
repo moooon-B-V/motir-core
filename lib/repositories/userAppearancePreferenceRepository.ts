@@ -1,4 +1,4 @@
-import { Prisma, type UserAppearancePreference } from '@prisma/client';
+import { Prisma, type UserAppearancePreference } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // User-appearance-preference repository — single Prisma operations on the

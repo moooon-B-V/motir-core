@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { NormalizedWorkflowJobEvent } from '@/lib/git/types';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';

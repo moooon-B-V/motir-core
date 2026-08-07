@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '@prisma/client';
+import type { User } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
 import { usersService } from '@/lib/services/usersService';

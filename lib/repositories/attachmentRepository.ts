@@ -1,4 +1,4 @@
-import { Prisma, type Attachment, type AttachmentSource } from '@prisma/client';
+import { Prisma, type Attachment, type AttachmentSource } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single-op data access for the `attachment` table (Subtask 2.3.7 upload leaf;

@@ -1,4 +1,4 @@
-import { Prisma, type Label, type WorkItem } from '@prisma/client';
+import { Prisma, type Label, type WorkItem } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { workItemLabelRepository } from '@/lib/repositories/workItemLabelRepository';

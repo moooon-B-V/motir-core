@@ -1,4 +1,4 @@
-import type { Project, WorkItem } from '@prisma/client';
+import type { Project, WorkItem } from '@/lib/generated/prisma/client';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { CommentDTO } from '@/lib/dto/comments';

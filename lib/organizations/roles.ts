@@ -10,7 +10,7 @@
 // admin UI (6.10.5) read the same constants instead of scattering magic
 // strings. Mirrors lib/workspaces/roles.ts.
 
-import type { OrganizationRole } from '@prisma/client';
+import type { OrganizationRole } from '@/lib/generated/prisma/client';
 
 export const ORGANIZATION_ROLE = {
   owner: 'owner',

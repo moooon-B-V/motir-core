@@ -1,4 +1,4 @@
-import { type Organization, Prisma } from '@prisma/client';
+import { type Organization, Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 

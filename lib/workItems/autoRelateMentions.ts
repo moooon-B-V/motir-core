@@ -3,7 +3,7 @@ import {
   type WorkItemLink,
   type WorkItemLinkKind,
   type WorkItemLinkSource,
-} from '@prisma/client';
+} from '@/lib/generated/prisma/client';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';

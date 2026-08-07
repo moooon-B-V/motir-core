@@ -1,4 +1,4 @@
-import { Prisma, type CustomFieldDefinition } from '@prisma/client';
+import { Prisma, type CustomFieldDefinition } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Custom-field-definition repository — single Prisma operations on the

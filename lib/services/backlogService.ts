@@ -1,4 +1,4 @@
-import type { Prisma, WorkItem } from '@prisma/client';
+import type { Prisma, WorkItem } from '@/lib/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';

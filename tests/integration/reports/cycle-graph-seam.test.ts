@@ -6,7 +6,7 @@ import { reportsService } from '@/lib/services/reportsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/lib/generated/prisma/client';
 
 // Story 8.14 · Subtask 8.14.7 — the cycle-graph INTEGRATION SEAM (real Postgres).
 // The integration-seam rule: read 8.14.3's per-day aggregate (the WRITER,

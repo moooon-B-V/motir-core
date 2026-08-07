@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Attachment, Prisma } from '@prisma/client';
+import type { Attachment, Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { truncateAuthTables } from '../helpers/db';

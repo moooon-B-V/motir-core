@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { OrganizationRole } from '@prisma/client';
+import type { OrganizationRole } from '@/lib/generated/prisma/client';
 import { getSession } from '@/lib/auth';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';

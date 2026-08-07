@@ -1,4 +1,4 @@
-import { Prisma, type JobRun, type JobRunStatus } from '@prisma/client';
+import { Prisma, type JobRun, type JobRunStatus } from '@/lib/generated/prisma/client';
 
 // Data access for the job_run ledger (Story 1.6 · Subtask 1.6.2). Single-op
 // methods only; writes require `tx` (the 4-layer contract). jobRunsService

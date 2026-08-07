@@ -1,4 +1,4 @@
-import type { ProjectRepoTakeoverState } from '@prisma/client';
+import type { ProjectRepoTakeoverState } from '@/lib/generated/prisma/client';
 
 // The TAKE-IT-OVER state machine (Story MOTIR-1775 · MOTIR-711) — the handoff that
 // moves a Motir-owned repository into the user's own GitHub account.

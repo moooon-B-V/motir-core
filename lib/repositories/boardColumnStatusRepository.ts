@@ -1,4 +1,4 @@
-import { Prisma, type BoardColumnStatus } from '@prisma/client';
+import { Prisma, type BoardColumnStatus } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the `board_column_status` mapping table (Story 3.1 ·

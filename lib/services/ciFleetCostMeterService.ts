@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import {
   ciContainerUsageRepository,

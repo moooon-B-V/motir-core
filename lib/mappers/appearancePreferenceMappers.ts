@@ -1,4 +1,4 @@
-import type { UserAppearancePreference } from '@prisma/client';
+import type { UserAppearancePreference } from '@/lib/generated/prisma/client';
 import type { AppearancePreferenceDto, AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
 import { resolvePattern } from '@/lib/theme/types';
 import { resolveStyle } from '@/lib/theme/styles';

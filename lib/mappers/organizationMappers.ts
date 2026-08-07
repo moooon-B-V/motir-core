@@ -1,4 +1,4 @@
-import type { Organization } from '@prisma/client';
+import type { Organization } from '@/lib/generated/prisma/client';
 import type { OrgMembershipWithUser } from '@/lib/repositories/organizationMembershipRepository';
 import type {
   CurrentOrganizationDTO,

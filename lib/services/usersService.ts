@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { Prisma, type User } from '@prisma/client';
+import { Prisma, type User } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { hash, verify } from '@/lib/auth/passwords';
 import { assertPasswordStrength } from '@/lib/auth/passwordPolicy';

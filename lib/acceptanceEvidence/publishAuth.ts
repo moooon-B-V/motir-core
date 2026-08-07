@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { WorkItem } from '@prisma/client';
+import type { WorkItem } from '@/lib/generated/prisma/client';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';

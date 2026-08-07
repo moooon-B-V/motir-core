@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/lib/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 
 // The DOGFOOD project's onboarding-ran marker (MOTIR-1799). The `motir` project

@@ -1,4 +1,4 @@
-import { Prisma, type Workspace } from '@prisma/client';
+import { Prisma, type Workspace } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Workspace repository — single Prisma operations on the `workspace` table.

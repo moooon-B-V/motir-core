@@ -1,4 +1,4 @@
-import type { GithubInstallation, GithubRepo, Prisma } from '@prisma/client';
+import type { GithubInstallation, GithubRepo, Prisma } from '@/lib/generated/prisma/client';
 import { getGitProvider } from '@/lib/git';
 import {
   listMergedPullRequests,

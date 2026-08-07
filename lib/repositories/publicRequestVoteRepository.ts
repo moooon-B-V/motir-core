@@ -1,4 +1,4 @@
-import { Prisma, type PublicRequestVote } from '@prisma/client';
+import { Prisma, type PublicRequestVote } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // publicRequestVoteRepository (Story 6.12) — single-op access to the

@@ -1,4 +1,4 @@
-import type { BoardType } from '@prisma/client';
+import type { BoardType } from '@/lib/generated/prisma/client';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 
 // The v1 default per-project board (Story 3.1 · Subtask 3.1.2) — the typed,

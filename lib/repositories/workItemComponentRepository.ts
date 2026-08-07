@@ -1,4 +1,4 @@
-import { Prisma, type WorkItemComponent } from '@prisma/client';
+import { Prisma, type WorkItemComponent } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // WorkItemComponent repository — single Prisma operations on the

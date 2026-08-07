@@ -1,4 +1,4 @@
-import type { GithubRepo, ProjectRepoRole, WorkItem } from '@prisma/client';
+import type { GithubRepo, ProjectRepoRole, WorkItem } from '@/lib/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { projectRepoPinService } from '@/lib/services/projectRepoPinService';

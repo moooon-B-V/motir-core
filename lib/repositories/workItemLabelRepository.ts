@@ -1,4 +1,4 @@
-import { Prisma, type WorkItemLabel } from '@prisma/client';
+import { Prisma, type WorkItemLabel } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // WorkItemLabel repository — single Prisma operations on the

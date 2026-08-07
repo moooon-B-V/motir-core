@@ -8,7 +8,7 @@ import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { FilterValidationError } from '@/lib/filters/errors';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemKind } from '@prisma/client';
+import type { WorkItemKind } from '@/lib/generated/prisma/client';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 

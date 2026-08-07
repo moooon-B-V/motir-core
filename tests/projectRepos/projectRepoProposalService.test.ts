@@ -1,4 +1,4 @@
-import type { GithubRepo } from '@prisma/client';
+import type { GithubRepo } from '@/lib/generated/prisma/client';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock ONLY the motir-ai boundary client (the `server-only` 7.1.5 primitive the

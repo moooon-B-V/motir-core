@@ -11,7 +11,7 @@ import {
   visibleSettingsNav,
   type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
-import type { ProjectAccessLevel } from '@prisma/client';
+import type { ProjectAccessLevel } from '@/lib/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from '../helpers/db';
 

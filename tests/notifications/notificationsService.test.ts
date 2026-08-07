@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { Notification, User, WorkItem } from '@prisma/client';
+import type { Notification, User, WorkItem } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { notificationsService, NOTIFICATION_PAGE_SIZE } from '@/lib/services/notificationsService';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';

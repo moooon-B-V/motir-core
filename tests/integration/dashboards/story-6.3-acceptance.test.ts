@@ -9,7 +9,7 @@ vi.mock('@/lib/workspaces', async (importOriginal) => {
   return { ...actual, getWorkspaceContext: async () => wsCtx.current };
 });
 
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dashboardsService } from '@/lib/services/dashboardsService';
 import { reportsService } from '@/lib/services/reportsService';

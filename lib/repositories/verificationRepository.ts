@@ -1,4 +1,4 @@
-import { Prisma, type Verification } from '@prisma/client';
+import { Prisma, type Verification } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Verification repository — Better-Auth's catch-all token table

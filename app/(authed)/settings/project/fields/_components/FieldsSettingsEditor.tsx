@@ -30,7 +30,7 @@ import { useToast } from '@/components/ui/Toast';
 import { keyBetween } from '@/lib/workItems/positioning';
 import { MAX_FIELDS_PER_PROJECT, MAX_OPTIONS_PER_FIELD } from '@/lib/customFields/limits';
 import { CUSTOM_FIELD_TYPES, CUSTOM_FIELD_TYPE_META } from '@/lib/customFields/typeMeta';
-import type { CustomFieldType } from '@prisma/client';
+import type { CustomFieldType } from '@/lib/generated/prisma/client';
 import type { CustomFieldDefinitionDTO, CustomFieldOptionDTO } from '@/lib/dto/customFields';
 
 // FieldsSettingsEditor (Story 5.3 · Subtask 5.3.6) — the Fields admin UI at

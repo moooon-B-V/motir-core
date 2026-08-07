@@ -1,4 +1,4 @@
-import { Prisma, type PlanChangeSession } from '@prisma/client';
+import { Prisma, type PlanChangeSession } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `plan_change_session` table (Story 7.30 ·

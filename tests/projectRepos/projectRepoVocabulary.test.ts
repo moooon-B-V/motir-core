@@ -1,4 +1,4 @@
-import { ProjectRepoRole, ProjectRepoState } from '@prisma/client';
+import { ProjectRepoRole, ProjectRepoState } from '@/lib/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   ESTABLISHED_PROJECT_REPO_STATES,

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { resolveContainerRate, UNPRICED_USD_PER_SECOND } from './rates';
 import type {
   ContainerAccrual,

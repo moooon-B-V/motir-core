@@ -1,4 +1,4 @@
-import { Prisma, type Component } from '@prisma/client';
+import { Prisma, type Component } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Component repository — single Prisma operations on the `component` table

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import type { AutomationExecutionStatus } from '@prisma/client';
+import type { AutomationExecutionStatus } from '@/lib/generated/prisma/client';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { usersService } from '@/lib/services/usersService';

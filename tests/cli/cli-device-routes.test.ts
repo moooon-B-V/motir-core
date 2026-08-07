@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User } from '@prisma/client';
+import type { User } from '@/lib/generated/prisma/client';
 
 // Same reason as the service suite: every approve test signs in for real, and
 // Better-Auth's IP-keyed sign-in bucket (10s / 3) would 429 the fourth one under

@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { generateKeyPairSync } from 'node:crypto';
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/lib/generated/prisma/client';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';

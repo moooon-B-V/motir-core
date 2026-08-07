@@ -1,4 +1,4 @@
-import type { DashboardAccess, DashboardLayout, Prisma } from '@prisma/client';
+import type { DashboardAccess, DashboardLayout, Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { dashboardRepository } from '@/lib/repositories/dashboardRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';

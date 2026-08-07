@@ -1,4 +1,4 @@
-import type { User } from '@prisma/client';
+import type { User } from '@/lib/generated/prisma/client';
 import type { UserProfileDto } from '@/lib/dto/users';
 
 // User Prisma → DTO converters (CLAUDE.md 4-layer: mappers live here, services

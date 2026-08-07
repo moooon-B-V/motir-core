@@ -1,4 +1,4 @@
-import { Prisma, type ImportSource, type ImportSourceIdentity } from '@prisma/client';
+import { Prisma, type ImportSource, type ImportSourceIdentity } from '@/lib/generated/prisma/client';
 
 // Import-source identity repository — single Prisma operations on the
 // `import_source_identity` table (Story 7.16 · MOTIR-1653). The service

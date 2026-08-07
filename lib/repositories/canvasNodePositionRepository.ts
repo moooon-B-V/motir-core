@@ -1,4 +1,4 @@
-import type { CanvasNodePosition, Prisma } from '@prisma/client';
+import type { CanvasNodePosition, Prisma } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single-op data access for `CanvasNodePosition` (CLAUDE.md 4-layer). Reads use

@@ -1,4 +1,4 @@
-import { Prisma, type WorkItem } from '@prisma/client';
+import { Prisma, type WorkItem } from '@/lib/generated/prisma/client';
 import { randomUUID } from 'node:crypto';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { acceptanceEvidenceRepository } from '@/lib/repositories/acceptanceEvidenceRepository';

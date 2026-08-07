@@ -1,4 +1,4 @@
-import type { Prisma, SavedFilterStar } from '@prisma/client';
+import type { Prisma, SavedFilterStar } from '@/lib/generated/prisma/client';
 
 // Saved-filter star data access (Story 6.2 · Subtask 6.2.1). Single Prisma
 // ops; writes require `tx` (CLAUDE.md). Counts live in the parent read's

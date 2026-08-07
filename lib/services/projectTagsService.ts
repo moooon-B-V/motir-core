@@ -1,4 +1,4 @@
-import type { Project } from '@prisma/client';
+import type { Project } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectTagRepository } from '@/lib/repositories/projectTagRepository';

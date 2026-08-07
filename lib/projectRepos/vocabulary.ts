@@ -1,4 +1,4 @@
-import type { ProjectRepoRole, ProjectRepoState } from '@prisma/client';
+import type { ProjectRepoRole, ProjectRepoState } from '@/lib/generated/prisma/client';
 import type { ProjectRepoProposalSignalDto, ProjectRepoRoleDto } from '@/lib/dto/projectRepos';
 
 // The repo-SET vocabulary (Story MOTIR-1775 · MOTIR-1780) — the small set of

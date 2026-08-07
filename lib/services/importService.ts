@@ -9,7 +9,7 @@
 // `Import`-row transactions.
 
 import { db } from '@/lib/db';
-import type { ImportSource } from '@prisma/client';
+import type { ImportSource } from '@/lib/generated/prisma/client';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import type { GithubRepo } from '@prisma/client';
+import type { GithubRepo } from '@/lib/generated/prisma/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';

@@ -3,7 +3,7 @@ import {
   type ProjectRepoCollaboratorPermission,
   type ProjectRepoRole,
   type ProjectRepoState,
-} from '@prisma/client';
+} from '@/lib/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';

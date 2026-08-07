@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/lib/generated/prisma/client';
 import { generateKeyPairSync } from 'node:crypto';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';

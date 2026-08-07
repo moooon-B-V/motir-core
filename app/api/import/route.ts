@@ -3,7 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
 import { ImportConnectionConfigError } from '@/lib/import/errors';
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
-import type { ImportSource } from '@prisma/client';
+import type { ImportSource } from '@/lib/generated/prisma/client';
 
 // POST /api/import (Story 7.16 · MOTIR-941) — create a DRAFT import for a
 // project. Thin HTTP layer over `importService.createDraft` (the 4-layer rule:

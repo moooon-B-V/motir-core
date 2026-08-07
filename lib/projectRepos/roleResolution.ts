@@ -1,4 +1,4 @@
-import type { ProjectRepoRole } from '@prisma/client';
+import type { ProjectRepoRole } from '@/lib/generated/prisma/client';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import { normalizeTargetRepo } from '@/lib/workItems/targetRepo';
 import { isEstablishedState } from './vocabulary';

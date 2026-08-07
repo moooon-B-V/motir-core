@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { User, WorkItem } from '@prisma/client';
+import type { User, WorkItem } from '@/lib/generated/prisma/client';
 import { toReadyItemDispatchDto, toReadyItemDto } from '@/lib/mappers/readyMappers';
 import { markdownToExcerpt } from '@/lib/markdown/excerpt';
 import type { ReadyAssignee } from '@/lib/mappers/readyMappers';

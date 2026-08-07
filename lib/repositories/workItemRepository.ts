@@ -9,7 +9,7 @@ import {
   type WorkItemPlanningSource,
   type WorkItemPriority,
   type WorkItemType,
-} from '@prisma/client';
+} from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { BuiltInFilterFieldId, FilterAst, FilterCondition } from '@/lib/filters/ast';
 import {

@@ -1,4 +1,4 @@
-import type { ProjectRepoRole } from '@prisma/client';
+import type { ProjectRepoRole } from '@/lib/generated/prisma/client';
 import { normalizeTargetRepo, type ConnectedRepoName } from '@/lib/workItems/targetRepo';
 import type { ProjectRepoWithRealized } from '@/lib/mappers/projectRepoMappers';
 import { repoCloneUrl } from '@/lib/repos/cloneUrl';

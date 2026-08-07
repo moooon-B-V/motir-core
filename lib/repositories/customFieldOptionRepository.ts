@@ -1,4 +1,4 @@
-import { Prisma, type CustomFieldOption } from '@prisma/client';
+import { Prisma, type CustomFieldOption } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Custom-field-option repository — single Prisma operations on the

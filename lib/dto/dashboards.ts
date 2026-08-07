@@ -1,4 +1,4 @@
-import type { DashboardAccess, DashboardLayout, DashboardWidgetType } from '@prisma/client';
+import type { DashboardAccess, DashboardLayout, DashboardWidgetType } from '@/lib/generated/prisma/client';
 import type { WidgetConfig } from '@/lib/dashboards/widgetRegistry';
 
 // Dashboard DTOs (Story 6.3 · Subtask 6.3.1) — what crosses the API

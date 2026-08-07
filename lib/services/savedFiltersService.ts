@@ -1,4 +1,4 @@
-import { Prisma, type Project, type SavedFilterVisibility } from '@prisma/client';
+import { Prisma, type Project, type SavedFilterVisibility } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import type { SavedFilterListView } from '@/lib/repositories/savedFilterRepository';

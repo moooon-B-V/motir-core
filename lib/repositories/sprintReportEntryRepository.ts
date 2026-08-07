@@ -1,4 +1,4 @@
-import { Prisma, type EstimationStatistic, type WorkItem } from '@prisma/client';
+import { Prisma, type EstimationStatistic, type WorkItem } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the `sprint_report_entry` table

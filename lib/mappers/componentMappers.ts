@@ -1,4 +1,4 @@
-import type { Component, User } from '@prisma/client';
+import type { Component, User } from '@/lib/generated/prisma/client';
 import type { ComponentWithCount } from '@/lib/repositories/componentRepository';
 import type { ComponentDto, ComponentUserDto, ComponentWithCountDto } from '@/lib/dto/components';
 

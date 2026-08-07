@@ -28,7 +28,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { WorkItemKind } from '@prisma/client';
+import type { WorkItemKind } from '@/lib/generated/prisma/client';
 
 const PASSWORD = 'backlog-filter-e2e-9';
 const OWNER = 'e2e-backlog-filter-owner@motir.dev';

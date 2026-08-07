@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { MigrateOnboardingStep } from '@prisma/client';
+import type { MigrateOnboardingStep } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';

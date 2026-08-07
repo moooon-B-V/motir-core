@@ -1,4 +1,4 @@
-import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
+import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@/lib/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   astHasEpic5Conditions,
