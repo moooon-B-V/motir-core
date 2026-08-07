@@ -267,7 +267,7 @@ export function registerGetWorkItemActivity(
       title: 'Get work item activity',
       description:
         "Read one page of a work item's discussion and change trail (by identifier, e.g. " +
-        '"PROD-7"): `view: "all"` (default) interleaves comment threads and history in ' +
+        '"ACME-7"): `view: "all"` (default) interleaves comment threads and history in ' +
         'timestamp order, `"comments"` returns threads with their replies, `"history"` the ' +
         'change trail. Cursor-paged — echo `nextCursor` back verbatim to continue; a SHORT ' +
         'page with a non-null cursor is normal, so keep paging until it is null. Comment ' +

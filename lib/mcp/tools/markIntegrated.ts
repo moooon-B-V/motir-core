@@ -77,7 +77,7 @@ export function registerMarkIntegrated(
     {
       title: 'Mark integrated',
       description:
-        'Record that a work item (by identifier, e.g. "PROD-7") has been integrated onto a ' +
+        'Record that a work item (by identifier, e.g. "ACME-7") has been integrated onto a ' +
         'session branch: it moves to "In review" and records the branch, which unblocks its ' +
         'dependents while the session PR awaits a human merge. Optionally self-report the ' +
         'implementation harness + model (source defaults to "byok") to record how it was built. ' +

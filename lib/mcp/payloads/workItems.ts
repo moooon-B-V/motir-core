@@ -45,7 +45,7 @@ import { definePayload } from './define';
  *
  * ⚠️ **`key` changes meaning here, and it is the ONE non-additive change in
  * Story 11.6** (ADR Amendment 7 Q6 addendum). It was the NUMERIC key on this row
- * and the `PROD-<n>` identifier on `/api/v1` — and on MCP's own `list_ready`
+ * and the `<KEY>-<n>` identifier on `/api/v1` — and on MCP's own `list_ready`
  * rows. It is now the identifier everywhere, and the numeric key is preserved as
  * `numericKey`, so nothing is lost. `@motir/cli` never read the numeric one
  * (`grep -rn "key: number" packages/cli/src/` → no matches; its `WorkItemSummary`
@@ -56,7 +56,7 @@ export const mcpWorkItemChildSchema = workItemChildSchema.extend({
   id: z.string(),
   /** The numeric key. Was `key` before MOTIR-2228; renamed, never dropped. */
   numericKey: z.number().int(),
-  /** The `PROD-<n>` identifier. Retained beside v1's `key`, which now holds the
+  /** The `<KEY>-<n>` identifier. Retained beside v1's `key`, which now holds the
    *  same value — every existing reader of `identifier` keeps working. */
   identifier: workItemKeySchema,
   /** The parent's internal id (v1 publishes `parentKey` instead; both ride). */

@@ -62,7 +62,7 @@ export function registerAddComment(server: McpServer, resolveContext: McpContext
     {
       title: 'Add comment',
       description:
-        'Post a Markdown comment on a work item (by identifier, e.g. "PROD-7") as the token ' +
+        'Post a Markdown comment on a work item (by identifier, e.g. "ACME-7") as the token ' +
         'owner. Mentions notify the mentioned member. Honors the same access checks as the UI.',
       inputSchema,
     },
