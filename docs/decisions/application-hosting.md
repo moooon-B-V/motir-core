@@ -484,3 +484,185 @@ here).
 | `MOTIR_BASE_URL` already meaning this                                | `scripts/upload-acceptance-video.mjs`, `.github/workflows/acceptance-video.yml`                                        |
 | A stale Inngest app registry drops events silently                   | `.github/workflows/inngest-sync.yml`'s header (MOTIR-1970)                                                             |
 | Uninstalling the Vercel integration deletes the Neon organization    | Neon's documentation, cited on MOTIR-2391 and MOTIR-2396                                                               |
+
+---
+
+## Amendment 1 (2026-08-07) — the core→ai seam moves onto Fly private networking; `MOTIR_BASE_URL` stays PUBLIC
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2420.** **Decided by Yue,
+> 2026-08-07:** once motir-core runs on Fly, it reaches motir-ai over the org's
+> private network. This amendment RECORDS that decision and the boundary around
+> it. It changes no secret, no code and no configuration — **MOTIR-2426 applies
+> the value and proves it from inside a deployed machine**, which cannot happen
+> until the cutover (MOTIR-2392) has produced one.
+>
+> **Numbered 1** — the first amendment to this record. (MOTIR-2410, which
+> corrects the org name in §1 / §2 / §7, is a separate PR against this same file
+> and takes the next number.)
+
+**Amends:** it ADDS a decision — **Q9**, the transport between motir-core and
+motir-ai — which §1's decision table did not carry. §1 is deliberately not
+rewritten in place; this section is Q9's entry, in the convention this directory
+uses (`attachment-access-control.md` Amendment 2, `public-api-conventions.md`
+Amendments 1–11).
+
+**It re-opens nothing.** Q1 (Fly, `iad`), Q3 (`MOTIR_BASE_URL` and its two-rung
+precedence) and Q7 (no CDN, egress accepted at $0.02/GB) all stand exactly as
+written. Q7 is cited below as the REASON this is worth doing, not as a decision
+being revisited.
+
+### Q9 — how motir-core reaches motir-ai
+
+#### The decision
+
+**`MOTIR_AI_URL` becomes `http://motir-ai.internal:8080`** — the private 6PN
+address of the `motir-ai` app inside the org, in place of the public
+`https://motir-ai.fly.dev`.
+
+|                   | public `https://motir-ai.fly.dev`                               | private `http://motir-ai.internal:8080`                           |
+| ----------------- | --------------------------------------------------------------- | ----------------------------------------------------------------- |
+| path              | out to the public internet and back in through Fly's edge proxy | direct machine-to-machine over the encrypted WireGuard (6PN) mesh |
+| **outbound bill** | **$0.02/GB** — the line item Q7 accepted                        | **free** — same-region app-to-app transfer is not billed          |
+| latency           | edge proxy hop + a TLS handshake per connection                 | one hop, no TLS termination                                       |
+| reachable by      | anyone on the internet who can resolve the hostname             | only from inside the org's private network                        |
+| auth              | `MOTIR_AI_SERVICE_TOKEN` on every call                          | **`MOTIR_AI_SERVICE_TOKEN` on every call — unchanged**            |
+
+The last row is not filler. **Going private does not replace authentication.**
+The service token still gates every request; the private address removes public
+reachability, it does not confer trust. Nothing here licenses dropping the token
+because "it is internal now."
+
+#### The facts this rests on — each READ, not assumed
+
+| Fact                                 | Value                        | How it was read (2026-08-07)                                                   |
+| ------------------------------------ | ---------------------------- | ------------------------------------------------------------------------------ |
+| Both apps are in the SAME Fly org    | `moooon`                     | `fly apps list` — `motir-ai`, `motir-core`, `motir-gateway` all owner `moooon` |
+| …and that org exists under that slug | `moooon` (display `MOOOON`)  | `fly orgs list` — `personal`, `motir-fleet`, `moooon`                          |
+| Both apps are in the SAME region     | `iad`                        | `motir-ai/fly.toml` `primary_region`; this record's Q1 for motir-core          |
+| motir-ai's port behind the proxy     | `8080`                       | `motir-ai/fly.toml` `[http_service] internal_port`                             |
+| Public egress rate                   | $0.02/GB (NA/EU)             | fly.io/docs/about/pricing                                                      |
+| Same-region app-to-app transfer      | free; cross-region $0.006/GB | fly.io/docs/about/pricing — "the following types of traffic are free"          |
+
+**⚠️ §1, §2 and §7 of this record name the org as `zhu-yue`. That org does not
+exist** — it is the personal org's DISPLAY name slugified by hand, and the
+personal org (slug `personal`) holds neither service. The correction to those
+three sections is **MOTIR-2410**'s, deliberately not made here so that two cards
+do not edit the same lines. This amendment states the observed value because the
+decision above depends on it: private networking works **because both apps are in
+one org**, and a reader checking that premise against a non-existent org name
+would conclude the premise is false.
+
+**The "free" claim is region-conditional, and that is why it is written this way
+rather than as "not billed".** Both apps are in `iad` today, so the transfer is
+free. If either app is ever given a second region, the same traffic becomes
+$0.006/GB — still 3× cheaper than the public path, but no longer zero. The
+cheapness of this change is a property of the current topology, not of private
+networking.
+
+### ⚠️ The boundary — `MOTIR_BASE_URL` is NOT the internal seam and must never be repointed
+
+**This is the load-bearing half of the amendment.** The two services call each
+other in both directions, and the obvious symmetry is wrong.
+
+- **core → ai** is `MOTIR_AI_URL`, a **motir-core** secret. It is a
+  service-to-service address and nothing else. **It goes private.**
+- **motir-core's own origin** is **`MOTIR_BASE_URL`** (Q3) — and it is **NOT a
+  service address at all.** It is the absolute origin the application prints
+  about ITSELF, resolved through the single accessor `lib/baseUrl.ts`, and it
+  lands in **password-reset links, workspace-invite links, OAuth callback URLs
+  (Google, GitHub, GitLab, Jira, Linear, Plane), public-project canonical and
+  OpenGraph URLs, the sitemap, and the automation e-mail CTA**. Every one of
+  those is opened by a human in a browser, off the Fly network. **It stays
+  `https://app.motir.co`. Pointing it at a `.internal` address would not error —
+  it would silently mint links nobody outside a Fly machine can open.**
+
+By Q3's design motir-core has **exactly one** variable for its own origin and
+**exactly one** accessor, so there is no "internal variant" of it to set. A
+reader who has seen half the traffic move inside and reaches for `MOTIR_BASE_URL`
+to finish the job is not completing this decision — they are breaking every
+emailed link in the product. **The job is finished. This paragraph is the record
+of that.**
+
+**What this amendment does NOT decide:** motir-ai's own `MOTIR_CORE_URL` — the
+address it calls back on, carrying `CORE_CALLBACK_SECRET` — is a **motir-ai**
+secret, in another repository, under another record. It is unchanged and out of
+scope here. It is named only so it is not confused with `MOTIR_BASE_URL`; the two
+are different variables in different applications.
+
+### Where `.internal` does NOT resolve — and what is deliberately unchanged
+
+`motir-ai.internal` resolves **only from inside the org's private network** — a
+Fly machine in `moooon`, or a device joined to the org's WireGuard peer network.
+An ordinary developer laptop, a GitHub Actions runner and a Playwright web server
+are none of those.
+
+So **this is ONE deployed Fly secret, and nothing else changes**:
+
+| Surface                                          | Value                                       | Why                                                                   |
+| ------------------------------------------------ | ------------------------------------------- | --------------------------------------------------------------------- |
+| the `motir-core` Fly app's `MOTIR_AI_URL` secret | `http://motir-ai.internal:8080`             | the only place the private address belongs                            |
+| `.env.example`'s documented default              | `http://localhost:8001` — **unchanged**     | it is what a developer runs against; `.internal` breaks every machine |
+| `playwright*.config.ts`                          | their existing stub origins — **unchanged** | the E2E lanes intercept this origin; they never reach Fly             |
+| `.github/**` workflows                           | **unchanged**                               | a runner is outside the 6PN mesh                                      |
+
+The enforcing check is a grep, not a count:
+`grep -rn 'motir-ai.internal' .env.example playwright*.config.ts .github/` must
+return nothing.
+
+### Why the value was not simply set during provisioning
+
+MOTIR-2386 set `MOTIR_AI_URL` to the **public** `https://motir-ai.fly.dev`, on
+purpose, and recorded why: a provisioning card **transcribes** configuration, it
+does not redesign a seam. Improving a value quietly in the middle of a migration
+destroys the one property that makes a cutover debuggable — the ability to tell a
+**migration** fault from an **optimisation** fault. The private address was
+therefore carded (this record, and MOTIR-2426) rather than slipped in.
+
+### The rollback
+
+**One command:** `fly secrets set MOTIR_AI_URL=https://motir-ai.fly.dev -a motir-core`.
+
+That it is this cheap is the whole argument **against** building anything in
+code — no fallback chain, no dual-address probing, no health-gated switch. A
+seam whose reversal is one secret does not need a mechanism.
+
+### Who applies it, and what they must VERIFY rather than assume
+
+**MOTIR-2426** owns the change and the proof. It cannot run before the cutover:
+the address can only be exercised from a machine inside the mesh, and no
+motir-core machine exists until MOTIR-2392's first deploy. Two things it must
+verify from inside that machine, because this record does not assert either:
+
+- **That `force_https = true` in `motir-ai/fly.toml` does not break a plain-HTTP
+  6PN request.** That setting is a Fly **edge-proxy** policy, and 6PN traffic
+  goes straight to the machine's internal port; the expectation is that it is
+  simply not in the path. **Expectation is not evidence** — MOTIR-2426 issues the
+  request and reads the response.
+- **That `machine_count` and the app's health are read from the platform**, not
+  from `fly.toml` (Q5, Q6).
+
+A decision with no owner for its execution is the gap this section exists to
+close.
+
+### Rejected alternatives
+
+| Alternative                                                           | Why rejected                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep the public URL                                                   | It works, and it pays $0.02/GB to send traffic out of a datacentre and back into the same one, while leaving an internal service boundary addressable from the internet. Q7 accepted that cost for **static assets served to users**, not for this. |
+| Move `MOTIR_BASE_URL` to `.internal` as well, for symmetry            | It is not a service address. It is the origin printed into emailed links and OAuth callbacks — see the boundary above. This is the specific mistake the amendment exists to prevent.                                                                |
+| Set `.internal` as `.env.example`'s default                           | `.internal` resolves nowhere outside the 6PN mesh, so this breaks every developer machine and every CI runner on the first `pnpm dev`, with a DNS error that reads like a network fault.                                                            |
+| Add an in-code fallback: try `.internal`, fall back to the public URL | It doubles the failure modes (which path served this request?) and hides a misconfiguration behind a silent, billed detour. The rollback is one `fly secrets set`; a mechanism cannot beat that.                                                    |
+| Put a Fly Machines private-network proxy or an internal LB in between | An extra hop and an extra thing to operate, for two apps in one org and one region that Fly already gives a flat private address space.                                                                                                             |
+| Do it inside MOTIR-2386 (provisioning)                                | A provisioning card transcribes configuration; changing a seam mid-migration makes a migration fault indistinguishable from an optimisation fault. See above.                                                                                       |
+
+### Sources — additions
+
+| Fact                                                            | Source                                                                              |
+| --------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Org `moooon` holds all three apps; `zhu-yue` does not exist     | `fly apps list` / `fly orgs list`, 2026-08-07 (also MOTIR-2386's execution comment) |
+| motir-ai's `internal_port = 8080`, and `force_https = true`     | `motir-ai/fly.toml` on its `origin/main`                                            |
+| Same-region app-to-app transfer is free; cross-region $0.006/GB | fly.io/docs/about/pricing, read 2026-08-07                                          |
+| `.internal` is org-scoped 6PN service discovery                 | fly.io/docs/networking/private-networking/, read 2026-08-07                         |
+| Everything `MOTIR_BASE_URL` ends up inside                      | `lib/baseUrl.ts`'s header and its call sites on `origin/main` (MOTIR-2388)          |
+| Why provisioning set the public value                           | MOTIR-2386's closing comment                                                        |
+| The org name correction in §1 / §2 / §7                         | MOTIR-2410                                                                          |
