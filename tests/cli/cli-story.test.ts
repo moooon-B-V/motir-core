@@ -32,18 +32,28 @@ import {
 // STORY-CLOSING suite for the Motir CLI (Story 7.9 · Subtask 7.9.5 · MOTIR-883).
 //
 // The per-subtask vitest under `packages/cli/test/**` covers each module in
-// isolation, in-process, with the MCP client, the agent launcher and git all
+// isolation, in-process, with the server client, the agent launcher and git all
 // injected. Nothing there proves the ASSEMBLED tool works: that the tsup bundle
-// `package.json#bin` points at boots, that it speaks the real protocol to the
-// real `/api/mcp` route over a real socket, that a status flip actually lands in
-// Postgres as the token's owner, or that a `motir auto` run ends with one pull
-// request and a `main` nobody advanced.
+// `package.json#bin` points at boots, that it reaches the real routes over a
+// real socket, that a status flip actually lands in Postgres as the token's
+// owner, or that a `motir auto` run ends with one pull request and a `main`
+// nobody advanced.
+//
+// ⚠️ THE TARGET MOVED (Story 11.5). This suite drove `/api/mcp` until the CLI
+// stopped being an MCP client; every request below now lands on `/api/v1`
+// (`v1Routes: true`, mounted by MOTIR-2379). The ASSERTIONS did not move with
+// it, and that is the migration's central proof: not one expected line of
+// human-readable output in this file changed. The only edits are three `--json`
+// payload assertions, where ADR Amendment 14 deliberately changed the shape —
+// `--json` now emits the v1 RESOURCE, which names an item by `key` rather than
+// `identifier`. `cli-v1-story.test.ts` (11.5.8) holds what this suite does not:
+// the harness's own dispatch, plus the scope-refused and rate-limited states.
 //
 // So this suite drives the BUILT BINARY as a CHILD PROCESS:
 //
-//   built `motir` binary  ──HTTP──▶  the real /api/mcp route  ──▶  real Postgres
-//          │                         (withMcpAuth + verifyMcpToken +
-//          │                          the production resolvers + tool registry)
+//   built `motir` binary  ──HTTP──▶  the real /api/v1 routes  ──▶  real Postgres
+//          │                         (withV1Route + the real bearer/scope gate
+//          │                          + the real rate limiter + real services)
 //          ├─ spawns ──▶ a scripted FAKE AGENT (records its cwd, stdin and
 //          │             $MOTIR_PROMPT_FILE; exits per fixture; never an LLM)
 //          └─ shells ──▶ real `git` against real on-disk repos, and a fake `gh`
@@ -89,8 +99,10 @@ interface LinkedProject {
   tokenId: string;
 }
 
-/** Mint a full-scope PAT for a fresh tenant (the CLI is an MCP client of the
- *  whole tool surface; scope gating is `tests/mcp/story-roundtrip`'s subject). */
+/** Mint a full-scope PAT for a fresh tenant — the CLI spans the whole read and
+ *  write surface, so a narrower token would refuse tests that are not about
+ *  scopes. What a NARROW one does is `cli-v1-story.test.ts`'s subject on the v1
+ *  side, and `tests/mcp/story-roundtrip`'s on the server's. */
 async function mintToken(
   fx: WorkItemFixture,
   label = 'cli',
