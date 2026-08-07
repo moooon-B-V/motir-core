@@ -3,11 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-// The client-direct blob upload (MOTIR-1681) is mocked so the uploader never
-// hits the network — the test asserts the mint → put → register orchestration.
-vi.mock('@vercel/blob/client', () => ({
-  put: vi.fn(async (pathname: string) => ({ pathname })),
-}));
+// The client-direct upload (MOTIR-1681) is an ordinary PUT to a presigned URL
+// since MOTIR-2389, so the shared `fetch` stub covers it — there is no SDK left
+// to module-mock. The test asserts the mint → PUT → register orchestration.
 
 // The BYOK uploader (Subtask MOTIR-1632; direct-to-Blob MOTIR-1681) — pure
 // logic, no DB. Tests the no-op (red-run) path + the mint/upload/register flow.
@@ -24,15 +22,33 @@ import {
   resolveStoryKey,
   uploadAcceptanceVideo,
 } from '../scripts/upload-acceptance-video.mjs';
-import { put as putBlobMock } from '@vercel/blob/client';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'acc-video-'));
 }
 
+/** A presigned PUT URL of the shape `mintPrivateUploadToken` now returns. */
+function signedPutUrl(key: string): string {
+  return `https://s3.example/motir-private/${key}?X-Amz-Signature=sig&X-Amz-SignedHeaders=content-type%3Bhost`;
+}
+
+/** The PUT calls a fetch mock recorded — the direct-upload half of the flow. */
+function putCalls(fetchMock: { mock: { calls: unknown[][] } }): Array<{
+  url: string;
+  contentType: string | undefined;
+  body: unknown;
+}> {
+  return fetchMock.mock.calls
+    .filter(([, init]) => (init as { method?: string } | undefined)?.method === 'PUT')
+    .map(([url, init]) => {
+      const i = init as { headers?: Record<string, string>; body?: unknown };
+      return { url: String(url), contentType: i.headers?.['content-type'], body: i.body };
+    });
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
-  vi.clearAllMocks(); // module-mocked `put` accumulates calls across tests otherwise
+  vi.clearAllMocks();
 });
 
 /** Write one Playwright-shaped recording directory. */
@@ -427,9 +443,10 @@ describe('uploadAcceptanceVideo', () => {
     body: string;
   }
 
-  /** A fetch mock that answers the mint-token call then the register call. */
+  /** A fetch mock that answers the mint-token call, the presigned PUT(s), then
+   *  the register call. */
   function stubPublishFetch(evidenceId = 'ev1', tokens?: unknown) {
-    const fetchMock = vi.fn(async (url: string, _init: FetchInit) => {
+    const fetchMock = vi.fn(async (url: string, init: FetchInit) => {
       if (url.endsWith('/upload-token')) {
         return {
           ok: true,
@@ -437,13 +454,14 @@ describe('uploadAcceptanceVideo', () => {
             tokens ?? {
               video: {
                 pathname: 'acceptance/w/s/uuid-acceptance.webm',
-                token: 'client-token-video',
+                token: signedPutUrl('acceptance/w/s/uuid-acceptance.webm'),
                 contentType: 'video/webm',
               },
               trace: null,
             },
         };
       }
+      if (init?.method === 'PUT') return { ok: true, status: 200, text: async () => '' };
       return { ok: true, json: async () => ({ evidence: { id: evidenceId } }) };
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -474,15 +492,17 @@ describe('uploadAcceptanceVideo', () => {
     expect(tokenInit.headers.authorization).toBe('Bearer motir_pat_abc');
     expect(JSON.parse(tokenInit.body)).toEqual({ hasTrace: false });
 
-    // 2. Direct client `put` to Blob with the minted token — NOT through the API.
-    expect(putBlobMock).toHaveBeenCalledWith(
-      'acceptance/w/s/uuid-acceptance.webm',
-      expect.anything(),
-      expect.objectContaining({ access: 'private', token: 'client-token-video' }),
-    );
+    // 2. Direct PUT to the presigned URL — NOT through the API. The
+    //    `content-type` header is REQUIRED and must equal the type the server
+    //    bound at signing time: it is inside X-Amz-SignedHeaders, so a missing
+    //    or mismatched one is a signature failure (MOTIR-2389).
+    const puts = putCalls(fetchMock);
+    expect(puts).toHaveLength(1);
+    expect(puts[0]!.url).toBe(signedPutUrl('acceptance/w/s/uuid-acceptance.webm'));
+    expect(puts[0]!.contentType).toBe('video/webm');
 
     // 3. Register call — JSON pathnames, never the bytes.
-    const [registerUrl, registerInit] = fetchMock.mock.calls[1]!;
+    const [registerUrl, registerInit] = fetchMock.mock.calls[2]!;
     expect(registerUrl).toBe('https://app.motir.co/api/work-items/MOTIR-1627/acceptance-evidence');
     expect(registerInit.headers['content-type']).toBe('application/json');
     expect(JSON.parse(registerInit.body)).toMatchObject({
@@ -506,10 +526,16 @@ describe('uploadAcceptanceVideo', () => {
       artifacts: { video, trace: null, chapters: null },
     });
 
-    for (const [, init] of fetchMock.mock.calls) {
+    // The two API calls carry the auth headers. The presigned PUT deliberately
+    // does NOT — its authorization IS the signature, and sending a bearer to the
+    // object store would leak the credential to a third party.
+    const apiCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/'));
+    expect(apiCalls).toHaveLength(2);
+    for (const [, init] of apiCalls) {
       expect(init.headers.authorization).toBe('Bearer oidc.jwt.token');
       expect(init.headers['x-motir-auth']).toBe('github-oidc');
     }
+    expect(putCalls(fetchMock)[0]!.contentType).toBe('video/webm');
   });
 
   it('uploads the trace too and registers both pathnames when a trace is present', async () => {
@@ -521,12 +547,12 @@ describe('uploadAcceptanceVideo', () => {
     const fetchMock = stubPublishFetch('ev3', {
       video: {
         pathname: 'acceptance/w/s/uuid-acceptance.webm',
-        token: 'ct-v',
+        token: signedPutUrl('acceptance/w/s/uuid-acceptance.webm'),
         contentType: 'video/webm',
       },
       trace: {
         pathname: 'acceptance/w/s/uuid-trace.zip',
-        token: 'ct-t',
+        token: signedPutUrl('acceptance/w/s/uuid-trace.zip'),
         contentType: 'application/zip',
       },
     });
@@ -539,8 +565,14 @@ describe('uploadAcceptanceVideo', () => {
     });
 
     expect(JSON.parse(fetchMock.mock.calls[0]![1].body)).toEqual({ hasTrace: true });
-    expect(putBlobMock).toHaveBeenCalledTimes(2);
-    expect(JSON.parse(fetchMock.mock.calls[1]![1].body)).toMatchObject({
+    // Each artifact PUTs with ITS OWN bound content type — the trace must not
+    // inherit the video's, or it lands as the wrong thing (the bound-at-signing
+    // hazard this seam exists to make impossible).
+    expect(putCalls(fetchMock).map((c) => c.contentType)).toEqual([
+      'video/webm',
+      'application/zip',
+    ]);
+    expect(JSON.parse(fetchMock.mock.calls[3]![1].body)).toMatchObject({
       videoPathname: 'acceptance/w/s/uuid-acceptance.webm',
       tracePathname: 'acceptance/w/s/uuid-trace.zip',
     });
@@ -552,21 +584,23 @@ describe('uploadAcceptanceVideo', () => {
     fs.writeFileSync(video, 'bytes');
     vi.stubGlobal(
       'fetch',
-      vi.fn(async (url: string) =>
-        url.endsWith('/upload-token')
-          ? {
-              ok: true,
-              json: async () => ({
-                video: {
-                  pathname: 'acceptance/w/s/v.webm',
-                  token: 'ct',
-                  contentType: 'video/webm',
-                },
-                trace: null,
-              }),
-            }
-          : { ok: false, status: 400, text: async () => 'ACCEPTANCE_EVIDENCE_BLOB_MISSING' },
-      ),
+      vi.fn(async (url: string, init?: { method?: string }) => {
+        if (url.endsWith('/upload-token')) {
+          return {
+            ok: true,
+            json: async () => ({
+              video: {
+                pathname: 'acceptance/w/s/v.webm',
+                token: signedPutUrl('acceptance/w/s/v.webm'),
+                contentType: 'video/webm',
+              },
+              trace: null,
+            }),
+          };
+        }
+        if (init?.method === 'PUT') return { ok: true, status: 200, text: async () => '' };
+        return { ok: false, status: 400, text: async () => 'ACCEPTANCE_EVIDENCE_BLOB_MISSING' };
+      }),
     );
     await expect(
       uploadAcceptanceVideo({
@@ -578,17 +612,18 @@ describe('uploadAcceptanceVideo', () => {
     ).rejects.toThrow(/400/);
   });
 
-  // MOTIR-1911 — the mint reports the cap it bound into the token, so an over-cap
-  // artifact fails by NAME here instead of as @vercel/blob's opaque "File is too
-  // large, the file length cannot be greater than 104857600 bytes" from inside `put`.
-  it('refuses an artifact over the MINTED cap, by name, before it reaches `put`', async () => {
+  // MOTIR-1911 — the mint reports the cap it bound into the grant, so an over-cap
+  // artifact fails by NAME here. Since MOTIR-2389 the presigned PUT has no size
+  // ceiling of its own, so this up-front check is what stops a doomed upload from
+  // being sent in full only to be refused by the register step.
+  it('refuses an artifact over the MINTED cap, by name, before it is uploaded', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
     fs.writeFileSync(video, Buffer.alloc(50));
-    stubPublishFetch('ev-cap', {
+    const fetchMock = stubPublishFetch('ev-cap', {
       video: {
         pathname: 'acceptance/v.webm',
-        token: 'ct',
+        token: signedPutUrl('acceptance/v.webm'),
         contentType: 'video/webm',
         maxBytes: 10,
       },
@@ -603,14 +638,14 @@ describe('uploadAcceptanceVideo', () => {
         artifacts: { video, trace: null, chapters: null },
       }),
     ).rejects.toThrow(/the video is .* over the publish target's .* per-file limit/);
-    expect(putBlobMock).not.toHaveBeenCalled();
+    expect(putCalls(fetchMock)).toHaveLength(0);
   });
 
   it('abstains when the mint reports no cap (an older server) — the flow is unchanged', async () => {
     const dir = tmpDir();
     const video = path.join(dir, 'v.webm');
     fs.writeFileSync(video, Buffer.alloc(50));
-    stubPublishFetch('ev-nocap'); // the default stub carries no `maxBytes`
+    const fetchMock = stubPublishFetch('ev-nocap'); // the default stub carries no `maxBytes`
 
     await expect(
       uploadAcceptanceVideo({
@@ -620,7 +655,7 @@ describe('uploadAcceptanceVideo', () => {
         artifacts: { video, trace: null, chapters: null },
       }),
     ).resolves.toEqual({ evidence: { id: 'ev-nocap' } });
-    expect(putBlobMock).toHaveBeenCalledTimes(1);
+    expect(putCalls(fetchMock)).toHaveLength(1);
   });
 
   it('throws when the token mint returns a non-2xx response (before any upload)', async () => {
@@ -697,10 +732,14 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
 
   /** The story key each register call targeted, in call order. */
   function publishedStories(fetchMock: { mock: { calls: unknown[][] } }): string[] {
-    return fetchMock.mock.calls
-      .map(([url]) => String(url))
-      .filter((url) => !url.endsWith('/upload-token'))
-      .map((url) => /work-items\/([^/]+)\/acceptance-evidence/.exec(url)?.[1] ?? '');
+    return (
+      fetchMock.mock.calls
+        .map(([url]) => String(url))
+        // The presigned PUTs go to the object store, not the API — only the
+        // register calls (the API URL, without the mint suffix) count.
+        .filter((url) => url.includes('/acceptance-evidence') && !url.endsWith('/upload-token'))
+        .map((url) => /work-items\/([^/]+)\/acceptance-evidence/.exec(url)?.[1] ?? '')
+    );
   }
 
   /** The JSON body of the FIRST register call (the mint calls carry a different
@@ -708,18 +747,29 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
   function registeredBody(fetchMock: {
     mock: { calls: Array<[string, { body?: string }?]> };
   }): Record<string, unknown> {
-    const call = fetchMock.mock.calls.find(([url]) => !url.endsWith('/upload-token'));
+    const call = fetchMock.mock.calls.find(
+      ([url]) => url.includes('/acceptance-evidence') && !url.endsWith('/upload-token'),
+    );
     return JSON.parse(call?.[1]?.body ?? '{}') as Record<string, unknown>;
   }
 
   function stubFetch(onRegister?: (storyKey: string) => { ok: boolean; status?: number }) {
-    const fetchMock = vi.fn(async (url: string, _init?: { body?: string }) => {
+    const fetchMock = vi.fn(async (url: string, init?: { body?: string; method?: string }) => {
+      if (init?.method === 'PUT') return { ok: true, status: 200, text: async () => '' };
       if (url.endsWith('/upload-token')) {
         return {
           ok: true,
           json: async () => ({
-            video: { pathname: 'acceptance/v.webm', token: 'ct', contentType: 'video/webm' },
-            trace: { pathname: 'acceptance/t.zip', token: 'ct2', contentType: 'application/zip' },
+            video: {
+              pathname: 'acceptance/v.webm',
+              token: signedPutUrl('acceptance/v.webm'),
+              contentType: 'video/webm',
+            },
+            trace: {
+              pathname: 'acceptance/t.zip',
+              token: signedPutUrl('acceptance/t.zip'),
+              contentType: 'application/zip',
+            },
           }),
         };
       }
@@ -757,7 +807,6 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     expect(exit).toHaveBeenCalledWith(1);
     // NOTHING was published — not even a token mint.
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(putBlobMock).not.toHaveBeenCalled();
   });
 
   // MOTIR-1905 — the blast radius of ONE unwatchable clip.
@@ -843,8 +892,8 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     // The receipt published, and the register call carries NO trace pathname.
     expect(publishedStories(fetchMock)).toEqual(['MOTIR-813']);
     expect(registeredBody(fetchMock).tracePathname).toBeNull();
-    // Only the VIDEO reached the Blob store — the trace was never uploaded.
-    expect(putBlobMock).toHaveBeenCalledTimes(1);
+    // Only the VIDEO reached the object store — the trace was never uploaded.
+    expect(putCalls(fetchMock)).toHaveLength(1);
     // Reported as a WARNING, not a failure: the receipt is there, so the run is
     // not broken.
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('DROPPED'));
@@ -860,7 +909,7 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
 
     await main();
 
-    expect(putBlobMock).toHaveBeenCalledTimes(2); // video + trace
+    expect(putCalls(fetchMock)).toHaveLength(2); // video + trace
     expect(registeredBody(fetchMock).tracePathname).toBe('acceptance/t.zip');
   });
 
@@ -912,8 +961,8 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
 
     expect(publishedStories(fetchMock)).toEqual(['MOTIR-811', 'MOTIR-1726', 'MOTIR-1627']);
     // Video + trace per recording — the exact bug's blast radius was that only
-    // one clip ever reached the Blob store.
-    expect(putBlobMock).toHaveBeenCalledTimes(6);
+    // one clip ever reached the object store.
+    expect(putCalls(fetchMock)).toHaveLength(6);
   });
 
   it('a failing publish does not cost the other recordings theirs — and the run exits non-zero', async () => {
@@ -999,7 +1048,6 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       await main();
 
       expect(fetchMock).not.toHaveBeenCalled();
-      expect(putBlobMock).not.toHaveBeenCalled();
     });
 
     it('publishes ONLY the story whose spec this PR changed, not its siblings', async () => {
