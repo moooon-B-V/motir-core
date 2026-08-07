@@ -1608,8 +1608,38 @@ dialog could not give it:
   and the author reads the model rather than a wrapped column;
 - **one layout for one catalog** — the create page's permission list is the detail screen's list with
   its marks swapped for checkboxes, not a second grammar invented for a dialog;
-- **a sticky action bar** carrying the running count and `Cancel` / `Create role`, pinned to the
-  bottom of the viewport so the commit is never 1500px away from the tick that changed the answer.
+- **a pinned action bar** carrying the running count and `Cancel` / `Create role`, held at the
+  bottom of the viewport for the whole scroll so the commit is never 1500px away from the tick that
+  changed the answer.
+
+### The pinned bar: the mechanism, and the trap that bit this mock
+
+`position: sticky; bottom: 0` pins against the **nearest scrolling ancestor**. In the shipped app
+that is `AppLayout`'s `<main>` — `min-h-0 overflow-y-auto` inside an `h-dvh overflow-hidden` column
+(`components/ui/AppLayout.tsx:56,80`) — and `app/(authed)/settings/project/layout.tsx` is a
+pass-through, so the bar pins correctly there.
+
+⚠️ **Any ancestor between `<main>` and the bar that sets `overflow` to anything but `visible` kills
+it silently.** The element keeps `position: sticky` in its computed style and simply never pins —
+there is no warning and nothing looks wrong in the CSS. That is exactly what happened here: this
+mock's inherited `.content` and the review page's `.stage` are both `overflow: hidden`, so an earlier
+revision of this asset **declared a sticky bar that did not stick**, and the notes claimed a
+behaviour the file did not have. It was caught by measuring — scroll the page, then read the bar's
+`getBoundingClientRect().bottom` against `window.innerHeight` — not by reading the CSS.
+
+Two consequences for **MOTIR-2257**:
+
+1. Do not wrap this page in a clipping container, and do not add `overflow-hidden` to a wrapper for
+   rounded corners without re-checking the bar.
+2. **Assert the pinning in a test** rather than trusting the declaration — scroll the scroll
+   container, then assert the bar's bottom edge is still at the container's bottom edge. A
+   declaration that silently no-ops is precisely the thing a test is for.
+
+**Panel 3 renders inside a fixed-height `overflow-y: auto` frame** (`.panel.vp .content`) that
+reproduces what `<main>` actually is, so the bar pins for real in the mock and in the PNG — a
+full-page screenshot can never show a pinned element otherwise. The 760px height is **review chrome**;
+the app takes its height from `h-dvh`. No trailing spacer is needed: the bar is the last child, so at
+full scroll it returns to its static position with every row above it.
 
 The author names the role, picks a **base to start from**, and the base's grants arrive **ticked and
 greyed** (`from Viewer`) — visually distinct from what they add on top (accent). Starting from a base

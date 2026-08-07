@@ -1201,15 +1201,32 @@
         margin-left: 6px;
       }
 
-      /* ── The CREATE page's sticky action bar ──────────────────────────────
+      /* ── The CREATE page's PINNED action bar ──────────────────────────────
          The create surface is a whole PAGE (MOTIR-2257 · /settings/project/
          roles/new), so the permission list has full width and every description
          sits on one line. What a page-length form owes the author is a commit
-         affordance that is never 1500px away — so the bar sticks to the bottom
-         of the viewport and carries the running count. */
+         affordance that is never 1500px away — so `Cancel` / `Create role` and
+         the running count PIN to the bottom of the viewport and stay there for
+         the whole scroll.
+
+         ⚠️ THE MECHANISM, AND THE TRAP THAT BIT THIS MOCK (read before building).
+         `position: sticky; bottom: 0` pins against the nearest SCROLLING
+         ancestor. In the shipped app that is AppLayout's `<main>`
+         (`min-h-0 overflow-y-auto` inside an `h-dvh overflow-hidden` column —
+         components/ui/AppLayout.tsx:56,80), and app/(authed)/settings/project/
+         layout.tsx is a pass-through, so the bar pins correctly there.
+         BUT: any ancestor between `<main>` and the bar that sets `overflow` to
+         anything other than `visible` silently kills it — the element keeps
+         `position: sticky` in the computed style and simply never pins. That is
+         exactly what happened here: the inherited `.content` and the review
+         page's `.stage` are both `overflow: hidden`, so an earlier revision
+         SHIPPED A BAR THAT LOOKED STICKY IN CSS AND WAS NOT. MOTIR-2257 must not
+         wrap this page in a clipping container, and should assert the pinning in
+         a test rather than trusting the declaration. */
       .stickybar {
         position: sticky;
         bottom: 0;
+        z-index: 2;
         display: flex;
         align-items: center;
         gap: 10px;
@@ -1219,6 +1236,25 @@
         border-radius: var(--radius-card);
         background: var(--el-surface);
         box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── MOCK CHROME: the app's scroll container, reproduced ───────────────
+         A full-page screenshot can never show a pinned bar, and the review
+         page's own `.stage` clips. So the CREATE panel renders inside a frame
+         that reproduces what AppLayout's `<main>` actually IS — a fixed-height
+         `overflow-y: auto` box — which makes the bar pin for real, in the mock
+         and in the PNG. REVIEW CHROME, not product: the app takes its height
+         from `h-dvh`, not from a hard 760px.
+
+         `padding-bottom: 0` so the pinned bar meets the frame's bottom edge. No
+         trailing spacer is needed: the bar is the last child, so at full scroll
+         it returns to its static position with every row above it — nothing is
+         permanently hidden behind it. */
+      .panel.vp .content {
+        height: 760px;
+        overflow-y: auto;
+        padding-bottom: 0;
+        scrollbar-width: thin;
       }
       /* The create form's two identity fields, above the permission list. */
       .createfields {
@@ -2583,13 +2619,16 @@
       the permission list the same full width panels 1 and 2 have, so every description sits on one
       line. Name, then the <strong>base to start from</strong> — the base’s grants arrive ticked and
       greyed (<code>from Viewer</code>), what the author adds is accent-ticked. The action bar
-      <strong>sticks to the bottom of the viewport</strong> with a running count, so the commit is
-      never 1500px away from the tick that changed the answer. <strong>Editing</strong> a custom
-      role is this same page with the values filled in — one surface, built once. MOTIR-2257 builds
-      this.
+      <strong>PINS to the bottom of the viewport</strong> with a running count, so the commit is
+      never 1500px away from the tick that changed the answer — this panel renders inside a
+      fixed-height scroll frame so you can SEE it pinned, with the rest of the list running behind
+      it. (An earlier revision declared that bar sticky and it never pinned: two inherited ancestors
+      are <code>overflow: hidden</code>, which kills <code>position: sticky</code> silently. See
+      design-notes.) <strong>Editing</strong> a custom role is this same page with the values filled
+      in — one surface, built once. MOTIR-2257 builds this.
     </div>
 
-    <div class="panel">
+    <div class="panel vp">
       <div class="stage">
         <div class="shell">
           <aside class="rail">
