@@ -1,18 +1,29 @@
-# Register the deployed function list with Inngest, on every production deploy.
+# Register the deployed function list with Inngest — the MANUAL re-sync.
 #
-# Why this workflow exists (MOTIR-1970)
-# ------------------------------------
+# ⚠️ THE DEPLOY-TIME SYNC IS NOT HERE ANY MORE (MOTIR-2390). It is a step of
+# `ci.yml`'s `deploy` job, which runs it after the Fly release is live and fails
+# the job when it does not succeed. Both entry points call ONE definition,
+# `.github/actions/inngest-sync`, so the retry loop and the 200 assertion cannot
+# drift apart.
+#
+# Why the trigger changed: this workflow used to fire on `deployment_status`, an
+# event **Vercel** raises. motir-core no longer runs on Vercel, and Fly raises no
+# such event, so the trigger would simply have stopped firing — reproducing the
+# exact silent failure the workflow was created to fix
+# (`docs/decisions/application-hosting.md` §6). What remains here is the
+# hand-operated path, for the cases no deploy covers: a `flyctl deploy` run from
+# a laptop, a restored-from-backup Inngest app, a rotated signing key.
+#
+# Why the sync exists at all (MOTIR-1970)
+# ---------------------------------------
 # Inngest only invokes functions it has been TOLD about. The registration is a
 # PUT to the app's `/api/inngest`, and until this workflow existed the only
-# thing issuing it was the Inngest↔Vercel integration, which probes the
-# per-deployment `motir-core-<hash>.vercel.app` URL.
-#
-# That probe cannot work here. The Vercel project runs Deployment Protection at
-# `all_except_custom_domains`, so every `*.vercel.app` deployment URL answers the
-# integration with a 302 into Vercel's SSO login — the request never reaches the
-# app. Only the custom domain `app.motir.co` is exempt. So the sync failed on
-# every deploy, silently, and the cloud kept serving a function list frozen at
-# whatever the last manual sync captured (2026-07-02, as it turned out).
+# thing issuing it was the Inngest↔Vercel integration, which probed the
+# per-deployment `motir-core-<hash>.vercel.app` URL. That probe could not work:
+# the Vercel project ran Deployment Protection at `all_except_custom_domains`,
+# so every `*.vercel.app` deployment URL answered the integration with a 302
+# into Vercel's SSO login and the request never reached the app. Only the custom
+# domain was exempt.
 #
 # The consequence was invisible: events for the un-registered functions were
 # ACCEPTED and consumed by nothing. `inngest.send()` succeeded, no run was
@@ -23,66 +34,39 @@
 # green. (This is MOTIR-66 recurring: that card fixed the PREVIEW probe with a
 # protection-bypass secret; production deployment URLs were never covered.)
 #
-# So Motir issues the sync ITSELF, against the custom domain, where Deployment
-# Protection does not apply — and FAILS THE JOB when the PUT does not succeed.
-# That is the point: the previous failure mode was a sync that could go wrong
-# without producing any signal at all. A red check is the signal.
+# So Motir issues the sync ITSELF, against the custom domain — and FAILS when
+# the PUT does not succeed. That is the point: the previous failure mode was a
+# sync that could go wrong without producing any signal at all. A red check is
+# the signal.
 #
-# This is the deploy-time half of the fix. The runtime half is the schedule-
+# This is the deploy-time fix's manual twin. The runtime half is the schedule-
 # health probe in `system.daily-health-check` (lib/services/jobScheduleHealth
-# Service.ts), which catches the fault even if this workflow is bypassed —
-# a hand-rolled deploy, a restored-from-backup Inngest app, a rotated key.
-#
-# Note this triggers on `deployment_status`, which Vercel raises for previews as
-# well; the `if` below narrows to successful PRODUCTION deploys. Those skipped
-# runs are not attached to any PR's check list, so they cost nothing visible.
+# Service.ts), which catches the fault even if neither path runs.
 
 name: Inngest sync
 
 on:
-  deployment_status:
+  workflow_dispatch:
 
-# One sync at a time; a superseded deploy's sync is worth cancelling because the
-# newer deploy's PUT supersedes it anyway.
+# One sync at a time. Unlike the deploy-time step, a manual run is never
+# superseded by a newer one automatically, so it queues rather than cancelling.
 concurrency:
   group: inngest-sync
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   register:
     name: Register functions with Inngest
-    if: >-
-      github.event.deployment_status.state == 'success' &&
-      github.event.deployment.environment == 'Production'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@v6
       - name: PUT the serve route
-        env:
-          # The CUSTOM domain, deliberately — the deployment URL is behind
-          # Deployment Protection (see the header). Overridable via a repo
-          # variable so a domain change does not need a code change.
-          SERVE_URL: ${{ vars.INNGEST_SERVE_URL || 'https://app.motir.co/api/inngest' }}
-        run: |
-          set -euo pipefail
-          echo "Registering $SERVE_URL"
-          # Retry: a production deploy is READY a moment before the alias fully
-          # settles, and a cold first request can exceed the default timeout.
-          for attempt in 1 2 3 4 5; do
-            code=$(curl -sS -X PUT "$SERVE_URL" \
-              --max-time 30 \
-              -o response.json -w '%{http_code}' || echo 000)
-            echo "attempt $attempt → HTTP $code"
-            cat response.json || true
-            echo
-            if [ "$code" = "200" ]; then
-              # The SDK answers 200 with { "message": ..., "modified": bool }.
-              # `modified` tells us whether the registry actually CHANGED; both
-              # values are success, so it is reported, not asserted.
-              echo "Registered. modified=$(jq -r '.modified // "unknown"' response.json)"
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-          echo "::error::Inngest registration failed after 5 attempts. Jobs added since the last successful sync will silently consume nothing — see MOTIR-1970."
-          exit 1
+        uses: ./.github/actions/inngest-sync
+        with:
+          # The CUSTOM domain, deliberately — it is where Inngest invokes the
+          # functions. Overridable via a repo variable so a domain change does
+          # not need a code change.
+          serve-url: ${{ vars.INNGEST_SERVE_URL || 'https://app.motir.co/api/inngest' }}

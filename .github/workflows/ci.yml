@@ -628,6 +628,138 @@ jobs:
     with:
       publish: false
 
+  # ── Ship it — the deploy runs AFTER the gates, never beside them (MOTIR-2390)
+  #
+  # The pipeline order is `docs/decisions/application-hosting.md` §6 (Q5): the
+  # suite that exists is the gate, it is untouched by this job, and the deploy
+  # follows it. Two conditions do that, and both are load-bearing:
+  #
+  #   • `needs:` — every app-level gate above. A skipped or failed need makes
+  #     this job skip (there is deliberately no `always()` here), so a red
+  #     Vitest shard or a red E2E leg means nothing ships. The package lanes
+  #     (`design-system`, `cli`) and the image lanes (`sandbox`, `runner-image`)
+  #     are NOT in the list: each is released by its own tag and none of them is
+  #     part of this service's artifact — the same reasoning motir-ai's deploy
+  #     uses to exclude `indexer-image`.
+  #   • `if:` — the default branch, on a real push. A pull request's `github.ref`
+  #     is `refs/pull/<n>/merge`, so a PR cannot deploy even by targeting main.
+  #
+  # `flyctl deploy` runs fly.toml's `release_command` (`prisma migrate deploy`
+  # via /app/migrate) as part of the release, in a temporary machine built from
+  # the same image, BEFORE any new machine takes traffic — so a migration cannot
+  # race a half-rolled-out release, and a non-zero release command rolls the
+  # deploy back.
+  #
+  # ⚠️ Merging a change here (or any change to `main`) DEPLOYS. That is the
+  # point, and it is also why the first merge after this job lands is a real
+  # production release: MOTIR-2392 is the card that watches it.
+
+  deploy:
+    name: Deploy to Fly
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, build, test, coverage, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # A release must NOT be cancelled mid-flight by a newer push — the
+    # workflow-level `cancel-in-progress` is right for a test run and wrong for
+    # a deploy, so this group overrides it.
+    concurrency:
+      group: fly-deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    # A backstop, not an expectation: the image build plus the release takes
+    # single-digit minutes.
+    timeout-minutes: 30
+    env:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # The Fly app name, which is also its Fly-owned hostname
+      # (`<app>.fly.dev`). Every check below reads THAT rather than the custom
+      # domain, so this job proves the release itself and not a DNS record.
+      FLY_APP: motir-core
+    steps:
+      - uses: actions/checkout@v6
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      # `--local-only` builds on the runner's own Docker daemon and pushes to
+      # registry.fly.io, instead of Fly's remote/Depot builder — which flaked
+      # with repeated 503s for motir-ai even while Fly itself was operational.
+      # The trade is that the Dockerfile's `node:22-slim` bases come from Docker
+      # Hub anonymously; if that becomes the flake, the mirror composite
+      # (`.github/actions/buildx`, MOTIR-2018) is where the fix belongs.
+      - name: Build the image and release it
+        run: flyctl deploy --local-only --app "$FLY_APP"
+
+      # ── Post-deploy verification: three things only a real release can show ──
+      #
+      # Deliberately NOT a second E2E suite. The deployed app's only database is
+      # production, and the specs truncate what they connect to (ADR §6's
+      # rejected alternatives). What is left is still every configuration
+      # failure worth catching: is the process up, can it be reached by the one
+      # caller that talks to it, and does the platform have the machines this
+      # repository believes it does.
+      - name: Assert the release answers
+        run: |
+          set -euo pipefail
+          url="https://${FLY_APP}.fly.dev/sign-in"
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 "$url" || echo 000)
+            echo "attempt $attempt → GET $url → HTTP $code"
+            if [ "$code" = "200" ]; then
+              exit 0
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "::error::$url did not answer 200 after 5 attempts — the release is not serving."
+          exit 1
+
+      # The sync that used to ride Vercel's `deployment_status` event, which Fly
+      # does not raise. It is a STEP of the deploy now, and a failure is a red
+      # check: a stale Inngest app registry drops events SILENTLY, which is how
+      # five production jobs stayed dead for a month (MOTIR-1970).
+      #
+      # The URL is the CUSTOM domain on purpose — it is where Inngest will
+      # invoke the functions, so it is the only URL whose registration means
+      # anything. The repo variable keeps a domain change out of this file.
+      - name: Register the deployed functions with Inngest
+        uses: ./.github/actions/inngest-sync
+        with:
+          serve-url: ${{ vars.INNGEST_SERVE_URL || 'https://app.motir.co/api/inngest' }}
+
+      # ⚠️ Read from the PLATFORM, never from `fly.toml`. A config file is a
+      # claim about the deployment, not a reading of it: motir-ai's fly.toml
+      # promised load spilling onto fresh machines while production ran ONE
+      # machine for weeks, because `auto_start_machines` never CREATES one and
+      # no card had run `fly scale count` (MOTIR-2102 — three days of an
+      # incident filed against the wrong service, closed by one authenticated
+      # GET).
+      #
+      # The EXPECTED count is a repo variable, not a constant, because the pool
+      # grows by an operator action this job cannot take: ADR §7 decides TWO
+      # machines and MOTIR-2408 creates the second one, which can only run once
+      # a first machine exists. Until it does, one machine is the truth, and a
+      # check that asserted 2 would be red for a reason that is not a defect.
+      # MOTIR-2408 sets FLY_EXPECTED_MACHINE_COUNT=2 as part of creating it.
+      - name: Assert the machine count, read from Fly's API
+        env:
+          EXPECTED: ${{ vars.FLY_EXPECTED_MACHINE_COUNT || '1' }}
+        run: |
+          set -euo pipefail
+          # Capture first, THEN test — a `curl | jq` pipeline under `pipefail`
+          # reports the wrong command's status.
+          body=$(curl -sS --max-time 30 \
+            -H "Authorization: Bearer ${FLY_API_TOKEN}" \
+            "https://api.machines.dev/v1/apps/${FLY_APP}")
+          echo "$body"
+          actual=$(jq -r '.machine_count // empty' <<<"$body")
+          if [ -z "$actual" ]; then
+            echo "::error::Fly's API returned no machine_count for ${FLY_APP} — the app is unreachable or the token cannot see it (Fly answers not-found, never forbidden)."
+            exit 1
+          fi
+          echo "machine_count=${actual}, expected=${EXPECTED}"
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error::${FLY_APP} runs ${actual} machine(s); ${EXPECTED} expected. Either the pool changed under us, or FLY_EXPECTED_MACHINE_COUNT is stale — read the platform before changing the variable."
+            exit 1
+          fi
+
   # ── The one required status check on `main` (MOTIR-2008) ──────────────────
   # `protect-main` (ruleset 17227448) requires exactly ONE context: `CI complete`.
   # Everything above is gated THROUGH this job rather than by name, because
@@ -667,7 +799,20 @@ jobs:
     #     FAILED or CANCELLED need. Hence the step, which is what actually turns
     #     `failure` / `cancelled` into a red gate.
     if: always()
-    needs: [lint, typecheck, design-system, cli, build, test, coverage, e2e, sandbox, runner-image]
+    needs:
+      [
+        lint,
+        typecheck,
+        design-system,
+        cli,
+        build,
+        test,
+        coverage,
+        e2e,
+        sandbox,
+        runner-image,
+        deploy,
+      ]
     runs-on: ubuntu-latest
     # Reads nothing, writes nothing — it only inspects the `needs` context.
     permissions: {}

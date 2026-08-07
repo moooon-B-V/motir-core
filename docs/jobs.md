@@ -577,11 +577,14 @@ deployment URLs were never covered.)
 
 Two mechanisms now close it, and they are deliberately independent:
 
-1. **Deploy-time sync** — `.github/workflows/inngest-sync.yml` PUTs
-   `https://app.motir.co/api/inngest` on every successful production deploy and
-   **fails the job** if the PUT does not return 200. Motir issues its own sync,
-   against the domain protection does not cover, and a failure is a red check
-   rather than silence.
+1. **Deploy-time sync** — `ci.yml`'s `deploy` job PUTs
+   `https://app.motir.co/api/inngest` as a step after the Fly release is live,
+   and **fails the job** if the PUT does not return 200. Motir issues its own
+   sync, against the domain protection does not cover, and a failure is a red
+   check rather than silence. (`.github/workflows/inngest-sync.yml` is the same
+   sync on a manual trigger, for the deploys CI does not make; both call
+   `.github/actions/inngest-sync`. It fired on Vercel's `deployment_status`
+   until MOTIR-2390 — an event Fly does not raise.)
 2. **Runtime detection** — `system.daily-health-check` now runs the
    **schedule-health probe** (`lib/services/jobScheduleHealthService.ts`). It
    walks every registered cron job and fails the run when one has missed more
