@@ -1484,32 +1484,57 @@ places, so BOTH doors are drawn (label + placement + which mode each opens) in e
 "Create project" is the kept, always-present manual path. Exact labels: **"Plan a new project with
 AI"** and **"Create project"** (verbatim).
 
-## The measured scale (MOTIR-2274) — the input this layout is built to
+## The grid is the model as it WILL BE — not how far enforcement has got
 
-The inventory walked every route and settled the numbers:
+|                       |                                                     |
+| --------------------- | --------------------------------------------------- |
+| Role-gated rows       | **28**                                              |
+| Domain headings       | **15**                                              |
+| Level-gated, own card | **3** (`public_request:*`)                          |
+| Largest domain        | **3 rows**                                          |
+| The three built-ins   | Admin **28** · Member **10** · Viewer **2** (of 28) |
 
-|                |            |
-| -------------- | ---------- |
-| Permissions    | **32**     |
-| Domains        | **16**     |
-| Largest domain | **4 rows** |
+**Every mark in this grid is the grant the role holds when the epic is finished.** That is the whole
+decision this section exists to record, and it is the one earlier revisions got wrong.
 
-**Every permission on this page is one the code enforces.** The page ships behind
-[MOTIR-2256](motir:cmsgmcpy2001a04joa4k7rjtb), which wires the 21 keys the inventory named but that had
-no gate yet — so there is no "coming soon" state anywhere in the design.
+The marks come from two records, and neither is a guess:
 
-That was decided the hard way. Two earlier revisions tried to render a partially-enforced model: one
-hid the unwired keys (showing 8 of 32, implying that was the model), the other showed them marked
-_"Not yet enforced"_ (putting Motir's own migration status on a customer's settings page). **Neither
-is a page worth shipping**, and the story is sequenced so neither is necessary — the page waits, and
-shows the model once, complete. `PLANNED_PERMISSIONS` being empty is asserted as this story's
-ship gate, so the ordering is a contract rather than a note.
+- **The 20 keys already wired** — `lib/permissions/builtinRoles.ts` on `origin/main`, after
+  [MOTIR-2256](motir:cmsgmcpy2001a04joa4k7rjtb) put the twelve per-domain administrative keys into
+  `admin`. `ROLE_GATED_PERMISSIONS` is the row set; `BUILTIN_ROLE_PERMISSIONS` is the marks.
+- **The 8 member-facing keys [MOTIR-2291](motir:cmshequ8x000004jx8cty50hs) has yet to wire** —
+  `work_item:delete`, `work_item:triage`, `sprint:manage`, `report:view`, `saved_filter:manage`,
+  `import:run`, `ai:plan`, `ai:view_plan` — take the grants
+  [MOTIR-2347](motir:cmsiao000001304lb5gsec1wp) decides, each argued from Jira / Plane / Linear.
+  Admin holds all eight; Member holds six (not `import:run`, admin-only per Plane and Linear; not
+  `work_item:delete`, admin-only per Jira's default scheme); Viewer gains only `report:view`, because
+  Jira has no separate report permission — _Browse Projects_ is what governs a report.
 
-**Collapsible groups are the density lever**, and the numbers say why: 32 rows across 16 groups is
-about 48 lines, but the largest domain is four rows and the median is two. The length lives in the
-NUMBER of groups, not the size of any one — so collapsing a GROUP is right, and truncating rows
-inside one, or per-row search, would fix a problem this catalog does not have. Groups ship expanded;
-the header is the control.
+**A settings page describes the product, not its migration.** Three revisions of this asset tried to
+put Motir's own wiring progress into a customer's grid — hiding the unwired keys (8 of 32, implying
+that was the model), marking them _"Not yet enforced"_, then showing them held by nobody, which read
+as "no role in this project can manage a sprint, a board, a field or a report." All three describe a
+half-finished migration. None describes the product. The page shows the model once, complete; if a
+row's grant changes, MOTIR-2347 is the file that changes and this grid follows it.
+
+> **This asset draws MOTIR-2347's recommendation as settled, and that card has not run.** It sits in
+> a later story, so the design would otherwise be blocked on a decision nobody is scheduled to make
+> before the page is built. The recommendation is fully argued with its mirror evidence, so drawing
+> it is the cheaper order — but it is a **ratification the grid depends on**: if MOTIR-2347 lands a
+> different answer for any of the eight, that row's marks here are wrong and change with it.
+
+**There is no collapse control, and that is a decision.** 28 rows under 15 headings is about 43
+lines — a long settings page, not a wall, and shorter than the Workflow page already shipped beside
+it. The largest domain is three rows and the median is two, so there is no group worth hiding: a
+chevron would cost a click to reach a row that was already on screen, and hide from an admin the one
+thing they opened the page to see. What a 43-line table does need is for the role names to stay put
+while it is scanned — so the column head is **sticky**, which is an affordance rather than a control.
+That is the entire density answer. An earlier revision shipped ten of the sixteen groups closed; it
+was solving for a page this catalog does not produce.
+
+`repository:connect` is **absent**, not withheld: [MOTIR-2294](motir:cmshf0mm5000f04l1liqnk2a0)
+retired it. Its operations bind a provider installation to a **workspace** and resolve no project, so
+no project role could ever govern them.
 
 ## Panels (inspect every one)
 
@@ -1517,12 +1542,14 @@ the header is the control.
    access path drawn (the rail's ACCESS group, under _Members & access_). **MOTIR-2263 builds to
    this panel.**
 1. **A custom role joins as a COLUMN** (MOTIR-2257) — "Contractor" is the epic's own motivating gap
-   (_may comment and attach but not transition_), which none of the three built-ins can express.
+   (_may comment and attach but not edit work items_), which none of the three built-ins can express.
    Shows the affordance split: built-ins carry a LOCK and no control, the custom column carries EDIT
-   and DELETE.
+   and DELETE. The page grows **sideways by a role and downward only by a permission**, which is the
+   argument for the matrix over a card per role.
 2. **Creating a role** (MOTIR-2257) — name, a **base role to start from**, then the permission list.
    The base's grants arrive checked and visually distinct (grey, `from Viewer`) from what the author
-   adds (accent).
+   adds (accent). All 28 are real switches: MOTIR-2257 lands after MOTIR-2291 has wired the last of
+   them, so the editor never offers a control over a permission nothing enforces.
 3. **The member (non-admin) view** — browse-gated, so a member reads the same matrix. Two differences,
    both admin-only WRITE affordances: no `Create role`, and a custom column shows no edit/delete.
 
@@ -1580,16 +1607,24 @@ from them. A change to any belongs in _that_ asset.
 
 ## Content grounding
 
-The eleven permissions, their domain groups and the three built-in role sets are **transcribed from
-the shipped model**, not invented: `lib/permissions/catalog.ts` (MOTIR-2260) and
-`lib/permissions/builtinRoles.ts` (MOTIR-2261). Admin holds 8 of 8 role permissions, Member 4,
-Viewer 1. Copy matches the `permissions.*` i18n namespace those cards added, so MOTIR-2263 renders
-the same strings this mock shows. "Contractor" (3 of 8) is illustrative — a custom role, not a
-shipped one.
+The 28 role-gated permissions and their 15 domain headings are **transcribed from the shipped
+catalog**, not invented: `lib/permissions/catalog.ts` on `origin/main` (MOTIR-2277), minus the three
+level-gated `public_request:*` keys, which get their own card. **Row order is
+`permissionsByDomain()`'s order** — `PERMISSION_DOMAINS` outer, `PERMISSIONS` inner — so the grid's
+ordering is a property of the catalog rather than a decision MOTIR-2263 re-makes in a component. (It
+is why _Administer project_ precedes _View project_: that is the array's order, and matching it costs
+the code nothing while diverging would cost it a sort.)
+
+The marks are the **target** model — see the section above for the two records they come from and
+why a partially-enforced grid was rejected three times. Copy matches the `permissions.*` i18n
+namespace, so MOTIR-2263 renders the same strings this mock shows. "Contractor" (4 of 28) is
+illustrative — a custom role, not a shipped one.
 
 ## Source of truth
 
 When a string or structure here disagrees with the shipped `lib/permissions/*` catalog or role sets,
-**the code wins** — this mock renders them. When it disagrees with `settings-area.mock.html`,
-`access-members.mock.html` or `details.mock.html` about chrome, chip grammar, Input or Modal,
-**those assets win** — this one composes them.
+**the code wins** — this mock renders them. The one deliberate exception is the eight keys MOTIR-2291
+has yet to wire: for those, **MOTIR-2347's decision record wins over today's code**, because today's
+code has no answer for them and this page must not show one it invented. When this asset disagrees
+with `settings-area.mock.html`, `access-members.mock.html` or `details.mock.html` about chrome, chip
+grammar, Input or Modal, **those assets win** — this one composes them.
