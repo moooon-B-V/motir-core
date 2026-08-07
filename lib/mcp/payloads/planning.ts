@@ -8,6 +8,7 @@ import type { SprintDto } from '@/lib/dto/sprints';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { definePayload } from './define';
 import { mcpWorkItemSchema, presentMcpWorkItem } from './workItems';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // The PROJECT / SPRINT / BACKLOG / IDENTITY payload shapes
 // (Story 11.6 · Subtask 11.6.4 — MOTIR-2230).
@@ -103,7 +104,7 @@ export function presentMcpWhoami(
   workspace: { id: string; name: string; slug: string } | null,
 ): McpWhoami {
   return {
-    user: { id: user.id, name: user.name, email: user.email, image: user.image },
+    user: { id: user.id, name: user.name, email: user.email, image: storedAssetUrl(user.image) },
     workspace: workspace ? { id: workspace.id, name: workspace.name, slug: workspace.slug } : null,
   };
 }

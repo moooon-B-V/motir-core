@@ -1,6 +1,7 @@
 import type { Comment, User } from '@/generated/prisma/client';
 import type { CommentWithReplies } from '@/lib/repositories/commentRepository';
 import type { CommentAuthorDTO, CommentDTO, CommentThreadDTO } from '@/lib/dto/comments';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma → DTO converters for the comments domain (Story 5.1 · Subtask
 // 5.1.2). The service batches the side reads — ONE author lookup and ONE
@@ -18,7 +19,7 @@ function authorFor(row: Comment, authorsById: Map<string, User>): CommentAuthorD
   if (!user) {
     throw new Error(`Comment ${row.id}: author ${row.authorId} missing from the batched read.`);
   }
-  return { id: user.id, name: user.name, image: user.image ?? null };
+  return { id: user.id, name: user.name, image: storedAssetUrl(user.image) };
 }
 
 export function toCommentDto(

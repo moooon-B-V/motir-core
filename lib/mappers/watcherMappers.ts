@@ -1,5 +1,6 @@
 import type { WatcherWithUser } from '@/lib/repositories/watcherRepository';
 import type { WatcherDto } from '@/lib/dto/watchers';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 /**
  * Prisma `Watcher` (+ its user) → wire DTO (Story 5.4 · Subtask 5.4.4). The
@@ -8,5 +9,5 @@ import type { WatcherDto } from '@/lib/dto/watchers';
  * surfaced as `nextCursor` at the page level, never per row).
  */
 export function toWatcherDto(row: WatcherWithUser): WatcherDto {
-  return { userId: row.userId, name: row.user.name, image: row.user.image };
+  return { userId: row.userId, name: row.user.name, image: storedAssetUrl(row.user.image) };
 }

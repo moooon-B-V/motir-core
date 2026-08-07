@@ -1,6 +1,6 @@
 import type { Attachment, User } from '@/generated/prisma/client';
 import { isImageType, isPdfType } from '@/lib/blob/allowlist';
-import { attachmentContentPath } from '@/lib/blob/referencedUrls';
+import { attachmentContentPath, storedAssetUrl } from '@/lib/blob/referencedUrls';
 import type { AttachmentDTO, AttachmentUploaderDTO } from '@/lib/dto/attachments';
 
 // Prisma → DTO converter for the attachment management surface (Story 5.2 ·
@@ -24,7 +24,7 @@ function uploaderFor(row: Attachment, uploadersById: Map<string, User>): Attachm
       `Attachment ${row.id}: uploader ${row.uploaderUserId} missing from the batched read.`,
     );
   }
-  return { id: user.id, name: user.name, image: user.image ?? null };
+  return { id: user.id, name: user.name, image: storedAssetUrl(user.image) };
 }
 
 /**

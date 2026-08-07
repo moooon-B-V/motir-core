@@ -1,5 +1,6 @@
 import type { User } from '@/generated/prisma/client';
 import type { UserProfileDto } from '@/lib/dto/users';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // User Prisma → DTO converters (CLAUDE.md 4-layer: mappers live here, services
 // call them just before returning).
@@ -10,6 +11,6 @@ export function toUserProfileDto(user: User): UserProfileDto {
     id: user.id,
     name: user.name ?? '',
     email: user.email,
-    image: user.image ?? null,
+    image: storedAssetUrl(user.image),
   };
 }

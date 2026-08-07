@@ -25,7 +25,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { currentLocale } from '@/lib/i18n/serverLocale';
 import { deletePublicAsset, putPublicAsset } from '@/lib/blob/uploader';
-import { avatarBlobPrefix, isOwnAvatarBlobUrl } from '@/lib/blob/referencedUrls';
+import { avatarBlobPrefix, isOwnAvatarRef, storedAssetKey } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import type { PasswordCapabilityDto, UserProfileDto } from '@/lib/dto/users';
@@ -36,7 +36,7 @@ import { isEmailShape } from '@/lib/utils/email';
 export const MAX_PROFILE_NAME_LENGTH = 80;
 
 /** What `updateProfile` accepts. An OMITTED key (`undefined`) leaves that field
- *  unchanged; `image: null` REMOVES the avatar; `image: <url>` sets it. */
+ *  unchanged; `image: null` REMOVES the avatar; `image: <key>` sets it. */
 export interface UpdateProfileInput {
   name?: string;
   image?: string | null;
@@ -159,13 +159,13 @@ export const usersService = {
    * Update the session user's OWN personal details — name and/or avatar (Story
    * 8.8 · Subtask 8.8.21, behind the Account › Profile pane 8.8.24). Both fields
    * are independently optional: an omitted key is untouched; `image: null`
-   * removes the avatar; `image: <url>` sets it.
+   * removes the avatar; `image: <key>` sets it.
    *
    * Validation: a present `name` must be non-empty (trimmed) and within
-   * {@link MAX_PROFILE_NAME_LENGTH}; a present non-null `image` must be one of
-   * OUR Vercel-Blob uploads under THIS user's `avatars/<userId>/` prefix
-   * (`isOwnAvatarBlobUrl`), so a foreign/arbitrary URL is rejected rather than
-   * stored. Name + avatar are keyed by the session user id and set to absolute
+   * {@link MAX_PROFILE_NAME_LENGTH}; a present non-null `image` must reference
+   * one of OUR public-bucket uploads under THIS user's `avatars/<userId>/`
+   * prefix (`isOwnAvatarRef`), so a foreign/arbitrary value is rejected rather
+   * than stored. Name + avatar are keyed by the session user id and set to absolute
    * values (not read-derived), so there is no lost-update hazard and no
    * `FOR UPDATE` is needed (email uniqueness, which DOES race, is handled
    * separately in 8.8.22). The single write runs in one `$transaction`.
@@ -194,17 +194,20 @@ export const usersService = {
       data.name = name;
     }
 
-    let oldAvatarToDelete: string | null = null;
+    let oldAvatarKeyToDelete: string | null = null;
     if (input.image !== undefined) {
       const image = input.image; // string (set) | null (remove)
-      if (image !== null && !isOwnAvatarBlobUrl(image, userId)) {
+      if (image !== null && !isOwnAvatarRef(image, userId)) {
         throw new InvalidAvatarUrlError();
       }
       data.image = image;
       // The prior avatar is ours to garbage-collect iff it's actually changing
-      // AND it's one of our own-avatar blobs (never a foreign/OAuth provider URL).
-      if (before.image && before.image !== image && isOwnAvatarBlobUrl(before.image, userId)) {
-        oldAvatarToDelete = before.image;
+      // AND it's one of our own-avatar objects (never a foreign/OAuth provider
+      // URL). `storedAssetKey` reduces either storage form — a bare key, or an
+      // absolute URL from before MOTIR-2404 — to the object the GC deletes, so a
+      // row written under the old shape is still collectable.
+      if (before.image && before.image !== image && isOwnAvatarRef(before.image, userId)) {
+        oldAvatarKeyToDelete = storedAssetKey(before.image);
       }
     }
 
@@ -213,30 +216,36 @@ export const usersService = {
     // Delete the replaced/removed blob AFTER the row commits (CLAUDE.md: external
     // side-effects live outside the transaction), so a rolled-back update can
     // never orphan a still-referenced avatar.
-    if (oldAvatarToDelete) {
-      await deletePublicAsset(oldAvatarToDelete);
+    if (oldAvatarKeyToDelete) {
+      await deletePublicAsset(oldAvatarKeyToDelete);
     }
 
     return toUserProfileDto(updated);
   },
 
   /**
-   * Store an uploaded avatar image and return its public URL (Story 8.8 ·
-   * Subtask 8.8.21) — the backend the Profile pane's `AvatarField` (8.8.24)
-   * POSTs a file to. Gates size + image-only MIME (the shared upload allowlist),
-   * then writes to the per-user `avatars/<userId>/` prefix so the URL passes
-   * `updateProfile`'s `isOwnAvatarBlobUrl` gate. Unlike an attachment upload
-   * this keeps NO audit row — an avatar is transient personal substrate, its
-   * lifecycle owned entirely by the user row's `image` column (and its GC by
-   * `updateProfile`). The caller then PATCHes the returned URL as `image`.
+   * Store an uploaded avatar image and return its object KEY (Story 8.8 ·
+   * Subtask 8.8.21; returned a URL until MOTIR-2404) — the backend the Profile
+   * pane's `AvatarField` (8.8.24) POSTs a file to. Gates size + image-only MIME
+   * (the shared upload allowlist), then writes to the per-user
+   * `avatars/<userId>/` prefix so the key passes `updateProfile`'s
+   * `isOwnAvatarRef` gate. Unlike an attachment upload this keeps NO audit row —
+   * an avatar is transient personal substrate, its lifecycle owned entirely by
+   * the user row's `image` column (and its GC by `updateProfile`). The caller
+   * then PATCHes the returned key as `image`.
+   *
+   * It returns the key rather than a URL so no hosting ORIGIN is ever persisted:
+   * `User.image` is the value a future provider or bucket change would otherwise
+   * strand, exactly as `Attachment.blobPathname` avoids by storing a key. The
+   * URL a browser fetches is composed on READ by `storedAssetUrl`, at the DTO
+   * boundary.
    */
-  async uploadAvatar(file: File, userId: string): Promise<{ url: string }> {
+  async uploadAvatar(file: File, userId: string): Promise<{ key: string }> {
     if (file.size > MAX_UPLOAD_BYTES) throw new FileTooLargeError(MAX_UPLOAD_BYTES);
     if (!isImageType(file.type)) throw new UnsupportedFileTypeError(file.type);
 
     const pathname = `${avatarBlobPrefix(userId)}${file.name}`;
-    const { url } = await putPublicAsset(pathname, file, file.type);
-    return { url };
+    return putPublicAsset(pathname, file, file.type);
   },
 
   /**

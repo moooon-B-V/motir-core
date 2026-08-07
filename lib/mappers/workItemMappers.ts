@@ -19,6 +19,7 @@ import type {
   WorkItemTreeNodeDto,
   WorkItemTreeRowDto,
 } from '@/lib/dto/workItems';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma → DTO converters for the work-item domain. The service calls these
 // just before returning so no Prisma row shape (Date objects, Decimal
@@ -284,7 +285,11 @@ export function toArchivedWorkItemDto(row: ArchivedWorkItemRow): ArchivedWorkIte
     ...toWorkItemListItemDto(row),
     archivedAt: row.archivedAt.toISOString(),
     archivedBy: row.archivedById
-      ? { id: row.archivedById, name: row.archivedByName, image: row.archivedByImage }
+      ? {
+          id: row.archivedById,
+          name: row.archivedByName,
+          image: storedAssetUrl(row.archivedByImage),
+        }
       : null,
   };
 }
