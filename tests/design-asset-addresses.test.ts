@@ -726,9 +726,10 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // it is allowed to stay, asserted TIGHT in both directions so the list cannot
 // rot into a mute button. Four families, and the reason says which.
 //
-// The `STALE` rows are this sweep's own first-run findings, parked rather than
-// fixed here — the boundary MOTIR-2316 set and MOTIR-2340 inherited: the run
-// that finds a class is not the run that clears it. MOTIR-2369 clears them.
+// This sweep's own first-run findings were parked here as `STALE` rather than
+// fixed in the run that found them — the boundary MOTIR-2316 set and MOTIR-2340
+// inherited: the run that finds a class is not the run that clears it.
+// MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
@@ -819,39 +820,13 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  cited by both brand assets — was parked here as forward-looking. MOTIR-1150
   //  shipped all three, so the six rows are gone: `expired()` is what turned
   //  "that card merged" into a failing test rather than a silent exemption.)
-  // ── STALE — real drift this sweep found on its first run. Not silenced on
-  //    the merits: MOTIR-2369 corrects every one and deletes these rows, and
-  //    the tightness test below is what stops it re-allowlisting them instead.
-  {
-    file: 'design/reports/design-notes.md',
-    path: 'app/(authed)/board',
-    why: 'STALE — the shipped directory is `app/(authed)/boards`, plural. Fixed by MOTIR-2369, not here.',
-  },
-  {
-    file: 'design/reports/cycle-graph.mock.html',
-    path: 'app/(authed)/board',
-    why: 'STALE — the shipped directory is `app/(authed)/boards`, plural. Fixed by MOTIR-2369, not here.',
-  },
-  {
-    file: 'design/repository-set/design-notes.md',
-    path: 'components/plans',
-    why: 'STALE — the planning components ship at `components/planning/`. Fixed by MOTIR-2369, not here.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    path: 'components/automation',
-    why: 'STALE — there is no `components/automation/`; the automation UI lives under `app/(authed)/settings/project/automation/_components/`. Fixed by MOTIR-2369, not here.',
-  },
-  {
-    file: 'design/onboarding-entrance/design-notes.md',
-    path: 'app/_components/PublicFrontDoor.tsx',
-    why: 'STALE — `app/_components/` holds only `ConnectAiGate.tsx`; the shipped marketing hero is `app/(public)/_components/PublicOverviewHero.tsx`. Fixed by MOTIR-2369, not here.',
-  },
-  {
-    file: 'design/public-projects/design-notes.md',
-    path: 'scripts/plan-seed/data/story-6.16.ts',
-    why: 'STALE — the seed data stops at `story-6.15.ts`. Fixed by MOTIR-2369, not here.',
-  },
+  // (The six STALE rows this sweep parked on its first run — `app/(authed)/board`
+  //  ×2, `components/plans`, `components/automation`,
+  //  `app/_components/PublicFrontDoor.tsx`, `scripts/plan-seed/data/story-6.16.ts`
+  //  — are gone: MOTIR-2369 corrected all six assets, so `expired()` below is what
+  //  turned "that card landed" into a failing test rather than a stale exemption.
+  //  Two were claim corrections, not repoints: the marketing hero left this repo
+  //  with MOTIR-1457, and Story 6.16 never had a seed file to name.)
   {
     file: 'design/brand/design-notes.md',
     path: 'app/icon-192.png',
@@ -886,10 +861,16 @@ describe('a design asset cites source paths that still exist', () => {
     expect(KNOWN_PATHS.filter((entry) => entry.why.trim().length < 20)).toEqual([]);
   });
 
-  it('lists each STALE row against the card that clears it', () => {
+  it('parks no finding as STALE without naming the card that clears it', () => {
+    // The same rule the address table above carries, and it reached the same
+    // place one sweep later: this table parked six of its own first-run
+    // findings rather than fixing them, MOTIR-2369 cleared all six, and none
+    // remains. The rule outlives them, because parking the NEXT batch is the
+    // same temptation — so it no longer requires a STALE row to exist (that
+    // would oblige the table to keep one forever), only that any row calling
+    // itself STALE cites the card that clears it.
     const stale = KNOWN_PATHS.filter((entry) => entry.why.startsWith('STALE'));
-    expect(stale.length).toBeGreaterThan(0);
-    expect(stale.filter((entry) => !entry.why.includes('MOTIR-2369'))).toEqual([]);
+    expect(stale.filter((entry) => !/MOTIR-\d+/.test(entry.why))).toEqual([]);
   });
 });
 

@@ -1152,8 +1152,10 @@ already seeded; this asset is its design gate. The owning subtasks:
 ## Context refs
 
 - `scripts/plan-seed/data/story-6.12.ts` — the locked model + the subtask DAG.
-- `scripts/plan-seed/data/story-6.16.ts` (MOTIR-774 · 6.16.1–6.16.8) — the
-  authorable-hero + in-place-editing DAG this asset gates.
+- **MOTIR-774 · 6.16.1–6.16.8** (MOTIR-775 … MOTIR-782) — the authorable-hero +
+  in-place-editing DAG this asset gates. Story 6.16 has **no seed file**: it was
+  authored straight into the live tenant on 2026-06-15, after the `scripts/plan-seed/data`
+  bootstrap snapshot froze at `story-6.15.ts`. Read the DAG from the tenant, not the seed.
 - `app/(public)/_components/PublicOverviewHero.tsx` — the shipped hero this redesign
   makes authorable (today: hardcoded `autoIntroTagline` + four i18n pills).
 - `components/ui/MarkdownEditor.tsx` · `components/ui/Input.tsx` · `components/ui/Pill.tsx` ·
