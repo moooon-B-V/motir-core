@@ -10,9 +10,11 @@ consequences list is narrowed rather than followed.
 
 ## Context
 
-`packages/cli` reaches the Motir server through **one file**:
-`packages/cli/src/mcpClient.ts` is the only module under `packages/cli/src` that
-imports `@modelcontextprotocol/sdk` or touches `callTool` / `structuredContent`.
+`packages/cli` reaches the Motir server through **one file**. At the time this
+record was written that file was `src/mcpClient.ts` — the only module under
+`packages/cli/src` importing `@modelcontextprotocol/sdk` or touching `callTool`
+/ `structuredContent`. (It is `src/client.ts` now, and imports neither: 11.5.6
+removed the SDK once every method had moved.)
 Every one of the 32 call sites in `src/commands/` goes through `MotirClient`'s
 methods, and `src/render.ts` never sees a wire value at all. So the migration is
 a rewrite of one class's innards — and, precisely because it is that contained,
@@ -472,7 +474,7 @@ differently:
   `x-ratelimit-reset` as Unix epoch seconds, and why there is no `Retry-After`.
 - `lib/api/v1/identity/schema.ts` — `meSchema`, `.strict()`, three fields.
 - `app/api/openapi/v1.json/route.ts` — `force-static`, the bytes Q2(d) compares.
-- `packages/cli/src/mcpClient.ts` — `isUnauthorized`, `callStructured`'s `as T`,
+- `packages/cli/src/client.ts` — `isUnauthorized`, `callStructured`'s `as T`,
   and the 19 methods Q4 preserves.
 - `packages/cli/src/errors.ts` — `CliError` / `AuthError` / `NotLinkedError`,
   which Q5 extends.

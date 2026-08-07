@@ -15,7 +15,7 @@ Motir has **two credential systems that do not currently meet.**
   the two bearer gates: `lib/apiTokens/routeAuth.ts` (REST) and the MCP
   transport gate. Everything **outside** the browser authenticates this way.
 
-The CLI is squarely on the second side: `packages/cli/src/mcpClient.ts` opens one
+The CLI is squarely on the second side: `packages/cli/src/client.ts` opens one
 streamable-HTTP transport whose only `requestInit` header is
 `Authorization: Bearer <pat>` — a session cookie is not a credential it can
 present, and no gate would accept one if it could.
@@ -326,7 +326,7 @@ owns that, and MOTIR-1870 owns proving it.
 
 `docs/cli.md` § Scopes asserts this is what the CLI needs; the assertion was
 verified rather than copied. Every tool the shipped client calls
-(`packages/cli/src/mcpClient.ts`: `whoami`, `list_projects`, `list_ready`,
+(`packages/cli/src/client.ts`: `whoami`, `list_projects`, `list_ready`,
 `next_ready`, `get_work_item`, `get_work_item_activity`, `transition_status`,
 `dispatch_prompt`, `mark_integrated`, `complete_session`, `expand_item`,
 `open_plan_session`, `append_plan_turn`, `submit_plan_session`,
@@ -454,7 +454,7 @@ to assume the first does the second.
 
 - `lib/auth/index.ts` · `lib/services/apiTokensService.ts` ·
   `lib/apiTokens/routeAuth.ts` · `lib/apiTokens/token.ts` · `lib/mcp/scopes.ts`
-- `packages/cli/src/mcpClient.ts` · `commands/auth.ts` · `config/userConfig.ts` ·
+- `packages/cli/src/client.ts` · `commands/auth.ts` · `config/userConfig.ts` ·
   `serverResolve.ts` · `browser.ts`
 - `app/(authed)/settings/account/_components/CreateTokenModal.tsx`
 - `docs/cli.md` §§ Authenticate · The sandbox · Files and environment ·

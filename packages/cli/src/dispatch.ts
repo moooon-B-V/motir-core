@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolveRepo, type LinkConfig, type RepoResolutionSource } from './config/linkConfig.js';
-import { isOrderingAdvisory, isRepoStraddleAdvisory } from './mcpClient.js';
-import type { DispatchPrompt, DispatchWorkflowMode } from './mcpClient.js';
+import { isOrderingAdvisory, isRepoStraddleAdvisory } from './client.js';
+import type { DispatchPrompt, DispatchWorkflowMode } from './client.js';
 
 // The PURE half of single dispatch (Story 7.9 · Subtask 7.9.3 · MOTIR-881):
 // where an item's agent runs, what the human is told about it, and how a

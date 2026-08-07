@@ -45,12 +45,11 @@ export interface DoctorReport {
   checks: DoctorCheck[];
 }
 
-/** What `probeServer` reports back: one connect, several rows. */
+/** What `probeServer` reports back: one round-trip, several rows. */
 export interface ServerProbe {
   ok: boolean;
-  /** Set when the connect / handshake failed (auth, network, unreachable). */
+  /** Set when the probe failed (auth, network, unreachable). */
   error?: { message: string; hint?: string };
-  toolCount?: number;
   user?: { name: string; email: string };
   workspace?: { name: string; slug: string } | null;
   /** Present only when a project key was supplied. */
@@ -276,11 +275,15 @@ function authCheck(input: {
   }
   const who = server.user ? `${server.user.email}` : 'unknown user';
   const ws = server.workspace ? ` · workspace ${server.workspace.slug}` : '';
-  const tools = server.toolCount === undefined ? '' : ` · ${server.toolCount} tools`;
+  // ⚠️ The ` · N tools` segment is GONE (11.5.6). It counted the MCP tools the
+  // server advertised, which was a fact about a protocol this CLI no longer
+  // speaks; the row's remaining segments — who the token resolves to, its
+  // workspace, and the project reachability row below — are what an operator
+  // reads it for, and all three still come from a live request.
   // The credential's SOURCE rides on the passing row too — that is the row an
   // operator reads when the account is right but unexpected.
   const via = credentialOrigin ? ` · via ${credentialOrigin}` : '';
-  return { ...base, status: 'pass', detail: `${who} on ${serverUrl}${ws}${tools}${via}` };
+  return { ...base, status: 'pass', detail: `${who} on ${serverUrl}${ws}${via}` };
 }
 
 function projectCheck(input: { link: FoundLink | null; server: ServerProbe | null }): DoctorCheck {

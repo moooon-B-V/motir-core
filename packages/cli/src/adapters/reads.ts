@@ -32,7 +32,7 @@ import type {
   WorkItemDetail,
   WorkItemLink,
   WorkItemSummary,
-} from '../mcpClient.js';
+} from '../client.js';
 
 // The READ ADAPTERS — wire shapes in, the CLI's own view models out
 // (Story 11.5 · Subtask 11.5.4 — MOTIR-2212).

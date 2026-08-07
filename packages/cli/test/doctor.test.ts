@@ -22,7 +22,6 @@ const LINK: FoundLink = {
 
 const SERVER_OK: ServerProbe = {
   ok: true,
-  toolCount: 28,
   user: { name: 'Yue', email: 'yue@example.com' },
   workspace: { name: 'moooon', slug: 'moooon' },
   project: { key: 'MOTIR', reachable: true, total: 42 },
@@ -75,7 +74,7 @@ describe('runDoctor — the happy path', () => {
     expect(report.ok).toBe(true);
     expect(doctorExitCode(report)).toBe(0);
     expect(check(report, 'auth').detail).toContain('yue@example.com');
-    expect(check(report, 'auth').detail).toContain('28 tools');
+    expect(check(report, 'auth').detail).toContain('workspace moooon');
     expect(check(report, 'project').detail).toContain('42 work items');
   });
 

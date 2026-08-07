@@ -8,15 +8,15 @@ import { buildProgram } from '../src/program.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import {
-  startTestMcpServer,
+  startTestServer,
   v1Detail,
   v1DispatchPrompt,
   v1Page,
   v1ReadyRow,
-  type TestMcpServer,
+  type TestServer,
   type V1Request,
   type V1Script,
-} from './helpers/mcpTestServer.js';
+} from './helpers/testServer.js';
 
 // `motir batch` as the COMMAND (Subtask 7.9.5b · MOTIR-1829).
 //
@@ -32,7 +32,7 @@ import {
 // its own agent launcher when nothing is passed, which is the shape the binary
 // actually runs in and the one no injected-deps test exercises.
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let cwd: string;
 let exitCode: typeof process.exitCode;
@@ -40,7 +40,7 @@ let exitCode: typeof process.exitCode;
 const TOKEN = 'pat_batch_token';
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -61,7 +61,6 @@ beforeEach(() => {
     JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }),
   );
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  server.calls.length = 0;
   server.v1Calls.length = 0;
   server.resetV1();
   // `batchCommand` reports the run through `process.exitCode`; restoring it in
@@ -137,7 +136,7 @@ describe('motir batch refuses to start without an agent', () => {
       hint: expect.stringContaining('motir next --print'),
     });
     // It failed BEFORE opening a session — nothing was read or claimed.
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   // The guard above is only worth anything if the flag actually REACHES it.
@@ -165,7 +164,7 @@ describe('motir batch refuses to start without an agent', () => {
       message: expect.stringContaining('cannot run in --print mode'),
       hint: expect.stringContaining('motir next --print'),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a run with no agent configured anywhere, naming the three sources', async () => {
@@ -173,17 +172,17 @@ describe('motir batch refuses to start without an agent', () => {
     await expect(batchCommand({})).rejects.toMatchObject({
       hint: expect.stringMatching(/MOTIR_AGENT.*agentCommand|--agent/),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a malformed --max before any work is snapshotted', async () => {
     await expect(batchCommand({ ...AGENT, max: '0' })).rejects.toThrow(CliError);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a malformed --kinds before any work is snapshotted', async () => {
     await expect(batchCommand({ ...AGENT, kinds: 'subtask,nonsense' })).rejects.toThrow(CliError);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 });
 

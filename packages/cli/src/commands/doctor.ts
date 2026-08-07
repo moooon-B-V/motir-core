@@ -2,7 +2,7 @@ import { homedir } from 'node:os';
 import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import { delimiter, isAbsolute, join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
-import { MotirClient, type WhoamiResult } from '../mcpClient.js';
+import { MotirClient, type WhoamiResult } from '../client.js';
 import { CliError } from '../errors.js';
 import { json, out } from '../output.js';
 import { resolveServerUrl } from '../serverResolve.js';
@@ -43,33 +43,30 @@ export const AGENT_VERSION_TIMEOUT_MS = 5_000;
  * create, or update method is even in scope.
  */
 export interface ReadOnlyServerClient {
-  connect(): Promise<void>;
-  close(): Promise<void>;
-  listToolNames(): Promise<string[]>;
   whoami(): Promise<WhoamiResult>;
   countWorkItems(args: { projectKey: string }): Promise<number>;
 }
 
 /**
- * One server round-trip: handshake → tool list → whoami → (optionally) a
- * work-item COUNT that proves the linked project is reachable for this token. Every failure is captured into the result rather than thrown, so
- * `doctor` reports a red row instead of aborting the whole checklist.
+ * The server checks: `whoami` → (optionally) a work-item COUNT that proves the
+ * linked project is reachable for this token. Every failure is captured into
+ * the result rather than thrown, so `doctor` reports a red row instead of
+ * aborting the whole checklist.
+ *
+ * `whoami` IS the reachability probe — it reads `/api/v1/me`, so an unreachable
+ * server, a bad URL and a revoked token all surface here, and a success answers
+ * with the identity the row prints. The handshake + tool-list pair that used to
+ * open this went with the MCP transport (11.5.6); there is no session to open
+ * and nothing to close.
  */
 export async function probeServerWith(
   client: ReadOnlyServerClient,
   projectKey?: string,
 ): Promise<ServerProbe> {
   try {
-    await client.connect();
-  } catch (err) {
-    return { ok: false, error: describeError(err) };
-  }
-  try {
-    const toolCount = (await client.listToolNames()).length;
     const who = await client.whoami();
     const result: ServerProbe = {
       ok: true,
-      toolCount,
       user: { name: who.user.name, email: who.user.email },
       workspace: who.workspace ? { name: who.workspace.name, slug: who.workspace.slug } : null,
     };
@@ -84,8 +81,6 @@ export async function probeServerWith(
     return result;
   } catch (err) {
     return { ok: false, error: describeError(err) };
-  } finally {
-    await client.close().catch(() => undefined);
   }
 }
 

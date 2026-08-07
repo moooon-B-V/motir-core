@@ -1,14 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mcpEndpoint } from '../src/mcpClient.js';
 import { AuthError, CliError, NotLinkedError } from '../src/errors.js';
 
-describe('mcpEndpoint', () => {
-  it('derives /api/mcp from a server base, trailing slash or not', () => {
-    expect(mcpEndpoint('https://app.motir.co').toString()).toBe('https://app.motir.co/api/mcp');
-    expect(mcpEndpoint('https://app.motir.co/').toString()).toBe('https://app.motir.co/api/mcp');
-    expect(mcpEndpoint('http://localhost:3000').toString()).toBe('http://localhost:3000/api/mcp');
-  });
-});
+// ⚠️ This file also pinned `mcpEndpoint` — the `/api/mcp` URL builder — which
+// went with the MCP transport (11.5.6). The `/api/v1` URL building that replaced
+// it is asserted in `transport.test.ts`, where the builder lives.
 
 describe('errors', () => {
   it('AuthError carries a re-login hint and exit code 1', () => {

@@ -19,7 +19,7 @@ import {
   type SnapshotEntry,
   type SnapshotSkip,
 } from '../batchPlan.js';
-import type { DispatchItem, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, MotirClient } from '../client.js';
 
 // `motir batch` — THE FROZEN SNAPSHOT (Story 7.9 · Subtask 7.9.10 · MOTIR-888).
 // Take the ready set ONCE, print it, then implement exactly those items one at a

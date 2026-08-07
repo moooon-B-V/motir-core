@@ -2,7 +2,7 @@ import { hostname } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import { openUrl } from '../browser.js';
 import { CliError } from '../errors.js';
-import { MotirClient, type ProjectSummary } from '../mcpClient.js';
+import { MotirClient, type ProjectSummary } from '../client.js';
 import { info } from '../output.js';
 import { autoLinkAfterLogin } from '../projectLink.js';
 import { resolveServerUrl } from '../serverResolve.js';
@@ -80,13 +80,8 @@ async function listProjectsWith(input: {
   token: string;
 }): Promise<ProjectSummary[]> {
   const client = new MotirClient(input);
-  try {
-    await client.connect();
-    const { projects } = await client.listProjects();
-    return projects;
-  } finally {
-    await client.close();
-  }
+  const { projects } = await client.listProjects();
+  return projects;
 }
 
 /**

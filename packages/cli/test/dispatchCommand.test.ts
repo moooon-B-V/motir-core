@@ -9,7 +9,7 @@ import type {
   DispatchItem,
   DispatchPrompt,
   WorkItemDetail,
-} from '../src/mcpClient.js';
+} from '../src/client.js';
 
 // `motir next` / `motir run` / `motir done` orchestration. The MCP session and
 // the agent SPAWN are stubbed (both are covered for real elsewhere:

@@ -1,4 +1,4 @@
-import { MotirClient } from '../mcpClient.js';
+import { MotirClient } from '../client.js';
 import { CliError } from '../errors.js';
 import { info, out } from '../output.js';
 import { describeProject, resolveProject } from '../projectLink.js';
@@ -70,58 +70,53 @@ export async function linkCommand(opts: LinkOptions): Promise<void> {
   const token = tokenFor(serverUrl);
 
   const client = new MotirClient({ serverUrl, token });
-  try {
-    await client.connect();
-    const who = await client.whoami();
+  const who = await client.whoami();
 
-    // Workspace: today the PAT is bound to one active workspace (lib/mcp/auth),
-    // so default to it. An explicit flag (or a prior binding) wins as the label.
-    const workspace = opts.workspace ?? existing?.config.workspace ?? who.workspace?.slug;
-    if (!workspace) {
-      throw new CliError('Could not determine the workspace.', {
-        hint: 'Pass --workspace <slug>.',
-      });
-    }
-
-    // A key the user ASSERTED (this run's flag, or the one already on the link)
-    // is probed; a key they did NOT give is RESOLVED. The two are different
-    // questions: the probe validates a claim, `list_projects` enumerates what
-    // the token can actually reach — which is proof of access by construction,
-    // so a resolved project needs no second round trip to justify itself.
-    const asserted = opts.project ?? existing?.config.project;
-    let project: string;
-    let chosen: string | null = null;
-    if (asserted) {
-      await assertProjectAccessible(client, asserted);
-      project = asserted;
-    } else {
-      const resolved = await resolveProject(client, workspace, serverUrl);
-      project = resolved.project.key;
-      chosen = describeProject(resolved, workspace);
-    }
-
-    // Build the config, preserving any existing repo overrides; `--repo` marks
-    // this root as that single repo's checkout (the single-repo "." override).
-    const config: LinkConfig = {
-      serverUrl,
-      workspace,
-      project,
-      ...(existing?.config.repos ? { repos: { ...existing.config.repos } } : {}),
-    };
-    const withRepo = opts.repo ? withRepoOverride(config, opts.repo, '.') : config;
-
-    // Edit the found link in place, else create one at the cwd.
-    const targetDir = existing?.dir ?? cwd;
-    const path = writeLink(targetDir, withRepo);
-    info(`Linked ${targetDir} → ${workspace}/${project} on ${serverUrl}`);
-    // Only when nobody named the project: a link that chose FOR the user has to
-    // say what it chose, and on what grounds.
-    if (chosen) info(`Chose ${chosen}.`);
-    info(`Wrote ${path}`);
-    showLink(targetDir, withRepo);
-  } finally {
-    await client.close();
+  // Workspace: today the PAT is bound to one active workspace (lib/mcp/auth),
+  // so default to it. An explicit flag (or a prior binding) wins as the label.
+  const workspace = opts.workspace ?? existing?.config.workspace ?? who.workspace?.slug;
+  if (!workspace) {
+    throw new CliError('Could not determine the workspace.', {
+      hint: 'Pass --workspace <slug>.',
+    });
   }
+
+  // A key the user ASSERTED (this run's flag, or the one already on the link)
+  // is probed; a key they did NOT give is RESOLVED. The two are different
+  // questions: the probe validates a claim, `list_projects` enumerates what
+  // the token can actually reach — which is proof of access by construction,
+  // so a resolved project needs no second round trip to justify itself.
+  const asserted = opts.project ?? existing?.config.project;
+  let project: string;
+  let chosen: string | null = null;
+  if (asserted) {
+    await assertProjectAccessible(client, asserted);
+    project = asserted;
+  } else {
+    const resolved = await resolveProject(client, workspace, serverUrl);
+    project = resolved.project.key;
+    chosen = describeProject(resolved, workspace);
+  }
+
+  // Build the config, preserving any existing repo overrides; `--repo` marks
+  // this root as that single repo's checkout (the single-repo "." override).
+  const config: LinkConfig = {
+    serverUrl,
+    workspace,
+    project,
+    ...(existing?.config.repos ? { repos: { ...existing.config.repos } } : {}),
+  };
+  const withRepo = opts.repo ? withRepoOverride(config, opts.repo, '.') : config;
+
+  // Edit the found link in place, else create one at the cwd.
+  const targetDir = existing?.dir ?? cwd;
+  const path = writeLink(targetDir, withRepo);
+  info(`Linked ${targetDir} → ${workspace}/${project} on ${serverUrl}`);
+  // Only when nobody named the project: a link that chose FOR the user has to
+  // say what it chose, and on what grounds.
+  if (chosen) info(`Chose ${chosen}.`);
+  info(`Wrote ${path}`);
+  showLink(targetDir, withRepo);
 }
 
 export function linkAddCommand(repo: string, path: string): void {

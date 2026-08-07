@@ -12,7 +12,7 @@ import {
   type ReadOnlyServerClient,
 } from '../src/commands/doctor.js';
 import { AuthError } from '../src/errors.js';
-import type { WhoamiResult } from '../src/mcpClient.js';
+import type { WhoamiResult } from '../src/client.js';
 
 const WHOAMI: WhoamiResult = {
   user: { id: 'u1', name: 'Yue', email: 'yue@example.com' },
@@ -30,16 +30,6 @@ function spyClient(over: Partial<ReadOnlyServerClient> = {}): {
 } {
   const calls: string[] = [];
   const client: ReadOnlyServerClient = {
-    connect: async () => {
-      calls.push('connect');
-    },
-    close: async () => {
-      calls.push('close');
-    },
-    listToolNames: async () => {
-      calls.push('listToolNames');
-      return ['whoami', 'list_ready', 'transition_status'];
-    },
     whoami: async () => {
       calls.push('whoami');
       return WHOAMI;
@@ -54,17 +44,18 @@ function spyClient(over: Partial<ReadOnlyServerClient> = {}): {
 }
 
 describe('probeServerWith — read-only by construction', () => {
-  it('handshakes, identifies the user, and proves the project is reachable', async () => {
+  it('identifies the user and proves the project is reachable', async () => {
     const { client, calls } = spyClient();
     const result = await probeServerWith(client, 'MOTIR');
     expect(result.ok).toBe(true);
-    expect(result.toolCount).toBe(3);
     expect(result.user).toEqual({ name: 'Yue', email: 'yue@example.com' });
     expect(result.workspace).toEqual({ name: 'moooon', slug: 'moooon' });
     expect(result.project).toEqual({ key: 'MOTIR', reachable: true, total: 42 });
-    // The whole call list, pinned: connect + three READS + close. No dispatch,
-    // no transition, no write — `doctor` may never mutate server state.
-    expect(calls).toEqual(['connect', 'listToolNames', 'whoami', 'countWorkItems', 'close']);
+    // The whole call list, pinned: two READS. No dispatch, no transition, no
+    // write — `doctor` may never mutate server state. (It used to open with a
+    // `connect` and a `listToolNames` and end with a `close`; all three went
+    // with the MCP transport in 11.5.6, and `whoami` is now the probe.)
+    expect(calls).toEqual(['whoami', 'countWorkItems']);
   });
 
   it('skips the project read when there is no linked project', async () => {
@@ -83,7 +74,7 @@ describe('probeServerWith — read-only by construction', () => {
 
   it('describes a non-Error rejection without crashing', async () => {
     const { client } = spyClient({
-      connect: async () => {
+      whoami: async () => {
         throw 'transport exploded';
       },
     });
@@ -108,9 +99,9 @@ describe('probeServerWith — read-only by construction', () => {
     });
   });
 
-  it('captures a failed connect as a red row, carrying the CliError hint', async () => {
+  it('captures a rejected credential as a red row, carrying the CliError hint', async () => {
     const { client, calls } = spyClient({
-      connect: async () => {
+      whoami: async () => {
         throw new AuthError();
       },
     });
@@ -118,12 +109,14 @@ describe('probeServerWith — read-only by construction', () => {
     expect(result.ok).toBe(false);
     expect(result.error?.message).toContain('Token invalid or expired');
     expect(result.error?.hint).toContain('motir auth login');
-    // Nothing was attempted after the failed connect.
+    // Nothing was attempted after the probe failed — in particular the project
+    // count, which would report a second red row about the same one problem.
+    // (`whoami` itself is the OVERRIDE here, so it never reaches the recorder.)
     expect(calls).toEqual([]);
   });
 
-  it('captures a mid-probe failure and still closes the client', async () => {
-    const { client, calls } = spyClient({
+  it('captures a mid-probe network failure as a red row rather than throwing', async () => {
+    const { client } = spyClient({
       whoami: async () => {
         throw new Error('network reset');
       },
@@ -131,16 +124,6 @@ describe('probeServerWith — read-only by construction', () => {
     const result = await probeServerWith(client, 'MOTIR');
     expect(result.ok).toBe(false);
     expect(result.error?.message).toBe('network reset');
-    expect(calls).toContain('close');
-  });
-
-  it('survives a close that itself throws', async () => {
-    const { client } = spyClient({
-      close: async () => {
-        throw new Error('already closed');
-      },
-    });
-    await expect(probeServerWith(client)).resolves.toMatchObject({ ok: true });
   });
 });
 

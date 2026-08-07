@@ -17,7 +17,7 @@ import {
   resolveSprintRef,
   type StatusPulse,
 } from '../render.js';
-import type { MotirClient, SprintSummary, WorkItemDetail } from '../mcpClient.js';
+import type { MotirClient, SprintSummary, WorkItemDetail } from '../client.js';
 
 // `motir ready` / `motir status` / `motir open <key>` — the read surface a user
 // checks before and between dispatches (Story 7.9 · Subtask 7.9.2), joined by

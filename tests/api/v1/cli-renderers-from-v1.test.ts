@@ -23,7 +23,7 @@ import type {
   SearchItemSummary,
   WorkItemChild,
   WorkItemDetail as CliWorkItemDetail,
-} from '../../../packages/cli/src/mcpClient';
+} from '../../../packages/cli/src/client';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 

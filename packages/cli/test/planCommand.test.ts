@@ -21,16 +21,16 @@ import { setCredential } from '../src/config/userConfig.js';
 import { CliError, ScopeError } from '../src/errors.js';
 import { WATCH_TIMEOUT_MS } from '../src/plan.js';
 import {
-  startTestMcpServer,
+  startTestServer,
   v1JobHandle,
   v1Plan,
   v1PlanOutcome,
   v1PlanSession,
   v1PlanTurn,
   v1Proposal,
-  type TestMcpServer,
+  type TestServer,
   type V1Script,
-} from './helpers/mcpTestServer.js';
+} from './helpers/testServer.js';
 
 // `motir plan` as the COMMAND (Subtask 7.9.9 · MOTIR-887).
 //
@@ -42,14 +42,14 @@ import {
 // nothing, and that the un-onboarded guard fires BEFORE a single turn is
 // appended. The reader and the watch clock are injected; nothing else is.
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let cwd: string;
 
 const TOKEN = 'pat_plan_token';
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -82,7 +82,6 @@ beforeEach(() => {
     stderr.push(String(chunk));
     return true;
   });
-  server.calls.length = 0;
   server.v1Calls.length = 0;
   server.resetV1();
   // Every test but the un-onboarded guard needs a non-empty tree: the guard
@@ -369,7 +368,7 @@ describe('motir plan "<text>" — the non-interactive shorthand', () => {
       hint: expect.stringContaining('motir plan "<what to change>"'),
     });
     // Refused BEFORE anything was opened or appended.
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('--detach returns the ids + review URL without watching', async () => {

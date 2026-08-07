@@ -39,7 +39,7 @@ import {
   type CommandRunner,
 } from '../git.js';
 import { CLI_VERSION } from '../version.js';
-import type { DispatchItem, DispatchPrompt, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
 // MOTIR-882). Drain the ready set unattended: one item per iteration, strictly

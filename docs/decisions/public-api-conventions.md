@@ -3104,7 +3104,7 @@ written.
 
 #### Q1 — the RESOURCE or the VIEW MODEL? **The resource.**
 
-The view model is deliberately LOSSY, and `packages/cli/src/mcpClient.ts` says
+The view model is deliberately LOSSY, and `packages/cli/src/client.ts` says
 why in as many words: heavier fields are left off _"because `--json` prints the
 tool payload itself, so nothing is lost by omitting them here."_
 

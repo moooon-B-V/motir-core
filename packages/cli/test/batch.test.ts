@@ -19,7 +19,7 @@ import { parseMax } from '../src/commands/auto.js';
 import { addExclude, readExcludes } from '../src/sessionExcludes.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
-import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/mcpClient.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 
 // `motir batch` — the FROZEN snapshot (Subtask 7.9.10 · MOTIR-888).

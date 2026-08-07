@@ -28,15 +28,14 @@ import {
 } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import {
-  DEFAULT_TOOLS,
-  startTestMcpServer,
+  startTestServer,
   v1Page,
   v1ReadyRow,
   v1Sprint,
   v1Project,
   v1WorkItem,
-  type TestMcpServer,
-} from './helpers/mcpTestServer.js';
+  type TestServer,
+} from './helpers/testServer.js';
 
 /**
  * Peel a `?filter=` parameter back to its compact form.
@@ -65,7 +64,7 @@ function decodeFilter(param: string | null | undefined): unknown {
 // temp dir (never a real credential store) and the cwd to a temp workspace root
 // (never a real `.motir.json`).
 
-let server: TestMcpServer;
+let server: TestServer;
 let home: string;
 let root: string;
 let cwd: string;
@@ -74,7 +73,7 @@ const TOKEN = 'pat_test_token_value';
 const STORED_USER = { id: 'u1', name: 'Yue', email: 'yue@motir.test' };
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN, tools: DEFAULT_TOOLS });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -92,10 +91,8 @@ beforeEach(() => {
   vi.stubEnv('MOTIR_CONFIG_HOME', home);
   vi.stubEnv('MOTIR_TOKEN', '');
   process.chdir(root);
-  server.calls.length = 0;
   server.v1Calls.length = 0;
   server.resetV1();
-  server.script(DEFAULT_TOOLS);
 });
 
 afterEach(() => {
@@ -435,7 +432,7 @@ describe('motir link', () => {
     await expect(linkCommand({ server: server.url, project: 'PROD' })).rejects.toMatchObject({
       hint: expect.stringMatching(/auth login/),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('resolves the SINGLE project with no flag and no prompt, and says which it chose', async () => {
@@ -490,7 +487,7 @@ describe('motir link', () => {
     await linkCommand({});
 
     expect(io.stdout()).toContain('Project:   PROD');
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('--repo marks THIS folder as one repo’s checkout; add / remove edit the overrides', async () => {
@@ -537,7 +534,7 @@ describe('the project session', () => {
     await expect(openProjectSession()).rejects.toMatchObject({
       hint: expect.stringMatching(/auth login/),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('closes the client even when the body throws', async () => {
@@ -608,14 +605,12 @@ describe('motir ready / status / open', () => {
     await readyCommand({ assignee: 'me' });
     expect(server.v1Calls.at(-1)?.query.get('assigneeId')).toBe('user-1');
 
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     await readyCommand({ assignee: 'unassigned' });
     // The wire literal for the bucket — `null` would be indistinguishable from
     // omitting the filter, which matches every assignee instead of none.
     expect(server.v1Calls.at(-1)?.query.get('assigneeId')).toBe('none');
 
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     await readyCommand({ assignee: 'user-42' });
     expect(server.v1Calls.at(-1)?.query.get('assigneeId')).toBe('user-42');
@@ -626,7 +621,7 @@ describe('motir ready / status / open', () => {
     capture();
 
     await expect(readyCommand({ kinds: 'widget' })).rejects.toThrow(/Unknown work item kind/);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('`status` composes the pulse: ready count, in-flight total, the ACTIVE sprint', async () => {
@@ -683,7 +678,7 @@ describe('motir ready / status / open', () => {
     await openCommand('PROD-7', { print: true });
 
     expect(io.stdout().trim()).toBe(`${server.url}/issues/PROD-7`);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
     await expect(openCommand('   ', { print: true })).rejects.toThrow(/key is required/);
   });
 
@@ -744,10 +739,9 @@ describe('motir sprints / sprint', () => {
     await sprintsCommand({ state: 'Active', json: true });
     expect(JSON.parse(io.stdout())).toMatchObject([{ id: 's2' }]);
 
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     await expect(sprintsCommand({ state: 'nope' })).rejects.toThrow(/Unknown sprint state/);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('`sprints` renders the empty case rather than a bare table', async () => {
@@ -862,11 +856,10 @@ describe('motir sprints / sprint', () => {
     });
     expect(io.stdout()).toContain('No work items in this sprint.');
 
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     await expect(sprintCommand(undefined, { kinds: 'widget' })).rejects.toThrow(
       /Unknown work item kind/,
     );
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 });

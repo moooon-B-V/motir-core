@@ -1,13 +1,12 @@
 import { CliError } from './errors.js';
 
-// THE DEVICE-AUTHORIZATION TRANSPORT — the one place `packages/cli` speaks
-// something other than MCP, and why that is not a drift.
+// THE DEVICE-AUTHORIZATION TRANSPORT — the one place `packages/cli` reaches a
+// route outside `/api/v1`, and why that is not a drift.
 //
-// Every other command goes through `mcpClient.ts`: one streamable-HTTP transport
-// whose only `requestInit` header is `Authorization: Bearer <pat>`. `motir login`
-// structurally cannot use it — it runs BEFORE a credential exists, so there is no
-// bearer to present and no MCP session to open. It therefore speaks plain
-// JSON/HTTP to Motir's own `/api/cli/device/*` routes.
+// Every other command goes through `client.ts`, whose every request carries an
+// `Authorization: Bearer <pat>`. `motir login` structurally cannot use it — it
+// runs BEFORE a credential exists, so there is no bearer to present. It
+// therefore speaks plain JSON/HTTP to Motir's own `/api/cli/device/*` routes.
 //
 // NOT Better-Auth's `/api/auth/device/*`, which is the obvious guess and the wrong
 // one: that endpoint completes into a browser SESSION, and no bearer gate in this
@@ -17,7 +16,7 @@ import { CliError } from './errors.js';
 //
 // The exception is bounded by construction: two endpoints, both unauthenticated by
 // design, both reached only from `commands/login.ts`, and the moment the poll
-// succeeds the CLI holds a PAT and everything after it is MCP again.
+// succeeds the CLI holds a PAT and everything after it is `/api/v1`.
 
 /**
  * The `client_id` this CLI presents. Pinned server-side too
@@ -50,8 +49,8 @@ export interface DeviceGrant {
  * The successful poll. `user` / `workspace` are Motir's additions to the RFC
  * shape, added by the substrate SO THAT `motir login` can print its confirmation
  * without a second round trip — see `lib/dto/cliDevice.ts`, which says so. The
- * device path also skips the connect + `listToolNames` validation the paste path
- * performs: a server-minted token cannot be the wrong token.
+ * device path also skips the `whoami` validation the paste path performs: a
+ * server-minted token cannot be the wrong token.
  */
 export interface DeviceCredential {
   access_token: string;

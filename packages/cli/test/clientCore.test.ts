@@ -1,9 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MotirClient, mcpEndpoint, type SearchFilterEnvelope } from '../src/mcpClient.js';
+import { MotirClient, type SearchFilterEnvelope } from '../src/client.js';
 import { AuthError, CliError } from '../src/errors.js';
 import {
-  DEFAULT_TOOLS,
-  startTestMcpServer,
+  startTestServer,
   v1CloseOut,
   v1CloseOutItem,
   v1DispatchPrompt,
@@ -18,26 +17,27 @@ import {
   v1WorkItem,
   v1ReadyRow,
   v1Sprint,
-  type TestMcpServer,
-} from './helpers/mcpTestServer.js';
+  type TestServer,
+} from './helpers/testServer.js';
 
-// The CLI's CLIENT CORE against a real MCP server (Subtask 7.9.5 · MOTIR-883).
+// The CLI's CLIENT CORE against a real HTTP server (Subtask 7.9.5 · MOTIR-883).
 //
-// Every command in the tool reaches the server through exactly these wrappers,
+// Every command in the tool reaches the server through exactly these methods,
 // so three things have to hold and are asserted here rather than assumed:
 //
-//   1. Each wrapper names the tool the server exposes and passes the arguments
-//      through unchanged (a typo'd tool name is otherwise a runtime-only bug).
-//   2. A tool ERROR surfaces as a `CliError` carrying the tool's OWN text —
-//      never a swallowed JSON-RPC failure, because that text is what tells the
-//      user which statuses a transition allows.
-//   3. Anything unauthorized — at connect OR mid-session — is an `AuthError`
-//      with the re-login hint, matching the server's uniform 401.
+//   1. Each method names the `/api/v1` operation the server routes and puts its
+//      arguments where that operation declares them — path, query or body (a
+//      wrong path or a dropped parameter is otherwise a runtime-only bug).
+//   2. A failure surfaces as a `CliError` carrying the server's OWN text, never
+//      a swallowed status, because that text is what tells the user which
+//      statuses a transition allows.
+//   3. Anything unauthorized is an `AuthError` with the re-login hint, matching
+//      the server's uniform 401 — including a token revoked mid-run.
 
-let server: TestMcpServer;
+let server: TestServer;
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: 'good-token', tools: DEFAULT_TOOLS });
+  server = await startTestServer({ token: 'good-token' });
 });
 
 afterAll(async () => {
@@ -45,62 +45,41 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  server.calls.length = 0;
   server.v1Calls.length = 0;
 });
 
-/** A connected client on the good token. */
-async function connected(): Promise<MotirClient> {
-  const client = new MotirClient({ serverUrl: server.url, token: 'good-token' });
-  await client.connect();
-  return client;
+/** A client on the good token. Nothing is opened — the client IS a base URL and
+ *  a bearer (11.5.6), so this is a constructor call, kept as a helper only
+ *  because every test below wants the same two arguments. */
+function connected(): MotirClient {
+  return new MotirClient({ serverUrl: server.url, token: 'good-token' });
 }
 
-describe('mcpEndpoint', () => {
-  it('derives /api/mcp from a server base, trailing slash or not', () => {
-    expect(mcpEndpoint('https://app.motir.co').toString()).toBe('https://app.motir.co/api/mcp');
-    expect(mcpEndpoint('https://app.motir.co/').toString()).toBe('https://app.motir.co/api/mcp');
-    expect(mcpEndpoint('http://localhost:3000').toString()).toBe('http://localhost:3000/api/mcp');
-  });
-});
-
-describe('connect', () => {
-  it('opens a session, is idempotent, and closes cleanly', async () => {
-    const client = await connected();
-    await client.connect(); // second call is a no-op, not a second session
-    expect(await client.listToolNames()).toContain('whoami');
-    await client.close();
-    // Closing twice must not throw either — `withProjectSession` always closes.
-    await client.close();
-  });
-
-  it('maps a 401 at connect to AuthError with the re-login hint', async () => {
-    const client = new MotirClient({ serverUrl: server.url, token: 'revoked' });
-    await expect(client.connect()).rejects.toBeInstanceOf(AuthError);
-    await expect(client.connect()).rejects.toMatchObject({ hint: expect.stringMatching(/login/) });
-  });
-
-  it('maps an unreachable server to a CliError naming the URL', async () => {
-    // Port 1 on loopback: nothing listens, and connecting fails immediately.
-    const client = new MotirClient({ serverUrl: 'http://127.0.0.1:1', token: 'x' });
-    await expect(client.connect()).rejects.toThrow(/Could not reach the Motir server/);
-  });
-
-  // `listToolNames` is the LAST thing needing a handshake — every method now
-  // speaks `/api/v1` (MOTIR-2398), and 11.5.6 retires this one with the SDK.
-  it('refuses to be used before connect() — the one path still needing a session', async () => {
-    const client = new MotirClient({ serverUrl: server.url, token: 'good-token' });
-    await expect(client.listToolNames()).rejects.toThrow(/used before connect/);
-  });
-
-  // MOTIR-2212. A READ no longer needs the MCP handshake — that is the point of
-  // the port, not an oversight: `/api/v1` is a bearer and a URL, and the two
-  // transports coexist until 11.5.6 removes the MCP half.
-  it('serves a READ with no connect() at all', async () => {
+describe('the client is a URL and a bearer — no session to open', () => {
+  // ⚠️ THE PROPERTY 11.5.6 LEFT BEHIND. There was a `connect()` here that opened
+  // an MCP session, and a `describe('connect')` asserting it was idempotent,
+  // closed cleanly, and refused use before a handshake. All three tested the
+  // SDK, not Motir. What survives the deletion is what a USER can observe: the
+  // FIRST call a freshly-built client makes works, and the two failure modes the
+  // handshake used to report — a bad token, an unreachable host — still report
+  // themselves, now on the call that hit them.
+  it('serves a read on a client that was only constructed', async () => {
     const client = new MotirClient({ serverUrl: server.url, token: 'good-token' });
     await expect(client.whoami()).resolves.toMatchObject({
       user: { email: 'yue@motir.test' },
     });
+  });
+
+  it('maps a 401 to AuthError with the re-login hint', async () => {
+    const client = new MotirClient({ serverUrl: server.url, token: 'revoked' });
+    await expect(client.whoami()).rejects.toBeInstanceOf(AuthError);
+    await expect(client.whoami()).rejects.toMatchObject({ hint: expect.stringMatching(/login/) });
+  });
+
+  it('maps an unreachable server to a CliError naming the URL', async () => {
+    // Port 1 on loopback: nothing listens, and the connection fails immediately.
+    const client = new MotirClient({ serverUrl: 'http://127.0.0.1:1', token: 'x' });
+    await expect(client.whoami()).rejects.toThrow(/Could not reach http:\/\/127\.0\.0\.1:1/);
   });
 });
 
@@ -112,7 +91,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   // conversation (11.5.20). Each test below asserts on the WIRE, which is what
   // proves a slice moved its own methods and no others.
   it('identity reads over /api/v1: each names its operation and forwards its arguments', async () => {
-    const client = await connected();
+    const client = connected();
 
     const who = await client.whoami();
     expect(who.user.email).toBe('yue@motir.test');
@@ -124,15 +103,12 @@ describe('typed wrappers — each names its operation and forwards its arguments
       '/api/v1/workspaces',
       '/api/v1/projects',
     ]);
-    // No MCP tool call was made for either — the whole point of the slice.
-    expect(server.calls).toEqual([]);
-    await client.close();
   });
 
   // The two properties this slice's adapters must have, and neither is visible
   // from a single-workspace / single-page fixture.
   it('whoami resolves its workspace by ID, never by position', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/workspaces': {
         body: {
@@ -154,20 +130,18 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // that took `items[0]` passes every single-workspace fixture and is wrong
     // the moment a user belongs to two.
     await expect(client.whoami()).resolves.toMatchObject({ workspace: { slug: 'acme' } });
-    await client.close();
   });
 
   it('whoami reports NO workspace when the bound one is not in the list', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({ 'GET /api/v1/workspaces': { body: { items: [], nextCursor: null } } });
 
     // Rendering no workspace is the honest answer; rendering a wrong one is not.
     await expect(client.whoami()).resolves.toMatchObject({ workspace: null });
-    await client.close();
   });
 
   it('listProjects WALKS every page, echoing the cursor verbatim', async () => {
-    const client = await connected();
+    const client = connected();
     const cursor = 'eyJrIjoiMjAyNi0wOC0wN1QwMDowMDowMFoifQ==';
     server.scriptV1({
       'GET /api/v1/projects': (req) =>
@@ -181,25 +155,23 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(projects.map((p) => p.key)).toEqual(['AAA', 'BBB']);
     // The cursor is opaque: sent back exactly as received, never rebuilt.
     expect(server.v1Calls[1]?.query.get('cursor')).toBe(cursor);
-    await client.close();
   });
 
   // The three semantics a transport swap loses SILENTLY — each produces output
   // that looks entirely reasonable when it is wrong, so each is asserted on the
   // WIRE rather than on what the client was asked for.
   it('sends a REPEATED `kind`, not one joined value', async () => {
-    const client = await connected();
+    const client = connected();
 
     await client.listReady({ projectKey: 'PROD', kinds: ['epic', 'story'] });
 
     // A comma-joined encoding would read as ONE kind named `epic,story`, which
     // the route rejects — the filter would narrow to nothing.
     expect(server.v1Calls.at(-1)?.query.getAll('kind')).toEqual(['epic', 'story']);
-    await client.close();
   });
 
   it('sends the ready ORDER back untouched — the server ranks, the client renders', async () => {
-    const client = await connected();
+    const client = connected();
     // A page whose rank matches no field the client could sort on: not key
     // order, not priority, not title.
     server.scriptV1({
@@ -215,11 +187,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     const { items } = await client.listReady({ projectKey: 'PROD' });
 
     expect(items.map((i) => i.key)).toEqual(['PROD-9', 'PROD-2', 'PROD-5']);
-    await client.close();
   });
 
   it('carries a sprint’s NEVER-ACTIVATED baseline through as null, not zero', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/projects/{projectKey}/sprints': {
         body: v1Page([
@@ -235,7 +206,6 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // a sprint nobody estimated and a sprint never started look identical.
     expect(sprints[0]).toMatchObject({ committedPoints: null, committedIssueCount: null });
     expect(sprints[1]).toMatchObject({ committedPoints: 21, committedIssueCount: 2 });
-    await client.close();
   });
 
   // MOTIR-2398 took the LAST method off MCP. What used to be "these still name
@@ -243,22 +213,20 @@ describe('typed wrappers — each names its operation and forwards its arguments
   // at all. Asserted over a run of every shape rather than method by method,
   // because the property is about the client as a whole.
   it('makes NO MCP tool call — every method speaks /api/v1', async () => {
-    const client = await connected();
+    const client = connected();
 
     await client.nextReady({ projectKey: 'PROD', excludeKeys: ['PROD-9'] });
     await client.whoami();
     await client.listReady({ projectKey: 'PROD' });
     await client.transitionStatus({ key: 'PROD-7', status: 'in_progress' });
 
-    expect(server.calls).toEqual([]);
     expect(server.v1Calls.length).toBeGreaterThan(0);
-    await client.close();
   });
 
   // The PICK (11.5.23 — MOTIR-2398). Three properties, none visible from the
   // output alone, all asserted on the wire.
   it('takes items[0] — the SERVER ranks, the client never re-sorts', async () => {
-    const client = await connected();
+    const client = connected();
     // A page whose order matches no field the client could sort on: not key
     // order, not priority, not title. If anything re-ranked, it shows here.
     server.scriptV1({
@@ -273,11 +241,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     const { item } = await client.nextReady({ projectKey: 'PROD' });
 
     expect(item?.key).toBe('PROD-9');
-    await client.close();
   });
 
   it('FOLLOWS the cursor when a whole page is held out', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/projects/{projectKey}/ready': (req) =>
         req.query.get('cursor') === null
@@ -294,11 +261,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
 
     expect(item?.key).toBe('PROD-3');
     expect(server.v1Calls.at(-1)?.query.get('cursor')).toBe('page-2');
-    await client.close();
   });
 
   it('sends NO row id — the hold-out never reaches the wire', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([v1ReadyRow('PROD-4')]) },
     });
@@ -311,14 +277,13 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // came back (MOTIR-2338's coupling, undone here).
     expect(ask?.query.getAll('kind')).toEqual(['subtask']);
     expect([...(ask?.query.keys() ?? [])].sort()).toEqual(['kind']);
-    await client.close();
   });
 
   // The work-item COLLECTION and its COUNT (11.5.17 — MOTIR-2319). Two
   // operations, deliberately: the page carries no total, so the count is one
   // request that says what it is rather than a search whose row is discarded.
   it('search sends the filter as ?filter=, and the count is its own request', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/projects/{projectKey}/work-items': {
         body: v1Page([v1WorkItem('PROD-7', { title: 'A row' })], 'cur-2'),
@@ -361,11 +326,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // The count takes no paging parameters at all: it is not a page.
     expect(server.v1Calls[1]?.query.get('limit')).toBeNull();
     expect(server.v1Calls[1]?.query.get('cursor')).toBeNull();
-    await client.close();
   });
 
   it('omits ?filter= entirely when there is none — never an empty one', async () => {
-    const client = await connected();
+    const client = connected();
 
     await client.searchWorkItems({ projectKey: 'PROD' });
     await client.countWorkItems({ projectKey: 'PROD' });
@@ -374,14 +338,13 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // "no filter" from "a filter I could not read".
     expect(server.v1Calls.map((c) => c.query.get('filter'))).toEqual([null, null]);
     expect(server.v1Calls[0]?.query.get('cursor')).toBeNull();
-    await client.close();
   });
 
   // The write half of the work loop over `/api/v1` (11.5.5 — MOTIR-2213). Each
   // one names a METHOD and a PATH now, and the argument that used to ride in a
   // tool's `arguments` object rides in a request BODY.
   it('writes: transitions / integration / session complete', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'POST /api/v1/sessions/complete': {
         body: v1CloseOut('motir/auto-1', [v1CloseOutItem('PROD-7')]),
@@ -411,13 +374,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     });
     // …and it is OMITTED, not sent as null, when the caller has none.
     expect(server.v1Calls[2]?.body).toEqual({ sessionBranch: 'motir/auto-1' });
-    // No MCP tool call for any of the three.
-    expect(server.calls).toEqual([]);
-    await client.close();
   });
 
   it('the dispatch prompt is a GET, and seeds the session branch only when there is one', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/work-items/{key}/dispatch-prompt': {
         body: v1DispatchPrompt('PROD-7', {
@@ -452,7 +412,6 @@ describe('typed wrappers — each names its operation and forwards its arguments
       'targetRepo',
       'workflowMode',
     ]);
-    await client.close();
   });
 
   // A PARTIAL close-out is a real answer, not a failure: the server closes what
@@ -460,7 +419,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   // outcomes verbatim — it neither re-derives one nor drops the reason, which is
   // the only thing that tells the operator what to do about the item.
   it('reports every close-out outcome verbatim, reasons included', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'POST /api/v1/sessions/complete': {
         body: v1CloseOut('motir/auto-1', [
@@ -484,7 +443,6 @@ describe('typed wrappers — each names its operation and forwards its arguments
         { key: 'PROD-9', outcome: 'failed', reason: 'Its pull request is not merged.' },
       ],
     });
-    await client.close();
   });
 
   // The PLANNING CONVERSATION over `/api/v1` (11.5.20 — MOTIR-2341). The two
@@ -492,7 +450,7 @@ describe('typed wrappers — each names its operation and forwards its arguments
   // they are asserted on the wire: nothing about the response bodies would
   // reveal a client that had blurred them.
   it('APPENDING is not submitting — a turn starts no job', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'POST /api/v1/projects/{projectKey}/plan-session/turns': {
         body: v1PlanSession([v1PlanTurn(0, { body: 'split the billing epic' })]),
@@ -507,11 +465,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     // eagerly would charge the user for a sentence they were still drafting.
     expect(server.v1Calls.map((c) => c.path)).toEqual(['/api/v1/projects/PROD/plan-session/turns']);
     expect(server.v1Calls[0]?.body).toEqual({ body: 'split it' });
-    await client.close();
   });
 
   it('submitting returns the handle WITHOUT waiting on the planner', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'POST /api/v1/projects/{projectKey}/plan-session/submissions': {
         status: 202,
@@ -541,11 +498,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
     const outcome = await client.getPlanStatus({ planId: 'plan-7' });
     expect(outcome.status).toBe('generating');
     expect(outcome.job).toEqual({ status: 'running', reachable: true, failure: null });
-    await client.close();
   });
 
   it('a plan read returns PROPOSALS — including ones that carry no fields', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'GET /api/v1/plans/{planId}': {
         body: v1Plan([
@@ -575,11 +531,10 @@ describe('typed wrappers — each names its operation and forwards its arguments
       proposedFields: null,
       patch: { title: 'A new title' },
     });
-    await client.close();
   });
 
   it('an expansion submit returns the job handle from a 202', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'POST /api/v1/work-items/{key}/expansions': {
         status: 202,
@@ -599,7 +554,6 @@ describe('typed wrappers — each names its operation and forwards its arguments
       // No body: the item's key is the whole request.
       body: undefined,
     });
-    await client.close();
   });
 });
 
@@ -610,7 +564,7 @@ describe('failures', () => {
   // reads only the envelope's two pinned fields silently turns actionable
   // guidance into a dead end, and this test is what forbids that.
   it('an illegal transition still names what IS allowed — from the field, not the sentence', async () => {
-    const client = await connected();
+    const client = connected();
     server.scriptV1({
       'POST /api/v1/work-items/{key}/transitions': {
         status: 422,
@@ -636,11 +590,10 @@ describe('failures', () => {
       'Illegal status transition: "in_progress" → "done". Allowed: To Do, In Review.',
     );
     expect((failure as CliError).hint).toBeUndefined();
-    await client.close();
   });
 
   it('a refusal with no usable target list still reports the refusal', async () => {
-    const client = await connected();
+    const client = connected();
     // Three ways the enrichment can be useless — absent, empty (a terminal
     // status really has nowhere to go), and malformed. None may cost the user
     // the error itself, because this runs on a path where nothing is validated.
@@ -659,7 +612,6 @@ describe('failures', () => {
       expect((failure as CliError).message).toBe('Nope.');
       expect((failure as CliError).hint).toBeUndefined();
     }
-    await client.close();
   });
 
   // ⚠️ The tool-error tests that lived here are GONE with the last method that
@@ -670,34 +622,31 @@ describe('failures', () => {
   // SDK; nothing here can drive it in the meantime, and a test that reached in
   // to call a private method would be asserting a shape no user can produce.
 
-  it('maps an unauthorized CALL to AuthError — a token revoked mid-session', async () => {
-    // The session opens fine; the revocation lands between the connect and the
-    // tool call, which is what a real `motir auto` run would hit.
-    const revoking = await startTestMcpServer({
+  it('maps an unauthorized CALL to AuthError — a token revoked mid-run', async () => {
+    // The first requests succeed; the revocation lands partway through, which is
+    // what a real `motir auto` run would hit.
+    const revoking = await startTestServer({
       token: 'good-token',
-      tools: DEFAULT_TOOLS,
       revokeAfterRequests: 2,
     });
     const client = new MotirClient({ serverUrl: revoking.url, token: 'good-token' });
-    await client.connect();
 
+    // `whoami` is two requests, so the first call spends the budget and the
+    // second is answered with the 401 a revoked token gets.
+    await client.whoami();
     await expect(client.whoami()).rejects.toBeInstanceOf(AuthError);
-    await expect(client.listToolNames()).rejects.toBeInstanceOf(AuthError);
 
-    await client.close();
     await revoking.close();
   });
 
   it('maps a call against a server that went away to a plain CliError, not a crash', async () => {
-    const gone = await startTestMcpServer({ token: 't', tools: DEFAULT_TOOLS });
+    const gone = await startTestServer({ token: 't' });
     const client = new MotirClient({ serverUrl: gone.url, token: 't' });
-    await client.connect();
     await gone.close();
 
     const failure = await client.whoami().catch((err: unknown) => err);
     expect(failure).toBeInstanceOf(CliError);
     expect(failure).not.toBeInstanceOf(AuthError);
-    await client.close();
   });
 
   // ⚠️ Also gone with the last MCP method (MOTIR-2398): "the server does not

@@ -70,13 +70,19 @@ export default defineConfig({
         // invariants, so a 90% BRANCH bar would fail on un-coverable code — the
         // same carve-out the root `vitest.config.ts` makes for `whoami` and
         // friends.
-        //   • mcpClient: the `content ?? []` arm (a tool result always carries a
-        //     content block) and the two `err instanceof Error ? … : String(err)`
-        //     fallbacks (the SDK only ever throws Errors).
+        //   • client: the OPTIONAL-PARAMETER spreads — `...(args.cursor ? {…} :
+        //     {})` and its dozen siblings, one per optional query field an
+        //     operation declares. Each is a two-armed branch that the shipped
+        //     commands only ever drive from ONE side (nothing passes `--order`
+        //     to the activity read, nothing omits `implementationHarness` on a
+        //     close-out), so covering the other arms would mean writing tests
+        //     for argument combinations no command can produce. (This carve-out
+        //     used to name the SDK's error shapes; those went with the MCP
+        //     transport in 11.5.6 and the reason is now purely the spreads.)
         //   • help: the `context.command !== program` guard in the after-help
         //     hook — commander fires that hook for the ROOT command only, so the
         //     guard states an invariant rather than handling a reachable case.
-        'src/mcpClient.ts': { functions: 90, lines: 90 },
+        'src/client.ts': { functions: 90, lines: 90 },
         'src/help.ts': { functions: 90, lines: 90 },
 
         // UNGATED, deliberately — each is proven end-to-end instead, by the

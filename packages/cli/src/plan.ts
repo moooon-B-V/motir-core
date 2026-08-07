@@ -1,11 +1,5 @@
 import { normalizeServerUrl } from './config/userConfig.js';
-import type {
-  PlanProposal,
-  PlanSession,
-  PlanTurn,
-  PlanWithItems,
-  PlanOutcome,
-} from './mcpClient.js';
+import type { PlanProposal, PlanSession, PlanTurn, PlanWithItems, PlanOutcome } from './client.js';
 
 // The PURE layer behind `motir plan` (Story 7.9 · Subtask 7.9.9 · MOTIR-887):
 // argument shaping, the interactive loop's input grammar, the watch decision,

@@ -9,16 +9,16 @@ import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import {
-  startTestMcpServer,
+  startTestServer,
   v1Detail,
   v1Page,
   v1ReadyRow,
   v1DispatchPrompt,
   v1Integration,
-  type TestMcpServer,
+  type TestServer,
   type V1Request,
   type V1Script,
-} from './helpers/mcpTestServer.js';
+} from './helpers/testServer.js';
 
 // `motir auto` as the COMMAND (Subtask 7.9.5 · MOTIR-883).
 //
@@ -33,7 +33,7 @@ import {
 // which commands the CLI issues — not git's own behaviour, which
 // `tests/cli/cli-story.test.ts` proves against real repositories.
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let configHome: string;
 let cwd: string;
@@ -42,7 +42,7 @@ let exitCode: typeof process.exitCode;
 const TOKEN = 'pat_auto_token';
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -64,7 +64,6 @@ beforeEach(() => {
     JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }),
   );
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  server.calls.length = 0;
   server.v1Calls.length = 0;
   server.resetV1();
   // `autoCommand` reports the run through `process.exitCode`; restoring it in
@@ -185,7 +184,7 @@ describe('motir auto refuses to start without an agent', () => {
       hint: expect.stringContaining('motir next --print'),
     });
     // It failed BEFORE opening a session — nothing was claimed.
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   // The guard above is only worth anything if the flag actually REACHES it.
@@ -212,7 +211,7 @@ describe('motir auto refuses to start without an agent', () => {
       message: expect.stringContaining('cannot run in --print mode'),
       hint: expect.stringContaining('motir next --print'),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a run with no agent configured anywhere, naming the three sources', async () => {
@@ -220,12 +219,12 @@ describe('motir auto refuses to start without an agent', () => {
     await expect(autoCommand({})).rejects.toMatchObject({
       hint: expect.stringMatching(/MOTIR_AGENT.*agentCommand|--agent/),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a malformed --max before any work is dispatched', async () => {
     await expect(autoCommand({ ...AGENT, max: '0' })).rejects.toThrow(CliError);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { encodeFilterParam } from '../src/adapters/filterParam.js';
 import { inFlightFilter, sprintFilter, FILTER_VERSION } from '../src/render.js';
-import type { SearchFilterEnvelope } from '../src/mcpClient.js';
+import type { SearchFilterEnvelope } from '../src/client.js';
 
 // The `?filter=` encoder (Story 11.5 · Subtask 11.5.17 — MOTIR-2319).
 //

@@ -18,7 +18,7 @@ import type {
   DispatchPrompt,
   DispatchReferenceAdvisory,
   DispatchRepoStraddleAdvisory,
-} from '../src/mcpClient.js';
+} from '../src/client.js';
 
 // The PURE dispatch engine: repo routing, the bootstrap post-condition, agent
 // resolution, and the human-facing text. No MCP, no spawn, no filesystem —

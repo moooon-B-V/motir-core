@@ -17,7 +17,7 @@ import {
   WATCH_POLL_MS,
   WATCH_TIMEOUT_MS,
 } from '../plan.js';
-import type { MotirClient, PlanSession, PlanSubmitResult } from '../mcpClient.js';
+import type { MotirClient, PlanSession, PlanSubmitResult } from '../client.js';
 
 // `motir plan` — TERMINAL PLANNING AS A CONVERSATION (Story 7.9 · Subtask 7.9.9
 // · MOTIR-887). The CLI form of the planning front door, on the SAME server-side

@@ -22,7 +22,7 @@ import {
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
-import type { DispatchPrompt, MotirClient } from '../src/mcpClient.js';
+import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 
 // `motir auto` — the sequential WHILE loop (Subtask 7.9.4 · MOTIR-882).

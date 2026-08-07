@@ -1,11 +1,4 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import {
-  StreamableHTTPClientTransport,
-  StreamableHTTPError,
-} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { AuthError, CliError } from './errors.js';
 import { normalizeServerUrl } from './config/userConfig.js';
-import { CLI_VERSION } from './version.js';
 import { V1Transport } from './transport.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
 import type { SuccessBody } from './transport.js';
@@ -30,19 +23,22 @@ import {
   UNASSIGNED,
 } from './adapters/reads.js';
 
-// The MCP client core — the ONE place the CLI talks to a Motir server. Every
-// command speaks to the tenant through the streamable-HTTP `/api/mcp` endpoint
-// with a PAT bearer (story-7.9 header: the CLI is an MCP client only, no
-// parallel REST path, one auth path). Typed wrappers over the tools the CLI
-// consumes live here; auth failures all funnel into a single `AuthError`.
+// The client core — the ONE place the CLI talks to a Motir server. Every command
+// speaks to the tenant over the documented public API at `/api/v1` with a PAT
+// bearer: a URL and a token are the whole client, there is no session to open,
+// and auth failures all funnel into a single `AuthError`.
 //
-// The dispatch/read tools the wrappers below call land across 7.8.5 / 7.8.6 /
-// 7.8.10; this scaffold (7.9.1) defines the typed client surface that 7.9.2
-// (read commands) and 7.9.3 (dispatch) consume. `list_ready` / `next_ready` /
-// `get_work_item` / `whoami` exist today; the rest resolve once their 7.8 tool
-// merges (the wrapper just names the tool — no client change needed then).
+// It used to be an MCP client (story 7.9) and is not one any more — story 11.5
+// moved every method onto `/api/v1` and 11.5.6 removed the tool protocol,
+// `@modelcontextprotocol/sdk` and the handshake with it. The MCP surface at
+// `/api/mcp` is untouched and still serves AGENTS; the CLI is simply no longer
+// one of its clients. A test in `test/noSdk.test.ts` keeps it that way.
+//
+// Each method below names an OPERATION on the generated `/api/v1` document and
+// hands the validated body to an adapter in `src/adapters/` — the only place a
+// wire type is allowed to be read (ADR Q4).
 
-/** The shape `whoami` returns (lib/mcp/tools/whoami.ts structuredContent). */
+/** Who a token resolves to: the caller and the workspace it is bound to. */
 export interface WhoamiResult {
   user: { id: string; name: string; email: string };
   workspace: { id: string; name: string; slug: string } | null;
@@ -170,10 +166,11 @@ export interface SearchPage {
 }
 
 /**
- * The `next_ready` dispatch payload (`ReadyItemDispatchDto`, the fields the CLI
- * actually routes on). `id` is the row id `excludeIds` takes; `key` is the
- * `PROD-<n>` identifier every other tool takes. `status.key` lets dispatch skip
- * a redundant `todo → in_progress` flip when the item is already in progress.
+ * The one item a dispatch picks, projected from a ready-collection row.
+ *
+ * `key` is the `PROD-<n>` identifier — the only way the CLI addresses an item
+ * (ADR §7), and what the exclusion list holds. `status.key` lets dispatch skip a
+ * redundant `todo → in_progress` flip when the item is already in progress.
  */
 export interface DispatchItem {
   key: string;
@@ -681,96 +678,22 @@ export interface MotirClientOptions {
   token: string;
 }
 
-// ⚠️ `ToolCallOutcome` / `ToolTextPart` / `textOf` lived here and are GONE with
-// the tool-call path they described (MOTIR-2398). A tool result's in-band
-// `isError` + text-part shape has no reader left: `/api/v1` reports a failure as
-// a STATUS with a `{ code, error }` envelope, which the transport maps.
-
-function isUnauthorized(err: unknown): boolean {
-  if (err instanceof StreamableHTTPError) return err.code === 401;
-  // The transport surfaces a 401 before the JSON-RPC layer; some paths wrap it
-  // in a plain Error whose message carries the status — match defensively so a
-  // revoked token always reads as an auth failure, never a generic crash.
-  const message = err instanceof Error ? err.message : String(err);
-  return /\b401\b|unauthorized/i.test(message);
-}
-
-/** The MCP `/api/mcp` URL for a server base. */
-export function mcpEndpoint(serverUrl: string): URL {
-  return new URL('/api/mcp', normalizeServerUrl(serverUrl) + '/');
-}
-
 export class MotirClient {
   private readonly serverUrl: string;
-  private readonly token: string;
-  private client: Client | null = null;
-  private transport: StreamableHTTPClientTransport | null = null;
   /**
-   * The `/api/v1` transport the READ methods use (11.5.4).
+   * The `/api/v1` transport EVERY method goes through.
    *
-   * Built in the constructor, not on `connect()`: it holds no connection, only
-   * a base URL and a bearer, and a read must not require an MCP handshake it no
-   * longer uses. The two paths COEXIST while the port is in flight — 11.5.6 is
-   * what removes the MCP half.
+   * Built in the constructor and immediately usable: it holds no connection,
+   * only a base URL and a bearer. There is nothing to open and nothing to
+   * close — the client that had a `connect()` / `close()` bracket, an SDK
+   * session and a tool protocol was retired with the MCP transport (11.5.6).
    */
   private readonly v1: V1Transport;
 
   constructor(opts: MotirClientOptions) {
     this.serverUrl = normalizeServerUrl(opts.serverUrl);
-    this.token = opts.token;
-    this.v1 = new V1Transport({ serverUrl: this.serverUrl, token: this.token });
+    this.v1 = new V1Transport({ serverUrl: this.serverUrl, token: opts.token });
   }
-
-  /** Open the connection. A 401 (bad/revoked/expired PAT) → {@link AuthError}. */
-  async connect(): Promise<void> {
-    if (this.client) return;
-    const transport = new StreamableHTTPClientTransport(mcpEndpoint(this.serverUrl), {
-      requestInit: { headers: { Authorization: `Bearer ${this.token}` } },
-    });
-    const client = new Client({ name: 'motir-cli', version: CLI_VERSION });
-    try {
-      await client.connect(transport);
-    } catch (err) {
-      if (isUnauthorized(err)) throw new AuthError();
-      throw new CliError(`Could not reach the Motir server at ${this.serverUrl}: ${errMsg(err)}`);
-    }
-    this.client = client;
-    this.transport = transport;
-  }
-
-  async close(): Promise<void> {
-    await this.client?.close();
-    await this.transport?.close();
-    this.client = null;
-    this.transport = null;
-  }
-
-  private requireClient(): Client {
-    if (!this.client) throw new CliError('MCP client used before connect().');
-    return this.client;
-  }
-
-  /** The server's advertised tool names — the `auth login` validation probe. */
-  async listToolNames(): Promise<string[]> {
-    try {
-      const { tools } = await this.requireClient().listTools();
-      return tools.map((t) => t.name);
-    } catch (err) {
-      // The one surviving SDK error map, inlined now that its shared helper has
-      // gone with the tool calls: a 401 mid-session is an AuthError, anything
-      // else is reported as the SDK worded it.
-      if (err instanceof CliError) throw err;
-      throw isUnauthorized(err) ? new AuthError() : new CliError(errMsg(err));
-    }
-  }
-
-  // ⚠️ `callStructured` / `mapCallError` lived here and are GONE (MOTIR-2398).
-  // They were the tool-call path — `callTool` plus the in-band `isError`
-  // unwrapping — and the last method that used one moved to `/api/v1`, leaving
-  // them unreachable. Deleted by the card that orphaned them rather than left
-  // as dead code failing the coverage gate; what remains of the MCP client
-  // (`connect` / `close` / `listToolNames`, the SDK dependency itself) is
-  // 11.5.6's to retire.
 
   /**
    * Walk a cursor-paged collection to exhaustion, returning every page.
@@ -794,9 +717,10 @@ export class MotirClient {
     return pages;
   }
 
-  // ── Typed tool wrappers ──────────────────────────────────────────────────
-  // These name the MCP tools the CLI consumes. Listing/auth/link commands use
-  // `whoami`; the read (7.9.2) and dispatch (7.9.3) commands use the rest.
+  // ── The typed methods ────────────────────────────────────────────────────
+  // Each names one `/api/v1` operation (or a small fixed set of them) and hands
+  // the validated body to an adapter. Listing/auth/link commands use `whoami`;
+  // the read and dispatch commands use the rest.
 
   /**
    * Who this token is, and the workspace it is bound to.
@@ -1220,8 +1144,4 @@ export class MotirClient {
       }),
     );
   }
-}
-
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
 }

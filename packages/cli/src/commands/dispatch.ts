@@ -17,7 +17,7 @@ import {
   type AgentSource,
 } from '../dispatch.js';
 import { CLI_VERSION } from '../version.js';
-import type { DispatchItem, DispatchPrompt, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir next` / `motir run <key>` / `motir done <key>` — SINGLE DISPATCH
 // (Story 7.9 · Subtask 7.9.3 · MOTIR-881). The heart of the CLI: take one work

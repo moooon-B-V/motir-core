@@ -14,7 +14,7 @@ import {
   watchVerdict,
   PROPOSALS_NOT_WORK_ITEMS,
 } from '../src/plan.js';
-import type { PlanOutcome, PlanProposal, PlanSession, PlanTurn } from '../src/mcpClient.js';
+import type { PlanOutcome, PlanProposal, PlanSession, PlanTurn } from '../src/client.js';
 
 // The PURE layer behind `motir plan` (Subtask 7.9.9 · MOTIR-887): argument
 // shaping, the loop's input grammar, the watch decision, and the renderers.

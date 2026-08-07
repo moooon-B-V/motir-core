@@ -500,10 +500,10 @@ pnpm vitest run tests/cli/              # the story suite — the BUILT binary, 
 ```
 
 **The package suite** (`packages/cli/test/**`) covers each module in isolation.
-Where a module talks to a server it is pointed at a REAL MCP server the test
-starts in-process (`test/helpers/mcpTestServer.ts`) with canned tool results —
-the transport, framing and error envelopes are the real ones, only the data is
-scripted. `test/auto.test.ts` drives the whole `motir auto` loop against a
+Where a module talks to a server it is pointed at a REAL HTTP server the test
+starts in-process (`test/helpers/testServer.ts`) with canned `/api/v1`
+responses — the framing, status handling and URL building are the real ones,
+only the data is scripted. `test/auto.test.ts` drives the whole `motir auto` loop against a
 scripted server, agent and git, because its load-bearing properties — that it
 re-queries every iteration, that an integrated item unlocks its dependents
 mid-run, that `main` is never advanced, and that the pull request opens even when

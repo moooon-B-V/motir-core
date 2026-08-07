@@ -1,4 +1,4 @@
-import type { SearchFilterEnvelope } from '../mcpClient.js';
+import type { SearchFilterEnvelope } from '../client.js';
 
 // The `?filter=` ENCODER (Story 11.5 · Subtask 11.5.17 — MOTIR-2319).
 //

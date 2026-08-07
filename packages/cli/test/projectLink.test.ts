@@ -3,13 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  DEFAULT_TOOLS,
   projectRow,
-  startTestMcpServer,
+  startTestServer,
   v1Page,
   v1Project,
-  type TestMcpServer,
-} from './helpers/mcpTestServer.js';
+  type TestServer,
+} from './helpers/testServer.js';
 // Type-only: the VALUE comes through the post-`vi.mock` dynamic import below,
 // which cannot also serve as a type reference.
 import type { CliError as CliErrorType } from '../src/errors.js';
@@ -19,7 +18,7 @@ import type { CliError as CliErrorType } from '../src/errors.js';
 // Two halves with different risk profiles, tested accordingly:
 //
 //  • `resolveProject` reads a real MCP tool, so it runs against the real client
-//    over a real socket (helpers/mcpTestServer.ts) — the same posture the rest of
+//    over a real socket (helpers/testServer.ts) — the same posture the rest of
 //    the command tests take. The interactive picker's READER is mocked, because
 //    there is no TTY under a runner and `prompts.ts` has no other seam.
 //
@@ -40,24 +39,22 @@ vi.mock('../src/prompts.js', () => prompts);
 
 const { autoLinkAfterLogin, describeProject, nextLinkCommand, pickProject, resolveProject } =
   await import('../src/projectLink.js');
-const { MotirClient } = await import('../src/mcpClient.js');
+const { MotirClient } = await import('../src/client.js');
 const { LINK_FILENAME } = await import('../src/config/linkConfig.js');
 const { CliError } = await import('../src/errors.js');
 
 const TOKEN = 'pat_project_link';
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let home: string;
 let stderr: string;
 
-/** A connected client against the scripted server; closed by the afterEach. */
-let open: InstanceType<typeof MotirClient>[] = [];
-async function client(): Promise<InstanceType<typeof MotirClient>> {
-  const c = new MotirClient({ serverUrl: server.url, token: TOKEN });
-  await c.connect();
-  open.push(c);
-  return c;
+/** A client against the scripted server. There is nothing to open and nothing
+ *  to close (11.5.6) — the helper survives only so each site names the server
+ *  and token once. */
+function client(): InstanceType<typeof MotirClient> {
+  return new MotirClient({ serverUrl: server.url, token: TOKEN });
 }
 
 const linkPath = (dir: string): string => join(dir, LINK_FILENAME);
@@ -80,7 +77,7 @@ function autoLink(
 }
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN, tools: DEFAULT_TOOLS });
+  server = await startTestServer({ token: TOKEN });
 });
 
 afterAll(async () => {
@@ -93,7 +90,6 @@ beforeEach(() => {
   home = join(base, 'home');
   mkdirSync(root, { recursive: true });
   mkdirSync(home, { recursive: true });
-  server.script(DEFAULT_TOOLS);
   prompts.isInteractive.mockReturnValue(true);
   stderr = '';
   vi.spyOn(process.stderr, 'write').mockImplementation((chunk: unknown) => {
@@ -102,9 +98,7 @@ beforeEach(() => {
   });
 });
 
-afterEach(async () => {
-  for (const c of open) await c.close();
-  open = [];
+afterEach(() => {
   vi.restoreAllMocks();
   prompts.promptLine.mockReset();
   prompts.isInteractive.mockReset();
@@ -114,7 +108,7 @@ afterEach(async () => {
 
 describe('resolveProject', () => {
   it('takes the ONLY project without asking — there is nothing to disambiguate', async () => {
-    const resolved = await resolveProject(await client(), 'acme', server.url);
+    const resolved = await resolveProject(client(), 'acme', server.url);
 
     expect(resolved).toEqual({ project: projectRow('PROD', 'Prodect'), sole: true });
     // The point of the card: a workspace with one project never prompts, and
@@ -125,7 +119,7 @@ describe('resolveProject', () => {
   it('resolves the single project even with NO TTY — a non-choice needs no terminal', async () => {
     prompts.isInteractive.mockReturnValue(false);
 
-    const resolved = await resolveProject(await client(), 'acme', server.url);
+    const resolved = await resolveProject(client(), 'acme', server.url);
 
     expect(resolved.project.key).toBe('PROD');
   });
@@ -136,7 +130,7 @@ describe('resolveProject', () => {
     });
     prompts.promptLine.mockResolvedValue('2');
 
-    const resolved = await resolveProject(await client(), 'acme', server.url);
+    const resolved = await resolveProject(client(), 'acme', server.url);
 
     expect(resolved).toEqual({ project: projectRow('ACME'), sole: false });
     // Both keys were SHOWN — the whole reason not to demand a typed key.
@@ -150,7 +144,7 @@ describe('resolveProject', () => {
     });
     prompts.promptLine.mockResolvedValue('acme');
 
-    const resolved = await resolveProject(await client(), 'acme', server.url);
+    const resolved = await resolveProject(client(), 'acme', server.url);
 
     expect(resolved.project.key).toBe('ACME');
   });
@@ -161,9 +155,7 @@ describe('resolveProject', () => {
     });
     prompts.promptLine.mockResolvedValue('9');
 
-    const failure = await resolveProject(await client(), 'acme', server.url).catch(
-      (err: unknown) => err,
-    );
+    const failure = await resolveProject(client(), 'acme', server.url).catch((err: unknown) => err);
 
     expect(failure).toBeInstanceOf(CliError);
     expect((failure as CliErrorType).hint).toContain('PROD, ACME');
@@ -175,7 +167,7 @@ describe('resolveProject', () => {
     });
     prompts.isInteractive.mockReturnValue(false);
 
-    await expect(resolveProject(await client(), 'acme', server.url)).rejects.toMatchObject({
+    await expect(resolveProject(client(), 'acme', server.url)).rejects.toMatchObject({
       message: 'The workspace acme has 2 projects.',
       hint: expect.stringContaining('--project'),
     });
@@ -185,9 +177,7 @@ describe('resolveProject', () => {
   it('fails CLEARLY on an empty workspace, pointing at where a project is made', async () => {
     server.scriptV1({ 'GET /api/v1/projects': { body: v1Page([]) } });
 
-    const failure = await resolveProject(await client(), 'acme', server.url).catch(
-      (err: unknown) => err,
-    );
+    const failure = await resolveProject(client(), 'acme', server.url).catch((err: unknown) => err);
 
     // Not a crash and not an empty link: an empty workspace is a real answer
     // that the CLI cannot act on, so it says so and names the fix.

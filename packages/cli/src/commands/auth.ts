@@ -1,4 +1,4 @@
-import { MotirClient } from '../mcpClient.js';
+import { MotirClient } from '../client.js';
 import { CliError } from '../errors.js';
 import { info, out } from '../output.js';
 import { isInteractive, promptLine, promptSecret } from '../prompts.js';
@@ -50,18 +50,16 @@ export async function authLogin(opts: AuthLoginOptions): Promise<void> {
   }
   if (!token) throw new CliError('A token is required.');
 
-  // Validate by connecting + listing tools, then resolve the owner via whoami.
+  // Validate by RESOLVING the token — `whoami` reads `/api/v1/me`, so a bad or
+  // revoked PAT surfaces as the 401 the transport maps to `AuthError`, and a
+  // good one answers with the very thing the success line has to print. The old
+  // probe listed MCP tools, which proved the credential worked and told the
+  // human nothing (11.5.6).
   const client = new MotirClient({ serverUrl, token });
-  try {
-    await client.connect();
-    await client.listToolNames();
-    const who = await client.whoami();
-    setCredential(serverUrl, { token, user: who.user });
-    const ws = who.workspace ? ` (workspace ${who.workspace.name})` : '';
-    info(`Logged in as ${who.user.email} on ${serverUrl}${ws}.`);
-  } finally {
-    await client.close();
-  }
+  const who = await client.whoami();
+  setCredential(serverUrl, { token, user: who.user });
+  const ws = who.workspace ? ` (workspace ${who.workspace.name})` : '';
+  info(`Logged in as ${who.user.email} on ${serverUrl}${ws}.`);
 }
 
 export interface AuthScopeOptions {
@@ -87,14 +85,9 @@ export async function authStatus(opts: AuthScopeOptions): Promise<void> {
   // A live whoami both confirms the token is still valid (a revoked one surfaces
   // as the auth error) and shows the current owner + active workspace.
   const client = new MotirClient({ serverUrl, token: cred.token });
-  try {
-    await client.connect();
-    const who = await client.whoami();
-    out(`User:      ${who.user.name || who.user.email} <${who.user.email}>`);
-    if (who.workspace) out(`Workspace: ${who.workspace.name} (${who.workspace.slug})`);
-  } finally {
-    await client.close();
-  }
+  const who = await client.whoami();
+  out(`User:      ${who.user.name || who.user.email} <${who.user.email}>`);
+  if (who.workspace) out(`Workspace: ${who.workspace.name} (${who.workspace.slug})`);
 }
 
 export async function authLogout(opts: AuthScopeOptions): Promise<void> {

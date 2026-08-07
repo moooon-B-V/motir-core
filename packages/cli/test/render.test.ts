@@ -61,7 +61,7 @@ import type {
   WorkItemDependencyEdges,
   WorkItemDetail,
   WorkItemSummary,
-} from '../src/mcpClient.js';
+} from '../src/client.js';
 
 describe('issueUrl', () => {
   it('builds <server>/issues/<key> from the link server (no hardcoded host)', () => {

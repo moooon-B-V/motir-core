@@ -15,8 +15,7 @@ import { openUrl } from '../src/browser.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import {
-  DEFAULT_TOOLS,
-  startTestMcpServer,
+  startTestServer,
   v1Activity,
   v1Detail,
   v1Edges,
@@ -25,8 +24,8 @@ import {
   v1ReadyRow,
   v1WorkItem,
   v1Sprint,
-  type TestMcpServer,
-} from './helpers/mcpTestServer.js';
+  type TestServer,
+} from './helpers/testServer.js';
 
 describe('parseKinds', () => {
   it('returns undefined for an absent / empty list (any kind)', () => {
@@ -131,7 +130,7 @@ describe('parseItemKey', () => {
 });
 
 describe('motir show', () => {
-  let server: TestMcpServer;
+  let server: TestServer;
   let cwd: string;
   let root: string;
   const TOKEN = 'pat_show_token';
@@ -168,7 +167,7 @@ describe('motir show', () => {
 
   beforeAll(async () => {
     cwd = process.cwd();
-    server = await startTestMcpServer({
+    server = await startTestServer({
       token: TOKEN,
       v1: { 'GET /api/v1/work-items/{key}': { body: detail } },
     });
@@ -192,7 +191,6 @@ describe('motir show', () => {
       join(root, '.motir.json'),
       JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }) + '\n',
     );
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     server.resetV1();
     server.scriptV1({ 'GET /api/v1/work-items/{key}': { body: detail } });
@@ -390,7 +388,7 @@ describe('motir show', () => {
     capture();
 
     await expect(showCommand('not-a-key!', {})).rejects.toThrow(CliError);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   // ── the discussion: --activity / --comments (MOTIR-2000) ──────────────────
@@ -464,7 +462,6 @@ describe('motir show', () => {
     vi.restoreAllMocks();
 
     const stdout = capture();
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     server.resetV1();
     server.scriptV1({ 'GET /api/v1/work-items/{key}/activity': { body: activityPage } });
@@ -509,7 +506,7 @@ describe('motir show', () => {
     await expect(showCommand('PROD-7', { activity: true, comments: true })).rejects.toMatchObject({
       message: expect.stringContaining('cannot be combined'),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   // ⚠️ A FORWARD-COMPATIBILITY PROPERTY CHANGED HERE, and it is worth pinning.
@@ -589,7 +586,7 @@ describe('motir show', () => {
 // is the payload a script actually receives — not a renderer's return value.
 
 describe('motir ready / sprint — the edge columns and their --json fidelity', () => {
-  let server: TestMcpServer;
+  let server: TestServer;
   let cwd: string;
   let root: string;
   const TOKEN = 'pat_edge_token';
@@ -631,7 +628,7 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
 
   beforeAll(async () => {
     cwd = process.cwd();
-    server = await startTestMcpServer({ token: TOKEN, tools: { ...DEFAULT_TOOLS } });
+    server = await startTestServer({ token: TOKEN });
   });
 
   afterAll(async () => {
@@ -652,7 +649,6 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
       join(root, '.motir.json'),
       JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }) + '\n',
     );
-    server.calls.length = 0;
     server.v1Calls.length = 0;
     server.resetV1();
     server.scriptV1({
