@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { estimationService } from '@/lib/services/estimationService';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // GET /api/sprints/[id]/points (Story 4.4 · Subtask 4.4.9 — finding #69) — the
 // live pre-start points roll-up for a sprint: `{ committed, completed, remaining }`
@@ -18,7 +19,11 @@ import { SprintNotFoundError } from '@/lib/sprints/errors';
 // transaction here.
 //
 // Typed errors → status codes:
-//   SprintNotFoundError → 404
+//   SprintNotFoundError   → 404
+//   ProjectNotFoundError  → 404 (MOTIR-2351 — the `report:view` gate refuses a
+//                           non-browser before the key is tested, so the project
+//                           stays invisible rather than merely forbidden)
+//   PermissionDeniedError → 403
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -32,6 +37,8 @@ export async function GET(
     const points = await estimationService.rollupForSprint(id, ctx);
     return NextResponse.json(points);
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof SprintNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

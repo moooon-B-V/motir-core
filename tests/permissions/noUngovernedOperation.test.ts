@@ -451,7 +451,14 @@ describe('the PENDING set is bounded and shrinking', () => {
     // sprint ANALYTICS rows (`burndown` / `points` / `report`) stay pending: they
     // are re-pointed at `report:view` and belong to MOTIR-2351, so one key has one
     // owner and two cards never flip the same enforcement flag.
-    expect(pending.length).toBe(22);
+    //
+    // 22 → 18 is MOTIR-2351 wiring `report:view`: the three sprint ANALYTICS rows
+    // the sprint card handed over (`burndown` / `points` / `report`) plus
+    // `/api/projects/[key]/velocity`, the one row in this story that was ungated
+    // end to end. The six `/api/reports/*` widget reads were already gated — they
+    // ran through `resolveReportScope`'s `canBrowse` check — so re-pointing them at
+    // the key moves no count, which is what a re-pointing looks like from here.
+    expect(pending.length).toBe(18);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

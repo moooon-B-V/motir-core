@@ -2495,7 +2495,12 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    // `report:view` (MOTIR-2351) — the roadmap is a project-scoped analytics
+    // read, so it asks the reports key rather than the generic browse predicate.
+    // The two admit the same actors by decision (`report:view` is browse-wide),
+    // so nobody's access moves; what changes is that the inventory row can name
+    // the key this read actually asks for.
+    await projectAccessService.assertPermission(projectId, ctx, 'report:view');
 
     // Sprint scope (MOTIR-1381): when the caller asks for the active-sprint
     // slice, resolve the one active sprint (partial-unique `state = 'active'`).

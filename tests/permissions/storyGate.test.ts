@@ -316,7 +316,7 @@ describe('the story leaves exactly MOTIR-2291 behind', () => {
         'work_item:delete',
         'work_item:triage',
         // 'sprint:manage' — wired by MOTIR-2350.
-        'report:view',
+        // 'report:view' — wired by MOTIR-2351.
         'saved_filter:manage',
         'import:run',
         'ai:plan',

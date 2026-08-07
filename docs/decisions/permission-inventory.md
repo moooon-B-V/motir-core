@@ -42,8 +42,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **24** are
-enforced by a gate today; **7** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **25** are
+enforced by a gate today; **6** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -62,7 +62,7 @@ A `planned` key is never offered in the grid or the role editor.
 > whole twelve are now wired.
 >
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
-> (MOTIR-2350). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> (MOTIR-2350) · **`report:view`** (MOTIR-2351). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -505,26 +505,26 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `report`
 
-| Operation                                                   | Verbs            | Gate today        | Permission            | Decision         | Why |
-| ----------------------------------------------------------- | ---------------- | ----------------- | --------------------- | ---------------- | --- |
-| `/api/dashboards`                                           | GET/POST         | workspace only    | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only    | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only    | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets/[widgetId]`          | DELETE/PATCH     | workspace only    | —                     | workspace-scoped | R34 |
-| `/api/dashboards/[dashboardId]/widgets/[widgetId]/move`     | POST             | workspace only    | —                     | workspace-scoped | R34 |
-| `/api/projects/[key]/roadmap`                               | GET              | workspace only    | `report:view`         | new              | R19 |
-| `/api/projects/[key]/saved-filters`                         | GET/POST         | workspace only    | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]`              | DELETE/GET/PATCH | `getCapabilities` | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | workspace only    | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | workspace only    | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | workspace only    | `saved_filter:manage` | new              | R16 |
-| `/api/projects/[key]/velocity`                              | GET              | workspace only    | `report:view`         | new              | R19 |
-| `/api/reports/average-age`                                  | GET              | workspace only    | `report:view`         | new              | R46 |
-| `/api/reports/created-vs-resolved`                          | GET              | workspace only    | `report:view`         | new              | R46 |
-| `/api/reports/distribution`                                 | GET              | workspace only    | `report:view`         | new              | R46 |
-| `/api/reports/filter-results`                               | GET              | workspace only    | `report:view`         | new              | R46 |
-| `/api/reports/resolution-time`                              | GET              | workspace only    | `report:view`         | new              | R46 |
-| `/api/reports/workload`                                     | GET              | workspace only    | `report:view`         | new              | R46 |
+| Operation                                                   | Verbs            | Gate today                                                     | Permission            | Decision         | Why |
+| ----------------------------------------------------------- | ---------------- | -------------------------------------------------------------- | --------------------- | ---------------- | --- |
+| `/api/dashboards`                                           | GET/POST         | workspace only                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]`                             | DELETE/GET/PATCH | workspace only                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets`                     | POST             | workspace only                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets/[widgetId]`          | DELETE/PATCH     | workspace only                                                 | —                     | workspace-scoped | R34 |
+| `/api/dashboards/[dashboardId]/widgets/[widgetId]/move`     | POST             | workspace only                                                 | —                     | workspace-scoped | R34 |
+| `/api/projects/[key]/roadmap`                               | GET              | `workItemsService.getProjectRoadmap` → `assertPermission`      | `report:view`         | existing         | R19 |
+| `/api/projects/[key]/saved-filters`                         | GET/POST         | workspace only                                                 | `saved_filter:manage` | new              | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]`              | DELETE/GET/PATCH | `getCapabilities`                                              | `saved_filter:manage` | new              | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/dependents`   | GET              | workspace only                                                 | `saved_filter:manage` | new              | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/star`         | DELETE/PUT       | workspace only                                                 | `saved_filter:manage` | new              | R16 |
+| `/api/projects/[key]/saved-filters/[filterId]/subscription` | DELETE/GET/PUT   | workspace only                                                 | `saved_filter:manage` | new              | R16 |
+| `/api/projects/[key]/velocity`                              | GET              | `reportsService.getVelocity` → `assertPermission`              | `report:view`         | existing         | R19 |
+| `/api/reports/average-age`                                  | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
+| `/api/reports/created-vs-resolved`                          | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
+| `/api/reports/distribution`                                 | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
+| `/api/reports/filter-results`                               | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
+| `/api/reports/resolution-time`                              | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
+| `/api/reports/workload`                                     | GET              | `reportsService.*` → `resolveReportScope` → `assertPermission` | `report:view`         | existing         | R46 |
 
 ### `repository`
 
@@ -572,12 +572,12 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/sprints`                  | GET          | `sprintsService.listByProject` → `assertPermission`                  | `project:browse` | existing | R14 |
 | `/api/sprints`                  | POST         | `sprintsService.createSprint` → `assertPermission`                   | `sprint:manage`  | existing | R14 |
 | `/api/sprints/[id]`             | DELETE/PATCH | `sprintsService.{deleteSprint,updateSprint}` → `assertPermission`    | `sprint:manage`  | existing | R14 |
-| `/api/sprints/[id]/burndown`    | GET          | workspace only                                                       | `report:view`    | new      | R14 |
+| `/api/sprints/[id]/burndown`    | GET          | `reportsService.getSprintCycleGraph` → `assertPermission`            | `report:view`    | existing | R14 |
 | `/api/sprints/[id]/complete`    | POST         | `sprintsService.completeSprint` → `assertPermission`                 | `sprint:manage`  | existing | R14 |
 | `/api/sprints/[id]/issues`      | GET          | `backlogService.getSprintIssues` → `assertPermission`                | `project:browse` | existing | R14 |
 | `/api/sprints/[id]/issues/bulk` | POST         | `backlogService.bulkAssignToSprint` → `assertPermission`             | `sprint:manage`  | existing | R14 |
-| `/api/sprints/[id]/points`      | GET          | workspace only                                                       | `report:view`    | new      | R14 |
-| `/api/sprints/[id]/report`      | GET          | workspace only                                                       | `report:view`    | new      | R14 |
+| `/api/sprints/[id]/points`      | GET          | `estimationService.rollupForSprint` → `assertPermission`             | `report:view`    | existing | R14 |
+| `/api/sprints/[id]/report`      | GET          | `sprintsService.getSprintReport` → `assertPermission`                | `report:view`    | existing | R14 |
 | `/api/sprints/[id]/start`       | POST         | `sprintsService.startSprint` → `assertPermission`                    | `sprint:manage`  | existing | R14 |
 | `/api/work-items/[id]/rank`     | POST         | `backlogService.rankIssue` → `assertPermission`                      | `sprint:manage`  | existing | R14 |
 | `/api/work-items/[id]/sprint`   | POST         | `backlogService.{assignToSprint,moveToBacklog}` → `assertPermission` | `sprint:manage`  | existing | R14 |

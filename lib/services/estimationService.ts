@@ -160,6 +160,13 @@ export const estimationService = {
   async rollupForSprint(sprintId: string, ctx: ServiceContext): Promise<SprintPointsDto> {
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
+    // `report:view` (MOTIR-2351), NOT `estimation:manage`. This method had no
+    // project gate; its sibling `setEstimationConfig` is the one MOTIR-2298 put
+    // behind `estimation:manage`, and CHANGING the scheme is a different act from
+    // reading a sprint's points. `report:view` is browse-wide, so the scrum
+    // header, the burndown and the velocity chart keep working for every actor
+    // who can see the project.
+    await projectAccessService.assertPermission(sprint.projectId, ctx, 'report:view');
 
     const statistic = await resolveStatistic(sprint.projectId);
     const { committed, completed } = await workItemRepository.sumPointsForSprint(

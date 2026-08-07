@@ -725,6 +725,12 @@ export const sprintsService = {
     ctx: ServiceContext,
   ): Promise<SprintReportDto> {
     const sprint = await sprintRepository.findById(id, ctx.workspaceId);
+    // `report:view` (MOTIR-2351) — the sprint report is analytics, not a sprint
+    // ACT, so it does not ride this file's `sprint:manage` gate. One key, one
+    // owning card.
+    if (sprint) {
+      await projectAccessService.assertPermission(sprint.projectId, ctx, 'report:view');
+    }
     if (!sprint) throw new SprintNotFoundError(id);
 
     const take = clampReportLimit(options.limit);
