@@ -30,7 +30,7 @@ import { resolveWorkItemIdPair, workItemKeyField } from './workItemRef';
 // raw storage kind: the FIVE user-facing relationships (`blocked_by`, `blocks`,
 // `relates_to`, `duplicates`, `clones`) map to the four directed storage kinds —
 // `blocks` is the inverse direction of `blocked_by`. The agent says
-// "PROD-3 blocked_by PROD-1"; the tool resolves both keys to ids and maps the
+// "ACME-3 blocked_by ACME-1"; the tool resolves both keys to ids and maps the
 // pair to the directed `LinkWorkItemsInput` the service consumes. Link targets
 // may be cross-PROJECT within the workspace (a blocker can live in another
 // project — the link model allows it, matching the UI), so each key is resolved
@@ -62,7 +62,7 @@ interface LinkArgs {
   relationship: RelationshipKind;
 }
 
-/** `"PROD-3 blocked_by PROD-1"` — the human-readable edge for the text block. */
+/** `"ACME-3 blocked_by ACME-1"` — the human-readable edge for the text block. */
 function edgeText(args: LinkArgs): string {
   return `${args.fromKey.trim().toUpperCase()} ${relationshipLabel(
     args.relationship,
@@ -129,7 +129,7 @@ export function registerLinkWorkItems(server: McpServer, resolveContext: McpCont
     {
       title: 'Link work items',
       description:
-        'Create a relationship between two work items (by identifier, e.g. "PROD-3" / "PROD-1"): ' +
+        'Create a relationship between two work items (by identifier, e.g. "ACME-3" / "ACME-1"): ' +
         'use "blocked_by" to record a DEPENDENCY EDGE (the first item is blocked by the second, so ' +
         'it leaves the ready set until the second is done), or "blocks" / "relates_to" / ' +
         '"duplicates" / "clones". Targets may be in another project in the same workspace. ' +

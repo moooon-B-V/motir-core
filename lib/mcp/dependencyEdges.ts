@@ -35,7 +35,7 @@ import type { WorkItemDependencyEdgesDto } from '@/lib/dto/workItems';
 export const EDGE_BLOCK_DESCRIPTION =
   'Every row also carries `dependencies: { blockedBy, blocks }` — the item’s ' +
   'dependency edges in both directions, each entry `{ key, title, status }` with ' +
-  '`key` the `PROD-<n>` identifier. Both arrays are always present (empty when the ' +
+  '`key` the `<KEY>-<n>` identifier. Both arrays are always present (empty when the ' +
   'item has no edges in that direction).';
 
 /**
@@ -47,7 +47,7 @@ export const EDGE_BLOCK_DESCRIPTION =
 export const CHILD_EDGE_BLOCK_DESCRIPTION =
   'Every CHILD row also carries `dependencies: { blockedBy, blocks }` — that ' +
   'child’s dependency edges in both directions, each entry `{ key, title, status }` ' +
-  'with `key` the `PROD-<n>` identifier. Both arrays are always present (empty when ' +
+  'with `key` the `<KEY>-<n>` identifier. Both arrays are always present (empty when ' +
   'the child has no edges in that direction), so the children’s build ORDER is ' +
   'derivable from this one call without a per-child read.';
 

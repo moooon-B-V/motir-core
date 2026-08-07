@@ -120,7 +120,7 @@ export function registerTransitionStatus(
     {
       title: 'Transition status',
       description:
-        'Move a work item (by identifier, e.g. "PROD-7") to a target workflow status, given as ' +
+        'Move a work item (by identifier, e.g. "ACME-7") to a target workflow status, given as ' +
         'its key or display name. An illegal move returns the allowed targets. Honors the ' +
         "project's workflow rules and the same access checks as the UI.",
       inputSchema,

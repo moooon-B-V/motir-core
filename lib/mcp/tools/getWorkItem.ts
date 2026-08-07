@@ -19,7 +19,7 @@ import {
 } from '../commentCounts';
 
 // `get_work_item` (Story 7.8 · Subtask 7.8.4) — read ONE work item by its
-// `PROD-<n>` identifier, returned as the issue-detail aggregate (the same
+// `<KEY>-<n>` identifier, returned as the issue-detail aggregate (the same
 // `getIssueDetail` shape the detail page reads: the item + parent + children +
 // dependency links + readiness verdict). One service call, no business logic —
 // the 6.4 browse gate + the 404-not-403 cross-tenant contract live in the
@@ -35,10 +35,15 @@ import {
 export const GET_WORK_ITEM_TOOL_NAME = 'get_work_item';
 
 const inputSchema = {
-  key: z.string().min(1).describe('The work item identifier, e.g. "PROD-7" (case-insensitive).'),
+  key: z
+    .string()
+    .min(1)
+    .describe(
+      'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+    ),
 };
 
-/** Derive the owning project key from a `PROD-7`-style identifier. */
+/** Derive the owning project key from an `ACME-7`-style identifier. */
 function projectKeyOf(identifier: string): string {
   const dash = identifier.lastIndexOf('-');
   return dash > 0 ? identifier.slice(0, dash) : identifier;
@@ -116,7 +121,7 @@ export function registerGetWorkItem(server: McpServer, resolveContext: McpContex
     {
       title: 'Get work item',
       description:
-        'Read a single work item by its identifier (e.g. "PROD-7"): full detail including ' +
+        'Read a single work item by its identifier (e.g. "ACME-7"): full detail including ' +
         'description, status, priority, assignee, parent/children, dependency links, and a ' +
         'readiness verdict. Honors the same access checks as the UI. ' +
         CHILD_EDGE_BLOCK_DESCRIPTION +

@@ -30,7 +30,7 @@ import { normalizeIdentifier, projectKeyOf, workItemKeyField } from './workItemR
 // matrix (`assertValidParent`), the same-project guard (`CrossProjectParentError`),
 // the cycle/depth DB-trigger backstop (→ `ParentCycleError` / `DepthLimitExceededError`),
 // the 6.4 edit gate, and the `parentId` revision all run in the service
-// UNCHANGED. This tool only resolves the `PROD-<n>` keys to ids.
+// UNCHANGED. This tool only resolves the `<KEY>-<n>` keys to ids.
 
 export const MOVE_TO_PARENT_TOOL_NAME = 'move_to_parent';
 
@@ -41,7 +41,7 @@ const inputSchema = {
     .min(1)
     .nullable()
     .describe(
-      'The NEW parent work item identifier (e.g. "PROD-3") — must be a kind-legal, ' +
+      'The NEW parent work item identifier (e.g. "ACME-3") — must be a kind-legal, ' +
         'same-project parent, and may not be the item itself or one of its descendants. ' +
         'Pass null to promote the item to a top-level root (allowed only for kinds that ' +
         'may live at the top level).',
@@ -98,7 +98,7 @@ export function registerMoveToParent(server: McpServer, resolveContext: McpConte
     {
       title: 'Move work item to a new parent',
       description:
-        'Re-parent a work item (by identifier, e.g. "PROD-7"): move it under a different parent ' +
+        'Re-parent a work item (by identifier, e.g. "ACME-7"): move it under a different parent ' +
         '(by identifier) or, with parentKey null, promote it to a top-level root. The item keeps ' +
         'its identifier, history, comments, and links. Honors the same kind-parent rules, ' +
         'same-project / no-cycle / depth limits, and access checks as the UI. Use create_work_item ' +
