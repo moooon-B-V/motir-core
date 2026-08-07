@@ -2939,7 +2939,7 @@ dead UI. (Verified against shipped code at plan/design time — rung 2.)
 ### Placement — top of the main column, above Description (a NEW slot)
 
 The banner is the **FIRST element of the detail page's main column, directly
-above the Description card** (`<main>` in `app/(authed)/issues/[key]/page.tsx`).
+above the Description card** (`<main>` in `app/(authed)/items/[key]/page.tsx`).
 A whole-item state announcement belongs at the top of the page body, before the
 content, where it's the first thing a reader sees — matching how Jira / Linear
 surface an archived/closed banner.
@@ -2969,7 +2969,7 @@ field pickers.
 > shipped eyebrow used to render a `<Pill tone="neutral">{item.status}</Pill>`
 > beside the breadcrumb, but **subtask 2.4.13 removes it** (it was a redundant,
 > untinted duplicate of the rail's `StatusPicker` status —
-> `app/(authed)/issues/[key]/page.tsx:246`). So the "Archived" chip is **NOT**
+> `app/(authed)/items/[key]/page.tsx:246`). So the "Archived" chip is **NOT**
 > placed beside a status Pill (there is none); it follows the breadcrumb directly
 > and is the **only** eyebrow tag. This is deliberately consistent with 2.4.13's
 > intent — the chip carries a **real, non-duplicated** state (archived is shown
@@ -3271,7 +3271,7 @@ the leaf is.
 ### Placement — a dedicated `Type` column (NOT inline)
 
 Both views render from the **shared `buildIssueColumns` set**
-(`app/(authed)/issues/_components/issueColumns.tsx`), so the indicator is added
+(`app/(authed)/items/_components/issueColumns.tsx`), so the indicator is added
 **ONCE** as a new `IssueColumn` and flows to both `IssueListTable` and
 `IssueTreeTable` (8.8.9). It is a column, not an inline element in the Title cell,
 because:
@@ -3346,14 +3346,14 @@ the violation note below).
     (`Sparkles` left-icon, `className="ml-auto"`) that **already exists** — today it
     is `disabled` with `createIssue.draftWithAiTooltip`. 8.8.6 designs the states
     that button drives once AI is connected; it does **not** invent the entry.
-- **`app/(authed)/issues/[key]/_components/IssueExplanation.tsx`** — the detail
+- **`app/(authed)/items/[key]/_components/IssueExplanation.tsx`** — the detail
   page's Explanation is a **read-only** `ContentSectionCard`: title +
   "— why this matters" gloss + (when `explanationSource === 'ai_draft'`) a
   `Pill tone="neutral"` "AI-drafted" badge + `MarkdownView` / `noExplanation`
   empty state + an **"Edit"** link. **Drafting is NOT inline here** — the comment
   is explicit: "Authoring/regenerating the prose is the create/edit forms' job;
   editing here routes to the edit form via the card's 'Edit' link."
-- **`app/(authed)/issues/[key]/edit/_components/EditIssueForm.tsx`** — an
+- **`app/(authed)/items/[key]/edit/_components/EditIssueForm.tsx`** — an
   always-visible `MarkdownEditor size="full"` for the explanation, label gloss +
   (when `ai_draft`) a `Pill severity="info"`. This is the **detail-page-side
   surface** where "Draft with AI" attaches in 8.8.12.

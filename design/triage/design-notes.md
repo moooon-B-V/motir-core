@@ -80,7 +80,7 @@ duplicate/Merge · Snooze**. This asset mirrors that surface shape and taxonomy.
 
 ## Panel 1 — the inbox (the 6.11.6 surface)
 
-### Page header (mirror `app/(authed)/issues/page.tsx`)
+### Page header (mirror `app/(authed)/items/page.tsx`)
 
 - **Title** — `font-serif text-2xl font-semibold text-(--el-text)` reading
   **"Triage"** (`t('triage.heading')`).

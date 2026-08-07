@@ -214,7 +214,7 @@ success)`, `CheckCircle2` icon in `--el-success`), bottom-right of the viewport:
 | copy / help / action   | `components/ui/Button.tsx` (ghost / secondary / icon)                     |
 | sidebar entry + badge  | `components/ui/Sidebar.tsx` via `app/(authed)/_components/SidebarNav.tsx` |
 | copy confirmation      | `components/ui/Toast.tsx` (`useToast`, `variant="success"`)               |
-| row peek               | `app/(authed)/issues/_components/IssueQuickView.tsx`                      |
+| row peek               | `app/(authed)/items/_components/IssueQuickView.tsx`                       |
 | virtualization         | the 2.5.15 `useRowWindow` windowing primitive                             |
 
 No new design-system entry is invented in this Story. If a future need arises
