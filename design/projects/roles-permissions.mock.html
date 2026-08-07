@@ -1,0 +1,3815 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Design mock · Roles &amp; permissions (Story MOTIR-2255 · MOTIR-2259)</title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the ROLES & PERMISSIONS page — Story
+      MOTIR-2255, subtask MOTIR-2259. Gates the code subtask MOTIR-2263.
+
+      THE SURFACE: Project settings -> Access -> Roles & permissions. It shows a
+      project's roles and, for each, the permissions it holds. This story ships
+      it READ-ONLY over the three built-in roles; MOTIR-2257 adds custom ones,
+      which is why panels 2 and 3 fix the per-role affordances and the whole
+      authoring surface before either is built.
+
+      THE STRUCTURE IS A DRILL-DOWN, AND THAT IS THE LOAD-BEARING DECISION.
+      Screen 1 LISTS the roles, one ROW each; screen 2 opens ONE role and shows
+      its permissions at full width. An earlier revision put permissions on rows
+      and roles on COLUMNS, which read well at three roles and could not survive
+      five. Measured in this mock: the content column is 902px, a role column is
+      132px, and the permission label needs ~390px to keep a description on one
+      line — so the matrix degrades at FOUR roles (descriptions wrap to three
+      lines) and cannot fit six at all. Custom roles are the whole point of
+      MOTIR-2257, so a structure that caps how many a team may have is the wrong
+      structure. A row-per-role list has no such ceiling, and the detail screen
+      gets the full width back.
+
+      THIS ASSET COMPOSES; IT DOES NOT REDRAW.
+        * The settings-area chrome (the rail, its groups, the back-link header,
+          the page frame) is owned by design/projects/settings-area.mock.html.
+          Its shell/rail/Card CSS is inherited here VERBATIM and is NOT
+          re-specified.
+        * The Members and Access cards, and the ROLE-CHIP GRAMMAR this page
+          reuses (pill-admin lavender / pill-member sky / pill-ro mint), are
+          owned by design/projects/access-members.mock.html. Also not
+          re-specified.
+
+      BUILT FROM THE REAL DESIGN SYSTEM: the token block below is copied 1:1
+      from app/globals.css (Tier-0 --color-* + Tier-3 --el-* + the shape
+      tokens), and the markup composes ONLY shipped primitives — Card, Pill,
+      Button, Sidebar/SidebarSection/SidebarNavItem (the rail), SectionLabel
+      (the domain headings). MOTIR-2263's two READ screens need NO new
+      primitive; MOTIR-2257's create page needs exactly ONE — a Checkbox, which
+      components/ui/ does not ship (see design-notes).
+
+      GROUNDED IN THE MODEL AS IT WILL BE, not invented and not a snapshot of
+      today's partial enforcement. The 28 role-gated permissions and their 15
+      domain groups are transcribed from lib/permissions/catalog.ts on
+      origin/main (MOTIR-2277, minus the three level-gated public_request keys);
+      the marks come from two places, and BOTH are records, not guesses:
+        * the 20 keys already wired — lib/permissions/builtinRoles.ts on
+          origin/main, after MOTIR-2256 put the twelve per-domain administrative
+          keys into `admin`;
+        * the 8 member-facing keys MOTIR-2291 has yet to wire — the grants
+          MOTIR-2347 decides, each argued from Jira/Plane/Linear.
+      A settings page describes what the product IS, so drawing the migration's
+      half-way point would have been the lie, not the omission. `repository:
+      connect` is absent because MOTIR-2294 RETIRED it — it binds an
+      installation to a WORKSPACE, so no project role could ever govern it.
+
+      THE DECISION THIS ASSET MAKES THAT THE CODE COULD NOT: the three
+      public_request:* permissions are LEVEL-gated, not role-gated — no role can
+      hold or withhold them. Listing them as a fourth role would be a lie. They
+      get their OWN card below the role list, labelled "Access level", with an
+      eye mark rather than a check/dash. See design-notes.
+
+      THE ACCESS PATH is part of the deliverable and is drawn in panels 0 and 4:
+      the settings rail's ACCESS group, directly under "Members & access".
+
+      Covers (multi-panel — review EACH):
+        (0) the ROLE LIST, project-ADMIN view, inside the settings shell
+        (1) a BUILT-IN role drilled into — its permissions at full width
+        (2) a CUSTOM role drilled into — Edit / Delete + its base provenance
+        (3) CREATING a role — a whole PAGE, with a sticky action bar
+        (4) the MEMBER (non-admin) view — same list, no write affordances
+      Toggle dark mode to confirm token parity. See design-notes.md
+      "Roles & permissions grid (MOTIR-2255)" for the spec.
+    -->
+    <style>
+      /* ── Tier 0 + Tier 3 + shape tokens — copied from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --el-sidebar-item-bg-hover: #eeede9;
+
+        /* Shape tokens — the [data-display-style] swap layer (default / 'default' values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* Shell — sidebar tokens (app/globals.css §App shell, Subtask 1.5.2) */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 820px;
+        line-height: 1.5;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .panel.narrow {
+        max-width: 760px;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .legend {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+      }
+      .legend code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+
+      /* ── App shell (the REPLACE chrome: one rail + content) ──────────────── */
+      .shell {
+        display: flex;
+        min-height: 560px;
+      }
+      .shell.compact {
+        min-height: 460px;
+      }
+      .rail {
+        flex: none;
+        width: 248px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      /* rail header — the back-to-project link + project identity (REPLACES the
+         ProjectSwitcher while in the settings area) */
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .proj {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .proj .pav {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-type-task);
+        color: #fff;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .proj .pmeta {
+        min-width: 0;
+      }
+      .proj .pname {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .proj .pkey {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-muted);
+      }
+      .settings-eyebrow {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        text-transform: uppercase;
+      }
+
+      /* nav groups (SidebarSection.label via SectionLabel) + rows (SidebarNavItem) */
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-faint);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row:hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .nav-row.is-hover {
+        background: var(--el-sidebar-item-bg-hover);
+        color: var(--el-text);
+      }
+      .nav-row.soon {
+        cursor: default;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon:hover {
+        background: transparent;
+        color: var(--el-text-faint);
+      }
+      .nav-row.soon .ni {
+        color: var(--el-text-faint);
+      }
+      .soon-chip {
+        margin-left: auto;
+        font-family: var(--font-sans);
+        font-size: 10px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        padding: 1px 7px;
+        border-radius: var(--radius-badge);
+      }
+
+      /* content area */
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 30px 32px 36px;
+        overflow: hidden;
+      }
+      .page-head {
+        margin-bottom: 22px;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-muted);
+        margin-top: 5px;
+        max-width: 62ch;
+        line-height: 1.5;
+      }
+      .stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        max-width: 640px;
+      }
+
+      /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head .ttl {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .card-head h3 {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+        margin: 0;
+      }
+      .card-head .hsub {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 2px;
+      }
+      .card-body {
+        padding: 6px var(--spacing-card-padding) 14px;
+      }
+      .card.danger {
+        border: 2px solid var(--el-danger);
+        box-shadow: none;
+      }
+      .card.danger .card-head {
+        border-bottom: 0;
+        padding-bottom: 4px;
+      }
+      .card.danger h3 {
+        color: var(--el-danger);
+      }
+
+      /* ── Pills (components/ui/Pill — hue in tint bg, --el-text-strong text) ── */
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        line-height: 1.1;
+      }
+      .pill svg {
+        width: 12px;
+        height: 12px;
+      }
+      .pill-neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill-ro {
+        background: var(--el-tint-mint);
+        color: var(--el-text-strong);
+      }
+      .pill-admin {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .pill-member {
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+      }
+
+      /* ── Buttons (components/ui/Button) ──────────────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 500;
+        cursor: pointer;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .btn svg {
+        width: 15px;
+        height: 15px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* Inherited verbatim from access-members.mock.html — the shipped Button's
+         `secondary` variant, needed here for a custom role's Edit control. */
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: #fff;
+      }
+      .btn[disabled],
+      .btn.is-disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* editable field rows */
+      .field {
+        padding: 16px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .field:last-child {
+        border-bottom: 0;
+      }
+      .field-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .field-label svg {
+        width: 15px;
+        height: 15px;
+        color: var(--el-text-muted);
+      }
+      .field-help {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        margin-top: 7px;
+        line-height: 1.45;
+      }
+
+      /* ── Input (components/ui/Input) ─────────────────────────────────────── */
+      .input {
+        width: 100%;
+        height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border-strong);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        font-size: 14px;
+        font-family: var(--font-sans);
+      }
+      .input.mono {
+        font-family: var(--font-mono);
+        letter-spacing: 0.04em;
+      }
+      .input.focus {
+        border-color: var(--el-accent);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring-color) 24%, transparent);
+        outline: none;
+      }
+      .input.err {
+        border-color: var(--el-danger);
+      }
+      .input.err.focus {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-danger) 22%, transparent);
+      }
+      .input-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        margin-top: 7px;
+        font-size: 12px;
+        color: var(--el-danger-text);
+        line-height: 1.4;
+      }
+      .input-err svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .input-ok {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 7px;
+        font-size: 12px;
+        color: var(--el-success);
+      }
+      .input-ok svg {
+        width: 14px;
+        height: 14px;
+      }
+
+      /* read-only key row + change affordance */
+      .key-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .key-val {
+        display: inline-flex;
+        align-items: center;
+        height: var(--height-input);
+        padding: 0 var(--spacing-input-x);
+        border-radius: var(--radius-input);
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        font-family: var(--font-mono);
+        font-size: 14px;
+        letter-spacing: 0.04em;
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      /* avatar field — chip + edit affordance */
+      .avatar-field {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      /* ── Modal (components/ui/Modal) ─────────────────────────────────────── */
+      .modal-scrim {
+        background: rgba(15, 15, 15, 0.32);
+        border-radius: var(--radius-card);
+        padding: 30px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+      }
+      [data-theme='dark'] .modal-scrim {
+        background: rgba(0, 0, 0, 0.55);
+      }
+      .modal {
+        width: 460px;
+        max-width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        overflow: hidden;
+      }
+      .modal-body {
+        padding: 22px var(--spacing-card-padding) 8px;
+      }
+      .modal-head {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        margin-bottom: 12px;
+      }
+      .modal-head .mtitle {
+        font-family: var(--font-serif);
+        font-size: 19px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .modal-icon {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 9999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal-icon svg {
+        width: 19px;
+        height: 19px;
+      }
+      .modal-icon.key {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .modal-icon.danger {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .modal-lede {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        line-height: 1.55;
+        margin: 0 0 16px;
+      }
+      .consequence {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 14px;
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        margin-bottom: 16px;
+      }
+      .cq {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.45;
+      }
+      .cq svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+      }
+      .cq.go svg {
+        color: var(--el-success);
+      }
+      .cq.warn svg {
+        color: var(--el-warning);
+      }
+      .cq b {
+        color: var(--el-text);
+        font-weight: 600;
+        font-family: var(--font-mono);
+        font-size: 12px;
+      }
+      .modal-foot {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px var(--spacing-card-padding);
+        border-top: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+      }
+      .field-lab {
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        margin-bottom: 7px;
+        display: block;
+      }
+
+      /* ── Roles & permissions page ─────────────────────────────────────────
+         The surface this asset specifies. Everything above is inherited from
+         settings-area.mock.html (shell/rail/Card), details.mock.html (Input,
+         Modal) + the shared Pill/Button primitives; nothing above is
+         re-specified here.                                                   */
+
+      /* The page header ROW. Deliberately NOT `.page-head` — settings-area.mock.html
+         already owns that class (margin + h2 + sub) and this asset inherits it
+         verbatim; a same-name rule here would silently redefine the shared
+         chrome. This wraps it instead. */
+      .rp-headrow {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+      .rp-headrow .page-head {
+        margin-bottom: 0;
+      }
+
+      /* The inherited `.stack` is capped at 640px — right for the Details form
+         column it was written for, wrong for a role MATRIX. Full content width. */
+      .rp-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+
+      .crumb {
+        display: block;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        letter-spacing: 0.02em;
+        color: var(--el-text-faint);
+        margin-bottom: 8px;
+      }
+
+      /* A chip never breaks across lines. */
+      .pill {
+        white-space: nowrap;
+      }
+
+      /* ── DRILL-DOWN, NOT A MATRIX ─────────────────────────────────────────
+         The revision before this one put permissions on ROWS and roles on
+         COLUMNS. It read well at three roles and could not survive five: the
+         content column is 902px (measured), the permission label needs ~390px
+         of it to keep a description on one line, and a role column is 132px —
+         so the grid holds THREE roles comfortably, FOUR only by wrapping every
+         description to three lines, and SIX not at all. A
+         permission catalog grows slowly; the number of roles a team invents does
+         not, and custom roles are the whole point of MOTIR-2257. A structure
+         that caps the feature it exists to serve is the wrong structure.
+
+         So the surface is two screens:
+           * the ROLE LIST — one ROW per role, which grows without limit and
+             gives each role room for a name, a purpose and a summary;
+           * the ROLE DETAIL — drill into one role and read its permissions at
+             FULL WIDTH, where a description is one line and the 15 domain
+             headings are the only structure needed.
+
+         What this trades away is side-by-side comparison, and the trade is
+         deliberate: the list's `N of 28` carries the coarse comparison, and a
+         custom role's detail states the base it was cut from plus what was
+         added — which is the comparison that actually gets used ("Contractor is
+         Viewer plus comments"), rather than reading four columns at once.     */
+
+      /* ── Role affordances ─────────────────────────────────────────────────
+         A BUILT-IN role is immutable: it gets a lock and NO control. Only a
+         CUSTOM role carries Edit / Delete. Drawing an "Edit" on a built-in was
+         the first draft's mistake — the epic seeds the three built-ins precisely
+         so they reproduce today's behaviour, so editing one is not a thing.   */
+      .lockchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--el-text-faint);
+        white-space: nowrap;
+      }
+      .lockchip svg {
+        width: 12px;
+        height: 12px;
+        flex: none;
+      }
+      .rowacts {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: none;
+      }
+      .iconbtn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        /* --spacing-icon-btn is a PADDING token, not a size — the glyph sizes
+           the box. Using it as width/height collapses the button to 4px. */
+        padding: var(--spacing-icon-btn);
+        border-radius: var(--radius-control);
+        color: var(--el-text-secondary);
+        border: 1px solid transparent;
+      }
+      .iconbtn:hover {
+        background: var(--el-muted);
+      }
+      .iconbtn svg {
+        width: 15px;
+        height: 15px;
+      }
+
+      /* ── The role LIST (screen 1) ─────────────────────────────────────────── */
+      .rolelist {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .rolerow {
+        display: grid;
+        grid-template-columns: 36px minmax(0, 1fr) auto 16px;
+        gap: 14px;
+        align-items: center;
+        padding: 14px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .rolerow:last-child {
+        border-bottom: 0;
+      }
+      .rolerow:hover {
+        background: var(--el-surface-soft);
+      }
+      /* The role's tile — a built-in takes the lavender tint the Admin chip
+         already uses in access-members.mock.html; a custom role takes sky, the
+         same two-slot distinction that asset draws between role kinds. */
+      .rtile {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        border-radius: var(--radius-control);
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+      }
+      .rtile.custom {
+        background: var(--el-tint-sky);
+      }
+      .rtile svg {
+        width: 17px;
+        height: 17px;
+      }
+      .rmain {
+        min-width: 0;
+      }
+      .rtop {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .rolerow .rname {
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--el-text);
+        line-height: 1.25;
+      }
+      .rolerow .rdesc {
+        margin-top: 2px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+      /* The summary column: the permission count is the scannable comparison the
+         matrix used to give, and the member count is the other thing an admin
+         opens this page to learn. */
+      .rsum {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
+        text-align: right;
+        white-space: nowrap;
+      }
+      .rsum .rcount {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-secondary);
+      }
+      .rsum .rmembers {
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .rchev {
+        width: 16px;
+        height: 16px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── The role DETAIL (screen 2) ───────────────────────────────────────── */
+      /* The back link to the list — the drill-down's way out, and the thing that
+         makes the two screens read as one surface. */
+      .backlink {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        margin-bottom: 12px;
+      }
+      .backlink svg {
+        width: 14px;
+        height: 14px;
+      }
+      .rolehead {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--el-border);
+        margin-bottom: 4px;
+      }
+      .rolehead .rh-left {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        min-width: 0;
+      }
+      .rolehead h3 {
+        font-family: var(--font-serif);
+        font-size: 21px;
+        font-weight: 600;
+        color: var(--el-text);
+        line-height: 1.2;
+      }
+      .rolehead .rdesc {
+        margin-top: 5px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+        max-width: 62ch;
+      }
+      .rh-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      /* A custom role's PROVENANCE — the comparison the matrix used to carry,
+         stated where it is actually needed. */
+      .basechip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 var(--spacing-chip-x);
+        height: 20px;
+        border-radius: var(--radius-badge);
+        background: var(--el-muted);
+        color: var(--el-text-secondary);
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .basechip svg {
+        width: 12px;
+        height: 12px;
+      }
+
+      /* ── The permission LIST — full width, one role ───────────────────────── */
+      .permcard {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-card);
+        background: var(--el-surface);
+        overflow: hidden;
+      }
+      .pgroup {
+        padding: 9px var(--spacing-card-padding);
+        background: var(--el-muted);
+        border-bottom: 1px solid var(--el-border-soft);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      /* One permission: its mark (or checkbox), then label + description on ONE
+         line each — the width the matrix could not spare. */
+      .permrow {
+        display: grid;
+        grid-template-columns: 20px minmax(0, 1fr);
+        gap: 12px;
+        align-items: baseline;
+        padding: 10px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .permrow:last-child {
+        border-bottom: 0;
+      }
+      .permrow .pmark {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        align-self: center;
+      }
+      .permrow .pmark svg {
+        width: 15px;
+        height: 15px;
+      }
+      .permrow.held .pmark {
+        color: var(--el-success);
+      }
+      .permrow.withheld .pmark {
+        color: var(--el-text-faint);
+      }
+      /* A withheld permission stays fully legible — the page's job is to show
+         the whole model, so "not held" is a mark, never a dimming. */
+      .permrow .plabel {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .permrow .pdesc {
+        font-size: 12.5px;
+        color: var(--el-text-muted);
+        line-height: 1.45;
+        margin-left: 8px;
+      }
+      .permrow .from {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-faint);
+        margin-left: 6px;
+      }
+
+      /* ── The CREATE page's PINNED action bar ──────────────────────────────
+         The create surface is a whole PAGE (MOTIR-2257 · /settings/project/
+         roles/new), so the permission list has full width and every description
+         sits on one line. What a page-length form owes the author is a commit
+         affordance that is never 1500px away — so `Cancel` / `Create role` and
+         the running count PIN to the bottom of the viewport and stay there for
+         the whole scroll.
+
+         ⚠️ THE MECHANISM, AND THE TRAP THAT BIT THIS MOCK (read before building).
+         `position: sticky; bottom: 0` pins against the nearest SCROLLING
+         ancestor. In the shipped app that is AppLayout's `<main>`
+         (`min-h-0 overflow-y-auto` inside an `h-dvh overflow-hidden` column —
+         components/ui/AppLayout.tsx:56,80), and app/(authed)/settings/project/
+         layout.tsx is a pass-through, so the bar pins correctly there.
+         BUT: any ancestor between `<main>` and the bar that sets `overflow` to
+         anything other than `visible` silently kills it — the element keeps
+         `position: sticky` in the computed style and simply never pins. That is
+         exactly what happened here: the inherited `.content` and the review
+         page's `.stage` are both `overflow: hidden`, so an earlier revision
+         SHIPPED A BAR THAT LOOKED STICKY IN CSS AND WAS NOT. MOTIR-2257 must not
+         wrap this page in a clipping container, and should assert the pinning in
+         a test rather than trusting the declaration. */
+      .stickybar {
+        position: sticky;
+        bottom: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 18px;
+        padding: 12px var(--spacing-card-padding);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        box-shadow: var(--shadow-elevated);
+      }
+
+      /* ── MOCK CHROME: the app's scroll container, reproduced ───────────────
+         A full-page screenshot can never show a pinned bar, and the review
+         page's own `.stage` clips. So the CREATE panel renders inside a frame
+         that reproduces what AppLayout's `<main>` actually IS — a fixed-height
+         `overflow-y: auto` box — which makes the bar pin for real, in the mock
+         and in the PNG. REVIEW CHROME, not product: the app takes its height
+         from `h-dvh`, not from a hard 760px.
+
+         `padding-bottom: 0` so the pinned bar meets the frame's bottom edge. No
+         trailing spacer is needed: the bar is the last child, so at full scroll
+         it returns to its static position with every row above it — nothing is
+         permanently hidden behind it. */
+      .panel.vp .content {
+        height: 760px;
+        overflow-y: auto;
+        padding-bottom: 0;
+        scrollbar-width: thin;
+      }
+      /* The create form's two identity fields, above the permission list. */
+      .createfields {
+        display: flex;
+        align-items: flex-end;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 6px;
+      }
+      .cfield {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .cfield .input {
+        min-width: 240px;
+      }
+      .fieldhint {
+        font-size: 12px;
+        color: var(--el-text-muted);
+        line-height: 1.45;
+        margin-bottom: 18px;
+        max-width: 68ch;
+      }
+
+      /* The level-gated card — three rows, kept OUT of the role list. */
+      .level-card {
+        padding: var(--spacing-card-padding);
+      }
+      .level-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .level-head .rname {
+        font-size: 14px;
+        font-weight: 650;
+        color: var(--el-text);
+      }
+      .level-head .rdesc {
+        margin-top: 4px;
+        font-size: 12.5px;
+        line-height: 1.45;
+        color: var(--el-text-muted);
+      }
+      .lrow {
+        display: grid;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 8px;
+        align-items: center;
+        padding: 7px 0 0;
+      }
+      .lrow svg {
+        width: 14px;
+        height: 14px;
+        color: var(--el-text-faint);
+      }
+      .lrow .plabel {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .lrow .pdesc {
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+
+      /* The read-only / member banner. */
+      .ro-note {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        border: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        border-radius: var(--radius-card);
+        padding: 10px 12px;
+        font-size: 12.5px;
+        line-height: 1.5;
+        color: var(--el-text-secondary);
+      }
+      .ro-note svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The permission CHECKBOX (MOTIR-2257's surface, specified here) ─────
+         ⚠️ THIS IS THE ONE NEW PRIMITIVE THIS ASSET ASKS FOR, and only the
+         EDITOR half needs it — MOTIR-2263's read-only page (panels 0/3) composes
+         shipped primitives alone. `components/ui/` ships `Switch` and
+         `MultiSelectPicker` but NO Checkbox; the only checkbox in the product is
+         a raw unstyled `<input type="checkbox">` in WorkflowEditor.tsx, which is
+         not something to put 28 of on a settings page. So MOTIR-2257 adds
+         `components/ui/Checkbox.tsx` to this spec: `--radius-control` (a small
+         affordance), `--el-border-strong` unchecked, `--el-accent` +
+         `--el-accent-text` checked. A Switch is the wrong grammar here — it says
+         "this setting is on/off now", where a checkbox says "this is part of the
+         set I am composing", which is what authoring a role is. */
+      .cbox {
+        width: 16px;
+        height: 16px;
+        margin-top: 1px;
+        border-radius: var(--radius-control);
+        border: 1.5px solid var(--el-border-strong);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: transparent;
+      }
+      .cbox svg {
+        width: 11px;
+        height: 11px;
+      }
+      .cbox.on {
+        background: var(--el-accent);
+        border-color: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      /* A permission the BASE already grants: checked, but visually distinct so
+         the author can see at a glance what came from the base and what they
+         added on top of it. */
+      .cbox.frombase {
+        background: var(--el-muted);
+        border-color: var(--el-border-strong);
+        color: var(--el-text-secondary);
+      }
+      .count-note {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-right: auto;
+      }
+
+      /* Panel annotation for a reserved / future slot. */
+      .reserved {
+        position: relative;
+        outline: 1.5px dashed var(--el-border-strong);
+        outline-offset: 3px;
+        border-radius: var(--radius-btn);
+      }
+      .reserved-tag {
+        position: absolute;
+        top: -9px;
+        right: -4px;
+        transform: translateY(-100%);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+        white-space: nowrap;
+      }
+
+      /* A picker trigger reads as a picker — the Input primitive plus its
+         chevron, the same grammar access-members.mock.html uses for the role
+         and access selects. */
+      .input.select {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .input.select svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>Roles &amp; permissions — the role list, a role’s permissions, and creating one</h1>
+        <p>
+          Story MOTIR-2255 · Subtask MOTIR-2259 design asset — built from app/globals.css tokens. A
+          <strong>DRILL-DOWN</strong>, not a matrix: screen 1 lists the roles one ROW each, screen 2
+          opens one role and shows its 28 permissions under 15 domain headings at full width. The
+          matrix this replaces capped out at four roles — 902px of content, 132px a column, ~390px
+          owed to the permission label — and custom roles are the whole point of MOTIR-2257. The
+          marks are the model as it will BE, not today’s partial enforcement: Admin 28, Member 10,
+          Viewer 2, over 28 role-gated keys, plus the three level-gated public-request grants in
+          their own card. Built-in roles are IMMUTABLE (lock, no control); only a custom role
+          carries Edit / Delete and a “Based on …” provenance. Panel 3 creates a role on a WHOLE
+          PAGE with a sticky action bar. COMPOSES design/projects/settings-area.mock.html (rail +
+          chrome), access-members.mock.html (role-chip grammar, the secondary Button) and
+          details.mock.html (Input) — none is re-specified here. The one new primitive this asks for
+          is a <code>Checkbox</code>, and only MOTIR-2257 needs it. See design-notes.md “Roles &amp;
+          permissions (MOTIR-2255)”.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════════ PANEL 0 ════════════ -->
+    <div class="panel-label">
+      0 · THE ROLE LIST — what “Roles &amp; permissions” opens on, reached from the settings rail’s
+      ACCESS group. <strong>One ROW per role</strong>, so the page grows with the number of roles a
+      team invents rather than running out of width at four or five. FIVE roles are drawn on
+      purpose: the matrix this replaces could not hold them — a 132px column each against a 902px
+      content width, with ~400px owed to the permission label, ran out at four customs and wrapped
+      every description to three lines before that. Each row carries the role’s purpose, its
+      <strong>N of 28</strong> — the coarse comparison the matrix used to give — and how many people
+      hold it. <strong>MOTIR-2263 builds this screen.</strong>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span class="pmeta">
+                  <span class="pname">motir</span>
+                  <span class="pkey">MOTIR</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="crumbs">Settings · motir · Roles &amp; permissions</div>
+            <div class="rp-headrow">
+              <div>
+                <h2>Roles &amp; permissions</h2>
+                <p class="page-lede">
+                  What each role in <strong>motir</strong> can do. Workspace owners and admins
+                  always hold everything.
+                </p>
+              </div>
+              <span class="btn btn-primary"
+                ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create role</span
+              >
+            </div>
+            <div class="rp-stack">
+              <div class="ro-note">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  >The three built-in roles can’t be changed — they’re what Motir guarantees. To fit
+                  a shape they don’t cover, create a role of your own.</span
+                >
+              </div>
+              <div class="rolelist">
+                <div class="rolerow">
+                  <span class="rtile" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Admin</span>
+                      <span class="lockchip"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                      >
+                    </span>
+                    <span class="rdesc"
+                      >Runs the project. Every setting, every domain, and the work itself.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">28 of 28 permissions</span>
+                    <span class="rmembers">3 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Member</span>
+                      <span class="lockchip"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                      >
+                    </span>
+                    <span class="rdesc"
+                      >Does the work — edits items, comments, attaches, runs the planner. No project
+                      settings.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">10 of 28 permissions</span>
+                    <span class="rmembers">12 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Viewer</span>
+                      <span class="lockchip"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                      >
+                    </span>
+                    <span class="rdesc">Reads the project and its reports. Changes nothing.</span>
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">2 of 28 permissions</span>
+                    <span class="rmembers">6 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile custom" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user-round" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Contractor</span>
+                      <span class="pill pill-member">Custom</span>
+                    </span>
+                    <span class="rdesc"
+                      >Reads and discusses, but cannot change a work item — for people outside the
+                      team.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">4 of 28 permissions</span>
+                    <span class="rmembers">4 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile custom" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Reporter</span>
+                      <span class="pill pill-member">Custom</span>
+                    </span>
+                    <span class="rdesc"
+                      >A Contractor who also triages the request queue and reads generated
+                      plans.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">6 of 28 permissions</span>
+                    <span class="rmembers">9 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+              </div>
+              <div class="card level-card">
+                <div class="level-head">
+                  <div>
+                    <div class="rname">Public requests</div>
+                    <div class="rdesc">
+                      Granted by the project’s <strong>access level</strong>, not by a role — which
+                      is why they are not a role in the list above. Every visitor of a
+                      <strong>public</strong> project holds all three, signed in or not; nobody
+                      holds them on an open, limited or private project, a workspace owner included.
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral"
+                    ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Access level</span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Submit requests</span>
+                    <span class="pdesc"
+                      >Send a bug report or feature request into the triage queue.</span
+                    ></span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Upvote requests</span>
+                    <span class="pdesc"
+                      >Vote on a public request to signal demand for it.</span
+                    ></span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Comment on requests</span>
+                    <span class="pdesc">Reply on a public request’s thread.</span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 1 ════════════ -->
+    <div class="panel-label">
+      1 · A ROLE’S PERMISSIONS — drilled into <strong>Member</strong>, a built-in. The whole model
+      at FULL WIDTH: 28 permissions under 15 domain headings, each on ONE line with its description
+      beside it — the room the matrix could not spare. Held is a check, not-held a dash, and a
+      not-held row stays fully legible because the page’s job is to show the whole model, not only
+      the granted part. A built-in is immutable, so the head carries a LOCK and no control at all.
+      <strong>MOTIR-2263 builds this screen.</strong>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span class="pmeta">
+                  <span class="pname">motir</span>
+                  <span class="pkey">MOTIR</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="crumbs">Settings · motir · Roles &amp; permissions · Member</div>
+            <span class="backlink"
+              ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>All roles</span
+            >
+            <div class="rolehead">
+              <div class="rh-left">
+                <span class="rtile" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                ></span>
+                <div>
+                  <h3>Member</h3>
+                  <p class="rdesc">
+                    Does the work — edits items, comments, attaches, runs the planner. No project
+                    settings.
+                  </p>
+                  <div class="rh-meta">
+                    <span class="lockchip"
+                      ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in · can’t be
+                      changed</span
+                    >
+                    <span class="basechip"
+                      ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>12 members</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <span class="count-note">Holds <strong>10</strong> of 28</span>
+            </div>
+            <div class="rp-stack">
+              <div class="permcard">
+                <div class="pgroup">Project</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Administer project</span>
+                    <span class="pdesc"
+                      >Change project settings — members, workflow, boards, fields.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">View project</span>
+                    <span class="pdesc"
+                      >Open the project and read its work items, boards and reports.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Work items</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Edit work items</span>
+                    <span class="pdesc"
+                      >Create, update, assign and move work items on the board.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Delete work items</span>
+                    <span class="pdesc"
+                      >Archive or delete a work item and everything beneath it.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Triage requests</span>
+                    <span class="pdesc"
+                      >Accept, decline, promote or snooze an item in the triage queue.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Comments</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Add comments</span>
+                    <span class="pdesc">Post comments, and edit or delete your own.</span></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Moderate comments</span>
+                    <span class="pdesc"
+                      >Edit and delete anyone’s comments, not only your own.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Attachments</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Add attachments</span>
+                    <span class="pdesc">Upload files, and delete the ones you uploaded.</span></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Delete any attachment</span>
+                    <span class="pdesc">Remove attachments uploaded by anyone.</span></span
+                  >
+                </div>
+                <div class="pgroup">Watchers</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage watchers</span>
+                    <span class="pdesc"
+                      >Add and remove other people from a work item’s watcher list.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Members & access</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage members</span>
+                    <span class="pdesc"
+                      >Add and remove project members, and set their roles.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Change project access</span>
+                    <span class="pdesc"
+                      >Set whether the project is public, open, limited or private.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Boards</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Configure boards</span>
+                    <span class="pdesc">Change board columns, swimlanes and WIP limits.</span></span
+                  >
+                </div>
+                <div class="pgroup">Sprints & backlog</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage sprints</span>
+                    <span class="pdesc"
+                      >Start and complete Sprints, and rank the backlog.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Workflow & automation</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage automation rules</span>
+                    <span class="pdesc"
+                      >Create, edit and enable automation and status-derivation rules.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage the workflow</span>
+                    <span class="pdesc"
+                      >Change the statuses a board column projects, and their transitions.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Fields & components</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage components</span>
+                    <span class="pdesc"
+                      >Create, rename and delete the project’s components.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage custom fields</span>
+                    <span class="pdesc"
+                      >Create, edit and remove custom field definitions.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage labels</span>
+                    <span class="pdesc"
+                      >Create, rename and delete the project’s labels and tags.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Estimation</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage estimation</span>
+                    <span class="pdesc">Change the project’s estimation scheme.</span></span
+                  >
+                </div>
+                <div class="pgroup">Reports & filters</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">View reports</span>
+                    <span class="pdesc"
+                      >Open the project’s reports — distribution, workload, velocity, roadmap.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage saved filters</span>
+                    <span class="pdesc"
+                      >Create, edit, share and subscribe to saved filters.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Repositories</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage repositories</span>
+                    <span class="pdesc"
+                      >Add, remove, move and take over the project’s repositories.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage code access</span>
+                    <span class="pdesc"
+                      >Decide which team members may clone the project’s code.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Import</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Import work items</span>
+                    <span class="pdesc"
+                      >Bulk-create work items from Jira, Linear or Plane.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">AI planning</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Configure AI planning</span>
+                    <span class="pdesc"
+                      >Set the planning cadence, planner model and drafted explanations.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Run AI planning</span>
+                    <span class="pdesc"
+                      >Submit a planning job that spends AI credits and proposes changes.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">View AI plans</span>
+                    <span class="pdesc">Open a generated plan and read its proposals.</span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 2 ════════════ -->
+    <div class="panel-label">
+      2 · A CUSTOM ROLE’S PERMISSIONS — <strong>Contractor</strong>, the epic’s own motivating gap
+      (may comment and attach, but cannot edit a work item), which none of the three built-ins can
+      express. Same screen as panel 1 with two additions, both admin-only: <strong>Edit</strong> and
+      <strong>Delete</strong>, and a <strong>“Based on Viewer”</strong> chip. That chip is where the
+      side-by-side comparison went: “Contractor is Viewer plus comments and attachments” is the
+      relationship an admin actually needs, and it survives at any number of roles — where reading
+      four columns at once did not. Edit opens panel 3 with the values filled in.
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span class="pmeta">
+                  <span class="pname">motir</span>
+                  <span class="pkey">MOTIR</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="crumbs">Settings · motir · Roles &amp; permissions · Contractor</div>
+            <span class="backlink"
+              ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>All roles</span
+            >
+            <div class="rolehead">
+              <div class="rh-left">
+                <span class="rtile custom" aria-hidden="true"
+                  ><svg viewBox="0 0 24 24"><use href="#i-user-round" /></svg
+                ></span>
+                <div>
+                  <h3>Contractor</h3>
+                  <p class="rdesc">
+                    Reads and discusses, but cannot change a work item — for people outside the
+                    team.
+                  </p>
+                  <div class="rh-meta">
+                    <span class="pill pill-member">Custom</span>
+                    <span class="basechip"
+                      ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg>Based on Viewer ·
+                      +2</span
+                    >
+                    <span class="basechip"
+                      ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>4 members</span
+                    >
+                  </div>
+                </div>
+              </div>
+              <div class="rowacts">
+                <span class="btn btn-secondary"
+                  ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Edit</span
+                >
+                <span class="iconbtn" role="img" aria-label="Delete this role"
+                  ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg
+                ></span>
+              </div>
+            </div>
+            <div class="rp-stack">
+              <div class="permcard">
+                <div class="pgroup">Project</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Administer project</span>
+                    <span class="pdesc"
+                      >Change project settings — members, workflow, boards, fields.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">View project</span>
+                    <span class="pdesc"
+                      >Open the project and read its work items, boards and reports.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Work items</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Edit work items</span>
+                    <span class="pdesc"
+                      >Create, update, assign and move work items on the board.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Delete work items</span>
+                    <span class="pdesc"
+                      >Archive or delete a work item and everything beneath it.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Triage requests</span>
+                    <span class="pdesc"
+                      >Accept, decline, promote or snooze an item in the triage queue.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Comments</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Add comments</span>
+                    <span class="pdesc">Post comments, and edit or delete your own.</span></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Moderate comments</span>
+                    <span class="pdesc"
+                      >Edit and delete anyone’s comments, not only your own.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Attachments</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">Add attachments</span>
+                    <span class="pdesc">Upload files, and delete the ones you uploaded.</span></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Delete any attachment</span>
+                    <span class="pdesc">Remove attachments uploaded by anyone.</span></span
+                  >
+                </div>
+                <div class="pgroup">Watchers</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage watchers</span>
+                    <span class="pdesc"
+                      >Add and remove other people from a work item’s watcher list.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Members & access</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage members</span>
+                    <span class="pdesc"
+                      >Add and remove project members, and set their roles.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Change project access</span>
+                    <span class="pdesc"
+                      >Set whether the project is public, open, limited or private.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Boards</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Configure boards</span>
+                    <span class="pdesc">Change board columns, swimlanes and WIP limits.</span></span
+                  >
+                </div>
+                <div class="pgroup">Sprints & backlog</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage sprints</span>
+                    <span class="pdesc"
+                      >Start and complete Sprints, and rank the backlog.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Workflow & automation</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage automation rules</span>
+                    <span class="pdesc"
+                      >Create, edit and enable automation and status-derivation rules.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage the workflow</span>
+                    <span class="pdesc"
+                      >Change the statuses a board column projects, and their transitions.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Fields & components</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage components</span>
+                    <span class="pdesc"
+                      >Create, rename and delete the project’s components.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage custom fields</span>
+                    <span class="pdesc"
+                      >Create, edit and remove custom field definitions.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage labels</span>
+                    <span class="pdesc"
+                      >Create, rename and delete the project’s labels and tags.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Estimation</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage estimation</span>
+                    <span class="pdesc">Change the project’s estimation scheme.</span></span
+                  >
+                </div>
+                <div class="pgroup">Reports & filters</div>
+                <div class="permrow held">
+                  <span class="pmark" role="img" aria-label="Held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span
+                  ><span
+                    ><span class="plabel">View reports</span>
+                    <span class="pdesc"
+                      >Open the project’s reports — distribution, workload, velocity, roadmap.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage saved filters</span>
+                    <span class="pdesc"
+                      >Create, edit, share and subscribe to saved filters.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Repositories</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage repositories</span>
+                    <span class="pdesc"
+                      >Add, remove, move and take over the project’s repositories.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Manage code access</span>
+                    <span class="pdesc"
+                      >Decide which team members may clone the project’s code.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Import</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Import work items</span>
+                    <span class="pdesc"
+                      >Bulk-create work items from Jira, Linear or Plane.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">AI planning</div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Configure AI planning</span>
+                    <span class="pdesc"
+                      >Set the planning cadence, planner model and drafted explanations.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">Run AI planning</span>
+                    <span class="pdesc"
+                      >Submit a planning job that spends AI credits and proposes changes.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow withheld">
+                  <span class="pmark" role="img" aria-label="Not held"
+                    ><svg viewBox="0 0 24 24"><use href="#i-minus" /></svg></span
+                  ><span
+                    ><span class="plabel">View AI plans</span>
+                    <span class="pdesc">Open a generated plan and read its proposals.</span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 3 ════════════ -->
+    <div class="panel-label">
+      3 · CREATING A ROLE — <strong>a whole page</strong> at
+      <code>/settings/project/roles/new</code>, not a dialog. The revision before this authored a
+      role in a 2165px modal inside a 900px viewport; a form this long is a page, and a page gives
+      the permission list the same full width panels 1 and 2 have, so every description sits on one
+      line. Name, then the <strong>base to start from</strong> — the base’s grants arrive ticked and
+      greyed (<code>from Viewer</code>), what the author adds is accent-ticked. The action bar
+      <strong>PINS to the bottom of the viewport</strong> with a running count, so the commit is
+      never 1500px away from the tick that changed the answer — this panel renders inside a
+      fixed-height scroll frame so you can SEE it pinned, with the rest of the list running behind
+      it. (An earlier revision declared that bar sticky and it never pinned: two inherited ancestors
+      are <code>overflow: hidden</code>, which kills <code>position: sticky</code> silently. See
+      design-notes.) <strong>Editing</strong> a custom role is this same page with the values filled
+      in — one surface, built once. MOTIR-2257 builds this.
+    </div>
+
+    <div class="panel vp">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span class="pmeta">
+                  <span class="pname">motir</span>
+                  <span class="pkey">MOTIR</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="crumbs">Settings · motir · Roles &amp; permissions · New role</div>
+            <span class="backlink"
+              ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>All roles</span
+            >
+            <div class="rp-headrow">
+              <div>
+                <h2>Create a role</h2>
+                <p class="page-lede">
+                  A role is a set of permissions with a name your team chose. It applies to this
+                  project only.
+                </p>
+              </div>
+            </div>
+            <div class="createfields">
+              <label class="cfield">
+                <span class="field-label">Name</span>
+                <span class="input focus">Contractor</span>
+              </label>
+              <label class="cfield">
+                <span class="field-label">Start from</span>
+                <span class="input select"
+                  ><span>Viewer</span><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+                ></span>
+              </label>
+            </div>
+            <p class="fieldhint">
+              The new role begins with everything <strong>Viewer</strong> holds — those arrive
+              ticked and greyed. Add to it below; you can always take something back off.
+            </p>
+            <div class="rp-stack">
+              <div class="permcard">
+                <div class="pgroup">Project</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Administer project</span>
+                    <span class="pdesc"
+                      >Change project settings — members, workflow, boards, fields.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-label="Held — from Viewer"
+                    tabindex="0"
+                    ><span class="cbox frombase"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span></span
+                  ><span
+                    ><span class="plabel">View project</span> <span class="from">from Viewer</span>
+                    <span class="pdesc"
+                      >Open the project and read its work items, boards and reports.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Work items</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Edit work items</span>
+                    <span class="pdesc"
+                      >Create, update, assign and move work items on the board.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Delete work items</span>
+                    <span class="pdesc"
+                      >Archive or delete a work item and everything beneath it.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Triage requests</span>
+                    <span class="pdesc"
+                      >Accept, decline, promote or snooze an item in the triage queue.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Comments</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-label="Held — added"
+                    tabindex="0"
+                    ><span class="cbox on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span></span
+                  ><span
+                    ><span class="plabel">Add comments</span>
+                    <span class="pdesc">Post comments, and edit or delete your own.</span></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Moderate comments</span>
+                    <span class="pdesc"
+                      >Edit and delete anyone’s comments, not only your own.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Attachments</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-label="Held — added"
+                    tabindex="0"
+                    ><span class="cbox on"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span></span
+                  ><span
+                    ><span class="plabel">Add attachments</span>
+                    <span class="pdesc">Upload files, and delete the ones you uploaded.</span></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Delete any attachment</span>
+                    <span class="pdesc">Remove attachments uploaded by anyone.</span></span
+                  >
+                </div>
+                <div class="pgroup">Watchers</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage watchers</span>
+                    <span class="pdesc"
+                      >Add and remove other people from a work item’s watcher list.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Members & access</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage members</span>
+                    <span class="pdesc"
+                      >Add and remove project members, and set their roles.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Change project access</span>
+                    <span class="pdesc"
+                      >Set whether the project is public, open, limited or private.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Boards</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Configure boards</span>
+                    <span class="pdesc">Change board columns, swimlanes and WIP limits.</span></span
+                  >
+                </div>
+                <div class="pgroup">Sprints & backlog</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage sprints</span>
+                    <span class="pdesc"
+                      >Start and complete Sprints, and rank the backlog.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Workflow & automation</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage automation rules</span>
+                    <span class="pdesc"
+                      >Create, edit and enable automation and status-derivation rules.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage the workflow</span>
+                    <span class="pdesc"
+                      >Change the statuses a board column projects, and their transitions.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Fields & components</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage components</span>
+                    <span class="pdesc"
+                      >Create, rename and delete the project’s components.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage custom fields</span>
+                    <span class="pdesc"
+                      >Create, edit and remove custom field definitions.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage labels</span>
+                    <span class="pdesc"
+                      >Create, rename and delete the project’s labels and tags.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Estimation</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage estimation</span>
+                    <span class="pdesc">Change the project’s estimation scheme.</span></span
+                  >
+                </div>
+                <div class="pgroup">Reports & filters</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="true"
+                    aria-label="Held — from Viewer"
+                    tabindex="0"
+                    ><span class="cbox frombase"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span></span
+                  ><span
+                    ><span class="plabel">View reports</span> <span class="from">from Viewer</span>
+                    <span class="pdesc"
+                      >Open the project’s reports — distribution, workload, velocity, roadmap.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage saved filters</span>
+                    <span class="pdesc"
+                      >Create, edit, share and subscribe to saved filters.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Repositories</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage repositories</span>
+                    <span class="pdesc"
+                      >Add, remove, move and take over the project’s repositories.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Manage code access</span>
+                    <span class="pdesc"
+                      >Decide which team members may clone the project’s code.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">Import</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Import work items</span>
+                    <span class="pdesc"
+                      >Bulk-create work items from Jira, Linear or Plane.</span
+                    ></span
+                  >
+                </div>
+                <div class="pgroup">AI planning</div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Configure AI planning</span>
+                    <span class="pdesc"
+                      >Set the planning cadence, planner model and drafted explanations.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">Run AI planning</span>
+                    <span class="pdesc"
+                      >Submit a planning job that spends AI credits and proposes changes.</span
+                    ></span
+                  >
+                </div>
+                <div class="permrow">
+                  <span
+                    class="pmark"
+                    role="checkbox"
+                    aria-checked="false"
+                    aria-label="Not held"
+                    tabindex="0"
+                    ><span class="cbox"></span></span
+                  ><span
+                    ><span class="plabel">View AI plans</span>
+                    <span class="pdesc">Open a generated plan and read its proposals.</span></span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="stickybar">
+              <span class="count-note">Holds <strong>4</strong> of 28 permissions</span>
+              <span class="btn btn-ghost">Cancel</span>
+              <span class="btn btn-primary">Create role</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 4 ════════════ -->
+    <div class="panel-label">
+      4 · THE MEMBER (non-admin) VIEW — browse-gated, so a member opens the same list and drills
+      into the same role screens. Two differences, both admin-only WRITE affordances: no
+      <strong>Create role</strong> button, and a custom role’s screen carries no Edit or Delete. The
+      note replaces the create-a-role invitation, which a member cannot act on.
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="rail">
+            <div class="rail-head">
+              <span class="back"
+                ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
+              >
+              <div class="proj">
+                <span class="pav">M</span>
+                <span class="pmeta">
+                  <span class="pname">motir</span>
+                  <span class="pkey">MOTIR</span>
+                </span>
+              </div>
+              <span class="settings-eyebrow">Project settings</span>
+            </div>
+            <nav aria-label="Project settings">
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-sliders" /></svg
+                  ></span>
+                  <span class="nl">Details</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-folder" /></svg
+                  ></span>
+                  <span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg
+                  ></span>
+                  <span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-workflow" /></svg
+                  ></span>
+                  <span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-columns" /></svg
+                  ></span>
+                  <span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg
+                  ></span>
+                  <span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-tag" /></svg
+                  ></span>
+                  <span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-box" /></svg
+                  ></span>
+                  <span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg viewBox="0 0 24 24"><use href="#i-bot" /></svg
+                  ></span>
+                  <span class="nl">Rules</span>
+                </div>
+              </div>
+            </nav>
+          </aside>
+          <div class="content">
+            <div class="crumbs">Settings · motir · Roles &amp; permissions</div>
+            <div class="rp-headrow">
+              <div>
+                <h2>Roles &amp; permissions</h2>
+                <p class="page-lede">
+                  What each role in <strong>motir</strong> can do. Workspace owners and admins
+                  always hold everything.
+                </p>
+              </div>
+            </div>
+            <div class="rp-stack">
+              <div class="ro-note">
+                <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                <span
+                  >These are the roles your project admins have set up. Open any one to see exactly
+                  what it can do. Only a project admin can create or change a role.</span
+                >
+              </div>
+              <div class="rolelist">
+                <div class="rolerow">
+                  <span class="rtile" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Admin</span>
+                      <span class="lockchip"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                      >
+                    </span>
+                    <span class="rdesc"
+                      >Runs the project. Every setting, every domain, and the work itself.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">28 of 28 permissions</span>
+                    <span class="rmembers">3 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Member</span>
+                      <span class="lockchip"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                      >
+                    </span>
+                    <span class="rdesc"
+                      >Does the work — edits items, comments, attaches, runs the planner. No project
+                      settings.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">10 of 28 permissions</span>
+                    <span class="rmembers">12 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-eye" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Viewer</span>
+                      <span class="lockchip"
+                        ><svg viewBox="0 0 24 24"><use href="#i-lock" /></svg>Built-in</span
+                      >
+                    </span>
+                    <span class="rdesc">Reads the project and its reports. Changes nothing.</span>
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">2 of 28 permissions</span>
+                    <span class="rmembers">6 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile custom" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-user-round" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Contractor</span>
+                      <span class="pill pill-member">Custom</span>
+                    </span>
+                    <span class="rdesc"
+                      >Reads and discusses, but cannot change a work item — for people outside the
+                      team.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">4 of 28 permissions</span>
+                    <span class="rmembers">4 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+                <div class="rolerow">
+                  <span class="rtile custom" aria-hidden="true"
+                    ><svg viewBox="0 0 24 24"><use href="#i-inbox" /></svg
+                  ></span>
+                  <span class="rmain">
+                    <span class="rtop">
+                      <span class="rname">Reporter</span>
+                      <span class="pill pill-member">Custom</span>
+                    </span>
+                    <span class="rdesc"
+                      >A Contractor who also triages the request queue and reads generated
+                      plans.</span
+                    >
+                  </span>
+                  <span class="rsum">
+                    <span class="rcount">6 of 28 permissions</span>
+                    <span class="rmembers">9 members</span>
+                  </span>
+                  <svg viewBox="0 0 24 24" class="rchev"><use href="#i-chevron-right" /></svg>
+                </div>
+              </div>
+              <div class="card level-card">
+                <div class="level-head">
+                  <div>
+                    <div class="rname">Public requests</div>
+                    <div class="rdesc">
+                      Granted by the project’s <strong>access level</strong>, not by a role — which
+                      is why they are not a role in the list above. Every visitor of a
+                      <strong>public</strong> project holds all three, signed in or not; nobody
+                      holds them on an open, limited or private project, a workspace owner included.
+                    </div>
+                  </div>
+                  <span class="pill pill-neutral"
+                    ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Access level</span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Submit requests</span>
+                    <span class="pdesc"
+                      >Send a bug report or feature request into the triage queue.</span
+                    ></span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Upvote requests</span>
+                    <span class="pdesc"
+                      >Vote on a public request to signal demand for it.</span
+                    ></span
+                  >
+                </div>
+                <div class="lrow">
+                  <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                  <span
+                    ><span class="plabel">Comment on requests</span>
+                    <span class="pdesc">Reply on a public request’s thread.</span></span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <g
+          id="i-arrow-left"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 19-7-7 7-7" />
+          <path d="M19 12H5" />
+        </g>
+        <g
+          id="i-sliders"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="21" x2="14" y1="4" y2="4" />
+          <line x1="10" x2="3" y1="4" y2="4" />
+          <line x1="21" x2="12" y1="12" y2="12" />
+          <line x1="8" x2="3" y1="12" y2="12" />
+          <line x1="21" x2="16" y1="20" y2="20" />
+          <line x1="12" x2="3" y1="20" y2="20" />
+          <line x1="14" x2="14" y1="2" y2="6" />
+          <line x1="8" x2="8" y1="10" y2="14" />
+          <line x1="16" x2="16" y1="18" y2="22" />
+        </g>
+        <g
+          id="i-users"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+          <circle cx="9" cy="7" r="4" />
+          <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+          <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        </g>
+        <g
+          id="i-workflow"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="8" height="8" x="3" y="3" rx="2" />
+          <path d="M7 11v4a2 2 0 0 0 2 2h4" />
+          <rect width="8" height="8" x="13" y="13" rx="2" />
+        </g>
+        <g
+          id="i-columns"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" />
+          <path d="M9 3v18" />
+          <path d="M15 3v18" />
+        </g>
+        <g
+          id="i-gauge"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m12 14 4-4" />
+          <path d="M3.34 19a10 10 0 1 1 17.32 0" />
+        </g>
+        <g
+          id="i-tag"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
+          />
+          <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+        </g>
+        <g
+          id="i-box"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+          />
+          <path d="m3.3 7 8.7 5 8.7-5" />
+          <path d="M12 22V12" />
+        </g>
+        <g
+          id="i-bot"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 8V4H8" />
+          <rect width="16" height="12" x="4" y="8" rx="2" />
+          <path d="M2 14h2" />
+          <path d="M20 14h2" />
+          <path d="M15 13v2" />
+          <path d="M9 13v2" />
+        </g>
+        <g
+          id="i-shield"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+          />
+        </g>
+        <g
+          id="i-eye"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"
+          />
+          <circle cx="12" cy="12" r="3" />
+        </g>
+        <g
+          id="i-lock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+        </g>
+        <g
+          id="i-info"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4" />
+          <path d="M12 8h.01" />
+        </g>
+        <g
+          id="i-hash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="4" x2="20" y1="9" y2="9" />
+          <line x1="4" x2="20" y1="15" y2="15" />
+          <line x1="10" x2="8" y1="3" y2="21" />
+          <line x1="16" x2="14" y1="3" y2="21" />
+        </g>
+        <g
+          id="i-type"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <polyline points="4 7 4 4 20 4 20 7" />
+          <line x1="9" x2="15" y1="20" y2="20" />
+          <line x1="12" x2="12" y1="4" y2="20" />
+        </g>
+        <g
+          id="i-image"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+          <circle cx="9" cy="9" r="2" />
+          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+        </g>
+        <g
+          id="i-layers"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
+          />
+          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+        </g>
+        <g
+          id="i-calendar"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M8 2v4" />
+          <path d="M16 2v4" />
+          <rect width="18" height="18" x="3" y="4" rx="2" />
+          <path d="M3 10h18" />
+        </g>
+        <g
+          id="i-chevron-down"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m6 9 6 6 6-6" />
+        </g>
+        <g
+          id="i-folder"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </g>
+        <g
+          id="i-minus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+        </g>
+        <g
+          id="i-plus"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M5 12h14" />
+          <path d="M12 5v14" />
+        </g>
+        <g
+          id="i-pencil"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"
+          />
+        </g>
+        <g
+          id="i-trash"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M3 6h18" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </g>
+        <g
+          id="i-chevron-right"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </g>
+      </defs>
+      <g id="i-user-round">
+        <circle cx="12" cy="8" r="5" />
+        <path d="M20 21a8 8 0 0 0-16 0" />
+      </g>
+      <g id="i-inbox">
+        <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+        <path
+          d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"
+        />
+      </g>
+      <g id="i-git-branch">
+        <path d="M15 6a9 9 0 0 0-9 9V3" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="6" cy="18" r="3" />
+      </g>
+    </svg>
+  </body>
+</html>

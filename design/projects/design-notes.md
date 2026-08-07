@@ -1485,197 +1485,273 @@ places, so BOTH doors are drawn (label + placement + which mode each opens) in e
 "Create project" is the kept, always-present manual path. Exact labels: **"Plan a new project with
 AI"** and **"Create project"** (verbatim).
 
+---
+
+# Roles & permissions — the role list, a role's permissions, and creating one (Story MOTIR-2255 · Subtask MOTIR-2259 output)
+
+The surface at **Project settings → Access → Roles & permissions**: what each role in a project can
+do. This story ships it **read-only** over the three built-in roles;
+[MOTIR-2257](motir:cmsgmdaim001g04joump8d6mi) adds custom ones. This section is the canonical
+reference for [MOTIR-2263](motir:cmsgmj2eu003904jo49c5r3k6) (the read screens + the rail entry) and
+for MOTIR-2257 (the create page).
+
+| HTML source (truth)           | PNG export              |
+| ----------------------------- | ----------------------- |
+| `roles-permissions.mock.html` | `roles-permissions.png` |
+
+## The structure: a DRILL-DOWN, because a matrix capped the feature it exists to serve
+
+The surface is **two screens**:
+
+1. **The role LIST** — one **row** per role, carrying its name, its purpose, `N of 28 permissions`
+   and how many people hold it.
+2. **The role DETAIL** — drill into one role and read its permissions at **full width**, 28 rows
+   under 15 domain headings, each on one line with its description beside it.
+
+An earlier revision put permissions on ROWS and roles on COLUMNS. It read well at three roles and
+**could not survive five**, which is why it was replaced. Measured in this mock:
+
+|                        |                                                                                        |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| Content column         | **902px**                                                                              |
+| One role column        | **132px**                                                                              |
+| Permission label needs | **~390px** to keep a description on one line                                           |
+| So the matrix holds    | **3 roles comfortably, 4 with every description wrapped to three lines, 6 not at all** |
+
+A permission catalog grows slowly and deliberately — 28 keys, added by a card that argues for each.
+The number of roles a team invents does not, and **custom roles are the entire point of MOTIR-2257**.
+A structure whose width is consumed by the thing the feature adds is the wrong structure: it would
+have shipped a role editor onto a page that breaks at the second or third role somebody creates. The
+list has no such ceiling, and the detail screen gets the whole 902px back — which is why a
+description that wrapped to three lines in the matrix now sits on one.
+
+**What the trade costs, and where it is paid back.** The matrix's one real virtue was side-by-side
+comparison, and a drill-down loses it. Two things carry it instead, and both survive at any number of
+roles:
+
+- the list's **`N of 28`** on every row — the coarse comparison, scannable in one pass;
+- a custom role's **`Based on Viewer · +2`** chip on its detail screen. "Contractor is Viewer plus
+  comments and attachments" is the comparison an admin actually reaches for, and it is exact — where
+  reading four columns at once was neither.
+
+**Panels 1 and 2 are the same screen** in its built-in and custom states; the differences are the two
+admin-only write affordances (`Edit`, `Delete`) and the provenance chip. The **breadcrumb and the
+`← All roles` link both appear**, deliberately: the inherited crumb trail is orientation, the back
+link is the control, and a drill-down needs a control rather than a place to read where you are.
+
+## The model the screens render — as it WILL BE, not how far enforcement has got
+
+|                       |                                                     |
+| --------------------- | --------------------------------------------------- |
+| Role-gated rows       | **28**                                              |
+| Domain headings       | **15**                                              |
+| Level-gated, own card | **3** (`public_request:*`)                          |
+| The three built-ins   | Admin **28** · Member **10** · Viewer **2** (of 28) |
+
+**Every mark is the grant the role holds when the epic is finished.** The marks come from two
+records, and neither is a guess:
+
+- **The 20 keys already wired** — `lib/permissions/builtinRoles.ts` on `origin/main`, after
+  [MOTIR-2256](motir:cmsgmcpy2001a04joa4k7rjtb) put the twelve per-domain administrative keys into
+  `admin`. `ROLE_GATED_PERMISSIONS` is the row set; `BUILTIN_ROLE_PERMISSIONS` is the marks.
+- **The 8 member-facing keys [MOTIR-2291](motir:cmshequ8x000004jx8cty50hs) has yet to wire** —
+  `work_item:delete`, `work_item:triage`, `sprint:manage`, `report:view`, `saved_filter:manage`,
+  `import:run`, `ai:plan`, `ai:view_plan` — take the grants
+  [MOTIR-2347](motir:cmsiao000001304lb5gsec1wp) decides, each argued from Jira / Plane / Linear.
+  Admin holds all eight; Member holds six (not `import:run`, admin-only per Plane and Linear; not
+  `work_item:delete`, admin-only per Jira's default scheme); Viewer gains only `report:view`, because
+  Jira has no separate report permission — _Browse Projects_ is what governs a report.
+
+**A settings page describes the product, not its migration.** Three revisions tried to put Motir's
+own wiring progress into a customer's screen — hiding the unwired keys (8 of 32, implying that was
+the model), marking them _"Not yet enforced"_, then showing them held by nobody, which read as "no
+role in this project can manage a sprint, a board, a field or a report". All three describe a
+half-finished migration; none describes the product.
+
+> **This asset draws MOTIR-2347's recommendation as settled, and that card has not run.** It sits in
+> a later story, so the design would otherwise be blocked on a decision nobody is scheduled to make
+> before the screens are built. The recommendation is fully argued with its mirror evidence, so
+> drawing it is the cheaper order — but it is a **ratification these screens depend on**: if
+> MOTIR-2347 lands a different answer for any of the eight, that row's mark changes with it.
+
+`repository:connect` is **absent**, not withheld: [MOTIR-2294](motir:cmshf0mm5000f04l1liqnk2a0)
+retired it. Its operations bind a provider installation to a **workspace** and resolve no project, so
+no project role could ever govern them.
+
+**A withheld permission stays fully legible** — a dash, never a dimmed row. The screen's job is to
+show the whole model, so "not held" has to be as readable as "held".
+
 ## Panels (inspect every one)
 
-1. **Project switcher popover.** The shipped switcher, open: PROJECTS heading, project rows (active
-   carries the `Check`), hairline, then the two footer rows — **Plan a new project with AI**
-   (`Sparkles`, `--el-accent-on-surface`) above **Create project** (`Plus`). Replaces the shipped
-   single "Create project" row's slot with the two-row stack; the "Create project" row keeps its
-   label + shipped behaviour.
-2. **Empty-project state — two variants.**
-   - **(a) No projects yet** — the shipped `EmptyState` with a lavender `Sparkles` icon tile,
-     headline _"Create your first project"_, description, primary **Plan a new project with AI** +
-     secondary **Create project**. Switcher trigger reads _"No project"_ (muted).
-   - **(b) "Already has AI plan"** — when the active project already carries a planning session (an
-     `AiPreplanSession` / generated tree), the empty state swaps to a neutral `RotateCw` tile,
-     headline _"Your plan is waiting"_, and the CTA **"Continue your plan"** (routes to the resume
-     surface, not fresh onboarding) + secondary **Add a work item**. We never re-onboard a project
-     that is already planned.
-3. **"Create project" modal — shipped, kept verbatim.** The shipped `CreateProjectModal` (title
-   _"Create project"_, Name + mono live-keyed Identifier, Cancel + Create project), plus its two
-   existing states as close-ups: **Submitting** (button spinner, both disabled) and **Identifier
-   taken** (the `IDENTIFIER_COLLISION` inline error). Drawn to prove the manual door is unchanged.
-4. **"Plan a new project with AI" → the onboarding fork (routed, not redrawn).** The AI door →
-   `router.push('/onboarding')`, landing on the shipped fork. A **reference-only** schematic of the
-   fork's two branches (Start fresh · Import an existing project) is shown, banner-labelled _"owned by
-   MOTIR-1461 — this card routes here, it does not build this"_ — so the mock cites the fork without
-   redrawing it (notes.html #82/#95).
-5. **Behaviour, routing & states.** Callouts: two-doors-one-fork; the composed Create-project
-   loading/error; the empty (no-projects) door; the "already has AI plan" swap; placement + keyboard
-   (the AI door is the accent switcher row above "Create project" / the accent primary button; each a
-   focusable `button` in normal tab order).
+0. **The role LIST, project-admin view** — five roles, drawn at a size the matrix could not hold,
+   inside the settings shell with the access path (the rail's ACCESS group, under _Members &
+   access_). **MOTIR-2263 builds this screen.**
+1. **A BUILT-IN role's permissions** — drilled into `Member`. The whole model at full width. A
+   built-in is immutable, so the head carries a **lock and no control at all**. **MOTIR-2263 builds
+   this screen.**
+2. **A CUSTOM role's permissions** — `Contractor`, the epic's own motivating gap (_may comment and
+   attach, but cannot edit a work item_), which none of the three built-ins can express. Same screen
+   plus `Edit`, `Delete` and the `Based on Viewer · +2` provenance chip.
+3. **Creating a role — a WHOLE PAGE** (MOTIR-2257) at `/settings/project/roles/new`. See below.
+4. **The member (non-admin) view** — browse-gated, so a member reads the same list and drills into
+   the same screens. Two differences, both admin-only WRITE affordances: no `Create role`, and a
+   custom role's screen carries no `Edit` or `Delete`.
 
-## Primitives composed (no hand-rolling)
+## Creating a role is a PAGE, not a dialog
 
-| Element                         | Shipped primitive / pattern                                  | Token role                                                                                                                |
-| ------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| Create-project modal            | `Modal` (`components/ui/Modal.tsx`) — KEPT verbatim          | `--el-surface`, `--el-border`, `--radius-modal`, `--shadow-modal`; serif title                                            |
-| Name / Identifier field         | `Input` (`components/ui/Input.tsx`) — Identifier `font-mono` | `--el-border-strong`, `--radius-input`, `--height-input`; error `--el-danger` + `--el-danger-text`                        |
-| Primary / secondary / ghost CTA | `Button` (`variant="primary"`/`"secondary"`/`"ghost"`)       | primary `--el-accent`/`--el-accent-text`; secondary `--el-button-border` + `--el-text`; `--radius-btn`, `--height-btn-md` |
-| Switcher popover                | `Popover` (`components/ui/Popover.tsx`) 320px                | `--el-surface`, `--el-border`, `--radius-card`, `--shadow-elevated`; rows `--radius-control`, `--spacing-control-x/y`     |
-| Switcher AI / manual rows       | menu rows + `Sparkles` / `Plus` lucide                       | AI row `--el-accent-on-surface`; Create-project row `--el-text` + `--el-text-muted` icon                                  |
-| Empty state                     | `EmptyState` (`components/ui/EmptyState.tsx`)                | icon tile `--el-tint-lavender` (a) / `--el-muted` (b); serif headline; `--el-accent` primary                              |
-| AI-door eyebrow / step chips    | badge + pills (reused from `onboarding-entrance`)            | `--el-tint-lavender` eyebrow; step chips `--el-surface-soft`/`--el-muted` + `--el-border`                                 |
-| Fork reference (Panel 4)        | dashed `--el-border-strong` frame + two mini `Card`s         | annotation scaffold — clearly marked reference-only, owned by MOTIR-1461                                                  |
-| Info callout                    | callout box + `Info` / `GitBranch` / `RotateCw` lucide       | `--el-surface-soft`, `--el-border`, `--radius-input`; icon `--el-info`                                                    |
+A revision before this authored a role in a modal. Measured in a 1200×900 chromium, **that dialog was
+2165px tall — 2.4× the viewport**, of which 1675px was the permission list.
 
-Icons are **lucide** (`Sparkles`, `Plus`, `ChevronDown`, `ArrowRight`, `Check`, `X`, `Info`,
-`GitBranch`, `RotateCw`, `SquareArrowOutUpRight`) at `viewBox="0 0 24 24"`, stroke 2, round caps —
-matching the shipped surfaces + the `onboarding-entrance` fork.
+A form that long is a page. So create is `/settings/project/roles/new`, and it gets three things a
+dialog could not give it:
+
+- **the same full width the detail screens have**, so every permission description sits on one line
+  and the author reads the model rather than a wrapped column;
+- **one layout for one catalog** — the create page's permission list is the detail screen's list with
+  its marks swapped for checkboxes, not a second grammar invented for a dialog;
+- **a pinned action bar** carrying the running count and `Cancel` / `Create role`, held at the
+  bottom of the viewport for the whole scroll so the commit is never 1500px away from the tick that
+  changed the answer.
+
+### The pinned bar: the mechanism, and the trap that bit this mock
+
+`position: sticky; bottom: 0` pins against the **nearest scrolling ancestor**. In the shipped app
+that is `AppLayout`'s `<main>` — `min-h-0 overflow-y-auto` inside an `h-dvh overflow-hidden` column
+(`components/ui/AppLayout.tsx:56,80`) — and `app/(authed)/settings/project/layout.tsx` is a
+pass-through, so the bar pins correctly there.
+
+⚠️ **Any ancestor between `<main>` and the bar that sets `overflow` to anything but `visible` kills
+it silently.** The element keeps `position: sticky` in its computed style and simply never pins —
+there is no warning and nothing looks wrong in the CSS. That is exactly what happened here: this
+mock's inherited `.content` and the review page's `.stage` are both `overflow: hidden`, so an earlier
+revision of this asset **declared a sticky bar that did not stick**, and the notes claimed a
+behaviour the file did not have. It was caught by measuring — scroll the page, then read the bar's
+`getBoundingClientRect().bottom` against `window.innerHeight` — not by reading the CSS.
+
+Two consequences for **MOTIR-2257**:
+
+1. Do not wrap this page in a clipping container, and do not add `overflow-hidden` to a wrapper for
+   rounded corners without re-checking the bar.
+2. **Assert the pinning in a test** rather than trusting the declaration — scroll the scroll
+   container, then assert the bar's bottom edge is still at the container's bottom edge. A
+   declaration that silently no-ops is precisely the thing a test is for.
+
+**Panel 3 renders inside a fixed-height `overflow-y: auto` frame** (`.panel.vp .content`) that
+reproduces what `<main>` actually is, so the bar pins for real in the mock and in the PNG — a
+full-page screenshot can never show a pinned element otherwise. The 760px height is **review chrome**;
+the app takes its height from `h-dvh`. No trailing spacer is needed: the bar is the last child, so at
+full scroll it returns to its static position with every row above it.
+
+The author names the role, picks a **base to start from**, and the base's grants arrive **ticked and
+greyed** (`from Viewer`) — visually distinct from what they add on top (accent). Starting from a base
+rather than an empty list is the GitHub custom-role pattern; it keeps a new role comprehensible
+instead of asking the author to derive 28 booleans from nothing.
+
+**Editing a custom role is this same page with the values filled in**, reached from the `Edit` button
+on panel 2 — one authoring surface, built once.
+
+Rejected: **a shorter modal** with a domain navigator inside it (still a dialog on top of the page it
+duplicates); **a two-step dialog** (moves the height into step 2 rather than removing it); and
+**authoring in a live column of the matrix** (elegant while the matrix existed, and dead with it).
+
+## Access path (drawn, not just named)
+
+The rail's **ACCESS** group, beneath **Members & access** and above **Code access** — drawn in every
+panel. The registry entry MOTIR-2263 adds is `id: 'roles'`, group `access`, href
+`/settings/project/roles`, `access: browse` (every current entry is browse-gated; changing that to a
+permission is MOTIR-2258's job). **Icon:** the `shield` glyph (`Shield` from `lucide-react`).
+
+**Routes.** `/settings/project/roles` (list) · `/settings/project/roles/[roleKey]` (detail) ·
+`/settings/project/roles/new` (create, MOTIR-2257). Only the first is a rail entry; the other two are
+drilled into, so the rail keeps **Roles & permissions** active on all three.
+
+## What this asset does NOT re-specify (it composes)
+
+| Surface                                                                 | Owned by                                           |
+| ----------------------------------------------------------------------- | -------------------------------------------------- |
+| Settings-area chrome — rail, groups, back-link header, `.content` frame | `design/projects/settings-area.mock.html` (6.5.1)  |
+| Role-chip grammar, and the `secondary` Button variant                   | `design/projects/access-members.mock.html` (6.4.1) |
+| `Input` / editable-field rows, and the `Modal`                          | `design/projects/details.mock.html` (6.8.3)        |
+
+All three are inherited **verbatim** — their CSS is copied in unchanged so this asset cannot drift
+from them. A change to any belongs in _that_ asset. (The `Modal` block is inherited but **no longer
+used**: role authoring is a page. It stays byte-identical rather than being pruned, so the
+inheritance is still a copy rather than an edit.)
+
+> Two `color: #fff` literals survive inside the inherited blocks (`.proj .pav`, the unused
+> `.btn-danger`). They are **pre-existing**, carried byte-identical rather than silently diverged;
+> this asset introduces no colour literal of its own.
+
+## Primitives composed — MOTIR-2263's screens need NO new primitive; MOTIR-2257's page needs exactly ONE
+
+| Element                             | Shipped primitive                               | Token role                                                                      |
+| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
+| The role list · the permission card | `Card`                                          | `--radius-card` · `--shadow-card` · `--el-border`                               |
+| A role ROW                          | the `MembersCard` row grammar                   | `--spacing-card-padding` · hover `--el-surface-soft`                            |
+| A role's TILE                       | `Pill` tint grammar                             | built-in `--el-tint-lavender` · custom `--el-tint-sky` · `--el-text-strong` ink |
+| `Built-in` lock · `Custom` chip     | `Pill`                                          | `--el-text-faint` · `pill-member` sky                                           |
+| Domain heading                      | `SectionLabel` grammar                          | `--el-muted` · `--el-text-faint`                                                |
+| Held / withheld / level-gated mark  | icon + `aria-label`                             | `--el-success` · `--el-text-faint`                                              |
+| `Based on …` provenance chip        | `Pill` (neutral)                                | `--el-muted` + `--el-text-secondary`                                            |
+| `Create role` · `Cancel` · `Edit`   | `Button` (primary / ghost / secondary)          | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md`         |
+| `Delete` on a custom role           | `Button` (icon)                                 | `--spacing-icon-btn` (PADDING) · `--radius-control`                             |
+| Name field · Start-from picker      | `Input` / `FormField`                           | `--radius-input` · `--height-input` · `--spacing-input-x/y`                     |
+| The sticky action bar               | `Card`                                          | `--radius-card` · `--shadow-elevated`                                           |
+| Rail, groups, rows                  | `Sidebar` / `SidebarSection` / `SidebarNavItem` | `--el-sidebar-*` · `--radius-control` · `--height-control`                      |
+| **Permission checkbox** — **NEW**   | ⚠️ **`Checkbox`, to be added by MOTIR-2257**    | `--radius-control` · `--el-border-strong` · `--el-accent`                       |
+
+**The one new primitive.** `components/ui/` ships `Switch` and `MultiSelectPicker` but no `Checkbox`;
+the product's only checkbox is a raw unstyled `<input type="checkbox">` in `WorkflowEditor.tsx`.
+Twenty-eight of those on a settings page is not acceptable, and a `Switch` is the wrong grammar (it
+says _this setting is on now_; a checkbox says _this is part of the set I am composing_). So
+MOTIR-2257 adds one — and **MOTIR-2263's two read screens are unaffected**, since they draw marks,
+not controls.
+
+**One data note for MOTIR-2263.** The list's **member count** per role is the only thing on these
+screens that is not derivable from the catalog and the role sets — it needs a group-by over project
+memberships. It earns its place (an admin opening this page wants to know who is affected), but if
+the count is not cheaply available it may be **deferred**: the row layout reserves the slot and reads
+correctly without it. Nothing else on the screen depends on it.
 
 ### Colour + shape rules (mock === component)
 
-- Every colour resolves to an `--el-*` / `--el-tint-*` palette token (the mock re-states the light /
-  warm-editorial / motir VALUES). **No invented hues** on any card / pill / state / text; the only
-  raw value is the non-semantic modal SCRIM dim (`#1a1a1a26`) and the doc-annotation scaffold, which
-  are not product UI.
-- Shape flows through element-semantic tokens (`--radius-modal`/`-card`/`-input`/`-btn`/`-badge`/
-  `-control`, `--spacing-*`, `--height-*`, `--shadow-*`) — never a raw `rounded-md`/`p-2`/`h-9`, so a
-  `data-style` swap re-shapes it. `rounded-full` only on the avatar chips / the spinner.
+- **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated**
+  = `eye`. Each mark is a `role="img"` with an `aria-label` (_Held_ / _Not held_ / _Granted by
+  access level_), so state is never carried by colour or glyph ALONE.
+- On the create page, a permission **from the base** is a grey-filled checkbox and one the author
+  **added** is an accent-filled one — two visual states, one affordance. Each is a `role="checkbox"`
+  with `aria-checked` and a label naming the state (_Held — from Viewer_ / _Held — added_ / _Not
+  held_), so "who granted this" is never carried by fill colour alone.
+- A **built-in** role's tile is `--el-tint-lavender` and a **custom** one's is `--el-tint-sky` — the
+  two tint slots `access-members.mock.html` already uses for Admin and Member. The kind is also
+  stated in words (`Built-in` / `Custom`), never by tint alone.
+- No Tier-0 `--color-*`, no raw `rounded-*` / `p-*` / `h-*` outside the inherited token block.
+  `data-theme="dark"` verified on every panel.
+- **`--spacing-icon-btn` is a PADDING token (4px), not a size.** Using it as `width`/`height`
+  collapses an icon button to a 4px artifact — the glyph sizes the box, the token pads it.
+- `.rp-headrow` / `.rp-stack` are named to AVOID colliding with the inherited `.page-head` /
+  `.stack`; the latter is capped at 640px for the Details form column, which is wrong for these.
 
-## Which card owns each destination (connect, don't duplicate)
+## Content grounding
 
-| Destination                                       | Owner (design → build)                                                      |
-| ------------------------------------------------- | --------------------------------------------------------------------------- |
-| The manual "Create project" modal                 | 1.3.3 / MOTIR-39 (design) → 1.3.4 / MOTIR-40 (code) — KEPT, unchanged       |
-| The new-vs-existing fork screen (fresh vs import) | MOTIR-1461 (design, `design/onboarding-entrance/`) — routed to, not redrawn |
-| The `/onboarding` fork route + hand-off           | MOTIR-1462 (router)                                                         |
-| The in-app entry affordances (this design)        | MOTIR-1485 (design) → MOTIR-1486 (code)                                     |
-| Start-fresh discovery                             | 7.3 / MOTIR-804 (done)                                                      |
-| Import existing (repo + optional Jira/Linear)     | 7.15 / MOTIR-815 · 7.17 / MOTIR-817                                         |
+The 28 role-gated permissions and their 15 domain headings are **transcribed from the shipped
+catalog**, not invented: `lib/permissions/catalog.ts` on `origin/main` (MOTIR-2277), minus the three
+level-gated `public_request:*` keys, which get their own card. **Row order is
+`permissionsByDomain()`'s order** — `PERMISSION_DOMAINS` outer, `PERMISSIONS` inner — so the ordering
+is a property of the catalog rather than a decision MOTIR-2263 re-makes in a component. (It is why
+_Administer project_ precedes _View project_: that is the array's order, and matching it costs the
+code nothing while diverging would cost it a sort.)
 
-## Source of truth
-
-When a string / structure here disagrees with the shipped `CreateProjectModal` / `ProjectSwitcher` /
-`ProjectsEmptyState` or the `onboarding-entrance` fork, **the shipped code / that asset wins** — this
-mock composes them and must track them. The "already has AI plan" resume target and the exact routing
-(`/onboarding` seeded state) are the fork-router (MOTIR-1462) + resume (MOTIR-1488) contracts; 1486
-wires to those, it does not invent them.
-
----
-
-# Status automation — the parent↔child derivation switches (Story MOTIR-1615) — Subtask MOTIR-1617 output
-
-Two on/off switches that govern **bidirectional status derivation**: the upward rollup (a parent
-follows its children) and the downward cascade (a done parent completes its children). Both **ON by
-default** — two-way sync is Motir's opinion, and each switch turns its own direction off.
-
-The behaviour, and every semantic this copy describes, is decided in
-**`docs/decisions/status-derivation.md`**. Where this asset and that ADR disagree, the ADR wins.
-
-## Files
-
-- `design/projects/status-automation.mock.html` — the source of truth (4 panels).
-- `design/projects/status-automation.png` — the full-page export (chromium, light, `dSF: 2`, 1200w).
-- This section.
-
-## §1 · Placement — a card on the SHIPPED Workflow page, NOT a new settings page
-
-The access path, verified against `lib/settings/projectSettingsNav.ts` and the shipped
-`app/(authed)/settings/project/workflow/page.tsx`:
-
-> **Settings → Work → Workflow** (`/settings/project/workflow`), or ⌘K → "Workflow".
-> The **Status automation** card sits at the TOP of that page, above the shipped
-> "Transition enforcement" section and the status + transition editor.
-
-**A new registry entry was considered and rejected.** These switches configure how a status move
-PROPAGATES along the project's workflow, and the workflow page is already where `workflowPolicyMode`
-— the other "how do status moves behave here" switch — lives. A separate page would split one
-concern across two doors and spend a rail row on two booleans. Consequences: **no registry change,
-no new route, and the route↔registry totality test (`tests/settings/projectSettingsNav.test.ts`)
-stays untouched.** Panel 0 draws the door: the rail with **Work › Workflow** active, and the card in
-its real neighbourhood.
-
-## §2 · Composition — no new primitive
-
-| Element                   | Composed from (shipped)                                                                        |
-| ------------------------- | ---------------------------------------------------------------------------------------------- |
-| The card shell            | `SettingsCard` (`AiPlanningSettingsEditor.tsx:446`) — head divider, `--el-surface-soft` footer |
-| Each toggle row           | `SwitchRow` (`AiPlanningSettingsEditor.tsx:486`) — Switch + label + hint                       |
-| The switch itself         | `Switch` (`packages/design-system/src/components/ui/Switch.tsx`)                               |
-| The admin footer / banner | The same Cancel + Save band and non-admin lock banner the ai-planning pane ships               |
-| The ladder read-out       | A plain `<dl>` — **not** a new component (see §4)                                              |
-
-Reuse `SwitchRow` and `SettingsCard` by EXTRACTING them from `AiPlanningSettingsEditor` into a shared
-module rather than copying them; they are already the second consumer's worth of the same grammar.
-
-## §3 · Copy (verbatim for MOTIR-1622; i18n under `settings.statusAutomation`)
-
-| Key                        | String                                                                                                                                                                                                                                    |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `title`                    | Status automation                                                                                                                                                                                                                         |
-| `subtitle`                 | Keep a parent and its children in step. Motir derives status in both directions by default; each switch turns its own direction off.                                                                                                      |
-| `rollup.label`             | Roll up parent status from children                                                                                                                                                                                                       |
-| `rollup.hint`              | A parent follows its children's progress. It only ever moves a parent forward, along moves your workflow already allows — reopening a child never moves a parent back.                                                                    |
-| `rollup.ladder.inProgress` | **In Progress** — as soon as any child starts                                                                                                                                                                                             |
-| `rollup.ladder.inReview`   | **In Review** — when the last open child reaches review                                                                                                                                                                                   |
-| `rollup.ladder.done`       | **Done** — when every child is finished or cancelled                                                                                                                                                                                      |
-| `cascade.label`            | Complete children when a parent is done                                                                                                                                                                                                   |
-| `cascade.hint`             | When a parent reaches Done — including automatically, when its pull request merges — its unfinished children are completed too. **This includes children nobody has started yet.** Turn it off if your team tracks child work separately. |
-| `cascade.hintOff`          | Off — closing a parent leaves its children where they are, for your team to close themselves.                                                                                                                                             |
-| `lock`                     | Only a project admin can change status automation.                                                                                                                                                                                        |
-
-**The cascade's consequence sentence is load-bearing, not decoration.** "This includes children
-nobody has started yet" is the one fact that makes the switch's risk legible, and it carries `<strong>`
-emphasis for exactly that reason. Do not soften or drop it.
-
-## §4 · Why the ladder read-out exists
-
-"Rolls up parent status" does not tell an admin WHEN each rung fires, which is the only thing they
-need to predict the behaviour on their own board. So the rollup row carries a three-line definition
-list — status name, then the condition — inside a `--el-border` left rule. It is a `<dl>`, not a new
-component: a table would over-structure three pairs, and a new primitive for one read-out is exactly
-the complexity the design system asks us not to add.
-
-## §5 · States (every panel of the mock)
-
-| Panel | State       | What it shows                                                                             |
-| ----- | ----------- | ----------------------------------------------------------------------------------------- |
-| 0     | Access path | The rail with Work › Workflow active; the card above the shipped enforcement section      |
-| 1     | Default     | Both ON — what every project starts at, and what existing projects backfill to            |
-| 2     | Upward-only | The cascade off. An off row KEEPS its layout and drops only its text to `--el-text-faint` |
-| 3     | Non-admin   | Switches disabled (not hidden), footer replaced by the lock banner                        |
-
-Panel 2 is the argument against one combined toggle, drawn: a team can keep the rollup and decline
-the auto-close. Panel 3 follows the shipped read-only rule — **disabled, never hidden**, so a member
-sees the same setting an admin does and learns why their items move on their own.
-
-## §6 · Attribution — how a derived move reads in the activity feed
-
-Per the ADR, an auto-transition in either direction runs under a system context and is attributed to
-the **workspace owner**. It writes the ordinary `updated` revision with a `status: {from, to}` diff,
-so the feed renders it through the SHIPPED status-change row — **no new revision kind, no new
-renderer, no new component.** It reads as an ordinary status change by that user, which is what it
-is. There is no badge distinguishing derived from manual moves: adding one would be its own design
-and its own card, and the ADR did not decide it.
-
-## §7 · Tokens
-
-Every colour is an `--el-*` token (`--el-text` / `-muted` / `-helper` / `-faint`, `--el-card`,
-`--el-surface-soft`, `--el-border` / `-soft` / `-strong`, `--el-muted`, `--el-accent` /
-`--el-accent-text`, `--el-switch-on` / `--el-switch-knob`, `--el-icon-heading`); no Tier-0
-`--color-*` reaches a component, and **no invented hue appears anywhere** — the single raw value in
-the mock is the non-semantic board backdrop, which is annotation scaffold, not product UI. Every
-shaped box takes an element-semantic shape token (`--radius-card` / `-btn` / `-control`,
-`--spacing-card-padding`, `--spacing-control-x/y`, `--shadow-card` / `-subtle`), so a `data-style`
-swap re-shapes the whole card. `rounded-full` appears only on the switch track and knob — the
-sanctioned genuinely-circular carve-out.
-
-The switch's accessible name comes BY REFERENCE (`aria-labelledby` → the visible label id), so it
-cannot drift from the text on screen — the same rule `SwitchRow` already follows.
+Copy matches the `permissions.*` i18n namespace, so MOTIR-2263 renders the same strings this mock
+shows. **`Contractor` (4 of 28) and `Reporter` (6 of 28) are illustrative** — custom roles, not
+shipped ones; they exist to draw the list at five roles and to show the `Based on …` provenance
+(Reporter is cut from Contractor, so the chip chains).
 
 ## Source of truth
 
-When a string or structure here disagrees with the shipped `AiPlanningSettingsEditor` /
-`WorkflowEditor` / `Switch`, **the shipped code wins** — this mock composes them. When it disagrees
-with `docs/decisions/status-derivation.md` about BEHAVIOUR, the ADR wins.
+When a string or structure here disagrees with the shipped `lib/permissions/*` catalog or role sets,
+**the code wins** — this mock renders them. The one deliberate exception is the eight keys MOTIR-2291
+has yet to wire: for those, **MOTIR-2347's decision record wins over today's code**, because today's
+code has no answer for them and this page must not show one it invented. When this asset disagrees
+with `settings-area.mock.html`, `access-members.mock.html` or `details.mock.html` about chrome, chip
+grammar, Input or Modal, **those assets win** — this one composes them.
