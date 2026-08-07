@@ -103,4 +103,27 @@ describe('the shell brand slot (§7a)', () => {
     expect(order[2]!.querySelector('[data-testid="hamburger"]')).not.toBeNull();
     expect(order[3]!.getAttribute('data-testid')).toBe('tier-nav');
   });
+
+  it('YIELDS to the hamburger below md — the slot is desktop-only', async () => {
+    // Measured, not preferred. This bar already overflows at 375px: the right
+    // cluster alone is 290–409px inside a 375px viewport, so the left cluster
+    // collapses to zero width and its children spill under it. On `main` the
+    // hamburger lands at x=16–52 and clears the right cluster's leading edge at
+    // x=69; 57px of brand ahead of it moves it to x=73–109, INSIDE that cluster,
+    // where the build-in-public megaphone intercepts every tap and "Open
+    // navigation" times out. Deleting these two `md:` variants re-breaks
+    // `shell-flows` and `settings-area` at narrow width, which is why they are
+    // pinned here and not left as styling.
+    const { container } = render(await TopNav(props));
+    const brand = container.querySelector('a[href="/dashboard"]')!;
+    const divider = brand.nextElementSibling!;
+    expect(brand.className).toContain('hidden');
+    expect(brand.className).toContain('md:flex');
+    expect(divider.className).toContain('hidden');
+    expect(divider.className).toContain('md:block');
+    // The hamburger keeps its own mirror-image breakpoint, so exactly one of the
+    // two leads the cluster at any width.
+    const hamburgerWrapper = container.querySelector('[data-testid="hamburger"]')!.parentElement!;
+    expect(hamburgerWrapper.className).toContain('md:hidden');
+  });
 });

@@ -113,15 +113,34 @@ export async function TopNav({
               `aria-hidden`, so this link is the mark's ONLY accessible name —
               the "informative" row of §8's table. Never add a visible wordmark
               here as well: a label plus visible text makes a screen reader
-              announce the brand twice. */}
+              announce the brand twice.
+
+              ⚠️ `hidden md:flex` — it yields to the hamburger below md, and that
+              is a MEASURED constraint, not a preference. This bar overflows at
+              375px before the brand is anywhere near it: the right cluster alone
+              measures 290–409px inside a 375px viewport depending on which of
+              the Plan-with-AI / build-in-public slots are live, so the left
+              cluster is squeezed to zero width and its children spill under it.
+              On `main` the hamburger sits at x=16–52 and clears the right
+              cluster's leading edge (x=69) with room to spare. Adding 57px of
+              brand ahead of it moves it to x=73–109 — INSIDE that cluster, where
+              `elementFromPoint` at its centre returns the build-in-public
+              megaphone and the tap opens nothing. (That is the E2E failure this
+              guard is for: `shell-flows` and `settings-area` both time out
+              clicking "Open navigation".) Above md the hamburger is gone and
+              there is nothing to displace, which is exactly the width §7a draws.
+
+              The overflow ITSELF is a pre-existing shell defect, logged
+              separately rather than absorbed here — this card must not silently
+              redesign a responsive bar the brand design never drew. */}
           <Link
             href="/dashboard"
             aria-label={t('topNav.brandHome')}
-            className="flex h-8 w-8 flex-none items-center justify-center rounded-(--radius-control)"
+            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex"
           >
             <BrandMark variant="mark" size={24} />
           </Link>
-          <span aria-hidden className="mx-1 h-5 w-px flex-none bg-(--el-border)" />
+          <span aria-hidden className="mx-1 hidden h-5 w-px flex-none bg-(--el-border) md:block" />
           {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
               where the persistent rail takes over. */}
           <div className="md:hidden">

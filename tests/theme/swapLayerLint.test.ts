@@ -98,6 +98,15 @@ describe('swap-layer lint — no component reaches past the --el-* layer', () =>
       // sees the stylesheet — there is no cascade to read a token from.
       'app/(public)/explore/opengraph-image.tsx',
       'app/(public)/p/[identifier]/opengraph-image.tsx',
+      // The brand mark's BAKED-COLOUR literals (MOTIR-1150). The glyph itself
+      // paints `currentColor` and follows the theme everywhere it is inline —
+      // but `currentColor` resolves to BLACK through an <img src>, as a favicon,
+      // and inside next/og, so those four surfaces (the icon set, the manifest's
+      // two colours, the OG cards, the email header) need the value baked. This
+      // module is where the bake happens ONCE, with each literal naming the
+      // token it came from, rather than the hex being retyped at four call
+      // sites. It renders nothing itself.
+      'components/brand/waveBand.ts',
       // The appearance PREVIEW swatches must show each palette's OWN literal
       // colours side by side, so they cannot resolve through the active one.
       'packages/design-system/src/components/theme/AppearancePickers.tsx',
