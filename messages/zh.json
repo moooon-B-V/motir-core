@@ -5926,7 +5926,8 @@
     "mcpReadReference": "查阅完整参考文档",
     "mcpThScope": "权限范围",
     "mcpThGates": "管控范围",
-    "mcpWhatNextBody": "全部 {count} 个工具、各自的作用，以及管控它的权限范围。"
+    "mcpWhatNextBody": "全部 {count} 个工具、各自的作用，以及管控它的权限范围。",
+    "mcpForkApiLink": "查阅 REST API 参考文档"
   },
   "auditCoverage": {
     "count": "{count, plural, other {# 个仓库尚无代码健康度审计。}}",

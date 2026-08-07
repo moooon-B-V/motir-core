@@ -68,6 +68,13 @@ export default async function McpGuidePage() {
             }}
           />
           <DocBlock block={MCP_FORK_STEER} />
+          {/* The other half, as a real link. The callout STATES the choice; a
+              reader who has just made it needs somewhere to click. */}
+          <p className="mb-3 max-w-[68ch] text-sm leading-relaxed text-(--el-text-secondary)">
+            <a className="text-(--el-link) underline" href="/docs/api">
+              {t('mcpForkApiLink')}
+            </a>
+          </p>
         </section>
 
         <section id="token" className="mb-10 scroll-mt-6">

@@ -285,7 +285,7 @@ export function mcpForkRows(facts: McpTransportFacts = mcpTransportFacts()): Mcp
 export const MCP_FORK_STEER: GuideBlock = {
   kind: 'callout',
   tone: 'info',
-  text: 'Wiring an agent? Stay here. Writing software other people install? Read the API reference.',
+  text: 'Wiring an agent? Stay here. Writing software other people install? The REST API is the other half — it is the one that promises not to change under you.',
 };
 
 // ── The scope legend, derived from TOKEN_SCOPES / DEFAULT_TOKEN_SCOPES ───────

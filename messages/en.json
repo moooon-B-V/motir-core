@@ -5930,7 +5930,8 @@
     "mcpReadReference": "Read the full reference",
     "mcpThScope": "Scope",
     "mcpThGates": "What it gates",
-    "mcpWhatNextBody": "all {count} tools, what each does, and the scope that gates it."
+    "mcpWhatNextBody": "all {count} tools, what each does, and the scope that gates it.",
+    "mcpForkApiLink": "Read the API reference"
   },
   "auditCoverage": {
     "count": "{count, plural, one {# repository has no code-health audit.} other {# repositories have no code-health audit.}}",
