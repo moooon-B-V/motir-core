@@ -538,6 +538,9 @@ uses; the story suite rides the sharded Vitest job.
 
 ## Releasing
 
+What each version changed, for the person who installs it, is
+[`CHANGELOG.md`](./CHANGELOG.md). Below is how one gets published.
+
 Releases publish to the **public npm registry** via CI — the
 `.github/workflows/release-cli.yml` workflow, triggered by a package-scoped git
 tag. There is no manual `npm publish` in the normal path.
