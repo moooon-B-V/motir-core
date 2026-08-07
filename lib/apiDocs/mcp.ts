@@ -387,17 +387,17 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   get_work_item: {
     summary:
       'One item in full — description, status, parent and children, dependency edges, and a readiness verdict.',
-    descriptionFingerprint: '02a36a0010a3',
+    descriptionFingerprint: '343942011390',
   },
   get_work_item_activity: {
     summary:
       "One page of an item's discussion and change trail: comment threads and history, interleaved.",
-    descriptionFingerprint: '8cc8655f754d',
+    descriptionFingerprint: 'f67109d04887',
   },
   list_ready: {
     summary:
       'The ready-to-start set for a project — every item whose dependencies are all satisfied, paginated.',
-    descriptionFingerprint: '647066c26c91',
+    descriptionFingerprint: '570879d433ae',
   },
   next_ready: {
     summary:
@@ -407,12 +407,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   dispatch_prompt: {
     summary:
       'The server-generated coding-agent prompt for one item — the same text the CLI hands an agent.',
-    descriptionFingerprint: 'caeaa0a220df',
+    descriptionFingerprint: 'b597b28346fd',
   },
   search_work_items: {
     summary:
       "Search a project's items with the same filter grammar the advanced filter builder writes.",
-    descriptionFingerprint: '99a46a63c07f',
+    descriptionFingerprint: '50c0482ec3fd',
   },
   whoami: {
     summary:
@@ -465,12 +465,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   update_work_item: {
     summary:
       "Edit any subset of an item's fields, including the explanation body create cannot set.",
-    descriptionFingerprint: '516b4babae1b',
+    descriptionFingerprint: '564bf33c1ea8',
   },
   transition_status: {
     summary:
       'Move an item to another status. An illegal move comes back naming the ones that are legal.',
-    descriptionFingerprint: '83dfa31eb804',
+    descriptionFingerprint: '07d05e08c12b',
   },
   claim_next_ready: {
     summary:
@@ -479,12 +479,12 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   add_comment: {
     summary: 'Post a Markdown comment as the token owner. Mentions notify the member named.',
-    descriptionFingerprint: 'bf72687689e9',
+    descriptionFingerprint: '81d096a6d087',
   },
   expand_item: {
     summary:
       "Submit an AI expansion of one container item. Spends the owner's credits; proposals await approval.",
-    descriptionFingerprint: '48e5bcd4dddd',
+    descriptionFingerprint: 'ee60a5541cc4',
   },
   append_plan_turn: {
     summary:
@@ -498,7 +498,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   link_work_items: {
     summary:
       'Create an edge between two items — blocked_by is the one that holds an item out of the ready set.',
-    descriptionFingerprint: '298064248748',
+    descriptionFingerprint: 'e2d02dc88244',
   },
   unlink_work_items: {
     summary: 'Remove an edge, given the same relationship used to create it.',
@@ -506,23 +506,23 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   },
   move_to_parent: {
     summary: 'Re-parent an item, enforcing the kind-parent matrix and refusing a cycle.',
-    descriptionFingerprint: '11ef90e685bc',
+    descriptionFingerprint: 'fc965c828ab0',
   },
   change_kind: {
     summary: "Reclassify a leaf's kind when it is mis-filed — subtask to task, and back.",
-    descriptionFingerprint: '7ac187668169',
+    descriptionFingerprint: '7d5af7a4655e',
   },
   archive_work_item: {
     summary: 'Soft-remove an item: it leaves the ready set and search, and stays fully restorable.',
-    descriptionFingerprint: '9e9e4e06ce64',
+    descriptionFingerprint: 'c806b53fd762',
   },
   unarchive_work_item: {
     summary: 'Restore an archived item — the inverse of archive.',
-    descriptionFingerprint: '1300d06cd737',
+    descriptionFingerprint: '8ada099dad87',
   },
   delete_work_item: {
     summary: 'Permanently delete an item and its whole subtree. Irreversible, and off by default.',
-    descriptionFingerprint: '296dcd78fb48',
+    descriptionFingerprint: '416497cebae1',
   },
   create_sprint: {
     summary:
@@ -556,7 +556,7 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
   mark_integrated: {
     summary:
       "Record that an item's work landed — the branch, the PR and the commit that carried it.",
-    descriptionFingerprint: 'c3d9ff1a29a5',
+    descriptionFingerprint: '645372de2186',
   },
   complete_session: {
     summary:
