@@ -28,7 +28,7 @@ import type { DispatchItem, MotirClient } from '../mcpClient.js';
 //
 // ── the two rules that shape this file ──────────────────────────────────────
 //  1. **The list is frozen before the first agent starts.** Every item is read
-//     up front (`enumerateReady` → `planSnapshot`) and nothing re-reads the
+//     up front (`listReadyForDispatch` → `planSnapshot`) and nothing re-reads the
 //     ready set to pick work afterwards. The only later read is the newly-ready
 //     COUNT, which is reporting — it can never add an item to the run.
 //  2. **No git, no lineage.** This module deliberately imports nothing from
@@ -81,44 +81,13 @@ function requireAgent(opts: BatchOptions): ResolvedAgent {
 // ── the snapshot ────────────────────────────────────────────────────────────
 
 /**
- * Enumerate the ready set as DISPATCH payloads, in the server's dispatch order.
+ * The whole ready set, in the server's rank — the snapshot's raw material.
  *
- * `next_ready` is the source rather than `list_ready` because only the dispatch
- * payload carries the four facts the snapshot must classify on: `type` and
- * `executor` (the human/planning split), `targetRepo` (which checkout each item
- * routes into), and above all the inherited `sessionBranch` — the one signal
- * that separates "ready from main" from "ready only via an integrated
- * dependency". Both tools read the SAME ready set through the same service, so
- * the enumeration is the list `motir ready` shows, decorated.
- *
- * Advancing via `excludeIds` is what makes it an enumeration rather than a
- * repeated pick: each answer is excluded from the next question, so the loop
- * walks the whole set exactly once and terminates when the server has nothing
- * left to offer.
+ * ONE page walk (MOTIR-2398). It used to ask `next_ready` once per item with a
+ * growing exclusion list — N requests to enumerate N items, plus a
+ * stop-on-repeat guard against a server that ignored the exclusions. The
+ * collection returns the same ranked set in pages, so neither is needed.
  */
-async function enumerateReady(
-  client: MotirClient,
-  projectKey: string,
-  kinds: string[] | undefined,
-  seedExcludeIds: Set<string>,
-): Promise<DispatchItem[]> {
-  const seen = new Set(seedExcludeIds);
-  const items: DispatchItem[] = [];
-  for (;;) {
-    const { item } = await client.nextReady({
-      projectKey,
-      ...(kinds ? { kinds } : {}),
-      ...(seen.size > 0 ? { excludeIds: [...seen] } : {}),
-    });
-    if (!item) return items;
-    // A server that ignored `excludeIds` would loop forever; stopping on a
-    // repeat is the cheap guard that keeps an unattended command terminating.
-    if (seen.has(item.id)) return items;
-    seen.add(item.id);
-    items.push(item);
-  }
-}
-
 /**
  * Split an enumerated ready set into what this run may take and what a previous
  * run's failure holds out, matching on KEY (MOTIR-2338).
@@ -148,11 +117,9 @@ export function planSnapshot(items: DispatchItem[]): Snapshot {
     const disposition = classifySnapshotItem(item);
     if (disposition === 'take') {
       taken.push({
-        id: item.id,
         key: item.key,
         title: item.title,
         kind: item.kind,
-        targetRepo: item.targetRepo,
         statusKey: item.status?.key,
       });
     } else {
@@ -208,7 +175,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   }
   // Items a previous run's agent failed on are held out of the snapshot, exactly
   // as `motir next` / `motir auto` hold them out of a pick.
-  // The PERSISTED list is keyed by KEY (MOTIR-2338). `enumerateReady` walks the
+  // The PERSISTED list is keyed by KEY (MOTIR-2338). The page walk enumerates the
   // WHOLE ready set, so no id translation is needed here — the excluded items
   // are simply filtered out of what it returns, which is the same set as before.
   const persistedExcludes = new Set(
@@ -220,17 +187,20 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
     );
   }
 
-  const enumerated = await enumerateReady(client, projectKey, kinds, new Set());
+  const enumerated = await client.listReadyForDispatch({
+    projectKey,
+    ...(kinds ? { kinds } : {}),
+  });
   const [eligible, heldOut] = partitionByExclusion(enumerated, persistedExcludes);
   const snapshot = planSnapshot(eligible);
   // Everything the snapshot saw — the frozen boundary. An item outside this set
   // at the end of the run became ready DURING it. The held-out items were seen,
   // so they belong to the boundary too.
-  const snapshotIds = new Set([
-    ...snapshot.taken.map((e) => e.id),
-    ...heldOut.map((item) => item.id),
+  const snapshotKeys = new Set([
+    ...snapshot.taken.map((e) => e.key.toUpperCase()),
+    ...heldOut.map((item) => item.key.toUpperCase()),
   ]);
-  const skippedIds = new Set<string>();
+  const skippedKeys = new Set<string>();
 
   info(renderSnapshotPlan(snapshot));
 
@@ -271,7 +241,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
       });
       if (outcome.kind === 'skipped') {
         skipped.push(outcome.skip);
-        skippedIds.add(entry.id);
+        skippedKeys.add(entry.key.toUpperCase());
         continue;
       }
 
@@ -293,14 +263,14 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
 
   const notReached = snapshot.taken
     .slice(stopIndex)
-    .filter((e) => !skippedIds.has(e.id) && !records.some((r) => r.key === e.key));
+    .filter((e) => !skippedKeys.has(e.key.toUpperCase()) && !records.some((r) => r.key === e.key));
 
   return {
     records,
     skipped,
     notReached,
     // Reporting only — read AFTER the drain, and never fed back into it.
-    newlyReady: await countNewlyReady(client, projectKey, kinds, snapshotIds, snapshot.skipped),
+    newlyReady: await countNewlyReady(client, projectKey, kinds, snapshotKeys, snapshot.skipped),
     stopReason,
   };
 }
@@ -318,13 +288,13 @@ async function countNewlyReady(
   client: MotirClient,
   projectKey: string,
   kinds: string[] | undefined,
-  snapshotIds: Set<string>,
+  snapshotKeys: Set<string>,
   snapshotSkips: SnapshotSkip[],
 ): Promise<{ key: string; title: string | null }[]> {
   const skippedKeys = new Set(snapshotSkips.map((s) => s.key));
-  const after = await enumerateReady(client, projectKey, kinds, new Set());
+  const after = await client.listReadyForDispatch({ projectKey, ...(kinds ? { kinds } : {}) });
   return after
-    .filter((item) => !snapshotIds.has(item.id) && !skippedKeys.has(item.key))
+    .filter((item) => !snapshotKeys.has(item.key.toUpperCase()) && !skippedKeys.has(item.key))
     .map((item) => ({ key: item.key, title: item.title }));
 }
 

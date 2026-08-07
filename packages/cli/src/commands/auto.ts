@@ -39,7 +39,7 @@ import {
   type CommandRunner,
 } from '../git.js';
 import { CLI_VERSION } from '../version.js';
-import type { DispatchItem, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../mcpClient.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
 // MOTIR-882). Drain the ready set unattended: one item per iteration, strictly
@@ -262,7 +262,8 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   // the first time the server hands it back — one extra round trip per
   // persisted exclusion, once, and the server keeps choosing.
   const excludedKeys = new Set(readExcludes(serverUrl, projectKey).map((e) => e.key.toUpperCase()));
-  const excludeIds = new Set<string>();
+  /** Every key this run has been handed — the termination guard below. */
+  const seenKeys = new Set<string>();
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
@@ -291,21 +292,34 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       }
 
       // ONE item, asked for fresh. Never a list — see the module header.
+      // Held out by KEY: the client skips excluded rows inside the page walk,
+      // so a previous run's failures cost no extra round trip (MOTIR-2398).
       const { item } = await client.nextReady({
         projectKey,
         ...(kinds ? { kinds } : {}),
-        ...(excludeIds.size > 0 ? { excludeIds: [...excludeIds] } : {}),
+        ...(excludedKeys.size > 0 ? { excludeKeys: [...excludedKeys] } : {}),
       });
       if (!item) {
         stopReason = 'drained';
         break;
       }
-      if (excludedKeys.has(item.key.toUpperCase())) {
-        // A previous run failed on it. Hold it out exactly as before — the only
-        // difference is that the id is learned here rather than read off disk.
-        excludeIds.add(item.id);
-        continue;
+      // ⚠️ TERMINATION. The loop asks again after every item, so a key it has
+      // already taken coming back a second time means the ready set is not
+      // shrinking — a status that did not move, or a server that disagrees with
+      // this client about what is ready. Left alone the run spins forever
+      // making requests, which is how an unattended command burns a night and a
+      // quota. The old MCP enumeration had this guard for the same reason;
+      // moving the pick client-side (MOTIR-2398) does not remove the need.
+      if (seenKeys.has(item.key.toUpperCase())) {
+        stopReason = 'halted';
+        info('');
+        info(
+          `${item.key} was offered twice — the ready set is not advancing. Stopping rather than ` +
+            "looping; check the item's status.",
+        );
+        break;
       }
+      seenKeys.add(item.key.toUpperCase());
 
       const disposition = classifyReadyItem(item);
       if (disposition === 'needs_planning' && opts.includePlanning) {
@@ -315,14 +329,14 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // goes on the exclude list because it stays childless and would
         // otherwise be handed straight back on the very next iteration.
         planning.push(await triggerExpansion(client, serverUrl, item));
-        excludeIds.add(item.id);
+        excludedKeys.add(item.key.toUpperCase());
         continue;
       }
       if (disposition !== 'dispatch') {
         // Not dispatched, so NOT transitioned: a planning item and a human item
         // are both left exactly as the loop found them.
         skipped.push({ key: item.key, title: item.title, reason: disposition });
-        excludeIds.add(item.id);
+        excludedKeys.add(item.key.toUpperCase());
         info(
           `${item.key}: skipped — ${
             disposition === 'needs_planning'
@@ -333,7 +347,19 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         continue;
       }
 
-      const target = resolveDispatchTarget(session.link.dir, session.link.config, item.targetRepo);
+      // ⚠️ SEED FIRST, THEN RESOLVE (MOTIR-2398). The loop cannot resolve the
+      // checkout before this read — `targetRepo` lives on the PROMPT, not on the
+      // ready row (Amendment 10 Q2) — and cannot seed after it, because
+      // `repos.ensure` creates the branch the seed names. So the seed goes out
+      // first: the prompt is a pure READ that neither claims the item nor moves
+      // its status, so asking before knowing whether a checkout exists costs
+      // nothing and keeps the common path at ONE request.
+      let dispatch = await client.dispatchPrompt(item.key, { sessionBranch: branch });
+      const target = resolveDispatchTarget(
+        session.link.dir,
+        session.link.config,
+        dispatch.targetRepo,
+      );
       let repo: RepoSession | null;
       try {
         repo = repos.ensure(target);
@@ -347,11 +373,19 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         break;
       }
 
+      if (!repo) {
+        // No checkout to branch in, so the seeded prompt's lineage instruction
+        // names a branch that does not exist here. Re-read WITHOUT the seed and
+        // hand the agent the per-item-pull-request text instead. The extra
+        // request buys correctness on a path that was already the exception.
+        dispatch = await client.dispatchPrompt(item.key);
+      }
+
       const record = await dispatchOne({
         client,
         item,
+        dispatch,
         target,
-        repo,
         agent,
         clock,
         runAgentFn,
@@ -362,7 +396,6 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       if (record.outcome === 'failed') {
         addExclude(serverUrl, projectKey, { key: item.key });
         excludedKeys.add(item.key.toUpperCase());
-        excludeIds.add(item.id);
         if (!opts.keepGoing) {
           stopReason = interrupted ? 'interrupted' : 'halted';
           break;
@@ -412,8 +445,10 @@ async function triggerExpansion(
 interface DispatchOneInput {
   client: MotirClient;
   item: DispatchItem;
+  /** Read by the CALLER, before the checkout was resolved — see the seed-first
+   *  note there. Passed in so this function makes no second prompt request. */
+  dispatch: DispatchPrompt;
   target: DispatchTarget;
-  repo: RepoSession | null;
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
@@ -422,14 +457,9 @@ interface DispatchOneInput {
 
 /** Run ONE item through the single-dispatch pipeline and record how it ended. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
-  const { client, item, target, repo, agent, clock, runAgentFn, onIntegrated } = input;
+  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated } = input;
 
   await ensureInProgress(client, item.key, item.status?.key);
-  // The seed applies only if the item has no lineage of its own; an item whose
-  // dependency this run already integrated arrives with that branch inherited,
-  // which is how the loop CASCADES through the dependency graph rather than
-  // stopping at the initially-ready set.
-  const dispatch = await client.dispatchPrompt(item.key, { sessionBranch: repo?.branch ?? null });
 
   info('');
   info(`── ${item.key} — ${item.title}`);

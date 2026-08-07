@@ -21,7 +21,7 @@ const { db } = await import('@/lib/db');
 const { auth } = await import('@/lib/auth');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
-const { CLI_TOKEN_SCOPES, TOOL_SCOPES, isTokenScope } = await import('@/lib/mcp/scopes');
+const { CLI_TOKEN_SCOPES, isTokenScope } = await import('@/lib/mcp/scopes');
 const { MCP_TOOL_NAMES } = await import('@/lib/mcp/registry');
 const { SCOPE_NOT_GRANTED_CODE } = await import('@/lib/mcp/scopeGate');
 const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
@@ -32,7 +32,6 @@ const { truncateAuthTables } = await import('../helpers/db');
 const { startMcpHttpServer } = await import('../helpers/mcpHttpServer');
 const { makeCliWorkspace } = await import('../helpers/cliHarness');
 
-import type { McpToolName } from '@/lib/mcp/registry';
 import type { WorkItemFixture } from '../fixtures/workItemFixtures';
 import type { McpTestServer } from '../helpers/mcpHttpServer';
 import type { CliWorkspace } from '../helpers/cliHarness';
@@ -252,7 +251,17 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
    * command that reaches for a `sprints:write` tool would 403 on every
    * device-minted token, and this fails the moment it is added, not in the field.
    */
-  it('every MCP tool the shipped CLI calls is gated by a scope CLI_TOKEN_SCOPES carries', () => {
+  // ⚠️ INVERTED (MOTIR-2398). This walked every MCP tool `packages/cli` names
+  // and checked each against `CLI_TOKEN_SCOPES`, with a floor so a regex that
+  // stopped matching could not make it pass vacuously. The floor fell once per
+  // porting card — 14, 12, 7, 6, 1 — and the last method moved to `/api/v1`, so
+  // the honest assertion is now the absence: the shipped client names NO tool
+  // at all, which makes the scope question moot rather than satisfied.
+  //
+  // It stays as a GUARD rather than being deleted, because "no tool calls" is
+  // exactly what 11.5.6 needs to be able to rely on before it removes the SDK,
+  // and a reintroduced `callTool` should fail here rather than in review.
+  it('the shipped CLI names NO MCP tool — every method speaks /api/v1', () => {
     const clientSource = readFileSync(
       join(REPO_ROOT, 'packages', 'cli', 'src', 'mcpClient.ts'),
       'utf8',
@@ -262,27 +271,12 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
       .map((m) => m[1] as string)
       .filter((name) => registry.has(name));
 
-    // Guard the guard: a regex that stopped matching would make this vacuous.
-    //
-    // ⚠️ The floor FALLS as Story 11.5 ports the CLI onto `/api/v1` — 14 tools
-    // before the port, and ONE now: `next_ready`, the last method still
-    // speaking MCP. It has been lowered deliberately, one card at a time, and
-    // never deleted, because it is the only thing standing between "this scope
-    // check covers the CLI" and a vacuous pass over an empty set — which is
-    // exactly what a regex that silently stopped matching would look like.
-    //
-    // 1 is the last rung. 11.5.6 retires `next_ready` with the MCP client, and
-    // this assertion — and the suite around it — goes with them rather than
-    // being lowered to 0, which would assert nothing at all.
-    expect(new Set(called).size).toBeGreaterThanOrEqual(1);
-
-    for (const name of new Set(called)) {
-      const required = TOOL_SCOPES[name as McpToolName];
-      expect(
-        CLI_TOKEN_SCOPES.includes(required),
-        `the CLI calls ${name}, which needs "${required}" — outside CLI_TOKEN_SCOPES`,
-      ).toBe(true);
-    }
+    expect([...new Set(called)]).toEqual([]);
+    // …and no tool-call machinery either: `listTools` survives for the `auth
+    // login` probe until 11.5.6 re-points it, but `callTool` has no caller.
+    // Matched as an INVOCATION (`.callTool(`) rather than as the word, so a
+    // comment explaining why it is gone does not trip the guard that proves it.
+    expect(clientSource).not.toMatch(/\.callTool\(/);
   });
 
   it('every scope in the grant is a real scope, and the destructive ones are withheld', () => {

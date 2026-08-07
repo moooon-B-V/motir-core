@@ -11,8 +11,9 @@ import {
   startTestMcpServer,
   v1Detail,
   v1DispatchPrompt,
+  v1Page,
+  v1ReadyRow,
   type TestMcpServer,
-  type ToolScript,
   type V1Request,
   type V1Script,
 } from './helpers/mcpTestServer.js';
@@ -81,34 +82,18 @@ const AGENT = { agent: `${process.execPath} -e ""` };
 /** A ready set of `keys`, served over the real protocol. The enumeration
  *  advances by `excludeIds`, so the tool honours it exactly as the server
  *  does — otherwise the snapshot could never terminate. */
-function planScripts(keys: string[]): { tools: ToolScript; v1: V1Script } {
+function planScripts(keys: string[]): { v1: V1Script } {
   const statuses = new Map<string, string>();
-  const tools: ToolScript = {
-    next_ready: (args) => {
-      const excluded = new Set((args['excludeIds'] as string[] | undefined) ?? []);
-      const key = keys.find(
-        (k) => !excluded.has(`row-${k}`) && (statuses.get(k) ?? 'todo') === 'todo',
-      );
-      if (!key) return { structured: { item: null } };
-      return {
-        structured: {
-          item: {
-            id: `row-${key}`,
-            key,
-            kind: 'subtask',
-            title: `Item ${key}`,
-            priority: 'medium',
-            status: { key: 'todo', category: 'todo' },
-            type: 'code',
-            executor: 'coding_agent',
-            targetRepo: 'motir-core',
-            sessionBranch: null,
-          },
-        },
-      };
-    },
-  };
   const v1: V1Script = {
+    // The whole ready set, ranked — `motir batch` enumerates it once and
+    // freezes it. An item leaves the set once its status moves off `todo`.
+    'GET /api/v1/projects/{projectKey}/ready': () => ({
+      body: v1Page(
+        keys
+          .filter((k) => (statuses.get(k) ?? 'todo') === 'todo')
+          .map((k) => v1ReadyRow(k, { title: `Item ${k}` })),
+      ),
+    }),
     'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
       body: v1DispatchPrompt(String(req.params['key']), {
         prompt: `PROMPT ${String(req.params['key'])}`,
@@ -132,14 +117,12 @@ function planScripts(keys: string[]): { tools: ToolScript; v1: V1Script } {
       },
     },
   };
-  return { tools, v1 };
+  return { v1 };
 }
 
 /** Script both halves of the plan onto the server. */
 function scriptPlan(keys: string[]): void {
-  const { tools, v1 } = planScripts(keys);
-  server.script(tools);
-  server.scriptV1(v1);
+  server.scriptV1(planScripts(keys).v1);
 }
 
 /** Every `/api/v1` request to one operation, in order. */
@@ -239,10 +222,9 @@ describe('motir batch — a whole run through the real session', () => {
 
     await batchCommand({ ...AGENT, kinds: 'subtask' });
 
-    // `--kinds` reached the server's own filter rather than being dropped.
-    expect(server.calls.find((c) => c.name === 'next_ready')?.args).toMatchObject({
-      kinds: ['subtask'],
-    });
+    // `--kinds` reached the server's own filter rather than being dropped —
+    // the ready collection's own REPEATED `kind` parameter (MOTIR-2398).
+    expect(v1CallsTo('GET', '/ready')[0]?.query.getAll('kind')).toEqual(['subtask']);
     expect(v1CallsTo('GET', '/dispatch-prompt')).toEqual([]);
     expect(process.exitCode ?? 0).toBe(0);
   });

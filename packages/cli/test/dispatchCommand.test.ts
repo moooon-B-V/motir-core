@@ -49,7 +49,6 @@ function dispatchPrompt(over: Partial<DispatchPrompt> = {}): DispatchPrompt {
 
 function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
   return {
-    id: 'row-7',
     key: 'PROD-7',
     kind: 'subtask',
     title: 'Add the thing',
@@ -57,8 +56,7 @@ function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
     status: { key: 'todo', category: 'todo' },
     type: 'code',
     executor: 'coding_agent',
-    targetRepo: 'motir-core',
-    sessionBranch: null,
+    inheritedSessionBranch: null,
     ...over,
   };
 }
@@ -284,8 +282,8 @@ describe('motir next --agent', () => {
 
   // MOTIR-2338: the persisted list holds KEYS, and `next_ready` still narrows by
   // row id — so the skip is now a TRANSLATION. The first ask carries no
-  // exclusions; the excluded item comes back, its id is fed to a second ask.
-  it('the NEXT next skips the excluded item by translating its key to an id, and --reset un-skips it', async () => {
+  // exclusions; the excluded item is skipped by key inside the client's walk.
+  it('the NEXT next skips the excluded item by KEY, in one ask, and --reset un-skips it', async () => {
     agentResult.exitCode = 1;
     setup();
     await nextCommand({ agent: 'claude' });
@@ -294,15 +292,16 @@ describe('motir next --agent', () => {
     setup();
     await nextCommand({ print: true });
     const asks = harness.calls.filter((c) => c.tool === 'next_ready');
-    // First ask: nothing to exclude yet — the CLI does not know PROD-7's id.
-    expect(asks[0]?.args).not.toHaveProperty('excludeIds');
-    // Second ask: it learned the id from the row it just refused.
-    expect(asks[1]?.args).toMatchObject({ excludeIds: ['row-7'] });
+    // ONE ask (MOTIR-2398). The hold-out is applied inside the client's walk
+    // over the ranked page, so the ask-learn-the-id-ask-again round trip is
+    // gone and the KEY goes straight through from the persisted list.
+    expect(asks).toHaveLength(1);
+    expect(asks[0]?.args).toMatchObject({ excludeKeys: ['PROD-7'] });
     expect(harness.stderr).toContain('Skipping 1 previously-failed item(s): PROD-7');
 
     setup();
     await nextCommand({ print: true, reset: true });
-    expect(harness.calls[0]?.args).not.toHaveProperty('excludeIds');
+    expect(harness.calls[0]?.args).not.toHaveProperty('excludeKeys');
   });
 
   it('a SUCCESSFUL run clears a prior exclusion for that item', async () => {

@@ -8,8 +8,10 @@ import { normalizeServerUrl } from './config/userConfig.js';
 import { CLI_VERSION } from './version.js';
 import { V1Transport } from './transport.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
+import type { SuccessBody } from './transport.js';
 import {
   toActivityAllPage,
+  toDispatchItem,
   toPlanOutcome,
   toPlanSession,
   toPlanWithItems,
@@ -174,7 +176,6 @@ export interface SearchPage {
  * a redundant `todo → in_progress` flip when the item is already in progress.
  */
 export interface DispatchItem {
-  id: string;
   key: string;
   kind: string;
   title: string;
@@ -182,9 +183,18 @@ export interface DispatchItem {
   status: { key: string; category: string };
   type: string | null;
   executor: string | null;
-  targetRepo: string | null;
-  sessionBranch: string | null;
+  /**
+   * READY RELATIVE TO WHAT — the branch this item's dependencies are integrated
+   * on, or `null` when it is ready from the trunk (ADR Amendment 15).
+   *
+   * `motir batch` refuses a non-null row: it opens ONE pull request per item off
+   * `main`, and a lineage item's base has not merged.
+   */
+  inheritedSessionBranch: string | null;
 }
+
+/** One row of the v1 ready collection, as the generated client types it. */
+type ReadyRow = SuccessBody<'getProjectReadySet'>['items'][number];
 
 /** WHICH `GIT WORKFLOW` variant the server-assembled prompt carries — chosen
  * server-side from the item's inherited lineage, never selectable by the CLI
@@ -671,26 +681,10 @@ export interface MotirClientOptions {
   token: string;
 }
 
-interface ToolTextPart {
-  type: string;
-  text?: string;
-}
-
-interface ToolCallOutcome {
-  isError?: boolean;
-  content?: ToolTextPart[];
-  structuredContent?: unknown;
-}
-
-/** Join the text parts of a tool result into one string (the human block / the
- * `code: message` an error tool carries). */
-function textOf(result: ToolCallOutcome): string {
-  return (result.content ?? [])
-    .filter((p) => p.type === 'text' && typeof p.text === 'string')
-    .map((p) => p.text)
-    .join('\n')
-    .trim();
-}
+// ⚠️ `ToolCallOutcome` / `ToolTextPart` / `textOf` lived here and are GONE with
+// the tool-call path they described (MOTIR-2398). A tool result's in-band
+// `isError` + text-part shape has no reader left: `/api/v1` reports a failure as
+// a STATUS with a `{ code, error }` envelope, which the transport maps.
 
 function isUnauthorized(err: unknown): boolean {
   if (err instanceof StreamableHTTPError) return err.code === 401;
@@ -762,37 +756,21 @@ export class MotirClient {
       const { tools } = await this.requireClient().listTools();
       return tools.map((t) => t.name);
     } catch (err) {
-      throw this.mapCallError(err);
+      // The one surviving SDK error map, inlined now that its shared helper has
+      // gone with the tool calls: a 401 mid-session is an AuthError, anything
+      // else is reported as the SDK worded it.
+      if (err instanceof CliError) throw err;
+      throw isUnauthorized(err) ? new AuthError() : new CliError(errMsg(err));
     }
   }
 
-  /**
-   * Call a tool and return its `structuredContent` typed as `T`. A tool that
-   * comes back `isError` throws a {@link CliError} carrying the tool's own
-   * `code: message` text — never a swallowed JSON-RPC error. Unauthorized →
-   * {@link AuthError}.
-   */
-  private async callStructured<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
-    let result: ToolCallOutcome;
-    try {
-      result = (await this.requireClient().callTool({
-        name,
-        arguments: args,
-      })) as ToolCallOutcome;
-    } catch (err) {
-      throw this.mapCallError(err);
-    }
-    if (result.isError) {
-      throw new CliError(textOf(result) || `Tool ${name} failed.`);
-    }
-    return result.structuredContent as T;
-  }
-
-  private mapCallError(err: unknown): CliError {
-    if (err instanceof CliError) return err;
-    if (isUnauthorized(err)) return new AuthError();
-    return new CliError(errMsg(err));
-  }
+  // ⚠️ `callStructured` / `mapCallError` lived here and are GONE (MOTIR-2398).
+  // They were the tool-call path — `callTool` plus the in-band `isError`
+  // unwrapping — and the last method that used one moved to `/api/v1`, leaving
+  // them unreachable. Deleted by the card that orphaned them rather than left
+  // as dead code failing the coverage gate; what remains of the MCP client
+  // (`connect` / `close` / `listToolNames`, the SDK dependency itself) is
+  // 11.5.6's to retire.
 
   /**
    * Walk a cursor-paged collection to exhaustion, returning every page.
@@ -876,12 +854,71 @@ export class MotirClient {
       .then(toReadyPage);
   }
 
-  nextReady(args: {
+  /**
+   * The next item to dispatch — the highest-ranked ready row not held out.
+   *
+   * ⚠️ There is no `next_ready` OPERATION on `/api/v1`, and that is the right
+   * shape rather than a gap. `lib/api/v1/ready/schema.ts` states the dispatch
+   * rank as contract — `(type asc, priority desc, key asc)` — and says
+   * `items[0]` is what an agent should take next. "Next" is therefore a pick
+   * from a ranked page: the server ranks, the client skips what it has already
+   * tried, and nothing here re-sorts.
+   *
+   * Held out by KEY. The row id the MCP tool addressed by is gone from this
+   * client entirely — it was that tool's addressing scheme, and the persisted
+   * exclusion list has been key-based since MOTIR-2338, which had to translate
+   * keys back into ids on every ask. That round trip goes with it.
+   *
+   * FOLLOWS the cursor. A whole page of held-out rows is ordinary on a resumed
+   * run, and stopping at page one would report "drained" to a loop that still
+   * had work.
+   */
+  async nextReady(args: {
     projectKey: string;
     kinds?: string[];
-    excludeIds?: string[];
+    excludeKeys?: readonly string[];
   }): Promise<{ item: DispatchItem | null }> {
-    return this.callStructured('next_ready', { ...args });
+    const excluded = new Set((args.excludeKeys ?? []).map((key) => key.toUpperCase()));
+    for await (const row of this.walkReady(args)) {
+      if (!excluded.has(row.key.toUpperCase())) return { item: toDispatchItem(row) };
+    }
+    return { item: null };
+  }
+
+  /**
+   * EVERY ready row a run may take, in rank order — `motir batch`'s snapshot.
+   *
+   * The whole set rather than one item, because a snapshot is a frozen
+   * BOUNDARY: what was ready when the run started. It used to be built by
+   * asking `next_ready` once per item with a growing exclusion list — N
+   * requests for N items — and is one page walk now.
+   */
+  async listReadyForDispatch(args: {
+    projectKey: string;
+    kinds?: string[];
+  }): Promise<DispatchItem[]> {
+    const items: DispatchItem[] = [];
+    for await (const row of this.walkReady(args)) items.push(toDispatchItem(row));
+    return items;
+  }
+
+  /** The ready collection, page by page, in the server's rank. */
+  private async *walkReady(args: {
+    projectKey: string;
+    kinds?: string[];
+  }): AsyncGenerator<ReadyRow> {
+    let cursor: string | undefined;
+    do {
+      const body = await this.v1.request('getProjectReadySet', {
+        path: { projectKey: args.projectKey },
+        query: {
+          ...(args.kinds ? { kind: args.kinds } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+      });
+      yield* body.items;
+      cursor = body.nextCursor ?? undefined;
+    } while (cursor);
   }
 
   async getWorkItem(key: string): Promise<WorkItemDetail> {

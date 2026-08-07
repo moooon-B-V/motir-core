@@ -86,10 +86,11 @@ describe('connect', () => {
     await expect(client.connect()).rejects.toThrow(/Could not reach the Motir server/);
   });
 
-  it('refuses to be used before connect() — on the paths that still speak MCP', async () => {
+  // `listToolNames` is the LAST thing needing a handshake — every method now
+  // speaks `/api/v1` (MOTIR-2398), and 11.5.6 retires this one with the SDK.
+  it('refuses to be used before connect() — the one path still needing a session', async () => {
     const client = new MotirClient({ serverUrl: server.url, token: 'good-token' });
     await expect(client.listToolNames()).rejects.toThrow(/used before connect/);
-    await expect(client.nextReady({ projectKey: 'PROD' })).rejects.toThrow(/used before connect/);
   });
 
   // MOTIR-2212. A READ no longer needs the MCP handshake — that is the point of
@@ -237,16 +238,79 @@ describe('typed wrappers — each names its operation and forwards its arguments
     await client.close();
   });
 
-  it('the UNPORTED read still names its MCP tool', async () => {
+  // MOTIR-2398 took the LAST method off MCP. What used to be "these still name
+  // their tools" is now a NEGATIVE: no read, no write, no pick makes a tool call
+  // at all. Asserted over a run of every shape rather than method by method,
+  // because the property is about the client as a whole.
+  it('makes NO MCP tool call — every method speaks /api/v1', async () => {
     const client = await connected();
-    server.script({ next_ready: { structured: { item: { id: 'row-1', key: 'PROD-7' } } } });
 
-    await client.nextReady({ projectKey: 'PROD', excludeIds: ['row-9'] });
+    await client.nextReady({ projectKey: 'PROD', excludeKeys: ['PROD-9'] });
+    await client.whoami();
+    await client.listReady({ projectKey: 'PROD' });
+    await client.transitionStatus({ key: 'PROD-7', status: 'in_progress' });
 
-    // Every read speaks `/api/v1` now. `next_ready` is the last one left on
-    // MCP, and 11.5.6 retires it outright rather than porting it.
-    expect(server.calls.map((c) => c.name)).toEqual(['next_ready']);
-    expect(server.calls[0]?.args).toMatchObject({ excludeIds: ['row-9'] });
+    expect(server.calls).toEqual([]);
+    expect(server.v1Calls.length).toBeGreaterThan(0);
+    await client.close();
+  });
+
+  // The PICK (11.5.23 — MOTIR-2398). Three properties, none visible from the
+  // output alone, all asserted on the wire.
+  it('takes items[0] — the SERVER ranks, the client never re-sorts', async () => {
+    const client = await connected();
+    // A page whose order matches no field the client could sort on: not key
+    // order, not priority, not title. If anything re-ranked, it shows here.
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: v1Page([
+          v1ReadyRow('PROD-9', { priority: 'low', title: 'zeta' }),
+          v1ReadyRow('PROD-2', { priority: 'highest', title: 'alpha' }),
+        ]),
+      },
+    });
+
+    const { item } = await client.nextReady({ projectKey: 'PROD' });
+
+    expect(item?.key).toBe('PROD-9');
+    await client.close();
+  });
+
+  it('FOLLOWS the cursor when a whole page is held out', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': (req) =>
+        req.query.get('cursor') === null
+          ? { body: v1Page([v1ReadyRow('PROD-1'), v1ReadyRow('PROD-2')], 'page-2') }
+          : { body: v1Page([v1ReadyRow('PROD-3')]) },
+    });
+
+    // Every row of page one is held out. Stopping there would report the set
+    // drained to a run that still had work — the failure this asserts against.
+    const { item } = await client.nextReady({
+      projectKey: 'PROD',
+      excludeKeys: ['PROD-1', 'PROD-2'],
+    });
+
+    expect(item?.key).toBe('PROD-3');
+    expect(server.v1Calls.at(-1)?.query.get('cursor')).toBe('page-2');
+    await client.close();
+  });
+
+  it('sends NO row id — the hold-out never reaches the wire', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([v1ReadyRow('PROD-4')]) },
+    });
+
+    await client.nextReady({ projectKey: 'PROD', excludeKeys: ['PROD-1'], kinds: ['subtask'] });
+
+    const ask = server.v1Calls.at(-1);
+    // The exclusion is applied client-side; only the KIND filter is the
+    // server's business. An `excludeIds`-shaped parameter would mean the id
+    // came back (MOTIR-2338's coupling, undone here).
+    expect(ask?.query.getAll('kind')).toEqual(['subtask']);
+    expect([...(ask?.query.keys() ?? [])].sort()).toEqual(['kind']);
     await client.close();
   });
 
@@ -598,30 +662,13 @@ describe('failures', () => {
     await client.close();
   });
 
-  it('names the tool when an error result carries no usable text', async () => {
-    const client = await connected();
-
-    // An `isError` with an EMPTY content block still has to say WHICH tool
-    // failed. Driven on `next_ready`, the last read still speaking MCP — every
-    // other one moved to `/api/v1`, where a failure is a status, not a result.
-    server.script({ next_ready: { error: '' } });
-    await expect(client.nextReady({ projectKey: 'PROD' })).rejects.toThrow(
-      /Tool next_ready failed/,
-    );
-
-    // …and so does one whose content carries no TEXT part (an image / resource
-    // block is not an error message).
-    server.script({
-      next_ready: {
-        error: 'x',
-        contentParts: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }],
-      },
-    });
-    await expect(client.nextReady({ projectKey: 'PROD' })).rejects.toThrow(
-      /Tool next_ready failed/,
-    );
-    await client.close();
-  });
+  // ⚠️ The tool-error tests that lived here are GONE with the last method that
+  // could reach them (MOTIR-2398). `callStructured` — and the `Tool <name>
+  // failed` message it raises — now has no caller: every method speaks
+  // `/api/v1`, where a failure is a STATUS mapped by the transport, not an
+  // in-band error result. The code itself is 11.5.6's to delete along with the
+  // SDK; nothing here can drive it in the meantime, and a test that reached in
+  // to call a private method would be asserting a shape no user can produce.
 
   it('maps an unauthorized CALL to AuthError — a token revoked mid-session', async () => {
     // The session opens fine; the revocation lands between the connect and the
@@ -653,20 +700,9 @@ describe('failures', () => {
     await client.close();
   });
 
-  it('reports a tool the server does not expose rather than hanging', async () => {
-    const client = await connected();
-    // `next_ready` is the LAST method still speaking MCP (11.5.6 retires it), so
-    // it is the only one that can still meet a server that does not expose its
-    // tool — on `/api/v1` a missing endpoint is a 404, not a missing tool. The
-    // server is started WITHOUT it for exactly that reason.
-    const bare = await startTestMcpServer({ token: 't', tools: {} });
-    const other = new MotirClient({ serverUrl: bare.url, token: 't' });
-    await other.connect();
-
-    await expect(other.nextReady({ projectKey: 'PROD' })).rejects.toThrow(/no scripted tool/);
-
-    await other.close();
-    await bare.close();
-    await client.close();
-  });
+  // ⚠️ Also gone with the last MCP method (MOTIR-2398): "the server does not
+  // expose that tool" was reachable only through a `callStructured` caller, and
+  // there is none. On `/api/v1` the equivalent — an endpoint this server does
+  // not route — is a 404 with no envelope, which arms the version-skew probe and
+  // is asserted in `transport.test.ts` where that logic lives.
 });

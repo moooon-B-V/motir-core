@@ -11,10 +11,11 @@ import type { CommandResult, CommandRunner } from '../src/git.js';
 import {
   startTestMcpServer,
   v1Detail,
+  v1Page,
+  v1ReadyRow,
   v1DispatchPrompt,
   v1Integration,
   type TestMcpServer,
-  type ToolScript,
   type V1Request,
   type V1Script,
 } from './helpers/mcpTestServer.js';
@@ -84,44 +85,39 @@ const AGENT = { agent: `${process.execPath} -e ""` };
  * A two-item plan where the second only becomes ready once the first is
  * integrated — the cascade, served over the real protocol.
  *
- * ⚠️ ONE state machine, TWO transports (MOTIR-2213). `next_ready` still speaks
- * MCP while the prompt / transition / integration calls moved to `/api/v1`, and
- * the cascade only works if all four read the same `integrated` set — so they
- * share this closure rather than being scripted independently. Splitting them
- * into two fixtures would let the run "drain a chain" that no longer exists.
+ * ⚠️ ONE state machine, ONE transport now (MOTIR-2398). Every call the loop
+ * makes speaks `/api/v1`, and the cascade only works if they read the same
+ * `integrated` set — so they share this closure rather than being scripted
+ * independently. Splitting them would let the run "drain a chain" that no
+ * longer exists.
+ *
+ * The READY SET is the cascade's source: PROD-2 appears in it only once PROD-1
+ * has been integrated, which is what the real server's edge-derived readiness
+ * does. The loop picks `items[0]`; nothing here decides what is "next".
  */
-function planScripts(): { tools: ToolScript; v1: V1Script } {
+function planScripts(): { v1: V1Script } {
   const integrated = new Set<string>();
   const statuses = new Map<string, string>();
-  const dispatched = new Set<string>();
-  const tools: ToolScript = {
-    next_ready: () => {
-      const key = !dispatched.has('PROD-1')
-        ? 'PROD-1'
-        : integrated.has('PROD-1') && !dispatched.has('PROD-2')
-          ? 'PROD-2'
-          : null;
-      if (!key) return { structured: { item: null } };
-      dispatched.add(key);
+  const v1: V1Script = {
+    // Ready = not yet integrated, and (for PROD-2) its dependency integrated.
+    'GET /api/v1/projects/{projectKey}/ready': () => {
+      const ready = ['PROD-1', 'PROD-2'].filter(
+        (key) =>
+          !integrated.has(key) &&
+          statuses.get(key) !== 'in_review' &&
+          (key === 'PROD-1' || integrated.has('PROD-1')),
+      );
       return {
-        structured: {
-          item: {
-            id: `row-${key}`,
-            key,
-            kind: 'subtask',
-            title: `Item ${key}`,
-            priority: 'medium',
-            status: { key: statuses.get(key) ?? 'todo', category: 'todo' },
-            type: 'code',
-            executor: 'coding_agent',
-            targetRepo: 'motir-core',
-            sessionBranch: null,
-          },
-        },
+        body: v1Page(
+          ready.map((key) =>
+            v1ReadyRow(key, {
+              title: `Item ${key}`,
+              status: { key: statuses.get(key) ?? 'todo', category: 'todo' },
+            }),
+          ),
+        ),
       };
     },
-  };
-  const v1: V1Script = {
     'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => {
       const key = String(req.params['key']);
       const seed = req.query.get('sessionBranch');
@@ -147,14 +143,12 @@ function planScripts(): { tools: ToolScript; v1: V1Script } {
       return { body: v1Integration(key, { sessionBranch: sent.sessionBranch }) };
     },
   };
-  return { tools, v1 };
+  return { v1 };
 }
 
 /** Script both halves of the plan onto the server. */
 function scriptPlan(): void {
-  const { tools, v1 } = planScripts();
-  server.script(tools);
-  server.scriptV1(v1);
+  server.scriptV1(planScripts().v1);
 }
 
 /** Every `/api/v1` request to one operation, in order. */
@@ -282,10 +276,9 @@ describe('motir auto — a whole run through the real session', () => {
     );
 
     expect(v1CallsTo('POST', '/integration')).toHaveLength(1);
-    // `--kinds` reached the server's own filter rather than being dropped.
-    expect(server.calls.find((c) => c.name === 'next_ready')?.args).toMatchObject({
-      kinds: ['subtask'],
-    });
+    // `--kinds` reached the server's own filter rather than being dropped —
+    // as the ready collection's own REPEATED `kind` parameter (MOTIR-2398).
+    expect(v1CallsTo('GET', '/ready')[0]?.query.getAll('kind')).toEqual(['subtask']);
     expect(
       git.log.some((cmd) =>
         /push origin refs\/remotes\/origin\/main:refs\/heads\/motir\/auto-\d{8}-\d{6}/.test(cmd),
@@ -311,11 +304,11 @@ describe('motir auto — a whole run through the real session', () => {
     expect(readExcludes(server.url, 'PROD')).toEqual([]);
   });
 
-  // MOTIR-2338. The persisted list holds KEYS and `next_ready` narrows by row
-  // id, so the loop learns the id from the row the server hands back and asks
-  // again. Without this the upgrade would silently re-dispatch every item a
-  // previous run failed on.
-  it('holds out an item excluded by a PREVIOUS run, translating its key to an id', async () => {
+  // MOTIR-2338 made the persisted list key-based; MOTIR-2398 made the PICK
+  // key-based too, so the hold-out is applied inside the client's page walk and
+  // the learn-the-id round trip is gone. ONE ask, and the excluded row is
+  // skipped without the server ever being told about it.
+  it('holds out an item a PREVIOUS run failed on, in ONE ask', async () => {
     scriptPlan();
     const { addExclude } = await import('../src/sessionExcludes.js');
     addExclude(server.url, 'PROD', { key: 'PROD-1' });
@@ -330,13 +323,37 @@ describe('motir auto — a whole run through the real session', () => {
       },
     );
 
-    const asks = server.calls.filter((c) => c.name === 'next_ready');
-    // The first ask carries nothing — the CLI does not know PROD-1's row id.
-    expect(asks[0]?.args).not.toHaveProperty('excludeIds');
-    // Having been handed the excluded row, it feeds that id back and asks again.
-    expect(asks[1]?.args).toMatchObject({ excludeIds: ['row-PROD-1'] });
+    // ONE ready read: the exclusion is applied client-side over the ranked page,
+    // so there is no second ask and no row id anywhere on the wire.
+    const asks = v1CallsTo('GET', '/ready');
+    expect(asks).toHaveLength(1);
+    expect(JSON.stringify(asks[0]?.query ? [...asks[0].query] : [])).not.toContain('row-');
     // And PROD-1 was never dispatched.
     expect(v1CallsTo('GET', '/dispatch-prompt')).toEqual([]);
+  });
+
+  // ⚠️ SEED FIRST (MOTIR-2398). `targetRepo` lives on the PROMPT, and the seed
+  // names a branch `repos.ensure` has not created yet — so the prompt is read
+  // WITH the seed before the checkout is resolved. Asserted on the request
+  // COUNT, because a seedless-then-seeded implementation produces identical
+  // output and doubles the calls.
+  it('reads the prompt ONCE per item when the repo has a checkout', async () => {
+    scriptPlan();
+
+    await autoCommand(
+      { ...AGENT, max: '1' },
+      {
+        run: gitRunner().run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      },
+    );
+
+    const prompts = v1CallsTo('GET', '/dispatch-prompt');
+    expect(prompts).toHaveLength(1);
+    // And it carried the run's branch as the seed, before any checkout existed.
+    expect(prompts[0]?.query.get('sessionBranch')).toBe('motir/auto-20260729-010203');
   });
 
   it('exits non-zero when an agent failed, and still opens the pull request', async () => {
@@ -431,33 +448,24 @@ describe('motir auto — a whole run through the real session', () => {
   it('runs an item whose repo has NO checkout with no lineage rather than failing the run', async () => {
     // `motir-ai` has no checkout under the root, so there is no repository to
     // open a session branch in: the item ships as its own pull request instead.
-    const plan = planScripts();
-    server.scriptV1(plan.v1);
-    server.script({
-      ...plan.tools,
-      next_ready: (() => {
-        let served = false;
-        return () => {
-          if (served) return { structured: { item: null } };
-          served = true;
-          return {
-            structured: {
-              item: {
-                id: 'row-9',
-                key: 'PROD-9',
-                kind: 'subtask',
-                title: 'An item for an unchecked-out repo',
-                priority: 'medium',
-                status: { key: 'todo', category: 'todo' },
-                type: 'code',
-                executor: 'coding_agent',
-                targetRepo: 'motir-ai',
-                sessionBranch: null,
-              },
-            },
-          };
+    let served = false;
+    server.scriptV1({
+      ...planScripts().v1,
+      'GET /api/v1/projects/{projectKey}/ready': () => {
+        if (served) return { body: v1Page([]) };
+        served = true;
+        return {
+          body: v1Page([v1ReadyRow('PROD-9', { title: 'An item for an unchecked-out repo' })]),
         };
-      })(),
+      },
+      // The prompt is what says WHERE it ships — `motir-ai`, which has no
+      // checkout under the root (MOTIR-2398: the repo comes from the prompt).
+      'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
+        body: v1DispatchPrompt(String(req.params['key']), {
+          prompt: `PROMPT ${String(req.params['key'])}`,
+          targetRepo: 'motir-ai',
+        }),
+      }),
     });
     const git = gitRunner((bin) =>
       // The root is not a git repository at all.

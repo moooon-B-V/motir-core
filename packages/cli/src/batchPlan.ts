@@ -63,21 +63,19 @@ export function classifySnapshotItem(item: {
   kind: string;
   type?: string | null;
   executor?: string | null;
-  sessionBranch?: string | null;
+  inheritedSessionBranch?: string | null;
 }): SnapshotDisposition {
   const shared = classifyReadyItem(item);
   if (shared !== 'dispatch') return shared;
-  if (item.sessionBranch) return 'integrated_dep';
+  if (item.inheritedSessionBranch) return 'integrated_dep';
   return 'take';
 }
 
 /** One item the snapshot TOOK — frozen at snapshot time, in dispatch order. */
 export interface SnapshotEntry {
-  id: string;
   key: string;
   title: string | null;
   kind: string;
-  targetRepo: string | null;
   /** The status key as of the snapshot, so the drain can skip a redundant
    *  `todo → in_progress` flip (the same guard `ensureInProgress` applies). */
   statusKey?: string | undefined;
@@ -157,7 +155,13 @@ const SKIP_LABEL: Record<SnapshotSkip['reason'], string> = {
 /** The reasons in the order the summary groups them. */
 const SKIP_ORDER: SnapshotSkip['reason'][] = ['needs_planning', 'needs_human', 'integrated_dep'];
 
-const PLAN_HEADERS = ['ITEM', 'KIND', 'REPO', 'TITLE'];
+// ⚠️ No REPO column. The snapshot freezes WHICH ITEMS the run will take; where
+// each one runs is assembled per iteration, from the dispatch prompt, at the
+// moment it is dispatched — and `dispatchOne` prints the resolved checkout on
+// its own line there. The column existed only because the MCP ready payload
+// handed `targetRepo` over for free (MOTIR-2398); carrying it here would mean
+// fetching a full prompt document per item to render one word early.
+const PLAN_HEADERS = ['ITEM', 'KIND', 'TITLE'];
 
 /**
  * The snapshot, printed UP FRONT — before a single agent starts.
@@ -181,7 +185,7 @@ export function renderSnapshotPlan(snapshot: Snapshot, titleWidth = 44): string 
     blocks.push(
       formatTable(
         PLAN_HEADERS,
-        taken.map((e) => [e.key, e.kind, e.targetRepo ?? '—', truncate(e.title ?? '', titleWidth)]),
+        taken.map((e) => [e.key, e.kind, truncate(e.title ?? '', titleWidth)]),
       ),
     );
   }

@@ -241,17 +241,14 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
 /**
  * The next ready item that is not on the persisted exclude list.
  *
- * The list is keyed by KEY (MOTIR-2338) and `next_ready` still narrows by row
- * ID, so the translation happens HERE, one item at a time: ask, and if what
- * came back is excluded, feed its id back as an exclusion and ask again. The
- * dispatch row carries the id, so each excluded item costs exactly one extra
- * round trip, once — and the SERVER keeps choosing, which is the property that
- * matters. A client that instead re-ranked a list would be re-deriving the
- * dispatch order the ready endpoint exists to own.
+ * The persisted list is keyed by KEY (MOTIR-2338) and so is the ready row, so
+ * there is nothing to translate: the keys go straight to the client, which
+ * skips them as it walks the ranked page (MOTIR-2398). One call, no round trip
+ * per excluded item, and no row id anywhere.
  *
- * The loop terminates: every iteration either returns or adds an id the server
- * has not seen excluded before, and the ready set is finite. A server that
- * ignored `excludeIds` would repeat an id, which the `has` check catches.
+ * The SERVER still chooses. The client skips what this run has already tried
+ * and takes the next row in the order it was given — a client that re-ranked
+ * would be re-deriving the dispatch order the ready endpoint exists to own.
  */
 async function claimNextNotExcluded(
   client: MotirClient,
@@ -259,19 +256,15 @@ async function claimNextNotExcluded(
   kinds: string[] | undefined,
   excluded: readonly { key: string }[],
 ): Promise<DispatchItem | null> {
-  const excludedKeys = new Set(excluded.map((e) => e.key.toUpperCase()));
-  const seenIds = new Set<string>();
-  for (;;) {
-    const { item } = await client.nextReady({
-      projectKey,
-      ...(kinds ? { kinds } : {}),
-      ...(seenIds.size > 0 ? { excludeIds: [...seenIds] } : {}),
-    });
-    if (!item) return null;
-    if (!excludedKeys.has(item.key.toUpperCase())) return item;
-    if (seenIds.has(item.id)) return null;
-    seenIds.add(item.id);
-  }
+  // ONE call. The hold-out is applied inside the client's page walk (MOTIR-2398),
+  // so the ask-learn-the-id-ask-again loop this used to need is gone: the
+  // exclusion list is keyed by KEY and so is the ready row.
+  const { item } = await client.nextReady({
+    projectKey,
+    ...(kinds ? { kinds } : {}),
+    ...(excluded.length > 0 ? { excludeKeys: excluded.map((e) => e.key) } : {}),
+  });
+  return item;
 }
 
 function keyList(entries: { key: string }[]): string {

@@ -1,6 +1,7 @@
 import type { SuccessBody } from '../transport.js';
 import type {
   ActivityAllPage,
+  DispatchItem,
   PlanJobState,
   PlanOutcome,
   PlanProposal,
@@ -681,5 +682,31 @@ export function toPlanWithItems(body: PlanBody): PlanWithItems {
     origin: body.origin,
     itemCount: body.proposalCount,
     items: body.proposals.map(toPlanProposal),
+  };
+}
+
+/**
+ * One ready row as the DISPATCH loop reads it (Subtask 11.5.23 — MOTIR-2398).
+ *
+ * The narrowest of the views over this row — `toReadyPage` renders a table,
+ * this one routes a run — and what it drops is the point:
+ *
+ * • `assignee` / `descriptionExcerpt` — display, and nothing here displays.
+ * • `dependencies` — a ready item's blockers are satisfied by definition, so
+ *   the edge block has nothing to tell a loop about to dispatch it.
+ * • `targetRepo` is not dropped, it was never here. The row omits it
+ *   deliberately (Amendment 10 Q2); the loop reads it from the dispatch prompt,
+ *   which it calls anyway before it can hand an agent anything.
+ */
+export function toDispatchItem(row: ReadyBody['items'][number]): DispatchItem {
+  return {
+    key: row.key,
+    kind: row.kind,
+    title: row.title,
+    priority: row.priority,
+    status: { key: row.status.key, category: row.status.category },
+    type: row.type,
+    executor: row.executor,
+    inheritedSessionBranch: row.inheritedSessionBranch,
   };
 }

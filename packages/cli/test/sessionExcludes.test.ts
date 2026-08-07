@@ -367,14 +367,17 @@ describe('no dispatch-path read of a work item’s internal row id', () => {
     expect(runByKey).not.toMatch(/\bitem\.id\b/);
   });
 
-  it('the one remaining row-id read is the `next_ready` ARGUMENT, and is deliberate', () => {
+  // ⚠️ This guard INVERTED (MOTIR-2398). It used to pin the ONE deliberate
+  // row-id read that survived: `next_ready` narrowed by id, so the pick had to
+  // read the id off the row the server handed back and ask again. The pick is a
+  // client-side skip over the ranked ready collection now, keyed by KEY like
+  // the persisted list, so that read is gone and the guard asserts its absence
+  // — the stronger property, and the one 11.5.6 needs to be able to rely on.
+  it('the dispatch path reads NO row id at all — the last one went with `next_ready`', () => {
     const source = readFileSync(join(SRC, 'commands', 'dispatch.ts'), 'utf8');
-    // `next_ready` still narrows by row id, so the translation helper reads the
-    // id off the row the server just handed back. That is an MCP-tool argument,
-    // not a persisted identity — it disappears with `nextReady` itself in
-    // 11.5.5. Pinned so the guard above cannot be widened past what is true.
-    const helper = source.slice(source.indexOf('async function claimNextNotExcluded'));
-    expect(helper).toMatch(/seenIds\.add\(item\.id\)/);
+    expect(source).not.toMatch(/\bitem\.id\b/);
+    expect(source).not.toMatch(/excludeIds/);
+    expect(source).not.toMatch(/seenIds/);
   });
 
   it('the exclude store exposes no id-shaped surface', () => {

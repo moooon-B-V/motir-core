@@ -138,20 +138,23 @@ class FakeServer {
         // materializes them.
         return { jobId: `job-${n}`, planId: `plan-${n}` };
       },
-      nextReady: async (args: { excludeIds?: string[] }) => {
-        this.nextReadyCalls.push(args.excludeIds?.length ?? 0);
-        const excluded = new Set(args.excludeIds ?? []);
+      // The pick is client-side over the ranked ready set now (MOTIR-2398), and
+      // the hold-out is by KEY. The fake honours `excludeKeys` for the same
+      // reason the real client does: without it the loop would be handed the
+      // same row forever.
+      nextReady: async (args: { excludeKeys?: readonly string[] }) => {
+        this.nextReadyCalls.push(args.excludeKeys?.length ?? 0);
+        const excluded = new Set((args.excludeKeys ?? []).map((k) => k.toUpperCase()));
         const item = this.items.find(
           (i) =>
             this.present(i) &&
             i.status === 'todo' &&
-            !excluded.has(i.id) &&
+            !excluded.has(i.key.toUpperCase()) &&
             i.deps.every((d) => this.satisfied(d)),
         );
         if (!item) return { item: null };
         return {
           item: {
-            id: item.id,
             key: item.key,
             kind: item.kind,
             title: item.title,
@@ -159,8 +162,7 @@ class FakeServer {
             status: { key: item.status, category: 'todo' },
             type: item.type,
             executor: item.executor,
-            targetRepo: item.targetRepo,
-            sessionBranch: item.sessionBranch,
+            inheritedSessionBranch: this.inherited(item) ?? item.sessionBranch,
           },
         };
       },

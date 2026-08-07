@@ -78,7 +78,6 @@ class FakeServer {
   readOnly = false;
   /** Model a server that IGNORES `excludeIds` — it keeps answering with the
    *  same item. The enumeration must still terminate. */
-  ignoreExcludes = false;
   /** Keys the server reports as `session_lineage` WITHOUT naming the branch.
    *  `sessionBranch` is nullable on the dispatch payload, so the refusal has to
    *  read without a name rather than printing `null`. */
@@ -125,33 +124,29 @@ class FakeServer {
       completeSession: (): never => {
         throw new Error('`motir batch` has no session to complete.');
       },
-      nextReady: async (args: { kinds?: string[]; excludeIds?: string[] }) => {
-        this.nextReadyCalls.push({
-          ...(args.kinds ? { kinds: args.kinds } : {}),
-          excluded: args.excludeIds?.length ?? 0,
-        });
-        const excluded = new Set(this.ignoreExcludes ? [] : (args.excludeIds ?? []));
-        const item = this.items.find(
-          (i) =>
-            i.status === 'todo' &&
-            !excluded.has(i.id) &&
-            (!args.kinds || args.kinds.includes(i.kind)) &&
-            i.deps.every((d) => this.satisfied(d)),
-        );
-        if (!item) return { item: null };
-        const payload: DispatchItem = {
-          id: item.id,
-          key: item.key,
-          kind: item.kind,
-          title: item.title,
-          priority: 'medium',
-          status: { key: item.status, category: 'todo' },
-          type: item.type,
-          executor: item.executor,
-          targetRepo: item.targetRepo,
-          sessionBranch: this.inherited(item),
-        };
-        return { item: payload };
+      // The whole ready set in one call (MOTIR-2398) — the shape the v1
+      // collection has. `motir batch` enumerates once and freezes it.
+      listReadyForDispatch: async (args: { kinds?: string[] }) => {
+        this.nextReadyCalls.push({ ...(args.kinds ? { kinds: args.kinds } : {}), excluded: 0 });
+        return this.items
+          .filter(
+            (i) =>
+              i.status === 'todo' &&
+              (!args.kinds || args.kinds.includes(i.kind)) &&
+              i.deps.every((d) => this.satisfied(d)),
+          )
+          .map(
+            (i): DispatchItem => ({
+              key: i.key,
+              kind: i.kind,
+              title: i.title,
+              priority: 'medium',
+              status: { key: i.status, category: 'todo' },
+              type: i.type,
+              executor: i.executor,
+              inheritedSessionBranch: this.inherited(i),
+            }),
+          );
       },
       dispatchPrompt: async (
         key: string,
@@ -273,7 +268,7 @@ describe('classifySnapshotItem', () => {
         kind: 'subtask',
         type: 'code',
         executor: 'coding_agent',
-        sessionBranch: null,
+        inheritedSessionBranch: null,
       }),
     ).toBe('take');
     expect(classifySnapshotItem({ kind: 'bug', type: null, executor: null })).toBe('take');
@@ -287,7 +282,7 @@ describe('classifySnapshotItem', () => {
         kind: 'subtask',
         type: 'code',
         executor: 'coding_agent',
-        sessionBranch: 'motir/auto-20260729-010203',
+        inheritedSessionBranch: 'motir/auto-20260729-010203',
       }),
     ).toBe('integrated_dep');
   });
@@ -299,7 +294,7 @@ describe('classifySnapshotItem', () => {
     expect(classifySnapshotItem({ kind: 'subtask', executor: 'human' })).toBe('needs_human');
     // A container reports as needing PLANNING even when it also inherits a
     // lineage — the more actionable answer of the two.
-    expect(classifySnapshotItem({ kind: 'story', sessionBranch: 'motir/auto-x' })).toBe(
+    expect(classifySnapshotItem({ kind: 'story', inheritedSessionBranch: 'motir/auto-x' })).toBe(
       'needs_planning',
     );
   });
@@ -309,7 +304,6 @@ describe('planSnapshot', () => {
   it('splits a ready page into the frozen list and the named exclusions', () => {
     const snapshot = planSnapshot([
       {
-        id: 'i1',
         key: 'PROD-1',
         kind: 'subtask',
         title: 'A',
@@ -317,11 +311,9 @@ describe('planSnapshot', () => {
         status: { key: 'todo', category: 'todo' },
         type: 'code',
         executor: 'coding_agent',
-        targetRepo: 'motir-core',
-        sessionBranch: null,
+        inheritedSessionBranch: null,
       },
       {
-        id: 'i2',
         key: 'PROD-2',
         kind: 'subtask',
         title: 'B',
@@ -329,8 +321,7 @@ describe('planSnapshot', () => {
         status: { key: 'todo', category: 'todo' },
         type: 'code',
         executor: 'coding_agent',
-        targetRepo: 'motir-core',
-        sessionBranch: 'motir/auto-x',
+        inheritedSessionBranch: 'motir/auto-x',
       },
     ]);
     expect(snapshot.taken.map((e) => e.key)).toEqual(['PROD-1']);
@@ -385,12 +376,13 @@ describe('motir batch — the frozen snapshot', () => {
   it('freezes the list with ONE enumeration, then never re-reads it to pick work', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
     await drive(server);
-    // Two items + the terminating empty answer = 3 to build the snapshot; the
-    // remaining calls are the after-the-fact newly-ready count (reporting only).
-    expect(server.nextReadyCalls.length).toBeGreaterThanOrEqual(3);
-    expect(server.nextReadyCalls[0]?.excluded).toBe(0);
-    expect(server.nextReadyCalls[1]?.excluded).toBe(1);
-    expect(server.nextReadyCalls[2]?.excluded).toBe(2);
+    // ONE read builds the snapshot (MOTIR-2398). It used to take N+1 — an ask
+    // per item, each excluding the last answer — because the tool handed back
+    // one row at a time. The collection returns the ranked set, so the
+    // enumeration is a single call and the only other read is the
+    // after-the-fact newly-ready count, which is reporting rather than picking.
+    expect(server.nextReadyCalls).toHaveLength(2);
+    expect(server.nextReadyCalls.every((c) => c.excluded === 0)).toBe(true);
   });
 
   it('passes --kinds through to the enumeration', async () => {
@@ -575,19 +567,21 @@ describe('motir batch — previously-failed items', () => {
 // ── the enumeration terminates, whatever the server does ────────────────────
 
 describe('motir batch — the enumeration', () => {
-  it('stops on a repeat rather than looping forever when the server ignores excludeIds', async () => {
-    // `enumerateReady` advances by EXCLUDING each answer from the next question.
-    // A server that ignored `excludeIds` would answer with the same item every
-    // time, and an unattended command would spin until it was killed. Seeing the
-    // same id twice ends the enumeration instead.
+  // ⚠️ The old guard here is GONE with the mechanism it guarded (MOTIR-2398).
+  // `enumerateReady` used to advance by excluding each answer from the next
+  // question, so a server that ignored the exclusions answered with the same
+  // row forever and the command span until killed; stopping on a repeat was the
+  // cheap defence. The collection returns the whole ranked set in one read, so
+  // there is no loop to run away — termination is a property of the client's
+  // page walk now, asserted in `clientCore.test.ts` where the paging lives.
+  it('takes the whole ready set in one read, in the server’s rank', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
-    server.ignoreExcludes = true;
 
     const { dispatched, summary } = await drive(server);
 
-    expect(dispatched).toEqual(['PROD-1']);
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
     expect(summary.stopReason).toBe('completed');
-    expect(printed()).toContain('Snapshot: 1 work item');
+    expect(printed()).toContain('Snapshot: 2 work items');
   });
 });
 
@@ -777,26 +771,27 @@ describe('the snapshot plan block', () => {
     const text = renderSnapshotPlan({
       taken: [
         {
-          id: 'i1',
           key: 'PROD-1',
           title: 'Add the thing',
           kind: 'subtask',
-          targetRepo: 'motir-core',
         },
       ],
       skipped: [{ key: 'PROD-2', title: 'A story', reason: 'needs_planning' }],
     });
     expect(text).toContain('Snapshot: 1 work item');
     expect(text).toContain('PROD-1');
-    expect(text).toContain('motir-core');
+    // ⚠️ No repo column (MOTIR-2398). The snapshot freezes WHICH items; where
+    // each ships is assembled per iteration from the dispatch prompt, and
+    // `dispatchOne` prints the resolved checkout on its own line there.
+    expect(text).not.toContain('REPO');
     expect(text).toContain('Not in the snapshot — needs planning (1)');
   });
 
-  it('renders an unpinned repo and an absent title as placeholders, never "null"', () => {
-    // `targetRepo` and `title` are both nullable on a work item, and this table
-    // is the first thing a human reads before deciding to let the run proceed.
+  it('renders an absent title as a placeholder, never "null"', () => {
+    // `title` is nullable on a work item, and this table is the first thing a
+    // human reads before deciding to let the run proceed.
     const text = renderSnapshotPlan({
-      taken: [{ id: 'i1', key: 'PROD-1', title: null, kind: 'subtask', targetRepo: null }],
+      taken: [{ key: 'PROD-1', title: null, kind: 'subtask' }],
       skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
     });
     expect(text).toContain('—');
@@ -840,7 +835,7 @@ describe('the end-of-run summary block', () => {
   it('names a not-reached and a newly-ready item that carry no title', () => {
     const text = renderBatchSummary(
       summary({
-        notReached: [{ id: 'i2', key: 'PROD-2', title: null, kind: 'subtask', targetRepo: null }],
+        notReached: [{ key: 'PROD-2', title: null, kind: 'subtask' }],
         newlyReady: [{ key: 'PROD-3', title: null }],
         stopReason: 'max',
       }),
