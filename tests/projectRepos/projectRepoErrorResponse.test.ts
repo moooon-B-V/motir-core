@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { mapProjectRepoError } from '@/lib/projectRepos/errorResponse';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import {
   ProjectRepoInvalidFieldError,
   ProjectRepoNameTakenError,
@@ -55,6 +59,35 @@ describe('mapProjectRepoError', () => {
     const res = mapProjectRepoError(err);
     expect(res?.status).toBe(422);
     expect((await res!.json()).code).toBe('PROJECT_REPO_INVALID_FIELD');
+  });
+
+  it('answers a PERMISSION refusal with 403 and NAMES the key that was missing', async () => {
+    // MOTIR-2299 — the SET writes and the code-access grant moved from
+    // `assertCanEdit` to `assertPermission(…, 'repository:manage' /
+    // 'repository:manage_access')`, so the refusal now arrives as
+    // `PermissionDeniedError`. Unmapped it would be a 500, which is precisely how
+    // the sibling mappers were caught (the story E2E's first CI run).
+    for (const key of ['repository:manage', 'repository:manage_access'] as const) {
+      const res = mapProjectRepoError(new PermissionDeniedError('proj-1', key));
+      expect(res?.status).toBe(403);
+      const body = (await res!.json()) as { code: string; permission: string };
+      expect(body.code).toBe('PERMISSION_DENIED');
+      // The KEY on the body is the whole point of the new error — a shared arm
+      // with `ProjectAccessDeniedError` would return the right status and
+      // silently drop it.
+      expect(body.permission).toBe(key);
+    }
+  });
+
+  it('still answers the OLD access denial with a 403 that carries no permission', async () => {
+    // The two arms are separate on purpose, and this is the half that proves it:
+    // `ProjectAccessDeniedError` keeps the body it shipped with, so a consumer
+    // reading `code` is unaffected by the split.
+    const res = mapProjectRepoError(new ProjectAccessDeniedError('proj-1', 'edit'));
+    expect(res?.status).toBe(403);
+    const body = (await res!.json()) as Record<string, unknown>;
+    expect(body.code).toBe('PROJECT_ACCESS_DENIED');
+    expect(Object.keys(body).sort()).toEqual(['code', 'error']);
   });
 
   it('returns NULL for anything it does not know, so the route rethrows into a 500', () => {

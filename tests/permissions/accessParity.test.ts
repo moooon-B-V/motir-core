@@ -14,8 +14,13 @@ import {
   canUpvotePublicRequest,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
-import { resolvePermissions } from '@/lib/permissions/resolve';
-import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { hasPermission, resolvePermissions } from '@/lib/permissions/resolve';
+import {
+  BUILTIN_ROLE_PERMISSIONS,
+  IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS,
+  ROLE_GATED_PERMISSIONS,
+} from '@/lib/permissions/builtinRoles';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // The PARITY TRUTH TABLE (Story MOTIR-2255 · Subtask MOTIR-2261). MOTIR-2261
 // moved the decision that guards every read and every write in the product onto
@@ -55,6 +60,28 @@ const PREDICATES: Record<string, (i: ProjectAccessInputs) => boolean> = {
   canUpvotePublicRequest,
   canCommentPublicRequest,
 };
+
+/**
+ * The twelve per-domain administrative keys MOTIR-2256 splits out of
+ * `project:administer`. Spelled out LITERALLY rather than derived from
+ * `ROLE_GATED_PERMISSIONS` — deriving it would let a key silently join or leave
+ * the split and still pass, which is precisely the drift the parity table below
+ * exists to catch.
+ */
+const ADMINISTRATIVE_KEYS: readonly PermissionKey[] = [
+  'member:manage',
+  'project:manage_access',
+  'board:configure',
+  'workflow:manage',
+  'automation:manage',
+  'field:manage',
+  'component:manage',
+  'label:manage',
+  'estimation:manage',
+  'repository:manage',
+  'repository:manage_access',
+  'ai:configure',
+];
 
 const TABLE: Row[] = [
   {
@@ -1315,6 +1342,48 @@ describe('the two rails resolve INSIDE the set, not around it', () => {
       expect(held.has('comment:add')).toBe(false);
       expect(held.has('attachment:create')).toBe(false);
       expect(held.has('project:administer')).toBe(false);
+    }
+  });
+
+  it('the twelve administrative keys are held by exactly the actors project:administer is', () => {
+    // The NEUTRALITY PROOF for MOTIR-2256. The story splits one umbrella
+    // permission into twelve per-domain ones and claims nobody's access changes.
+    // That claim is only true if each of the twelve resolves identically to
+    // `project:administer` for EVERY actor the system can describe — not for the
+    // handful anybody would think to try. This walks all 64 rows and both rails.
+    //
+    // A divergence here means one of two things, and both are real findings:
+    // the key was added to the wrong role set, or `levelGrants` grew a branch
+    // naming it (see the ⚠️ on `levelGrants` — it must not).
+    for (const row of TABLE) {
+      const inputs: ProjectAccessInputs = {
+        accessLevel: row.accessLevel,
+        workspaceRole: row.workspaceRole,
+        projectRole: row.projectRole,
+      };
+      const umbrella = hasPermission(inputs, 'project:administer');
+      for (const key of ADMINISTRATIVE_KEYS) {
+        expect(
+          hasPermission(inputs, key),
+          `${key} diverges from project:administer on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} } (expected ${umbrella})`,
+        ).toBe(umbrella);
+      }
+    }
+  });
+
+  it('the twelve are held by admin and by NO other built-in role', () => {
+    // The other half of neutrality: the split must not GRANT anything. A member
+    // or viewer picking up an administrative key would satisfy the parity test
+    // above only if `project:administer` moved too — but stating it directly is
+    // what makes a mistaken paste into the wrong set fail loudly.
+    for (const key of ADMINISTRATIVE_KEYS) {
+      expect(BUILTIN_ROLE_PERMISSIONS.admin.has(key), `admin lacks ${key}`).toBe(true);
+      expect(BUILTIN_ROLE_PERMISSIONS.member.has(key), `member holds ${key}`).toBe(false);
+      expect(BUILTIN_ROLE_PERMISSIONS.viewer.has(key), `viewer holds ${key}`).toBe(false);
+      expect(
+        IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS.has(key),
+        `the implicit workspace-member grant holds ${key}`,
+      ).toBe(false);
     }
   });
 

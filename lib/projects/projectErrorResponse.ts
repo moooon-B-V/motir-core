@@ -10,6 +10,7 @@ import {
   InvalidProjectNameError,
   InvalidStatusAutomationSettingsError,
   NotProjectAdminError,
+  PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -23,7 +24,10 @@ import {
 //   ProjectNotFoundError / AliasNotFoundError                → 404 (incl. the
 //       no-existence-leak 404 a non-browser sees instead of "exists but you
 //       can't" — assertCanManage maps a non-browser to ProjectNotFoundError)
-//   ProjectAccessDeniedError / NotProjectAdminError          → 403
+//   ProjectAccessDeniedError / NotProjectAdminError
+//       / PermissionDeniedError                              → 403 (MOTIR-2293 —
+//       PermissionDeniedError carries the `permission` that was missing, so the
+//       body adds it; the other two keep the shape they shipped with)
 //   InvalidProjectNameError / InvalidIdentifierError
 //       / IdentifierUnchangedError / InvalidAvatarError       → 400
 //   IdentifierTakenError / IdentifierReservedError           → 409
@@ -47,6 +51,12 @@ export function projectErrorResponse(err: unknown): NextResponse | null {
   }
   if (err instanceof ProjectNotFoundError || err instanceof AliasNotFoundError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
+  }
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { error: err.message, code: err.code, permission: err.permission },
+      { status: 403 },
+    );
   }
   if (err instanceof ProjectAccessDeniedError || err instanceof NotProjectAdminError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });

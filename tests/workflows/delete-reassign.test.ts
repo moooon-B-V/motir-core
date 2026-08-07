@@ -9,9 +9,9 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import {
   CannotDeleteInitialStatusError,
   InvalidReassignTargetError,
-  NotProjectAdminError,
   StatusInUseError,
 } from '@/lib/workflows/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
@@ -225,7 +225,12 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
     ).rejects.toThrow(CannotDeleteInitialStatusError);
   });
 
-  it('is admin-gated — a non-member cannot reassign-and-delete', async () => {
+  it('is admin-gated — a NON-MEMBER gets 404, never a permission error', async () => {
+    // MOTIR-2297. The gate is now the shared `assertPermission`, whose refusal
+    // ORDER puts the browse check FIRST: an actor with no workspace membership
+    // at all cannot browse the project, so it must stay indistinguishable from a
+    // project that does not exist. The old private gate answered 403 here, which
+    // confirmed to a complete outsider that the project was real.
     const fx = await makeFixture();
     const triage = await makeCustomStatus(fx, 'triage');
     await makeItemsWithStatus(fx, 'triage', 1);
@@ -242,6 +247,33 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
         statusId: triage.id,
         reassignToStatusId: todoId,
       }),
-    ).rejects.toThrow(NotProjectAdminError);
+    ).rejects.toThrow(ProjectNotFoundError);
+  });
+
+  it('is admin-gated — a project MEMBER who CAN browse gets 403 naming the key', async () => {
+    // The other arm of the same ordering: this actor sees the project, so the
+    // refusal is allowed to say why.
+    const fx = await makeFixture();
+    const triage = await makeCustomStatus(fx, 'triage');
+    await makeItemsWithStatus(fx, 'triage', 1);
+    const todoId = await seededStatusId(fx, 'todo');
+    const member = await usersService.createUser({
+      email: 'wf-member@example.com',
+      password: 'hunter2hunter2',
+      name: 'Member',
+    });
+    await db.workspaceMembership.create({
+      data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
+    });
+    const err = await workflowsService
+      .deleteStatus({
+        userId: member.id,
+        workspaceId: fx.workspaceId,
+        statusId: triage.id,
+        reassignToStatusId: todoId,
+      })
+      .catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(PermissionDeniedError);
+    expect((err as PermissionDeniedError).permission).toBe('workflow:manage');
   });
 });

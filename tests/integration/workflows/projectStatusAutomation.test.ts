@@ -6,7 +6,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { toProjectStatusAutomationDto } from '@/lib/mappers/projectStatusAutomationMappers';
 import {
   InvalidStatusAutomationSettingsError,
-  NotProjectAdminError,
+  PermissionDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
@@ -285,7 +285,7 @@ describe('Project status-automation — validation + gates (MOTIR-1618)', () => 
         { autoRollupParentStatus: false },
         ctxFor(fx, member.id),
       ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
 
     const after = await projectStatusAutomationService.getStatusAutomation(
       fx.projectIdentifier,

@@ -106,6 +106,20 @@ export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<Perm
  * their role's base set. This is the "subtracts from it" half of the model —
  * every branch transcribed from the shipped per-level tables in
  * `lib/projects/access.ts`.
+ *
+ * ⚠️ DELIBERATELY UNCHANGED BY MOTIR-2256, and that is what makes the split
+ * behaviour-neutral. Only three keys are ever named here — `work_item:edit`,
+ * `comment:add`, `attachment:create`. Every other key takes the default arm of
+ * its level's branch, so the twelve new administrative keys are subtracted by
+ * `limited` and `private` in EXACTLY the way `project:administer` already was:
+ * kept on `open` / `public`, kept on `limited` (the `work_item:edit` test does
+ * not match them), and on `private` gated on `hasProjectMembership` alone. Since
+ * `BUILTIN_ROLE_PERMISSIONS` grants the twelve to precisely the role that already
+ * held `project:administer` (admin), the resolved answer is identical for all 64
+ * actors — proved in `tests/permissions/accessParity.test.ts`. Adding a branch
+ * for one of the twelve here would BREAK that equivalence, so don't; a domain
+ * that genuinely needs a different per-level rule is a policy change and belongs
+ * in a card that argues for it.
  */
 function levelGrants(
   accessLevel: ProjectAccessLevel,

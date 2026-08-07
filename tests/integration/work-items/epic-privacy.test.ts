@@ -6,7 +6,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { NotEpicError, WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { NotProjectAdminError } from '@/lib/projects/errors';
+import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -103,11 +103,25 @@ describe('setEpicPrivacy — the admin write', () => {
       ctx: { userId: stranger.id, workspaceId: fx.workspaceId },
     };
 
-    for (const denied of [plainMember, projMember, projViewer, strangerActor]) {
+    // The three who CAN browse the project get the 403 arm, still carrying the
+    // shipped `NOT_PROJECT_ADMIN` code: `assertCanManage` asks
+    // `project:administer`, which keeps that error by design (MOTIR-2293's
+    // compatibility branch).
+    for (const denied of [plainMember, projMember, projViewer]) {
       await expect(
         workItemsService.setEpicPrivacy(epic.id, true, denied.ctx),
       ).rejects.toBeInstanceOf(NotProjectAdminError);
     }
+
+    // The STRANGER gets 404, not 403 (MOTIR-2302). This service used to derive
+    // the admin answer itself, in a private `assertCanManageProject`; folding it
+    // into the shared gate brought the BROWSE-first ordering with it, so an actor
+    // with no workspace membership no longer learns the epic is real. That is
+    // what this test's own comment above already says production does — the
+    // service now agrees with RLS instead of being a backstop that leaks.
+    await expect(
+      workItemsService.setEpicPrivacy(epic.id, true, strangerActor.ctx),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
     // No write leaked through a denied call.
     expect((await workItemRepository.findById(epic.id))?.publicChildrenHidden).toBe(false);
   });

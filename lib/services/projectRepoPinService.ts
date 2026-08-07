@@ -96,9 +96,11 @@ export const projectRepoPinService = {
    * never UN-pins: a row that later leaves the established states does not retract
    * a name that has already been dispatched against.
    *
-   * Edit-gated, because it writes work items. A caller that has already proved
-   * edit access still pays one access read; that is deliberate, so the method is
-   * safe to call from anywhere rather than trusting its callers.
+   * EDIT-gated, and deliberately NOT `repository:manage` (MOTIR-2299): what it
+   * writes is `targetRepo` on WORK ITEMS, so the capability it needs is the one
+   * that edits work items. The repository SET is not touched. A caller that has
+   * already proved edit access still pays one access read; that is deliberate, so
+   * the method is safe to call from anywhere rather than trusting its callers.
    */
   async resolvePins(projectId: string, ctx: ServiceContext): Promise<ResolveRepoPinsResult> {
     await projectAccessService.assertCanEdit(projectId, ctx);

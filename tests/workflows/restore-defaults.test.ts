@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import { NotProjectAdminError } from '@/lib/workflows/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -135,6 +135,6 @@ describe('restoreDefaultTransitions — additive merge', () => {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
       }),
-    ).rejects.toThrow(NotProjectAdminError);
+    ).rejects.toThrow(PermissionDeniedError);
   });
 });

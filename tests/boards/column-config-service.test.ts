@@ -15,8 +15,8 @@ import {
   InvalidColumnNameError,
   InvalidColumnPositionError,
   LastColumnError,
-  NotBoardAdminError,
 } from '@/lib/boards/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -31,7 +31,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //
 // Authorization: board config is workspace-OWNER-gated (finding #36), mirroring
 // the 3.3.3 WIP/group-by writes — so an owner succeeds and a plain member is
-// denied (NotBoardAdminError). Tenancy (finding #26): a board / column from
+// denied (PermissionDeniedError). Tenancy (finding #26): a board / column from
 // another workspace is a 404 (no cross-tenant existence leak).
 
 beforeEach(async () => {
@@ -158,7 +158,7 @@ describe('boardsService.addColumn (Subtask 3.6.2)', () => {
     const before = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
     await expect(
       boardsService.addColumn(fx.boardId, { name: 'Nope' }, fx.memberCtx),
-    ).rejects.toBeInstanceOf(NotBoardAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     const after = await boardColumnRepository.findByBoard(fx.boardId, fx.workspaceId);
     expect(after).toHaveLength(before.length);
   });
@@ -195,7 +195,7 @@ describe('boardsService.renameColumn (Subtask 3.6.2)', () => {
     const other = await makeFixture('rename-gate-b');
     const columnId = fx.columnByStatusKey.get('todo')!;
     await expect(boardsService.renameColumn(columnId, 'X', fx.memberCtx)).rejects.toBeInstanceOf(
-      NotBoardAdminError,
+      PermissionDeniedError,
     );
     await expect(boardsService.renameColumn(columnId, 'X', other.ownerCtx)).rejects.toBeInstanceOf(
       BoardColumnNotFoundError,
@@ -275,7 +275,7 @@ describe('boardsService.deleteColumn (Subtask 3.6.2)', () => {
     const other = await makeFixture('del-gate-b');
     const columnId = fx.columnByStatusKey.get('blocked')!;
     await expect(boardsService.deleteColumn(columnId, fx.memberCtx)).rejects.toBeInstanceOf(
-      NotBoardAdminError,
+      PermissionDeniedError,
     );
     await expect(boardsService.deleteColumn(columnId, other.ownerCtx)).rejects.toBeInstanceOf(
       BoardColumnNotFoundError,
@@ -354,7 +354,7 @@ describe('boardsService.mapStatusToColumn (Subtask 3.6.2)', () => {
     const todoColumnId = fx.columnByStatusKey.get('todo')!;
     await expect(
       boardsService.mapStatusToColumn(fx.boardId, todoColumnId, statusId, fx.memberCtx),
-    ).rejects.toBeInstanceOf(NotBoardAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       boardsService.mapStatusToColumn(fx.boardId, todoColumnId, statusId, other.ownerCtx),
     ).rejects.toBeInstanceOf(BoardNotFoundError);
@@ -393,7 +393,7 @@ describe('boardsService.unmapStatus (Subtask 3.6.2)', () => {
     const statusId = fx.statusIdByKey.get('todo')!;
     await expect(
       boardsService.unmapStatus(fx.boardId, statusId, fx.memberCtx),
-    ).rejects.toBeInstanceOf(NotBoardAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       boardsService.unmapStatus(fx.boardId, statusId, other.ownerCtx),
     ).rejects.toBeInstanceOf(BoardNotFoundError);
@@ -420,7 +420,7 @@ describe('boardsService.renameBoard (Subtask 3.6.2)', () => {
     const fx = await makeFixture('board-rename-gate');
     const other = await makeFixture('board-rename-gate-b');
     await expect(boardsService.renameBoard(fx.boardId, 'X', fx.memberCtx)).rejects.toBeInstanceOf(
-      NotBoardAdminError,
+      PermissionDeniedError,
     );
     await expect(boardsService.renameBoard(fx.boardId, 'X', other.ownerCtx)).rejects.toBeInstanceOf(
       BoardNotFoundError,

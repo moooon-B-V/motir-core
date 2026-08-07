@@ -9,7 +9,7 @@ import { componentRepository } from '@/lib/repositories/componentRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
-  NotProjectAdminError,
+  PermissionDeniedError,
   ProjectAccessDeniedError,
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
@@ -164,10 +164,10 @@ describe('componentsService.createComponent — admin CRUD', () => {
 
     await expect(
       componentsService.createComponent({ key: s.fx.projectIdentifier, name: 'Nope' }, s.memberCtx),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     await expect(
       componentsService.createComponent({ key: s.fx.projectIdentifier, name: 'Nope' }, s.viewerCtx),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 
   it('resolves the project workspace-scoped — an unknown key reads as 404', async () => {
@@ -214,7 +214,7 @@ describe('componentsService.updateComponent', () => {
 
     await expect(
       componentsService.updateComponent(api.id, { name: 'X' }, s.memberCtx),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
 
     const other = await makeWorkItemFixture({ name: 'Foreign', identifier: 'FRG' });
     await expect(
@@ -404,7 +404,7 @@ describe('componentsService.deleteComponent — the move-or-remove flow', () => 
     const s = await buildScenario();
     const api = await ownerCreate(s, 'API');
     await expect(componentsService.deleteComponent(api.id, {}, s.memberCtx)).rejects.toBeInstanceOf(
-      NotProjectAdminError,
+      PermissionDeniedError,
     );
   });
 });

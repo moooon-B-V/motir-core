@@ -3,11 +3,8 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { boardsService } from '@/lib/services/boardsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import {
-  InvalidBoardNameError,
-  InvalidBoardTypeError,
-  NotBoardAdminError,
-} from '@/lib/boards/errors';
+import { InvalidBoardNameError, InvalidBoardTypeError } from '@/lib/boards/errors';
+import { boardGateErrorResponse } from '@/lib/boards/boardGateResponse';
 
 // /api/boards (Subtask 3.7.3) — the multi-board CRUD collection for the ACTIVE
 // project (the board lifecycle: list + create; per-board rename/set-default/
@@ -48,7 +45,8 @@ export async function GET(): Promise<Response> {
 //
 // Typed errors → status codes:
 //   InvalidBoardNameError / InvalidBoardTypeError → 400
-//   NotBoardAdminError                            → 403 (not owner, #36; TODO(6.4))
+//   PermissionDeniedError (board:configure)                     → 403
+//   ProjectNotFoundError (cannot browse the project)             → 404
 //   ProjectNotFoundError                          → 404
 export async function POST(req: Request): Promise<Response> {
   const session = await getSession();
@@ -97,9 +95,8 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof InvalidBoardNameError || err instanceof InvalidBoardTypeError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }
-    if (err instanceof NotBoardAdminError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
-    }
+    const gate = boardGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

@@ -4,19 +4,12 @@ import { componentRepository } from '@/lib/repositories/componentRepository';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
-import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
-import { isWorkspaceManager } from '@/lib/projects/roles';
-import {
-  NotProjectAdminError,
-  ProjectAccessDeniedError,
-  ProjectNotFoundError,
-} from '@/lib/projects/errors';
+import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
   ComponentNameConflictError,
@@ -102,9 +95,17 @@ async function resolveProject(key: string, ctx: WorkspaceContext): Promise<Proje
 }
 
 /**
- * Assert the actor may MANAGE the project's components — the 6.4 two-tier
- * check (workspace owner/admin always pass; otherwise project role `admin`),
- * exactly the members-page / custom-fields pattern.
+ * Assert the actor may manage this project's vocabulary (Story MOTIR-2256 ·
+ * Subtask MOTIR-2298). A thin adapter onto the ONE shared gate.
+ *
+ * It replaces a MODULE-PRIVATE re-implementation of the two-tier check — the
+ * workspace-manager rail, then `projectMembership?.role === 'admin'` — which is
+ * the shape this story exists to end: several services each grew their own copy,
+ * they agreed by coincidence, and nothing kept them that way. This one agreed, so
+ * the change is BEHAVIOUR-NEUTRAL: `component:manage` resolves to exactly the actors
+ * `project:administer` resolves to, on every access level and both rails, proved
+ * over all 64 inputs in `tests/permissions/accessParity.test.ts`. What changes is
+ * that there is now one answer instead of five, and the 403 names the key.
  */
 async function assertCanManage(
   actorUserId: string,
@@ -112,21 +113,12 @@ async function assertCanManage(
   projectId: string,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const wsMembership = await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-    actorUserId,
-    workspaceId,
-    tx,
-  );
-  if (wsMembership && isWorkspaceManager(wsMembership.role)) return;
-
-  const projectMembership = await projectMembershipRepository.findByUserAndProject(
-    actorUserId,
+  await projectAccessService.assertPermission(
     projectId,
+    { userId: actorUserId, workspaceId },
+    'component:manage',
     tx,
   );
-  if (projectMembership?.role === 'admin') return;
-
-  throw new NotProjectAdminError(projectId);
 }
 
 /**
