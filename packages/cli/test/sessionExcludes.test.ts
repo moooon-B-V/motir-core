@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  mkdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -8,7 +16,6 @@ import {
   excludesPath,
   readExcludes,
   removeExclude,
-  removeExcludeByKey,
   scopeKey,
 } from '../src/sessionExcludes.js';
 
@@ -37,43 +44,102 @@ describe('sessionExcludes', () => {
   });
 
   it('persists an exclusion across "processes" (a fresh read of the file)', () => {
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row1', key: 'PROD-7' }]);
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
   });
 
-  it('is idempotent by id', () => {
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
+  it('is idempotent by key, case-insensitively', () => {
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'prod-7' });
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
   });
 
   it('scopes by server AND project — one project never hides another’s work', () => {
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
     expect(readExcludes(SERVER, 'OTHER')).toEqual([]);
     expect(readExcludes('https://other.example', 'PROD')).toEqual([]);
   });
 
   it('normalizes the server URL and the project key when scoping', () => {
     expect(scopeKey('https://app.motir.co/', 'prod')).toBe(scopeKey(SERVER, 'PROD'));
-    addExclude('https://app.motir.co/', 'prod', { id: 'row1', key: 'PROD-7' });
+    addExclude('https://app.motir.co/', 'prod', { key: 'PROD-7' });
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
   });
 
-  it('removes by id and by key, so a fixed item stops being skipped', () => {
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
-    addExclude(SERVER, 'PROD', { id: 'row2', key: 'PROD-8' });
-    expect(removeExclude(SERVER, 'PROD', 'row1')).toBe(true);
-    expect(removeExclude(SERVER, 'PROD', 'row1')).toBe(false);
-    expect(removeExcludeByKey(SERVER, 'PROD', 'prod-8')).toBe(true);
+  it('removes by key — case-insensitively — so a fixed item stops being skipped', () => {
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-8' });
+    expect(removeExclude(SERVER, 'PROD', 'PROD-7')).toBe(true);
+    expect(removeExclude(SERVER, 'PROD', 'PROD-7')).toBe(false);
+    // `motir done PROD-8` is the lower-case path that used to need its own
+    // function; one key-based remove now serves both callers.
+    expect(removeExclude(SERVER, 'PROD', 'prod-8')).toBe(true);
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
   });
 
   it('clears the whole list and reports how many went', () => {
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
-    addExclude(SERVER, 'PROD', { id: 'row2', key: 'PROD-8' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-8' });
     expect(clearExcludes(SERVER, 'PROD')).toBe(2);
     expect(clearExcludes(SERVER, 'PROD')).toBe(0);
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
+  });
+
+  // ── The MOTIR-2338 migration ──────────────────────────────────────────────
+  //
+  // Real user state on disk: a list written by a CLI that stored `{ id, key }`.
+  // It must keep working, because the alternative is an upgrade that silently
+  // re-dispatches every item a previous run failed on.
+  it('reads a file written by the PREVIOUS CLI, and drops the row id on the next write', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(
+      excludesPath(),
+      JSON.stringify({
+        [scopeKey(SERVER, 'PROD')]: [
+          { id: 'cuid-row-1', key: 'PROD-7' },
+          { id: 'cuid-row-2', key: 'PROD-8' },
+        ],
+      }),
+    );
+
+    // Read: the keys survive, the ids are gone from the value callers see.
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }, { key: 'PROD-8' }]);
+
+    // Write: the id is not carried forward onto disk either.
+    addExclude(SERVER, 'PROD', { key: 'PROD-9' });
+    const onDisk = JSON.parse(readFileSync(excludesPath(), 'utf8')) as Record<
+      string,
+      Record<string, unknown>[]
+    >;
+    expect(onDisk[scopeKey(SERVER, 'PROD')]).toEqual([
+      { key: 'PROD-7' },
+      { key: 'PROD-8' },
+      { key: 'PROD-9' },
+    ]);
+  });
+
+  it('still holds out an item recorded by the PREVIOUS CLI', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(
+      excludesPath(),
+      JSON.stringify({ [scopeKey(SERVER, 'PROD')]: [{ id: 'cuid-row-1', key: 'PROD-7' }] }),
+    );
+    // The whole point of the migration: the upgrade does not re-offer PROD-7.
+    expect(readExcludes(SERVER, 'PROD').map((e) => e.key)).toContain('PROD-7');
+    expect(removeExclude(SERVER, 'PROD', 'PROD-7')).toBe(true);
+    expect(readExcludes(SERVER, 'PROD')).toEqual([]);
+  });
+
+  it('discards an entry with no key rather than keeping an unclearable exclusion', () => {
+    mkdirSync(join(home, 'motir'), { recursive: true });
+    writeFileSync(
+      excludesPath(),
+      JSON.stringify({ [scopeKey(SERVER, 'PROD')]: [{ id: 'cuid-row-1' }, { key: 'PROD-7' }] }),
+    );
+    // An entry naming nothing the CLI can match could never be removed by any
+    // command, so it would skip an item forever.
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
   });
 
   it('treats a CORRUPT store as empty rather than wedging every dispatch', () => {
@@ -81,7 +147,7 @@ describe('sessionExcludes', () => {
     writeFileSync(excludesPath(), '{ not json');
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
     // and it recovers on the next write
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
   });
 });
@@ -97,8 +163,8 @@ describe('a corrupt store never wedges dispatch', () => {
     // better than every `motir next` failing.
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
 
-    addExclude(SERVER, 'PROD', { id: 'row-1', key: 'PROD-1' });
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row-1', key: 'PROD-1' }]);
+    addExclude(SERVER, 'PROD', { key: 'PROD-1' });
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-1' }]);
   });
 
   it('reads a JSON scalar (not an object) as empty too', () => {
@@ -140,7 +206,7 @@ describe('an unwritable exclude store degrades instead of aborting the run', () 
   it('addExclude does NOT throw — the caller keeps running', () => {
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      expect(() => addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' })).not.toThrow();
+      expect(() => addExclude(SERVER, 'PROD', { key: 'PROD-7' })).not.toThrow();
     } finally {
       vi.restoreAllMocks();
     }
@@ -154,7 +220,7 @@ describe('an unwritable exclude store degrades instead of aborting the run', () 
     mkdirSync(join(home, 'motir', 'session-excludes.json'), { recursive: true });
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      expect(() => addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' })).not.toThrow();
+      expect(() => addExclude(SERVER, 'PROD', { key: 'PROD-7' })).not.toThrow();
       expect(() => clearExcludes(SERVER, 'PROD')).not.toThrow();
     } finally {
       vi.restoreAllMocks();
@@ -168,9 +234,9 @@ describe('an unwritable exclude store degrades instead of aborting the run', () 
       return true;
     });
     try {
-      addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
-      addExclude(SERVER, 'PROD', { id: 'row2', key: 'PROD-8' });
-      addExclude(SERVER, 'OTHER', { id: 'row3', key: 'OTHER-1' });
+      addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+      addExclude(SERVER, 'PROD', { key: 'PROD-8' });
+      addExclude(SERVER, 'OTHER', { key: 'OTHER-1' });
     } finally {
       spy.mockRestore();
     }
@@ -182,7 +248,7 @@ describe('an unwritable exclude store degrades instead of aborting the run', () 
   });
 
   it('reads as empty rather than throwing, so dispatch still selects', () => {
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
   });
 
@@ -193,9 +259,9 @@ describe('an unwritable exclude store degrades instead of aborting the run', () 
     mkdirSync(join(home, 'motir'), { recursive: true });
     writeFileSync(
       join(home, 'motir', 'session-excludes.json'),
-      JSON.stringify({ [scopeKey(SERVER, 'PROD')]: [{ id: 'row1', key: 'PROD-7' }] }),
+      JSON.stringify({ [scopeKey(SERVER, 'PROD')]: [{ key: 'PROD-7' }] }),
     );
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row1', key: 'PROD-7' }]);
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
 
     // `--reset` cannot clear a store it cannot write, and must not claim it did:
     // the next run would still be excluding the item the user just un-excluded.
@@ -214,7 +280,7 @@ describe('an unwritable exclude store degrades instead of aborting the run', () 
       process.env['MOTIR_STATE_HOME'] = readonlyHome;
       vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
       try {
-        expect(() => addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' })).not.toThrow();
+        expect(() => addExclude(SERVER, 'PROD', { key: 'PROD-7' })).not.toThrow();
       } finally {
         vi.restoreAllMocks();
         chmodSync(join(readonlyHome, 'motir'), 0o700);
@@ -236,8 +302,8 @@ describe('the store is resolved from the state home', () => {
     process.env['MOTIR_STATE_HOME'] = state;
     expect(excludesPath()).toBe(join(state, 'motir', 'session-excludes.json'));
 
-    addExclude(SERVER, 'PROD', { id: 'row1', key: 'PROD-7' });
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row1', key: 'PROD-7' }]);
+    addExclude(SERVER, 'PROD', { key: 'PROD-7' });
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
     // and NOTHING was written beside the credential
     expect(existsSync(join(home, 'motir', 'session-excludes.json'))).toBe(false);
     rmSync(state, { recursive: true, force: true });
@@ -261,17 +327,60 @@ describe('the store is resolved from the state home', () => {
     mkdirSync(join(home, 'motir'), { recursive: true });
     writeFileSync(
       join(home, 'motir', 'session-excludes.json'),
-      JSON.stringify({ [scopeKey(SERVER, 'PROD')]: [{ id: 'old', key: 'PROD-1' }] }),
+      JSON.stringify({ [scopeKey(SERVER, 'PROD')]: [{ key: 'PROD-1' }] }),
     );
 
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'old', key: 'PROD-1' }]);
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-1' }]);
     // The next write migrates it to the new home, legacy entries carried over.
-    addExclude(SERVER, 'PROD', { id: 'new', key: 'PROD-2' });
+    addExclude(SERVER, 'PROD', { key: 'PROD-2' });
     expect(existsSync(join(state, 'motir', 'session-excludes.json'))).toBe(true);
-    expect(readExcludes(SERVER, 'PROD')).toEqual([
-      { id: 'old', key: 'PROD-1' },
-      { id: 'new', key: 'PROD-2' },
-    ]);
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-1' }, { key: 'PROD-2' }]);
     rmSync(state, { recursive: true, force: true });
+  });
+});
+
+// ── The structural guard MOTIR-2338 exists for ──────────────────────────────
+//
+// The exclusion list moved to KEYS so that nothing in the dispatch path needs a
+// work item's internal row id — `/api/v1` never publishes one (ADR §7), and
+// that read is precisely what blocked the CLI's `getWorkItem` port (MOTIR-2212).
+//
+// Asserted over the SOURCE rather than through behaviour, because the defect
+// this prevents is a re-introduction: a future edit that reaches for `item.id`
+// again would pass every functional test in this suite while quietly re-coupling
+// the CLI to an identifier the public API will not give it.
+describe('no dispatch-path read of a work item’s internal row id', () => {
+  const SRC = join(import.meta.dirname, '..', 'src');
+
+  it('dispatch.ts feeds the exclude store KEYS, never a row id', () => {
+    const source = readFileSync(join(SRC, 'commands', 'dispatch.ts'), 'utf8');
+    // Every exclude write names a key. `{ id` or `, id)` in one of these calls
+    // is the re-coupling this guard exists to catch.
+    for (const call of source.matchAll(/(?:add|remove)Exclude\([^)]*\)/g)) {
+      expect(call[0], call[0]).not.toMatch(/\bid\b/);
+    }
+    // The `motir run <key>` path reads a `get_work_item` DETAIL. It must route
+    // on the identifier alone — that read of `item.id` is what blocked the
+    // detail's port to /api/v1 (MOTIR-2212), and ADR §7 keeps the cuid off the
+    // wire for good.
+    const runByKey = source.slice(source.indexOf('item.identifier'));
+    expect(runByKey).not.toMatch(/\bitem\.id\b/);
+  });
+
+  it('the one remaining row-id read is the `next_ready` ARGUMENT, and is deliberate', () => {
+    const source = readFileSync(join(SRC, 'commands', 'dispatch.ts'), 'utf8');
+    // `next_ready` still narrows by row id, so the translation helper reads the
+    // id off the row the server just handed back. That is an MCP-tool argument,
+    // not a persisted identity — it disappears with `nextReady` itself in
+    // 11.5.5. Pinned so the guard above cannot be widened past what is true.
+    const helper = source.slice(source.indexOf('async function claimNextNotExcluded'));
+    expect(helper).toMatch(/seenIds\.add\(item\.id\)/);
+  });
+
+  it('the exclude store exposes no id-shaped surface', () => {
+    const source = readFileSync(join(SRC, 'sessionExcludes.ts'), 'utf8');
+    // The interface, the idempotence check and the removal all key on `key`.
+    expect(source).not.toMatch(/^\s*id: string;/m);
+    expect(source).not.toMatch(/removeExcludeByKey/);
   });
 });

@@ -30,9 +30,19 @@ import { info } from './output.js';
 export const EXCLUDES_FILENAME = 'session-excludes.json';
 
 export interface ExcludeEntry {
-  /** The work item ROW id — what `next_ready`'s `excludeIds` takes. */
-  id: string;
-  /** The `PROD-<n>` identifier, carried purely so the list is readable. */
+  /**
+   * The `PROD-<n>` identifier — the ONLY thing this list stores (MOTIR-2338,
+   * ADR Amendment 10 Q3).
+   *
+   * It used to carry the internal row `id` as well, because that is what
+   * `next_ready`'s `excludeIds` takes. `/api/v1` never publishes an internal
+   * id (ADR §7), so a list keyed on one cannot survive the CLI's move onto the
+   * public API — and a key identifies the item just as well.
+   *
+   * A file written by the PREVIOUS CLI carries `{ id, key }`, so it still reads
+   * cleanly here; {@link readExcludes} normalises it so the id is never written
+   * forward.
+   */
   key: string;
 }
 
@@ -117,18 +127,29 @@ function writeStore(store: ExcludeStore): boolean {
   }
 }
 
-/** Every entry excluded for this (server, project). */
+/**
+ * Every entry excluded for this (server, project).
+ *
+ * NORMALISES on read: an entry written by the previous CLI carries an `id`
+ * alongside its `key`, and dropping it here is the whole migration — nothing
+ * re-reads the id, and the next write persists keys only. An entry with no
+ * `key` at all cannot be matched against anything and is discarded rather than
+ * carried forward as a permanent un-clearable exclusion.
+ */
 export function readExcludes(serverUrl: string, projectKey: string): ExcludeEntry[] {
-  return readStore()[scopeKey(serverUrl, projectKey)] ?? [];
+  const stored = readStore()[scopeKey(serverUrl, projectKey)] ?? [];
+  return stored
+    .filter((entry) => typeof entry?.key === 'string')
+    .map((entry) => ({ key: entry.key }));
 }
 
-/** Add an entry (idempotent by id) — called when an agent run FAILS. */
+/** Add an entry (idempotent by key) — called when an agent run FAILS. */
 export function addExclude(serverUrl: string, projectKey: string, entry: ExcludeEntry): void {
   const store = readStore();
-  const key = scopeKey(serverUrl, projectKey);
-  const current = store[key] ?? [];
-  if (current.some((e) => e.id === entry.id)) return;
-  store[key] = [...current, entry];
+  const scope = scopeKey(serverUrl, projectKey);
+  const current = readExcludes(serverUrl, projectKey);
+  if (current.some((e) => e.key.toUpperCase() === entry.key.toUpperCase())) return;
+  store[scope] = [...current, { key: entry.key }];
   writeStore(store);
 }
 
@@ -137,26 +158,17 @@ export function addExclude(serverUrl: string, projectKey: string, entry: Exclude
  * done`), so a previously-failed item that has since been fixed stops being
  * skipped. Returns true when something was removed.
  */
-export function removeExclude(serverUrl: string, projectKey: string, id: string): boolean {
+export function removeExclude(serverUrl: string, projectKey: string, key: string): boolean {
   const store = readStore();
-  const key = scopeKey(serverUrl, projectKey);
-  const current = store[key] ?? [];
-  const next = current.filter((e) => e.id !== id);
+  const scope = scopeKey(serverUrl, projectKey);
+  const current = readExcludes(serverUrl, projectKey);
+  const next = current.filter((e) => e.key.toUpperCase() !== key.toUpperCase());
   if (next.length === current.length) return false;
-  if (next.length > 0) store[key] = next;
-  else delete store[key];
+  if (next.length > 0) store[scope] = next;
+  else delete store[scope];
   // Reports what actually PERSISTED: an unwritable store removed nothing, and
   // saying otherwise would make `--reset`'s summary lie about the next run.
   return writeStore(store);
-}
-
-/** Drop one entry BY KEY (`PROD-7`) — the `motir done` path, which knows the
- *  identifier but not the row id. Returns true when something was removed. */
-export function removeExcludeByKey(serverUrl: string, projectKey: string, key: string): boolean {
-  const entry = readExcludes(serverUrl, projectKey).find(
-    (e) => e.key.toUpperCase() === key.toUpperCase(),
-  );
-  return entry ? removeExclude(serverUrl, projectKey, entry.id) : false;
 }
 
 /** Clear the whole list for a (server, project) — `motir next --reset`. */

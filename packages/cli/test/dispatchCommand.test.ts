@@ -281,10 +281,13 @@ describe('motir next --agent', () => {
     expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
     expect(harness.stderr).toContain('stays In Progress');
     expect(process.exitCode).toBe(2);
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row-7', key: 'PROD-7' }]);
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
   });
 
-  it('the NEXT next skips the excluded item, and --reset un-skips it', async () => {
+  // MOTIR-2338: the persisted list holds KEYS, and `next_ready` still narrows by
+  // row id — so the skip is now a TRANSLATION. The first ask carries no
+  // exclusions; the excluded item comes back, its id is fed to a second ask.
+  it('the NEXT next skips the excluded item by translating its key to an id, and --reset un-skips it', async () => {
     agentResult.exitCode = 1;
     setup();
     await nextCommand({ agent: 'claude' });
@@ -292,7 +295,11 @@ describe('motir next --agent', () => {
     agentResult.exitCode = 0;
     setup();
     await nextCommand({ print: true });
-    expect(harness.calls[0]?.args).toMatchObject({ excludeIds: ['row-7'] });
+    const asks = harness.calls.filter((c) => c.tool === 'next_ready');
+    // First ask: nothing to exclude yet — the CLI does not know PROD-7's id.
+    expect(asks[0]?.args).not.toHaveProperty('excludeIds');
+    // Second ask: it learned the id from the row it just refused.
+    expect(asks[1]?.args).toMatchObject({ excludeIds: ['row-7'] });
     expect(harness.stderr).toContain('Skipping 1 previously-failed item(s): PROD-7');
 
     setup();
@@ -306,9 +313,12 @@ describe('motir next --agent', () => {
     await nextCommand({ agent: 'claude' });
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
 
+    // Retried by KEY — the explicit path, which does not consult the exclude
+    // list. `motir next` would keep holding PROD-7 out until `--reset`, which
+    // is what the test above asserts.
     agentResult.exitCode = 0;
     setup();
-    await nextCommand({ agent: 'claude' });
+    await runCommand('PROD-7', { agent: 'claude' });
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
   });
 

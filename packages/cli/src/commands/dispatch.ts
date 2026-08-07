@@ -5,13 +5,7 @@ import { withProjectSession, type ProjectSession } from '../session.js';
 import { getAgentCommand } from '../config/userConfig.js';
 import { parseAgentCommand, type ParsedAgentCommand } from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
-import {
-  addExclude,
-  clearExcludes,
-  readExcludes,
-  removeExclude,
-  removeExcludeByKey,
-} from '../sessionExcludes.js';
+import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
   checkBootstrapCheckout,
   renderAgentFailure,
@@ -23,7 +17,7 @@ import {
   type AgentSource,
 } from '../dispatch.js';
 import { CLI_VERSION } from '../version.js';
-import type { DispatchPrompt, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../mcpClient.js';
 
 // `motir next` / `motir run <key>` / `motir done <key>` — SINGLE DISPATCH
 // (Story 7.9 · Subtask 7.9.3 · MOTIR-881). The heart of the CLI: take one work
@@ -113,9 +107,6 @@ interface DeliverInput {
   session: ProjectSession;
   key: string;
   title: string | null;
-  /** The row id, for the exclude list. Absent on a `motir run <key>` whose
-   *  `get_work_item` read supplies it separately. */
-  id: string | null;
   dispatch: DispatchPrompt;
   opts: DeliveryOptions;
 }
@@ -126,7 +117,7 @@ interface DeliverInput {
  * never drift.
  */
 async function deliver(input: DeliverInput): Promise<void> {
-  const { session, key, title, id, dispatch, opts } = input;
+  const { session, key, title, dispatch, opts } = input;
   const { client, link, serverUrl, projectKey } = session;
 
   const agent = resolveAgent(opts);
@@ -170,7 +161,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   if (result.exitCode !== 0) {
     // The item stays In Progress on purpose — work was started. Record it so
     // the next `motir next` moves past it instead of re-picking the failure.
-    if (id) addExclude(serverUrl, projectKey, { id, key });
+    addExclude(serverUrl, projectKey, { key });
     info('');
     info(renderAgentFailure(key, result.exitCode));
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
@@ -192,7 +183,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   } else {
     await client.transitionStatus({ key, status: IN_REVIEW });
   }
-  if (id) removeExclude(serverUrl, projectKey, id);
+  removeExclude(serverUrl, projectKey, key);
 
   const suspect = checkBootstrapCheckout(target);
   info('');
@@ -225,11 +216,7 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       info(`Skipping ${excluded.length} previously-failed item(s): ${keyList(excluded)}.`);
     }
 
-    const { item } = await client.nextReady({
-      projectKey,
-      ...(kinds ? { kinds } : {}),
-      ...(excluded.length > 0 ? { excludeIds: excluded.map((e) => e.id) } : {}),
-    });
+    const item = await claimNextNotExcluded(client, projectKey, kinds, excluded);
     if (!item) {
       info(
         excluded.length > 0
@@ -245,11 +232,46 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       session,
       key: item.key,
       title: item.title,
-      id: item.id,
       dispatch,
       opts,
     });
   });
+}
+
+/**
+ * The next ready item that is not on the persisted exclude list.
+ *
+ * The list is keyed by KEY (MOTIR-2338) and `next_ready` still narrows by row
+ * ID, so the translation happens HERE, one item at a time: ask, and if what
+ * came back is excluded, feed its id back as an exclusion and ask again. The
+ * dispatch row carries the id, so each excluded item costs exactly one extra
+ * round trip, once — and the SERVER keeps choosing, which is the property that
+ * matters. A client that instead re-ranked a list would be re-deriving the
+ * dispatch order the ready endpoint exists to own.
+ *
+ * The loop terminates: every iteration either returns or adds an id the server
+ * has not seen excluded before, and the ready set is finite. A server that
+ * ignored `excludeIds` would repeat an id, which the `has` check catches.
+ */
+async function claimNextNotExcluded(
+  client: MotirClient,
+  projectKey: string,
+  kinds: string[] | undefined,
+  excluded: readonly { key: string }[],
+): Promise<DispatchItem | null> {
+  const excludedKeys = new Set(excluded.map((e) => e.key.toUpperCase()));
+  const seenIds = new Set<string>();
+  for (;;) {
+    const { item } = await client.nextReady({
+      projectKey,
+      ...(kinds ? { kinds } : {}),
+      ...(seenIds.size > 0 ? { excludeIds: [...seenIds] } : {}),
+    });
+    if (!item) return null;
+    if (!excludedKeys.has(item.key.toUpperCase())) return item;
+    if (seenIds.has(item.id)) return null;
+    seenIds.add(item.id);
+  }
 }
 
 function keyList(entries: { key: string }[]): string {
@@ -309,7 +331,6 @@ export async function runCommand(key: string, opts: RunOptions): Promise<void> {
       session,
       key: item.identifier,
       title: item.title,
-      id: item.id,
       dispatch,
       opts,
     });
@@ -372,7 +393,7 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
       }
       throw err;
     }
-    removeExcludeByKey(serverUrl, projectKey, trimmed);
+    removeExclude(serverUrl, projectKey, trimmed);
     info(`${trimmed}: done.`);
   });
 }

@@ -119,6 +119,26 @@ async function enumerateReady(
   }
 }
 
+/**
+ * Split an enumerated ready set into what this run may take and what a previous
+ * run's failure holds out, matching on KEY (MOTIR-2338).
+ *
+ * Both halves are returned because the held-out items are still part of the
+ * snapshot BOUNDARY: they were ready when the run started, so an item that is
+ * ready at the end and was held out did not "arrive during the run".
+ */
+function partitionByExclusion(
+  items: readonly DispatchItem[],
+  excludedKeys: ReadonlySet<string>,
+): [DispatchItem[], DispatchItem[]] {
+  const eligible: DispatchItem[] = [];
+  const heldOut: DispatchItem[] = [];
+  for (const item of items) {
+    (excludedKeys.has(item.key.toUpperCase()) ? heldOut : eligible).push(item);
+  }
+  return [eligible, heldOut];
+}
+
 /** Freeze the ready set into the run's plan: what will be implemented, and
  *  what is left out with the reason. */
 export function planSnapshot(items: DispatchItem[]): Snapshot {
@@ -188,17 +208,28 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   }
   // Items a previous run's agent failed on are held out of the snapshot, exactly
   // as `motir next` / `motir auto` hold them out of a pick.
-  const persistedExcludes = new Set(readExcludes(serverUrl, projectKey).map((e) => e.id));
+  // The PERSISTED list is keyed by KEY (MOTIR-2338). `enumerateReady` walks the
+  // WHOLE ready set, so no id translation is needed here — the excluded items
+  // are simply filtered out of what it returns, which is the same set as before.
+  const persistedExcludes = new Set(
+    readExcludes(serverUrl, projectKey).map((e) => e.key.toUpperCase()),
+  );
   if (persistedExcludes.size > 0) {
     info(
       `Skipping ${persistedExcludes.size} previously-failed item(s) — \`--reset\` retries them.`,
     );
   }
 
-  const snapshot = planSnapshot(await enumerateReady(client, projectKey, kinds, persistedExcludes));
+  const enumerated = await enumerateReady(client, projectKey, kinds, new Set());
+  const [eligible, heldOut] = partitionByExclusion(enumerated, persistedExcludes);
+  const snapshot = planSnapshot(eligible);
   // Everything the snapshot saw — the frozen boundary. An item outside this set
-  // at the end of the run became ready DURING it.
-  const snapshotIds = new Set([...snapshot.taken.map((e) => e.id), ...persistedExcludes]);
+  // at the end of the run became ready DURING it. The held-out items were seen,
+  // so they belong to the boundary too.
+  const snapshotIds = new Set([
+    ...snapshot.taken.map((e) => e.id),
+    ...heldOut.map((item) => item.id),
+  ]);
   const skippedIds = new Set<string>();
 
   info(renderSnapshotPlan(snapshot));
@@ -246,14 +277,14 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
 
       records.push(outcome.record);
       if (outcome.record.outcome === 'failed') {
-        addExclude(serverUrl, projectKey, { id: entry.id, key: entry.key });
+        addExclude(serverUrl, projectKey, { key: entry.key });
         if (!opts.keepGoing) {
           stopReason = interrupted ? 'interrupted' : 'halted';
           stopIndex = index + 1;
           break;
         }
       } else {
-        removeExclude(serverUrl, projectKey, entry.id);
+        removeExclude(serverUrl, projectKey, entry.key);
       }
     }
   } finally {

@@ -533,7 +533,7 @@ describe('motir batch — previously-failed items', () => {
     // so it is not merely skipped later — it never enters the frozen list, and
     // so can never be counted as "newly ready" either.
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
-    addExclude('https://app.motir.co', 'PROD', { id: 'idA', key: 'PROD-1' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-1' });
 
     const { dispatched, summary } = await drive(server);
 
@@ -544,8 +544,8 @@ describe('motir batch — previously-failed items', () => {
 
   it('--reset clears the list first, counting it in singular and plural', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1')]);
-    addExclude('https://app.motir.co', 'PROD', { id: 'idX', key: 'PROD-90' });
-    addExclude('https://app.motir.co', 'PROD', { id: 'idY', key: 'PROD-91' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-90' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-91' });
 
     await drive(server, { opts: { reset: true } });
     expect(printed()).toContain('Cleared 2 excluded items.');
@@ -555,7 +555,7 @@ describe('motir batch — previously-failed items', () => {
     // rather than a plural with an `s` a reader has to forgive.
     stderrSpy.mockClear();
     server.byKey('PROD-1').status = 'todo';
-    addExclude('https://app.motir.co', 'PROD', { id: 'idZ', key: 'PROD-92' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-92' });
     await drive(server, { opts: { reset: true } });
     expect(printed()).toContain('Cleared 1 excluded item.');
   });

@@ -257,7 +257,12 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   // Seeded from the PERSISTED list (items a previous session's agent failed on),
   // then grown in-process: an item skipped or failed this run must not be handed
   // straight back by the very next `next_ready`, or the loop would spin on it.
-  const excludeIds = new Set(readExcludes(serverUrl, projectKey).map((e) => e.id));
+  // The PERSISTED list is keyed by KEY (MOTIR-2338); `next_ready` still narrows
+  // by row ID. So the id set starts EMPTY and absorbs each excluded item's id
+  // the first time the server hands it back — one extra round trip per
+  // persisted exclusion, once, and the server keeps choosing.
+  const excludedKeys = new Set(readExcludes(serverUrl, projectKey).map((e) => e.key.toUpperCase()));
+  const excludeIds = new Set<string>();
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
@@ -294,6 +299,12 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       if (!item) {
         stopReason = 'drained';
         break;
+      }
+      if (excludedKeys.has(item.key.toUpperCase())) {
+        // A previous run failed on it. Hold it out exactly as before — the only
+        // difference is that the id is learned here rather than read off disk.
+        excludeIds.add(item.id);
+        continue;
       }
 
       const disposition = classifyReadyItem(item);
@@ -349,14 +360,16 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       records.push(record);
 
       if (record.outcome === 'failed') {
-        addExclude(serverUrl, projectKey, { id: item.id, key: item.key });
+        addExclude(serverUrl, projectKey, { key: item.key });
+        excludedKeys.add(item.key.toUpperCase());
         excludeIds.add(item.id);
         if (!opts.keepGoing) {
           stopReason = interrupted ? 'interrupted' : 'halted';
           break;
         }
       } else {
-        removeExclude(serverUrl, projectKey, item.id);
+        removeExclude(serverUrl, projectKey, item.key);
+        excludedKeys.delete(item.key.toUpperCase());
       }
     }
   } finally {

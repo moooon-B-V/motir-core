@@ -262,7 +262,7 @@ describe('motir auto — a whole run through the real session', () => {
   it('--reset clears the persisted exclude list before the run starts', async () => {
     server.script(planTools());
     const { addExclude, readExcludes } = await import('../src/sessionExcludes.js');
-    addExclude(server.url, 'PROD', { id: 'row-old', key: 'PROD-99' });
+    addExclude(server.url, 'PROD', { key: 'PROD-99' });
 
     await autoCommand(
       { ...AGENT, reset: true, max: '1' },
@@ -275,6 +275,34 @@ describe('motir auto — a whole run through the real session', () => {
     );
 
     expect(readExcludes(server.url, 'PROD')).toEqual([]);
+  });
+
+  // MOTIR-2338. The persisted list holds KEYS and `next_ready` narrows by row
+  // id, so the loop learns the id from the row the server hands back and asks
+  // again. Without this the upgrade would silently re-dispatch every item a
+  // previous run failed on.
+  it('holds out an item excluded by a PREVIOUS run, translating its key to an id', async () => {
+    server.script(planTools());
+    const { addExclude } = await import('../src/sessionExcludes.js');
+    addExclude(server.url, 'PROD', { key: 'PROD-1' });
+
+    await autoCommand(
+      { ...AGENT, max: '1' },
+      {
+        run: gitRunner().run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      },
+    );
+
+    const asks = server.calls.filter((c) => c.name === 'next_ready');
+    // The first ask carries nothing — the CLI does not know PROD-1's row id.
+    expect(asks[0]?.args).not.toHaveProperty('excludeIds');
+    // Having been handed the excluded row, it feeds that id back and asks again.
+    expect(asks[1]?.args).toMatchObject({ excludeIds: ['row-PROD-1'] });
+    // And PROD-1 was never dispatched.
+    expect(server.calls.some((c) => c.name === 'get_work_item_dispatch_prompt')).toBe(false);
   });
 
   it('exits non-zero when an agent failed, and still opens the pull request', async () => {
