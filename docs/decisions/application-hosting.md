@@ -178,8 +178,9 @@ set.** Content type must be bound at signing time, not sent by the browser, or
 every client-uploaded object lands as `application/octet-stream`.
 
 The swap is bounded to one file. `lib/blob/uploader.ts` is the **only** module
-importing `@vercel/blob`, and it exports nine functions everything else calls
-through — which is why this is a code change and not an architecture change.
+importing `@vercel/blob`, and it exports eight functions (and the three
+interfaces they return) that everything else calls through — which is why this is
+a code change and not an architecture change. _Corrected by Amendment 3._
 
 ### Rejected alternatives
 
@@ -464,11 +465,12 @@ here).
   the two-rung precedence of Q3 behind one accessor, collapses `trustedOrigins`,
   and leaves `NEXT_PUBLIC_BETTER_AUTH_URL` unset and un-inlined. Its own criterion
   already says the ADR's name wins; this is that name.
-- **MOTIR-2389 (the blob store)** — reimplements all nine `lib/blob/uploader.ts`
-  functions against the S3 client per Q2: presigned GET at **300 s**, presigned
-  PUT **with content type bound at signing time**, and the two-bucket
-  public/private split preserved. The expiry and the split are what
-  `attachment-access-control.md`'s Amendment 2 records.
+- **MOTIR-2389 (the blob store)** — reimplements all eight
+  `lib/blob/uploader.ts` functions (and the three interfaces they return) against
+  the S3 client per Q2: presigned GET at **300 s**, presigned PUT **with content
+  type bound at signing time**, and the two-bucket public/private split
+  preserved. The expiry and the split are what `attachment-access-control.md`'s
+  Amendment 2 records. _Count corrected by Amendment 3._
 - **MOTIR-2390 (CI)** — implements the Q5 order: gates first, deploy after on the
   default branch, the Inngest sync as a step that fails the job, and a post-deploy
   check that reads `machine_count` from Fly's API.
@@ -795,3 +797,97 @@ from the other direction: read the platform, not our own file.
 - **Any decision.** Q1's choice of Fly, Q6's count of 2, and every other Q stand.
 - **Anything on the platform.** Nothing is created, moved or renamed; MOTIR-2386
   already created `motir-core` under `moooon`.
+
+---
+
+## Amendment 3 (2026-08-07) — `lib/blob/uploader.ts` exports eight functions, not nine
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2431.** This amendment corrects a
+> COUNT. **It re-opens no decision** — Q2 still chooses S3-on-Tigris, the
+> two-bucket split still stands, the 300 s presigned GET and the content type
+> bound at signing time are all untouched, and every other section stands exactly
+> as written. What changes is that the two places which stated _how many_ exports
+> the seam has now state a number the file agrees with.
+>
+> **Numbered 3.** Amendment 1 (the core→ai private-networking seam, MOTIR-2420)
+> and Amendment 2 (the Fly org, MOTIR-2410) are both in this file already; the
+> highest heading was re-read at edit time rather than taken from the card.
+
+**Amends:** the export COUNT in **§3**'s "the swap is bounded to one file"
+paragraph and in the **MOTIR-2389 bullet** under _Consequences_. Nothing else in
+this record changes, and no clause is withdrawn. The companion correction to the
+same count in `attachment-access-control.md` is that record's Amendment 3, landed
+by this same card.
+
+### What was wrong
+
+Both sites stated that `lib/blob/uploader.ts` **"exports nine functions"**. It
+exports **eight**, alongside three interfaces — so nine is neither the function
+count nor the export count, and matches no reading of the file.
+
+The paragraph it sits in is the one a reader leans on hardest: its whole argument
+is that the provider swap is _bounded_, and the number is offered as the measure
+of that boundedness. The boundedness was real — the swap was bounded by the LIST
+of exports, which MOTIR-2389 worked from and which is correct — but the number
+quantifying it was never read back from the file.
+
+### What the file actually exports — read, not assumed
+
+Observed on `origin/main`, 2026-08-07:
+
+```
+$ git grep -c '^export' origin/main -- lib/blob/uploader.ts
+11
+$ git grep -c '^export async function' origin/main -- lib/blob/uploader.ts
+8
+$ git grep -c '^export interface' origin/main -- lib/blob/uploader.ts
+3
+```
+
+| Reading           | Value                                               |
+| ----------------- | --------------------------------------------------- |
+| `async function`s | **8**                                               |
+| `interface`s      | **3** (`PutResult`, `PrivatePutResult`, `BlobHead`) |
+| Total `export`s   | **11**                                              |
+| What was written  | 9 — neither                                         |
+
+**The number was never right, not even for the pre-migration file this record was
+describing.** The same greps at `16bef033` — the last commit before MOTIR-2389
+was authored — return the identical eight function names and three interfaces.
+This is not a count that drifted as the file grew; it was wrong when written.
+
+The authoritative list of the eight, name by name, lives on **MOTIR-2402** and
+**MOTIR-2389**, which work from a table of them. This record deliberately does not
+restate that table: an ADR needs the correct count and a pointer, not a duplicated
+API listing that acquires its own drift.
+
+### Why an amendment rather than a silent replacement
+
+A find-and-replace would leave this record looking as though it had always been
+right. The convention in this directory — Amendment 2 above,
+`attachment-access-control.md`'s Amendment 2, `public-api-conventions.md`'s
+Amendments 9–11 — is that a correction is recorded, not overwritten, and that
+holds even when the corrected fact turned out to be harmless.
+
+That harmlessness is the point rather than a reason to shrug. An unverified fact
+that happens to be harmless is indistinguishable, at the moment it is written,
+from one that is not; this one travelled from a card into two accepted decision
+records without anyone opening the file it described. Left in place, it teaches
+the next reader that the numbers in these documents are decorative.
+
+### The general lesson this record now carries
+
+**A count is a reading, not a recollection.** The same rule Amendment 2 arrived at
+for identifiers — paste the value from the tool that owns it — applies to
+quantities about our own code: a number describing a file belongs in a document
+only with the command that produced it. `git grep -c '^export' <file>` costs one
+command, and it is the difference between a fact and an impression.
+
+### What this amendment does NOT touch
+
+- **`lib/blob/uploader.ts` or any code.** Nothing is renamed, added or removed;
+  the file is only counted.
+- **Any decision.** Q2's choice of S3-on-Tigris, the two-bucket split, the 300 s
+  expiry and the signing-time content type all stand.
+- **The eight names themselves.** They live on MOTIR-2389 / MOTIR-2402; this
+  record points at them rather than copying them.
