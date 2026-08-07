@@ -6,6 +6,7 @@ import type { IssueRowData } from '@/app/(authed)/items/_components/issueRows';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import { escapeRegExp } from '@/lib/utils/regexp';
 import type { IssueActionResult } from '@/app/(authed)/items/[key]/edit/actions';
 
 // Repro for bug-inline-status-revert-on-second-edit: inline-edit item A's
@@ -264,7 +265,7 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
     const owner = h.members[0]!;
     const ownerLabel = owner.name || owner.email;
     // The fixture's generated email contains regex specials (`+`) — escape it.
-    const ownerOption = new RegExp(owner.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const ownerOption = new RegExp(escapeRegExp(owner.email));
     const initial = await h.snapshot();
     const { rerender } = render(h.table(initial));
 
@@ -320,7 +321,7 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
   it('FOLLOW-UP same cell: unassign after reassign submits the acknowledged updatedAt and the real write accepts it', async () => {
     const h = await makeHarness();
     const owner = h.members[0]!;
-    const ownerOption = new RegExp(owner.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const ownerOption = new RegExp(escapeRegExp(owner.email));
     const initial = await h.snapshot();
     render(h.table(initial));
 
@@ -359,7 +360,7 @@ describe('bug-inline-status-revert-on-second-edit — two rapid inline edits, ad
   it('FOLLOW-UP across cells: an assignee edit after a status change on the same row submits the status-bumped updatedAt', async () => {
     const h = await makeHarness();
     const owner = h.members[0]!;
-    const ownerOption = new RegExp(owner.email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const ownerOption = new RegExp(escapeRegExp(owner.email));
     const initial = await h.snapshot();
     render(h.table(initial));
 

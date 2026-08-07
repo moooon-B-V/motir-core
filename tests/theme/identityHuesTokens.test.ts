@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // MOTIR-1274 · 1266.3 — the new IDENTITY-hue element tokens (roles / org-roles /
 // privacy / labels / avatars) plus the decoupled --el-notif-* / --el-model-*
@@ -30,9 +31,7 @@ const BASE_BLOCK = (() => {
 })();
 
 function mappingOf(token: string): string | null {
-  const m = BASE_BLOCK.match(
-    new RegExp(`${token.replace(/[-]/g, '\\-')}:\\s*var\\((--color-[a-z-]+)\\)`),
-  );
+  const m = BASE_BLOCK.match(new RegExp(`${escapeRegExp(token)}:\\s*var\\((--color-[a-z-]+)\\)`));
   return m?.[1] ?? null;
 }
 
