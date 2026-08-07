@@ -9,7 +9,12 @@
 # its machines are created by MOTIR-2386 (an operator card), and the first deploy
 # is MOTIR-2392. Nothing here brings anything into existence.
 
-app            = "motir-core"   # claimed by MOTIR-2386 in org `zhu-yue`
+app            = "motir-core"   # org `moooon` — created by MOTIR-2386, and what
+                                # `fly apps list` reports as this app's OWNER
+                                # (read 2026-08-07), alongside motir-ai and
+                                # motir-gateway. There is no org key to set: an
+                                # app's org is fixed at creation, so this line is
+                                # a reading of the platform, not a request to it.
 primary_region = "iad"          # Ashburn — co-located with motir-ai AND with the
                                 # Neon database, which stays exactly where it is.
                                 # Moving compute does not move the data: the app
