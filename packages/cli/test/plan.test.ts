@@ -38,7 +38,6 @@ function turn(over: Partial<PlanTurn> = {}): PlanTurn {
 function session(over: Partial<PlanSession> = {}): PlanSession {
   return {
     id: 's1',
-    projectId: 'p1',
     targetKeys: [],
     turnCount: 0,
     lastJobId: null,
@@ -53,7 +52,6 @@ function session(over: Partial<PlanSession> = {}): PlanSession {
 function outcome(over: Partial<PlanOutcome> = {}): PlanOutcome {
   return {
     planId: 'plan_1',
-    projectId: 'p1',
     status: 'generating',
     origin: 'user',
     jobId: 'job_1',
@@ -67,7 +65,7 @@ function add(id: string, over: Partial<PlanProposal> = {}): PlanProposal {
   return {
     id,
     op: 'add',
-    workItemId: null,
+    workItemKey: null,
     proposedFields: { title: `Item ${id}`, kind: 'story' },
     patch: null,
     parentRef: null,
@@ -288,18 +286,20 @@ describe('describeProposal', () => {
       describeProposal(
         add('m', {
           op: 'modify',
-          workItemId: 'wi_1',
+          workItemKey: 'PROD-7',
           patch: { title: 'New', storyPoints: 2, priority: undefined },
         }),
       ),
-    ).toBe('~ modify wi_1 — title, storyPoints');
+    ).toBe('~ modify PROD-7 — title, storyPoints');
   });
 
   it('renders a modify with an empty patch and a remove', () => {
-    expect(describeProposal(add('m', { op: 'modify', workItemId: 'wi_1', patch: {} }))).toBe(
-      '~ modify wi_1',
+    expect(describeProposal(add('m', { op: 'modify', workItemKey: 'PROD-7', patch: {} }))).toBe(
+      '~ modify PROD-7',
     );
-    expect(describeProposal(add('r', { op: 'remove', workItemId: 'wi_2' }))).toBe('- remove wi_2');
+    expect(describeProposal(add('r', { op: 'remove', workItemKey: 'PROD-8' }))).toBe(
+      '- remove PROD-8',
+    );
     expect(describeProposal(add('r', { op: 'remove' }))).toBe('- remove (no target)');
   });
 });

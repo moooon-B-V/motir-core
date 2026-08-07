@@ -265,13 +265,16 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
     // Guard the guard: a regex that stopped matching would make this vacuous.
     //
     // ⚠️ The floor FALLS as Story 11.5 ports the CLI onto `/api/v1` — 14 tools
-    // before the port, 6 now that the reads, the writes and the work-item
-    // collection have moved — and it must be lowered DELIBERATELY, one card at
-    // a time, never deleted. It is the only thing standing between "this scope
-    // check covers the CLI" and a vacuous pass over an empty set, which is
-    // exactly what a regex that silently stopped matching would look like. It
-    // reaches 0 at 11.5.6, when the MCP client goes away and so does this.
-    expect(new Set(called).size).toBeGreaterThanOrEqual(6);
+    // before the port, and ONE now: `next_ready`, the last method still
+    // speaking MCP. It has been lowered deliberately, one card at a time, and
+    // never deleted, because it is the only thing standing between "this scope
+    // check covers the CLI" and a vacuous pass over an empty set — which is
+    // exactly what a regex that silently stopped matching would look like.
+    //
+    // 1 is the last rung. 11.5.6 retires `next_ready` with the MCP client, and
+    // this assertion — and the suite around it — goes with them rather than
+    // being lowered to 0, which would assert nothing at all.
+    expect(new Set(called).size).toBeGreaterThanOrEqual(1);
 
     for (const name of new Set(called)) {
       const required = TOOL_SCOPES[name as McpToolName];

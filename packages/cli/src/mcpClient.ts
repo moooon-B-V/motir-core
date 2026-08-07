@@ -10,6 +10,9 @@ import { V1Transport } from './transport.js';
 import { encodeFilterParam } from './adapters/filterParam.js';
 import {
   toActivityAllPage,
+  toPlanOutcome,
+  toPlanSession,
+  toPlanWithItems,
   toSearchPage,
   toWorkItemCount,
   toCompleteSessionResult,
@@ -326,7 +329,15 @@ export interface ExpandSubmitResult {
 export interface PlanTurn {
   id: string;
   seq: number;
-  role: 'user' | 'system';
+  /**
+   * ⚠️ THREE roles, not two. `assistant` is a real turn the planner writes (the
+   * Gate-2 clarifying question, MOTIR-2222); the view model claimed two until
+   * MOTIR-2341 read the union off the wire. `renderTurn` still labels anything
+   * that is not `system` as "you", which mislabels an assistant turn — a
+   * pre-existing gap this port made VISIBLE rather than introduced, and one
+   * whose fix is a new label, so it belongs to a card that may change output.
+   */
+  role: 'user' | 'system' | 'assistant';
   body: string;
   jobId: string | null;
   authorId: string | null;
@@ -341,7 +352,6 @@ export interface PlanTurn {
  */
 export interface PlanSession {
   id: string;
-  projectId: string;
   targetKeys: string[];
   turnCount: number;
   lastJobId: string | null;
@@ -351,12 +361,18 @@ export interface PlanSession {
   turns: PlanTurn[];
 }
 
-/** What a submit returns — the job it opened, the `generating` plan bound to it,
- *  and the thread as it now stands (its new `system` marker turn included). */
+/**
+ * What a submit returns — the job it opened and the `generating` plan bound to
+ * it. The SAME handle an expansion submit answers with, and for the same
+ * reason: the job has been accepted, not run.
+ *
+ * It used to carry the thread as it then stood. Nothing read it — the command
+ * prints the two ids and either detaches or watches the plan — and the v1
+ * submit does not publish one, so it is gone rather than re-fetched.
+ */
 export interface PlanSubmitResult {
   jobId: string;
   planId: string;
-  session: PlanSession;
 }
 
 /** The motir-ai job behind a still-`generating` plan. `reachable: false` means
@@ -376,7 +392,6 @@ export interface PlanJobState {
  */
 export interface PlanOutcome {
   planId: string;
-  projectId: string;
   status: 'generating' | 'planned' | 'approved' | 'declined';
   origin: string;
   jobId: string | null;
@@ -398,15 +413,15 @@ export interface PlanProposalFields {
 }
 
 /**
- * ONE PROPOSAL — not a work item. `workItemId` stays null on an `add` until the
- * plan is approved in Motir, which is the only path from a proposal to a row.
- * `parentRef` / `blockedByRefs` carry either a real work-item id or an
+ * ONE PROPOSAL — not a work item. `workItemKey` stays null on an `add` until
+ * the plan is approved in Motir, which is the only path from a proposal to a
+ * row. `parentRef` / `blockedByRefs` carry either a real work-item ref or an
  * intra-plan `planItem:<id>` temp-ref.
  */
 export interface PlanProposal {
   id: string;
   op: 'add' | 'modify' | 'remove';
-  workItemId: string | null;
+  workItemKey: string | null;
   proposedFields: PlanProposalFields | null;
   patch: Record<string, unknown> | null;
   parentRef: string | null;
@@ -417,7 +432,6 @@ export interface PlanProposal {
  *  just how many items it produced. */
 export interface PlanWithItems {
   id: string;
-  projectId: string;
   status: 'generating' | 'planned' | 'approved' | 'declined';
   title: string | null;
   summary: string | null;
@@ -1047,8 +1061,13 @@ export class MotirClient {
    * panel is looking at, so the CLI cannot fork a second conversation about the
    * same items. Opening submits nothing and costs nothing.
    */
-  openPlanSession(args: { projectKey: string; targetKeys?: string[] }): Promise<PlanSession> {
-    return this.callStructured<PlanSession>('open_plan_session', { ...args });
+  async openPlanSession(args: { projectKey: string; targetKeys?: string[] }): Promise<PlanSession> {
+    return toPlanSession(
+      await this.v1.request('openPlanSession', {
+        path: { projectKey: args.projectKey },
+        body: { ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+      }),
+    );
   }
 
   /**
@@ -1056,12 +1075,17 @@ export class MotirClient {
    * server-side the moment this returns (so quitting can never lose it) and no
    * job starts, no credits are spent, and no work item changes.
    */
-  appendPlanTurn(args: {
+  async appendPlanTurn(args: {
     projectKey: string;
     targetKeys?: string[];
     body: string;
   }): Promise<PlanSession> {
-    return this.callStructured<PlanSession>('append_plan_turn', { ...args });
+    return toPlanSession(
+      await this.v1.request('appendPlanTurn', {
+        path: { projectKey: args.projectKey },
+        body: { body: args.body, ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+      }),
+    );
   }
 
   /**
@@ -1073,24 +1097,31 @@ export class MotirClient {
    * item. A thread with no turns is refused by the server; a failed submit
    * leaves the thread intact.
    */
-  submitPlanSession(args: {
+  async submitPlanSession(args: {
     projectKey: string;
     targetKeys?: string[];
   }): Promise<PlanSubmitResult> {
-    return this.callStructured<PlanSubmitResult>('submit_plan_session', { ...args });
+    // A 202. The handle comes back the moment the job is ACCEPTED; nothing here
+    // waits for the planner, which is what keeps `--detach` honest and the
+    // watched path a poll the command owns rather than a hang inside the client.
+    const handle = await this.v1.request('submitPlanSession', {
+      path: { projectKey: args.projectKey },
+      body: { ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+    });
+    return { jobId: handle.jobId, planId: handle.planId };
   }
 
   /** What became of a submitted planning job (MOTIR-1825) — the plan's status
    *  AND, while it is still generating, whether the job is alive or already
    *  dead (a failed job leaves the plan generating forever). */
-  getPlanStatus(args: { planId: string }): Promise<PlanOutcome> {
-    return this.callStructured<PlanOutcome>('get_plan_status', { ...args });
+  async getPlanStatus(args: { planId: string }): Promise<PlanOutcome> {
+    return toPlanOutcome(await this.v1.request('getPlanStatus', { path: { planId: args.planId } }));
   }
 
   /** Read a plan WITH its proposals (MOTIR-1837) — what was proposed, not just
    *  how many. Still PROPOSALS: nothing here exists in the tree. */
-  getPlan(args: { planId: string }): Promise<PlanWithItems> {
-    return this.callStructured<PlanWithItems>('get_plan', { ...args });
+  async getPlan(args: { planId: string }): Promise<PlanWithItems> {
+    return toPlanWithItems(await this.v1.request('getPlan', { path: { planId: args.planId } }));
   }
 
   async listSprints(args: { projectKey: string }): Promise<SprintList> {

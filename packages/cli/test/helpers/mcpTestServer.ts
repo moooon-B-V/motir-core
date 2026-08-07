@@ -536,6 +536,95 @@ export function v1WorkItem(key: string, over: Record<string, unknown> = {}) {
   };
 }
 
+/** One turn of a planning thread. */
+export function v1PlanTurn(seq: number, over: Record<string, unknown> = {}) {
+  return {
+    id: `turn-${seq}`,
+    seq,
+    role: 'user',
+    body: `Turn ${seq}`,
+    jobId: null,
+    question: null,
+    isAnswer: false,
+    authorId: 'user-1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...over,
+  };
+}
+
+/** The planning CONVERSATION, thread included. */
+export function v1PlanSession(turns: unknown[] = [], over: Record<string, unknown> = {}) {
+  return {
+    id: 'ps-1',
+    targetKeys: [],
+    turnCount: turns.length,
+    lastJobId: null,
+    lastSubmittedAt: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    turns,
+    ...over,
+  };
+}
+
+/** What became of a submitted planning job. */
+export function v1PlanOutcome(over: Record<string, unknown> = {}) {
+  return {
+    planId: 'plan-1',
+    status: 'planned',
+    origin: 'user',
+    jobId: 'job-1',
+    proposalCount: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    plannedAt: '2026-01-01T00:01:00.000Z',
+    decidedAt: null,
+    job: null,
+    ...over,
+  };
+}
+
+/** ONE proposal — never a work item. */
+export function v1Proposal(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    op: 'add',
+    workItemKey: null,
+    proposedFields: {
+      title: `Proposal ${id}`,
+      kind: 'subtask',
+      type: null,
+      priority: null,
+      executor: null,
+      storyPoints: null,
+      estimateMinutes: null,
+      descriptionMd: null,
+      targetRepo: null,
+    },
+    patch: null,
+    parentRef: null,
+    blockedByRefs: [],
+    ...over,
+  };
+}
+
+/** A plan with the proposals it bundles. */
+export function v1Plan(proposals: unknown[] = [], over: Record<string, unknown> = {}) {
+  return {
+    id: 'plan-1',
+    status: 'planned',
+    origin: 'user',
+    title: null,
+    summary: null,
+    sourceJobId: 'job-1',
+    proposalCount: proposals.length,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    plannedAt: '2026-01-01T00:01:00.000Z',
+    decidedAt: null,
+    proposals,
+    ...over,
+  };
+}
+
 /** The canned `/api/v1` answers, mirroring {@link DEFAULT_TOOLS}' data. */
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
@@ -562,6 +651,16 @@ export const DEFAULT_V1: V1Script = {
   // Its OWN operation, not a field on the page above — a collection either
   // promises a total or it does not (ADR Amendment 12).
   'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 0 } },
+  // The planning conversation. Opening and appending both answer with the
+  // WHOLE thread; the submit answers 202 with a job handle and nothing else.
+  'POST /api/v1/projects/{projectKey}/plan-session': { body: v1PlanSession() },
+  'POST /api/v1/projects/{projectKey}/plan-session/turns': { body: v1PlanSession() },
+  'POST /api/v1/projects/{projectKey}/plan-session/submissions': {
+    status: 202,
+    body: v1JobHandle(),
+  },
+  'GET /api/v1/plans/{planId}': { body: v1Plan() },
+  'GET /api/v1/plans/{planId}/status': { body: v1PlanOutcome() },
   // The write half of the work loop. A transition answers with the item at its
   // new status; nothing in the CLI reads that body, but the transport validates
   // every success, so the default has to be a real one.

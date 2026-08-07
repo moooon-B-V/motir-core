@@ -9,7 +9,12 @@ import {
   v1DispatchPrompt,
   v1JobHandle,
   v1Page,
+  v1Plan,
+  v1PlanOutcome,
+  v1PlanSession,
+  v1PlanTurn,
   v1Project,
+  v1Proposal,
   v1WorkItem,
   v1ReadyRow,
   v1Sprint,
@@ -418,6 +423,97 @@ describe('typed wrappers — each names its operation and forwards its arguments
     await client.close();
   });
 
+  // The PLANNING CONVERSATION over `/api/v1` (11.5.20 — MOTIR-2341). The two
+  // invariants below are properties of WHEN rather than of shape, which is why
+  // they are asserted on the wire: nothing about the response bodies would
+  // reveal a client that had blurred them.
+  it('APPENDING is not submitting — a turn starts no job', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'POST /api/v1/projects/{projectKey}/plan-session/turns': {
+        body: v1PlanSession([v1PlanTurn(0, { body: 'split the billing epic' })]),
+      },
+    });
+
+    const session = await client.appendPlanTurn({ projectKey: 'PROD', body: 'split it' });
+
+    expect(session.turnCount).toBe(1);
+    expect(session.turns[0]?.body).toBe('split the billing epic');
+    // The turn is persisted and NOTHING was submitted. A client that submitted
+    // eagerly would charge the user for a sentence they were still drafting.
+    expect(server.v1Calls.map((c) => c.path)).toEqual(['/api/v1/projects/PROD/plan-session/turns']);
+    expect(server.v1Calls[0]?.body).toEqual({ body: 'split it' });
+    await client.close();
+  });
+
+  it('submitting returns the handle WITHOUT waiting on the planner', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'POST /api/v1/projects/{projectKey}/plan-session/submissions': {
+        status: 202,
+        body: v1JobHandle({ jobId: 'job-7', planId: 'plan-7' }),
+      },
+      // Still generating when the submit resolves — which is the point: the
+      // client hands back a handle and the COMMAND decides whether to poll.
+      'GET /api/v1/plans/{planId}/status': {
+        body: v1PlanOutcome({
+          planId: 'plan-7',
+          status: 'generating',
+          job: { status: 'running', reachable: true, failure: null },
+        }),
+      },
+    });
+
+    const submitted = await client.submitPlanSession({
+      projectKey: 'PROD',
+      targetKeys: ['PROD-7'],
+    });
+
+    expect(submitted).toEqual({ jobId: 'job-7', planId: 'plan-7' });
+    expect(server.v1Calls[0]?.body).toEqual({ targetKeys: ['PROD-7'] });
+    // No status read happened inside the client: submitting is one request.
+    expect(server.v1Calls).toHaveLength(1);
+
+    const outcome = await client.getPlanStatus({ planId: 'plan-7' });
+    expect(outcome.status).toBe('generating');
+    expect(outcome.job).toEqual({ status: 'running', reachable: true, failure: null });
+    await client.close();
+  });
+
+  it('a plan read returns PROPOSALS — including ones that carry no fields', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'GET /api/v1/plans/{planId}': {
+        body: v1Plan([
+          // An `add` whose kind the planner did not commit to. The renderer
+          // falls back to `task`, which it can only do if the adapter omits
+          // the key rather than carrying a null through.
+          v1Proposal('a', { proposedFields: { ...v1Proposal('a').proposedFields, kind: null } }),
+          // A `modify` has NO proposed fields at all — it patches a row that
+          // already exists, and names it by KEY.
+          v1Proposal('b', {
+            op: 'modify',
+            workItemKey: 'PROD-9',
+            proposedFields: null,
+            patch: { title: 'A new title' },
+          }),
+        ]),
+      },
+    });
+
+    const plan = await client.getPlan({ planId: 'plan-1' });
+
+    expect(plan.itemCount).toBe(2);
+    expect(plan.items[0]?.proposedFields).not.toHaveProperty('kind');
+    expect(plan.items[1]).toMatchObject({
+      op: 'modify',
+      workItemKey: 'PROD-9',
+      proposedFields: null,
+      patch: { title: 'A new title' },
+    });
+    await client.close();
+  });
+
   it('an expansion submit returns the job handle from a 202', async () => {
     const client = await connected();
     server.scriptV1({
@@ -559,14 +655,15 @@ describe('failures', () => {
 
   it('reports a tool the server does not expose rather than hanging', async () => {
     const client = await connected();
-    // Driven on a tool that still speaks MCP and is NOT in DEFAULT_TOOLS —
-    // `open_plan_session`, which 11.5.20 ports. `dispatch_prompt` used to play
-    // this part; on `/api/v1` a missing endpoint is a 404, not a missing tool.
-    const bare = await startTestMcpServer({ token: 't', tools: DEFAULT_TOOLS });
+    // `next_ready` is the LAST method still speaking MCP (11.5.6 retires it), so
+    // it is the only one that can still meet a server that does not expose its
+    // tool — on `/api/v1` a missing endpoint is a 404, not a missing tool. The
+    // server is started WITHOUT it for exactly that reason.
+    const bare = await startTestMcpServer({ token: 't', tools: {} });
     const other = new MotirClient({ serverUrl: bare.url, token: 't' });
     await other.connect();
 
-    await expect(other.openPlanSession({ projectKey: 'PROD' })).rejects.toThrow(/no scripted tool/);
+    await expect(other.nextReady({ projectKey: 'PROD' })).rejects.toThrow(/no scripted tool/);
 
     await other.close();
     await bare.close();

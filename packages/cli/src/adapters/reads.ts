@@ -1,6 +1,12 @@
 import type { SuccessBody } from '../transport.js';
 import type {
   ActivityAllPage,
+  PlanJobState,
+  PlanOutcome,
+  PlanProposal,
+  PlanSession,
+  PlanTurn,
+  PlanWithItems,
   SearchItemSummary,
   SearchPage,
   CompleteSessionResult,
@@ -545,4 +551,135 @@ export function toSearchPage(body: SuccessBody<'listProjectWorkItems'>): SearchP
  */
 export function toWorkItemCount(body: CountBody): number {
   return body.count;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The PLANNING CONVERSATION (Subtask 11.5.20 — MOTIR-2341)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The conversation, thread included. */
+type PlanSessionBody = SuccessBody<'openPlanSession'>;
+/** What became of a submitted planning job. */
+type PlanOutcomeBody = SuccessBody<'getPlanStatus'>;
+/** A plan with its proposals. */
+type PlanBody = SuccessBody<'getPlan'>;
+
+/**
+ * One turn of the thread.
+ *
+ * `question` and `isAnswer` are dropped: the CLI renders a turn's body and its
+ * author, and neither field has a reader. `jobId` stays because the system
+ * marker turn prints the job it submitted.
+ */
+function toPlanTurn(turn: PlanSessionBody['turns'][number]): PlanTurn {
+  return {
+    id: turn.id,
+    seq: turn.seq,
+    role: turn.role,
+    body: turn.body,
+    jobId: turn.jobId,
+    authorId: turn.authorId,
+    createdAt: turn.createdAt,
+  };
+}
+
+/**
+ * The planning conversation.
+ *
+ * `projectId` leaves the view model: the wire does not publish it (a project is
+ * named by its KEY on this API, ADR §7), nothing rendered it, and the CLI
+ * already knows which project it opened the conversation for.
+ */
+export function toPlanSession(body: PlanSessionBody): PlanSession {
+  return {
+    id: body.id,
+    targetKeys: body.targetKeys,
+    turnCount: body.turnCount,
+    lastJobId: body.lastJobId,
+    lastSubmittedAt: body.lastSubmittedAt,
+    createdAt: body.createdAt,
+    updatedAt: body.updatedAt,
+    turns: body.turns.map(toPlanTurn),
+  };
+}
+
+/**
+ * What became of a submitted planning job.
+ *
+ * ⚠️ `job` is populated ONLY while the plan is `generating`, and reading it is
+ * what makes a bounded watch possible: a failed motir-ai job leaves its plan at
+ * `generating` forever — there is no synthetic failed plan state — so a
+ * status-only loop would poll a corpse until it timed out. The block is carried
+ * across verbatim, `failure` included, because the command surfaces the
+ * server's own code and message rather than a paraphrase nobody can search for.
+ */
+export function toPlanOutcome(body: PlanOutcomeBody): PlanOutcome {
+  return {
+    planId: body.planId,
+    status: body.status,
+    origin: body.origin,
+    jobId: body.jobId,
+    itemCount: body.proposalCount,
+    job:
+      body.job === null
+        ? null
+        : {
+            // The job status vocabulary is the QUEUE's, not this API's, so the
+            // wire types it as an open string. The view model's union is what
+            // the CLI knows how to reason about; a status outside it reads as
+            // "running" to `watchVerdict`, which is the safe default — keep
+            // waiting rather than declare a live job dead.
+            status: body.job.status as PlanJobState['status'],
+            reachable: body.job.reachable,
+            failure: body.job.failure === null ? null : { ...body.job.failure },
+          },
+  };
+}
+
+/**
+ * ONE proposal — never a work item.
+ *
+ * `workItemId` becomes `workItemKey`, and that is a rename with teeth: the wire
+ * publishes the `MOTIR-<n>` KEY (ADR §7 — an internal id is not addressable on
+ * this API at all), so `motir plan` now prints a target a person can act on
+ * instead of a cuid. `null` still means "no target", which on an `add` is the
+ * contract: it is how a client tells a proposal from a work item.
+ */
+function toPlanProposal(proposal: PlanBody['proposals'][number]): PlanProposal {
+  const fields = proposal.proposedFields;
+  return {
+    id: proposal.id,
+    op: proposal.op,
+    workItemKey: proposal.workItemKey,
+    proposedFields:
+      fields === null
+        ? null
+        : {
+            title: fields.title,
+            ...(fields.kind === null ? {} : { kind: fields.kind }),
+            type: fields.type,
+            priority: fields.priority,
+            executor: fields.executor,
+            storyPoints: fields.storyPoints,
+            estimateMinutes: fields.estimateMinutes,
+            descriptionMd: fields.descriptionMd,
+          },
+    patch: proposal.patch,
+    parentRef: proposal.parentRef,
+    blockedByRefs: proposal.blockedByRefs,
+  };
+}
+
+/** A plan with the proposals it bundles. */
+export function toPlanWithItems(body: PlanBody): PlanWithItems {
+  return {
+    id: body.id,
+    status: body.status,
+    title: body.title,
+    summary: body.summary,
+    sourceJobId: body.sourceJobId,
+    origin: body.origin,
+    itemCount: body.proposalCount,
+    items: body.proposals.map(toPlanProposal),
+  };
 }
