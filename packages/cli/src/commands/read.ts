@@ -55,7 +55,11 @@ async function resolveAssignee(
 ): Promise<string | null | undefined> {
   if (raw === undefined) return undefined;
   const value = raw.trim().toLowerCase();
-  if (value === 'unassigned' || value === 'none') return 'unassigned';
+  // NULL is the unassigned bucket — the tri-state `MotirClient.listReady`'s
+  // signature already declares. The wire's own literal for it (`none`) belongs
+  // to the adapter, not here: `'unassigned'` was the MCP tool's spelling
+  // leaking into the command (MOTIR-2344).
+  if (value === 'unassigned' || value === 'none') return null;
   if (value === 'me') {
     const who = await client.whoami();
     return who.user.id;

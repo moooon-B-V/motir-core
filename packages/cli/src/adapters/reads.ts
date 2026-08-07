@@ -1,5 +1,13 @@
 import type { SuccessBody } from '../transport.js';
-import type { ProjectList, ProjectSummary, WhoamiResult } from '../mcpClient.js';
+import type {
+  ProjectList,
+  ProjectSummary,
+  ReadyItemSummary,
+  ReadyPage,
+  SprintList,
+  SprintSummary,
+  WhoamiResult,
+} from '../mcpClient.js';
 
 // The READ ADAPTERS — wire shapes in, the CLI's own view models out
 // (Story 11.5 · Subtask 11.5.4 — MOTIR-2212).
@@ -29,9 +37,20 @@ import type { ProjectList, ProjectSummary, WhoamiResult } from '../mcpClient.js'
 // one layer below every renderer.
 //
 // ── It grows one SLICE at a time ────────────────────────────────────────────
-// This module arrives with the IDENTITY mappers. `listReady` / `listSprints`
-// (11.5.21) and the detail + activity reshapes (11.5.22) add theirs here rather
-// than defining a second boundary — one module is the whole point.
+// It arrived with the IDENTITY mappers (11.5.4) and gained the COLLECTION ones
+// (11.5.21); the detail + activity reshapes (11.5.22) add theirs here too,
+// rather than defining a second boundary — one module is the whole point.
+
+/**
+ * The literal `?assigneeId=` takes to mean the UNASSIGNED bucket.
+ *
+ * Declared here because it is a WIRE value, and the boundary is this module's
+ * job. The ready filter is TRI-STATE and all three states are reachable: the
+ * parameter absent means any assignee, this literal means the unassigned
+ * bucket, and a user id means that user. An empty value would be
+ * indistinguishable from omitting it, which is why the bucket needs a name.
+ */
+export const UNASSIGNED = 'none';
 
 /** `GET /api/v1/me`'s body. */
 type MeBody = SuccessBody<'getMe'>;
@@ -39,6 +58,10 @@ type MeBody = SuccessBody<'getMe'>;
 type WorkspacesBody = SuccessBody<'listWorkspaces'>;
 /** One page of `GET /api/v1/projects`. */
 type ProjectsBody = SuccessBody<'listProjects'>;
+/** One page of the ready set. */
+type ReadyBody = SuccessBody<'getProjectReadySet'>;
+/** One page of a project's sprints. */
+type SprintsBody = SuccessBody<'listProjectSprints'>;
 
 /** One row of a paged body, with the envelope's optional `items` resolved. */
 type RowOf<B extends { items?: unknown[] }> = NonNullable<B['items']>[number];
@@ -98,4 +121,65 @@ export function toProjectList(pages: readonly ProjectsBody[]): ProjectList {
   const projects: ProjectSummary[] = [];
   for (const page of pages) projects.push(...rowsOf(page).map(toProjectSummary));
   return { projects };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The ready set
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * One page of the ready set.
+ *
+ * The ORDER is the server's — the dispatch rank `(type asc, priority desc, key
+ * asc)` — and passes through untouched. A client that re-sorted here would be
+ * re-deriving the decision the ready endpoint exists to own.
+ *
+ * `assignee` is the minimal actor object MOTIR-2279 put on the row. The view
+ * model's optional `dependencies` is always present from a v1 server: the wire
+ * block is total, two arrays, empty rather than missing.
+ */
+export function toReadyPage(body: ReadyBody): ReadyPage {
+  const items: ReadyItemSummary[] = rowsOf(body).map((row) => ({
+    key: row.key,
+    kind: row.kind,
+    title: row.title,
+    priority: row.priority,
+    assignee: row.assignee === null ? null : { id: row.assignee.id, name: row.assignee.name },
+    dependencies: {
+      blockedBy: row.dependencies.blockedBy.map((edge) => ({ ...edge })),
+      blocks: row.dependencies.blocks.map((edge) => ({ ...edge })),
+    },
+  }));
+  // ⚠️ The cursor is OPAQUE and collection-scoped: echoed, never parsed, never
+  // handed to another collection's read.
+  return { items, nextCursor: body.nextCursor };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprints
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** One sprint row — a field-for-field carry; the two shapes agree. */
+export function toSprintSummary(sprint: RowOf<SprintsBody>): SprintSummary {
+  return {
+    id: sprint.id,
+    name: sprint.name,
+    state: sprint.state,
+    goal: sprint.goal,
+    startDate: sprint.startDate,
+    endDate: sprint.endDate,
+    sequence: sprint.sequence,
+    issueCount: sprint.issueCount,
+    // Passed THROUGH, never defaulted: null means "never activated", and a
+    // `?? 0` here would report a scope-lock baseline that was never taken.
+    committedPoints: sprint.committedPoints,
+    committedIssueCount: sprint.committedIssueCount,
+  };
+}
+
+/** A whole sprint list, assembled from every page the caller walked. */
+export function toSprintList(pages: readonly SprintsBody[]): SprintList {
+  const sprints: SprintSummary[] = [];
+  for (const page of pages) sprints.push(...rowsOf(page).map(toSprintSummary));
+  return { sprints };
 }

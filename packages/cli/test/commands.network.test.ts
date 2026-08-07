@@ -31,6 +31,8 @@ import {
   DEFAULT_TOOLS,
   startTestMcpServer,
   v1Page,
+  v1ReadyRow,
+  v1Sprint,
   v1Project,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
@@ -78,6 +80,7 @@ beforeEach(() => {
   process.chdir(root);
   server.calls.length = 0;
   server.v1Calls.length = 0;
+  server.resetV1();
   server.script(DEFAULT_TOOLS);
 });
 
@@ -307,7 +310,7 @@ describe('the credential ladder — MOTIR_TOKEN above the stored config (MOTIR-1
     await openCommand('PROD-1', { print: true });
     await linkCommand({ project: 'PROD' });
 
-    expect(server.calls.map((c) => c.name)).toContain('list_ready');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/PROD/ready');
     expect(io.stdout()).toContain('PROD-1');
     // Nothing was persisted: no config dir, no config file, no token on disk.
     // This is what makes the tier work on a READ-ONLY mount — and it is asserted
@@ -393,13 +396,18 @@ describe('motir link', () => {
     expect(config).toEqual({ serverUrl: server.url, workspace: 'acme', project: 'PROD' });
     // No `repos` key: checkouts resolve by convention until an override is added.
     expect(config).not.toHaveProperty('repos');
-    expect(server.calls.map((c) => c.name)).toContain('list_ready');
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/PROD/ready');
     expect(io.stdout()).toContain('checkouts resolve by convention');
   });
 
   it('refuses a project the token cannot see — and writes no link at all', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({ list_ready: { error: 'PROJECT_NOT_FOUND: no project "NOPE".' } });
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        status: 404,
+        body: { code: 'PROJECT_NOT_FOUND', error: 'no project "NOPE".' },
+      },
+    });
     capture();
 
     await expect(linkCommand({ server: server.url, project: 'NOPE' })).rejects.toThrow(
@@ -426,7 +434,7 @@ describe('motir link', () => {
     // Resolution replaces the probe: `list_projects` enumerates what the token
     // can reach, which IS proof of access — no `list_ready` round trip needed.
     expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects');
-    expect(server.calls.map((c) => c.name)).not.toContain('list_ready');
+    expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects/PROD/ready');
     expect(io.stderr()).toContain('the only project in workspace acme');
   });
 
@@ -455,8 +463,9 @@ describe('motir link', () => {
     expect(readLink()).toMatchObject({ project: 'ACME' });
     // A key the user ASSERTED is validated, not enumerated — the two paths stay
     // distinct, so an explicit key is never silently replaced by a resolved one.
-    const names = server.calls.map((c) => c.name);
-    expect(names).toContain('list_ready');
+    // The probe is now a v1 read; enumeration would be `/projects`, and the two
+    // paths stay distinct so an explicit key is never silently replaced.
+    expect(server.v1Calls.map((c) => c.path)).toContain('/api/v1/projects/ACME/ready');
     expect(server.v1Calls.map((c) => c.path)).not.toContain('/api/v1/projects');
   });
 
@@ -531,14 +540,11 @@ describe('the project session', () => {
 
   it('pages the WHOLE ready set through the cursor rather than one page', async () => {
     await linked();
-    let call = 0;
-    server.script({
-      list_ready: () => {
-        call += 1;
-        return call === 1
-          ? { structured: { items: [{ key: 'PROD-1' }], nextCursor: 'cursor-2' } }
-          : { structured: { items: [{ key: 'PROD-2' }], nextCursor: null } };
-      },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': (req) =>
+        req.query.get('cursor') === null
+          ? { body: v1Page([v1ReadyRow('PROD-1')], 'cursor-2') }
+          : { body: v1Page([v1ReadyRow('PROD-2')]) },
     });
 
     const items = await withProjectSession(({ client, projectKey }) =>
@@ -546,7 +552,9 @@ describe('the project session', () => {
     );
 
     expect(items.map((i) => i.key)).toEqual(['PROD-1', 'PROD-2']);
-    expect(server.calls[1]?.args).toMatchObject({ cursor: 'cursor-2', limit: 200 });
+    // The cursor is echoed verbatim onto the second request, never rebuilt.
+    expect(server.v1Calls[1]?.query.get('cursor')).toBe('cursor-2');
+    expect(server.v1Calls[1]?.query.get('limit')).toBe('200');
   });
 });
 
@@ -555,20 +563,16 @@ describe('the project session', () => {
 describe('motir ready / status / open', () => {
   it('`ready` renders a table, or raw JSON with --json', async () => {
     await linked();
-    server.script({
-      list_ready: {
-        structured: {
-          items: [
-            {
-              key: 'PROD-7',
-              kind: 'subtask',
-              title: 'Wire the thing',
-              priority: 'high',
-              assignee: { id: 'u1', name: 'Zhu Yue' },
-            },
-          ],
-          nextCursor: null,
-        },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: v1Page([
+          v1ReadyRow('PROD-7', {
+            title: 'Wire the thing',
+            priority: 'high',
+            assignee: { id: 'u1', name: 'Zhu Yue' },
+            assigneeId: 'u1',
+          }),
+        ]),
       },
     });
 
@@ -588,25 +592,19 @@ describe('motir ready / status / open', () => {
     capture();
 
     await readyCommand({ assignee: 'me' });
-    expect(server.calls.find((c) => c.name === 'list_ready')?.args).toMatchObject({
-      assigneeId: 'user-1',
-    });
+    expect(server.v1Calls.at(-1)?.query.get('assigneeId')).toBe('user-1');
 
     server.calls.length = 0;
-    server.v1Calls.length = 0;
     server.v1Calls.length = 0;
     await readyCommand({ assignee: 'unassigned' });
-    expect(server.calls.find((c) => c.name === 'list_ready')?.args).toMatchObject({
-      assigneeId: 'unassigned',
-    });
+    // The wire literal for the bucket — `null` would be indistinguishable from
+    // omitting the filter, which matches every assignee instead of none.
+    expect(server.v1Calls.at(-1)?.query.get('assigneeId')).toBe('none');
 
     server.calls.length = 0;
     server.v1Calls.length = 0;
-    server.v1Calls.length = 0;
     await readyCommand({ assignee: 'user-42' });
-    expect(server.calls.find((c) => c.name === 'list_ready')?.args).toMatchObject({
-      assigneeId: 'user-42',
-    });
+    expect(server.v1Calls.at(-1)?.query.get('assigneeId')).toBe('user-42');
   });
 
   it('`ready --kinds` rejects an unknown kind before any network call', async () => {
@@ -619,19 +617,24 @@ describe('motir ready / status / open', () => {
 
   it('`status` composes the pulse: ready count, in-flight total, the ACTIVE sprint', async () => {
     await linked();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: v1Page([v1ReadyRow('PROD-1'), v1ReadyRow('PROD-2')]),
+      },
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([
+          v1Sprint('s1', { name: 'Sprint 1', state: 'complete', issueCount: 3 }),
+          v1Sprint('s2', {
+            name: 'Journey D',
+            state: 'active',
+            goal: 'Ship the CLI',
+            issueCount: 9,
+          }),
+        ]),
+      },
+    });
     server.script({
-      list_ready: {
-        structured: { items: [{ key: 'PROD-1' }, { key: 'PROD-2' }], nextCursor: null },
-      },
       search_work_items: { structured: { items: [], total: 5, nextCursor: null } },
-      list_sprints: {
-        structured: {
-          sprints: [
-            { id: 's1', name: 'Sprint 1', state: 'complete', issueCount: 3 },
-            { id: 's2', name: 'Journey D', state: 'active', goal: 'Ship the CLI', issueCount: 9 },
-          ],
-        },
-      },
     });
 
     const io = capture();
@@ -677,21 +680,6 @@ describe('motir ready / status / open', () => {
 
 // ── the sprint reads (7.9.14 · MOTIR-1844) ──────────────────────────────────
 
-/** A `list_sprints` row, with the fields `motir sprints` renders. */
-const sprintRow = (over: Record<string, unknown> = {}) => ({
-  id: 's2',
-  name: 'Journey D',
-  state: 'active',
-  goal: 'Ship the CLI',
-  startDate: '2026-07-20',
-  endDate: '2026-08-03',
-  sequence: 2,
-  issueCount: 2,
-  committedPoints: 21,
-  committedIssueCount: 2,
-  ...over,
-});
-
 /** A `search_work_items` row. */
 const itemRow = (identifier: string) => ({
   identifier,
@@ -704,14 +692,12 @@ const itemRow = (identifier: string) => ({
 describe('motir sprints / sprint', () => {
   it('`sprints` tables every sprint, marks the ACTIVE one, and --json emits the rows', async () => {
     await linked();
-    server.script({
-      list_sprints: {
-        structured: {
-          sprints: [
-            sprintRow({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
-            sprintRow({}),
-          ],
-        },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([
+          v1Sprint('s1', { name: 'Sprint 1', state: 'complete', sequence: 1 }),
+          v1Sprint('s2', { name: 'Journey D', state: 'active', sequence: 2, issueCount: 9 }),
+        ]),
       },
     });
 
@@ -729,14 +715,12 @@ describe('motir sprints / sprint', () => {
 
   it('`sprints --state` filters, and rejects an unknown state before any network call', async () => {
     await linked();
-    server.script({
-      list_sprints: {
-        structured: {
-          sprints: [
-            sprintRow({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
-            sprintRow({}),
-          ],
-        },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([
+          v1Sprint('s1', { name: 'Sprint 1', state: 'complete', sequence: 1 }),
+          v1Sprint('s2', { name: 'Journey D', state: 'active', sequence: 2, issueCount: 9 }),
+        ]),
       },
     });
 
@@ -745,7 +729,6 @@ describe('motir sprints / sprint', () => {
     expect(JSON.parse(io.stdout())).toMatchObject([{ id: 's2' }]);
 
     server.calls.length = 0;
-    server.v1Calls.length = 0;
     server.v1Calls.length = 0;
     await expect(sprintsCommand({ state: 'nope' })).rejects.toThrow(/Unknown sprint state/);
     expect(server.calls).toHaveLength(0);
@@ -762,8 +745,19 @@ describe('motir sprints / sprint', () => {
 
   it('`sprint` defaults to the ACTIVE sprint and PAGES the whole set via nextCursor', async () => {
     await linked();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([
+          v1Sprint('s2', {
+            name: 'Journey D',
+            state: 'active',
+            goal: 'Ship the CLI',
+            issueCount: 3,
+          }),
+        ]),
+      },
+    });
     server.script({
-      list_sprints: { structured: { sprints: [sprintRow({ issueCount: 3 })] } },
       // Two pages: the count the CLI prints must equal the tool's own `total`,
       // which only holds if it followed the cursor instead of stopping at one.
       search_work_items: (args) =>
@@ -799,16 +793,16 @@ describe('motir sprints / sprint', () => {
 
   it('`sprint <name>` resolves case-insensitively; ambiguous and unknown refs error', async () => {
     await linked();
-    server.script({
-      list_sprints: {
-        structured: {
-          sprints: [
-            sprintRow({ id: 's1', name: 'Sprint 1', state: 'complete', sequence: 1 }),
-            sprintRow({ id: 's10', name: 'Sprint 10', state: 'planned', sequence: 3 }),
-            sprintRow({}),
-          ],
-        },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([
+          v1Sprint('s1', { name: 'Sprint 1', state: 'complete', sequence: 1 }),
+          v1Sprint('s10', { name: 'Sprint 10', state: 'planned', sequence: 3 }),
+          v1Sprint('s2', { name: 'Journey D', state: 'active', sequence: 2 }),
+        ]),
       },
+    });
+    server.script({
       search_work_items: { structured: { items: [itemRow('PROD-1')], total: 1, nextCursor: null } },
     });
 
@@ -822,8 +816,10 @@ describe('motir sprints / sprint', () => {
 
   it('`sprint` with no active sprint and no ref names the situation instead of an empty table', async () => {
     await linked();
-    server.script({
-      list_sprints: { structured: { sprints: [sprintRow({ state: 'planned' })] } },
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([v1Sprint('s1', { name: 'Sprint 1', state: 'complete' })]),
+      },
     });
     capture();
 
@@ -834,8 +830,12 @@ describe('motir sprints / sprint', () => {
 
   it('`sprint --kinds` narrows the query, and rejects an unknown kind before any network call', async () => {
     await linked();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([v1Sprint('s2', { state: 'active' })]),
+      },
+    });
     server.script({
-      list_sprints: { structured: { sprints: [sprintRow({})] } },
       search_work_items: { structured: { items: [], total: 0, nextCursor: null } },
     });
 
@@ -852,7 +852,6 @@ describe('motir sprints / sprint', () => {
     expect(io.stdout()).toContain('No work items in this sprint.');
 
     server.calls.length = 0;
-    server.v1Calls.length = 0;
     server.v1Calls.length = 0;
     await expect(sprintCommand(undefined, { kinds: 'widget' })).rejects.toThrow(
       /Unknown work item kind/,

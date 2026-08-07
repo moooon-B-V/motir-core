@@ -10,10 +10,18 @@ import {
   showCommand,
   sprintCommand,
 } from '../src/commands/read.js';
+import { renderReadyTable } from '../src/render.js';
 import { openUrl } from '../src/browser.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
-import { DEFAULT_TOOLS, startTestMcpServer, type TestMcpServer } from './helpers/mcpTestServer.js';
+import {
+  DEFAULT_TOOLS,
+  startTestMcpServer,
+  v1Page,
+  v1ReadyRow,
+  v1Sprint,
+  type TestMcpServer,
+} from './helpers/mcpTestServer.js';
 
 describe('parseKinds', () => {
   it('returns undefined for an absent / empty list (any kind)', () => {
@@ -485,19 +493,9 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     })),
   };
 
-  const readyPage = {
-    items: [
-      {
-        key: 'PROD-7',
-        kind: 'subtask',
-        title: 'The unblocker',
-        priority: 'high',
-        assignee: null,
-        dependencies: fanOut,
-      },
-    ],
-    nextCursor: null,
-  };
+  const readyPage = v1Page([
+    v1ReadyRow('PROD-7', { title: 'The unblocker', priority: 'high', dependencies: fanOut }),
+  ]);
 
   const sprintPage = {
     items: [
@@ -514,22 +512,7 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     nextCursor: null,
   };
 
-  const sprints = {
-    sprints: [
-      {
-        id: 'sp-1',
-        name: 'Journey D',
-        state: 'active',
-        goal: null,
-        startDate: null,
-        endDate: null,
-        sequence: 1,
-        issueCount: 1,
-        committedPoints: null,
-        committedIssueCount: null,
-      },
-    ],
-  };
+  const sprints = v1Page([v1Sprint('sp-1', { name: 'Journey D', state: 'active', issueCount: 1 })]);
 
   function capture(): () => string {
     const chunks: string[] = [];
@@ -565,11 +548,13 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
       JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }) + '\n',
     );
     server.calls.length = 0;
-    server.script({
-      list_ready: { structured: readyPage },
-      list_sprints: { structured: sprints },
-      search_work_items: { structured: sprintPage },
+    server.resetV1();
+    server.v1Calls.length = 0;
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': { body: readyPage },
+      'GET /api/v1/projects/{projectKey}/sprints': { body: sprints },
     });
+    server.script({ search_work_items: { structured: sprintPage } });
   });
 
   afterEach(() => {
@@ -624,19 +609,19 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     expect(payload.items[0]?.dependencies.blocks).toHaveLength(5);
   });
 
-  it('degrades to the pre-7.9.16 tables against a server with no edge projection', async () => {
-    const stdout = capture();
-    server.script({
-      list_ready: {
-        structured: {
-          items: [{ key: 'PROD-7', kind: 'subtask', title: 'Older server', priority: 'high' }],
-          nextCursor: null,
-        },
-      },
-    });
-
-    await readyCommand({});
-    const printed = stdout();
+  // MOTIR-2344. This used to be driven through `readyCommand` against a server
+  // that omitted the edge block. `/api/v1` REQUIRES `dependencies` on a ready
+  // row, so the transport's validator rejects that body before a renderer ever
+  // sees it — the degradation is no longer reachable through the client.
+  //
+  // It is still reachable, and still worth pinning, one layer down: the view
+  // model keeps `dependencies` OPTIONAL because the CLI ships on its own
+  // release train, and the renderer must draw a column it has no data for as
+  // no column rather than as an empty one.
+  it('renderReadyTable degrades to the pre-7.9.16 table for a row with no edge block', () => {
+    const printed = renderReadyTable([
+      { key: 'PROD-7', kind: 'subtask', title: 'Older server', priority: 'high' },
+    ]);
 
     expect(printed).toContain('1 ready work item:');
     expect(printed).toContain('Older server');

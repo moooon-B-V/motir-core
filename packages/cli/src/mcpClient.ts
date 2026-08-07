@@ -7,7 +7,13 @@ import { AuthError, CliError } from './errors.js';
 import { normalizeServerUrl } from './config/userConfig.js';
 import { CLI_VERSION } from './version.js';
 import { V1Transport } from './transport.js';
-import { toProjectList, toWhoami } from './adapters/reads.js';
+import {
+  toProjectList,
+  toReadyPage,
+  toSprintList,
+  toWhoami,
+  UNASSIGNED,
+} from './adapters/reads.js';
 
 // The MCP client core — the ONE place the CLI talks to a Motir server. Every
 // command speaks to the tenant through the streamable-HTTP `/api/mcp` endpoint
@@ -813,7 +819,24 @@ export class MotirClient {
     cursor?: string;
     limit?: number;
   }): Promise<ReadyPage> {
-    return this.callStructured<ReadyPage>('list_ready', { ...args });
+    // `assigneeId` is TRI-STATE on the wire: absent means any assignee, and the
+    // literal `none` means the unassigned bucket. `null` here IS that bucket, so
+    // it must become the literal rather than being dropped as "no value" — which
+    // would silently widen the filter to every assignee.
+    return this.v1
+      .request('getProjectReadySet', {
+        path: { projectKey: args.projectKey },
+        query: {
+          ...(args.kinds ? { kind: args.kinds } : {}),
+          ...(args.priority ? { priority: args.priority } : {}),
+          ...(args.assigneeId === undefined
+            ? {}
+            : { assigneeId: args.assigneeId === null ? UNASSIGNED : args.assigneeId }),
+          ...(args.cursor ? { cursor: args.cursor } : {}),
+          ...(args.limit === undefined ? {} : { limit: args.limit }),
+        },
+      })
+      .then(toReadyPage);
   }
 
   nextReady(args: {
@@ -965,8 +988,17 @@ export class MotirClient {
     return this.callStructured<PlanWithItems>('get_plan', { ...args });
   }
 
-  listSprints(args: { projectKey: string }): Promise<SprintList> {
-    return this.callStructured<SprintList>('list_sprints', { ...args });
+  async listSprints(args: { projectKey: string }): Promise<SprintList> {
+    // Walked to exhaustion for the reason `listProjects` gives: the view model
+    // is a whole list, and a sprint set is bounded by its project.
+    return toSprintList(
+      await this.walkPages((cursor) =>
+        this.v1.request('listProjectSprints', {
+          path: { projectKey: args.projectKey },
+          query: { ...(cursor ? { cursor } : {}) },
+        }),
+      ),
+    );
   }
 
   searchWorkItems(args: {

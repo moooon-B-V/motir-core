@@ -82,6 +82,15 @@ export interface TestMcpServer {
   script(tools: ToolScript): void;
   /** Replace / extend the scripted `/api/v1` routes mid-test. */
   scriptV1(routes: V1Script): void;
+  /**
+   * Restore the `/api/v1` routes this server STARTED with.
+   *
+   * `scriptV1` merges, so a route one test overrides — a 404, an error envelope
+   * — is inherited by every test after it. That is an order-dependent failure
+   * whose symptom appears in an unrelated test, so suites reset in `beforeEach`
+   * rather than each site remembering to put a route back.
+   */
+  resetV1(): void;
   close(): Promise<void>;
 }
 
@@ -207,6 +216,9 @@ export async function startTestMcpServer(opts: TestMcpServerOptions = {}): Promi
     scriptV1: (next) => {
       v1 = { ...v1, ...next };
     },
+    resetV1: () => {
+      v1 = { ...DEFAULT_V1, ...(opts.v1 ?? {}) };
+    },
     close: () =>
       new Promise<void>((resolve, reject) => {
         http.closeAllConnections();
@@ -310,6 +322,47 @@ export function v1Project(key: string, name = key) {
   return { key, name, accessLevel: 'open', archived: false };
 }
 
+/** A total dependency block — two arrays, empty rather than missing. */
+export function v1Edges() {
+  return { blockedBy: [], blocks: [] };
+}
+
+/** One v1 READY row. */
+export function v1ReadyRow(key: string, over: Record<string, unknown> = {}) {
+  return {
+    key,
+    kind: 'subtask',
+    title: key,
+    priority: 'medium',
+    status: { key: 'todo', category: 'todo' },
+    type: 'code',
+    executor: 'coding_agent',
+    assigneeId: null,
+    assignee: null,
+    descriptionExcerpt: null,
+    dependencies: v1Edges(),
+    ...over,
+  };
+}
+
+/** One v1 SPRINT row. */
+export function v1Sprint(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id,
+    name: id,
+    goal: null,
+    state: 'planned',
+    startDate: null,
+    endDate: null,
+    completedAt: null,
+    sequence: 1,
+    issueCount: 0,
+    committedPoints: null,
+    committedIssueCount: null,
+    ...over,
+  };
+}
+
 /** The canned `/api/v1` answers, mirroring {@link DEFAULT_TOOLS}' data. */
 export const DEFAULT_V1: V1Script = {
   'GET /api/v1/me': {
@@ -325,4 +378,6 @@ export const DEFAULT_V1: V1Script = {
     ]),
   },
   'GET /api/v1/projects': { body: v1Page([v1Project('PROD', 'Prodect')]) },
+  'GET /api/v1/projects/{projectKey}/ready': { body: v1Page([]) },
+  'GET /api/v1/projects/{projectKey}/sprints': { body: v1Page([]) },
 };

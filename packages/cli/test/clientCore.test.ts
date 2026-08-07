@@ -4,7 +4,10 @@ import { AuthError, CliError } from '../src/errors.js';
 import {
   DEFAULT_TOOLS,
   startTestMcpServer,
+  v1Page,
   v1Project,
+  v1ReadyRow,
+  v1Sprint,
   type TestMcpServer,
 } from './helpers/mcpTestServer.js';
 
@@ -170,6 +173,60 @@ describe('typed wrappers — each names its tool and forwards its arguments', ()
     await client.close();
   });
 
+  // The three semantics a transport swap loses SILENTLY — each produces output
+  // that looks entirely reasonable when it is wrong, so each is asserted on the
+  // WIRE rather than on what the client was asked for.
+  it('sends a REPEATED `kind`, not one joined value', async () => {
+    const client = await connected();
+
+    await client.listReady({ projectKey: 'PROD', kinds: ['epic', 'story'] });
+
+    // A comma-joined encoding would read as ONE kind named `epic,story`, which
+    // the route rejects — the filter would narrow to nothing.
+    expect(server.v1Calls.at(-1)?.query.getAll('kind')).toEqual(['epic', 'story']);
+    await client.close();
+  });
+
+  it('sends the ready ORDER back untouched — the server ranks, the client renders', async () => {
+    const client = await connected();
+    // A page whose rank matches no field the client could sort on: not key
+    // order, not priority, not title.
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: v1Page([
+          v1ReadyRow('PROD-9', { priority: 'low', title: 'zeta' }),
+          v1ReadyRow('PROD-2', { priority: 'highest', title: 'alpha' }),
+          v1ReadyRow('PROD-5', { priority: 'medium', title: 'mu' }),
+        ]),
+      },
+    });
+
+    const { items } = await client.listReady({ projectKey: 'PROD' });
+
+    expect(items.map((i) => i.key)).toEqual(['PROD-9', 'PROD-2', 'PROD-5']);
+    await client.close();
+  });
+
+  it('carries a sprint’s NEVER-ACTIVATED baseline through as null, not zero', async () => {
+    const client = await connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/sprints': {
+        body: v1Page([
+          v1Sprint('s1'),
+          v1Sprint('s2', { committedPoints: 21, committedIssueCount: 2 }),
+        ]),
+      },
+    });
+
+    const { sprints } = await client.listSprints({ projectKey: 'PROD' });
+
+    // `?? 0` here would report a scope-lock baseline that was never taken —
+    // a sprint nobody estimated and a sprint never started look identical.
+    expect(sprints[0]).toMatchObject({ committedPoints: null, committedIssueCount: null });
+    expect(sprints[1]).toMatchObject({ committedPoints: 21, committedIssueCount: 2 });
+    await client.close();
+  });
+
   it('the UNPORTED reads still name their MCP tools', async () => {
     const client = await connected();
     server.script({
@@ -177,18 +234,11 @@ describe('typed wrappers — each names its tool and forwards its arguments', ()
       get_work_item: { structured: { item: { identifier: 'PROD-7' }, readiness: { ready: true } } },
     });
 
-    await client.listReady({ projectKey: 'PROD', kinds: ['subtask'] });
     await client.nextReady({ projectKey: 'PROD', excludeIds: ['row-9'] });
     await client.getWorkItem('PROD-7');
-    await client.listSprints({ projectKey: 'PROD' });
 
-    expect(server.calls.map((c) => c.name)).toEqual([
-      'list_ready',
-      'next_ready',
-      'get_work_item',
-      'list_sprints',
-    ]);
-    expect(server.calls[1]?.args).toMatchObject({ excludeIds: ['row-9'] });
+    expect(server.calls.map((c) => c.name)).toEqual(['next_ready', 'get_work_item']);
+    expect(server.calls[0]?.args).toMatchObject({ excludeIds: ['row-9'] });
     await client.close();
   });
 
