@@ -3159,16 +3159,16 @@ allocation below is that rule applied row by row, with the deciding limb shown.
 
 ##### The allocation
 
-| The PAGE(s) own                                                                                             | Decided by                                                                                     | `docs/mcp.md` keeps                                                                                        |
-| ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **What the MCP is**, in a paragraph, and the MCP-versus-`/api/v1` fork with its reasoning                   | limb 1 — it is the first choice a reader makes, and making it wrong is discovered months later | The architecture walk-through: the thin-adapter rule, the `ServiceContext` seam, the ASCII request diagram |
-| **The endpoint** — `POST /api/mcp`, streamable HTTP only, stateless, never cached                           | limb 1 + limb 2 — read from `app/api/mcp/route.ts`, and a test can pin it                      | Why `mcp-handler`, why a static path and not `[transport]`, why SSE is off                                 |
-| **How to get a credential** — Settings → Account → API tokens, and that the plaintext is shown exactly once | limb 1 — there is no first call without one                                                    | The token row's fields, the display prefix, the hash-storage detail, the full security list                |
-| **The scope legend and the default grant**, derived from `TOKEN_SCOPES` / `DEFAULT_TOKEN_SCOPES`            | limb 2 — derived, so it cannot drift                                                           | The scope→tool table as prose (the page's catalogue supersedes it for a reader)                            |
-| **One wired client** — the `.mcp.json` block and its `claude mcp add` equivalent, with the bearer header    | limb 1 — this IS the first run                                                                 | Every other client's wiring variant                                                                        |
-| **One working call** and what a 401 looks like                                                              | limb 1 — the reader has to know it worked                                                      | The full auth-failure taxonomy and the no-probing rationale                                                |
-| **The catalogue** — every tool, its scope, one line each                                                    | limb 1 + limb 2 — derived names/scopes; summaries pinned by Q2's fingerprint                   | **The per-tool INPUT TABLES and output shapes** — 1,280 lines of argument-level reference                  |
-| **A link to `docs/mcp.md`** for everything above, and a link back from it                                   | —                                                                                              | —                                                                                                          |
+| The PAGE(s) own                                                                                                                                   | Decided by                                                                                     | `docs/mcp.md` keeps                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **What the MCP is**, in a paragraph, and the MCP-versus-`/api/v1` fork with its reasoning                                                         | limb 1 — it is the first choice a reader makes, and making it wrong is discovered months later | The architecture walk-through: the thin-adapter rule, the `ServiceContext` seam, the ASCII request diagram |
+| **The endpoint** — `POST /api/mcp`, streamable HTTP only, stateless, never cached                                                                 | limb 1 + limb 2 — read from `app/api/mcp/route.ts`, and a test can pin it                      | Why `mcp-handler`, why a static path and not `[transport]`, why SSE is off                                 |
+| **How to get a credential** — Settings → Account → API tokens, and that the plaintext is shown exactly once                                       | limb 1 — there is no first call without one                                                    | The token row's fields, the display prefix, the hash-storage detail, the full security list                |
+| **The scope legend and the default grant**, derived from `TOKEN_SCOPES` / `DEFAULT_TOKEN_SCOPES`                                                  | limb 2 — derived, so it cannot drift                                                           | The scope→tool table as prose (the page's catalogue supersedes it for a reader)                            |
+| **EVERY major client's wiring block** — Claude Code, Cursor, VS Code, Codex CLI, and a generic streamable-HTTP block, each with the bearer header | limb 1 — this IS the first run, and it is not one for most readers (see Q3a)                   | Nothing — it holds no client but Claude Code today                                                         |
+| **One working call** and what a 401 looks like                                                                                                    | limb 1 — the reader has to know it worked                                                      | The full auth-failure taxonomy and the no-probing rationale                                                |
+| **The catalogue** — every tool, its scope, one line each                                                                                          | limb 1 + limb 2 — derived names/scopes; summaries pinned by Q2's fingerprint                   | **The per-tool INPUT TABLES and output shapes** — 1,280 lines of argument-level reference                  |
+| **A link to `docs/mcp.md`** for everything above, and a link back from it                                                                         | —                                                                                              | —                                                                                                          |
 
 Two rows are worth their reasons.
 
@@ -3185,6 +3185,77 @@ fixed here** — MOTIR-2309's scope explicitly excludes rewriting the reference.
 is recorded because it is exactly the kind of fact limb 2 keeps off the page: a
 literal example that nothing checks. The page's own worked call derives its key
 from nothing — it uses the reader's own project.
+
+##### Q3a — the client matrix: MORE than one client, and how a vendor-versioned fact is bounded
+
+**Corrected 2026-08-06, same card, before the page was built.** This row first
+read _"**One wired client** — the `.mcp.json` block and its `claude mcp add`
+equivalent"_, against _"`docs/mcp.md` keeps every other client's wiring
+variant."_ **Both halves were wrong**, and the second was wrong as a matter of
+fact rather than judgement: `docs/mcp.md` § _Wiring an agent_ holds **Claude Code
+and nothing else** — a `claude mcp add` line, the `.mcp.json` block it is
+equivalent to, and a prose "any streamable-HTTP client" paragraph. There was no
+"elsewhere" for the allocation to point at. The row described a division of
+labour that did not exist, which is the failure mode this document's own
+`⚠️ verify, don't cite` discipline exists to catch, committed in the table that
+allocates by evidence.
+
+The judgement half was wrong too. **Motir's pitch is that you hand work to an
+agent, and it does not ship the agent** — the product's whole position is that
+the reader brings their own. A page that wires exactly one vendor's client tells
+every other reader that they are on an unsupported path, on the surface whose
+entire job is to say _"bring your agent."_ One client is the right answer for a
+first-run guide when there is one client; here the reader population is plural by
+design.
+
+**The decision: the page carries a wiring block per major client** — Claude Code,
+Cursor, VS Code, Codex CLI — **plus the generic streamable-HTTP block**, which is
+the one that actually covers the tail (Windsurf, Zed, Cline, Goose, a bespoke
+agent) and which is therefore drawn as a first-class block rather than a
+consolation paragraph.
+
+**The tension this creates with limb 2, stated rather than dodged.** A third
+party's config schema is a **vendor-versioned fact that no test of ours can hold
+true** — the same shape as the sandbox's auto-approve matrix, which Amendment 9
+Q2 pushed OFF the page for exactly this reason. The difference that changes the
+answer is that the auto-approve matrix was a _nice-to-have comparison_ while
+this is _the step_: a reader who cannot write the config has not had a first run
+at all, so limb 1 is not merely satisfied, it is the whole page. Where the two
+limbs genuinely conflict on a fact the reader cannot proceed without, **limb 1
+wins and the staleness is BOUNDED rather than accepted**:
+
+1. **Split the fact.** The parts that are OURS — the endpoint, that it is
+   streamable HTTP only, the `Authorization: Bearer` header, the `motir_pat_`
+   token shape — are stated ONCE, above the blocks, and are the facts a test
+   pins. Each client block is then a transcription of those four facts into that
+   vendor's file format, so a stale block is wrong about **syntax**, never about
+   Motir.
+2. **Date it and link out.** Every block carries the date its format was checked
+   and a link to that vendor's own MCP documentation, so a reader who hits a
+   mismatch knows the block is a convenience and where the authority is.
+3. **Prefer each vendor's INDIRECTION over a pasted secret.** Where a client
+   supports it, the block uses it — VS Code's `inputs` + `${input:…}` prompt,
+   Cursor's `${env:…}` interpolation, Codex's `bearer_token_env_var` (which takes
+   the variable's NAME, not the token). This is not a security aside: the guide
+   that tells a reader to paste a live PAT into a file their repository tracks
+   has taught them the wrong habit in the first five minutes.
+
+**Formats verified against each vendor's own documentation, 2026-08-06** (rung 2
+for a third party's surface — read, not recalled):
+
+| Client          | File                                          | Shape                                                                         |
+| --------------- | --------------------------------------------- | ----------------------------------------------------------------------------- |
+| **Claude Code** | `.mcp.json`, or `claude mcp add`              | `mcpServers` → `type: "http"`, `url`, `headers`                               |
+| **Cursor**      | `~/.cursor/mcp.json` · `.cursor/mcp.json`     | `mcpServers` → `url`, `headers`; supports `${env:VAR}` interpolation          |
+| **VS Code**     | `.vscode/mcp.json`                            | `servers` → `type: "http"`, `url`, `headers`; `inputs` + `${input:id}` prompt |
+| **Codex CLI**   | `~/.codex/config.toml` · `.codex/config.toml` | `[mcp_servers.NAME]` → `url`, `bearer_token_env_var` (a variable NAME)        |
+
+**This does NOT re-open Amendment 9 Q2's rule.** The rule stands and still
+decides every other row of the table above. What Q3a adds is the tie-break the
+rule did not have: _when the two limbs point opposite ways on a fact the reader
+cannot proceed without, limb 1 wins and limb 2 becomes a containment
+obligation_ — split, date, link, and prefer the indirection. A future page
+reaching for that tie-break owes the same three steps.
 
 ##### How much of the v1 framing the page states
 
@@ -3206,12 +3277,14 @@ their case is the exception.
 
 ##### Rejected alternatives
 
-| Rejected                                                       | Why                                                                                                                                                                                                                                    |
-| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Publish `docs/mcp.md` wholesale as the page**                | 1,481 lines written for someone with a checkout, 1,280 of them argument-level reference that Amendment 7 licenses to churn. It moves the clone requirement rather than removing it — Amendment 9 Q2's own rejection, one surface over. |
-| **Put the per-tool input tables on `/docs/mcp/tools`**         | The highest-churn facts on the page with no mechanism to notice they moved, and a 39-row scan turned into a 1,280-line document. If a reader needs the arguments they are one link from them, in the file that ships beside the code.  |
-| **Retire `docs/mcp.md` and make the page the only reference**  | Deletes the in-repo document an agent working in this repository reads, to remove a duplication the link already resolves. Reference stays reference; MOTIR-2309's boundary says so.                                                   |
-| **State the shorthand and link Amendment 7 for the reasoning** | The shorthand is the conclusion with the reasoning removed — the one part a reader choosing between two surfaces actually needs. Linking an internal ADR from a public page also publishes an internal document by reference.          |
+| Rejected                                                                                        | Why                                                                                                                                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Publish `docs/mcp.md` wholesale as the page**                                                 | 1,481 lines written for someone with a checkout, 1,280 of them argument-level reference that Amendment 7 licenses to churn. It moves the clone requirement rather than removing it — Amendment 9 Q2's own rejection, one surface over.                                                                                |
+| **Wire ONE client (Claude Code) and send everyone else to the generic block**                   | The original answer here, corrected in Q3a before the page was built. It fails limb 1 for most of the audience — Motir does not ship the agent, so the reader brings their own — and it was resting on a false premise: `docs/mcp.md` holds no other client's wiring either, so there was nowhere to send them.       |
+| **Carry no client blocks at all — state the four transport facts and let the reader transpose** | Maximally durable and maximally useless. The four facts ARE the whole content of each block; refusing to write them down in the four formats readers actually use saves this document from ever being stale by making the reader do transcription that we can do once. Q3a's dating and links bound the risk instead. |
+| **Put the per-tool input tables on `/docs/mcp/tools`**                                          | The highest-churn facts on the page with no mechanism to notice they moved, and a 39-row scan turned into a 1,280-line document. If a reader needs the arguments they are one link from them, in the file that ships beside the code.                                                                                 |
+| **Retire `docs/mcp.md` and make the page the only reference**                                   | Deletes the in-repo document an agent working in this repository reads, to remove a duplication the link already resolves. Reference stays reference; MOTIR-2309's boundary says so.                                                                                                                                  |
+| **State the shorthand and link Amendment 7 for the reasoning**                                  | The shorthand is the conclusion with the reasoning removed — the one part a reader choosing between two surfaces actually needs. Linking an internal ADR from a public page also publishes an internal document by reference.                                                                                         |
 
 ---
 
@@ -3224,7 +3297,15 @@ their case is the exception.
 - **MOTIR-2325** (`lib/apiDocs/mcp.ts`) implements Q2's split: derive from
   `TOOL_SCOPES`, author the summaries as a `Record<McpToolName, …>` with their
   fingerprints, group by scope with six authored labels, import nothing else from
-  `lib/mcp/`, write no count as a literal.
+  `lib/mcp/`, write no count as a literal. **It also carries Q3a's client
+  matrix** — one wiring block per client, each declaring the vendor's file path,
+  its `checkedOn` date and its documentation URL, with the four transport facts
+  held ONCE and interpolated into every block so a client cannot disagree with
+  the endpoint.
+- **MOTIR-2330** additionally asserts Q3a's containment: every client block
+  carries a `checkedOn` date and a vendor link, and the endpoint / header / token
+  shape in each block equals the single source above them (a block that
+  hard-codes its own URL is a red build).
 - **MOTIR-2327** (the pages) ships **two** routes under Q1's table, adds the
   surface-tier row and the second tier, and renders the `/api/v1` operation index
   on neither.
