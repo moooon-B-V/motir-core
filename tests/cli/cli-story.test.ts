@@ -65,7 +65,7 @@ let server: McpTestServer;
 let ws: CliWorkspace;
 
 beforeAll(async () => {
-  server = await startMcpHttpServer();
+  server = await startMcpHttpServer({ v1Routes: true });
 });
 
 afterAll(async () => {
@@ -671,22 +671,26 @@ describe('motir show --activity / --comments — the discussion, from a real ten
   });
 
   it('`--json` emits the activity page UNALTERED beside the aggregate', async () => {
-    const { fx } = await linkedProject();
+    const { fx, token } = await linkedProject();
     const item = await argumentativeItem(fx);
 
     const asJson = await ws.run(['show', item.identifier, '--comments', '--json']);
     expect(asJson.exitCode, asJson.stderr).toBe(0);
-    const payload = JSON.parse(asJson.stdout) as {
-      item: { identifier: string };
-      activity: unknown;
-    };
+    const payload = JSON.parse(asJson.stdout) as { key: string; activity: unknown };
 
-    expect(payload.item.identifier).toBe(item.identifier);
-    // Byte for byte the tool's own `structuredContent` — cursor and totals
-    // included, so a script can tell there is more to read.
-    expect(payload.activity).toEqual(
-      structured(await runGetWorkItemActivity({ key: item.identifier, view: 'comments' }, fx.ctx)),
+    // Since MOTIR-2340 the aggregate IS the v1 resource — no `item` wrapper and
+    // no `identifier`, because the resource names itself by `key` (ADR §7).
+    expect(payload.key).toBe(item.identifier);
+    // Byte for byte the ROUTE's own body — cursor and totals included, so a
+    // script can tell there is more to read. Read back through the endpoint the
+    // CLI actually calls rather than through the MCP tool, which is a different
+    // producer with its own shape.
+    const page = await fetch(
+      `${server.url}/api/v1/work-items/${item.identifier}/activity?view=comments`,
+      { headers: { Authorization: `Bearer ${token}` } },
     );
+    expect(page.status).toBe(200);
+    expect(payload.activity).toEqual(await page.json());
   });
 
   it('needs NOTHING beyond the `read` scope `motir login` mints', async () => {
@@ -1034,11 +1038,15 @@ describe('motir show — build-order waves over a real Postgres DAG', () => {
 
     // `--json` carries the same order machine-readably, and its per-child edge
     // block matches the tool's — the same drift check, one level down.
+    // ⚠️ `key`, not `identifier`: since MOTIR-2340 `--json` emits the v1
+    // RESOURCE, which names a work item by its `MOTIR-<n>` key everywhere (ADR
+    // §7). The MCP tool below still says `identifier`, and the two are compared
+    // across that rename rather than assumed to agree.
     const asJson = await ws.run(['show', parent.identifier, '--json']);
     const payload = JSON.parse(asJson.stdout) as {
-      children: { identifier: string; wave: number | null; dependencies: EdgeBlock }[];
+      children: { key: string; wave: number | null; dependencies: EdgeBlock }[];
     };
-    expect(new Map(payload.children.map((c) => [c.identifier, c.wave]))).toEqual(
+    expect(new Map(payload.children.map((c) => [c.key, c.wave]))).toEqual(
       new Map([
         [w1.identifier, 1],
         [w2.identifier, 1],
@@ -1051,7 +1059,7 @@ describe('motir show — build-order waves over a real Postgres DAG', () => {
       await runGetWorkItem({ key: parent.identifier }, fx.ctx),
     );
     for (const jsonChild of payload.children) {
-      const toolChild = tool.children.find((c) => c.identifier === jsonChild.identifier);
+      const toolChild = tool.children.find((c) => c.identifier === jsonChild.key);
       expect(jsonChild.dependencies).toEqual(toolChild?.dependencies);
     }
   });

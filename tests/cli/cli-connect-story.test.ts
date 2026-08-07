@@ -100,7 +100,7 @@ let server: McpTestServer;
 beforeAll(async () => {
   // The device endpoints are served too — this is the ONE suite whose subject
   // speaks them (see tests/helpers/mcpHttpServer.ts).
-  server = await startMcpHttpServer({ cliDeviceRoutes: true });
+  server = await startMcpHttpServer({ cliDeviceRoutes: true, v1Routes: true });
 });
 
 afterAll(async () => {
@@ -263,7 +263,15 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
       .filter((name) => registry.has(name));
 
     // Guard the guard: a regex that stopped matching would make this vacuous.
-    expect(new Set(called).size).toBeGreaterThanOrEqual(14);
+    //
+    // ⚠️ The floor FALLS as Story 11.5 ports the CLI onto `/api/v1` — 14 tools
+    // before the port, 12 now that the reads have moved — and it must be
+    // lowered DELIBERATELY, one card at a time, never deleted. It is the only
+    // thing standing between "this scope check covers the CLI" and a vacuous
+    // pass over an empty set, which is exactly what a regex that silently
+    // stopped matching would look like. It reaches 0 at 11.5.6, when the MCP
+    // client goes away and this whole assertion goes with it.
+    expect(new Set(called).size).toBeGreaterThanOrEqual(12);
 
     for (const name of new Set(called)) {
       const required = TOOL_SCOPES[name as McpToolName];
