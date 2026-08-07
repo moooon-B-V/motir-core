@@ -1313,8 +1313,9 @@ on the NIF project — they resolve flat, matching 6.8.2's no-chain-walk rule).
 Release opens the **danger confirm** (archive-confirm grammar) naming the
 consequence; **no typed-identifier arm step** — releasing is recoverable only by
 a fresh rename back to that key, and the broken-links consequence is the gate
-(parity with the components/automation delete confirms, which also drop the
-arm-step when a consequence statement suffices).
+(parity with the automation rule's `DeleteRuleModal` in
+`app/(authed)/settings/project/automation/_components/AutomationSettings.tsx`,
+which also drops the arm-step when a consequence statement suffices).
 
 ## Save states (panel 1)
 
