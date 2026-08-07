@@ -17,6 +17,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createFirstProject } from './_helpers/shell-session';
 import { WCAG_TAGS, formatViolations, type AxeViolation } from './_helpers/a11y';
+import { servePrivateObjectStore } from './_helpers/object-store';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -377,7 +378,6 @@ test.describe('@a11y populated issue surfaces', () => {
       { projectId: project.id, kind: 'task', title: 'Attached task' },
       { userId: user.id, workspaceId: ws.id },
     );
-    const blobHost = 'https://e2etest.public.blob.vercel-storage.com';
     await db.attachment.createMany({
       data: [
         { originalFilename: 'shot.png', mimeType: 'image/png', source: 'panel' as const },
@@ -388,21 +388,17 @@ test.describe('@a11y populated issue surfaces', () => {
         workspaceId: ws.id,
         workItemId: issue.id,
         uploaderUserId: user.id,
-        blobPathname: `${blobHost}/a11y/${row.originalFilename}`,
+        // An object KEY, matching what the upload path stores (MOTIR-2395) —
+        // the content route signs a GET for exactly this string.
+        blobPathname: `attachments/${ws.id}/a11y/${row.originalFilename}`,
         sizeBytes: 64,
         createdAt: new Date(Date.now() - (3 - i) * 1000),
       })),
     });
-    await page.route('**/*.public.blob.vercel-storage.com/**', (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'image/png',
-        body: Buffer.from(
-          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5CYII=',
-          'base64',
-        ),
-      }),
-    );
+    // The thumbnails follow the content route's 302 to a presigned URL on the
+    // store endpoint; serve it so the axe sweep runs against painted cards
+    // rather than broken images.
+    await servePrivateObjectStore(page);
 
     await page.goto(`/items/${issue.identifier}`);
     await expect(page.getByRole('heading', { name: 'Attached task', level: 1 })).toBeVisible();

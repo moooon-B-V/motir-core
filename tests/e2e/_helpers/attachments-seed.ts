@@ -26,10 +26,6 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 
 export const ATTACHMENTS_PASSWORD = 'attachments-e2e-pass-123';
 
-/** The host suffix lib/test-blob-mock's synthetic URLs ride — the spec's
- * page.route fulfiller matches it so no browser request leaves localhost. */
-export const MOCK_BLOB_HOST_GLOB = '**/*.public.blob.vercel-storage.com/**';
-
 export interface AttachmentsFixture {
   pm: { id: string; name: string; email: string };
   workspaceId: string;
@@ -108,6 +104,21 @@ export async function seedViewer(fx: AttachmentsFixture, email: string): Promise
   });
 }
 
+/**
+ * A seeded row's `blobPathname` is an object KEY, not a URL (MOTIR-2395).
+ *
+ * It is what `signedDownloadUrl` signs a GET for, so it has to look like what
+ * the real upload path stores — `attachments/<workspaceId>/<name>`, per
+ * `attachmentsService`. These previously held a full
+ * `…blob.vercel-storage.com` URL, which worked only because the app
+ * short-circuited signing under E2E and echoed the value straight back; against
+ * the real presigner the whole string is signed AS the key, and the store is
+ * asked for an object whose name is a URL.
+ */
+function seedKey(fx: AttachmentsFixture, name: string): string {
+  return `attachments/${fx.workspaceId}/${name}`;
+}
+
 /** Insert one linked panel attachment directly (role-pass setup). */
 export async function seedPanelAttachment(
   fx: AttachmentsFixture,
@@ -120,7 +131,7 @@ export async function seedPanelAttachment(
       workItemId: fx.issue.id,
       uploaderUserId,
       source: 'panel',
-      blobPathname: `https://e2etest.public.blob.vercel-storage.com/seeded/${filename}`,
+      blobPathname: seedKey(fx, `seeded/${filename}`),
       mimeType: 'text/plain',
       sizeBytes: 8,
       originalFilename: filename,
@@ -137,7 +148,7 @@ export async function seedScaleAttachments(fx: AttachmentsFixture, count: number
       workItemId: fx.issue.id,
       uploaderUserId: fx.pm.id,
       source: 'panel' as const,
-      blobPathname: `https://e2etest.public.blob.vercel-storage.com/scale/file-${i + 1}.txt`,
+      blobPathname: seedKey(fx, `scale/file-${i + 1}.txt`),
       mimeType: 'text/plain',
       sizeBytes: 16,
       originalFilename: `file-${i + 1}.txt`,
