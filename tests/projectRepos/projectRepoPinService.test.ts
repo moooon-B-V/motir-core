@@ -10,6 +10,7 @@ import {
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // RESOLVING a pinned ROLE to a real repository, over real Postgres (Story
 // MOTIR-1775 · MOTIR-1913) — the step that makes a two-repo project's agents
@@ -63,7 +64,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId,
-      repoId: `${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `${name}-${randomToken(8)}`,
       owner: 'acme',
       name,
       defaultBranch: 'main',

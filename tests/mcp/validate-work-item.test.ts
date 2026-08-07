@@ -14,6 +14,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // `validate_work_item` (Subtask 7.8.23) over real Postgres — the single-item
 // analogue of `validate_sprint`: is a work item's whole SUBTREE finishable? We
@@ -956,7 +957,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
-      repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `repo-${name}-${randomToken(8)}`,
       owner: 'moooon',
       name,
       defaultBranch: 'main',

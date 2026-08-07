@@ -11,6 +11,7 @@ import {
 } from '@/lib/migrateOnboarding/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // migrateOnboardingService — the migrate-onboarding ("Workflow B") state machine
 // WIRED to shipped reality (Story 7.15 · MOTIR-931), against a REAL Postgres (the
@@ -78,7 +79,7 @@ async function patchRun(
 /** Seed a connected GitHub repo for the fixture's workspace so resolveCodeContext
  *  resolves it — the connect-step exit signal. Returns its `owner/name` ref. */
 async function seedConnectedRepo(fx: WorkItemFixture, owner = 'acme', name = 'widgets') {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomToken(6);
   const inst = await db.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
@@ -108,7 +109,7 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: 'succeeded',
       finishedAt: new Date(),

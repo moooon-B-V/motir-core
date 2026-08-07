@@ -21,6 +21,7 @@ import {
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // THE CI-ACTIONS GATE against real Postgres (Story MOTIR-1775 · MOTIR-1907) —
 // `docs/decisions/ci-minutes-allowance.md` §A, §4.4, §6.5, §8.6.
@@ -109,7 +110,7 @@ async function seedRepo(
     data: {
       installationId: inst.id,
       workspaceId: tenant.workspaceId,
-      repoId: `${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `${name}-${randomToken(8)}`,
       owner,
       name,
       defaultBranch: 'main',

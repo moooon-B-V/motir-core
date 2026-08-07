@@ -21,6 +21,7 @@ import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // PROPOSING the repository set over real Postgres (Story MOTIR-1775 · MOTIR-1881).
 // The derivation itself is proved in `projectRepoProposal.test.ts` (pure); what is
@@ -69,7 +70,7 @@ async function connectRepo(workspaceId: string, name: string): Promise<GithubRep
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
-      repoId: `${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `${name}-${randomToken(8)}`,
       owner: 'acme',
       name,
       defaultBranch: 'main',

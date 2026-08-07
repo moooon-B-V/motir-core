@@ -13,6 +13,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // `get_project_state` (MOTIR-1968) over real Postgres — the project-CONFIGURATION
 // read a planning agent needs to VERIFY a tenant precondition instead of
@@ -71,7 +72,7 @@ function stateOf(res: CallToolResult): ProjectStateDto {
  *  the connected-set read is a `findFirst`, so repos meant to be visible together
  *  MUST share it). */
 async function seedInstallation(fx: WorkItemFixture) {
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomToken(6);
   return db.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
@@ -89,7 +90,7 @@ async function seedRepo(
   name: string,
 ): Promise<string> {
   if (!inst.workspaceId) throw new Error('seedRepo needs a workspace-bound installation');
-  const rand = Math.random().toString(36).slice(2, 8);
+  const rand = randomToken(6);
   await db.githubRepo.create({
     data: {
       installationId: inst.id,
@@ -112,7 +113,7 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: 'succeeded',
       finishedAt: new Date(),
@@ -129,7 +130,7 @@ async function seedRunningIndexJob(fx: WorkItemFixture) {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
       eventName: 'system.code-graph-index',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: 'running',
       output: {},
@@ -297,7 +298,7 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
         workspaceId: fx.workspaceId,
         functionId: 'system.code-graph-index',
         eventName: 'system.code-graph-index',
-        eventId: `evt-${Math.random().toString(36).slice(2)}`,
+        eventId: `evt-${randomToken()}`,
         attempt: 0,
         status: 'succeeded',
         finishedAt: new Date(),

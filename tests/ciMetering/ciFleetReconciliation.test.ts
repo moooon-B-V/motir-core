@@ -11,6 +11,7 @@ import {
 } from '@/lib/services/ciMinutesReconciliationService';
 import { MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken, randomInt } from '../helpers/random';
 
 // THE CORRECTED RECONCILIATION (Story MOTIR-1916 · MOTIR-1924) —
 // `docs/decisions/ci-minutes-allowance.md` §Q.
@@ -94,7 +95,7 @@ async function seedMeteredRun(
     data: {
       workspaceId: tenant.workspaceId,
       organizationId: tenant.organizationId,
-      runId: options.runId ?? `run-${repoName}-${Math.random().toString(36).slice(2, 8)}`,
+      runId: options.runId ?? `run-${repoName}-${randomToken(6)}`,
       runAttempt: 1,
       repoOwner: MOTIR_ORG,
       repoName,
@@ -122,7 +123,7 @@ async function seedContainer(
   await db.ciContainerUsage.create({
     data: {
       containerProvider: 'fly',
-      handleId: `m-${Math.random().toString(36).slice(2, 10)}`,
+      handleId: `m-${randomToken(8)}`,
       containerRegion: 'iad',
       workspaceId: tenant.workspaceId,
       organizationId: tenant.organizationId,
@@ -130,7 +131,7 @@ async function seedContainer(
       workload,
       // An index or agent container has no GitHub job at all — the whole reason it
       // cannot appear in an Actions-based audit.
-      workflowJobId: workload === 'ci' ? String(44000 + Math.floor(Math.random() * 900)) : null,
+      workflowJobId: workload === 'ci' ? String(44000 + randomInt(900)) : null,
       cpuKind: 'performance',
       cpus: 2,
       memoryMb: 8192,

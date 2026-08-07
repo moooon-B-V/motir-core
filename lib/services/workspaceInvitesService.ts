@@ -17,6 +17,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
+import { isEmailShape } from '@/lib/utils/email';
 import {
   AlreadyMemberError,
   InvalidEmailError,
@@ -47,7 +48,6 @@ export const INVITE_RATE_LIMIT = {
 } as const;
 
 const TOKEN_BYTES = 24;
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 interface InvitePayload {
   workspaceId: string;
@@ -145,7 +145,7 @@ export const workspaceInvitesService = {
     targetEmail: string;
   }): Promise<SendInviteResultDTO> {
     const email = normalizeEmail(args.targetEmail);
-    if (!EMAIL_SHAPE.test(email)) throw new InvalidEmailError();
+    if (!isEmailShape(email)) throw new InvalidEmailError();
 
     // Inviter must be a workspace member.
     const inviterMembership = await workspaceMembershipRepository.findByUserAndWorkspace(

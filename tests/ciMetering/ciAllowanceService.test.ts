@@ -11,6 +11,7 @@ import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { periodStartFor } from '@/lib/ciMetering/period';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // The CI-minutes ENTITLEMENT against real Postgres (Story MOTIR-1775 ·
 // MOTIR-1901) — `docs/decisions/ci-minutes-allowance.md` §1, §2, §4, §6, §8.6.
@@ -65,7 +66,7 @@ interface Fixture {
 
 /** An org with `members` memberships and one workspace. */
 async function seedOrg(options?: { members?: number; isMeta?: boolean }): Promise<Fixture> {
-  const suffix = Math.floor(Math.random() * 1_000_000);
+  const suffix = randomInt(1_000_000);
   const owner = await usersService.createUser({
     email: `ci-allowance-${suffix}@example.com`,
     password: PASSWORD,

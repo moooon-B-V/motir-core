@@ -23,6 +23,7 @@ import {
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // THE CROSS-WORKLOAD FLEET CEILING against real Postgres (Story MOTIR-1916 ·
 // MOTIR-1997).
@@ -59,7 +60,7 @@ interface Fixture {
 }
 
 async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> {
-  const suffix = Math.floor(Math.random() * 1_000_000);
+  const suffix = randomInt(1_000_000);
   const user = await usersService.createUser({
     email: `fleet-ceiling-${suffix}@example.com`,
     password: PASSWORD,
@@ -73,7 +74,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
     await db.organization.update({

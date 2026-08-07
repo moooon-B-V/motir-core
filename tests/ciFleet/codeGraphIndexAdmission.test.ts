@@ -20,6 +20,7 @@ import {
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // THE INDEX ADMISSION CAP against real Postgres (Story MOTIR-1981 · MOTIR-1990) —
 // `docs/decisions/code-graph-index-fleet.md` §7 · §7.2.
@@ -58,7 +59,7 @@ let seq = 0;
 async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> {
   seq += 1;
   const user = await usersService.createUser({
-    email: `index-admission-${seq}-${Math.floor(Math.random() * 1_000_000)}@example.com`,
+    email: `index-admission-${seq}-${randomInt(1_000_000)}@example.com`,
     password: PASSWORD,
     name: 'Owner',
   });
@@ -70,7 +71,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
     await db.organization.update({
@@ -331,7 +332,7 @@ describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
         })
       ).userId,
       name: 'Second',
-      identifier: `B${Math.floor(Math.random() * 900 + 100)}`,
+      identifier: `B${randomInt(100, 1000)}`,
     });
 
     await admit(fx, 'moooon/a');

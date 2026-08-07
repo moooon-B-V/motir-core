@@ -9,6 +9,7 @@ import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import type { ExecutorDto, WorkItemProseAdvisoryDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // DISPATCH READS THE ADVISORIES (MOTIR-2079) — over REAL Postgres.
 //
@@ -631,7 +632,7 @@ async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'):
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
-      repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `repo-${name}-${randomToken(8)}`,
       owner,
       name,
       defaultBranch: 'main',

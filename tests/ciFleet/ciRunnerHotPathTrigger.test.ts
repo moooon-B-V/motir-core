@@ -19,6 +19,7 @@ import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioni
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken, randomInt } from '../helpers/random';
 
 // THE HOT-PATH BOOT TRIGGER against real Postgres (Story MOTIR-1916 ·
 // MOTIR-1996) — `docs/decisions/ci-runner-fleet.md` §6.
@@ -108,7 +109,7 @@ interface Fixture {
 async function seedTenant(
   options: { withProjectRepo?: boolean; email?: string } = {},
 ): Promise<Fixture> {
-  const email = options.email ?? `fleet-hot-${Math.random().toString(36).slice(2, 8)}@example.com`;
+  const email = options.email ?? `fleet-hot-${randomToken(6)}@example.com`;
   const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
     name: `WS ${email}`,
@@ -118,7 +119,7 @@ async function seedTenant(
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
   await db.project.update({
     where: { id: project.id },

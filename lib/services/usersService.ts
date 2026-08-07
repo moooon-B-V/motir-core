@@ -29,6 +29,7 @@ import { avatarBlobPrefix, isOwnAvatarBlobUrl } from '@/lib/blob/referencedUrls'
 import { MAX_UPLOAD_BYTES, isImageType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import type { PasswordCapabilityDto, UserProfileDto } from '@/lib/dto/users';
+import { isEmailShape } from '@/lib/utils/email';
 
 /** Upper bound on a profile display name (Subtask 8.8.21). Generous enough for
  *  real names + handles, short enough to keep a row label sane. */
@@ -47,12 +48,6 @@ export interface UpdateProfileInput {
 const EMAIL_CHANGE_TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
 const EMAIL_CHANGE_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const EMAIL_CHANGE_RATE_MAX = 3; // requests per user per window
-
-// Pragmatic email shape check — the same intent as Better-Auth's signup
-// validation: a single `@` with non-empty, whitespace-free local and domain
-// parts and a dot in the domain. The real authority is delivery + the confirm
-// click; this just rejects obvious garbage before issuing a token.
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Users service — business logic for the User entity.
 //
@@ -422,7 +417,7 @@ export const usersService = {
     newEmail: string,
   ): Promise<{ token: string; newEmail: string; recipientName: string }> {
     const normalized = normalizeEmail(newEmail);
-    if (!EMAIL_RE.test(normalized)) {
+    if (!isEmailShape(normalized)) {
       throw new InvalidEmailError(newEmail);
     }
 
