@@ -115,16 +115,13 @@ const POLICY_OWNERS = [
  *
  * Every entry here is a domain OUTSIDE MOTIR-2256's twelve keys. When MOTIR-2291
  * wires `sprint:manage`, `report:view` and `saved_filter:manage`, its cards delete
- * these three lines — which is exactly the signal this list is meant to carry.
+ * these lines — which is exactly the signal this list is meant to carry, and the
+ * `sprintsService` line is the first one MOTIR-2350 collected.
  */
 const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
   {
     file: 'lib/savedFilters/access.ts',
     why: "the saved-filter capability derivation — `saved_filter:manage` is MOTIR-2291's, not this story's",
-  },
-  {
-    file: 'lib/services/sprintsService.ts',
-    why: "`assertSprintAdmin` — `sprint:manage` is MOTIR-2291's; a fourth workspace-OWNER-only gate of the shape MOTIR-2304 found",
   },
   {
     file: 'lib/services/jobsDashboardService.ts',
@@ -311,11 +308,14 @@ describe('the story leaves exactly MOTIR-2291 behind', () => {
       .filter((d) => d.enforcement === 'planned')
       .map((d) => d.key)
       .sort();
+    // The eight MOTIR-2291 keys, MINUS the ones its own cards have since wired.
+    // Each wiring card deletes its key from this list in the same change, so the
+    // array is the story's remaining worklist and MOTIR-2356 empties it.
     expect(stillPlanned).toEqual(
       [
         'work_item:delete',
         'work_item:triage',
-        'sprint:manage',
+        // 'sprint:manage' — wired by MOTIR-2350.
         'report:view',
         'saved_filter:manage',
         'import:run',

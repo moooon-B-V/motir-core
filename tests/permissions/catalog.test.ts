@@ -154,6 +154,20 @@ const ADMINISTRATIVE_ENFORCED: PermissionKey[] = [
   'estimation:manage',
 ];
 
+/**
+ * The MEMBER-FACING keys MOTIR-2291 has WIRED so far — same progress-bar shape
+ * as the twelve above, and the card that wires a key adds it here in the same
+ * change. Empty before MOTIR-2350 and holding all eight when the story closes;
+ * MOTIR-2356 is the card that asserts the list IS all eight and empties
+ * `PLANNED_PERMISSIONS`.
+ *
+ * ⚠️ Kept SEPARATE from `ADMINISTRATIVE_ENFORCED` rather than appended to it.
+ * The twelve are provably equivalent to `project:administer` for every actor
+ * (`accessParity.test.ts`); these eight are deliberately not, so a reader must
+ * never take membership of one list as evidence about the other.
+ */
+const MEMBER_FACING_ENFORCED: PermissionKey[] = ['sprint:manage'];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
@@ -197,7 +211,13 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => ADMINISTRATIVE_ENFORCED.includes(k)).sort()).toEqual(
       [...ADMINISTRATIVE_ENFORCED].sort(),
     );
-    expect(ENFORCED_PERMISSIONS).toHaveLength(shipped.length + ADMINISTRATIVE_ENFORCED.length);
+    // …and the member-facing keys, on the same terms (MOTIR-2291).
+    expect(ENFORCED_PERMISSIONS.filter((k) => MEMBER_FACING_ENFORCED.includes(k)).sort()).toEqual(
+      [...MEMBER_FACING_ENFORCED].sort(),
+    );
+    expect(ENFORCED_PERMISSIONS).toHaveLength(
+      shipped.length + ADMINISTRATIVE_ENFORCED.length + MEMBER_FACING_ENFORCED.length,
+    );
   });
 
   it('renders the WHOLE model by default — the grid must not under-describe the product', () => {

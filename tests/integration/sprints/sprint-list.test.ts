@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -64,8 +65,14 @@ describe('sprintsService.listByProject', () => {
     const b = await makeWorkItemFixture({ name: 'Tenant B', identifier: 'BBB' });
     await sprintsService.createSprint(a.projectId, { name: 'A-only' }, a.ctx);
 
-    // Tenant B asking for tenant A's project id under B's context sees nothing
-    // (the read filters on `workspaceId`), never A's sprint.
-    expect(await sprintsService.listByProject(a.projectId, b.ctx)).toEqual([]);
+    // Tenant B asking for tenant A's project id under B's context is REFUSED,
+    // never shown A's sprint. Until MOTIR-2350's `project:browse` gate the read
+    // simply filtered on `workspaceId` and returned `[]` — the right data behind
+    // a 200 that implies the project exists and is empty. The gate resolves the
+    // project against the actor's workspace first, so a foreign id and one that
+    // never existed are the same 404.
+    await expect(sprintsService.listByProject(a.projectId, b.ctx)).rejects.toBeInstanceOf(
+      ProjectNotFoundError,
+    );
   });
 });

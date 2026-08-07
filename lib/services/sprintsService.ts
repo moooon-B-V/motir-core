@@ -2,19 +2,17 @@ import { Prisma, type SprintState } from '@/generated/prisma/client';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntryRepository';
 import { boardsService } from '@/lib/services/boardsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { estimationService } from '@/lib/services/estimationService';
-import { isOwnerRole } from '@/lib/workspaces/roles';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import { toSprintDto, toSprintReportDto, toSprintReportPage } from '@/lib/mappers/sprintMappers';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { DEFAULT_VALIDITY_CONDITION } from '@/lib/dto/sprints';
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
@@ -65,12 +63,13 @@ import {
 // the dev/CI BYPASSRLS superuser, so the application-layer gate is primary. A
 // sprint outside the active workspace is a 404 (no existence leak).
 //
-// AUTHORIZATION: sprint management is owner-gated today (finding #36; TODO(6.4)
-// widens the role-set), EXACTLY mirroring `boardsService.assertBoardConfigAdmin`
-// — managing sprints is project-planning config, the same tier as the board /
-// workflow editors, and Jira gates it to admins (decision-ladder rung 1). The
-// gate also asserts the project belongs to the workspace, so a foreign
-// projectId 404s before any membership probe.
+// AUTHORIZATION: the sprint LIFECYCLE (create / update / delete / start /
+// complete) asks `sprint:manage` through the shared gate — see
+// `assertCanManageSprints` at the foot of this file, and the ⚠️ on it: MOTIR-2350
+// WIDENED this from the workspace-owner-only check it shipped with (finding #36's
+// TODO(6.4), now done). Sprint READS ask `project:browse`, because seeing a
+// sprint is browsing. The gate also asserts the project belongs to the workspace,
+// so a foreign projectId 404s before any membership probe.
 
 export const sprintsService = {
   /**
@@ -106,7 +105,7 @@ export const sprintsService = {
     ctx: ServiceContext,
     tx?: Prisma.TransactionClient,
   ): Promise<SprintDto> {
-    await assertSprintAdmin(ctx.userId, projectId, ctx.workspaceId);
+    await assertCanManageSprints(ctx.userId, projectId, ctx.workspaceId);
 
     const name = input.name !== undefined ? validateName(input.name) : undefined;
     const startDate = parseNullableDate(input.startDate);
@@ -256,7 +255,7 @@ export const sprintsService = {
   ): Promise<SprintDto> {
     const existing = await sprintRepository.findById(id, ctx.workspaceId);
     if (!existing) throw new SprintNotFoundError(id);
-    await assertSprintAdmin(ctx.userId, existing.projectId, ctx.workspaceId);
+    await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
     if (existing.state === 'complete') throw new CannotModifyCompletedSprintError(id);
 
     const data: Prisma.SprintUncheckedUpdateInput = {};
@@ -296,7 +295,7 @@ export const sprintsService = {
   async deleteSprint(id: string, ctx: ServiceContext): Promise<void> {
     const existing = await sprintRepository.findById(id, ctx.workspaceId);
     if (!existing) throw new SprintNotFoundError(id);
-    await assertSprintAdmin(ctx.userId, existing.projectId, ctx.workspaceId);
+    await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
     if (existing.state === 'active') throw new CannotDeleteActiveSprintError(id);
 
     await withWorkspaceContext({ userId: ctx.userId, workspaceId: ctx.workspaceId }, (tx) =>
@@ -313,10 +312,14 @@ export const sprintsService = {
    * (finding #26) — `listByProject` filters on it, so a foreign project simply
    * returns an empty list, never another workspace's sprints.
    *
-   * Available to any project member (everyday planning), like the backlog
-   * reads — NOT owner-gated (the owner gate guards sprint MANAGEMENT writes,
-   * not reads). The sprint count per project is small + bounded, so the
-   * per-sprint count read is a bounded fan-out, not an unbounded scan.
+   * Asks `project:browse`, NOT `sprint:manage` (Subtask MOTIR-2350). Seeing a
+   * project's sprints is browsing it — Jira governs the same split, where
+   * *Manage Sprints* creates and starts one while *Browse Projects* sees it — so
+   * taking the inventory's thirteen `sprint:manage` rows literally would have
+   * made the backlog invisible to a viewer, which is the over-correction a story
+   * about closing holes invites. The sprint count per project is small +
+   * bounded, so the per-sprint count read is a bounded fan-out, not an unbounded
+   * scan.
    *
    * NB: this exposes the already-shipped `sprintRepository.listByProject` leaf
    * (Story 4.1) through the service + a `GET /api/sprints` route — the read
@@ -324,6 +327,11 @@ export const sprintsService = {
    * repo read but not its service/HTTP binding.
    */
   async listByProject(projectId: string, ctx: ServiceContext): Promise<SprintDto[]> {
+    await projectAccessService.assertPermission(
+      projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'project:browse',
+    );
     const rows = await sprintRepository.listByProject(projectId, ctx.workspaceId);
     return Promise.all(
       rows.map(async (row) =>
@@ -362,7 +370,7 @@ export const sprintsService = {
   async startSprint(id: string, input: StartSprintInput, ctx: ServiceContext): Promise<SprintDto> {
     const existing = await sprintRepository.findById(id, ctx.workspaceId);
     if (!existing) throw new SprintNotFoundError(id);
-    await assertSprintAdmin(ctx.userId, existing.projectId, ctx.workspaceId);
+    await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
 
     // Only a PLANNED sprint is startable — the friendly surface over the pure
     // one-way `assertSprintTransition(planned → active)` rule, which is still
@@ -509,7 +517,7 @@ export const sprintsService = {
   ): Promise<SprintDto> {
     const existing = await sprintRepository.findById(id, ctx.workspaceId);
     if (!existing) throw new SprintNotFoundError(id);
-    await assertSprintAdmin(ctx.userId, existing.projectId, ctx.workspaceId);
+    await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
 
     // Only an ACTIVE sprint is completable — the friendly surface over the pure
     // one-way `assertSprintTransition(active → complete)` rule, composed below
@@ -996,21 +1004,55 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002';
 }
 
-async function assertSprintAdmin(
+/**
+ * Assert the actor may manage this project's sprints — the sprint LIFECYCLE
+ * (create / rename / delete / start / complete), Story MOTIR-2291 · Subtask
+ * MOTIR-2350.
+ *
+ * ⚠️ IT REPLACES A GATE THAT ASKED A DIFFERENT QUESTION, AND THAT IS A DELIBERATE
+ * WIDENING. Until this card the five lifecycle writes ran through a module-private
+ * check resolving `isOwnerRole(membership?.role)` — the workspace OWNER or
+ * workspace ADMIN, and nobody else. Not the project's own admin, not a project
+ * member. `sprint:manage` is held by the project `admin` and `member` too
+ * (`docs/decisions/member-facing-permissions.md` §1), so the team that runs the
+ * sprint can now run the sprint, which is what the key exists to express and what
+ * both mirrors do.
+ *
+ * It is the same movement MOTIR-2296 / MOTIR-2297 / MOTIR-2298 made for the
+ * board, workflow and estimation domains, and it is REQUIRED rather than
+ * optional: MOTIR-2349 put `sprint:manage` into `BUILTIN_ROLE_PERMISSIONS.admin`
+ * and `.member`, so leaving the old gate would have the catalog advertise a
+ * permission this code refuses — the exact lie `lib/permissions/catalog.ts`'s
+ * opening rule forbids. The other half of the story's movement is in
+ * `backlogService`, where ranking and sprint assignment had NO project gate at
+ * all and this key TIGHTENS them.
+ *
+ * ⚠️ `NotSprintAdminError` / `NOT_SPRINT_ADMIN` SURVIVES on the wire, unlike its
+ * board twin. `NOT_BOARD_ADMIN` was raised only inside the route files that
+ * caught it; this code is read by three backlog dialogs, by `lib/api/v1/errors.ts`,
+ * and by the PUBLIC v1 API's own OpenAPI description — it is a documented contract
+ * error, so the 403 keeps its shape and only the actor set behind it moves. That
+ * is the same compatibility branch `assertPermission` already keeps for
+ * `project:administer`; collapse it when the v1 contract is next revised.
+ *
+ * `ProjectNotFoundError` passes straight through, as it did before: an actor who
+ * cannot BROWSE the project gets the 404 rather than a 403 that confirms it
+ * exists.
+ */
+async function assertCanManageSprints(
   userId: string,
   projectId: string,
   workspaceId: string,
 ): Promise<void> {
-  const project = await projectRepository.findById(projectId);
-  if (!project || project.workspaceId !== workspaceId) {
-    throw new ProjectNotFoundError(projectId);
-  }
-  const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
-    userId,
-    workspaceId,
-  );
-  if (!isOwnerRole(membership?.role)) {
-    throw new NotSprintAdminError();
+  try {
+    await projectAccessService.assertPermission(
+      projectId,
+      { userId, workspaceId },
+      'sprint:manage',
+    );
+  } catch (err) {
+    if (err instanceof PermissionDeniedError) throw new NotSprintAdminError();
+    throw err;
   }
 }
 

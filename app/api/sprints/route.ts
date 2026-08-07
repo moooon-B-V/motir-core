@@ -8,6 +8,7 @@ import {
   NotSprintAdminError,
   SprintWindowInvalidError,
 } from '@/lib/sprints/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // /api/sprints (Subtask 4.1.3) — create a sprint on the ACTIVE project. Thin
 // HTTP layer over sprintsService; session-required; the project + workspace come
@@ -33,11 +34,19 @@ export async function GET(): Promise<Response> {
     );
   }
 
-  const sprints = await sprintsService.listByProject(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-  return NextResponse.json({ sprints });
+  try {
+    const sprints = await sprintsService.listByProject(ctx.projectId, {
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+    return NextResponse.json({ sprints });
+  } catch (err) {
+    // `project:browse` (MOTIR-2350) — an actor who cannot see the project gets
+    // the 404, never a 403 that confirms it exists.
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
+    throw err;
+  }
 }
 
 // POST /api/sprints — create a PLANNED sprint on the active project. Body:
@@ -105,6 +114,8 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(sprint, { status: 201 });
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof InvalidSprintNameError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }

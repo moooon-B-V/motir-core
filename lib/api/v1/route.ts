@@ -199,6 +199,11 @@ export function withV1Route<P = Record<string, never>>(
       });
       return stamp(response, responseHeaders);
     } catch (err) {
+      // Every domain error the v1 surface renders passes through here, mapped by
+      // its own `code` rather than by class — including `PermissionDeniedError`
+      // (`PERMISSION_DENIED` → 403, MOTIR-2291), which the shared project gate
+      // raises for a browser who does not hold the key a service asked for, and
+      // `ProjectNotFoundError` (404) for one who cannot browse the project at all.
       const classified = classifyApiV1Error(err);
       if (classified) {
         return stamp(

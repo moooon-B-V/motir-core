@@ -444,7 +444,14 @@ describe('the PENDING set is bounded and shrinking', () => {
     // leaves this set the other way: it GAINED `project:browse` in
     // `canvasLayoutService`, so the walk now sees a gate and it is no longer
     // pending. 8 re-decided + 1 gated = 9.
-    expect(pending.length).toBe(27);
+    //
+    // 27 → 22 is MOTIR-2350 wiring `sprint:manage`: five ungated rows gained a
+    // gate — `/api/backlog/bulk-move`, `/api/sprints/[id]/issues` (+ `/bulk`),
+    // `/api/work-items/[id]/rank` and `/api/work-items/[id]/sprint`. The three
+    // sprint ANALYTICS rows (`burndown` / `points` / `report`) stay pending: they
+    // are re-pointed at `report:view` and belong to MOTIR-2351, so one key has one
+    // owner and two cards never flip the same enforcement flag.
+    expect(pending.length).toBe(22);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

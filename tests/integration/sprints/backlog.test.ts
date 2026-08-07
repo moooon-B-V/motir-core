@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -270,11 +271,16 @@ describe('backlogService.getBacklog (bounded reads, finding #57)', () => {
     const big = await backlogService.getBacklog(fx.projectId, { limit: 100000 }, fx.ctx);
     expect(big.items).toHaveLength(3);
 
-    // Another workspace sees an empty backlog for this project (finding #26).
+    // Another workspace is REFUSED outright rather than shown an empty backlog
+    // (finding #26, sharpened by MOTIR-2350). Until the `project:browse` gate
+    // landed, a cross-tenant read returned `{ items: [], totalCount: 0 }` — the
+    // right data, but a 200 that says "this project is empty" where the honest
+    // answer is "there is no such project here". The gate resolves the project
+    // against the actor's workspace FIRST, so both cases are one 404.
     const other = await makeWorkItemFixture({ name: 'ClampOther', identifier: 'OTH' });
-    const denied = await backlogService.getBacklog(fx.projectId, {}, other.ctx);
-    expect(denied.items).toEqual([]);
-    expect(denied.totalCount).toBe(0);
+    await expect(backlogService.getBacklog(fx.projectId, {}, other.ctx)).rejects.toBeInstanceOf(
+      ProjectNotFoundError,
+    );
   });
 });
 

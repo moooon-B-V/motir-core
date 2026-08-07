@@ -179,7 +179,7 @@ const PERMISSION_META: Record<
   'member:manage': { domain: 'member', enforcement: 'enforced' },
   'project:manage_access': { domain: 'member', enforcement: 'enforced' },
   'board:configure': { domain: 'board', enforcement: 'enforced' },
-  'sprint:manage': { domain: 'sprint', enforcement: 'planned' },
+  'sprint:manage': { domain: 'sprint', enforcement: 'enforced' }, // MOTIR-2350
   'automation:manage': { domain: 'workflow', enforcement: 'enforced' },
   'workflow:manage': { domain: 'workflow', enforcement: 'enforced' },
   'component:manage': { domain: 'field', enforcement: 'enforced' },

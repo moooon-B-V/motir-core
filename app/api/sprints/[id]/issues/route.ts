@@ -6,6 +6,7 @@ import { parseIssueFilter } from '@/lib/issues/issueListFilter';
 import { upgradeFacetsIntoAst } from '@/lib/issues/issueListAdvancedFilter';
 import { decodeFilterParam } from '@/lib/filters/ast';
 import { FilterValidationError } from '@/lib/filters/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // GET /api/sprints/[id]/issues (Subtask 4.1.4) — a sprint's ranked issues as a
 // bounded, cursor-paginated page + the committed-issue count (finding #57). Thin
@@ -63,6 +64,8 @@ export async function GET(
     const page = await backlogService.getSprintIssues(id, { cursor, limit, filterAst }, ctx);
     return NextResponse.json(page);
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof SprintNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

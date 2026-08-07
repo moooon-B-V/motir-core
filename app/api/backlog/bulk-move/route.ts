@@ -3,6 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { backlogService } from '@/lib/services/backlogService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { BulkBatchTooLargeError } from '@/lib/sprints/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // POST /api/backlog/bulk-move (Subtask 4.2.2) — move a multi-selection of issues
 // back to the backlog ATOMICALLY (the "Move to backlog" bulk action). Thin HTTP
@@ -43,6 +44,8 @@ export async function POST(req: Request): Promise<Response> {
     const items = await backlogService.bulkMoveToBacklog(itemIds as string[], ctx);
     return NextResponse.json({ items });
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BulkBatchTooLargeError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }

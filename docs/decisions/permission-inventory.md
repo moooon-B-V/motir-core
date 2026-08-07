@@ -42,8 +42,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **23** are
-enforced by a gate today; **8** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **24** are
+enforced by a gate today; **7** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -60,6 +60,11 @@ A `planned` key is never offered in the grid or the role editor.
 > **`workflow:manage` · `automation:manage`** (MOTIR-2297) ·
 > **`field:manage` · `component:manage` · `label:manage` · `estimation:manage`** (MOTIR-2298) — the
 > whole twelve are now wired.
+>
+> **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
+> (MOTIR-2350). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
+> take membership of one list as evidence about the other.
 
 > **The catalog was 32 keys, and `repository:connect` was the twenty-first `planned` one.**
 > MOTIR-2294 RETIRED it rather than wiring it. Its six operations — the two GitHub OAuth legs,
@@ -129,18 +134,28 @@ splitting. So MOTIR-2256's split is not one movement: it TIGHTENS some domains, 
 leaves the rest exactly where they were. The per-domain card is where each is argued, and a card that
 claims neutrality for a row in the LOOSENS column is wrong.
 
-| Domain       | The gate that actually runs                                      | Admits today                                        | The split |
-| ------------ | ---------------------------------------------------------------- | --------------------------------------------------- | --------- |
-| `board`      | `assertPermission(board:configure)` (wired, MOTIR-2296)          | was workspace OWNER only                            | LOOSENED  |
-| `workflow`   | `assertPermission(workflow:manage)` (wired, MOTIR-2297)          | was workspace OWNER only                            | LOOSENED  |
-| `estimation` | `assertPermission(estimation:manage)` (wired, MOTIR-2298)        | was workspace OWNER only                            | LOOSENED  |
-| `automation` | `assertPermission(automation:manage)` (wired, MOTIR-2297)        | `project:administer`-equivalent                     | neutral   |
-| `component`  | `assertPermission(component:manage)` (wired, MOTIR-2298)         | was a module-private `assertCanManage`, same answer | neutral   |
-| `field`      | `assertPermission(field:manage)` (wired, MOTIR-2298)             | was a module-private `assertCanManage`, same answer | neutral   |
-| `label`      | `assertPermission(label:manage)` (wired, MOTIR-2298)             | was `project:administer`                            | neutral   |
-| `ai`         | `assertPermission(ai:configure)` (wired, MOTIR-2300)             | was `project:administer`                            | neutral   |
-| `member`     | `assertPermission(member:manage / project:manage_access)` (2295) | was `project:administer`                            | neutral   |
-| `repository` | `assertPermission(repository:manage / …_access)` (MOTIR-2299)    | was project MEMBER via `assertCanEdit`              | TIGHTENED |
+| Domain               | The gate that actually runs                                      | Admits today                                        | The split |
+| -------------------- | ---------------------------------------------------------------- | --------------------------------------------------- | --------- |
+| `board`              | `assertPermission(board:configure)` (wired, MOTIR-2296)          | was workspace OWNER only                            | LOOSENED  |
+| `workflow`           | `assertPermission(workflow:manage)` (wired, MOTIR-2297)          | was workspace OWNER only                            | LOOSENED  |
+| `estimation`         | `assertPermission(estimation:manage)` (wired, MOTIR-2298)        | was workspace OWNER only                            | LOOSENED  |
+| `automation`         | `assertPermission(automation:manage)` (wired, MOTIR-2297)        | `project:administer`-equivalent                     | neutral   |
+| `component`          | `assertPermission(component:manage)` (wired, MOTIR-2298)         | was a module-private `assertCanManage`, same answer | neutral   |
+| `field`              | `assertPermission(field:manage)` (wired, MOTIR-2298)             | was a module-private `assertCanManage`, same answer | neutral   |
+| `label`              | `assertPermission(label:manage)` (wired, MOTIR-2298)             | was `project:administer`                            | neutral   |
+| `ai`                 | `assertPermission(ai:configure)` (wired, MOTIR-2300)             | was `project:administer`                            | neutral   |
+| `member`             | `assertPermission(member:manage / project:manage_access)` (2295) | was `project:administer`                            | neutral   |
+| `repository`         | `assertPermission(repository:manage / …_access)` (MOTIR-2299)    | was project MEMBER via `assertCanEdit`              | TIGHTENED |
+| `sprint` (lifecycle) | `assertPermission(sprint:manage)` (wired, MOTIR-2350)            | was workspace OWNER/ADMIN only                      | LOOSENED  |
+| `sprint` (grooming)  | `assertPermission(sprint:manage)` (wired, MOTIR-2350)            | was NOTHING — any workspace member                  | TIGHTENED |
+
+**⚠️ MOTIR-2291's rows land in BOTH columns, and one card straddles them.** The table above was
+written for MOTIR-2256, whose whole story was administrative keys. MOTIR-2350 is the first card in
+either story where the SAME key both loosens and tightens depending on which service you look at:
+`sprintsService`'s five lifecycle writes were behind a module-private `isOwnerRole` check —
+invisible to the guard's walk until MOTIR-2304, and TIGHTER than the umbrella — while
+`backlogService`'s ranking and sprint-assignment writes had no project gate at all. Reading the
+inventory row alone ("`sprint:manage`, was `session only`") would have described half of it.
 
 **Why this had to be written down.** The `Gate today` cells for `board`, `workflow` and `estimation`
 read **`session only`** until 2026-08-06. They were produced by the guard in
@@ -534,21 +549,38 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `sprint`
 
-| Operation                       | Verbs        | Gate today                                       | Permission      | Decision | Why |
-| ------------------------------- | ------------ | ------------------------------------------------ | --------------- | -------- | --- |
-| `/api/backlog`                  | GET/POST     | `backlogService.createBacklogIssue` (transitive) | `sprint:manage` | new      | R14 |
-| `/api/backlog/bulk-move`        | POST         | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/sprints`                  | GET/POST     | session only                                     | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]`             | DELETE/PATCH | session only                                     | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/burndown`    | GET          | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/complete`    | POST         | session only                                     | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/issues`      | GET          | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/issues/bulk` | POST         | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/points`      | GET          | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/report`      | GET          | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/sprints/[id]/start`       | POST         | session only                                     | `sprint:manage` | new      | R14 |
-| `/api/work-items/[id]/rank`     | POST         | workspace only                                   | `sprint:manage` | new      | R14 |
-| `/api/work-items/[id]/sprint`   | POST         | workspace only                                   | `sprint:manage` | new      | R14 |
+> **MOTIR-2350 wired ten of these thirteen rows, and the split it made is not the one this
+> table originally recorded.** Taking all thirteen literally would have made the backlog and a
+> sprint's issue list invisible to a project `viewer` — so the three READS ask `project:browse`
+> (Jira splits _Manage Sprints_ from _Browse Projects_ the same way), and `POST /api/backlog` asks
+> `work_item:edit`, because authoring work is not a sprint act however the issue enters the list.
+> The three ANALYTICS rows (`burndown` / `points` / `report`) are re-pointed at `report:view` and
+> left for **MOTIR-2351**, so one key has one owner and two cards never flip the same
+> `enforcement` flag.
+>
+> ⚠️ **The direction of travel differs between the two services, and the row cells alone hide it.**
+> `backlogService` had NO project gate — those rows TIGHTEN. The five sprint LIFECYCLE writes ran
+> through a module-private `isOwnerRole` check, i.e. the workspace OWNER or ADMIN and nobody else —
+> so `sprint:manage` LOOSENS them to the project's own admins and members, exactly as MOTIR-2296 /
+> -2297 / -2298 did for board, workflow and estimation. See the GATE TODAY, MEASURED table above.
+
+| Operation                       | Verbs        | Gate today                                                           | Permission       | Decision | Why |
+| ------------------------------- | ------------ | -------------------------------------------------------------------- | ---------------- | -------- | --- |
+| `/api/backlog`                  | GET          | `backlogService.getBacklog` → `assertPermission`                     | `project:browse` | existing | R14 |
+| `/api/backlog`                  | POST         | `backlogService.createBacklogIssue` → `assertPermission`             | `work_item:edit` | existing | R14 |
+| `/api/backlog/bulk-move`        | POST         | `backlogService.bulkMoveToBacklog` → `assertPermission`              | `sprint:manage`  | existing | R14 |
+| `/api/sprints`                  | GET          | `sprintsService.listByProject` → `assertPermission`                  | `project:browse` | existing | R14 |
+| `/api/sprints`                  | POST         | `sprintsService.createSprint` → `assertPermission`                   | `sprint:manage`  | existing | R14 |
+| `/api/sprints/[id]`             | DELETE/PATCH | `sprintsService.{deleteSprint,updateSprint}` → `assertPermission`    | `sprint:manage`  | existing | R14 |
+| `/api/sprints/[id]/burndown`    | GET          | workspace only                                                       | `report:view`    | new      | R14 |
+| `/api/sprints/[id]/complete`    | POST         | `sprintsService.completeSprint` → `assertPermission`                 | `sprint:manage`  | existing | R14 |
+| `/api/sprints/[id]/issues`      | GET          | `backlogService.getSprintIssues` → `assertPermission`                | `project:browse` | existing | R14 |
+| `/api/sprints/[id]/issues/bulk` | POST         | `backlogService.bulkAssignToSprint` → `assertPermission`             | `sprint:manage`  | existing | R14 |
+| `/api/sprints/[id]/points`      | GET          | workspace only                                                       | `report:view`    | new      | R14 |
+| `/api/sprints/[id]/report`      | GET          | workspace only                                                       | `report:view`    | new      | R14 |
+| `/api/sprints/[id]/start`       | POST         | `sprintsService.startSprint` → `assertPermission`                    | `sprint:manage`  | existing | R14 |
+| `/api/work-items/[id]/rank`     | POST         | `backlogService.rankIssue` → `assertPermission`                      | `sprint:manage`  | existing | R14 |
+| `/api/work-items/[id]/sprint`   | POST         | `backlogService.{assignToSprint,moveToBacklog}` → `assertPermission` | `sprint:manage`  | existing | R14 |
 
 ### `user`
 

@@ -13,7 +13,11 @@ import {
   WorkItemKeyConflictError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
   CrossWorkspaceLinkError,
@@ -189,6 +193,15 @@ export function toToolError(err: unknown): CallToolResult {
   // 6.4 access gate: a non-browser sees a project-level denial; a read-only
   // member sees the edit denial on a write tool. Both carry their own message.
   if (err instanceof ProjectAccessDeniedError) {
+    return toolError(err.code, err.message);
+  }
+  // The MOTIR-2256 / MOTIR-2291 shared gate's 403: a BROWSER who does not hold
+  // the key `assertPermission` asked for. Its message names the key, so an agent
+  // refused by `sprint:manage` on `move_to_sprint` is told which permission it
+  // lacks rather than seeing an opaque internal error. (A NON-browser never
+  // reaches here — the gate raises `ProjectNotFoundError` first, above, which is
+  // the no-existence-leak ordering.)
+  if (err instanceof PermissionDeniedError) {
     return toolError(err.code, err.message);
   }
   // Write-tool structural / validation errors (7.8.5): create-path kind/parent
