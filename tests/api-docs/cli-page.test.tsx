@@ -93,6 +93,39 @@ describe('lib/apiDocs/cli — the facts are DERIVED, not typed', () => {
     expect(CLI_STEPS.flatMap((step) => step.cliCommands ?? []).length).toBeGreaterThan(5);
   });
 
+  it('DROPS a subcommand whose parent is not in the record, rather than mis-filing it', async () => {
+    // The orphan arm of `groupOf`. It cannot happen with a record
+    // `packages/cli/test/commandCatalog.test.ts` pins against the real tree —
+    // which is exactly why it needs a stub to reach: an entry with no help
+    // group and no findable parent belongs under no heading, and the table must
+    // leave it out rather than guess one.
+    vi.resetModules();
+    vi.doMock('../../packages/cli/src/commandCatalog', async () => {
+      const actual = await vi.importActual<typeof import('../../packages/cli/src/commandCatalog')>(
+        '../../packages/cli/src/commandCatalog',
+      );
+      return {
+        ...actual,
+        COMMAND_CATALOG: [
+          ...actual.COMMAND_CATALOG,
+          {
+            path: 'ghost orphan',
+            signature: '',
+            description: 'A subcommand whose parent does not exist.',
+            helpGroup: null,
+            options: [],
+          },
+        ],
+      };
+    });
+    const { cliCommandGroups: stubbed } = await import('@/lib/apiDocs/cli');
+    const paths = stubbed().flatMap((group) => group.rows.map((row) => row.path));
+    expect(paths).not.toContain('ghost orphan');
+    expect(paths).toContain('auth status');
+    vi.doUnmock('../../packages/cli/src/commandCatalog');
+    vi.resetModules();
+  });
+
   it('cites the CLI’s own default server rather than a retyped host', () => {
     const prose = CLI_FILES.filter((block) => block.kind === 'prose')
       .map((block) => block.text)
