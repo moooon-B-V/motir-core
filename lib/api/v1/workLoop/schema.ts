@@ -209,6 +209,26 @@ export const integrationResultSchema = z
   })
   .extend(implementationProvenanceSchema.shape);
 
+/**
+ * What recording provenance ALONE returns (MOTIR-2421).
+ *
+ * The triple that was just written, plus the two facts a caller needs in order
+ * to see that nothing else moved: the status is echoed unchanged, and
+ * `sessionBranch` is here precisely so a client can READ that it is still null.
+ * That is the assertion the dangerous fix fails — not "provenance was recorded",
+ * which the wrong implementation also satisfies.
+ */
+export const implementationReportSchema = z
+  .object({
+    key: workItemKeySchema,
+    /** Unchanged by this operation — it moves no status. */
+    status: z.string(),
+    /** Untouched by this operation. Null for a per-item-PR run, and it stays so. */
+    sessionBranch: z.string().nullable(),
+    updatedAt: z.string(),
+  })
+  .extend(implementationProvenanceSchema.shape);
+
 /** How ONE item on a closed session branch fared. */
 export const sessionCloseOutItemSchema = z.object({
   key: workItemKeySchema,
@@ -497,6 +517,17 @@ export const sessionCloseOutBodySchema = z
   .strict();
 
 /**
+ * `POST /api/v1/work-items/{key}/implementation` — the SAME triple with no
+ * branch beside it (MOTIR-2421).
+ *
+ * ⚠️ `.strict()` is the guard, not a formality: it is what makes a
+ * `sessionBranch` sent to this endpoint a 422 rather than a silently ignored
+ * field. A caller that reaches for the branch here is reaching for the fix that
+ * would unblock dependents without a merge, and it must fail loudly.
+ */
+export const implementationReportBodySchema = closeOutProvenanceBodySchema.strict();
+
+/**
  * The provenance triple as the SERVICE takes it, or `undefined` when the caller
  * reported none.
  *
@@ -532,6 +563,7 @@ export function toProvenanceInput(body: {
 }
 
 export type V1IntegrationResult = z.infer<typeof integrationResultSchema>;
+export type V1ImplementationReport = z.infer<typeof implementationReportSchema>;
 export type V1SessionCloseOut = z.infer<typeof sessionCloseOutSchema>;
 
 /** What `markIntegrated` returns, shaped for the wire — field by field. */
@@ -556,6 +588,27 @@ export function presentIntegrationResult(item: {
     implementationHarness: item.implementationHarness,
     implementationModel: item.implementationModel,
   };
+}
+
+/**
+ * What `reportImplementation` returns, shaped for the wire (MOTIR-2421).
+ *
+ * The same fields as the integration read-back and deliberately so: the two
+ * operations differ in what they ASSERT, not in what they report, and a caller
+ * that has just recorded provenance either way reads one shape. `sessionBranch`
+ * rides along unchanged, which is what lets a client see that this call left it
+ * alone.
+ */
+export function presentImplementationReport(item: {
+  identifier: string;
+  status: string;
+  sessionBranch: string | null;
+  updatedAt: string;
+  implementationSource: 'hosted' | 'byok' | 'manual' | null;
+  implementationHarness: string | null;
+  implementationModel: string | null;
+}): V1ImplementationReport {
+  return presentIntegrationResult(item);
 }
 
 /**

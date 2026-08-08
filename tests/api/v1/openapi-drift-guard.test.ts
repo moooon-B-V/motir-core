@@ -427,6 +427,18 @@ describe('every operation’s REAL response validates against its declared schem
       );
       expect(res.status, 'seeding the integration item').toBe(200);
     }
+    // BEFORE the integration drive, deliberately: this operation records
+    // provenance and asserts nothing about state (MOTIR-2421), so it neither
+    // needs the item integrated nor disturbs what the next drive asserts.
+    await drive(
+      'reportWorkItemImplementation',
+      () => import('@/app/api/v1/work-items/[key]/implementation/route'),
+      send(`/api/v1/work-items/${closing}/implementation`, 'POST', {
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+      }),
+      { key: closing },
+    );
     await drive(
       'recordWorkItemIntegration',
       () => import('@/app/api/v1/work-items/[key]/integration/route'),

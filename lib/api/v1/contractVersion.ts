@@ -57,5 +57,11 @@
  *   it without parsing text the server may reword — and costs no query, since
  *   the parent row is already read to render that line. Additive: one new
  *   field, the prompt text byte-identical.
+ * - `1.8.0` — MOTIR-2421 adds `POST /api/v1/work-items/{key}/implementation`.
+ *   Recording WHAT BUILT an item was only reachable through the integration
+ *   endpoint, which requires a session branch — so the per-item-PR path could
+ *   not record provenance at all without also asserting a lineage that does not
+ *   exist. Additive: one new endpoint, on the existing `integration` scope, with
+ *   `POST …/integration` unchanged in shape and behaviour.
  */
-export const V1_CONTRACT_VERSION = '1.7.0';
+export const V1_CONTRACT_VERSION = '1.8.0';

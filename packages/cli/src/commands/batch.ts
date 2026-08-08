@@ -5,6 +5,7 @@ import { ensureInProgress, resolveAgent, type DeliveryOptions } from './dispatch
 import { parseMax } from './auto.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
+import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { checkBootstrapCheckout, cwdReasonLabel, resolveDispatchTarget } from '../dispatch.js';
 import {
@@ -385,6 +386,18 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   // is opening the pull request — so In Review is the truthful status, and the
   // per-item close-out is `motir done <key>` after the human merges it.
   await client.transitionStatus({ key: entry.key, status: 'in_review' });
+  // What BUILT it, recorded as its own fact (MOTIR-2421). Two calls rather than
+  // one because they assert different things: the transition says where the item
+  // is, this says what ran. `motir auto` gets both from `mark_integrated`, which
+  // can only speak while also claiming a session branch — and batch has none.
+  // Same split by who-knows as the loop's (MOTIR-2419): the harness comes off
+  // the command this run launched, the model off the agent's own report.
+  await client.reportImplementation({
+    key: entry.key,
+    implementationSource: 'byok',
+    implementationHarness: deriveAgentHarness(agent.parsed.binary),
+    implementationModel: result.model,
+  });
   info(`${entry.key}: In Review via its own pull request.`);
   return { kind: 'record', record: { ...base, outcome: 'in_review' } };
 }

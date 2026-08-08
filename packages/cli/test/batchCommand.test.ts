@@ -11,6 +11,7 @@ import {
   startTestServer,
   v1Detail,
   v1DispatchPrompt,
+  v1Integration,
   v1Page,
   v1ReadyRow,
   type TestServer,
@@ -105,6 +106,16 @@ function planScripts(keys: string[]): { v1: V1Script } {
       statuses.set(key, status);
       return { body: v1Detail(key, { status }) };
     },
+    // Provenance WITHOUT a branch (MOTIR-2421) — the write batch does make.
+    'POST /api/v1/work-items/{key}/implementation': (req) => ({
+      body: v1Integration(String(req.params['key']), {
+        // What the real endpoint answers for a per-item-PR item: it moves no
+        // status and stamps no branch.
+        status: statuses.get(String(req.params['key'])) ?? 'in_review',
+        sessionBranch: null,
+        implementationSource: 'byok',
+      }),
+    }),
     // A TRIPWIRE, not a fixture: `motir batch` opens a pull request per item and
     // must never record one onto a session lineage. Scripted to refuse, so a
     // regression that starts integrating fails loudly here.

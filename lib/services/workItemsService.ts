@@ -1957,6 +1957,51 @@ export const workItemsService = {
     return report;
   },
 
+  /**
+   * Record implementation provenance WITHOUT asserting integration (MOTIR-2421)
+   * — what built a work item, said on its own.
+   *
+   * `markIntegrated` was the only path that wrote the triple, and its subject is
+   * the session branch: the branch is a required positional there, and the v1
+   * endpoint behind it requires it in the body. So provenance inherited a
+   * precondition it has nothing to do with, and `motir batch` — which opens ONE
+   * pull request per item off `main` and therefore has no branch — could not
+   * record any. Every card it ever ran carries a null triple.
+   *
+   * ⚠️ THIS METHOD MUST NEVER TOUCH `session_branch`, AND THAT IS THE POINT. A
+   * recorded branch is not an annotation: `isOpenBlocker` reads one as evidence
+   * that a blocker is satisfied, which is how a run cascades through a
+   * dependency chain with nothing merged. Inventing a branch here so the
+   * existing call could be reused — the short road, and the one anybody reaches
+   * for first — would make batch-run items stop blocking their dependents
+   * without a merge, and would enrol them in a `motir done --session` close-out
+   * they were never part of. A null column is a gap; that would be corruption
+   * wearing a fix's clothes.
+   *
+   * It moves no status either. The caller has already put the item wherever it
+   * belongs (`motir batch` transitions to In Review when the agent opens its own
+   * pull request); this says only what built the work. "What built this" and
+   * "where is it integrated" are independent facts that used to share one write.
+   *
+   * Gated exactly like the mutation routes: tenant check + browse gate through
+   * `getWorkItem`, so a cross-tenant key 404s before anything is written.
+   */
+  async reportImplementation(
+    workItemId: string,
+    ctx: ServiceContext,
+    implementation: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
+  ): Promise<WorkItemDto> {
+    await workItemsService.getWorkItem(workItemId, ctx);
+    const row = await db.$transaction((tx) =>
+      workItemsService.recordImplementationProvenance(
+        workItemId,
+        { source: implementation.source ?? 'byok', ...implementation },
+        tx,
+      ),
+    );
+    return toWorkItemDto(row);
+  },
+
   async markIntegrated(
     workItemId: string,
     sessionBranch: string,

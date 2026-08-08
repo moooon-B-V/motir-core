@@ -19,6 +19,7 @@ import { parseMax } from '../src/commands/auto.js';
 import { addExclude, readExcludes } from '../src/sessionExcludes.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
+import { parseAgentCommand } from '../src/agentProfiles.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 
@@ -72,6 +73,8 @@ function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
 
 class FakeServer {
   readonly transitions: { key: string; status: string }[] = [];
+  /** Every `reportImplementation` call, verbatim (MOTIR-2421). */
+  readonly provenance: Record<string, unknown>[] = [];
   readonly promptCalls: { key: string; seeded: boolean }[] = [];
   readonly nextReadyCalls: { kinds?: string[]; excluded: number }[] = [];
   /** Set to make every write fail the way a read-only PAT does. */
@@ -183,6 +186,13 @@ class FakeServer {
         this.byKey(args.key).status = args.status;
         return {};
       },
+      // The provenance report (MOTIR-2421) — recorded on its own, with no
+      // branch. The fake keeps the whole argument object so a test can assert
+      // what it did NOT contain.
+      reportImplementation: async (args: Record<string, unknown>) => {
+        this.provenance.push(args);
+        return {};
+      },
     };
     return fake as unknown as MotirClient;
   }
@@ -231,6 +241,8 @@ interface DriveOptions {
     index: number,
   ) => Omit<AgentRunResult, 'model'> & { model?: string | null };
   onDispatch?: (key: string, index: number) => void;
+  /** The agent command the run launched — what the harness is derived FROM. */
+  agentCommand?: string;
 }
 
 async function drive(
@@ -244,7 +256,10 @@ async function drive(
     opts: drives.opts ?? {},
     kinds: drives.kinds,
     max: drives.opts?.max ? parseMax(drives.opts.max) : null,
-    agent: { parsed: { command: 'fake-agent', binary: 'fake-agent', args: [] }, source: 'flag' },
+    agent: {
+      parsed: parseAgentCommand(drives.agentCommand ?? 'fake-agent')!,
+      source: 'flag',
+    },
     clock: () => (tick += 1000),
     runAgentFn: async ({ prompt }) => {
       const key = prompt.replace('PROMPT ', '');
@@ -740,6 +755,70 @@ describe('motir batch — a single item’s outcomes', () => {
     expect(server.transitions).toEqual([{ key: 'PROD-1', status: 'in_progress' }]);
     expect(printed()).toContain('still has no checkout');
     expect(printed()).toContain('motir link add motir-ai');
+  });
+
+  // ── implementation provenance (MOTIR-2421) ────────────────────────────────
+  // Every card `motir batch` ever ran carried a null triple, because the only
+  // write that recorded one also asserted a session branch — and batch has
+  // none. Recording it is now its own call.
+
+  it('records WHAT BUILT each item — with no branch anywhere in the call', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, {
+      agentCommand: 'claude --dangerously-skip-permissions',
+      agentResults: () => ({ exitCode: 0, signal: null, model: 'claude-opus-5' }),
+    });
+
+    expect(server.provenance).toEqual([
+      {
+        key: 'PROD-1',
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+        implementationModel: 'claude-opus-5',
+      },
+      {
+        key: 'PROD-2',
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+        implementationModel: 'claude-opus-5',
+      },
+    ]);
+    // ⚠️ The assertion that catches the dangerous fix. `toEqual` above already
+    // fails on an extra key; naming it keeps the reason attached — a branch sent
+    // from here would make the item stop blocking its dependents with nothing
+    // merged. `markIntegrated` on this fake throws for the same reason.
+    for (const call of server.provenance) expect(call).not.toHaveProperty('sessionBranch');
+  });
+
+  it('leaves the model NULL when the agent reported none, and still names the agent', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server, { agentCommand: 'codex exec' });
+
+    expect(server.provenance).toEqual([
+      {
+        key: 'PROD-1',
+        implementationSource: 'byok',
+        implementationHarness: 'codex',
+        // Null, never defaulted: the harness is derivable and stays truthful,
+        // the model is not and stays empty. The client omits it from the wire.
+        implementationModel: null,
+      },
+    ]);
+  });
+
+  it('records provenance only for an item that actually reached In Review', async () => {
+    // A failed agent leaves the item In Progress and nothing reverted — there is
+    // no work to attribute, and claiming an agent built it would be a lie about
+    // a card nobody finished.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, {
+      opts: { keepGoing: true },
+      agentCommand: 'claude',
+      agentResults: (key) =>
+        key === 'PROD-1' ? { exitCode: 1, signal: null } : { exitCode: 0, signal: null },
+    });
+
+    expect(server.provenance.map((c) => c['key'])).toEqual(['PROD-2']);
   });
 
   it('names the refusal readably when the server reports lineage without a branch name', async () => {

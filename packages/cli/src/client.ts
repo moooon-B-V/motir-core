@@ -997,6 +997,41 @@ export class MotirClient {
     });
   }
 
+  /**
+   * Record WHAT BUILT an item, with no branch beside it (MOTIR-2421).
+   *
+   * The per-item-PR path's counterpart to {@link markIntegrated}: `motir batch`
+   * opens one pull request per item off `main`, so it has no session branch to
+   * report — and the integration endpoint requires one, which is why every card
+   * it ever ran carries a null provenance triple.
+   *
+   * ⚠️ It records provenance and NOTHING else. No status moves, and the item's
+   * session branch is untouched — a branch stamped here would make the item stop
+   * blocking its dependents with nothing merged. There is deliberately no
+   * parameter for one, and the server refuses the field outright.
+   */
+  async reportImplementation(args: {
+    key: string;
+    implementationSource?: 'byok' | 'manual';
+    implementationHarness?: string;
+    implementationModel?: string | null;
+  }): Promise<void> {
+    await this.v1.request('reportWorkItemImplementation', {
+      path: { key: args.key },
+      body: {
+        ...(args.implementationSource === undefined
+          ? {}
+          : { implementationSource: args.implementationSource }),
+        ...(args.implementationHarness === undefined
+          ? {}
+          : { implementationHarness: args.implementationHarness }),
+        ...(args.implementationModel === undefined || args.implementationModel === null
+          ? {}
+          : { implementationModel: args.implementationModel }),
+      },
+    });
+  }
+
   /** Bulk close-out for a merged session PR (7.8.11): every item recorded on
    * the branch → done, `session_branch` cleared, with per-item outcomes. */
   async completeSession(args: {

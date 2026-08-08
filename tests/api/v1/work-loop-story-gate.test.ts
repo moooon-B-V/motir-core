@@ -101,6 +101,27 @@ const WORK_LOOP_MIRRORS = {
   getWorkItemActivity: 'get_work_item_activity',
 } as const;
 
+/**
+ * Work-loop operations that deliberately mirror NO MCP tool, each with the
+ * reason — the same shape the drift guard uses for an operation it cannot
+ * drive.
+ *
+ * An entry here is a claim that has to be argued, not a way to quiet the guard:
+ * the pairing check below reads this set, so an operation added with no tool and
+ * no reason still fails. What the guard actually protects is that nobody adds a
+ * v1 operation whose scope was invented rather than mirrored, and an operation
+ * with no counterpart cannot invent one either — its scope is asserted against
+ * `TOOL_SCOPES` all the same.
+ */
+const WORK_LOOP_UNMIRRORED: Record<string, string> = {
+  reportWorkItemImplementation:
+    'MOTIR-2421 · Amendment 18 — recording provenance without asserting integration is a ' +
+    'CLIENT need, not an agent one: an agent already reports its harness and model through ' +
+    '`mark_integrated` when it has a branch, and the per-item-PR path this serves is the ' +
+    'CLI runner’s. It takes `mark_integrated`’s scope (the same actor, the same §3 row) ' +
+    'without duplicating its tool.',
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. The scope map is MIRRORED, not copied
 // ─────────────────────────────────────────────────────────────────────────────
@@ -108,13 +129,26 @@ const WORK_LOOP_MIRRORS = {
 describe('every work-loop operation mirrors its MCP counterpart’s scope', () => {
   const MIRRORS = WORK_LOOP_MIRRORS;
 
-  it('pairs EVERY operation this story declared — no operation is unmirrored', () => {
+  it('pairs EVERY operation this story declared — or names why it has no tool', () => {
     expect(WORK_LOOP_OPERATIONS.map((op) => op.operationId).sort()).toEqual(
-      Object.keys(MIRRORS).sort(),
+      [...Object.keys(MIRRORS), ...Object.keys(WORK_LOOP_UNMIRRORED)].sort(),
     );
-    // …and the story's own audit named ten. A count that drifted from the plan
-    // is worth failing on.
-    expect(WORK_LOOP_OPERATIONS).toHaveLength(10);
+    // …and the story's own audit named ten, plus the one later operation that
+    // deliberately has no counterpart. A count that drifted from the plan is
+    // worth failing on.
+    expect(Object.keys(MIRRORS)).toHaveLength(10);
+    expect(WORK_LOOP_OPERATIONS).toHaveLength(11);
+  });
+
+  it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {
+    // The excuse proven against a violation: an empty reason is not a reason,
+    // and an unmirrored operation cannot invent a scope of its own either.
+    for (const [operationId, reason] of Object.entries(WORK_LOOP_UNMIRRORED)) {
+      expect(reason.trim().length, `${operationId} states why it has no tool`).toBeGreaterThan(40);
+      const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === operationId);
+      expect(op, `${operationId} is declared`).toBeDefined();
+      expect(Object.values(TOOL_SCOPES) as readonly string[]).toContain(op?.scope);
+    }
   });
 
   it.each(Object.entries(MIRRORS))(

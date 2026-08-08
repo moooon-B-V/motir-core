@@ -4019,3 +4019,71 @@ never a checkout concept; it is not a general reopening of the dispatch payload.
   addressed as an instruction — and the two coexist deliberately.
 - **MOTIR-2398 consumes it**, which is what lets `nextReady` leave MCP and
   11.5.6 delete the SDK.
+
+### Amendment 18 (2026-08-08) — an optional field on an ASSERTING operation is a precondition nobody chose: provenance gets its own endpoint
+
+> **Written by Story 11.5 (MOTIR-2421), from a command that could not report at all.**
+
+#### The conflict
+
+`POST /api/v1/work-items/{key}/integration` records that work is integrated onto
+a session branch, and carries the implementation provenance triple as three
+optional body fields. That looked like a free addition: integration is exactly
+the moment an external agent's work arrives, and exactly the moment it knows what
+it ran as.
+
+But the operation's SUBJECT is the branch. `sessionBranch` is required in the
+body, so the three optional fields inherited a precondition that has nothing to
+do with them: there is no way to say _"this was built by X on model Y"_ without
+also saying _"and it is integrated on branch Z"_.
+
+For `motir batch` — one pull request per item, off `main` — the second half is
+false. So it recorded nothing, and every card it ever ran carries a null triple.
+Not a wrong value; an absent one, for an entire command's output, silently.
+
+#### The rule
+
+**An optional field on an operation that ASSERTS something inherits that
+assertion as a precondition.** "Optional" reads as _you may also supply this_.
+What it actually means on an asserting operation is _you may supply this, but
+only while asserting the thing this operation is about_. That coupling is
+invisible in the schema, invisible in the generated client, and shows up only as
+a caller that cannot use the field at all.
+
+When a fact is independent of what an operation asserts, it needs its own
+operation — not an optional field on the nearest one that happens to be writing
+the same row.
+
+#### Why the obvious alternatives were rejected
+
+- **Make `sessionBranch` optional on `…/integration`.** It would turn one
+  operation into two behaviours behind one name, and the response — whose
+  `status: in_review` is part of what integration MEANS — would become
+  conditional on a field. A client reading the operation could no longer tell
+  what it had asserted.
+- **Send a synthetic branch so the existing call works.** ⚠️ This is the
+  dangerous one, and it is what anybody reaches for first. A recorded branch is
+  not an annotation: `isOpenBlocker` reads one as evidence that a blocker is
+  satisfied, which is how a run cascades through a dependency chain with nothing
+  merged. Inventing a branch would make batch-run items **stop blocking their
+  dependents without a merge**, and enrol them in a `motir done --session`
+  close-out they were never part of. A null column is a gap; that is corruption
+  wearing a fix's clothes.
+
+#### Consequences of this amendment
+
+- **`POST /api/v1/work-items/{key}/implementation`** records the triple alone. It
+  moves no status and touches no branch, and echoes both back so a client can SEE
+  that it did not.
+- **Its body is `.strict()` with no `sessionBranch`.** A branch sent there is a
+  422, not a silently dropped field — the rejected fix must fail loudly rather
+  than half-work.
+- **The contract MINOR moves to `1.8.0`.** A new endpoint is additive under §8;
+  `…/integration` is unchanged in shape and behaviour.
+- **It shares the `integration` scope** with its two siblings, which
+  `lib/mcp/scopes.ts` defines as "external-agent integration writes" — exactly
+  the actor here.
+- **The tests assert the NEGATIVE.** "Provenance was recorded" is satisfied by
+  the rejected fix too. What that fix breaks is `sessionBranch` and readiness, so
+  those are what the suite reads: the branch still null, dependents still
+  blocked, and the close-out still not finding the item.

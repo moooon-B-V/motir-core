@@ -678,6 +678,13 @@ gap.
 | Close-out             | `motir done <key>`                      | `motir done --session <branch>` (bulk)             | `motir done <key>` (per item)                   |
 | Agent required        | no (`--print` is the default)           | **yes**                                            | **yes**                                         |
 
+**All three record what BUILT each item** — the agent Motir launched, and the
+model that agent reported. `auto` and `run` record it while marking the item
+integrated; `batch` has no session branch to mark, so it reports provenance on
+its own. None of them writes a branch it did not create: a recorded session
+branch is what tells Motir a dependency is satisfied, so stamping one to carry
+provenance would release dependents with nothing merged.
+
 **`motir batch` freezes the list and prints it before the first agent starts** —
 so you can Ctrl-C out of a run you did not want while nothing has been touched.
 A strictly main-ready snapshot is mutually independent by construction (an item
