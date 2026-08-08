@@ -5,6 +5,7 @@ import {
   FolderGit2,
   Gauge,
   KeyRound,
+  Shield,
   SlidersHorizontal,
   Sparkles,
   Tag,
@@ -80,6 +81,25 @@ export interface SettingsNavEntry {
    * from the command palette. Becomes a normal entry when 6.6 ships its page.
    */
   placeholder?: boolean;
+  /**
+   * Routes reached by DRILLING DOWN from this entry, which deliberately get no
+   * rail row of their own (Subtask MOTIR-2263 — the role DETAIL screen). Each
+   * must be a strict sub-path of {@link href}: this field declares a nested
+   * destination, it is not a second way to register an unrelated page.
+   *
+   * ⚠️ WHY THIS EXISTS RATHER THAN A WEAKER TOTALITY TEST. The 6.5.2 guard pairs
+   * every on-disk `settings/project/**​/page.tsx` 1:1 with a registry entry, so a
+   * page that ships with no way to reach it fails the build. A drill-down is the
+   * first honest exception — a second `page.tsx` whose door is its PARENT's row,
+   * not a row of its own — and the answer is to teach the registry about it, not
+   * to relax the assertion until it passes. The guard still pairs the filesystem
+   * 1:1 with `PROJECT_SETTINGS_ROUTE_PATHS` (hrefs PLUS declared nested routes),
+   * so an undeclared new page still fails exactly as before.
+   *
+   * `isSettingsEntryActive` already lights the parent row on these, since a
+   * non-`exact` entry matches its own sub-paths.
+   */
+  nestedRoutes?: string[];
 }
 
 /** The project-settings root — the Details landing route. */
@@ -128,6 +148,27 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     icon: Users,
     labelKey: 'nav.members',
     access: browse,
+  },
+  {
+    id: 'roles',
+    group: 'access',
+    href: '/settings/project/roles',
+    icon: Shield,
+    labelKey: 'nav.roles',
+    // Story MOTIR-2282 · MOTIR-2263 — what each role in the project can DO.
+    // Sits between Members & access (who is on the team) and Code access (who
+    // can clone), which is the order `design/projects/design-notes.md` draws:
+    // the model, then its two applications.
+    //
+    // A DRILL-DOWN: the list is the rail row, and `roles/[roleKey]` is reached
+    // by activating a row — hence `nestedRoutes` rather than a second entry. The
+    // rail keeps this row active on the detail screen (non-`exact` matching).
+    //
+    // BROWSE-gated like every other Access entry: a member reads what the roles
+    // mean, they just cannot author one. Turning that into a permission
+    // predicate is MOTIR-2258's job, not this card's.
+    access: browse,
+    nestedRoutes: ['/settings/project/roles/[roleKey]'],
   },
   {
     id: 'code-access',
@@ -225,6 +266,21 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
 export const PROJECT_SETTINGS_ROUTES: SettingsNavEntry[] = PROJECT_SETTINGS_NAV.filter(
   (entry) => !entry.placeholder,
 );
+
+/**
+ * EVERY reachable settings destination — each real entry's own `href` plus the
+ * drill-down routes it declares in {@link SettingsNavEntry.nestedRoutes}. This is
+ * the set the totality test pairs 1:1 with the on-disk
+ * `settings/project/**​/page.tsx` routes.
+ *
+ * The distinction from {@link PROJECT_SETTINGS_ROUTES} is exactly the rail's: a
+ * nested route is REACHABLE (so it must be accounted for) but is not a ROW (so it
+ * has no icon, no label, and no place in the nav or the command palette).
+ */
+export const PROJECT_SETTINGS_ROUTE_PATHS: string[] = PROJECT_SETTINGS_ROUTES.flatMap((entry) => [
+  entry.href,
+  ...(entry.nestedRoutes ?? []),
+]);
 
 /** Whether `pathname` is inside the project-settings area. */
 export function isProjectSettingsPath(pathname: string): boolean {
