@@ -1715,6 +1715,41 @@ correctly without it. Nothing else on the screen depends on it.
 
 ### Colour + shape rules (mock === component)
 
+> **⚠️ CONTRAST, MEASURED — the asset's first revision failed AA and the code had to
+> diverge from it until this section was corrected (MOTIR-2455).** `AxeBuilder` on the
+> real `/settings/project/roles` reported the `Built-in` chip and the member count at
+> **2.39:1** and the role's purpose at **4.16:1**, against AA's 4.5:1. The cause was not
+> the ink alone: this asset's own `.rolelist` / `.permcard` reached for `--el-surface`
+> (`#f6f5f4`) while the inherited `.card` in this same file is already `#ffffff`, and that
+> off-white halves the headroom every ink above it has.
+>
+> **Contrast is a property of the PAIR.** Measured across both themes:
+>
+> | ink                   | page / card | `--el-surface` | `--el-muted` | `--el-surface-soft` |
+> | --------------------- | ----------- | -------------- | ------------ | ------------------- |
+> | `--el-text-faint`     | 2.61 ✗      | 2.39 ✗         | 2.37 ✗       | 2.50 ✗              |
+> | `--el-text-muted`     | **4.54 ✓**  | 4.17 ✗         | 4.12 ✗       | 4.34 ✗              |
+> | `--el-text-secondary` | 6.80 ✓      | 6.24 ✓         | 6.18 ✓       | 6.51 ✓              |
+>
+> (Light theme, which is the binding one — every ink clears AA on every dark surface.)
+>
+> Three rules fall out, and they are the reason this section is worth reading before
+> drawing the create page:
+>
+> 1. **`--el-text-faint` NEVER carries text that WCAG measures.** It clears AA on no
+>    surface in either theme. It is for **decorative glyphs** (`.rchev`, `.lrow svg`, the
+>    withheld `.pmark` — each `aria-hidden` or `role="img"` with its own label, so meaning
+>    never rests on it) and for **disabled / inactive** text, which 1.4.3 exempts.
+> 2. **`--el-text-muted` is AA-safe ONLY on the white page/card**, with 0.04 of headroom.
+>    On any of the three off-white surfaces it fails. So a muted description is fine inside
+>    a card and wrong on a tinted panel.
+> 3. **This asset's own containers therefore take `--el-card`** — the same white the
+>    inherited `.card` already paints and the same surface the shipped `Card` primitive
+>    renders — so the descriptions can stay muted and the hierarchy survives.
+>
+> Every ACTIVE informational ink that was `--el-text-faint` is now `--el-text-secondary`:
+> `.crumb`, `.lockchip`, `.rsum .rmembers`, `.pgroup`, `.permrow .from`, `.reserved-tag`.
+
 - **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated**
   = `eye`. Each mark is a `role="img"` with an `aria-label` (_Held_ / _Not held_ / _Granted by
   access level_), so state is never carried by colour or glyph ALONE.

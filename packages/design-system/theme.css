@@ -2244,10 +2244,19 @@
   /* ── Text scale (the warm-charcoal hierarchy, named by ROLE) ────── */
   --el-text: var(--color-foreground); /* primary ink */
   --el-text-strong: var(--color-charcoal); /* emphasis / AA-safe text on tints */
-  --el-text-secondary: var(--color-slate); /* secondary copy */
+  --el-text-secondary: var(--color-slate); /* secondary copy — AA on EVERY surface */
+  /* ⚠️ AA-SAFE ONLY ON THE WHITE PAGE/CARD, and by 0.04 (4.54:1). On
+     --el-surface it is 4.17, on --el-muted 4.12, on --el-surface-soft 4.34 —
+     all under AA. A muted caption belongs inside a card, never on a panel.
+     (MOTIR-2455; light theme is the binding one — every ink clears AA on dark.) */
   --el-text-muted: var(--color-muted-foreground); /* muted / captions */
   --el-text-tertiary: var(--color-steel); /* tertiary / footers */
-  --el-text-faint: var(--color-stone); /* faint labels */
+  /* ⚠️ NEVER CARRIES TEXT WCAG MEASURES — 2.37–2.82:1 on every surface in BOTH
+     themes, so there is no context in which it passes. It is for DECORATIVE
+     glyphs (aria-hidden, or a role="img" whose label carries the meaning) and
+     for DISABLED / inactive text, which WCAG 1.4.3 exempts. Active
+     informational text takes --el-text-secondary. (MOTIR-2455) */
+  --el-text-faint: var(--color-stone); /* faint labels — decoration + disabled ONLY */
   --el-text-inverted: var(--color-background); /* text on an ink / accent fill */
 
   /* ── Accent (active CTA identity) + brand highlight ─────────────── */

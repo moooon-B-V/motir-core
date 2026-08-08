@@ -18,15 +18,17 @@ import { PermissionMark } from './PermissionMark';
 // a ROW you drill into and the comparison the matrix gave is carried by the
 // `N of M` on every row.
 //
-// ⚠️ THE INK IS ONE STEP DARKER THAN THE MOCK DRAWS IT, DELIBERATELY. The mock
-// puts the `Built-in` chip and the member count in `--el-text-faint` on
-// `--el-surface`; measured by axe on the real route that is 2.39:1, well under
-// AA's 4.5:1, and `--el-text-muted` on the same surface is 4.16:1 — also under.
-// Both are INFORMATION, not decoration, so they take `--el-text-secondary` and
-// the containers take `--el-card` (which is what the shipped `Card` primitive the
-// design's own table names actually paints). `motir-core/CLAUDE.md` says AA
-// contrast holds, and the design notes restate it; where a mock's token choice
-// and that rule disagree, the rule wins. Logged so the asset can follow.
+// ⚠️ THE INKS HERE ARE AA-DRIVEN, AND THE ASSET NOW AGREES (MOTIR-2455). The
+// mock's first revision put the `Built-in` chip and the member count in
+// `--el-text-faint` on `--el-surface`; axe measured 2.39:1 against AA's 4.5:1,
+// and `--el-text-muted` on that same off-white is 4.17:1 — also under. The asset
+// has been corrected to match what is here, so this is no longer a divergence:
+// active informational text takes `--el-text-secondary` (AA on every surface in
+// both themes) and the containers take `--el-card`, the white the shipped `Card`
+// primitive paints. `--el-text-faint` survives ONLY on the chevron and the
+// permission marks, which are glyphs whose meaning is carried by an `aria-label`.
+// The measured table lives in `motir-core/CLAUDE.md` and in the token's own
+// comment in `packages/design-system/theme.css`.
 //
 // ⚠️ EVERY NUMBER COMES FROM THE READ. `N` is the role's own set length, `M` is
 // `roleGatedPermissionCount`, and the headcount is `memberCount` — all three off

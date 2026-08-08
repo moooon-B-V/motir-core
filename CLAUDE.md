@@ -397,7 +397,7 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
 | emphasis, AA text on a tint                 | `--el-text-strong`                                                                 |
 | secondary copy                              | `--el-text-secondary`                                                              |
 | muted / caption                             | `--el-text-muted`                                                                  |
-| tertiary / footer · faint label             | `--el-text-tertiary` · `--el-text-faint`                                           |
+| tertiary / footer · faint label             | `--el-text-tertiary` · `--el-text-faint` (⚠️ see below)                            |
 | text on an ink/accent fill                  | `--el-text-inverted`                                                               |
 | CTA accent FILL · its text · pressed        | `--el-accent` · `--el-accent-text` · `--el-accent-pressed`                         |
 | accent AS text / icon on a page surface     | `--el-accent-on-surface`                                                           |
@@ -422,6 +422,26 @@ So in JSX, use arbitrary-value utilities pointing at `--el-*`:
 - ✅ **AA contrast holds** — colored chips put the hue in the tint
   BACKGROUND with `--el-text-strong` text (finding #35); never tint a
   page-level surface.
+- ⚠️ **CONTRAST IS A PROPERTY OF THE PAIR, NOT OF THE INK — and two grey
+  tokens are traps (MOTIR-2455).** Measured with axe on a real route, light
+  theme (the binding one; every ink clears AA on every dark surface):
+
+  | ink                   | page / card `#ffffff` | `--el-surface` | `--el-muted` | `--el-surface-soft` |
+  | --------------------- | --------------------- | -------------- | ------------ | ------------------- |
+  | `--el-text-faint`     | 2.61 ✗                | 2.39 ✗         | 2.37 ✗       | 2.50 ✗              |
+  | `--el-text-muted`     | **4.54 ✓**            | 4.17 ✗         | 4.12 ✗       | 4.34 ✗              |
+  | `--el-text-secondary` | 6.80 ✓                | 6.24 ✓         | 6.18 ✓       | 6.51 ✓              |
+
+  So: **`--el-text-faint` NEVER carries text WCAG measures** — it is for
+  decorative glyphs (`aria-hidden`, or a `role="img"` whose label carries the
+  meaning) and for **disabled / inactive** text, which 1.4.3 exempts. And
+  **`--el-text-muted` is safe only on the white page/card**, with 0.04 of
+  headroom — put a muted caption on `--el-surface` / `--el-muted` /
+  `--el-surface-soft` and it fails. When in doubt reach for
+  `--el-text-secondary`, which clears AA everywhere in both themes. A design
+  mock is NOT authority here: the roles asset specified faint on surface and
+  had to be corrected.
+
 - ❌ `text-foreground` / `bg-surface` / `text-muted-foreground` /
   `border-border` / `bg-primary` and friends — Tier-0 utilities, forbidden
   in component code.

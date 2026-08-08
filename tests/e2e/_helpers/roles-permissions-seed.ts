@@ -101,12 +101,23 @@ export async function seedRolesPermissions(prefix: string): Promise<RolesPermiss
     data: { activeProjectId: project.id },
   });
 
-  const members = await Promise.all(
-    Array.from({ length: ROLE_HEADCOUNT.member }, (_, i) => member(`member${i + 1}`, 'member')),
-  );
-  const viewers = await Promise.all(
-    Array.from({ length: ROLE_HEADCOUNT.viewer }, (_, i) => member(`viewer${i + 1}`, 'viewer')),
-  );
+  // ⚠️ SERIAL, NOT `Promise.all`. Each `member()` call is a bcrypt hash followed
+  // by its own `db.$transaction`, and the acceptance lane installs a global
+  // undici MockAgent that taxes every non-intercepted origin — enough that
+  // Prisma's 5s interactive-transaction budget is genuinely reachable. Creating
+  // five accounts concurrently, five times over (this seed runs per test), is a
+  // flake source the fixture does not need: the whole seed is well under a
+  // second serially, and a fixture that intermittently fails to build reads as a
+  // broken page rather than as a busy pool. (`Unable to start a transaction in
+  // the given time` — the MOTIR-1753 signature, observed here on 2026-08-08.)
+  const members: { email: string }[] = [];
+  for (let i = 0; i < ROLE_HEADCOUNT.member; i += 1) {
+    members.push(await member(`member${i + 1}`, 'member'));
+  }
+  const viewers: { email: string }[] = [];
+  for (let i = 0; i < ROLE_HEADCOUNT.viewer; i += 1) {
+    viewers.push(await member(`viewer${i + 1}`, 'viewer'));
+  }
 
   // The NO-ACCESS actor: a real workspace member with no project membership. On
   // a private project they cannot browse, so both routes must answer with the

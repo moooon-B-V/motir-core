@@ -288,3 +288,48 @@ describe('the branches a built-in-only catalog cannot reach', () => {
     expect(marks.every((mark) => mark.getAttribute('aria-label') === 'Not held')).toBe(true);
   });
 });
+
+// The AA regression guard (MOTIR-2455). The axe sweep in the E2E is the real
+// check, but it runs in a lane nobody watches while editing a component — and
+// the failure it catches is invisible by eye, because 2.39:1 grey on off-white
+// looks entirely reasonable. This is the cheap version: `--el-text-faint` may
+// appear only on elements whose meaning does not depend on reading them.
+describe('AA — the screens carry no un-measurable ink on informational text', () => {
+  const FAINT = 'text-(--el-text-faint)';
+
+  function faintElements(container: HTMLElement): HTMLElement[] {
+    return [...container.querySelectorAll<HTMLElement>('*')].filter((el) =>
+      el.className?.toString().includes(FAINT),
+    );
+  }
+
+  it('uses --el-text-faint only on glyphs whose meaning lives in a label', () => {
+    const { container: list } = renderWith(<RoleList catalog={CATALOG} />);
+    cleanup();
+    const member = CATALOG.roles.find((role) => role.role === 'member')!;
+    const { container: detail } = renderWith(
+      <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
+    );
+    for (const container of [list, detail]) {
+      for (const el of faintElements(container)) {
+        const decorative =
+          el.getAttribute('aria-hidden') === 'true' ||
+          el.getAttribute('role') === 'img' ||
+          el.closest('[role="img"]') !== null ||
+          el.tagName.toLowerCase() === 'svg';
+        expect(
+          decorative,
+          `${el.tagName} carries --el-text-faint but is not a labelled glyph: ${el.textContent?.slice(0, 40)}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('puts both containers on the CARD surface, where a muted caption still clears AA', () => {
+    const { container } = renderWith(<RoleList catalog={CATALOG} />);
+    // `--el-text-muted` is 4.54:1 on white and 4.17:1 on `--el-surface`, so the
+    // container choice is what keeps every description legible.
+    expect(container.innerHTML).toContain('bg-(--el-card)');
+    expect(container.innerHTML).not.toContain('bg-(--el-surface)');
+  });
+});
