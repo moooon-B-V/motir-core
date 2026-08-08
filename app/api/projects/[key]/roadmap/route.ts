@@ -3,6 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // GET /api/projects/[key]/roadmap?parentId=<id>&scope=sprint (Subtask 7.20.4
 // re-plan, MOTIR-1010; sprint scope MOTIR-1381) — ONE LEVEL of the project
@@ -40,6 +41,10 @@ export async function GET(
     const roadmap = await workItemsService.getProjectRoadmap(project.id, parentId, ctx, { scope });
     return NextResponse.json(roadmap);
   } catch (err) {
+    // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,
+    // 403 naming the key). Without this arm they fall through to a 500.
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

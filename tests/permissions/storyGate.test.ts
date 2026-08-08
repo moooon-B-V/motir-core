@@ -402,14 +402,28 @@ function bodyAfterSignature(src: string, afterOpenParen: number): string | null 
   return src.slice(open, j + 1);
 }
 
-/** Whether a route file, or a `@/lib/**` module it imports, knows the error. */
+/** Whether a route file, or a `@/lib/**` module it imports, knows the error.
+ *
+ *  ⚠️ The module that DEFINES the class does not count. `lib/projects/errors.ts`
+ *  is where `PermissionDeniedError` is declared, so ANY route importing a
+ *  sibling from it — `ProjectNotFoundError`, say — used to satisfy this walk
+ *  without owning a single arm. That false negative is not hypothetical: it let
+ *  `POST /api/import` ship with a three-arm hand-rolled mapper that knew
+ *  `ProjectNotFoundError` and not the refusal, so a project member's
+ *  `import:run` denial came back as a **500**, and this guard stayed green until
+ *  the E2E spec ran it. A definition is not a mapping. */
+function definesTheError(src: string): boolean {
+  return /export\s+class\s+PermissionDeniedError\b/.test(src);
+}
+
 function mapsPermissionDenied(src: string): boolean {
-  if (src.includes('PermissionDeniedError')) return true;
+  if (src.includes('PermissionDeniedError') && !definesTheError(src)) return true;
   const importRe = /from '(@\/lib\/[^']+)'/g;
   for (let m = importRe.exec(src); m !== null; m = importRe.exec(src)) {
     const mod = join(ROOT, `${m[1]!.replace('@/', '')}.ts`);
     try {
-      if (readFileSync(mod, 'utf8').includes('PermissionDeniedError')) return true;
+      const imported = readFileSync(mod, 'utf8');
+      if (imported.includes('PermissionDeniedError') && !definesTheError(imported)) return true;
     } catch {
       // a directory import or a .tsx module — not an error mapper
     }

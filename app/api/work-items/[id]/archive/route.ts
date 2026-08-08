@@ -3,6 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // POST   /api/work-items/[id]/archive — soft-archive a work item (reversible,
 //        single-node: descendants stay live; the "Linear shape").
@@ -22,6 +23,10 @@ import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/e
 //   ProjectAccessDeniedError (kind edit)   → 403 (read-only actor)
 //   ProjectNotFoundError                   → 404
 function mapError(err: unknown): Response {
+  // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,
+  // 403 naming the key). Without this arm they fall through to a 500.
+  const gate = workItemGateErrorResponse(err);
+  if (gate) return gate;
   if (err instanceof WorkItemNotFoundError || err instanceof ProjectNotFoundError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
   }

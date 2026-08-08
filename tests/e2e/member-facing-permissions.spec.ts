@@ -167,7 +167,11 @@ function gatedWrites(t: Tenant, page: Page): { name: string; run: () => Promise<
           data: {
             name: `Filter ${(filterSeq += 1)}`,
             visibility: 'private',
-            filterParam: encodeFilterParam({
+            // ⚠️ The wire field is `filter`; `filterParam` is the SERVICE's input
+            // name. Sending the service's name produced a 400 from the route's own
+            // body check, BEFORE the gate — which failed the admin row and would
+            // have made every refusal row pass for the wrong reason.
+            filter: encodeFilterParam({
               combinator: 'and',
               conditions: [{ field: 'priority', operator: 'is_any_of', value: ['high'] }],
             }),

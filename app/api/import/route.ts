@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
-import { ImportConnectionConfigError } from '@/lib/import/errors';
-import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { importErrorResponse } from '@/lib/import/httpErrors';
 import type { ImportSource } from '@/generated/prisma/client';
 
 // POST /api/import (Story 7.16 · MOTIR-941) — create a DRAFT import for a
@@ -37,12 +36,11 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(dto, { status: 201 });
   } catch (err) {
-    if (err instanceof ProjectNotFoundError)
-      return NextResponse.json({ code: err.code }, { status: 404 });
-    if (err instanceof ProjectAccessDeniedError)
-      return NextResponse.json({ code: err.code }, { status: 403 });
-    if (err instanceof ImportConnectionConfigError)
-      return NextResponse.json({ code: err.code }, { status: 422 });
-    throw err;
+    // MOTIR-2353 — share the `[id]` routes' mapper rather than keeping a second,
+    // shorter list here. The hand-rolled one this replaced knew
+    // `ProjectNotFoundError` / `ProjectAccessDeniedError` / the config error but
+    // NOT `PermissionDeniedError`, so once `createDraft` grew the `import:run`
+    // gate a project member's refusal fell through to a 500 instead of a 403.
+    return importErrorResponse(err);
   }
 }
