@@ -4,10 +4,19 @@
 // — a new connector, not a pipeline change (the extension-seam decision, ADR §1).
 //
 // Live REST, cursor-paginated (`per_page` + `cursor`, loop while
-// `next_page_results`). Auth is an `X-API-Key` PAT (Plane Profile Settings →
-// Personal Access Tokens); `baseUrl` is `https://api.plane.so` for Cloud or the
-// user's self-hosted instance URL (MOTIR-943 provisions both + the workspace
-// slug). Targets `/work-items/` (Plane deprecated the older `/issues/` path).
+// `next_page_results`). Auth is `Authorization: Bearer <access-token>` — the
+// OAuth access token the "Connect" grant stored (MOTIR-1656), read back through
+// `planeImportOAuthService.getFreshConnection`. Plane documents TWO schemes and
+// tells them apart BY HEADER: its own PAT header carries a `plane_api_*`
+// personal key, while `Authorization: Bearer <access-token>` carries an OAuth
+// token (developers.plane.so/api-reference/introduction). This connector shipped
+// sending the OAuth token in the PAT header (MOTIR-2457); there is no PAT path
+// to keep, because MOTIR-1657 made OAuth connect the SOLE live-source auth and
+// removed the paste-a-token field — so this takes ONE credential in ONE scheme
+// and no `authScheme` flag (contrast `LinearConnector`, which needs one because
+// Linear's raw personal key is sent unprefixed). `baseUrl` is
+// `https://api.plane.so` for Cloud or the user's self-hosted instance URL.
+// Targets `/work-items/` (Plane deprecated the older `/issues/` path).
 //
 // Whole-history scope (ADR §1): NO state filter — every state GROUP
 // (backlog/unstarted/started/completed/cancelled) is fetched; completed/
@@ -31,8 +40,13 @@ import type {
 } from './types';
 
 export interface PlaneConnectorConfig {
-  /** The Plane PAT — sent as `X-API-Key` (MOTIR-943). */
-  apiKey: string;
+  /**
+   * The Plane OAuth access token — sent as `Authorization: Bearer` (MOTIR-2457).
+   * The ONLY credential the product can supply: MOTIR-1657 removed the
+   * paste-a-PAT path, so `ImportSourceIdentity` stores a Bearer token and
+   * nothing stores a `plane_api_*` key.
+   */
+  accessToken: string;
   /** `https://api.plane.so` (Cloud, default) or a self-hosted instance URL. */
   baseUrl?: string;
   workspaceSlug: string;
@@ -99,7 +113,9 @@ export class PlaneConnector implements IssueSourceConnector {
   private readonly includeComments: boolean;
 
   constructor(config: PlaneConnectorConfig) {
-    if (!config.apiKey) throw new ConnectorConfigError('a Plane API key is required', 'plane');
+    if (!config.accessToken) {
+      throw new ConnectorConfigError('a Plane access token is required', 'plane');
+    }
     if (!config.workspaceSlug || !config.projectId) {
       throw new ConnectorConfigError('a Plane workspace slug and project id are required', 'plane');
     }
@@ -110,7 +126,10 @@ export class PlaneConnector implements IssueSourceConnector {
   }
 
   private headers(): Record<string, string> {
-    return { 'X-API-Key': this.config.apiKey, Accept: 'application/json' };
+    return {
+      Authorization: `Bearer ${this.config.accessToken}`,
+      Accept: 'application/json',
+    };
   }
 
   private retryOpts(): RetryOptions {

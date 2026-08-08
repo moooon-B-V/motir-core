@@ -462,12 +462,14 @@ describe('importService.buildConnector — the Plane refresh path', () => {
   interface PlaneStub {
     /** The form-encoded body of each POST to the token endpoint. */
     tokenPosts: URLSearchParams[];
-    /** The credential header value on every REST call the connector made. */
+    /** The `Authorization` header value on every REST call the connector made. */
     apiCredentials: string[];
+    /** The `X-API-Key` header on each of those calls — must stay null (MOTIR-2457). */
+    patHeaders: (string | null)[];
   }
 
   function stubPlane(token: { status?: number; body: unknown }): PlaneStub {
-    const stub: PlaneStub = { tokenPosts: [], apiCredentials: [] };
+    const stub: PlaneStub = { tokenPosts: [], apiCredentials: [], patHeaders: [] };
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -484,14 +486,16 @@ describe('importService.buildConnector — the Plane refresh path', () => {
           return json(token.body, token.status ?? 200);
         }
         if (url.startsWith(WORK_ITEMS)) {
-          // ⚠️ Read off `X-API-Key`, which is what PlaneConnector sends today —
-          // the header this card asserts the RENEWED token reaches. Plane's own
-          // docs put an OAuth access token in `Authorization: Bearer` and
-          // reserve `X-API-Key` for a `plane_api_*` PAT, so the scheme itself is
-          // wrong; that is a separate, pre-existing defect (MOTIR-2457, logged
-          // not absorbed per `notes.html` #27) and this assertion moves to
-          // `authorization` when it lands.
-          stub.apiCredentials.push(String(new Headers(init?.headers).get('x-api-key')));
+          // Read off `authorization` — the ONE scheme the whole path now speaks
+          // (MOTIR-2457). Plane's docs put an OAuth access token in
+          // `Authorization: Bearer` and reserve `X-API-Key` for a `plane_api_*`
+          // PAT; the connector shipped sending the OAuth token in the PAT
+          // header, so this assertion moved here when that landed. Recording the
+          // PAT header TOO is what makes this an end-to-end scheme check rather
+          // than the connector agreeing with itself (`notes.html` #162).
+          const headers = new Headers(init?.headers);
+          stub.apiCredentials.push(String(headers.get('authorization')));
+          stub.patHeaders.push(headers.get('x-api-key'));
           return json({ total_count: 3, results: [] });
         }
         throw new Error(`unexpected fetch to ${url}`);
@@ -529,7 +533,9 @@ describe('importService.buildConnector — the Plane refresh path', () => {
 
     expect(stub.tokenPosts.map((p) => p.get('grant_type'))).toEqual(['refresh_token']);
     expect(stub.tokenPosts[0]?.get('refresh_token')).toBe('refresh_1');
-    expect(stub.apiCredentials).toEqual(['fresh_token']);
+    // Stored identity → refresh → connector → wire: ONE credential, ONE scheme.
+    expect(stub.apiCredentials).toEqual(['Bearer fresh_token']);
+    expect(stub.patHeaders).toEqual([null]);
     expect(result.issueCount).toBe(3);
   });
 
@@ -544,7 +550,8 @@ describe('importService.buildConnector — the Plane refresh path', () => {
     await (await importService.buildConnector('plane', PLANE_CONNECTION, fx.ctx)).connect();
 
     expect(stub.tokenPosts).toHaveLength(0);
-    expect(stub.apiCredentials).toEqual(['live_token']);
+    expect(stub.apiCredentials).toEqual(['Bearer live_token']);
+    expect(stub.patHeaders).toEqual([null]);
   });
 
   it('turns a grant Plane will not refresh into the 422 not-connected error, not a 500', async () => {
