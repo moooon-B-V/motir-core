@@ -29,18 +29,21 @@ import {
 //     list: a documentation page that needs a query has a design problem, not a
 //     missing allowlist entry.
 //   * NO PRISMA CLIENT — nothing in this tree reaches the generated client at
-//     all, for values OR enums. This card does NOT establish it, and the second
-//     test below pins exactly how far short it falls, so the gap is visible and
-//     gated rather than described in a comment nobody re-reads.
+//     all, for values OR enums. MOTIR-2452 did NOT establish it and pinned
+//     exactly how far short it fell (three API-reference pages, reaching the
+//     client for two enums one layer out in the v1 API surface); MOTIR-2458
+//     removed that cause, so the allowlist below is now EMPTY and the second
+//     test asserts the stronger property outright.
 //
 // ⚠️ These walk SOURCE, which is the cheap half of the answer; the authority is
 // the build manifest (`next build && node scripts/measure-prisma-traces.mjs
-// --list`), because a route also inherits its ROOT layout's closure. Measured on
-// this branch: 342 of 350 before, 342 of 350 after — the root layout's approved
-// imports reach every route, so the count cannot move here at all. With the root
-// layout's two imports ALSO removed the same build measures 328 of 350 and four
-// of the seven docs functions come clean, which is the evidence that this card's
-// change is necessary and not sufficient.
+// --list`), because a route also inherits its ROOT layout's closure. Measured
+// across both cards: 342 of 350 before, 342 of 350 after — the root layout's
+// approved imports reach every route, so the count cannot move here at all.
+// With the root layout's two imports ALSO removed the same build measured 328 of
+// 350 with four of the seven docs functions clean before MOTIR-2458, and all
+// seven clean after. That arm is the evidence; the headline number is not, and
+// MOTIR-2381 decided the root layout's reach deliberately.
 
 const DOCS_ROOT = 'app/(public)/docs';
 const SOURCE_EXTENSIONS = ['.ts', '.tsx'];
@@ -51,21 +54,22 @@ const PRISMA_SPECIFIER = /^@prisma\/client|^\.prisma\/|^@\/generated\/prisma/;
 /**
  * The docs files still allowed to reach the generated Prisma client, and why.
  *
- * These are NOT database reads — `lib/api/v1/ready/schema.ts` imports the
- * generated `WorkItemKind` / `WorkItemPriority` ENUMS as runtime values to
- * validate a query string, and the OpenAPI registry pulls that into every page
- * that renders the API reference. It still costs the whole client in the bundle.
- * Removing it means deriving those value sets from the DTO unions the same file
- * already declares — a change in the v1 API layer, not in this tree, so it is
- * filed as its own card rather than smuggled into this one.
+ * EMPTY, as of MOTIR-2458 — and that is the end state, not a starting one.
  *
- * Shrinking this list is the only legal edit. Growing it is not.
+ * It held the three API-reference pages, which reached the client for two
+ * ENUMS: `lib/api/v1/ready/schema.ts` imported the generated `WorkItemKind` /
+ * `WorkItemPriority` as runtime values to validate a query string, and the
+ * OpenAPI registry pulls that file into every page rendering the reference.
+ * MOTIR-2458 derived those value sets from the DTO unions the same file already
+ * declares and moved the Prisma-parity assertion into
+ * `tests/api/v1/ready-filter-vocabulary.test.ts`, where importing the client is
+ * free. Nothing in this tree reaches the client any more.
+ *
+ * Shrinking this list was the only legal edit; it is now shrunk as far as it
+ * goes. Growing it never was: a documentation page that acquires a database
+ * client has a defect, and this is the assertion that says so.
  */
-const PRISMA_CARRYING_DOCS_PAGES = [
-  `${DOCS_ROOT}/api/getting-started/page.tsx`,
-  `${DOCS_ROOT}/api/page.tsx`,
-  `${DOCS_ROOT}/api/stability/page.tsx`,
-] as const;
+const PRISMA_CARRYING_DOCS_PAGES = [] as const satisfies readonly string[];
 
 /** Every source file in the docs tree, repo-relative, sorted. */
 function docsSources(): string[] {
@@ -128,19 +132,20 @@ describe('the published docs tree’s database reach (MOTIR-2452)', () => {
     ).toEqual([]);
   });
 
-  it('carries the generated Prisma client on EXACTLY the three pages still known to (MOTIR-2452)', () => {
-    // The honest ceiling of this card. `lib/db.ts` is gone from the tree, but
-    // three pages still pull the client in for its enums, one layer out in the
-    // v1 API surface. Pinned as an exact set so the number can only go down —
-    // and so the follow-up card has a test that turns green when it lands.
+  it('carries the generated Prisma client on NO page at all (MOTIR-2452 → MOTIR-2458)', () => {
+    // MOTIR-2452 pinned this as an exact set of three so the number could only
+    // go down and the follow-up would have a test that turned green when it
+    // landed. MOTIR-2458 landed, so the expected set is now empty: no file in
+    // the docs tree reaches the generated client, for values OR enums.
     const carrying = docsSources().filter((file) => reachesPrismaClient(file));
 
     expect(
       carrying,
-      `Docs pages reaching the generated Prisma client.\nExpected exactly the known three ` +
-        `(see PRISMA_CARRYING_DOCS_PAGES). A NEW entry means a documentation page just ` +
-        `grew a client it did not have — remove the import rather than widening the list. ` +
-        `A MISSING entry means the follow-up landed: delete it from the list.`,
+      `Docs pages reaching the generated Prisma client.\nExpected NONE. An entry means a ` +
+        `documentation page just grew a client it did not have — remove the import rather than ` +
+        `widening PRISMA_CARRYING_DOCS_PAGES. Note that a generated ENUM is a runtime value: ` +
+        `\`import { WorkItemKind } from '@/generated/prisma/client'\` ships the whole client, ` +
+        `\`import type\` is erased and free (MOTIR-2458).`,
     ).toEqual([...PRISMA_CARRYING_DOCS_PAGES].sort());
   });
 
