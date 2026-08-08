@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
+import { createTestProject } from '../fixtures/projectFixtures';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -24,7 +25,12 @@ const { attachmentsService } = await import('@/lib/services/attachmentsService')
 async function makeFixture(email = 'att@example.com') {
   const owner = await usersService.createUser({ email, password: 'hunter2hunter2', name: 'Att' });
   const ws = await workspacesService.createWorkspace({ name: 'Att WS', ownerUserId: owner.id });
-  return { userId: owner.id, workspaceId: ws.workspace.id };
+  // MOTIR-2366 — the upload now names the project it uploads INTO and asserts
+  // `attachment:create` on it, so the fixture needs a real project. The owner is
+  // a workspace manager, so they hold the key through the always-pass rail; the
+  // refusal cases live in `tests/integration/work-items/unconfirmed-gates.test.ts`.
+  const project = await createTestProject({ workspaceId: ws.workspace.id, actorUserId: owner.id });
+  return { userId: owner.id, workspaceId: ws.workspace.id, projectId: project.id };
 }
 
 const fileOf = (name: string, type: string, bytes = 4) =>

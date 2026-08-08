@@ -364,10 +364,10 @@ describe('attachmentsService.deleteAttachment', () => {
 
   it('an EDITOR-sourced row → 409 ATTACHMENT_EDITOR_SOURCED, row stays linked (the broken-embed guard)', async () => {
     const s = await buildScenario();
-    const upload = await attachmentsService.uploadAttachment(
-      fileOf('embed.png', 'image/png'),
-      s.memberCtx,
-    );
+    const upload = await attachmentsService.uploadAttachment(fileOf('embed.png', 'image/png'), {
+      ...s.memberCtx,
+      projectId: s.fx.projectId,
+    });
     const row = (await rowByUrl(upload.url))!;
     await linkAsEditor(s, row);
 
@@ -384,10 +384,10 @@ describe('attachmentsService.deleteAttachment', () => {
 
   it('an UNLINKED row → 404 (on no panel; the GC owns it)', async () => {
     const s = await buildScenario();
-    const upload = await attachmentsService.uploadAttachment(
-      fileOf('stray.png', 'image/png'),
-      s.memberCtx,
-    );
+    const upload = await attachmentsService.uploadAttachment(fileOf('stray.png', 'image/png'), {
+      ...s.memberCtx,
+      projectId: s.fx.projectId,
+    });
     const row = (await rowByUrl(upload.url))!;
     await expect(attachmentsService.deleteAttachment(row.id, s.memberCtx)).rejects.toMatchObject({
       code: 'ATTACHMENT_NOT_FOUND',

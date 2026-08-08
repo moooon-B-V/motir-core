@@ -221,6 +221,7 @@ describe('generic upload allowlist stays unchanged', () => {
       attachmentsService.uploadAttachment(videoOf(), {
         userId: fx.ownerId,
         workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
       }),
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE', status: 415 });
   });

@@ -4070,6 +4070,11 @@ export const workItemsService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
+    // `project:browse` (MOTIR-2366) — the nudge answers "is this project running
+    // out of ready work", which is a project-scoped read. It was session-only:
+    // the check above asked whether the project was in the actor's workspace and
+    // nothing about whether they may see it.
+    await projectAccessService.assertPermission(projectId, ctx, 'project:browse');
     const { count } = await this.countReady(projectId, {}, ctx);
     if (count >= EXPANSION_NUDGE_THRESHOLD) return null;
 

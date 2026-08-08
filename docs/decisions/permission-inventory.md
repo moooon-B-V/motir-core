@@ -260,6 +260,8 @@ worse failure than a gap.
 
 **R33.** Public project surface; level-gated, never role-gated.
 
+> ⚠️ **CORRECTED by MOTIR-2366.** `/api/public/categories` and `/api/public/explore` were labelled `existing` / `public_request:submit`, and BOTH halves were wrong. They are the anonymous PROJECT SQUARE — a logged-out visitor or a crawler reads them, so there is deliberately no `getSession()` call and no project to resolve; the `accessLevel = 'public'` filter lives in the repository aggregate. And the claimed key was the wrong one anyway: reading a directory of public projects is not submitting. They are `no-gate` / R33, which is the same answer their per-project siblings (`/p/[identifier]/items`, gated on `assertCanBrowsePublic`) already reach by a different route.
+
 **R34.** DECISION: a dashboard is a WORKSPACE artifact, not a project one — it aggregates widgets across projects, and its own private/shared field governs sharing. The per-widget project reads are gated by report:view. The route already reads "any workspace member".
 
 **R35.** The actor's own API tokens. Their SCOPES are the separate narrowing axis (lib/mcp/scopes.ts).
@@ -382,13 +384,13 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `attachment`
 
-| Operation                          | Verbs    | Gate today     | Permission          | Decision | Why |
-| ---------------------------------- | -------- | -------------- | ------------------- | -------- | --- |
-| `/api/attachments/[id]`            | DELETE   | workspace only | `attachment:create` | existing | R37 |
-| `/api/attachments/[id]/content`    | GET      | workspace only | `attachment:create` | existing | R37 |
-| `/api/upload/avatar`               | POST     | session only   | `attachment:create` | existing | R37 |
-| `/api/upload/issue-attachment`     | POST     | session only   | `attachment:create` | existing | R37 |
-| `/api/work-items/[id]/attachments` | GET/POST | workspace only | `attachment:create` | existing | R37 |
+| Operation                          | Verbs    | Gate today                                                                    | Permission          | Decision    | Why |
+| ---------------------------------- | -------- | ----------------------------------------------------------------------------- | ------------------- | ----------- | --- |
+| `/api/attachments/[id]`            | DELETE   | workspace only                                                                | `attachment:create` | existing    | R37 |
+| `/api/attachments/[id]/content`    | GET      | workspace only                                                                | `attachment:create` | existing    | R37 |
+| `/api/upload/avatar`               | POST     | session only — writes the SIGNED-IN user’s own avatar                         | —                   | user-scoped | R31 |
+| `/api/upload/issue-attachment`     | POST     | `attachmentsService.uploadAttachment` → `assertPermission` (was session only) | `attachment:create` | existing    | R37 |
+| `/api/work-items/[id]/attachments` | GET/POST | workspace only                                                                | `attachment:create` | existing    | R37 |
 
 ### `board`
 
@@ -510,17 +512,17 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `public_request`
 
-| Operation                                              | Verbs | Gate today                | Permission               | Decision | Why |
-| ------------------------------------------------------ | ----- | ------------------------- | ------------------------ | -------- | --- |
-| `/api/public-requests/[id]/comments`                   | POST  | workspace only            | `public_request:comment` | existing | R36 |
-| `/api/public-requests/[id]/upvote`                     | POST  | workspace only            | `public_request:comment` | existing | R36 |
-| `/api/public/categories`                               | GET   | session only              | `public_request:submit`  | existing | R33 |
-| `/api/public/explore`                                  | GET   | session only              | `public_request:submit`  | existing | R33 |
-| `/api/public/p/[identifier]/items`                     | GET   | `assertCanBrowsePublic`   | `public_request:submit`  | existing | R33 |
-| `/api/public/p/[identifier]/roadmap`                   | GET   | session only              | `public_request:submit`  | existing | R33 |
-| `/api/public/p/[identifier]/tree`                      | GET   | session only              | `public_request:submit`  | existing | R33 |
-| `/api/public/projects/[projectId]/requests`            | POST  | session only              | `public_request:submit`  | existing | R33 |
-| `/api/public/projects/[projectId]/requests/duplicates` | GET   | `assertCanSubmitToTriage` | `public_request:submit`  | existing | R33 |
+| Operation                                              | Verbs | Gate today                                                                        | Permission               | Decision | Why |
+| ------------------------------------------------------ | ----- | --------------------------------------------------------------------------------- | ------------------------ | -------- | --- |
+| `/api/public-requests/[id]/comments`                   | POST  | workspace only                                                                    | `public_request:comment` | existing | R36 |
+| `/api/public-requests/[id]/upvote`                     | POST  | workspace only                                                                    | `public_request:comment` | existing | R36 |
+| `/api/public/categories`                               | GET   | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/explore`                                  | GET   | — none — anonymous; the `accessLevel = public` filter is the repository aggregate | —                        | no-gate  | R33 |
+| `/api/public/p/[identifier]/items`                     | GET   | `assertCanBrowsePublic`                                                           | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/roadmap`                   | GET   | session only                                                                      | `public_request:submit`  | existing | R33 |
+| `/api/public/p/[identifier]/tree`                      | GET   | session only                                                                      | `public_request:submit`  | existing | R33 |
+| `/api/public/projects/[projectId]/requests`            | POST  | session only                                                                      | `public_request:submit`  | existing | R33 |
+| `/api/public/projects/[projectId]/requests/duplicates` | GET   | `assertCanSubmitToTriage`                                                         | `public_request:submit`  | existing | R33 |
 
 ### `report`
 
@@ -630,7 +632,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/projects/[key]/triage/submissions`                | POST        | `triageService.createSubmission` → `assertCanBrowse`                                       | `public_request:submit` | existing | R23 |
 | `/api/ready`                                            | GET         | workspace only                                                                             | `project:browse`        | existing | R2  |
 | `/api/ready/next`                                       | POST        | workspace only                                                                             | `project:browse`        | existing | R2  |
-| `/api/ready/nudge`                                      | GET         | session only                                                                               | `project:browse`        | existing | R2  |
+| `/api/ready/nudge`                                      | GET         | `workItemsService.computeExpansionNudge` → `assertPermission` (was session only)           | `project:browse`        | existing | R2  |
 | `/api/work-items/[id]`                                  | DELETE      | `workItemsService.deleteWorkItem` → `assertPermission`                                     | `work_item:delete`      | existing | R42 |
 | `/api/work-items/[id]/acceptance-evidence`              | POST        | `acceptanceEvidenceService` → `resolveStory` → `assertPermission` (was — none —)           | `work_item:edit`        | existing | R43 |
 | `/api/work-items/[id]/acceptance-evidence/upload-token` | POST        | `acceptanceEvidenceService` → `resolveStory` → `assertPermission` (was — none —)           | `work_item:edit`        | existing | R43 |

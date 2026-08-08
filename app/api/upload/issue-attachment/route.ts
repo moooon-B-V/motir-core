@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { AttachmentError } from '@/lib/blob/errors';
 import { EntitlementExceededError } from '@/lib/billing/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // POST /api/upload/issue-attachment (Subtask 2.3.7) — the thin HTTP layer over
 // attachmentsService.uploadAttachment. Multipart body with a single `file`
@@ -45,9 +46,12 @@ export async function POST(req: Request): Promise<Response> {
     const result = await attachmentsService.uploadAttachment(file, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
+      projectId: ctx.projectId,
     });
     return NextResponse.json(result);
   } catch (err) {
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof AttachmentError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
     }

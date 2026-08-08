@@ -526,7 +526,10 @@ export async function seedCollabFixture(): Promise<CollabSeedManifest> {
     if (i % embedEvery === 1 && editorEmbedded < sizes.editorAttachments) {
       const uploaderId = pickUploader(authorId);
       const file = fixtureFile(`editor:${i}`);
-      const uploaded = await attachmentsService.uploadAttachment(file, ctxOf(uploaderId));
+      const uploaded = await attachmentsService.uploadAttachment(file, {
+        ...ctxOf(uploaderId),
+        projectId: project.id,
+      });
       uploadsByUser.set(uploaderId, (uploadsByUser.get(uploaderId) ?? 0) + 1);
       body += `\n\n![${file.name}](${uploaded.url})`;
       editorEmbedded++;

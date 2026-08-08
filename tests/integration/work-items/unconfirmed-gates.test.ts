@@ -4,6 +4,7 @@ import { activityService } from '@/lib/services/activityService';
 import { estimationService } from '@/lib/services/estimationService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { attachmentsService } from '@/lib/services/attachmentsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -199,5 +200,54 @@ describe('the one real gate the walk could not follow', () => {
     expect(await workItemsService.quickSearch('story', fx.outsiderCtx)).toEqual([]);
     const mine = await workItemsService.quickSearch('story', fx.memberCtx);
     expect(mine.map((r) => r.id)).toContain(fx.storyId);
+  });
+});
+
+// MOTIR-2366 — the other half of the bucket. Two gates and three mis-mappings.
+// The mis-mappings have no test to write (there is nothing to refuse); what IS
+// worth pinning is the two that turned out to be holes, and the fact that a
+// viewer keeps the read half of the ready set.
+describe('the second half — the ready nudge and the editor upload', () => {
+  it('refuses the expansion nudge to a workspace member who cannot browse the project', async () => {
+    const fx = await makeFixture('nudge');
+    await expect(
+      workItemsService.computeExpansionNudge(fx.projectId, fx.outsiderCtx),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    await expect(
+      workItemsService.computeExpansionNudge(fx.projectId, fx.memberCtx),
+    ).resolves.toBeDefined();
+  });
+
+  it('refuses an editor upload from a VIEWER before a single byte is read', async () => {
+    // The upload happens BEFORE the attachment is linked to any work item, so
+    // there was no item to resolve a project from and `resolveGatedWorkItem` — the
+    // sibling the inventory's `existing` label was leaning on — never ran here.
+    // The gate is `attachment:create` on the project the route resolved, asserted
+    // ahead of the entitlement round-trips so a refusal costs nothing.
+    const fx = await makeFixture('upload');
+    const viewer = await usersService.createUser({
+      email: `unv-upl-viewer-${seq}@example.com`,
+      password: PASSWORD,
+      name: 'viewer',
+    });
+    await db.workspaceMembership.create({
+      data: { userId: viewer.id, workspaceId: fx.ownerCtx.workspaceId, role: 'member' },
+    });
+    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    await projectMembersService.addMember({
+      key: project.identifier,
+      actorUserId: fx.ownerCtx.userId,
+      ctx: fx.ownerCtx,
+      targetUserId: viewer.id,
+      role: 'viewer',
+    });
+    const file = new File([new Uint8Array(4)], 'shot.png', { type: 'image/png' });
+    await expect(
+      attachmentsService.uploadAttachment(file, {
+        userId: viewer.id,
+        workspaceId: fx.ownerCtx.workspaceId,
+        projectId: fx.projectId,
+      }),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 });

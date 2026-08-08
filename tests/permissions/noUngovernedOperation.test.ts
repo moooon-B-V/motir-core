@@ -595,7 +595,17 @@ describe('the PENDING set is bounded and shrinking', () => {
     // upload-token minter was reachable with a session and a story id alone. Every
     // one of them was labelled `existing` in a `done` document, three of them on a
     // row whose own `Gate today` column said "— none —".
-    expect(unverified.length).toBe(5);
+    // 5 → 0 is MOTIR-2366 reading the other half, and the bucket is now EMPTY —
+    // the story's second terminal condition. Two of its five were gates
+    // (`/api/upload/issue-attachment` took bytes from anyone with a session;
+    // `/api/ready/nudge` asked only whether the project was in the workspace) and
+    // THREE were mis-mappings: the anonymous project square is `no-gate` / R33
+    // and the avatar upload is `user-scoped` / R31, neither of which any project
+    // permission could ever have governed.
+    //
+    // Like the PENDING arm above, this one does not survive reaching zero:
+    // MOTIR-2356 deletes both rather than re-pinning them at 0.
+    expect(unverified.length).toBe(0);
   });
 
   it('every pending operation names the permission that will govern it', () => {
