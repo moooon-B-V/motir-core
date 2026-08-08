@@ -38,6 +38,7 @@ import {
   InvalidTriageSubmissionTitleError,
   MAX_TRIAGE_TITLE_LENGTH,
 } from '@/lib/triage/errors';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 /** The two request-grammar kinds a triage submission is born as (ADR §1): a
  *  `bug` (bug report) or a `task` (feature request). Never epic/story/subtask. */
@@ -702,6 +703,6 @@ async function resolveSubmitter(item: WorkItem): Promise<TriageSubmitterDto> {
     userId: submitterId,
     name: submitter?.name ?? null,
     email: submitter?.email ?? null,
-    image: submitter?.image ?? null,
+    image: storedAssetUrl(submitter?.image),
   };
 }

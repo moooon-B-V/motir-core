@@ -2,6 +2,7 @@ import type { User, WorkItem } from '@/generated/prisma/client';
 import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import { markdownToExcerpt } from '@/lib/markdown/excerpt';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma → DTO converters for the Ready surface (Subtask 7.0.3). PURE — no DB
 // calls, no I/O. The service (7.0.2) fetches the rows + resolves the status
@@ -65,7 +66,7 @@ function toAssigneeDto(assignee: ReadyAssignee | null): ReadyItemDto['assignee']
     // Same email-localpart fallback the workspace-member mapper uses for
     // name-less (OAuth / pre-name-collection) users.
     name: assignee.name || assignee.email.split('@')[0]!,
-    avatarUrl: assignee.image,
+    avatarUrl: storedAssetUrl(assignee.image),
   };
 }
 

@@ -68,10 +68,15 @@ describe('AvatarField', () => {
     expect(screen.getByRole('button', { name: /Remove/ })).toBeTruthy();
   });
 
-  it('uploads a valid file, then persists the returned url and refreshes', async () => {
+  it('persists the uploaded KEY and renders the RESOLVED url the action returns', async () => {
+    // The two halves of MOTIR-2404 meet in this component: the upload route
+    // hands back an object key (no origin), and the action hands back that key
+    // resolved to an absolute URL. The field must PATCH the first and RENDER
+    // the second — swapping them would either store a hosting origin again or
+    // put a relative key in an <img src>.
     (fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
-      json: async () => ({ url: 'https://blob.example/avatars/u1/me.png' }),
+      json: async () => ({ key: 'avatars/u1/me.png' }),
     });
     avatarSpy.mockResolvedValue({ ok: true, image: 'https://blob.example/avatars/u1/me.png' });
 
@@ -80,16 +85,16 @@ describe('AvatarField', () => {
       selectFile(pngFile());
     });
 
-    await waitFor(() =>
-      expect(avatarSpy).toHaveBeenCalledWith('https://blob.example/avatars/u1/me.png'),
-    );
+    await waitFor(() => expect(avatarSpy).toHaveBeenCalledWith('avatars/u1/me.png'));
     expect(fetch).toHaveBeenCalledWith(
       '/api/upload/avatar',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(refresh).toHaveBeenCalled();
-    // The optimistic image now renders + the Remove control appears.
-    expect(screen.getByAltText('Your avatar')).toBeTruthy();
+    // The optimistic image now renders + the Remove control appears — and it is
+    // the ACTION's resolved value that reaches the <img>, never the raw key.
+    const img = screen.getByAltText('Your avatar') as HTMLImageElement;
+    expect(img.src).toBe('https://blob.example/avatars/u1/me.png');
     expect(screen.getByRole('button', { name: /Remove/ })).toBeTruthy();
   });
 

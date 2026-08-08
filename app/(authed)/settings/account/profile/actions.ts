@@ -85,11 +85,12 @@ export type UpdateProfileAvatarResult =
 /**
  * Persist (or clear) the session user's avatar from the Profile card's Photo
  * row. `AvatarField` uploads the file to `POST /api/upload/avatar` first (which
- * returns the stored blob URL), then calls this with that URL to set it — or
- * with `null` to remove it. Delegates the own-upload-URL validation and the
- * old-blob GC to `usersService.updateProfile`, mapping its typed
- * `InvalidAvatarUrlError` to a result the field surfaces as a toast. Returns the
- * canonical stored value so the optimistic avatar shows exactly what persisted.
+ * returns the stored object KEY, since MOTIR-2404), then calls this with that
+ * key to set it — or with `null` to remove it. Delegates the own-upload
+ * validation and the old-object GC to `usersService.updateProfile`, mapping its
+ * typed `InvalidAvatarUrlError` to a result the field surfaces as a toast.
+ * Returns the value the profile DTO carries — the stored key RESOLVED to an
+ * absolute URL — so the optimistic avatar shows exactly what will render.
  * No rate limit: setting your own avatar is a benign, idempotent own-account
  * write (the upload route itself gates size + MIME).
  */

@@ -26,10 +26,9 @@ vi.mock('@/lib/blob/uploader', async (importOriginal) => {
     ...actual,
     // Private content: the put returns only a pathname (no public URL exists).
     putPrivateAttachment: vi.fn(async (pathname: string) => ({ pathname })),
-    // Avatars: the PUBLIC store returns a directly-fetchable public URL.
-    putPublicAsset: vi.fn(async (pathname: string) => ({
-      url: `https://pub123.public.blob.vercel-storage.com/${pathname}`,
-    })),
+    // Avatars: the PUBLIC store returns the object KEY (MOTIR-2404); the
+    // fetchable URL is composed on read, at the DTO boundary.
+    putPublicAsset: vi.fn(async (pathname: string) => ({ key: pathname })),
     signedDownloadUrl: vi.fn(async (pathname: string) => `https://blob.example/signed/${pathname}`),
   };
 });
@@ -97,14 +96,20 @@ describe('access-controlled attachments — the assembled write→DTO→route se
     expect((await getContent(dto.id)).status).toBe(404);
   });
 
-  it('avatars stay PUBLIC — uploadAvatar yields a public blob URL, not the content path', async () => {
+  it('avatars stay PUBLIC — the profile DTO carries a fetchable URL, not the content path', async () => {
     const fx = await makeWorkItemFixture();
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', 'https://pub.test.invalid/motir-public');
 
-    const { url } = await usersService.uploadAvatar(png('me.png'), fx.ownerId);
+    const { key } = await usersService.uploadAvatar(png('me.png'), fx.ownerId);
+    const dto = await usersService.updateProfile(fx.ownerId, { image: key });
 
-    // The public/private contrast: an avatar is a directly-fetchable public URL,
-    // never routed through the authenticated content path.
-    expect(url).toMatch(/\.public\.blob\.vercel-storage\.com\//);
-    expect(url).not.toMatch(/\/api\/attachments\//);
+    // The public/private contrast is unchanged by MOTIR-2404 — it just moved to
+    // the read side. What is STORED carries no origin; what the DTO hands a
+    // renderer is a directly-fetchable public URL, never the authenticated
+    // content path an attachment is served through.
+    expect(key).not.toMatch(/^https?:/);
+    expect(dto.image).toBe(`https://pub.test.invalid/motir-public/${key}`);
+    expect(dto.image).not.toMatch(/\/api\/attachments\//);
+    vi.unstubAllEnvs();
   });
 });

@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { truncateAuthTables } from './helpers/db';
 import { createTestUser } from './fixtures/userFixtures';
@@ -12,15 +12,20 @@ import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 // Profile read + update service tests (Story 8.8 · Subtask 8.8.21) against a
 // REAL Postgres. The Blob adapter is the ONE mocked external (no network) —
 // the same sanctioned exception attachments-service.test.ts uses — so the
-// avatar GC (`del` of a replaced blob) and the upload write are assertable
-// without touching Vercel Blob. The mock returns a URL on OUR public-blob host
-// so an uploaded avatar passes updateProfile's own-avatar gate end-to-end.
+// avatar GC (the delete of a replaced object) and the upload write are
+// assertable without touching object storage. The mock returns the object KEY,
+// which is what `putPublicAsset` returns since MOTIR-2404.
+//
+// Three storage forms appear below and all three are deliberate: a KEY is what
+// is written today; the CONFIGURED-origin and LEGACY-Vercel absolute URLs are
+// what rows written before MOTIR-2404 / MOTIR-2389 still carry. The read
+// tolerance for those two is what let the storage change ship with no backfill,
+// so it is covered here rather than assumed.
 const TEST_BLOB_HOST = 'teststore.public.blob.vercel-storage.com';
+const PUBLIC_BASE = 'https://s3.test.invalid/motir-public';
 
 vi.mock('@/lib/blob/uploader', () => ({
-  putPublicAsset: vi.fn(async (pathname: string) => ({
-    url: `https://${TEST_BLOB_HOST}/${pathname}`,
-  })),
+  putPublicAsset: vi.fn(async (pathname: string) => ({ key: pathname })),
   deletePublicAsset: vi.fn(async () => {}),
 }));
 
@@ -28,8 +33,14 @@ const { usersService } = await import('@/lib/services/usersService');
 const { MAX_PROFILE_NAME_LENGTH } = await import('@/lib/services/usersService');
 const { putPublicAsset, deletePublicAsset } = await import('@/lib/blob/uploader');
 
-/** An own-avatar URL the gate accepts: our blob host + `/avatars/<userId>/`. */
-const ownAvatarUrl = (userId: string, name: string) =>
+/** What `User.image` holds for our own avatars: a bare object key. */
+const ownAvatarKey = (userId: string, name: string) => `avatars/${userId}/${name}`;
+
+/** What the DTO carries for that key — the key resolved against the public base. */
+const resolved = (key: string) => `${PUBLIC_BASE}/${key}`;
+
+/** A pre-MOTIR-2389 row: an absolute URL on the retired Vercel public host. */
+const legacyAvatarUrl = (userId: string, name: string) =>
   `https://${TEST_BLOB_HOST}/avatars/${userId}/${name}`;
 
 const fileOf = (name: string, type: string, bytes = 8) =>
@@ -37,7 +48,12 @@ const fileOf = (name: string, type: string, bytes = 8) =>
 
 beforeEach(async () => {
   vi.clearAllMocks();
+  vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', PUBLIC_BASE);
   await truncateAuthTables();
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -86,12 +102,12 @@ describe('usersService.updateProfile — name', () => {
 
   it('leaves the avatar untouched when only the name is updated', async () => {
     const user = await createTestUser();
-    const avatar = ownAvatarUrl(user.id, 'a.png');
-    await usersService.updateProfile(user.id, { image: avatar });
+    const key = ownAvatarKey(user.id, 'a.png');
+    await usersService.updateProfile(user.id, { image: key });
     vi.clearAllMocks();
 
     const dto = await usersService.updateProfile(user.id, { name: 'Renamed' });
-    expect(dto.image).toBe(avatar);
+    expect(dto.image).toBe(resolved(key));
     expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 
@@ -103,54 +119,100 @@ describe('usersService.updateProfile — name', () => {
 });
 
 describe('usersService.updateProfile — avatar', () => {
-  it('sets a valid own-avatar URL and round-trips it through the DTO', async () => {
+  it('stores the KEY and returns it RESOLVED — no origin reaches the column', async () => {
     const user = await createTestUser();
-    const avatar = ownAvatarUrl(user.id, 'me.png');
+    const key = ownAvatarKey(user.id, 'me.png');
 
-    const dto = await usersService.updateProfile(user.id, { image: avatar });
-    expect(dto.image).toBe(avatar);
-    expect((await usersService.getProfile(user.id))?.image).toBe(avatar);
+    const dto = await usersService.updateProfile(user.id, { image: key });
+
+    // The DTO is unchanged in shape: consumers still receive an absolute URL.
+    expect(dto.image).toBe(resolved(key));
+    expect((await usersService.getProfile(user.id))?.image).toBe(resolved(key));
+
+    // The point of the card, asserted on the STORED value rather than the
+    // response: no scheme, no host — nothing a hosting change could strand.
+    const stored = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    expect(stored.image).toBe(key);
+    expect(stored.image).not.toMatch(/^https?:/);
   });
 
-  it('rejects a non-referenced (foreign) image URL and writes nothing', async () => {
+  it('resolution follows the configured base, so a bucket move needs no data change', async () => {
     const user = await createTestUser();
+    const key = ownAvatarKey(user.id, 'moved.png');
+    await usersService.updateProfile(user.id, { image: key });
 
-    await expect(
-      usersService.updateProfile(user.id, { image: 'https://evil.example.com/x.png' }),
-    ).rejects.toBeInstanceOf(InvalidAvatarUrlError);
-    // A blob on our host but under ANOTHER user's prefix is equally rejected.
-    await expect(
-      usersService.updateProfile(user.id, { image: ownAvatarUrl('someone-else', 'x.png') }),
-    ).rejects.toBeInstanceOf(InvalidAvatarUrlError);
+    // The whole reason for storing a key: point the app at a different origin
+    // and every existing avatar follows, with no migration.
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', 'https://cdn.elsewhere.test/bucket');
+    expect((await usersService.getProfile(user.id))?.image).toBe(
+      'https://cdn.elsewhere.test/bucket/' + key,
+    );
+  });
+
+  it('accepts a LEGACY absolute row, passes it through, and still GCs it', async () => {
+    const user = await createTestUser();
+    const legacy = legacyAvatarUrl(user.id, 'old.png');
+    await db.user.update({ where: { id: user.id }, data: { image: legacy } });
+
+    // Read tolerance: an absolute value is returned untouched, never re-prefixed.
+    expect((await usersService.getProfile(user.id))?.image).toBe(legacy);
+
+    // And it is still recognised as ours, so replacing it collects the object —
+    // by KEY, which is where MOTIR-2401 copied it to.
+    const next = ownAvatarKey(user.id, 'new.png');
+    await usersService.updateProfile(user.id, { image: next });
+    expect(deletePublicAsset).toHaveBeenCalledWith('avatars/' + user.id + '/old.png');
+  });
+
+  it('rejects a foreign URL, another user\u2019s key, and a traversal escape', async () => {
+    const user = await createTestUser();
+    const reject = (image: string) =>
+      expect(usersService.updateProfile(user.id, { image })).rejects.toBeInstanceOf(
+        InvalidAvatarUrlError,
+      );
+
+    await reject('https://evil.example.com/x.png');
+    // Another user's prefix, in BOTH storage forms.
+    await reject(ownAvatarKey('someone-else', 'x.png'));
+    await reject(legacyAvatarUrl('someone-else', 'x.png'));
+    // The containment trap the gate's own comment names: a filename that merely
+    // CONTAINS our prefix must not read as ours.
+    await reject('avatars/someone-else/x-avatars-' + user.id + '-y.png');
+    // A relative value that escapes its own prefix, and a non-https scheme that
+    // would otherwise survive to an <img src>.
+    await reject('avatars/' + user.id + '/../someone-else/x.png');
+    await reject('/avatars/' + user.id + '/x.png');
+    await reject('javascript:alert(1)//avatars/' + user.id + '/x.png');
 
     expect((await usersService.getProfile(user.id))?.image).toBeNull();
     expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 
-  it('replacing an avatar deletes the prior blob', async () => {
+  it('replacing an avatar deletes the prior object BY KEY', async () => {
     const user = await createTestUser();
-    const first = ownAvatarUrl(user.id, 'first.png');
-    const second = ownAvatarUrl(user.id, 'second.png');
+    const first = ownAvatarKey(user.id, 'first.png');
+    const second = ownAvatarKey(user.id, 'second.png');
 
     await usersService.updateProfile(user.id, { image: first });
     vi.clearAllMocks();
 
     const dto = await usersService.updateProfile(user.id, { image: second });
-    expect(dto.image).toBe(second);
+    expect(dto.image).toBe(resolved(second));
     expect(deletePublicAsset).toHaveBeenCalledTimes(1);
+    // A key, not a URL — deletePublicAsset no longer derives one.
     expect(deletePublicAsset).toHaveBeenCalledWith(first);
   });
 
-  it('removing an avatar (image: null) deletes the prior blob and nulls the column', async () => {
+  it('removing an avatar (image: null) deletes the prior object and nulls the column', async () => {
     const user = await createTestUser();
-    const avatar = ownAvatarUrl(user.id, 'gone.png');
-    await usersService.updateProfile(user.id, { image: avatar });
+    const key = ownAvatarKey(user.id, 'gone.png');
+    await usersService.updateProfile(user.id, { image: key });
     vi.clearAllMocks();
 
     const dto = await usersService.updateProfile(user.id, { image: null });
     expect(dto.image).toBeNull();
     expect((await usersService.getProfile(user.id))?.image).toBeNull();
-    expect(deletePublicAsset).toHaveBeenCalledWith(avatar);
+    expect(deletePublicAsset).toHaveBeenCalledWith(key);
   });
 
   it('never deletes a foreign / OAuth provider avatar when it is replaced', async () => {
@@ -159,30 +221,32 @@ describe('usersService.updateProfile — avatar', () => {
     const google = 'https://lh3.googleusercontent.com/a/abc123';
     await db.user.update({ where: { id: user.id }, data: { image: google } });
 
-    const dto = await usersService.updateProfile(user.id, {
-      image: ownAvatarUrl(user.id, 'now-ours.png'),
-    });
-    expect(dto.image).toBe(ownAvatarUrl(user.id, 'now-ours.png'));
-    // The Google URL is not one of our blobs → must NOT be sent to `del`.
+    const key = ownAvatarKey(user.id, 'now-ours.png');
+    const dto = await usersService.updateProfile(user.id, { image: key });
+    expect(dto.image).toBe(resolved(key));
+    // The Google URL is not one of ours → must NOT be deleted, and it is also
+    // never re-prefixed on read: a provider avatar keeps working untouched.
     expect(deletePublicAsset).not.toHaveBeenCalled();
   });
 });
 
 describe('usersService.uploadAvatar', () => {
-  it('stores an image under the per-user avatars prefix and returns its URL', async () => {
+  it('stores under the per-user avatars prefix and returns the KEY', async () => {
     const user = await createTestUser();
 
-    const { url } = await usersService.uploadAvatar(fileOf('pic.png', 'image/png'), user.id);
+    const { key } = await usersService.uploadAvatar(fileOf('pic.png', 'image/png'), user.id);
 
     expect(putPublicAsset).toHaveBeenCalledWith(
       `avatars/${user.id}/pic.png`,
       expect.anything(),
       'image/png',
     );
-    // The returned URL is one updateProfile will accept for this user.
-    expect(url).toBe(ownAvatarUrl(user.id, 'pic.png'));
-    await expect(usersService.updateProfile(user.id, { image: url })).resolves.toMatchObject({
-      image: url,
+    expect(key).toBe(ownAvatarKey(user.id, 'pic.png'));
+    expect(key).not.toMatch(/^https?:/);
+    // The round trip the Profile pane actually performs: upload -> PATCH the
+    // returned value -> the DTO carries the resolved URL the field renders.
+    await expect(usersService.updateProfile(user.id, { image: key })).resolves.toMatchObject({
+      image: resolved(key),
     });
   });
 

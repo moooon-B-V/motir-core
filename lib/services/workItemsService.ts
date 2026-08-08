@@ -173,6 +173,7 @@ import {
   resolveItemDispatchRepo,
 } from '@/lib/workItems/dispatchRepo';
 import { ciAllowanceService } from '@/lib/services/ciAllowanceService';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Work-items service — the business-logic surface Epic 2's route handlers
 // call (Subtask 1.4.4). It owns every $transaction for the work-item +
@@ -4273,7 +4274,7 @@ function rowReadyContext(row: ReadyCandidateRow): ReadyItemContext {
           id: row.assigneeId,
           name: row.assigneeName ?? '',
           email: row.assigneeEmail ?? '',
-          image: row.assigneeImage,
+          image: storedAssetUrl(row.assigneeImage),
         }
       : null,
   };

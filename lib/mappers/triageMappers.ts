@@ -1,5 +1,6 @@
 import type { TriageQueueRow } from '@/lib/repositories/workItemRepository';
 import type { TriageQueueItemDto, TriageSubmitterDto } from '@/lib/dto/triage';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma/projection → DTO converters for the triage inbox (Subtask 6.11.3). The
 // service calls these just before returning so no Prisma row shape (Date
@@ -31,7 +32,7 @@ function toSubmitterDto(row: TriageQueueRow): TriageSubmitterDto {
     userId: row.submittedByUserId,
     name: row.submitterName,
     email: row.submitterEmail,
-    image: row.submitterImage,
+    image: storedAssetUrl(row.submitterImage),
   };
 }
 
