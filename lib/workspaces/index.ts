@@ -1,5 +1,5 @@
-import { cookies, headers } from 'next/headers';
-import { auth } from '@/lib/auth';
+import { cookies } from 'next/headers';
+import { getSession } from '@/lib/auth';
 import type { WorkspaceContext } from './context';
 import { WORKSPACE_COOKIE_NAME, resolveWorkspaceFromIds } from './middleware';
 
@@ -28,7 +28,15 @@ export { resolveWorkspaceContext, WORKSPACE_COOKIE_NAME } from './middleware';
  *   );
  */
 export async function getWorkspaceContext(): Promise<WorkspaceContext | null> {
-  const session = await auth.api.getSession({ headers: await headers() });
+  // Through `getSession()`, NOT `auth.api.getSession` directly (MOTIR-2453).
+  // This is the `next/headers` context, so the two were already the identical
+  // call — but the direct one bypassed the request memoisation, which is why an
+  // authed page render validated the session four times instead of two: the
+  // `(authed)` layout calls this helper right after its own `getSession()`.
+  // The Request-taking sibling in ./middleware.ts (`resolveWorkspaceContext`)
+  // legitimately stays direct: it is handed explicit headers and has no render
+  // scope to share.
+  const session = await getSession();
   if (!session) return null;
 
   const cookieStore = await cookies();
