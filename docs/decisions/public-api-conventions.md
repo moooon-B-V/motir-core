@@ -4019,4 +4019,3 @@ never a checkout concept; it is not a general reopening of the dispatch payload.
   addressed as an instruction — and the two coexist deliberately.
 - **MOTIR-2398 consumes it**, which is what lets `nextReady` leave MCP and
   11.5.6 delete the SDK.
-
