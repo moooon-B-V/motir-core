@@ -1891,3 +1891,207 @@ has yet to wire: for those, **MOTIR-2347's decision record wins over today's cod
 code has no answer for them and this page must not show one it invented. When this asset disagrees
 with `settings-area.mock.html`, `access-members.mock.html` or `details.mock.html` about chrome, chip
 grammar, Input or Modal, **those assets win** — this one composes them.
+
+---
+
+# The permission-gated shell — the door that is not there (Story MOTIR-2258 · Subtask MOTIR-2464 output)
+
+The shell as it renders for an actor whose role does not hold what a destination needs. Every other
+card in Story MOTIR-2258 REMOVES something, and an absence is harder to specify than an addition:
+adding a row has an obvious right answer (it looks like its neighbours), while removing one leaves a
+hole and every hole has to be decided — does the gap close up, does anything acknowledge it, does the
+group heading above it survive, does the separator below it. Decided once here so six sibling cards
+do not answer those questions independently and differently.
+
+## Files
+
+| HTML source (truth)             | PNG export                |
+| ------------------------------- | ------------------------- |
+| `permission-gated-ui.mock.html` | `permission-gated-ui.png` |
+
+A six-block board (five design panels + a trace table): **review EACH**. Toggle `data-theme="dark"`
+on `<html>` (the button, top right) to confirm token parity.
+
+## What this asset COMPOSES, and does not redraw
+
+- **`design/projects/settings-area.mock.html`** (Subtask 6.5.1) — the settings rail, its groups, its
+  rows, the back-to-project head. The token block and the `.rail` / `.grp` / `.nav-row` rules in
+  this mock are copied from it **1:1**, so panels 1–3 show THE SAME rail with entries removed, in
+  the same chrome. **This asset does not re-specify the rail.**
+- **`design/shell/desktop.pen`** and **`design/shell/desktop-collapsed.pen`** — the app shell and its
+  project nav (panels 1 and 4); **`design/shell/cmd-k.pen`** — the palette. **This asset does not
+  redesign the shell.**
+
+A second rail or shell specification would be built twice and drift; where a panel needs either, it
+takes the shipped one.
+
+## Where the RULE lives — this asset draws it, it does not author it
+
+Every treatment below traces to a row of the **treatment table** in this file's
+§ _Amendment 2026-08-08 — hide the entry point, disable the in-place control, guard the destination_
+(Subtask **MOTIR-2462**). That section carries the three-part rule, the nine affordance families, and
+the mirror evidence. **Do not read a rule out of this asset that the table does not carry** — and if
+a surface needs a treatment the table lacks, that is a gap in the DECISION, not a licence to invent
+one here. The trace table at the foot of the mock maps each panel to its table row, and states what
+the asset adds that the table does not carry.
+
+## The panels
+
+### Panel 1 — the bottom nav: the Project settings door, present and absent
+
+Table row **2** (HIDE, the settings AREA door). Two rails side by side: a project admin's, with
+`Project settings` in the footer group; and a member's, with that row simply not rendered.
+
+**Decided here: the gap is NOT marked.** No disabled row, no `Soon`-style chip, no tooltip, no "ask
+an admin" line. The rows below (`Job runs`, `Git`, `Docs`) close up and the footer is one row
+shorter. The dashed hatched block on the right of the mock is the REVIEW PAGE's annotation showing a
+reader where the row was — **it is not product chrome and nothing renders in its place.** The reason
+is the rule's own: an entry point is a promise about a room, and a disabled row is a promise the
+product then refuses — the exact treatment the 2026-08-08 amendment supersedes for entry points.
+
+**The door hides only when every entry INSIDE the area filters away.** An actor holding one settings
+domain still gets the door and lands on panel 2's rail. The two workspace-scoped rows below it
+(`Job runs`, `Git`) are not this story's and are drawn unchanged.
+
+### Panel 2 — the settings rail for a partial role
+
+Table row **1** (HIDE, the settings rail entry). A project admin's full rail — four groups, twelve
+entries — beside a custom role holding two work domains and nothing else.
+
+**A group with zero visible entries renders NO HEADING**, not an empty one. This is the panel that
+earns the asset: a heading above nothing is what a naive filter produces, and it reads as a loading
+failure rather than as policy. The surviving group sits directly under the rail head, with no gap and
+no placeholder. The rule is already shipped one level down — `groupSettingsNav()` in
+`lib/settings/projectSettingsNav.ts` ends `.filter((section) => section.entries.length > 0)` — and is
+drawn here so the gating card keeps it rather than rediscovering it.
+
+**WHICH entries survive for which role is deliberately NOT drawn.** The permission key each
+destination gates on is **MOTIR-2468**'s to name, against that surface's own server guard. What this
+panel fixes is the SHAPE of a partly-filtered rail, which is the same under any key map.
+
+### Panel 3 — the refused destination
+
+Table row **3** (the GUARD limb). `/settings/project/members` reached by direct navigation from an
+actor who cannot see its row. Hiding is presentation, so the page stays reachable by URL or by an old
+link, and what a person lands on is a real screen.
+
+**The shipped component, unchanged:** `components/projects/NoAccessState.tsx` — the `EmptyState`
+family, a `Lock` glyph at 48px, a serif title, a `--el-text-secondary` description and **one**
+action rendered as a `primary` Button. Not a new screen: `/settings/project/automation` already
+renders exactly this for a non-admin, and this asset extends that precedent to every destination the
+story hides.
+
+**The copy is per destination, and the back action resolves to the nearest page the actor can
+actually reach** — a back button that lands on another refusal is worse than no back button:
+
+| Destination                     | Title       | Description                                                                                                                                   |
+| ------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/settings/project/members`     | Admins only | Who is on this project, and what each of them can do, is managed by project admins. Ask an admin if you need someone added or a role changed. |
+| `/settings/project/roles`       | Admins only | What each role in this project can do is managed by project admins. Ask an admin if a role needs changing.                                    |
+| `/settings/project/board`       | Admins only | Board configuration is managed by project admins. Ask an admin if a column or a limit needs changing.                                         |
+| `/settings/project/workflow`    | Admins only | Statuses and transitions are managed by project admins. Ask an admin if the workflow needs changing.                                          |
+| `/settings/project/estimation`  | Admins only | How this project estimates is managed by project admins. Ask an admin if the scale needs changing.                                            |
+| `/settings/project/fields`      | Admins only | Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.                                                |
+| `/settings/project/components`  | Admins only | Components are managed by project admins. Ask an admin if one needs adding or changing.                                                       |
+| `/settings/project/ai-planning` | Admins only | AI planning for this project is configured by project admins. Ask an admin if the cadence or model needs changing.                            |
+| `/settings/project/automation`  | Admins only | Project automation is managed by project admins. Ask an admin if you need a rule changed. **(shipped, unchanged)**                            |
+
+**Back label / href, in this order:**
+
+1. The actor can see **any** settings entry → label `Details`, href `/settings/project`. (The shipped
+   automation page's choice; keep it.)
+2. The whole area filtered away (panel 1's actor) → label `Back to projects`, href `/dashboard` —
+   the shipped `projectAccess.backToProjects` string, the same one `NoAccessState` already uses for a
+   project a member cannot browse.
+
+The `Admins only` title is deliberately repeated across rows: it is the shipped
+`settings.automation.noAccess.title` and it says the one thing every one of these pages has in
+common. The DESCRIPTION is what carries which room this is. New keys belong under
+`settings.<section>.noAccess.*`, mirroring the shipped `settings.automation.noAccess` shape.
+
+### Panel 4 — the project nav for a viewer
+
+Table row **4** (HIDE, the project-nav entry). Before and after, so the code card can see what moves.
+
+**What this panel decides is SHAPE only:** a removed row leaves no placeholder and no disabled
+stand-in, and the rows below move up. **The primary section keeps its single separator from the
+footer even when the footer has nothing in it** — the separator belongs to the section boundary, not
+to the rows, so a viewer whose settings door is also gone sees the nav simply end rather than a
+hairline floating under nothing. And **the primary section can never render empty**: Dashboard, Work
+items, Boards, Roadmap, Backlog and Reports are reads that survive for any actor who can browse the
+project at all. An actor who cannot browse never reaches this shell — they get panel 3's state on the
+project itself.
+
+**WHICH rows leave is NOT decided here.** The three drawn as closing up (`Ready`, `Plans`, `Triage`)
+are illustrative. **MOTIR-2471** names the permission each destination needs, read off that
+destination's own server guard — an entry stays unless its page refuses the actor outright, and a
+page that merely renders fewer actions is a page-level concern, not a nav one.
+
+### Panel 5 — UNCHANGED: the in-place treatments this story must NOT touch
+
+Table rows **6, 7, 8** (DISABLE) and **9** (HIDE), all recorded UNCHANGED by the 2026-08-08
+amendment — it widened the hidden set for ENTRY POINTS and did not re-open the disabled set for
+IN-PLACE CONTROLS. Drawn verbatim from what ships, so a sibling card can see there is nothing to do:
+
+- **The Create control** — `CreateIssueButton.tsx`: a `Tooltip`-wrapped `aria-disabled` span at
+  `--el-text-faint` with `opacity: 0.6`, carrying the `projectAccess.readOnlyHint` copy. Visible,
+  disabled, explained.
+- **The board** — `BoardContainer.tsx`: cards do not drag, and a `role="status"` notice
+  (`readOnlyBoardBanner`) is what says so.
+- **The issue-detail inline pickers** — `CoreFieldsPanel.tsx` sets `readOnly = !canEdit`; the shipped
+  comment is the rationale, verbatim: disabling "makes the affordance honest rather than letting a
+  viewer edit then bounce off a 403".
+- **The Edit link** — absent from the header and from every per-section edit door
+  (`editHref={canEdit ? … : undefined}`), and `/items/[key]/edit` redirects back to the read-only
+  detail view. HIDE rather than DISABLE because it navigates to an edit SURFACE: an entry point, not
+  an in-place control. This one already shipped correctly in 2026-06 and is drawn only so nobody
+  "fixes" it.
+
+Treatment-table row **5** (the work-item ⋯ menu) has no panel: `WorkItemActionsMenu` already hides
+rows the actor lacks the capability for — its own source calls that "the permission law" — and it is
+reached only from a surface the actor is already standing on, so there is no absence to draw.
+
+## The access path
+
+There is none to add, and that is the point: every panel is a state of a surface the shell already
+renders. Panels 1 and 4 are the app-shell rail (`SidebarNav.tsx`, its `primary` and `bottom`
+sections); panel 2 is the same rail inside the settings area; panel 3 is a settings route reached by
+direct navigation, which is precisely the path that survives hiding; panel 5 is the top bar, the
+board and the work-item detail page. Nothing here is entered from a new door.
+
+## Composing primitives (no new primitive required)
+
+`Sidebar` / `SidebarSection` / `SidebarNavItem` (`components/ui/Sidebar.tsx`) for both rails and
+their group captions · `EmptyState` (`components/ui/EmptyState.tsx`) via `NoAccessState`
+(`components/projects/NoAccessState.tsx`) for panel 3 · `Button` (`primary` for the back action,
+`ghost` for Watch) · `Tooltip` for the disabled-Create explainer · `Pill` grammar for the role chips
+in the state captions and the HIDE / DISABLE / GUARD tags · `Card` for the board columns and the
+panel-5 sub-cards.
+
+## Tokens & a11y
+
+Colour is `--el-*` only — there is no hardcoded hue anywhere outside the token block copied from
+`app/globals.css`, and both themes render from it. Shape is the element-semantic tokens
+(`--radius-card/-input/-badge/-control/-btn/-kbd`, `--spacing-card-padding` / `-control-*` /
+`-chip-*` / `-btn-x` / `-kbd-*` / `-tooltip-*`, `--height-control/-btn-sm`, `--shadow-subtle/-card/
+-elevated`) so a `data-display-style` swap reshapes it. Role chips put the hue in the tint background
+with `--el-text-strong` text (AA-safe, finding #35).
+
+**On ink — the trap this asset was warned off.** `--el-text-faint` measures **2.39:1** on
+`--el-surface` and fails AA (MOTIR-2455; the MOTIR-2459 scanner exists because of it), and
+`--el-text-muted` is safe only on the white page/card. So **every secondary string inside a stage is
+`--el-text-secondary`** (6.80:1, clears AA on every surface in both themes) — including the group
+captions, which the 6.5.1 asset drew faint. `--el-text-faint` appears exactly four times: the review
+page's own panel labels, which are not product surface, and the three **disabled** controls in panel
+5 — disabled text is what WCAG 1.4.3 exempts, and it is the treatment `CreateIssueButton` already
+ships.
+
+## Source of truth
+
+When a string or structure here disagrees with shipped MOTIR-2258 code, **the code wins** — file a
+fix so the asset stays the reference. Two exceptions, both deliberate:
+
+1. **The treatment RULE is MOTIR-2462's**, in this file's _Amendment 2026-08-08_ section. When this
+   asset and that table disagree, the table wins and this asset is wrong.
+2. **On chrome, chip grammar and the rail**, `settings-area.mock.html` and the `design/shell` assets
+   win — this one composes them.
