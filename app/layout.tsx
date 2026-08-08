@@ -11,6 +11,10 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
 import { buildThemeInitScript } from '@/lib/theme/init-script';
+// ⚠️ THE TWO IMPORTS BELOW PUT A PRISMA CLIENT IN EVERY ROUTE IN THE PRODUCT.
+// They are deliberate and load-bearing; the reasoning is the "Why the database
+// reach cannot move down" block above RootLayout. Do not add a third without
+// reading it — `tests/root-layout-db-imports.test.ts` will stop you.
 import { getSession } from '@/lib/auth';
 import { appearancePreferenceService } from '@/lib/services/appearancePreferenceService';
 import type { AppliedAppearanceDto } from '@/lib/dto/appearancePreference';
@@ -94,6 +98,46 @@ export const metadata: Metadata = {
   description: 'AI-native project management — open-source PM substrate.',
 };
 
+/**
+ * ── Why the database reach cannot move down (MOTIR-2381) ────────────────────
+ *
+ * This layout is in EVERY route's module graph, so everything it imports is
+ * traced into every server function Next builds. Measured on `.next/**\/*.nft.json`
+ * with `scripts/measure-prisma-traces.mjs`: **340 of 348 traced functions carry
+ * `@prisma/client`** — a 404, the `/tokens` specimen and the published docs tree
+ * among them. And `lib/db.ts` builds its `PrismaClient` at MODULE scope (throwing
+ * when `DATABASE_URL` is unset), so those routes do not merely *ship* a database
+ * client: they *instantiate* one. That is a blast-radius fact, not a size one,
+ * and it is why the question below was asked at all.
+ *
+ * The question was whether `getSession` + `appearancePreferenceService` could sit
+ * in `(authed)/layout.tsx` instead. **They cannot**, and the reason is scope, not
+ * taste: the appearance is applied to the `<html>` element and to the pre-paint
+ * `<head>` script, and a nested layout can render neither. So there is no "move"
+ * available — only *keep*, or *drop 7.3.61's cross-device no-flash guarantee for
+ * the whole app*, including the authed shell, which is the surface it exists for.
+ *
+ * MEASURED CEILING, so the trade is a number rather than an opinion. Deleting
+ * both imports takes 340 → **330**: the landing page, the four `(auth)` screens,
+ * `_not-found`, and the four `/tokens` routes. Ten functions, bought by removing
+ * a shipped feature from every route. Not worth it.
+ *
+ * Two things this rules out, so nobody re-derives them:
+ *
+ * - **`outputFileTracingExcludes` cannot paper over it.** Next 16 builds with
+ *   Turbopack, and `build/index.js` guards `collect-build-traces.js` with
+ *   `bundler !== Bundler.Turbopack`, so both tracing keys are inert (MOTIR-2403).
+ *   It would be a lie regardless: the layout genuinely calls the DB.
+ * - **A lighter session probe exists but does not help.** `getSessionCookie`
+ *   (`better-auth/cookies`, already used by `proxy.ts`) answers "is someone signed
+ *   in" with no Prisma — enough for `ThemeProvider`'s `signedIn`, and nothing
+ *   else. `applied` is keyed by user id, which needs a *validated* session.
+ *
+ * ⚠️ AND THE ROOT LAYOUT IS NOT THE ONLY CARRIER. With both imports removed the
+ * public docs tree STILL traces `@prisma/client`, because
+ * `app/(public)/docs/layout.tsx` reads `projectTagsService.listCategories()` for
+ * up to six footer topic links. That one is independent of this file — MOTIR-2452.
+ */
 export default async function RootLayout({
   children,
 }: Readonly<{
