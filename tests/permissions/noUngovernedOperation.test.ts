@@ -113,7 +113,7 @@ function methodBody(src: string, afterOpenParen: number): string | null {
     else if (src[cursor] === ')') parenDepth -= 1;
   }
   if (parenDepth > 0) return null;
-  const open = src.indexOf('{', cursor);
+  const open = bodyBraceAfter(src, cursor);
   if (open < 0) return null;
   let depth = 0;
   let j = open;
@@ -122,6 +122,54 @@ function methodBody(src: string, afterOpenParen: number): string | null {
     else if (src[j] === '}' && --depth === 0) break;
   }
   return src.slice(open, j + 1);
+}
+
+/**
+ * The index of the BODY's opening brace, given `from` = just past the signature's
+ * closing `)`. Returns -1 when there is no body (an overload signature, an
+ * interface member).
+ *
+ * ⚠️ THE RETURN TYPE COMES FIRST, AND IT CAN CONTAIN BRACES (MOTIR-2443). Taking
+ * the first `{` after `)` looks right and is wrong the moment a method returns an
+ * object type — `): Promise<{ jobId: string }> {` — because THAT brace wins and
+ * the "body" becomes `{ jobId: string }`. A method whose first statement is an
+ * `assertPermission` then reports as UNGOVERNED. Reproduced on
+ * `aiChatService.submitDiscoveryTurn`, whose gate the guard could not see the day
+ * it was added.
+ *
+ * It is the MOTIR-2292 failure on the other side of the parameter list — that
+ * repair walked the PARAMS by paren depth and stopped there — so the rule is the
+ * mirror image: a `{` belongs to the TYPE, not the body, when it sits inside
+ * `<…>` (a generic argument) or immediately follows a `:` (a bare object return
+ * type). Skip those, and the first survivor is the body.
+ */
+function bodyBraceAfter(src: string, from: number): number {
+  let angle = 0;
+  let i = from;
+  while (i < src.length) {
+    const ch = src[i]!;
+    if (ch === ';') return -1; // an overload signature — no body at all
+    if (ch === '<') angle += 1;
+    else if (ch === '>') angle = Math.max(0, angle - 1);
+    else if (ch === '{') {
+      // Inside a generic argument, or the object type after a `:` — either way
+      // this brace is the annotation's. Walk past it and keep looking.
+      let prev = i - 1;
+      while (prev >= from && /\s/.test(src[prev]!)) prev -= 1;
+      if (angle > 0 || src[prev] === ':') {
+        let depth = 0;
+        for (; i < src.length; i++) {
+          if (src[i] === '{') depth += 1;
+          else if (src[i] === '}' && --depth === 0) break;
+        }
+        i += 1;
+        continue;
+      }
+      return i;
+    }
+    i += 1;
+  }
+  return -1;
 }
 
 /** Every service method body, by `service.method`. */
@@ -219,6 +267,14 @@ function bodyIsGated(svc: string, body: string, seen: Set<string>): boolean {
   // Hop 1 — across SERVICES (unchanged).
   for (const [otherSvc, method] of serviceCalls(body)) {
     if (methodIsGated(`${otherSvc}.${method}`, seen)) return true;
+  }
+  // Hop 1b — to a SIBLING method on the same service object (MOTIR-2443). The
+  // walk hops across services and into module-local functions and could not see
+  // the shortest hop of all: `getOrCreateForProject` delegating to
+  // `this.getOrCreateForScope`, which asserts. `serviceCalls` cannot match it —
+  // `this` is not a `…Service` identifier — so the receiver is matched on its own.
+  for (const [, method] of [...body.matchAll(/\bthis\.([a-zA-Z_][\w]*)\s*\(/g)]) {
+    if (methodIsGated(`${svc}.${method}`, seen)) return true;
   }
   // Hop 2 — into a MODULE-LOCAL function of the same file (MOTIR-2304). Recurses
   // through `bodyIsGated`, so a local calling another local, or a local calling
@@ -472,7 +528,14 @@ describe('the PENDING set is bounded and shrinking', () => {
     // they were gated and merely mis-named. `GET /api/import/[id]` was the
     // ungated one — an import draft holds the connection config and the field
     // mapping, and nothing was asking who could read it.
-    expect(pending.length).toBe(16);
+    //
+    // 16 → 13 is MOTIR-2443 REPAIRING THE WALK again, and like MOTIR-2292 and
+    // MOTIR-2304 before it, NO GATE WAS ADDED: `methodBody` was taking a RETURN
+    // TYPE's braces as the body (`): Promise<{ jobId: string }> {`), and the walk
+    // could not follow a `this.siblingMethod(` hop. Three operations were never
+    // ungoverned. A FALL here means the instrument got better; only a RISE means
+    // a hole opened.
+    expect(pending.length).toBe(13);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
@@ -488,7 +551,11 @@ describe('the PENDING set is bounded and shrinking', () => {
     // discrepancies were never discrepancies.
     // this number is progress; raising it is a regression. (38 → 33 for the same
     // extractor fix as above — five of them were never unconfirmed.)
-    expect(unverified.length).toBe(18);
+    // MOTIR-2443 moved this one 18 → 11 for the same reason as the pin above —
+    // seven of the eighteen discrepancies were the walk failing to see a body,
+    // not a gate failing to exist. What is left is MOTIR-2365 / MOTIR-2366's
+    // worklist, and it is now seven items shorter than either card was sized for.
+    expect(unverified.length).toBe(11);
   });
 
   it('every pending operation names the permission that will govern it', () => {
@@ -539,6 +606,57 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     expect(
       GATE.test(methodBody(ungated, ungated.indexOf('(', ungated.indexOf('reaudit')) + 1)!),
     ).toBe(false);
+  });
+
+  it('finds a gate behind a RETURN TYPE that carries braces', () => {
+    // The MOTIR-2443 regression, pinned. `methodBody` walked the PARAMETER list
+    // by paren depth (the MOTIR-2292 repair) and then took the first `{` — which
+    // is the return annotation's when the method returns an object type. The
+    // "body" became `{ jobId: string }` and the assert on the next line was
+    // invisible. Both the generic form and the bare object form are here: the
+    // first is what `aiChatService.submitDiscoveryTurn` actually looks like.
+    const generic = [
+      'export const svc = {',
+      '  async submitDiscoveryTurn(',
+      '    prompt: string,',
+      '    ctx: ProjectContext,',
+      '  ): Promise<{ jobId: string }> {',
+      "    await projectAccessService.assertPermission(ctx.projectId, ctx, 'ai:plan');",
+      '  },',
+      '};',
+    ].join('\n');
+    const bodyOf = (src: string, name: string): string | null =>
+      methodBody(src, src.indexOf('(', src.indexOf(name)) + 1);
+    expect(GATE.test(bodyOf(generic, 'submitDiscoveryTurn')!)).toBe(true);
+
+    const bare = [
+      'export const svc = {',
+      '  async counts(projectId: string, ctx: Ctx): { created: number } {',
+      '    await projectAccessService.assertCanBrowse(projectId, ctx);',
+      '  },',
+      '};',
+    ].join('\n');
+    expect(GATE.test(bodyOf(bare, 'counts')!)).toBe(true);
+
+    // …and the repair is not just "answer true more often": with the assert
+    // removed, the same shape still reports NO gate.
+    const ungated = generic.replace(
+      "    await projectAccessService.assertPermission(ctx.projectId, ctx, 'ai:plan');",
+      '    return submitJob();',
+    );
+    expect(GATE.test(bodyOf(ungated, 'submitDiscoveryTurn')!)).toBe(false);
+  });
+
+  it('follows a `this.` hop to a sibling method, and still says no when the sibling gates nothing', () => {
+    // The other half of MOTIR-2443. `serviceCalls` matches `someService.method(`
+    // only, so a method delegating to a sibling on the SAME object was a dead
+    // end — `planChangeSessionsService.getOrCreateForProject` reads as ungated
+    // however plainly `getOrCreateForScope` asserts. Driven through the REAL
+    // walk rather than a synthetic string, because the hop is a property of
+    // `bodyIsGated`'s recursion, not of one regex.
+    expect(methodIsGated('planChangeSessionsService.getOrCreateForProject')).toBe(true);
+    // The negative control: a delegating method whose target gates nothing.
+    expect(methodIsGated('dashboardsService.listDashboards')).toBe(false);
   });
 
   it('follows a call into a MODULE-LOCAL helper, and still says no when the helper gates nothing', () => {

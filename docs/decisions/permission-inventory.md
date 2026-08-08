@@ -171,6 +171,16 @@ It is the MOTIR-2292 failure one level up — that repair fixed WHERE the walk l
 recognises alone — and it is the reason three cards under MOTIR-2256 were written claiming their
 domains had _"no project gate at all"_ when the gates were there and tighter than the umbrella.
 
+**And a THIRD correction, MOTIR-2443, found while wiring `ai:plan`.** The walk was taking a RETURN
+TYPE's braces as the method body — `): Promise<{ jobId: string }> {` captures `{ jobId: string }`,
+so every service method returning an object type reported UNGOVERNED however plainly it asserted —
+and it could not follow a `this.siblingMethod(` hop. `PENDING` fell **16 → 13** and the
+claimed-but-unverified bucket **18 → 11**. Again NO gate was added; again the instrument was wrong,
+not the product. Three corrections in one epic, each on a different axis: WHERE the walk starts
+(2292), WHAT it recognises (2304), WHERE it stops (2443). The pattern worth carrying forward is that
+a static walk over a language it does not parse will keep being wrong in a new way, so every count it
+produces is pinned and every repair carries a synthetic control.
+
 ## Reasons
 
 Every row cites one of these. A row with no reason is the failure this card exists to prevent.
