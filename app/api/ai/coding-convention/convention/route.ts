@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { resolveActiveProjectContext, mapCodeHealthError } from '../_shared';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/ai/coding-convention/convention — the active project's per-repo
 // convention (derived, auto-used — read-only per MOTIR-1660/1663). Accepts
@@ -21,6 +22,8 @@ export async function GET(req: Request): Promise<Response> {
     );
     return NextResponse.json(convention);
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     return mapCodeHealthError(err);
   }
 }

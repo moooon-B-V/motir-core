@@ -6,6 +6,7 @@ import {
   parseOffsetParam,
   parseLimitParam,
 } from '../_shared';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/ai/coding-convention/audit — the active project's latest code-health
 // audit summary + a page of findings (`?findingsOffset=`, `?findingsLimit=`,
@@ -31,6 +32,8 @@ export async function GET(req: Request): Promise<Response> {
     );
     return NextResponse.json(audit);
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     return mapCodeHealthError(err);
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { resolveActiveProjectContext, mapCodeHealthError, parseRepoScopeBody } from '../_shared';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // POST /api/ai/coding-convention/refresh — the "Re-audit now" trigger of the
 // "Deepen this audit" affordance (MOTIR-1592) over the MOTIR-928 refresh seam.
@@ -40,6 +41,8 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(result, { status: 202 });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     return mapCodeHealthError(err);
   }
 }

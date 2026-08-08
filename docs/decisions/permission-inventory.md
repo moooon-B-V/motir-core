@@ -63,7 +63,8 @@ A `planned` key is never offered in the grid or the role editor.
 >
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
 > (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352) ·
-> **`import:run`** (MOTIR-2353) · **`work_item:triage` · `work_item:delete`** (MOTIR-2354). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> **`import:run`** (MOTIR-2353) · **`work_item:triage` · `work_item:delete`** (MOTIR-2354).
+> `ai:plan` is wired across MOTIR-2355 / -2357 / -2358 / -2359 and flips on the last of them. `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -200,6 +201,8 @@ worse failure than a gap.
 
 **R5.** Submits a planning job that spends the workspace’s AI credits and proposes plan changes. Today session-only.
 
+> ⚠️ **CORRECTED by MOTIR-2362.** The four `/api/ai/coding-convention/*` rows cited this reason and are NOT planning submissions: they read and re-run the project's convention AUDIT, a project-wide configuration artifact the planner then consumes. They were `assertCanManage` (admin-only) already, and `ai:plan` is a member key — so applying the mapping literally would have been the story's only WIDENING. They move to `ai:configure` / R17, which `admin` holds, so no actor's answer changes. A story that closes holes should not open one in passing.
+
 **R6.** Inbound provider webhook, signature-verified. No actor.
 
 **R8.** TEST-SUPPORT route (Next escapes the leading underscore as %5F). It creates work items with no project gate. Must be unreachable in production — verify the build excludes it, else it is an ungated write path. Logged as a finding, not a permission.
@@ -308,10 +311,10 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
 | `/api/ai/chat`                                | POST      | `aiChatService.submitDiscoveryTurn` → `assertPermission`                                                                          | `ai:plan`        | existing    | R5  |
 | `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`                                                                                | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`                                                                            | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`                                                                           | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`                                                                                 | `ai:plan`        | new         | R5  |
+| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertPermission`                                                                               | `ai:configure`   | existing    | R5  |
+| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertPermission`                                                                           | `ai:configure`   | existing    | R5  |
+| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertPermission`                                                                          | `ai:configure`   | existing    | R5  |
+| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertPermission`                                                                                | `ai:configure`   | existing    | R5  |
 | `/api/ai/expand`                              | POST      | `aiPlanEditsService.submitExpand` → `assertPermission`                                                                            | `ai:plan`        | existing    | R5  |
 | `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
 | `/api/ai/explanation`                         | POST      | `aiExplanationService.submitExplanationDraft` → `assertPermission`                                                                | `ai:plan`        | existing    | R5  |

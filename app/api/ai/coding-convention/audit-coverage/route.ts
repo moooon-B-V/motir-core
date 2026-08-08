@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auditCoverageService } from '@/lib/services/auditCoverageService';
 import { resolveActiveProjectContext, mapCodeHealthError } from '../_shared';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/ai/coding-convention/audit-coverage — how many of the ACTIVE project's
 // connected repos have no derived code-health audit (MOTIR-2248).
@@ -24,6 +25,8 @@ export async function GET(): Promise<Response> {
     });
     return NextResponse.json(coverage, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     return mapCodeHealthError(err);
   }
 }

@@ -15,7 +15,7 @@ const { auditCoverageService } = await import('@/lib/services/auditCoverageServi
 const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
-const { NotProjectAdminError } = await import('@/lib/projects/errors');
+const { PermissionDeniedError } = await import('@/lib/projects/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
 
@@ -203,7 +203,7 @@ describe('auditCoverageService.getCoverage', () => {
         userId: outsider.id,
         workspaceId: workspace.id,
       }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     expect(getCodeAuditMock).not.toHaveBeenCalled();
   });
 });
