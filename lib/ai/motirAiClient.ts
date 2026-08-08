@@ -195,6 +195,20 @@ export async function submitJob(
   return { jobId };
 }
 
+/**
+ * The query parameter the two job reads scope themselves with — the ONE seam in
+ * MOTIR-2291 that no single repo's tests can cover.
+ *
+ * ⚠️ IT IS A CROSS-REPO CONTRACT AND IT FAILS CLOSED AND SILENTLY. motir-ai's
+ * `GET /v1/jobs/:id` requires this exact name (MOTIR-2360); a typo on either side
+ * produces a `validation_error` on every job read — no type error, no test
+ * failure in the repo that made it, just a product where nothing streams. Naming
+ * it once here, and pinning the string in
+ * `tests/permissions/memberFacingGate.integration.test.ts`, is what makes a drift
+ * a red test rather than a support ticket.
+ */
+export const JOB_SCOPE_QUERY_PARAM = 'coreProjectId';
+
 // GET /v1/jobs/:id — status + result, with a failed job's error mapped to a
 // typed error. A 404 / transport failure throws a typed error.
 //
@@ -214,7 +228,7 @@ export async function submitJob(
 // its project, and that is the bug this whole story is about.
 export async function getJob(jobId: string, coreProjectId: string): Promise<JobView> {
   const { url, serviceToken } = config();
-  const params = new URLSearchParams({ coreProjectId });
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
   const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}?${params.toString()}`, {
     headers: authHeaders(serviceToken),
   });
@@ -796,7 +810,7 @@ export async function* streamJob(
   coreProjectId: string,
 ): AsyncGenerator<JobStreamEvent> {
   const { url, serviceToken } = config();
-  const params = new URLSearchParams({ coreProjectId });
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
   const res = await aiFetch(
     `${url}/v1/jobs/${encodeURIComponent(jobId)}/stream?${params.toString()}`,
     {
