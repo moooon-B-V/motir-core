@@ -8,8 +8,11 @@ import { AttachmentError } from '@/lib/blob/errors';
 // Multipart body with a single `file` field. Session-required; the owner is the
 // SESSION user (NOT the active project — an avatar is account-scoped personal
 // substrate, so there is no project/workspace context here). Typed
-// AttachmentErrors → their own status (413/415); returns { url } for the Profile
+// AttachmentErrors → their own status (413/415); returns { key } for the Profile
 // pane's AvatarField (8.8.24), which then PATCHes it as the profile `image`.
+// It is a KEY rather than a URL since MOTIR-2404 — the origin is composed on
+// READ, so nothing persists a hosting host. The field never renders this value
+// directly: it displays what the profile action returns, which is resolved.
 // No `db.*` / no transaction here — the service owns the storage write.
 
 export async function POST(req: Request): Promise<Response> {

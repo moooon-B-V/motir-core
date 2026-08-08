@@ -45,6 +45,7 @@ const {
   deletePublicAsset,
 } = await import('@/lib/blob/uploader');
 const { s3Client, resetS3ClientForTests } = await import('@/lib/blob/s3');
+const { storedAssetKey } = await import('@/lib/blob/referencedUrls');
 
 /** What the fake transport hands back — the SDK deserializes it as a response. */
 interface FakeTransportResult {
@@ -119,7 +120,7 @@ function withoutSuffix(key: string): string {
 }
 
 describe('the two-bucket split — every path writes the bucket it should', () => {
-  it('putPublicAsset writes the PUBLIC bucket and returns a fetchable URL', async () => {
+  it('putPublicAsset writes the PUBLIC bucket and returns the KEY, never a URL', async () => {
     const result = await putPublicAsset('avatars/u1/a.png', new Blob(['x']), 'image/png');
 
     expect(seen).toHaveLength(1);
@@ -127,9 +128,10 @@ describe('the two-bucket split — every path writes the bucket it should', () =
     expect(seen[0]!.bucket).toBe('motir-public');
     expect(withoutSuffix(seen[0]!.key)).toBe('avatars/u1/a.png');
     expect(seen[0]!.headers['content-type']).toBe('image/png');
-    // The URL is the public base + the SUFFIXED key, so it addresses the object
-    // that was actually written.
-    expect(result.url).toBe(`${ENV.MOTIR_S3_PUBLIC_BASE_URL}/${seen[0]!.key}`);
+    // Since MOTIR-2404 it returns the SUFFIXED key — the object actually
+    // written — and no origin at all, so the caller cannot persist one.
+    expect(result).not.toHaveProperty('url');
+    expect(result.key).toBe(seen[0]!.key);
   });
 
   it('putPrivateAttachment writes the PRIVATE bucket and returns the KEY, never a URL', async () => {
@@ -149,7 +151,7 @@ describe('the two-bucket split — every path writes the bucket it should', () =
 
   it('deleteAttachmentBlob deletes from PRIVATE, deletePublicAsset from PUBLIC', async () => {
     await deleteAttachmentBlob('attachments/w1/f-aaaaaaaaaa.pdf');
-    await deletePublicAsset(`${ENV.MOTIR_S3_PUBLIC_BASE_URL}/avatars/u1/a-bbbbbbbbbb.png`);
+    await deletePublicAsset('avatars/u1/a-bbbbbbbbbb.png');
 
     expect(seen.map((s) => [s.method, s.bucket, s.key])).toEqual([
       ['DELETE', 'motir-private', 'attachments/w1/f-aaaaaaaaaa.pdf'],
@@ -157,19 +159,23 @@ describe('the two-bucket split — every path writes the bucket it should', () =
     ]);
   });
 
-  it('deletePublicAsset resolves a PRE-MIGRATION Vercel URL to the same key', async () => {
+  // The URL-to-key derivation moved to `storedAssetKey` when MOTIR-2404 made
+  // `deletePublicAsset` take a key (its caller now has one directly). These two
+  // cases still matter — they are what keeps a row written before MOTIR-2404
+  // collectable — so they follow the logic to where it now lives.
+  it('storedAssetKey resolves a PRE-MIGRATION Vercel URL to the same key', () => {
     // The objects were copied across at the same key (MOTIR-2401), so a
     // `User.image` still carrying the old host is still garbage-collectable.
-    await deletePublicAsset('https://store1.public.blob.vercel-storage.com/avatars/u1/old.png');
-    expect(seen[0]).toMatchObject({
-      method: 'DELETE',
-      bucket: 'motir-public',
-      key: 'avatars/u1/old.png',
-    });
+    expect(storedAssetKey('https://store1.public.blob.vercel-storage.com/avatars/u1/old.png')).toBe(
+      'avatars/u1/old.png',
+    );
   });
 
-  it('deletePublicAsset is a no-op for a URL that is not ours', async () => {
-    await deletePublicAsset('https://lh3.googleusercontent.com/a/photo.jpg');
+  it('storedAssetKey yields nothing for a value that is not ours, so the GC no-ops', async () => {
+    expect(storedAssetKey('https://lh3.googleusercontent.com/a/photo.jpg')).toBeNull();
+    // And the deleter refuses an empty key rather than issuing a DELETE against
+    // the bucket root.
+    await deletePublicAsset('');
     expect(seen).toHaveLength(0);
   });
 

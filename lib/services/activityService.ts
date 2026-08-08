@@ -58,6 +58,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 /** Displayable entries per page — the History tab's "Show more" stride. */
 export const ACTIVITY_PAGE_SIZE = 20;
@@ -165,7 +166,7 @@ async function buildResolvers(
   return {
     user(id: string): ActivityUserValue {
       const u = userById.get(id);
-      return { type: 'user', userId: id, name: u?.name ?? null, image: u?.image ?? null };
+      return { type: 'user', userId: id, name: u?.name ?? null, image: storedAssetUrl(u?.image) };
     },
     status(key: string): ActivityValueDto {
       return { type: 'status', key, label: statusByKey.get(key)?.label ?? null };

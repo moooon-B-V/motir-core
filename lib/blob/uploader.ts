@@ -7,7 +7,6 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { privateBucket, publicBaseUrl, publicBucket, s3Client } from '@/lib/blob/s3';
-import { publicAssetKeyFromUrl } from '@/lib/blob/referencedUrls';
 
 // The blob-storage adapter (Subtask 2.3.7; delete added in 5.2.7; moved onto
 // the S3 API by MOTIR-2389) — the ONE place the app talks to object storage,
@@ -110,15 +109,18 @@ export async function deleteAttachmentBlob(url: string): Promise<void> {
 }
 
 /**
- * Delete a PUBLIC-store asset (an avatar) by its URL (MOTIR-1673). `User.image`
- * stores a full URL, so the key is derived from it — including for a row still
- * carrying a pre-migration Vercel URL, whose object was copied across at the
- * same key (MOTIR-2401). A URL that is not ours resolves to no key and is a
- * no-op rather than an error: the caller already gates on `isOwnAvatarBlobUrl`,
- * and deleting nothing is the safe outcome if that ever changes. Idempotent.
+ * Delete a PUBLIC-store asset (an avatar) by its object KEY (MOTIR-1673; took a
+ * URL until MOTIR-2404). `User.image` now stores the key, so the caller has one
+ * directly and the derivation that used to live here moved to
+ * `storedAssetKey` — beside the avatar GATE it must agree with, and where a
+ * legacy absolute row is reduced to the same key its object was copied across
+ * at (MOTIR-2401).
+ *
+ * An empty key is a no-op rather than an error: the caller already gates on
+ * `isOwnAvatarRef`, and deleting nothing is the safe outcome if that ever
+ * changes. Idempotent — S3's delete-object succeeds on an already-gone key.
  */
-export async function deletePublicAsset(url: string): Promise<void> {
-  const key = publicAssetKeyFromUrl(url);
+export async function deletePublicAsset(key: string): Promise<void> {
   if (!key) return;
   await s3Client().send(new DeleteObjectCommand({ Bucket: publicBucket(), Key: key }));
 }
@@ -136,18 +138,29 @@ export interface PrivatePutResult {
   pathname: string;
 }
 
+export interface PublicPutResult {
+  /** The object key. Resolve it for display with `storedAssetUrl`. */
+  key: string;
+}
+
 /**
- * Upload a PUBLIC asset (avatars) to the public bucket. Returns a
- * directly-fetchable URL — public by design, since it is rendered without any
- * per-item authorization.
+ * Upload a PUBLIC asset (avatars) to the public bucket. Returns the object KEY,
+ * not a URL (MOTIR-2404) — the object is still world-readable and still rendered
+ * with no per-item authorization; what changed is that the ORIGIN is no longer
+ * baked into the value the caller persists.
+ *
+ * That is the same shape `putPrivateAttachment` returns below, and for the same
+ * reason `Attachment.blobPathname` has always stored a key: a key means the same
+ * object wherever the bucket lives, so a provider or bucket change is a config
+ * change rather than a data migration. Composing the URL is `storedAssetUrl`'s
+ * job, at the DTO boundary, on read.
  */
 export async function putPublicAsset(
   pathname: string,
   body: File | Blob | ArrayBuffer | Buffer,
   contentType: string,
-): Promise<PutResult> {
-  const key = await putObject('public', pathname, body, contentType);
-  return { url: `${publicBaseUrl()}/${key}` };
+): Promise<PublicPutResult> {
+  return { key: await putObject('public', pathname, body, contentType) };
 }
 
 /**

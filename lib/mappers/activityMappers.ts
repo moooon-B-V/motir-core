@@ -6,6 +6,7 @@
 import type { WorkItemRevision } from '@/generated/prisma/client';
 import type { ActivityEntryDto } from '@/lib/dto/activity';
 import { buildEntryParts, type DisplayResolvers } from '@/lib/activity/renderers';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 export function toActivityEntryDto(
   row: WorkItemRevision,
@@ -17,7 +18,7 @@ export function toActivityEntryDto(
     workItemId: row.workItemId,
     changeKind: row.changeKind,
     changedAt: row.changedAt.toISOString(),
-    actor: { userId: actor.userId, name: actor.name, image: actor.image },
+    actor: { userId: actor.userId, name: actor.name, image: storedAssetUrl(actor.image) },
     parts: buildEntryParts(row.changeKind, row.diff, resolvers),
   };
 }

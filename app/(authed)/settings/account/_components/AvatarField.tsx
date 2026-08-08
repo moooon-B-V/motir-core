@@ -18,8 +18,10 @@ import { updateProfileAvatarAction } from '../profile/actions';
 // behind a confirm modal).
 //
 // Backend wiring (8.8.21): "Change" POSTs the file to `/api/upload/avatar`
-// (multipart, returns `{ url }`), then calls `updateProfileAvatarAction(url)` to
-// persist it as the profile `image`; "Remove" calls the same action with `null`.
+// (multipart, returns `{ key }` — the object KEY, since MOTIR-2404), then calls
+// `updateProfileAvatarAction(key)` to persist it as the profile `image`;
+// "Remove" calls the same action with `null`. We never render the key: the
+// action returns the RESOLVED absolute URL, which is what `setImage` stores.
 // The upload route gates size + MIME server-side; we ALSO pre-validate on the
 // client to the design's stated rule (PNG/JPG, ≤ 2 MB) so a bad pick fails fast
 // with a friendly toast instead of a round-trip.
@@ -83,9 +85,9 @@ export function AvatarField({ initialImage, name }: AvatarFieldProps) {
         toast({ variant: 'error', title: t('errors.failed') });
         return;
       }
-      const { url } = (await res.json()) as { url: string };
+      const { key } = (await res.json()) as { key: string };
 
-      const result = await updateProfileAvatarAction(url);
+      const result = await updateProfileAvatarAction(key);
       if (!result.ok) {
         toast({ variant: 'error', title: t('errors.failed') });
         return;

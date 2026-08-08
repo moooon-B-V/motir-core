@@ -4,6 +4,7 @@ import type {
   NotificationData,
   NotificationDTO,
 } from '@/lib/dto/notifications';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma → DTO converters for the notifications domain (Story 5.7 · Subtask
 // 5.7.4). The service batches the actor lookup — ONE user read per page (no
@@ -21,7 +22,7 @@ function actorFor(row: Notification, actorsById: Map<string, User>): Notificatio
   if (!row.actorId) return null;
   const user = actorsById.get(row.actorId);
   if (!user) return null;
-  return { id: user.id, name: user.name, image: user.image ?? null };
+  return { id: user.id, name: user.name, image: storedAssetUrl(user.image) };
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
