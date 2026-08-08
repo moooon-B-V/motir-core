@@ -8,6 +8,10 @@ import {
   ImportNotFoundError,
   ImportSourceNotConnectedError,
 } from '@/lib/import/errors';
+import { usersService } from '@/lib/services/usersService';
+import { projectMembersService } from '@/lib/services/projectMembersService';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture } from '../fixtures';
 
@@ -157,5 +161,101 @@ describe('importService', () => {
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(ImportSourceNotConnectedError);
+  });
+});
+
+// The `import:run` GATE (Story MOTIR-2291 · Subtask MOTIR-2353) — the largest
+// single revocation in the story: four of these five operations asserted
+// `assertCanEdit`, so every project MEMBER could pull an entire external backlog
+// into a project, and the fifth (`getImport`) asked nothing at all. Both mirrors
+// put imports behind administration, so the key is admin-only. The member refusal
+// IS the deliverable, so it is asserted rather than implied.
+describe('importService — the import:run gate', () => {
+  interface Actors {
+    projectId: string;
+    adminCtx: ServiceContext;
+    memberCtx: ServiceContext;
+    foreignCtx: ServiceContext;
+  }
+
+  let gateSeq = 0;
+  async function makeActors(): Promise<Actors> {
+    gateSeq += 1;
+    const fx = await makeWorkItemFixture({ identifier: `IG${gateSeq}` });
+    async function enroll(slug: string, role: 'admin' | 'member'): Promise<ServiceContext> {
+      const user = await usersService.createUser({
+        email: `import-${slug}-${gateSeq}@example.com`,
+        password: 'hunter2hunter2',
+        name: slug,
+      });
+      await db.workspaceMembership.create({
+        data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
+      });
+      await projectMembersService.addMember({
+        key: fx.projectIdentifier,
+        actorUserId: fx.ownerId,
+        ctx: fx.ctx,
+        targetUserId: user.id,
+        role,
+      });
+      return { userId: user.id, workspaceId: fx.workspaceId };
+    }
+    const foreign = await makeWorkItemFixture({ identifier: `IF${gateSeq}`, name: 'Foreign' });
+    return {
+      projectId: fx.projectId,
+      adminCtx: await enroll('admin', 'admin'),
+      memberCtx: await enroll('member', 'member'),
+      foreignCtx: foreign.ctx,
+    };
+  }
+
+  it('refuses a project MEMBER every one of the five — the revocation, stated', async () => {
+    const a = await makeActors();
+    // create is refused outright…
+    await expect(
+      importService.createDraft({ projectId: a.projectId, source: 'csv' }, a.memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
+    // …and so is every operation on a draft an admin made.
+    const draft = await importService.createDraft(
+      { projectId: a.projectId, source: 'csv' },
+      a.adminCtx,
+    );
+    const connection = csvConnection('K-1,One,task,open,,,,,2026-01-01');
+    await expect(importService.getImport(draft.id, a.memberCtx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    await expect(
+      importService.discoverFields(draft.id, { connection }, a.memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      importService.preview(draft.id, { connection, mapping: CSV_MAPPING }, a.memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      importService.run(draft.id, { connection, mapping: CSV_MAPPING }, a.memberCtx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('admits a project ADMIN through the whole wizard', async () => {
+    const a = await makeActors();
+    const draft = await importService.createDraft(
+      { projectId: a.projectId, source: 'csv' },
+      a.adminCtx,
+    );
+    const connection = csvConnection('K-1,One,task,open,,,,,2026-01-01');
+    await expect(importService.getImport(draft.id, a.adminCtx)).resolves.toBeTruthy();
+    await expect(
+      importService.preview(draft.id, { connection, mapping: CSV_MAPPING }, a.adminCtx),
+    ).resolves.toBeTruthy();
+  });
+
+  it('keeps the non-browser refusal shaped as a 404, never a 403', async () => {
+    // `createDraft` resolves the project itself, so a foreign id is
+    // ProjectNotFoundError before the key is ever tested — the no-existence-leak
+    // ordering, unchanged by this card.
+    const a = await makeActors();
+    await expect(
+      importService.createDraft({ projectId: a.projectId, source: 'csv' }, a.foreignCtx),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });

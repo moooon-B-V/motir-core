@@ -466,7 +466,13 @@ describe('the PENDING set is bounded and shrinking', () => {
     // `/api/projects/[key]/saved-filters/[filterId]/subscription` was the
     // exception — it reached the SEE gate and no project gate at all, so a
     // viewer could put a recurring email on somebody else's shared query.
-    expect(pending.length).toBe(17);
+    //
+    // 17 → 16 is MOTIR-2353 wiring `import:run`. One row again: four of the five
+    // project-scoped importer operations already asserted `assertCanEdit`, so
+    // they were gated and merely mis-named. `GET /api/import/[id]` was the
+    // ungated one — an import draft holds the connection config and the field
+    // mapping, and nothing was asking who could read it.
+    expect(pending.length).toBe(16);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

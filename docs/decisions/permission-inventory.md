@@ -42,8 +42,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **26** are
-enforced by a gate today; **5** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **27** are
+enforced by a gate today; **4** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -62,7 +62,8 @@ A `planned` key is never offered in the grid or the role editor.
 > whole twelve are now wired.
 >
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
-> (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352) ·
+> **`import:run`** (MOTIR-2353). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -253,7 +254,7 @@ worse failure than a gap.
 
 **R38.** Workspace membership lifecycle, governed by the workspace MemberRole.
 
-**R39.** Bulk-creates work items from an external tracker — a destructive-scale write gated today only by workspace membership.
+**R39.** Bulk-creates work items from an external tracker — a destructive-scale write. MOTIR-2353 moved the five PROJECT-SCOPED operations from `work_item:edit` (every project member) to `import:run` (admin only), which is where both mirrors put it: Plane allows imports to workspace admins only "to maintain governance", Linear requires a Linear Admin. The six OAuth legs left this reason for R3 in MOTIR-2346 — they resolve no project.
 
 **R40.** The actor's own notification inbox. Per-user, never per-project.
 
@@ -418,11 +419,11 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 | Operation                           | Verbs | Gate today                                                                                                             | Permission   | Decision         | Why |
 | ----------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------- | --- |
-| `/api/import`                       | POST  | `assertCanEdit`                                                                                                        | `import:run` | new              | R39 |
-| `/api/import/[id]`                  | GET   | workspace only                                                                                                         | `import:run` | new              | R39 |
-| `/api/import/[id]/discover`         | POST  | workspace only                                                                                                         | `import:run` | new              | R39 |
-| `/api/import/[id]/preview`          | POST  | workspace only                                                                                                         | `import:run` | new              | R39 |
-| `/api/import/[id]/run`              | POST  | workspace only                                                                                                         | `import:run` | new              | R39 |
+| `/api/import`                       | POST  | `importService.createDraft` → `assertPermission`                                                                       | `import:run` | existing         | R39 |
+| `/api/import/[id]`                  | GET   | `importService.getImport` → `assertPermission`                                                                         | `import:run` | existing         | R39 |
+| `/api/import/[id]/discover`         | POST  | `importService.discoverFields` → `assertPermission`                                                                    | `import:run` | existing         | R39 |
+| `/api/import/[id]/preview`          | POST  | `importService.preview` → `assertPermission`                                                                           | `import:run` | existing         | R39 |
+| `/api/import/[id]/run`              | POST  | `importService.run` → `assertPermission`                                                                               | `import:run` | existing         | R39 |
 | `/api/import/jira/oauth/callback`   | GET   | workspace only — `resolveWorkspaceContext(req)`; binds the provider credential to a WORKSPACE, no project              | —            | workspace-scoped | R3  |
 | `/api/import/jira/oauth/start`      | GET   | workspace only — `resolveWorkspaceContext(req)`; no project resolved                                                   | —            | workspace-scoped | R3  |
 | `/api/import/linear/oauth/callback` | GET   | workspace only — `getWorkspaceContext()`; no project resolved                                                          | —            | workspace-scoped | R3  |

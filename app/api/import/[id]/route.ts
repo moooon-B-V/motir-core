@@ -2,10 +2,15 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { importService } from '@/lib/services/importService';
 import { ImportNotFoundError } from '@/lib/import/errors';
+import { importErrorResponse } from '@/lib/import/httpErrors';
 
 // GET /api/import/:id (Story 7.16 · MOTIR-941) — one import's status + per-outcome
 // counts, for the wizard's progress / resume view. Thin HTTP layer over
 // `importService.getImport` (tenant-scoped: a cross-workspace id is a 404).
+//
+// MOTIR-2353 gave the read the `import:run` gate its siblings already had, so it
+// now shares their mapper: `ProjectNotFoundError` → 404 (a non-browser, refused
+// before the key is tested) and `PermissionDeniedError` → 403 carrying the key.
 
 export async function GET(
   _req: Request,
@@ -21,6 +26,6 @@ export async function GET(
   } catch (err) {
     if (err instanceof ImportNotFoundError)
       return NextResponse.json({ code: err.code }, { status: 404 });
-    throw err;
+    return importErrorResponse(err);
   }
 }

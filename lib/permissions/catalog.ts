@@ -190,7 +190,7 @@ const PERMISSION_META: Record<
   'saved_filter:manage': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2352
   'repository:manage': { domain: 'repository', enforcement: 'enforced' },
   'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
-  'import:run': { domain: 'import', enforcement: 'planned' },
+  'import:run': { domain: 'import', enforcement: 'enforced' }, // MOTIR-2353
   'ai:configure': { domain: 'ai', enforcement: 'enforced' },
   'ai:plan': { domain: 'ai', enforcement: 'planned' },
   'ai:view_plan': { domain: 'ai', enforcement: 'planned' },

@@ -49,15 +49,41 @@ export interface PreviewResult {
   counts: { create: number; update: number; skip: number };
 }
 
+/**
+ * Assert the actor may RUN an import into this project — `import:run`
+ * (Story MOTIR-2291 · Subtask MOTIR-2353).
+ *
+ * ⚠️ THE LARGEST SINGLE REVOCATION IN THE STORY: this was `assertCanEdit`, so
+ * every project MEMBER could run one; `import:run` is ADMIN-ONLY by decision
+ * (`docs/decisions/member-facing-permissions.md` §1). An import is not an edit —
+ * it authenticates against another company's tracker with a stored credential,
+ * writes hundreds of work items in a single act, and is close to irreversible;
+ * nobody un-imports a Jira project. Both mirrors say so in their own
+ * documentation: Plane allows imports to workspace admins only "to maintain
+ * governance", and Linear requires a Linear Admin.
+ *
+ * The recovery path for a team that needs a non-admin to import is MOTIR-2257's
+ * custom roles — a role holding `import:run` and nothing else administrative —
+ * not a wider default.
+ *
+ * Only the five PROJECT-SCOPED operations are here. The six importer OAuth legs
+ * bind a provider credential to a WORKSPACE and resolve no project at all, so
+ * MOTIR-2346 re-decided them as `workspace-scoped`; wiring a project permission
+ * onto them is impossible, not merely wrong.
+ */
+async function assertCanRunImports(projectId: string, ctx: ServiceContext): Promise<void> {
+  await projectAccessService.assertPermission(projectId, ctx, 'import:run');
+}
+
 export const importService = {
-  /** Create a DRAFT import for a project (POST /api/import). Gated by project
-   *  edit access; the reporter/owner is the acting user. */
+  /** Create a DRAFT import for a project (POST /api/import). Gated by
+   *  `import:run` (MOTIR-2353); the reporter/owner is the acting user. */
   async createDraft(input: CreateImportInput, ctx: ServiceContext): Promise<ImportDto> {
     const project = await projectRepository.findById(input.projectId);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(input.projectId);
     }
-    await projectAccessService.assertCanEdit(input.projectId, ctx);
+    await assertCanRunImports(input.projectId, ctx);
 
     const row = await db.$transaction((tx) =>
       importRepository.create(
@@ -74,10 +100,19 @@ export const importService = {
     return toImportDto(row);
   },
 
-  /** Read one import's status + counts (GET /api/import/:id). Tenant-scoped: a
-   *  cross-workspace id is a 404, never a leak. */
+  /**
+   * Read one import's status + counts (GET /api/import/:id). Tenant-scoped: a
+   * cross-workspace id is a 404, never a leak.
+   *
+   * ⚠️ It asks `import:run` WITH THE WRITES, not `project:browse` (MOTIR-2353).
+   * An import draft holds the connection configuration and the field mapping —
+   * operator material for whoever is running the import, not project content for
+   * everyone who can see the board. It had no project gate at all before this
+   * card; the tenancy check in `requireImport` was the whole of it.
+   */
   async getImport(importId: string, ctx: ServiceContext): Promise<ImportDto> {
     const row = await this.requireImport(importId, ctx);
+    await assertCanRunImports(row.projectId, ctx);
     return toImportDto(row);
   },
 
@@ -96,7 +131,7 @@ export const importService = {
     ctx: ServiceContext,
   ): Promise<ImportDiscoverResult> {
     const imp = await this.requireImport(importId, ctx);
-    await projectAccessService.assertCanEdit(imp.projectId, ctx);
+    await assertCanRunImports(imp.projectId, ctx);
 
     const connector = await this.buildConnector(imp.source, args.connection, ctx);
     // Sequential (not Promise.all): `connect()` validates reachability + auth, so
@@ -122,7 +157,7 @@ export const importService = {
     ctx: ServiceContext,
   ): Promise<PreviewResult> {
     const imp = await this.requireImport(importId, ctx);
-    await projectAccessService.assertCanEdit(imp.projectId, ctx);
+    await assertCanRunImports(imp.projectId, ctx);
 
     const connector = await this.buildConnector(imp.source, args.connection, ctx);
     const resolveCtx = await importEngineService.buildResolveContext(
@@ -167,7 +202,7 @@ export const importService = {
     ctx: ServiceContext,
   ): Promise<AsyncGenerator<ImportRunProgress>> {
     const imp = await this.requireImport(importId, ctx);
-    await projectAccessService.assertCanEdit(imp.projectId, ctx);
+    await assertCanRunImports(imp.projectId, ctx);
 
     const mapping = args.mapping ?? (imp.mapping as ImportMapping | null);
     if (!mapping) {

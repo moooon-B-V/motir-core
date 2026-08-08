@@ -11,7 +11,11 @@ import {
   ImportSourceNotConnectedError,
 } from '@/lib/import/errors';
 import { ConnectorAuthError, ConnectorError } from '@/lib/import/connectors';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 
 export function importErrorResponse(err: unknown): Response {
   if (err instanceof ImportNotFoundError || err instanceof ProjectNotFoundError) {
@@ -19,6 +23,14 @@ export function importErrorResponse(err: unknown): Response {
   }
   if (err instanceof ProjectAccessDeniedError) {
     return NextResponse.json({ code: err.code }, { status: 403 });
+  }
+  // MOTIR-2353 — the `import:run` refusal. It carries the key it asked for, so a
+  // project MEMBER who could run an import yesterday is told exactly which
+  // permission they now lack rather than getting an opaque 403. A NON-browser
+  // never reaches here: `assertPermission` raises `ProjectNotFoundError` first,
+  // which the 404 arm above maps.
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json({ code: err.code, permission: err.permission }, { status: 403 });
   }
   if (err instanceof ImportAlreadyRunningError) {
     return NextResponse.json({ code: err.code }, { status: 409 });
