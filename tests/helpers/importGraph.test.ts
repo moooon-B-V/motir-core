@@ -175,20 +175,6 @@ describe('specifiersOf — what a comment stripper must NOT eat', () => {
     );
   });
 
-  it('does NOT see a dynamic `import(…)` — pinned as it is, not as it should be', () => {
-    // Pre-existing and NOT introduced here: both specifier patterns require
-    // whitespace after `import`, and `import('…')` has a parenthesis. A lazily
-    // imported module IS traced into the bundle, so this is the unsafe
-    // direction — but widening the walk changes what both guards report and is
-    // its own card (MOTIR-2484), not a passenger on a comment-stripping fix.
-    //
-    // It is pinned rather than left undocumented because MOTIR-2461's repo
-    // sweep is what found it: `app/api/%5Ftest/work-items/route.ts` dynamically
-    // imports `react-dom/server` on line 95, and the ONLY reason the walker
-    // ever reported that specifier was the comment on line 86 describing it.
-    expect(specifiersOf("const lazy = await import('@/lib/heavy');")).toEqual([]);
-  });
-
   it('still strips `import type`, and does not strip the value import beside it', () => {
     const fixture = source(
       "import type { ReadyItemDto } from '@/lib/dto/ready';",
@@ -196,6 +182,108 @@ describe('specifiersOf — what a comment stripper must NOT eat', () => {
     );
 
     expect(specifiersOf(fixture)).toEqual(['@/lib/db']);
+  });
+});
+
+describe('specifiersOf — a DYNAMIC `import(…)` is an import (MOTIR-2484)', () => {
+  // The replacement for MOTIR-2461's pinning test, which asserted the blind
+  // spot rather than the behaviour and named this card as the one to delete it.
+  //
+  // Next traces a lazily imported module into the calling function's closure
+  // exactly as it traces a static one, so every case below puts a real module
+  // in a real bundle. Missing one is the UNSAFE direction: nothing goes red.
+
+  it('sees `await import(…)` — the live instance this card was filed for', () => {
+    // `app/api/%5Ftest/work-items/route.ts:95`, reduced. The walker used to
+    // report `react-dom/server` for that file only because of the COMMENT two
+    // lines above describing the import; MOTIR-2461 removed the accident and
+    // left the import itself unseen.
+    const fixture = source(
+      'async function renderHtml(md: string) {',
+      "  const { renderToStaticMarkup } = await import('react-dom/server');",
+      '  return renderToStaticMarkup(renderMarkdown(md));',
+      '}',
+    );
+
+    expect(specifiersOf(fixture)).toEqual(['react-dom/server']);
+  });
+
+  it('sees the bare `import(…).then(…)` form', () => {
+    expect(specifiersOf("import('@/lib/db').then(({ db }) => db.$connect());")).toEqual([
+      '@/lib/db',
+    ]);
+  });
+
+  it('sees a dynamic import written with double quotes, or with spacing around it', () => {
+    const fixture = source(
+      'const a = await import("@/lib/services/one");',
+      "const b = await import( '@/lib/services/two' );",
+      'const c = await import(',
+      "  '@/lib/services/three',",
+      ');',
+    );
+
+    expect(specifiersOf(fixture).sort()).toEqual([
+      '@/lib/services/one',
+      '@/lib/services/three',
+      '@/lib/services/two',
+    ]);
+  });
+
+  it('sees a dynamic import beside the static ones, and reports every form together', () => {
+    const fixture = source(
+      "import { cache } from 'react';",
+      "import '@/lib/instrumentation';",
+      "export { toDto } from '@/lib/mappers/readyMappers';",
+      "const lazy = () => import('@/lib/db');",
+    );
+
+    expect(specifiersOf(fixture).sort()).toEqual(
+      ['@/lib/db', '@/lib/instrumentation', '@/lib/mappers/readyMappers', 'react'].sort(),
+    );
+  });
+
+  // ── The widened pattern must not reopen MOTIR-2461's defect ───────────────
+  //
+  // Both of these are why the dynamic form is read by the SCANNER and not by a
+  // third regex over the stripped text: the comment case a regex would get for
+  // free, and the string case it could not get at all.
+
+  it('does NOT report a dynamic import quoted inside a COMMENT', () => {
+    const fixture = source(
+      "// The service is loaded lazily: `await import('@/lib/db')` in the handler.",
+      '/**',
+      " * See {@link import('@/lib/dto/workItems').TreeLevelDto} — a JSDoc link, not",
+      ' * an import. This shape is live in lib/dto/publicProjects.ts.',
+      ' */',
+      "export { renderDocs } from './render';",
+    );
+
+    expect(specifiersOf(fixture)).toEqual(['./render']);
+  });
+
+  it('does NOT report a dynamic import quoted inside a STRING', () => {
+    const fixture = source(
+      'const SNIPPET = "const { db } = await import(\'@/lib/db\');";',
+      "const HINT = `use await import('@/lib/services/heavy') here`;",
+      "import { cache } from 'react';",
+    );
+
+    // The last line also proves nothing ran away: a scanner that mis-read
+    // either quote would lose the real import three lines down.
+    expect(specifiersOf(fixture)).toEqual(['react']);
+  });
+
+  it('does NOT invent a specifier from `import(` with no string argument', () => {
+    const fixture = source(
+      'const mod = await import(specifierFromConfig);',
+      'const other = await import(`@/lib/${name}`);',
+      "import { cache } from 'react';",
+    );
+
+    // Neither is statically resolvable, so neither is reportable — and the
+    // template form must not be mistaken for a quoted one.
+    expect(specifiersOf(fixture)).toEqual(['react']);
   });
 });
 
@@ -293,19 +381,60 @@ describe('specifiersOf over the REAL repo — no import disappears, none is inve
     ).toEqual([]);
   });
 
+  it('never LOSES a DYNAMIC import written on a code line (MOTIR-2484)', () => {
+    // The static half above compares the walk to the regexes it still runs, so
+    // it cannot see this axis at all: before this card the answer was "none",
+    // and a sweep over hits the walk never produced would have been vacuous.
+    //
+    // It is a separate sweep because the dynamic form is read by the SCANNER,
+    // whose literal-skipping is the thing that could go wrong — a region it
+    // mis-reads as a string or a regex drops the import inside it, silently and
+    // in the unsafe direction. The fixtures cover the shapes somebody thought
+    // of; this covers the file nobody did.
+    const lost: string[] = [];
+    let seen = 0;
+
+    for (const file of files) {
+      const text = readFileSync(join(REPO_ROOT, file), 'utf8');
+      const reported = new Set(specifiersOf(text));
+      for (const match of text.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]/g)) {
+        if (onACommentLine(text, match.index)) continue;
+        seen++;
+        if (!reported.has(match[1]!)) lost.push(`${file} → ${match[1]!}`);
+      }
+    }
+
+    // An empty sweep would pass for the wrong reason — the repo really does
+    // carry dynamic imports on code lines, and this is the count that says so.
+    expect(seen).toBeGreaterThan(0);
+    expect(
+      lost,
+      'The walk did not report a dynamic `import(…)` written on a code line. That is the ' +
+        'UNSAFE failure direction: Next traces a lazily imported module into the calling ' +
+        "function's closure, so the route carries it while both database-reach guards stay " +
+        'green. Fix the scanner — do not relax this assertion.',
+    ).toEqual([]);
+  });
+
   it('never INVENTS a specifier the raw source does not contain', () => {
     const invented: string[] = [];
 
     for (const file of files) {
       const text = readFileSync(join(REPO_ROOT, file), 'utf8');
-      const before = new Set(matchesBeforeTheFix(text).hits.map((hit) => hit.specifier));
+      const quoted = new Set(matchesBeforeTheFix(text).hits.map((hit) => hit.specifier));
+      // A dynamic specifier is quoted in the raw source too — by a pattern this
+      // test owns, so "the walk reported it" is never its own evidence.
+      for (const match of text.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]/g)) {
+        quoted.add(match[1]!);
+      }
       for (const specifier of specifiersOf(text)) {
-        if (!before.has(specifier)) invented.push(`${file} → ${specifier}`);
+        if (!quoted.has(specifier)) invented.push(`${file} → ${specifier}`);
       }
     }
 
-    // Stripping can only ever remove. Anything new means the scanner spliced
-    // two unrelated fragments together, which would misdirect a real failure.
+    // The walk only ever reports text the file quotes. Anything new means the
+    // scanner spliced two unrelated fragments together, which would misdirect a
+    // real failure.
     expect(invented).toEqual([]);
   });
 
