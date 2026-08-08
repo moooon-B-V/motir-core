@@ -462,3 +462,5 @@ The card's acceptance criteria name `design/brand/brand-mark.design-notes.md`. T
 `design/brand/design-notes.md` instead, which is the convention `motir-core/CLAUDE.md` states and
 every other area follows (`design/<area>/design-notes.md`, one per area, indexing that area's
 surfaces). The mock and PNG keep the `brand-mark` basename the card asks for.
+
+[A deliberately broken link, for the MOTIR-2442 CI probe](/no-such-route-probe)
