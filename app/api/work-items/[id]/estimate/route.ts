@@ -3,6 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { estimationService } from '@/lib/services/estimationService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // PATCH /api/work-items/[id]/estimate (Story 4.3 · Subtask 4.3.3) — set or clear
 // an issue's STORY-POINT estimate (separate from the 2.3.6 TIME estimate). Thin
@@ -46,6 +47,8 @@ export async function PATCH(
     const item = await estimationService.setEstimate(id, points, ctx);
     return NextResponse.json(item);
   } catch (err) {
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof WorkItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { activityService } from '@/lib/services/activityService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // GET /api/work-items/[id]/activity/history (Story 5.5 · Subtask 5.5.1) —
 // one page of the issue's History feed: displayable `work_item_revision`
@@ -39,6 +40,8 @@ export async function GET(
     );
     return NextResponse.json(page);
   } catch (err) {
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof WorkItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

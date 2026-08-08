@@ -37,6 +37,7 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { toActivityEntryDto } from '@/lib/mappers/activityMappers';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import {
   collectDiffRefs,
   emptyDiffRefs,
@@ -258,6 +259,14 @@ export const activityService = {
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(workItemId);
     }
+    // `project:browse` (Story MOTIR-2291 · Subtask MOTIR-2365). The inventory
+    // called this row `existing`; the same row's `Gate today` said "workspace
+    // only", and the code agreed — the workspace check above was the whole of it,
+    // so any workspace member could read the full revision history of any work
+    // item in any project. That contradiction inside one line of a `done`
+    // document is what the CLAIMED_BUT_UNVERIFIED bucket exists to surface. The
+    // project comes from the ITEM, never from the actor's active project.
+    await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
 
     const [totalCount, scan] = await Promise.all([
       workItemRevisionRepository.countDisplayableByWorkItem(workItemId, [...SUPPRESSED_DIFF_KEYS]),

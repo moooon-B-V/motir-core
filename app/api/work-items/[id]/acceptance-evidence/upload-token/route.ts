@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
 import { authorizeAcceptancePublish } from '@/lib/acceptanceEvidence/publishAuth';
 import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // POST /api/work-items/[id]/acceptance-evidence/upload-token (MOTIR-1681) — mint
 // scoped CLIENT upload tokens so a trusted CI job uploads the acceptance video
@@ -31,6 +32,8 @@ export async function POST(
     );
     return NextResponse.json(tokens, { status: 200 });
   } catch (err) {
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof AcceptanceEvidenceError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
     }

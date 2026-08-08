@@ -4,6 +4,7 @@ import { authorizeAcceptancePublish } from '@/lib/acceptanceEvidence/publishAuth
 import { AcceptanceEvidenceError } from '@/lib/acceptanceEvidence/errors';
 import { AttachmentError } from '@/lib/blob/errors';
 import type { AcceptanceEvidenceChapterDTO } from '@/lib/dto/acceptanceEvidence';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // POST /api/work-items/[id]/acceptance-evidence (Story MOTIR-1627 · Subtask
 // MOTIR-1631; direct-to-Blob MOTIR-1681) — REGISTER a green E2E's video, already
@@ -72,6 +73,8 @@ export async function POST(
     );
     return NextResponse.json({ evidence }, { status: 201 });
   } catch (err) {
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof AcceptanceEvidenceError || err instanceof AttachmentError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: err.status });
     }

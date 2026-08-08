@@ -55,8 +55,18 @@ const DOC = join(ROOT, 'docs', 'decisions', 'permission-inventory.md');
 // definition. That is exactly the guard's question — not "is this gate the one
 // we would choose" (the inventory's row decides that) but "does this operation
 // consult the policy at all".
+//
+// ⚠️ AND `filterBrowsable(` IS ON IT (MOTIR-2365). It is the one gate shape that
+// answers the question in the PLURAL: `workItemsService.quickSearch` resolves
+// every project in the workspace and narrows to the browsable ones before it
+// searches, so the mention-search operation IS governed — the walk simply had no
+// name for "filter a set by the policy" as opposed to "assert one project". That
+// is a real gate reached by a hop the walk could not follow, which is exactly the
+// first of the two dispositions the CLAIMED_BUT_UNVERIFIED bucket asks for; the
+// other five rows in its half of the bucket turned out to be the second, and got
+// gates.
 const GATE =
-  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|isOwnerRole\(|isWorkspaceManager\(/;
+  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|isOwnerRole\(|isWorkspaceManager\(|filterBrowsable\(/;
 /**
  * Every `someService.someMethod(` call in `source`.
  *
@@ -576,7 +586,16 @@ describe('the PENDING set is bounded and shrinking', () => {
     // seven of the eighteen discrepancies were the walk failing to see a body,
     // not a gate failing to exist. What is left is MOTIR-2365 / MOTIR-2366's
     // worklist, and it is now seven items shorter than either card was sized for.
-    expect(unverified.length).toBe(11);
+    // 11 → 5 is MOTIR-2365 reading its half of the bucket, and the shape of the
+    // answer is the finding: of its six remaining rows, ONE was a real gate the
+    // walk could not follow (`quickSearch` narrows to browsable projects through
+    // `filterBrowsable` — the one gate that answers in the plural, now in `GATE`)
+    // and FIVE were holes. The estimate WRITE, the parent roll-up, the activity
+    // history and both acceptance-evidence paths had only a workspace check; the
+    // upload-token minter was reachable with a session and a story id alone. Every
+    // one of them was labelled `existing` in a `done` document, three of them on a
+    // row whose own `Gate today` column said "— none —".
+    expect(unverified.length).toBe(5);
   });
 
   it('every pending operation names the permission that will govern it', () => {
