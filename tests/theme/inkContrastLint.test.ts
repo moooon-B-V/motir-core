@@ -65,6 +65,22 @@ function renderedSources(): string[] {
 
 const SOURCES = renderedSources();
 
+/**
+ * Every scanned file's text, read ONCE. Both describes below need it, and a
+ * second `readFileSync` pass over 1703 files is pure cost.
+ */
+const TEXT_BY_FILE = new Map(SOURCES.map((file) => [file, readFileSync(join(REPO, file), 'utf8')]));
+
+/**
+ * The files worth PARSING. `scanSource` can only report a faint finding for a
+ * file whose text contains the class, so a substring pre-filter is not a
+ * sampling of the tree — it is the same answer without building 1600 ASTs that
+ * cannot produce one. It matters: parsing every file took the whole 15s test
+ * budget on a loaded CI shard, and a guard that times out is a guard that
+ * teaches people to rerun it.
+ */
+const CARRIERS = SOURCES.filter((file) => TEXT_BY_FILE.get(file)!.includes(FAINT_CLASS));
+
 describe('ink-contrast lint — the scanned set is the set that was searched', () => {
   // notes.html #195: a guard is only worth what its file set is. A `ls-files`
   // glob that silently matches nothing reports a clean tree, which is the one
@@ -86,11 +102,9 @@ describe('ink-contrast lint — the scanned set is the set that was searched', (
   it('reads files that actually carry the ink under measurement', () => {
     // The counterpart to the check above: a file set can be real and still be
     // the wrong one. If NOTHING in the scanned tree mentions the token, the
-    // guard is watching a tree the ink does not live in.
-    const carriers = SOURCES.filter((file) =>
-      readFileSync(join(REPO, file), 'utf8').includes(FAINT_CLASS),
-    );
-    expect(carriers.length).toBeGreaterThan(0);
+    // guard is watching a tree the ink does not live in — and the pre-filter
+    // below would then make it pass by scanning nothing at all.
+    expect(CARRIERS.length).toBeGreaterThan(0);
   });
 });
 
@@ -99,8 +113,8 @@ describe('ink-contrast lint — --el-text-faint carries no active informational 
     // Derived over the scanned set, never compared to a frozen count: the sweep
     // that made this pass measured 132 defects, and writing 132 down here would
     // turn every new file into a reason to edit the assertion.
-    const offenders = SOURCES.flatMap((file) =>
-      violations(scanSource(file, readFileSync(join(REPO, file), 'utf8'))),
+    const offenders = CARRIERS.flatMap((file) =>
+      violations(scanSource(file, TEXT_BY_FILE.get(file)!)),
     ).filter((finding) => finding.ink === 'faint');
 
     expect(
