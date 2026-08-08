@@ -2,15 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   classifyInput,
   describeProposal,
+  dispositionMarkerFor,
   loopCommands,
   nextStepHint,
   onboardingUrl,
   parsePlanArgs,
+  pendingQuestion,
+  renderAwaiting,
   renderPlan,
   renderProposalTree,
   renderThread,
   renderTurn,
   scopeLabel,
+  turnMarker,
   watchVerdict,
   PROPOSALS_NOT_WORK_ITEMS,
 } from '../src/plan.js';
@@ -29,10 +33,24 @@ function turn(over: Partial<PlanTurn> = {}): PlanTurn {
     role: 'user',
     body: 'add auth to the billing epic',
     jobId: null,
+    question: null,
+    isAnswer: false,
     authorId: 'u1',
     createdAt: '2026-07-29T10:00:00.000Z',
     ...over,
   };
+}
+
+/** The planner speaking: a report, or — when `question` is set — the one
+ *  clarifying question that blocks the thread. */
+function plannerTurn(over: Partial<PlanTurn> = {}): PlanTurn {
+  return turn({
+    id: 'a1',
+    role: 'assistant',
+    authorId: null,
+    body: 'I searched the tree.',
+    ...over,
+  });
 }
 
 function session(over: Partial<PlanSession> = {}): PlanSession {
@@ -198,6 +216,146 @@ describe('renderThread', () => {
     // The user's own intent is never excerpted — a resumed thread that shows a
     // truncation reads as if something was lost.
     expect(second?.trim()).toBe('second line');
+  });
+});
+
+// The PLANNER speaking in the terminal (MOTIR-2397), carrying MOTIR-2225's
+// design into the one CLI surface that is a conversation. The bug this pins:
+// every turn that was not a submission marker printed as `[you]`, so the
+// planner's own findings report — and its one clarifying question — arrived
+// under the user's name, and a resumed thread read as if the user had asked
+// themselves something.
+describe('renderTurn — three authors, not two', () => {
+  it('names the PLANNER on an assistant turn, never the user', () => {
+    const text = renderTurn(plannerTurn(), 1);
+    expect(text).toContain('[Motir AI] I searched the tree.');
+    expect(text).not.toContain('[you]');
+  });
+
+  it('marks a QUESTION distinctly from a report — the design’s `asking` label', () => {
+    expect(turnMarker(plannerTurn({ question: 'Refunds too?' }))).toBe('Motir AI · asking');
+    expect(turnMarker(plannerTurn())).toBe('Motir AI');
+  });
+
+  it('keeps `you` for a user turn and the submission marker for a system one', () => {
+    expect(turnMarker(turn())).toBe('you');
+    expect(turnMarker(turn({ role: 'system', jobId: 'job_7' }))).toBe('submitted → job job_7');
+  });
+
+  it('labels the user turn that ANSWERED a question as the answer it is', () => {
+    expect(turnMarker(turn({ isAnswer: true }))).toBe('you · answer');
+  });
+});
+
+describe('pendingQuestion — the thread waiting on you, DERIVED', () => {
+  it('is waiting when the last planner turn asked and no user turn followed', () => {
+    const asking = plannerTurn({ question: 'Refunds too?' });
+    expect(pendingQuestion([turn(), asking])).toBe(asking);
+  });
+
+  it('is NOT waiting on a report — most turns are reports, and they want nothing', () => {
+    expect(pendingQuestion([turn(), plannerTurn()])).toBeNull();
+  });
+
+  it('stops waiting the moment ANY user turn follows — answered or superseded', () => {
+    const asking = plannerTurn({ question: 'Refunds too?' });
+    expect(pendingQuestion([asking, turn({ id: 'u2', isAnswer: true })])).toBeNull();
+    expect(pendingQuestion([asking, turn({ id: 'u2', body: 'something else' })])).toBeNull();
+  });
+
+  it('reads a system marker as provenance — it neither opens nor closes the state', () => {
+    const asking = plannerTurn({ question: 'Refunds too?' });
+    const marker = turn({ id: 's1', role: 'system', body: 'Submitted.', jobId: 'job_7' });
+    expect(pendingQuestion([asking, marker])).toBe(asking);
+    expect(pendingQuestion([marker])).toBeNull();
+  });
+
+  it('is not waiting on an empty thread', () => {
+    expect(pendingQuestion([])).toBeNull();
+  });
+});
+
+describe('dispositionMarkerFor — how a question was disposed of', () => {
+  const asking = plannerTurn({ question: 'Refunds too?' });
+
+  it('marks the reply that ANSWERED it', () => {
+    const turns = [asking, turn({ id: 'u2', isAnswer: true })];
+    expect(dispositionMarkerFor(turns, 1)).toBe('answered');
+  });
+
+  it('marks the turn that SUPERSEDED it — recorded, never inferred from the words', () => {
+    const turns = [asking, turn({ id: 'u2', body: 'actually, drop billing' })];
+    expect(dispositionMarkerFor(turns, 1)).toBe('superseded');
+  });
+
+  it('owes nothing on a user turn with no question before it, or on a non-user turn', () => {
+    expect(dispositionMarkerFor([turn(), turn({ id: 'u2' })], 1)).toBeNull();
+    expect(dispositionMarkerFor([asking, turn({ id: 'u2', isAnswer: true })], 0)).toBeNull();
+    expect(dispositionMarkerFor([turn()], 9)).toBeNull();
+  });
+});
+
+describe('the awaiting-an-answer state in the transcript', () => {
+  it('says what it is waiting for, LAST — against the prompt', () => {
+    const text = renderThread(
+      session({
+        turnCount: 2,
+        turns: [turn({ body: 'add billing' }), plannerTurn({ question: 'Refunds too?' })],
+      }),
+    );
+    expect(text).toContain('[Motir AI · asking] I searched the tree.');
+    expect(text).toContain('[?] Waiting for your answer');
+    expect(text).toContain('Refunds too?');
+    // The loop is unchanged — an answer is an ordinary turn — so the block has
+    // to SAY that, which is what the web carries in the composer's placeholder
+    // and its relabelled Send button.
+    expect(text).toContain('Type your answer as the next turn; nothing is sent until /submit.');
+    expect(text.trimEnd().split('\n').at(-1)).toContain('/submit');
+  });
+
+  it('renders a multi-line question in full', () => {
+    const text = renderAwaiting([plannerTurn({ question: 'Refunds too?\nOr credits only?' })]);
+    expect(text).toContain('Refunds too?');
+    expect(text).toContain('Or credits only?');
+  });
+
+  it('says NOTHING on a thread that is not waiting — a report changes only the transcript', () => {
+    const text = renderThread(session({ turnCount: 2, turns: [turn(), plannerTurn()] }));
+    expect(text).toContain('[Motir AI]');
+    expect(text).not.toContain('Waiting for your answer');
+    expect(renderAwaiting([turn()])).toBeNull();
+  });
+
+  it('marks the answer that resumed planning, beneath the turn that closed the question', () => {
+    const text = renderThread(
+      session({
+        turnCount: 3,
+        turns: [
+          plannerTurn({ question: 'Refunds too?' }),
+          turn({ id: 'u2', body: 'yes, refunds', isAnswer: true }),
+          plannerTurn({ id: 'a2', body: 'Planning it now.' }),
+        ],
+      }),
+    );
+    expect(text).toContain('[you · answer] yes, refunds');
+    expect(text).toContain('↳ Answered — planning resumed.');
+    expect(text).not.toContain('Waiting for your answer');
+  });
+
+  it('MARKS a superseded question rather than dropping it — never rewrites the transcript', () => {
+    const text = renderThread(
+      session({
+        turnCount: 2,
+        turns: [
+          plannerTurn({ question: 'Refunds too?' }),
+          turn({ id: 'u2', body: 'actually, drop billing' }),
+        ],
+      }),
+    );
+    // The question stays exactly as it was: the reader has to be able to see
+    // later WHY a plan rests on an assumption they never confirmed.
+    expect(text).toContain('[Motir AI · asking]');
+    expect(text).toContain('↳ Not answered — Motir AI carried on with what you asked.');
   });
 });
 

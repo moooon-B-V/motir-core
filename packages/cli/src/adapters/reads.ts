@@ -569,9 +569,12 @@ type PlanBody = SuccessBody<'getPlan'>;
 /**
  * One turn of the thread.
  *
- * `question` and `isAnswer` are dropped: the CLI renders a turn's body and its
- * author, and neither field has a reader. `jobId` stays because the system
- * marker turn prints the job it submitted.
+ * `question` and `isAnswer` are carried since MOTIR-2397, and only because they
+ * are READ: `question` is what `pendingQuestion` scans for to decide the thread
+ * is waiting on the user, and `isAnswer` is what tells an answer apart from a
+ * turn that superseded the question. Every field on the view model has a
+ * renderer — a field that arrives with none is a claim the CLI does not keep.
+ * `jobId` stays because the system marker turn prints the job it submitted.
  */
 function toPlanTurn(turn: PlanSessionBody['turns'][number]): PlanTurn {
   return {
@@ -580,6 +583,8 @@ function toPlanTurn(turn: PlanSessionBody['turns'][number]): PlanTurn {
     role: turn.role,
     body: turn.body,
     jobId: turn.jobId,
+    question: turn.question,
+    isAnswer: turn.isAnswer,
     authorId: turn.authorId,
     createdAt: turn.createdAt,
   };
