@@ -708,6 +708,7 @@ export function toDispatchItem(row: ReadyBody['items'][number]): DispatchItem {
     status: { key: row.status.key, category: row.status.category },
     type: row.type,
     executor: row.executor,
+    assigneeId: row.assigneeId,
     inheritedSessionBranch: row.inheritedSessionBranch,
   };
 }

@@ -165,6 +165,59 @@ export interface SearchPage {
 }
 
 /**
+ * IS THIS ROW MINE TO TAKE? — the pickable rule, as a pure function (MOTIR-2427).
+ *
+ * Two conditions, and both exist because Motir is used by TEAMS. On a
+ * single-operator project neither ever fires, which is exactly why the loop
+ * shipped without them.
+ *
+ * 1. **The TO-DO CATEGORY, never a status key.** A project defines its own
+ *    statuses, so the rule has to be expressed on the category or it would need
+ *    extending every time somebody adds a vocabulary word. Anything in the
+ *    in-progress category belongs to whoever moved it there — and that is how a
+ *    card at `Planning` leaves circulation for free (MOTIR-2425): nothing here
+ *    knows what re-planning is, the card simply left the category.
+ * 2. **Unassigned, or assigned to ME.** Someone else's claim is someone else's
+ *    work. My own is the interrupted run I am resuming.
+ *
+ * ⚠️ THE `in_progress`-ASSIGNED-TO-ME CASE IS DELIBERATE, and it is the answer to
+ * the resumption question the category rule would otherwise close. Today a
+ * killed run leaves its card in progress and the next run picks it up again;
+ * under the category rule alone that card is stranded until a human moves it.
+ * Someone else's in-progress card is theirs; my own is mine, and an unattended
+ * loop that cannot resume its own interrupted work needs a human to continue,
+ * which is the opposite of what it is for.
+ *
+ * ⚠️ THIS IS AN ADVISORY, NOT A LOCK, and the claim that follows it is a plain
+ * assignment. Two runs starting together both read the same page, both see the
+ * row unassigned, both take it. That race is ACCEPTED: closing it needs a
+ * conditional write ("assign only if unassigned") that the server does not
+ * offer, the window is one read-to-write gap, and the failure is loud — two
+ * branches for one card is noticed immediately. Do NOT add a re-read here that
+ * checks again before assigning: it closes nothing and reads like a guarantee.
+ */
+export function isPickable(
+  item: Pick<DispatchItem, 'status' | 'assigneeId'>,
+  ownerId: string,
+): boolean {
+  const mine = item.assigneeId === null || item.assigneeId === ownerId;
+  if (!mine) return false;
+  if (item.status.category === 'todo') return true;
+  // The resumption carve-out, and it is deliberately narrow: the ONE status a
+  // dispatch itself sets, on a card that is already mine. That is what makes it
+  // honest — I can only resume what I started, and what I started is in the
+  // status this CLI moved it to. Widening it to the in-progress CATEGORY would
+  // pick up `in_review` (waiting on a human) and `Planning` (waiting on a
+  // re-plan), which is precisely the circulation MOTIR-2425 removed them from.
+  return item.status.key === RESUMABLE_STATUS && item.assigneeId === ownerId;
+}
+
+/** The status a dispatch moves a card into — and therefore the only one a run
+ *  may resume. Kept beside the rule that reads it; `commands/dispatch.ts` sets
+ *  it, and a project on a custom workflow surfaces the server's own error. */
+const RESUMABLE_STATUS = 'in_progress';
+
+/**
  * The one item a dispatch picks, projected from a ready-collection row.
  *
  * `key` is the `PROD-<n>` identifier — the only way the CLI addresses an item
@@ -179,6 +232,14 @@ export interface DispatchItem {
   status: { key: string; category: string };
   type: string | null;
   executor: string | null;
+  /**
+   * WHO HAS IT — null when nobody has claimed it (MOTIR-2427).
+   *
+   * A run claims what it takes, so on a TEAM this is the difference between
+   * "available" and "someone else's live work". It rides the ready row already;
+   * carrying it here is what lets the pick decide without a second read.
+   */
+  assigneeId: string | null;
   /**
    * READY RELATIVE TO WHAT — the branch this item's dependencies are integrated
    * on, or `null` when it is ready from the trunk (ADR Amendment 17).
@@ -806,10 +867,13 @@ export class MotirClient {
     projectKey: string;
     kinds?: string[];
     excludeKeys?: readonly string[];
+    ownerId?: string;
   }): Promise<{ item: DispatchItem | null }> {
     const excluded = new Set((args.excludeKeys ?? []).map((key) => key.toUpperCase()));
     for await (const item of this.walkReady(args)) {
-      if (!excluded.has(item.key.toUpperCase())) return { item };
+      if (excluded.has(item.key.toUpperCase())) continue;
+      if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
+      return { item };
     }
     return { item: null };
   }
@@ -825,9 +889,13 @@ export class MotirClient {
   async listReadyForDispatch(args: {
     projectKey: string;
     kinds?: string[];
+    ownerId?: string;
   }): Promise<DispatchItem[]> {
     const items: DispatchItem[] = [];
-    for await (const item of this.walkReady(args)) items.push(item);
+    for await (const item of this.walkReady(args)) {
+      if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
+      items.push(item);
+    }
     return items;
   }
 
@@ -1029,6 +1097,26 @@ export class MotirClient {
           ? {}
           : { implementationModel: args.implementationModel }),
       },
+    });
+  }
+
+  /**
+   * CLAIM a work item for the token owner (MOTIR-2427) — a plain assignment.
+   *
+   * Written BEFORE the agent is launched, never after: a claim recorded at the
+   * end is history, and the only version that tells a teammate anything is the
+   * one that lands while the work is happening. Assignment already exists and
+   * the board already renders it, so this turns an invisible act into a visible
+   * one with machinery that is entirely built.
+   *
+   * ⚠️ Idempotent and unconditional. Re-claiming a card already mine is a no-op
+   * write, and there is deliberately no "only if unassigned" — see
+   * {@link isPickable} for why that race is accepted rather than simulated.
+   */
+  async claimWorkItem(args: { key: string; ownerId: string }): Promise<void> {
+    await this.v1.request('updateWorkItem', {
+      path: { key: args.key },
+      body: { assigneeId: args.ownerId },
     });
   }
 

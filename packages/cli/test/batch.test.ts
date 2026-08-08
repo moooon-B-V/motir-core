@@ -53,6 +53,8 @@ interface FakeItem {
   /** This item's OWN recorded integration branch (set by `mark_integrated` in
    *  the real system; pre-set here to build an integrated-dependency fixture). */
   sessionBranch: string | null;
+  /** Who holds it — null is unclaimed (MOTIR-2427). */
+  assigneeId: string | null;
 }
 
 function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
@@ -67,6 +69,7 @@ function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
     deps: [],
     status: 'todo',
     sessionBranch: null,
+    assigneeId: null,
     ...over,
   };
 }
@@ -75,6 +78,10 @@ class FakeServer {
   readonly transitions: { key: string; status: string }[] = [];
   /** Every `reportImplementation` call, verbatim (MOTIR-2421). */
   readonly provenance: Record<string, unknown>[] = [];
+  /** Every claim the run wrote, in order (MOTIR-2427). */
+  readonly claims: { key: string; ownerId: string }[] = [];
+  /** The `ownerId` each enumeration was narrowed by. */
+  readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; seeded: boolean }[] = [];
   readonly nextReadyCalls: { kinds?: string[]; excluded: number }[] = [];
   /** Set to make every write fail the way a read-only PAT does. */
@@ -129,13 +136,19 @@ class FakeServer {
       },
       // The whole ready set in one call (MOTIR-2398) — the shape the v1
       // collection has. `motir batch` enumerates once and freezes it.
-      listReadyForDispatch: async (args: { kinds?: string[] }) => {
+      listReadyForDispatch: async (args: { kinds?: string[]; ownerId?: string }) => {
         this.nextReadyCalls.push({ ...(args.kinds ? { kinds: args.kinds } : {}), excluded: 0 });
+        this.ownerIdsAsked.push(args.ownerId);
         return this.items
           .filter(
             (i) =>
               i.status === 'todo' &&
               (!args.kinds || args.kinds.includes(i.kind)) &&
+              // The pickable rule, applied at ENUMERATION as the real client
+              // does — the snapshot is the boundary a human reads (MOTIR-2427).
+              (args.ownerId === undefined ||
+                i.assigneeId === null ||
+                i.assigneeId === args.ownerId) &&
               i.deps.every((d) => this.satisfied(d)),
           )
           .map(
@@ -143,6 +156,7 @@ class FakeServer {
               key: i.key,
               kind: i.kind,
               title: i.title,
+              assigneeId: i.assigneeId,
               priority: 'medium',
               status: { key: i.status, category: 'todo' },
               type: i.type,
@@ -177,6 +191,11 @@ class FakeServer {
           workflowMode: branch ? 'session_lineage' : 'per_item_pr',
           sessionBranch: branch,
         };
+      },
+      claimWorkItem: async (args: { key: string; ownerId: string }) => {
+        this.claims.push(args);
+        this.byKey(args.key).assigneeId = args.ownerId;
+        return {};
       },
       transitionStatus: async (args: { key: string; status: string }) => {
         if (this.readOnly) {
@@ -232,6 +251,9 @@ function session(server: FakeServer): ProjectSession {
   };
 }
 
+/** The token owner every run below claims for (MOTIR-2427). */
+const OWNER = 'user_me';
+
 interface DriveOptions {
   opts?: BatchOptions;
   kinds?: string[];
@@ -243,6 +265,8 @@ interface DriveOptions {
   onDispatch?: (key: string, index: number) => void;
   /** The agent command the run launched — what the harness is derived FROM. */
   agentCommand?: string;
+  /** The token owner this run claims for (MOTIR-2427). */
+  ownerId?: string;
 }
 
 async function drive(
@@ -269,6 +293,7 @@ async function drive(
       const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
       return { model: null, ...result };
     },
+    ownerId: drives.ownerId ?? OWNER,
   };
   const summary = await runBatch(input);
   return { summary, dispatched };
@@ -333,6 +358,7 @@ describe('planSnapshot', () => {
         status: { key: 'todo', category: 'todo' },
         type: 'code',
         executor: 'coding_agent',
+        assigneeId: null,
         inheritedSessionBranch: null,
       },
       {
@@ -343,6 +369,7 @@ describe('planSnapshot', () => {
         status: { key: 'todo', category: 'todo' },
         type: 'code',
         executor: 'coding_agent',
+        assigneeId: null,
         inheritedSessionBranch: 'motir/auto-x',
       },
     ]);
@@ -528,6 +555,7 @@ describe('motir batch — exclusions', () => {
           dispatched.push(prompt);
           return { exitCode: 0, signal: null, model: null };
         },
+        ownerId: OWNER,
       }),
     ).rejects.toThrow(/FORBIDDEN/);
 
@@ -819,6 +847,50 @@ describe('motir batch — a single item’s outcomes', () => {
     });
 
     expect(server.provenance.map((c) => c['key'])).toEqual(['PROD-2']);
+  });
+
+  // ── the CLAIM and the pickable snapshot (MOTIR-2427) ──────────────────────
+
+  it('CLAIMS every card it takes, for the token owner', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server);
+
+    expect(server.claims).toEqual([
+      { key: 'PROD-1', ownerId: OWNER },
+      { key: 'PROD-2', ownerId: OWNER },
+    ]);
+  });
+
+  it('a teammate’s card never ENTERS the snapshot — not skipped later', async () => {
+    // The snapshot is the frozen boundary a human reads before the first agent
+    // starts, so a card listed there and skipped afterwards would have been
+    // announced as work about to happen. Narrowing at enumeration is the
+    // difference between "not shown" and "shown, then not done".
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1', { assigneeId: 'user_them' }),
+      leaf('idB', 'PROD-2'),
+    ]);
+    const { summary, dispatched } = await drive(server);
+
+    expect(dispatched).toEqual(['PROD-2']);
+    expect(summary.records.map((r) => r.key)).toEqual(['PROD-2']);
+    // Not in the SKIPPED list either — it was never this run's to consider, so
+    // it is absent from the plan a human reads rather than listed-and-excused.
+    expect(summary.skipped.map((sk) => sk.key)).not.toContain('PROD-1');
+    expect(summary.notReached.map((e) => e.key)).not.toContain('PROD-1');
+    expect(printed()).not.toContain('PROD-1');
+  });
+
+  it('narrows the enumeration by the owner, and asks whoami’s answer once', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server);
+    expect(server.ownerIdsAsked[0]).toBe(OWNER);
+  });
+
+  it('takes a card ALREADY assigned to me', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1', { assigneeId: OWNER })]);
+    const { dispatched } = await drive(server);
+    expect(dispatched).toEqual(['PROD-1']);
   });
 
   it('names the refusal readably when the server reports lineage without a branch name', async () => {

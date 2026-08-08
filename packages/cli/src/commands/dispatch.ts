@@ -46,6 +46,9 @@ import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 const IN_PROGRESS = 'in_progress';
 const IN_REVIEW = 'in_review';
 const DONE = 'done';
+/** The status a re-planned card sits at (MOTIR-2425) — in the in-progress
+ *  category, so a picked run never sees it; `run <key>` warns about it. */
+const PLANNING = 'planning';
 
 /**
  * What `motir done --session` reports about how the work was implemented: the
@@ -113,7 +116,19 @@ export async function ensureInProgress(
   client: MotirClient,
   key: string,
   currentStatus: string | undefined,
+  ownerId?: string,
 ): Promise<void> {
+  // THE CLAIM, and it goes FIRST (MOTIR-2427). Every dispatch path in the CLI
+  // funnels through here, which is why the claim lives here rather than being
+  // repeated in three commands that could drift. Written before the status
+  // moves and long before the agent launches: a claim recorded at the end is
+  // history, and the only version that tells a teammate anything is the one
+  // that lands while the work is happening.
+  //
+  // `ownerId` is optional so a caller that has not resolved `whoami` still
+  // dispatches — an unclaimed run is worse than no run, and on a single-operator
+  // project the claim changes nothing anyone reads.
+  if (ownerId !== undefined) await client.claimWorkItem({ key, ownerId });
   if (currentStatus === IN_PROGRESS) {
     info(`${key}: already In Progress — leaving the status as it is.`);
     return;
@@ -238,7 +253,8 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       info(`Skipping ${excluded.length} previously-failed item(s): ${keyList(excluded)}.`);
     }
 
-    const item = await claimNextNotExcluded(client, projectKey, kinds, excluded);
+    const ownerId = await resolveOwnerId(client);
+    const item = await claimNextNotExcluded(client, projectKey, kinds, excluded, ownerId);
     if (!item) {
       info(
         excluded.length > 0
@@ -248,7 +264,7 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       return;
     }
 
-    await ensureInProgress(client, item.key, item.status?.key);
+    await ensureInProgress(client, item.key, item.status?.key, ownerId);
     const dispatch = await client.dispatchPrompt(item.key);
     await deliver({
       session,
@@ -258,6 +274,40 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       opts,
     });
   });
+}
+
+/**
+ * The token owner's user id — who a claim assigns to (MOTIR-2427).
+ *
+ * One `whoami` per command invocation, not per item: the answer cannot change
+ * inside a run, and an unattended loop that asked per dispatch would spend a
+ * request on a constant.
+ */
+export async function resolveOwnerId(client: MotirClient): Promise<string> {
+  return (await client.whoami()).user.id;
+}
+
+/**
+ * Why a NAMED card would not have been picked — or null when it would have been.
+ *
+ * Only for `motir run <key>`, which is told which card to take. It reports the
+ * same two conditions {@link isPickable} refuses on, in the words a person needs
+ * in order to decide whether to carry on: WHOSE it is, or WHERE it is.
+ */
+export function pickWarning(
+  item: { status: string; assigneeId: string | null },
+  ownerId: string,
+): string | null {
+  if (item.assigneeId !== null && item.assigneeId !== ownerId) {
+    return 'assigned to someone else — dispatching it anyway will put two agents on one card.';
+  }
+  if (item.status === IN_REVIEW) {
+    return 'already In Review — its pull request is waiting on a human, not on an agent.';
+  }
+  if (item.status === PLANNING) {
+    return 'being re-planned — a human has not acted on the plan yet.';
+  }
+  return null;
 }
 
 /**
@@ -277,12 +327,14 @@ async function claimNextNotExcluded(
   projectKey: string,
   kinds: string[] | undefined,
   excluded: readonly { key: string }[],
+  ownerId: string,
 ): Promise<DispatchItem | null> {
   // ONE call. The hold-out is applied inside the client's page walk (MOTIR-2398),
   // so the ask-learn-the-id-ask-again loop this used to need is gone: the
   // exclusion list is keyed by KEY and so is the ready row.
   const { item } = await client.nextReady({
     projectKey,
+    ownerId,
     ...(kinds ? { kinds } : {}),
     ...(excluded.length > 0 ? { excludeKeys: excluded.map((e) => e.key) } : {}),
   });
@@ -340,7 +392,17 @@ export async function runCommand(key: string, opts: RunOptions): Promise<void> {
       info(`${item.identifier} is not ready — dispatching anyway (--force).`);
     }
 
-    await ensureInProgress(client, item.identifier, item.status);
+    // `run` is GIVEN a card by a person; `next` / `auto` / `batch` PICK one. So
+    // the pickable rule WARNS here instead of refusing (MOTIR-2427): a human who
+    // names a key has a reason, and refusing outright would break the documented
+    // recovery for a card an agent left in progress. The warning still has to be
+    // said — dispatching onto a teammate's live card is the failure this whole
+    // card exists to make visible, and silence is what made it invisible.
+    const ownerId = await resolveOwnerId(client);
+    const warning = pickWarning(item, ownerId);
+    if (warning) info(`${item.identifier}: ${warning}`);
+
+    await ensureInProgress(client, item.identifier, item.status, ownerId);
     const dispatch = await client.dispatchPrompt(item.identifier);
     await deliver({
       session,

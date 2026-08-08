@@ -51,6 +51,8 @@ interface FakeItem {
   deps: string[];
   status: string;
   sessionBranch: string | null;
+  /** Who holds it — null is unclaimed (MOTIR-2427). */
+  assigneeId: string | null;
   /** When set, this item only ENTERS the plan once `appearsAfter` is integrated
    *  — it is absent from every listing before that, which is what makes "the
    *  ready set changes underneath the loop" real rather than rearranged. */
@@ -69,6 +71,7 @@ function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
     deps: [],
     status: 'todo',
     sessionBranch: null,
+    assigneeId: null,
     ...over,
   };
 }
@@ -82,6 +85,10 @@ class FakeServer {
   readonly integrated: { key: string; sessionBranch: string }[] = [];
   /** The implementation provenance each integration carried (MOTIR-2419). */
   readonly provenance: { key: string; harness: string | null; model: string | null }[] = [];
+  /** Every claim the run wrote, in order (MOTIR-2427). */
+  readonly claims: { key: string; ownerId: string }[] = [];
+  /** The `ownerId` each pick was narrowed by — undefined means UNNARROWED. */
+  readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; sessionBranch: string | null }[] = [];
   readonly nextReadyCalls: number[] = [];
   readonly expandCalls: string[] = [];
@@ -146,14 +153,20 @@ class FakeServer {
       // the hold-out is by KEY. The fake honours `excludeKeys` for the same
       // reason the real client does: without it the loop would be handed the
       // same row forever.
-      nextReady: async (args: { excludeKeys?: readonly string[] }) => {
+      nextReady: async (args: { excludeKeys?: readonly string[]; ownerId?: string }) => {
         this.nextReadyCalls.push(args.excludeKeys?.length ?? 0);
+        this.ownerIdsAsked.push(args.ownerId);
         const excluded = new Set((args.excludeKeys ?? []).map((k) => k.toUpperCase()));
         const item = this.items.find(
           (i) =>
             this.present(i) &&
             i.status === 'todo' &&
             !excluded.has(i.key.toUpperCase()) &&
+            // The pickable rule, as the real client applies it inside its page
+            // walk: unassigned, or already mine (MOTIR-2427).
+            (args.ownerId === undefined ||
+              i.assigneeId === null ||
+              i.assigneeId === args.ownerId) &&
             i.deps.every((d) => this.satisfied(d)),
         );
         if (!item) return { item: null };
@@ -166,6 +179,7 @@ class FakeServer {
             status: { key: item.status, category: 'todo' },
             type: item.type,
             executor: item.executor,
+            assigneeId: item.assigneeId,
             inheritedSessionBranch: this.inherited(item) ?? item.sessionBranch,
           },
         };
@@ -190,6 +204,11 @@ class FakeServer {
       transitionStatus: async (args: { key: string; status: string }) => {
         this.transitions.push(args);
         this.byKey(args.key).status = args.status;
+        return {};
+      },
+      claimWorkItem: async (args: { key: string; ownerId: string }) => {
+        this.claims.push(args);
+        this.byKey(args.key).assigneeId = args.ownerId;
         return {};
       },
       markIntegrated: async (args: {
@@ -268,6 +287,9 @@ let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 const BRANCH = sessionBranchName('20260729-010203');
 
+/** The token owner every run below claims for (MOTIR-2427). */
+const OWNER = 'user_me';
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'motir-auto-'));
   mkdirSync(join(root, 'motir-core'), { recursive: true });
@@ -306,6 +328,8 @@ interface DriveOptions {
   onDispatch?: (key: string, index: number) => void;
   /** The agent command the loop launched — what the harness is derived FROM. */
   agentCommand?: string;
+  /** The token owner this run claims for (MOTIR-2427). */
+  ownerId?: string;
 }
 
 async function drive(
@@ -336,6 +360,7 @@ async function drive(
       const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
       return { model: null, ...result };
     },
+    ownerId: drives.ownerId ?? OWNER,
   };
   const summary = await runAutoLoop(input);
   closeOutRepos(summary, git.runner);
@@ -714,6 +739,67 @@ describe('motir auto — failure policy', () => {
     }
   });
 
+  // ── the CLAIM and the pickable set (MOTIR-2427) ───────────────────────────
+  // Motir is used by TEAMS. The loop used to take the top of a shared ranked
+  // queue and record nothing, so two people's runs competed for one queue and
+  // neither could tell.
+
+  it('CLAIMS every card it takes, for the token owner', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, new FakeGit());
+
+    expect(server.claims).toEqual([
+      { key: 'PROD-1', ownerId: OWNER },
+      { key: 'PROD-2', ownerId: OWNER },
+    ]);
+  });
+
+  it('narrows every pick by the owner — not just the first', async () => {
+    // A run that narrowed only its opening ask would take a teammate's card the
+    // moment one appeared mid-run, which is exactly when the ready set changes.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, new FakeGit());
+
+    expect(server.ownerIdsAsked.length).toBeGreaterThan(1);
+    expect(new Set(server.ownerIdsAsked)).toEqual(new Set([OWNER]));
+  });
+
+  it('never takes a card claimed by someone ELSE', async () => {
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1', { assigneeId: 'user_them' }),
+      leaf('idB', 'PROD-2'),
+    ]);
+    const { dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-2']);
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-2']);
+    // Their card was not touched in any way — not claimed, not transitioned.
+    expect(server.byKey('PROD-1').status).toBe('todo');
+    expect(server.byKey('PROD-1').assigneeId).toBe('user_them');
+  });
+
+  it('takes a card ALREADY assigned to me — the claim is idempotent', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1', { assigneeId: OWNER })]);
+    const { dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(server.claims).toEqual([{ key: 'PROD-1', ownerId: OWNER }]);
+  });
+
+  it('claims BEFORE the status moves — a claim written at the end is history', async () => {
+    // The ordering is the point: a teammate reads the board WHILE the work is
+    // happening, and a claim recorded afterwards tells them nothing in time.
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server, new FakeGit(), {
+      onDispatch: () => {
+        // By the time the agent runs, both writes have landed in order.
+        expect(server.claims).toEqual([{ key: 'PROD-1', ownerId: OWNER }]);
+      },
+    });
+
+    expect(server.transitions[0]).toEqual({ key: 'PROD-1', status: 'in_progress' });
+  });
+
   it('--keep-going finishes the remainder and never re-dispatches the failure', async () => {
     const server = chain();
     const git = new FakeGit();
@@ -905,6 +991,7 @@ describe('an item with no lineage ships as its own pull request', () => {
       run: rootIsNotARepo,
       clock: () => 0,
       runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
     });
 
     expect(summary.records[0]?.outcome).toBe('in_review');
@@ -943,6 +1030,7 @@ describe('the close-out survives a git failure', () => {
       run: pushRejected,
       clock: () => 0,
       runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
     });
     closeOutRepos(summary, pushRejected);
 
@@ -1076,6 +1164,7 @@ describe('more of the run’s edges', () => {
       run: localBranchAhead,
       clock: () => 0,
       runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
     });
     closeOutRepos(summary, localBranchAhead);
 

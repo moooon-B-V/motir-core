@@ -1,7 +1,12 @@
 import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
-import { ensureInProgress, resolveAgent, type DeliveryOptions } from './dispatch.js';
+import {
+  ensureInProgress,
+  resolveAgent,
+  resolveOwnerId,
+  type DeliveryOptions,
+} from './dispatch.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
@@ -208,6 +213,9 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
   const branch = sessionBranchName(runId);
 
   await withProjectSession(async (session) => {
+    // ONE `whoami` for the whole run: the owner cannot change mid-loop, and an
+    // unattended drain that asked per item would spend a request on a constant.
+    const ownerId = await resolveOwnerId(session.client);
     const summary = await runAutoLoop({
       session,
       opts,
@@ -219,6 +227,7 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       run,
       clock,
       runAgentFn: deps.runAgentFn ?? runAgent,
+      ownerId,
     });
     closeOutRepos(summary, run);
     info('');
@@ -238,13 +247,17 @@ export interface LoopInput {
   run: CommandRunner;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** The token owner — every card this run takes is CLAIMED for them, and rows
+   *  claimed by anyone else are not taken at all (MOTIR-2427). */
+  ownerId: string;
 }
 
 /** The WHILE loop itself. Exported so it can be driven end-to-end against a
  *  scripted client + agent, which is the only way the "re-queries every
  *  iteration" property can actually be asserted. */
 export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
-  const { session, opts, kinds, max, agent, runId, branch, run, clock, runAgentFn } = input;
+  const { session, opts, kinds, max, agent, runId, branch, run, clock, runAgentFn, ownerId } =
+    input;
   const { client, serverUrl, projectKey } = session;
 
   if (opts.reset) {
@@ -292,8 +305,15 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       // ONE item, asked for fresh. Never a list — see the module header.
       // Held out by KEY: the client skips excluded rows inside the page walk,
       // so a previous run's failures cost no extra round trip (MOTIR-2398).
+      // `ownerId` narrows the pick to what this run may take: unassigned rows,
+      // and its own interrupted work. Both filters are CLIENT-SIDE — the ready
+      // set has no status facet, and its `assigneeId` is single-valued, so
+      // "unassigned OR mine" has no wire form — which is why the page walk that
+      // backs this must follow the cursor rather than stop at a page it cannot
+      // use (MOTIR-2427).
       const { item } = await client.nextReady({
         projectKey,
+        ownerId,
         ...(kinds ? { kinds } : {}),
         ...(excludedKeys.size > 0 ? { excludeKeys: [...excludedKeys] } : {}),
       });
@@ -387,6 +407,7 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         agent,
         clock,
         runAgentFn,
+        ownerId,
         onIntegrated: (key) => repo?.keys.push(key),
       });
       records.push(record);
@@ -451,13 +472,15 @@ interface DispatchOneInput {
   clock: () => number;
   runAgentFn: typeof runAgent;
   onIntegrated: (key: string) => void;
+  /** Claimed for this owner before the agent launches (MOTIR-2427). */
+  ownerId: string;
 }
 
 /** Run ONE item through the single-dispatch pipeline and record how it ended. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
-  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated } = input;
+  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, ownerId } = input;
 
-  await ensureInProgress(client, item.key, item.status?.key);
+  await ensureInProgress(client, item.key, item.status?.key, ownerId);
 
   info('');
   info(`── ${item.key} — ${item.title}`);

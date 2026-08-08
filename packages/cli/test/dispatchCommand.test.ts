@@ -34,6 +34,8 @@ vi.mock('../src/session.js', () => ({
 const { doneCommand, nextCommand, runCommand } = await import('../src/commands/dispatch.js');
 
 const SERVER = 'https://app.motir.co';
+/** The token owner every dispatch below claims for (MOTIR-2427). */
+const OWNER = 'user_me';
 const PROMPT_TEXT = 'CONTEXT\nWHAT TO DO\nACCEPTANCE CRITERIA\nGIT WORKFLOW\n';
 
 function dispatchPrompt(over: Partial<DispatchPrompt> = {}): DispatchPrompt {
@@ -55,6 +57,7 @@ function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
     title: 'Add the thing',
     priority: 'high',
     status: { key: 'todo', category: 'todo' },
+    assigneeId: null,
     type: 'code',
     executor: 'coding_agent',
     inheritedSessionBranch: null,
@@ -115,6 +118,14 @@ function setup(
   for (const repo of opts.repos ?? ['motir-core']) mkdirSync(join(root, repo));
 
   const client = {
+    whoami: async () => {
+      calls.push({ tool: 'whoami', args: undefined });
+      return { user: { id: OWNER, name: 'Me', email: 'me@motir.test' }, workspace: null };
+    },
+    claimWorkItem: async (args: unknown) => {
+      calls.push({ tool: 'claim', args });
+      return {};
+    },
     nextReady: async (args: unknown) => {
       calls.push({ tool: 'next_ready', args });
       return { item: opts.item === undefined ? readyItem() : opts.item };
@@ -201,8 +212,17 @@ describe('motir next --print', () => {
     setup();
     await nextCommand({ print: true });
 
-    expect(toolNames()).toEqual(['next_ready', 'transition_status', 'dispatch_prompt']);
-    expect(harness.calls[1]?.args).toEqual({ key: 'PROD-7', status: 'in_progress' });
+    expect(toolNames()).toEqual([
+      'whoami',
+      'next_ready',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
+    // The CLAIM lands BEFORE the status moves and long before any agent
+    // launches (MOTIR-2427) — a claim written at the end is history.
+    expect(harness.calls[2]?.args).toEqual({ key: 'PROD-7', ownerId: OWNER });
+    expect(harness.calls[3]?.args).toEqual({ key: 'PROD-7', status: 'in_progress' });
     // The prompt is the ONLY thing on stdout, verbatim — nothing prepended,
     // nothing appended but the single terminating newline.
     expect(harness.stdout).toBe(PROMPT_TEXT);
@@ -220,20 +240,20 @@ describe('motir next --print', () => {
   it('reports an empty ready set without touching any status', async () => {
     setup({ item: null });
     await nextCommand({ print: true });
-    expect(toolNames()).toEqual(['next_ready']);
+    expect(toolNames()).toEqual(['whoami', 'next_ready']);
     expect(harness.stderr).toContain('No ready work items.');
   });
 
   it('passes --kinds through to next_ready', async () => {
     setup();
     await nextCommand({ print: true, kinds: 'subtask,bug' });
-    expect(harness.calls[0]?.args).toMatchObject({ kinds: ['subtask', 'bug'] });
+    expect(harness.calls[1]?.args).toMatchObject({ kinds: ['subtask', 'bug'] });
   });
 
   it('does NOT re-flip an item that is already In Progress', async () => {
     setup({ item: readyItem({ status: { key: 'in_progress', category: 'in_progress' } }) });
     await nextCommand({ print: true });
-    expect(toolNames()).toEqual(['next_ready', 'dispatch_prompt']);
+    expect(toolNames()).toEqual(['whoami', 'next_ready', 'claim', 'dispatch_prompt']);
     expect(harness.stderr).toContain('already In Progress');
   });
 });
@@ -249,12 +269,14 @@ describe('motir next --agent', () => {
     expect(call.cwd).toBe(join(harness.root, 'motir-core'));
     expect(call.command).toMatchObject({ binary: 'claude', args: ['--yolo'] });
     expect(toolNames()).toEqual([
+      'whoami',
       'next_ready',
+      'claim',
       'transition_status',
       'dispatch_prompt',
       'transition_status',
     ]);
-    expect(harness.calls[3]?.args).toEqual({ key: 'PROD-7', status: 'in_review' });
+    expect(harness.calls[5]?.args).toEqual({ key: 'PROD-7', status: 'in_review' });
     expect(harness.stderr).toContain('motir done PROD-7');
   });
 
@@ -337,7 +359,7 @@ describe('motir next --agent', () => {
 
     setup();
     await nextCommand({ print: true, reset: true });
-    expect(harness.calls[0]?.args).not.toHaveProperty('excludeKeys');
+    expect(harness.calls[1]?.args).not.toHaveProperty('excludeKeys');
   });
 
   it('a SUCCESSFUL run clears a prior exclusion for that item', async () => {
@@ -400,7 +422,13 @@ describe('motir run <key>', () => {
       }),
     });
     await runCommand('PROD-7', { force: true, print: true });
-    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'get_work_item',
+      'whoami',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
     expect(harness.stderr).toContain('--force');
     expect(harness.stdout).toBe(PROMPT_TEXT);
   });
@@ -408,7 +436,13 @@ describe('motir run <key>', () => {
   it('dispatches a ready item straight through', async () => {
     setup();
     await runCommand('PROD-7', { print: true });
-    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'get_work_item',
+      'whoami',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
   });
 
   it('rejects an empty key before any network call', async () => {
@@ -446,7 +480,13 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
     expect(harness.stderr).toContain('PROD-5 (in_review)');
     expect(harness.stderr).toContain('NOT a blocker');
     // Byte-identical to the no-advisory run: same calls, same payload, same code.
-    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'get_work_item',
+      'whoami',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
     expect(harness.stdout).toBe(PROMPT_TEXT);
     expect(process.exitCode).toBeUndefined();
   });
@@ -456,7 +496,13 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
     await nextCommand({ print: true });
 
     expect(harness.stderr).toContain('PROD-5 (in_review)');
-    expect(toolNames()).toEqual(['next_ready', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'whoami',
+      'next_ready',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
     expect(harness.stdout).toBe(PROMPT_TEXT);
     expect(process.exitCode).toBeUndefined();
   });
@@ -553,6 +599,62 @@ describe('motir done', () => {
     // fails on it, and saying so keeps the reason attached to the assertion.
     expect(args).not.toHaveProperty('implementationHarness');
     expect(JSON.stringify(args)).not.toContain('motir-cli');
+  });
+
+  describe('the CLAIM — every dispatch says who took the card (MOTIR-2427)', () => {
+    it('`motir next` claims BEFORE the status moves and before any agent launches', async () => {
+      setup();
+      await nextCommand({ print: true });
+
+      const names = toolNames();
+      expect(names.indexOf('claim')).toBeLessThan(names.indexOf('transition_status'));
+      expect(names.indexOf('claim')).toBeLessThan(names.indexOf('dispatch_prompt'));
+      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({
+        key: 'PROD-7',
+        ownerId: OWNER,
+      });
+    });
+
+    it('`motir run <key>` claims a NAMED card too', async () => {
+      // Being told which card to take is not being told it is unclaimed.
+      setup();
+      await runCommand('PROD-7', { print: true });
+
+      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({
+        key: 'PROD-7',
+        ownerId: OWNER,
+      });
+    });
+
+    it('asks WHOAMI once per invocation, not once per item', async () => {
+      setup();
+      await nextCommand({ print: true });
+      expect(harness.calls.filter((c) => c.tool === 'whoami')).toHaveLength(1);
+    });
+
+    it('`motir run <key>` WARNS on a card claimed by someone else — and dispatches it', async () => {
+      // `run` is GIVEN a key by a person with a reason, so the rule warns rather
+      // than refuses. Refusing would break the documented recovery for a card an
+      // agent left in progress; saying nothing is what made the collision
+      // invisible in the first place.
+      setup({
+        detail: workItem({
+          item: { ...workItem().item, assigneeId: 'user_them' },
+        }),
+      });
+      await runCommand('PROD-7', { print: true });
+
+      expect(harness.stderr).toContain('assigned to someone else');
+      expect(harness.stderr).toContain('two agents on one card');
+      // …and it still went ahead: the human asked for it.
+      expect(toolNames()).toContain('dispatch_prompt');
+    });
+
+    it('`motir run <key>` says nothing about a card that was pickable anyway', async () => {
+      setup();
+      await runCommand('PROD-7', { print: true });
+      expect(harness.stderr).not.toContain('assigned to someone else');
+    });
   });
 
   it('refuses a key AND --session together', async () => {

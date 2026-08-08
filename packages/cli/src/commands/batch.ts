@@ -1,7 +1,12 @@
 import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
-import { ensureInProgress, resolveAgent, type DeliveryOptions } from './dispatch.js';
+import {
+  ensureInProgress,
+  resolveAgent,
+  resolveOwnerId,
+  type DeliveryOptions,
+} from './dispatch.js';
 import { parseMax } from './auto.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
@@ -138,6 +143,8 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
   const agent = requireAgent(opts);
 
   await withProjectSession(async (session) => {
+    // ONE `whoami` for the whole run — see the note on `motir auto`'s.
+    const ownerId = await resolveOwnerId(session.client);
     const summary = await runBatch({
       session,
       opts,
@@ -146,6 +153,7 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
       agent,
       clock: deps.clock ?? Date.now,
       runAgentFn: deps.runAgentFn ?? runAgent,
+      ownerId,
     });
     info('');
     info(renderBatchSummary(summary));
@@ -161,13 +169,16 @@ export interface BatchInput {
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** The token owner — every card this run takes is CLAIMED for them, and rows
+   *  claimed by anyone else never enter the snapshot (MOTIR-2427). */
+  ownerId: string;
 }
 
 /** Snapshot, print, drain. Exported so the whole command can be driven against
  *  a scripted client + agent, which is the only way the "never picks up an item
  *  that became ready mid-run" property can actually be asserted. */
 export async function runBatch(input: BatchInput): Promise<BatchSummary> {
-  const { session, opts, kinds, max, agent, clock, runAgentFn } = input;
+  const { session, opts, kinds, max, agent, clock, runAgentFn, ownerId } = input;
   const { client, serverUrl, projectKey } = session;
 
   if (opts.reset) {
@@ -188,8 +199,15 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
     );
   }
 
+  // The snapshot only ever contains rows this run may take (MOTIR-2427):
+  // unassigned, or its own interrupted work, and in the to-do category. Applied
+  // at ENUMERATION rather than at dispatch, because the snapshot is the frozen
+  // boundary a human reads before the first agent starts — a teammate's card
+  // listed there and skipped later would have been printed as work about to
+  // happen.
   const enumerated = await client.listReadyForDispatch({
     projectKey,
+    ownerId,
     ...(kinds ? { kinds } : {}),
   });
   const [eligible, heldOut] = partitionByExclusion(enumerated, persistedExcludes);
@@ -239,6 +257,7 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
         agent,
         clock,
         runAgentFn,
+        ownerId,
       });
       if (outcome.kind === 'skipped') {
         skipped.push(outcome.skip);
@@ -305,6 +324,8 @@ interface DispatchOneInput {
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** Claimed for this owner before the agent launches (MOTIR-2427). */
+  ownerId: string;
 }
 
 type DispatchOneResult =
@@ -313,7 +334,7 @@ type DispatchOneResult =
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
-  const { session, entry, agent, clock, runAgentFn } = input;
+  const { session, entry, agent, clock, runAgentFn, ownerId } = input;
   const { client, link } = session;
 
   // The prompt is fetched BEFORE the status flip, which is the opposite order to
@@ -341,7 +362,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     };
   }
 
-  await ensureInProgress(client, entry.key, entry.statusKey);
+  await ensureInProgress(client, entry.key, entry.statusKey, ownerId);
   const target = resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
 
   info('');

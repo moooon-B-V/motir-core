@@ -208,6 +208,117 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(sprints[1]).toMatchObject({ committedPoints: 21, committedIssueCount: 2 });
   });
 
+  // THE PICK NARROWS TO WHAT THIS RUN MAY TAKE (MOTIR-2427), and both filters
+  // are CLIENT-SIDE by necessity: the ready set has no status facet at all, and
+  // its `assigneeId` is single-valued (`params.get`, not `getAll`), so
+  // "unassigned OR mine" has no wire form. That is what makes the cursor walk
+  // load-bearing rather than an edge case.
+  it('WALKS PAST a page it cannot use — an unpickable page is not a drained set', async () => {
+    // The failure this catches: a project whose ready set opens with a
+    // teammate's claimed work. Stopping at page one reports "nothing to do" to a
+    // run that had work two rows down — and a three-item fixture never shows it.
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': (req) =>
+        req.query.get('cursor') === 'page-2'
+          ? { body: { items: [v1ReadyRow('PROD-9')], nextCursor: null } }
+          : {
+              body: {
+                items: [
+                  v1ReadyRow('PROD-1', { assigneeId: 'user_them' }),
+                  v1ReadyRow('PROD-2', { status: { key: 'in_review', category: 'in_progress' } }),
+                  v1ReadyRow('PROD-3', { status: { key: 'planning', category: 'in_progress' } }),
+                ],
+                nextCursor: 'page-2',
+              },
+            },
+    });
+
+    const { item } = await client.nextReady({ projectKey: 'PROD', ownerId: 'user_me' });
+
+    expect(item?.key).toBe('PROD-9');
+    // It really followed the cursor rather than getting lucky on one page.
+    expect(server.v1Calls.filter((c) => c.path.endsWith('/ready'))).toHaveLength(2);
+  });
+
+  it('reports the set DRAINED when every page is unpickable — not a false pick', async () => {
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: {
+          items: [v1ReadyRow('PROD-1', { assigneeId: 'user_them' })],
+          nextCursor: null,
+        },
+      },
+    });
+
+    expect((await client.nextReady({ projectKey: 'PROD', ownerId: 'user_me' })).item).toBeNull();
+  });
+
+  it("takes MY OWN interrupted card, and never a teammate's", async () => {
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: {
+          items: [
+            v1ReadyRow('PROD-1', {
+              assigneeId: 'user_them',
+              status: { key: 'in_progress', category: 'in_progress' },
+            }),
+            v1ReadyRow('PROD-2', {
+              assigneeId: 'user_me',
+              status: { key: 'in_progress', category: 'in_progress' },
+            }),
+          ],
+          nextCursor: null,
+        },
+      },
+    });
+
+    expect((await client.nextReady({ projectKey: 'PROD', ownerId: 'user_me' })).item?.key).toBe(
+      'PROD-2',
+    );
+  });
+
+  it('the batch SNAPSHOT is narrowed the same way, at enumeration', async () => {
+    // Applied when the set is enumerated rather than at dispatch, because the
+    // snapshot is the frozen boundary a human reads BEFORE the first agent
+    // starts: a teammate's card printed there and skipped later would have been
+    // announced as work about to happen.
+    const client = connected();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': {
+        body: {
+          items: [
+            v1ReadyRow('PROD-1'),
+            v1ReadyRow('PROD-2', { assigneeId: 'user_them' }),
+            v1ReadyRow('PROD-3', { status: { key: 'planning', category: 'in_progress' } }),
+            v1ReadyRow('PROD-4', { assigneeId: 'user_me' }),
+          ],
+          nextCursor: null,
+        },
+      },
+    });
+
+    const snapshot = await client.listReadyForDispatch({ projectKey: 'PROD', ownerId: 'user_me' });
+
+    expect(snapshot.map((i) => i.key)).toEqual(['PROD-1', 'PROD-4']);
+  });
+
+  it('CLAIMS a card with a plain assignment — no condition, no re-read', async () => {
+    // Advisory, not a lock: there is deliberately no "assign only if unassigned"
+    // and no check-then-write. The race is accepted; simulating a guarantee is
+    // what the card forbids.
+    const client = connected();
+
+    await client.claimWorkItem({ key: 'PROD-7', ownerId: 'user_me' });
+
+    expect(server.v1Calls).toHaveLength(1);
+    expect(server.v1Calls[0]?.method).toBe('PATCH');
+    expect(server.v1Calls[0]?.path).toBe('/api/v1/work-items/PROD-7');
+    expect(server.v1Calls[0]?.body).toEqual({ assigneeId: 'user_me' });
+  });
+
   // MOTIR-2398 took the LAST method off MCP. What used to be "these still name
   // their tools" is now a NEGATIVE: no read, no write, no pick makes a tool call
   // at all. Asserted over a run of every shape rather than method by method,

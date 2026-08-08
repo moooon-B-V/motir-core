@@ -579,6 +579,10 @@ export const DEFAULT_V1: V1Script = {
   // new status; nothing in the CLI reads that body, but the transport validates
   // every success, so the default has to be a real one.
   'POST /api/v1/work-items/{key}/transitions': { body: v1Detail('PROD-1') },
+  // The CLAIM (MOTIR-2427) — a plain assignment before every dispatch, which
+  // answers with the patched item. Every dispatch path makes this call, so it
+  // belongs in the DEFAULTS rather than in each command suite's script.
+  'PATCH /api/v1/work-items/{key}': { body: v1Detail('PROD-1') },
   'GET /api/v1/work-items/{key}/dispatch-prompt': { body: v1DispatchPrompt('PROD-1') },
   'POST /api/v1/work-items/{key}/integration': { body: v1Integration('PROD-1') },
   'POST /api/v1/sessions/complete': { body: v1CloseOut('motir/session-1') },

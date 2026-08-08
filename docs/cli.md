@@ -694,6 +694,22 @@ ready **only** because a dependency is integrated-awaiting-review is excluded
 and named — that dependency's code is not on `main`, so a pull request of its
 own could not even build. That lineage is `auto`'s territory.
 
+**A run CLAIMS what it takes, and takes only what is free.** Before an agent is
+launched — before the status even moves — the card is assigned to the token
+owner. That is the signal a teammate reads on the board: someone has this. And a
+run picks up only the **to-do category**, never a status key, so a project that
+defines its own statuses gets the rule for free and a card at `Planning` leaves
+circulation without anything special-casing it. A card claimed by someone else
+is not picked up at all; a card claimed by **you** and left in progress by an
+interrupted run is — that is how a killed run resumes.
+
+⚠️ The claim is an **advisory, not a lock**. Two runs started at the same instant
+can both see a card unassigned and both take it. Closing that needs a conditional
+write Motir does not offer today; the window is one read-to-write gap and the
+failure is loud — two branches for one card is noticed immediately. `motir run
+<key>` is the exception to the pickable rule rather than the claim: you named the
+card, so it warns and proceeds.
+
 **What both loops skip.** An unexpanded epic/story is a _planning_ item, not a
 dispatchable one — there is no agent prompt for "do the planning" — so it is
 skipped untouched under _needs planning_. A `type: manual` / `executor: human`
