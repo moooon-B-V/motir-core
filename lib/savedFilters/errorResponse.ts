@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { FilterValidationError } from '@/lib/filters/errors';
 import {
   BuiltinSavedFilterImmutableError,
@@ -22,6 +26,9 @@ import {
  *   BuiltinSavedFilterImmutableError                → 403 (visible but the
  *     action sits outside the actor's matrix cell; built-ins reject every
  *     write — the mirror's "cannot be deleted or edited")
+ *   PermissionDeniedError                           → 403 + the missing key
+ *     (MOTIR-2352 — the project-level `saved_filter:manage` gate, distinct from
+ *     the per-ROW matrix cell above)
  *   SavedFilterNameConflictError                    → 409 (case-insensitive
  *     per-project uniqueness)
  *   InvalidSavedFilterNameError / InvalidSavedFilterOwnerError /
@@ -39,6 +46,17 @@ export function mapSavedFilterError(err: unknown): NextResponse | null {
     err instanceof BuiltinSavedFilterImmutableError
   ) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 403 });
+  }
+  // MOTIR-2352 — the shared gate's 403, raised when the actor may browse the
+  // project but does not hold `saved_filter:manage`. It carries the key it asked
+  // for, which the two 403s above do not, so it keeps its own arm rather than
+  // being folded into theirs. A NON-browser never reaches here: `assertPermission`
+  // raises `ProjectNotFoundError` first, which the 404 arm above already maps.
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, permission: err.permission },
+      { status: 403 },
+    );
   }
   if (err instanceof SavedFilterNameConflictError) {
     return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });

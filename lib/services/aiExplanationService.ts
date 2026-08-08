@@ -2,6 +2,7 @@ import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // The "Draft with AI" dispatch side (Subtask 8.8.12): the thin motir-core seam
 // between the create-modal / edit-form drafting UI and the motir-ai
@@ -35,6 +36,13 @@ export const aiExplanationService = {
     input: ExplanationDraftInput,
     ctx: ProjectContext,
   ): Promise<{ jobId: string }> {
+    // `ai:plan` (MOTIR-2357). This reached NO gate at all: drafting an
+    // explanation is a metered motir-ai job like every other planning act.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     const { organizationId, isMeta } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -64,7 +72,7 @@ export const aiExplanationService = {
   // that to an HTTP status); the generator ends when motir-ai closes the stream.
   // (The terminal-failure REASON — e.g. out-of-credits — is appended by the
   // stream ROUTE; see lib/ai/jobStream.failureReasonFrame.)
-  streamExplanation(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamExplanation(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 };

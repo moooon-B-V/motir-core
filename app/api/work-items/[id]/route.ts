@@ -3,6 +3,7 @@ import { getWorkspaceContext } from '@/lib/workspaces';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // DELETE /api/work-items/[id] (Story 2.8 · Subtask 2.8.3) — PERMANENTLY delete a
 // work item AND its entire subtree (Jira-parity "Delete Issues"). Thin HTTP layer
@@ -28,6 +29,10 @@ export async function DELETE(
     await workItemsService.deleteWorkItem(id, ctx);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
+    // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,
+    // 403 naming the key). Without this arm they fall through to a 500.
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof WorkItemNotFoundError || err instanceof ProjectNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

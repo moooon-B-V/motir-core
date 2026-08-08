@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiSprintPlanningService } from '@/lib/services/aiSprintPlanningService';
 import { SprintAssignmentValidationError } from '@/lib/ai/sprintAssignment';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/ai/plan/sprint/:jobId/review (Subtask MOTIR-1750) — the proposed
 // packing RESOLVED for render: the delta plus, per packed key, its work-item
@@ -35,6 +36,8 @@ export async function GET(
     const review = await aiSprintPlanningService.reviewSprintPlan(jobId, ctx);
     return NextResponse.json(review, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     // A result this build cannot parse is a 400 with nothing rendered — the same
     // shape gate the approve applies, one seam earlier.
     if (err instanceof SprintAssignmentValidationError) {

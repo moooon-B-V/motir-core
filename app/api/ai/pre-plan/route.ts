@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import { MotirAiError } from '@/lib/ai/errors';
 import { InvalidDesignChoiceError } from '@/lib/ai/preplanErrors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/ai/pre-plan (Subtask 7.3.70) — the resumable pre-plan read the
 // discovery UI (7.3.5) loads its state from: the session strategy decisions +
@@ -40,6 +41,8 @@ export async function GET(): Promise<Response> {
     const state = await aiPreplanService.getPreplanState(ctx);
     return NextResponse.json(state, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     // Any motir-ai-side failure (unreachable / misconfigured / rejected) maps
     // through the 7.1.1 taxonomy to a typed error → 502: the upstream dependency
     // failed, not the caller's request.
@@ -103,6 +106,8 @@ export async function PATCH(req: Request): Promise<Response> {
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     // An unknown axis id is the caller's bug (motir-core owns the registries) → 422.
     if (err instanceof InvalidDesignChoiceError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });

@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import {
   WorkItemNotFoundError,
   CrossProjectParentError,
@@ -29,6 +33,8 @@ import {
 //       leak — a cross-workspace / hidden id is indistinguishable from a
 //       never-existed one, findings #26/#44)
 //   ProjectAccessDeniedError(kind: edit)                  → 403 (read-only)
+//   PermissionDeniedError                                 → 403 + the key
+//     (MOTIR-2354 — `work_item:triage`, narrower than editing)
 //   NotInTriageError                                      → 409 (already
 //       graduated — a state conflict, not a missing item)
 //   IllegalParentTypeError / DepthLimitExceededError /
@@ -44,6 +50,15 @@ export function triageActionErrorResponse(err: unknown): NextResponse | null {
     (err instanceof ProjectAccessDeniedError && err.kind === 'browse')
   ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
+  }
+  // MOTIR-2354 — the `work_item:triage` refusal, carrying the key. A NON-browser
+  // never produces it (the 404 arm above catches them first), so this is exactly
+  // "you can see this project's queue and may not moderate it".
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, permission: err.permission },
+      { status: 403 },
+    );
   }
   if (err instanceof ProjectAccessDeniedError) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 403 });

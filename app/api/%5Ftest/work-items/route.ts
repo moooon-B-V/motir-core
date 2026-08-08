@@ -21,6 +21,7 @@ import type {
 } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { notFound, productionGate, requireContext } from '../_helpers';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // `_test` transport over workItemsService — CRUD on work items via the service
 // layer (Subtask 1.4.8). See ../_helpers.ts for the WHY + the three invariants
@@ -54,6 +55,12 @@ function mapError(err: unknown): NextResponse {
   ) {
     return notFound();
   }
+  // MOTIR-2291 — the shared project gate's 403, naming the key; without this arm
+  // it falls through to a 500. It sits BELOW the tenancy arm on purpose: the
+  // gate's own `ProjectNotFoundError` must keep this transport's uniform
+  // `notFound()` body, not the helper's `{ code, error }` one.
+  const gate = workItemGateErrorResponse(err);
+  if (gate) return gate;
   if (
     err instanceof IllegalParentTypeError ||
     err instanceof DepthLimitExceededError ||

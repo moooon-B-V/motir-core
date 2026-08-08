@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // POST /api/ai/plan/generate (Subtask 7.4.4 · MOTIR-846) — open a `Plan`
 // (status `generating`) for the active project and submit the `generate_tree`
@@ -55,6 +56,8 @@ export async function POST(req: Request): Promise<Response> {
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof MotirAiOutOfCreditsError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 402 });
     }

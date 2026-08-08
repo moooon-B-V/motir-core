@@ -115,16 +115,13 @@ const POLICY_OWNERS = [
  *
  * Every entry here is a domain OUTSIDE MOTIR-2256's twelve keys. When MOTIR-2291
  * wires `sprint:manage`, `report:view` and `saved_filter:manage`, its cards delete
- * these three lines — which is exactly the signal this list is meant to carry.
+ * these lines — which is exactly the signal this list is meant to carry, and the
+ * `sprintsService` line is the first one MOTIR-2350 collected.
  */
 const ALLOWED_DERIVATIONS: { file: string; why: string }[] = [
   {
     file: 'lib/savedFilters/access.ts',
-    why: "the saved-filter capability derivation — `saved_filter:manage` is MOTIR-2291's, not this story's",
-  },
-  {
-    file: 'lib/services/sprintsService.ts',
-    why: "`assertSprintAdmin` — `sprint:manage` is MOTIR-2291's; a fourth workspace-OWNER-only gate of the shape MOTIR-2304 found",
+    why: 'the saved-filter ROW-LEVEL tier — an owner manages their own filter, an admin any project-shared one. MOTIR-2352 wired `saved_filter:manage` beside it as the project-level question; this derivation answers the per-ROW one and stays',
   },
   {
     file: 'lib/services/jobsDashboardService.ts',
@@ -293,36 +290,47 @@ describe('guard 2 — every administrative key is ENFORCED and actually WIRED', 
     ).toEqual([]);
   });
 
-  it('THE GUARD CAN ACTUALLY FAIL — a key nothing consults is reported', () => {
-    // `import:run` is one of MOTIR-2291's eight: justified by the inventory,
-    // deliberately unwired. It is the honest negative control, and if a future
-    // card wires it this assertion flips and asks to be updated.
+  // ⚠️ RETIRED BY MOTIR-2356. The control needed a key that was justified by the
+  // inventory and deliberately unwired, and there is no longer one — every key in
+  // the catalog is `enforced`. It moved three times as its subject was wired
+  // (`import:run` → `work_item:delete` → `ai:view_plan` → `ai:plan`), which is
+  // exactly the signal it was built to carry, and it has now carried it to the
+  // end. What survives is the assertion ABOVE, which is the one with teeth: every
+  // enforced key must appear in a gate call somewhere outside `lib/permissions/`.
+  it.skip('THE GUARD CAN ACTUALLY FAIL — a key nothing consults is reported', () => {
+    // A key from MOTIR-2291's eight that is justified by the inventory and
+    // deliberately unwired. It is the honest negative control, and when a card
+    // wires it this assertion flips and asks to be updated — which is exactly
+    // what happened: the control was `import:run` until MOTIR-2353 wired it and
+    // `work_item:delete` until MOTIR-2354 did, each time moving on rather than
+    // being deleted. MOTIR-2356 retires it for good.
+    // ⚠️ ONLY `ai:plan` IS LEFT, and it is a control of a different kind: its
+    // operations ARE wired (MOTIR-2355 / -2357 / -2358), and the FLAG is what
+    // MOTIR-2359 and then MOTIR-2356 still owe. So the assertion inverts — the
+    // key is consulted and still `planned`, which is exactly the seam that lets
+    // naming and wiring land separately. MOTIR-2356 retires this control with the
+    // arm it belongs to.
     const wired = SOURCES.filter((f) => !f.path.startsWith('lib/permissions/')).some((f) =>
-      f.code.includes("'import:run'"),
+      f.code.includes("'ai:plan'"),
     );
-    expect(wired, 'import:run is now wired — move it out of the negative control').toBe(false);
-    expect(PERMISSION_CATALOG['import:run'].enforcement).toBe('planned');
+    expect(wired, 'ai:plan should be consulted by the cards that wired it').toBe(true);
+    expect(PERMISSION_CATALOG['ai:plan'].enforcement).toBe('planned');
   });
 });
 
-describe('the story leaves exactly MOTIR-2291 behind', () => {
-  it('every remaining `planned` key is one of the eight member-facing ones', () => {
+describe('the story leaves nothing behind', () => {
+  it('NO key is `planned` any more — both stories have landed (MOTIR-2356)', () => {
     const stillPlanned = Object.values(PERMISSION_CATALOG)
       .filter((d) => d.enforcement === 'planned')
       .map((d) => d.key)
       .sort();
-    expect(stillPlanned).toEqual(
-      [
-        'work_item:delete',
-        'work_item:triage',
-        'sprint:manage',
-        'report:view',
-        'saved_filter:manage',
-        'import:run',
-        'ai:plan',
-        'ai:view_plan',
-      ].sort(),
-    );
+    // This array was MOTIR-2291's worklist: each wiring card deleted its own key
+    // in the same change — `sprint:manage` (2350), `report:view` (2351),
+    // `saved_filter:manage` (2352), `import:run` (2353), `work_item:triage` +
+    // `work_item:delete` (2354), `ai:view_plan` (2363), and `ai:plan` across
+    // 2355/2357/2358/2359 with the flag flipped here. It is empty, and the
+    // emptiness is the story's definition of done.
+    expect(stillPlanned).toEqual([]);
   });
 });
 
@@ -394,14 +402,28 @@ function bodyAfterSignature(src: string, afterOpenParen: number): string | null 
   return src.slice(open, j + 1);
 }
 
-/** Whether a route file, or a `@/lib/**` module it imports, knows the error. */
+/** Whether a route file, or a `@/lib/**` module it imports, knows the error.
+ *
+ *  ⚠️ The module that DEFINES the class does not count. `lib/projects/errors.ts`
+ *  is where `PermissionDeniedError` is declared, so ANY route importing a
+ *  sibling from it — `ProjectNotFoundError`, say — used to satisfy this walk
+ *  without owning a single arm. That false negative is not hypothetical: it let
+ *  `POST /api/import` ship with a three-arm hand-rolled mapper that knew
+ *  `ProjectNotFoundError` and not the refusal, so a project member's
+ *  `import:run` denial came back as a **500**, and this guard stayed green until
+ *  the E2E spec ran it. A definition is not a mapping. */
+function definesTheError(src: string): boolean {
+  return /export\s+class\s+PermissionDeniedError\b/.test(src);
+}
+
 function mapsPermissionDenied(src: string): boolean {
-  if (src.includes('PermissionDeniedError')) return true;
+  if (src.includes('PermissionDeniedError') && !definesTheError(src)) return true;
   const importRe = /from '(@\/lib\/[^']+)'/g;
   for (let m = importRe.exec(src); m !== null; m = importRe.exec(src)) {
     const mod = join(ROOT, `${m[1]!.replace('@/', '')}.ts`);
     try {
-      if (readFileSync(mod, 'utf8').includes('PermissionDeniedError')) return true;
+      const imported = readFileSync(mod, 'utf8');
+      if (imported.includes('PermissionDeniedError') && !definesTheError(imported)) return true;
     } catch {
       // a directory import or a .tsx module — not an error mapper
     }

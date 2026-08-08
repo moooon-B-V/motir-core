@@ -33,7 +33,7 @@ import {
 } from '@/lib/savedFilters/errors';
 import { BUILTIN_FILTERS, builtinFilterId } from '@/lib/savedFilters/builtins';
 import { SAVED_FILTER_NAME_MAX_LENGTH } from '@/lib/savedFilters/constants';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { GET as listGET, POST as createPOST } from '@/app/api/projects/[key]/saved-filters/route';
 import { GET as resolveGET } from '@/app/api/projects/[key]/saved-filters/[filterId]/route';
 import {
@@ -153,21 +153,27 @@ describe('create — visibility gates + validation + uniqueness', () => {
     });
   });
 
-  it('a viewer saves PRIVATE filters freely but never project-shared ones', async () => {
+  it('a viewer saves NO filters at all — private included (MOTIR-2352)', async () => {
+    // The shipped 6.2 rule was "a viewer creates/stars PRIVATE filters freely",
+    // on the reasoning that filters are a read-layer construct. MOTIR-2347 put
+    // `saved_filter:manage` at admin+member, and MOTIR-2352 asks it on every
+    // write, so authoring is now a member capability at BOTH visibilities. The
+    // viewer keeps what a viewer is for: listing and running what they can see.
     const t = await makeTeam();
-    const dto = await savedFiltersService.create(
-      t.key,
-      { name: 'mine', visibility: 'private', filterParam: param() },
-      t.viewerCtx,
-    );
-    expect(dto.visibility).toBe('private');
+    await expect(
+      savedFiltersService.create(
+        t.key,
+        { name: 'mine', visibility: 'private', filterParam: param() },
+        t.viewerCtx,
+      ),
+    ).rejects.toThrow(PermissionDeniedError);
     await expect(
       savedFiltersService.create(
         t.key,
         { name: 'shared', visibility: 'project', filterParam: param() },
         t.viewerCtx,
       ),
-    ).rejects.toThrow(SavedFilterForbiddenError);
+    ).rejects.toThrow(PermissionDeniedError);
   });
 
   it('names are case-insensitively unique per project (the 409), trimmed and capped', async () => {
@@ -332,7 +338,14 @@ describe('update — rename, details, and the cross-project hide-gate', () => {
 });
 
 describe('the (role × visibility × action) permission matrix', () => {
-  type Cell = 'ok' | 'not-found' | 'forbidden';
+  // ⚠️ `permission-denied` is the FOURTH cell, added by MOTIR-2352. It is the
+  // project-level `saved_filter:manage` refusal, raised BEFORE the row is even
+  // read — so a viewer's cell that used to read `not-found` (the SEE gate) or
+  // `ok` now reads this instead. The distinction is worth keeping in the type
+  // rather than folding into `forbidden`: `forbidden` means the actor may manage
+  // saved filters here and not THIS one, which is the per-row rule this card
+  // deliberately left standing.
+  type Cell = 'ok' | 'not-found' | 'forbidden' | 'permission-denied';
   type Actor = 'owner-of-filter' | 'project-admin' | 'workspace-owner' | 'other-member' | 'viewer';
 
   // One row per (action × visibility × actor) — table-driven so the
@@ -351,7 +364,11 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'ok',
         'workspace-owner': 'ok',
         'other-member': 'ok',
-        viewer: 'ok',
+        // MOTIR-2352: the shipped 6.2 matrix let a viewer save PRIVATE filters
+        // freely — "filters are a read-layer construct". `saved_filter:manage`
+        // is admin+member by decision, so authoring is now a member capability
+        // whatever the visibility. This is the revocation the card names.
+        viewer: 'permission-denied',
       },
     },
     {
@@ -362,7 +379,9 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'ok',
         'workspace-owner': 'ok',
         'other-member': 'ok',
-        viewer: 'forbidden',
+        // Was `forbidden` (the `canShare` tier). The project-level key now
+        // refuses first, so the viewer never reaches the visibility rule.
+        viewer: 'permission-denied',
       },
     },
     {
@@ -375,7 +394,10 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'forbidden', // sees it, cannot rewrite it
         'workspace-owner': 'forbidden',
         'other-member': 'not-found', // cannot even see it
-        viewer: 'not-found',
+        // The key is asked BEFORE the row is read, so the viewer no longer
+        // learns whether the filter is merely invisible. Nothing leaks either
+        // way — the message names the project, which they can browse.
+        viewer: 'permission-denied',
       },
     },
     {
@@ -386,7 +408,7 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'ok',
         'workspace-owner': 'ok',
         'other-member': 'forbidden',
-        viewer: 'forbidden',
+        viewer: 'permission-denied',
       },
     },
     {
@@ -397,7 +419,7 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'forbidden',
         'workspace-owner': 'forbidden',
         'other-member': 'not-found',
-        viewer: 'not-found',
+        viewer: 'permission-denied',
       },
     },
     {
@@ -408,7 +430,7 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'ok',
         'workspace-owner': 'ok',
         'other-member': 'forbidden',
-        viewer: 'forbidden',
+        viewer: 'permission-denied',
       },
     },
     {
@@ -419,7 +441,7 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'forbidden',
         'workspace-owner': 'forbidden',
         'other-member': 'not-found',
-        viewer: 'not-found',
+        viewer: 'permission-denied',
       },
     },
     {
@@ -430,7 +452,7 @@ describe('the (role × visibility × action) permission matrix', () => {
         'project-admin': 'ok',
         'workspace-owner': 'ok',
         'other-member': 'forbidden',
-        viewer: 'forbidden',
+        viewer: 'permission-denied',
       },
     },
   ];
@@ -510,6 +532,8 @@ describe('the (role × visibility × action) permission matrix', () => {
           await expect(run).resolves.toBeUndefined();
         } else if (cell === 'not-found') {
           await expect(run).rejects.toThrow(SavedFilterNotFoundError);
+        } else if (cell === 'permission-denied') {
+          await expect(run).rejects.toThrow(PermissionDeniedError);
         } else {
           await expect(run).rejects.toThrow(SavedFilterForbiddenError);
         }
@@ -555,16 +579,33 @@ describe('the (role × visibility × action) permission matrix', () => {
     expect(updated.owner.id).toBe(t.viewerId);
   });
 
-  it('an owner who is a viewer cannot flip their private filter to project', async () => {
+  it('a MEMBER who owns a private filter can flip it to project; a viewer cannot get one to flip', async () => {
+    // The shipped case was "an owner who is a VIEWER cannot flip their private
+    // filter to project" — the `canShare` tier refusing the visibility change.
+    // MOTIR-2352 makes that unreachable: a viewer can no longer create the
+    // private filter in the first place, so what survives of the rule is the
+    // member's ability to share their own, plus the refusal one step earlier.
     const t = await makeTeam();
-    const mine = await savedFiltersService.create(
-      t.key,
-      { name: 'viewer-own', visibility: 'private', filterParam: param() },
-      t.viewerCtx,
-    );
     await expect(
-      savedFiltersService.update(t.key, mine.id, { visibility: 'project' }, t.viewerCtx),
-    ).rejects.toThrow(SavedFilterForbiddenError);
+      savedFiltersService.create(
+        t.key,
+        { name: 'viewer-own', visibility: 'private', filterParam: param() },
+        t.viewerCtx,
+      ),
+    ).rejects.toThrow(PermissionDeniedError);
+
+    const theirs = await savedFiltersService.create(
+      t.key,
+      { name: 'member-own', visibility: 'private', filterParam: param() },
+      t.memberCtx,
+    );
+    const shared = await savedFiltersService.update(
+      t.key,
+      theirs.id,
+      { visibility: 'project' },
+      t.memberCtx,
+    );
+    expect(shared.visibility).toBe('project');
   });
 });
 
@@ -832,14 +873,18 @@ describe('stars — idempotent toggles, SQL-aggregated counts', () => {
     await savedFiltersService.unstar(t.key, shared.id, t.memberCtx); // idempotent no-op
   });
 
-  it('a viewer stars what they can see; an invisible private filter is a 404', async () => {
+  it('a MEMBER stars what they can see; an invisible private filter is a 404', async () => {
+    // Was the viewer's test. MOTIR-2352 moved starring behind
+    // `saved_filter:manage`, so the SEE-gate behaviour it pins is now exercised
+    // by the lowest rank that still holds the key — otherwise the permission
+    // refusal would mask the not-found one and the assertion would prove nothing.
     const t = await makeTeam();
     const shared = await savedFiltersService.create(
       t.key,
-      { name: 'viewer-starrable', visibility: 'project', filterParam: param() },
+      { name: 'member-starrable', visibility: 'project', filterParam: param() },
       t.memberCtx,
     );
-    const starred = await savedFiltersService.star(t.key, shared.id, t.viewerCtx);
+    const starred = await savedFiltersService.star(t.key, shared.id, t.otherCtx);
     expect(starred.starredByMe).toBe(true);
 
     const secret = await savedFiltersService.create(
@@ -847,8 +892,20 @@ describe('stars — idempotent toggles, SQL-aggregated counts', () => {
       { name: 'hidden', visibility: 'private', filterParam: param() },
       t.memberCtx,
     );
-    await expect(savedFiltersService.star(t.key, secret.id, t.viewerCtx)).rejects.toThrow(
+    await expect(savedFiltersService.star(t.key, secret.id, t.otherCtx)).rejects.toThrow(
       SavedFilterNotFoundError,
+    );
+  });
+
+  it('a VIEWER can no longer star at all — the project key refuses first', async () => {
+    const t = await makeTeam();
+    const shared = await savedFiltersService.create(
+      t.key,
+      { name: 'viewer-cannot-star', visibility: 'project', filterParam: param() },
+      t.memberCtx,
+    );
+    await expect(savedFiltersService.star(t.key, shared.id, t.viewerCtx)).rejects.toThrow(
+      PermissionDeniedError,
     );
   });
 });

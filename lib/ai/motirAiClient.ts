@@ -195,11 +195,41 @@ export async function submitJob(
   return { jobId };
 }
 
+/**
+ * The query parameter the two job reads scope themselves with — the ONE seam in
+ * MOTIR-2291 that no single repo's tests can cover.
+ *
+ * ⚠️ IT IS A CROSS-REPO CONTRACT AND IT FAILS CLOSED AND SILENTLY. motir-ai's
+ * `GET /v1/jobs/:id` requires this exact name (MOTIR-2360); a typo on either side
+ * produces a `validation_error` on every job read — no type error, no test
+ * failure in the repo that made it, just a product where nothing streams. Naming
+ * it once here, and pinning the string in
+ * `tests/permissions/memberFacingGate.integration.test.ts`, is what makes a drift
+ * a red test rather than a support ticket.
+ */
+export const JOB_SCOPE_QUERY_PARAM = 'coreProjectId';
+
 // GET /v1/jobs/:id — status + result, with a failed job's error mapped to a
 // typed error. A 404 / transport failure throws a typed error.
-export async function getJob(jobId: string): Promise<JobView> {
+//
+// ⚠️ `coreProjectId` IS REQUIRED, AND MOTIR-AI DOES NOT READ IT YET (Story
+// MOTIR-2291 · Subtask MOTIR-2359). Until this card, a job was readable by its
+// ID ALONE on both sides of the boundary: this call sent the SERVICE token and
+// nothing else, and motir-ai's `GET /v1/jobs/:id` answered `getJobView(id)` with
+// no tenant filter — its `JobView` carries no owning project, so core had nothing
+// to check even if it wanted to. The binding exists upstream
+// (`PlanJob.aiProjectId` → `AiProject.coreProjectId`); MOTIR-2360 is the card
+// that enforces it on the read.
+//
+// So core starts SENDING the id first. Sending one the producer does not yet
+// read is harmless; requiring one the consumer does not yet send is not, which is
+// why the order is this way round. The parameter is NON-OPTIONAL on purpose: a
+// call site that cannot supply a project id is a call site that has not resolved
+// its project, and that is the bug this whole story is about.
+export async function getJob(jobId: string, coreProjectId: string): Promise<JobView> {
   const { url, serviceToken } = config();
-  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}`, {
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
+  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}?${params.toString()}`, {
     headers: authHeaders(serviceToken),
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
@@ -772,11 +802,21 @@ export async function offboardCodeGraph(input: {
 // arrive; the generator ends when the stream closes (motir-ai closes it on a
 // terminal state). A transport failure throws a typed error before the first
 // yield.
-export async function* streamJob(jobId: string): AsyncGenerator<JobStreamEvent> {
+// `coreProjectId` is required for the same reason as {@link getJob} — see the ⚠️
+// there. The stream is the same passthrough one layer down, so it had the same
+// hole and takes the same parameter.
+export async function* streamJob(
+  jobId: string,
+  coreProjectId: string,
+): AsyncGenerator<JobStreamEvent> {
   const { url, serviceToken } = config();
-  const res = await aiFetch(`${url}/v1/jobs/${encodeURIComponent(jobId)}/stream`, {
-    headers: { Authorization: `Bearer ${serviceToken}`, Accept: 'text/event-stream' },
-  });
+  const params = new URLSearchParams({ [JOB_SCOPE_QUERY_PARAM]: coreProjectId });
+  const res = await aiFetch(
+    `${url}/v1/jobs/${encodeURIComponent(jobId)}/stream?${params.toString()}`,
+    {
+      headers: { Authorization: `Bearer ${serviceToken}`, Accept: 'text/event-stream' },
+    },
+  );
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   if (!res.body) throw new MotirAiUnavailableError('stream response had no body');
 

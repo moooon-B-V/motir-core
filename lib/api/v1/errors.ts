@@ -211,6 +211,14 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
   // thing this endpoint can do to an integrator, and a shared code would leave
   // them re-issuing tokens forever against a problem no token can fix.
   NOT_SPRINT_ADMIN: 403,
+
+  // MOTIR-2291 — the shared permission gate's 403: `PermissionDeniedError`,
+  // raised by `projectAccessService.assertPermission` for a BROWSER who does not
+  // hold the key. Same 403-not-INSUFFICIENT_SCOPE reasoning as the row above, and the same
+  // fix on the caller's side (a role change, never a new token) — but the message
+  // NAMES the missing key, so it is a distinct code rather than a second alias.
+  // A NON-browser never produces it: the gate raises the 404 first.
+  PERMISSION_DENIED: 403,
   INVALID_SPRINT_NAME: 422,
   SPRINT_WINDOW_INVALID: 422,
   // A conflict with existing STATE, not a malformed request: the body is fine,

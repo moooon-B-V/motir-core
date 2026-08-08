@@ -6,7 +6,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
-import { NotProjectAdminError } from '@/lib/projects/errors';
+import { PermissionDeniedError } from '@/lib/projects/errors';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture,
@@ -201,7 +201,7 @@ describe('deleteWorkItem — audit', () => {
 });
 
 describe('deleteWorkItem — permission gate', () => {
-  it('rejects a non-admin workspace member with NotProjectAdminError and deletes nothing', async () => {
+  it('rejects a non-admin workspace member with the work_item:delete refusal, and deletes nothing', async () => {
     const fx = await makeWorkItemFixture();
     const { story, sub1 } = await makeTree(fx);
     const member = await createTestUser();
@@ -209,7 +209,7 @@ describe('deleteWorkItem — permission gate', () => {
     const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
 
     await expect(workItemsService.deleteWorkItem(story.id, memberCtx)).rejects.toBeInstanceOf(
-      NotProjectAdminError,
+      PermissionDeniedError,
     );
     // The transaction rolled back — the subtree is untouched.
     expect(await exists(story.id)).toBe(true);
@@ -366,7 +366,7 @@ describe('getDeletePreview — cascade impact', () => {
     expect(await exists(sub2.id)).toBe(true);
   });
 
-  it('rejects a non-admin member with NotProjectAdminError (no impact-preview leak)', async () => {
+  it('rejects a non-admin member with the work_item:delete refusal (no impact-preview leak)', async () => {
     const fx = await makeWorkItemFixture();
     const { story } = await makeTree(fx);
     const member = await createTestUser();
@@ -374,7 +374,7 @@ describe('getDeletePreview — cascade impact', () => {
     const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
 
     await expect(workItemsService.getDeletePreview(story.id, memberCtx)).rejects.toBeInstanceOf(
-      NotProjectAdminError,
+      PermissionDeniedError,
     );
   });
 

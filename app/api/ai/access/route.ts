@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { billingService } from '@/lib/services/billingService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 
 // GET /api/ai/access — the member-safe AI entitlement the 8.1.8 paywall reads to
@@ -34,6 +35,23 @@ export async function GET(): Promise<Response> {
   if (!ctx) return NextResponse.json(NOT_APPLICABLE);
 
   try {
+    // `project:browse`, NOT `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2358).
+    // This is the PROBE the UI uses to decide whether to offer a planning
+    // affordance at all. Gating it on `ai:plan` would mean an actor who may not
+    // plan cannot even discover that planning exists, pushing the discovery into
+    // a failed write; gating it on browse keeps the answer readable while the ACT
+    // stays refused by the four cards that gate the acts.
+    //
+    // The assert is in the ROUTE rather than the service on purpose:
+    // `getAiAccessForContext` is WORKSPACE-scoped billing (it takes no project),
+    // and the project is the route's own context. A refusal falls into the catch
+    // below and renders NOT_APPLICABLE, which preserves the degrade-never-error
+    // contract this endpoint is built on.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'project:browse',
+    );
     const access = await billingService.getAiAccessForContext({
       actorUserId: ctx.userId,
       workspaceId: ctx.workspaceId,

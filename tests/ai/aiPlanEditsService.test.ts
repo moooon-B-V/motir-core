@@ -8,10 +8,19 @@ vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
 vi.mock('@/lib/ai/codeContext', () => ({ resolveCodeContext: vi.fn() }));
 vi.mock('@/lib/services/plansService');
 vi.mock('@/lib/repositories/workItemRepository');
+// …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
+// with no rows behind it, so the real `ai:plan` assert would 404 on the project id
+// and prove nothing about the job envelope they are here for. The gate itself is
+// covered against real Postgres in `tests/integration/ai/planPermissionGate.test.ts`;
+// the mock is asserted below so it can never quietly hide the call.
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { assertPermission: vi.fn() },
+}));
 
 import { aiPlanEditsService, InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveCodeContext } from '@/lib/ai/codeContext';
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -97,6 +106,13 @@ describe('aiPlanEditsService.submitAugment', () => {
     const out = await aiPlanEditsService.submitAugment('add a login flow', ctx);
 
     expect(out).toEqual({ jobId: 'job_1', planId: 'plan_1' });
+    // The gate runs, and it asks for `ai:plan` on THIS project (MOTIR-2357).
+    expect(projectAccessService.assertPermission).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ userId: expect.any(String) }),
+      'ai:plan',
+    );
+
     expect(submitJob).toHaveBeenCalledWith(
       'augment',
       {
@@ -405,9 +421,9 @@ describe('aiPlanEditsService.stream*', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamAugment('job_1')) got.push(f);
+    for await (const f of aiPlanEditsService.streamAugment('job_1', 'pj_1')) got.push(f);
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 
@@ -418,9 +434,9 @@ describe('aiPlanEditsService.stream*', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamExpand('job_1')) got.push(f);
+    for await (const f of aiPlanEditsService.streamExpand('job_1', 'pj_1')) got.push(f);
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 
@@ -431,9 +447,9 @@ describe('aiPlanEditsService.stream*', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamReplan('job_1')) got.push(f);
+    for await (const f of aiPlanEditsService.streamReplan('job_1', 'pj_1')) got.push(f);
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 });

@@ -10,6 +10,7 @@ import { NoPlanForJobError } from '@/lib/plans/errors';
 import { plansService } from '@/lib/services/plansService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import type { PlanJobStateDto, PlanOriginDto, PlanOutcomeDto } from '@/lib/dto/plans';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // ⚠️ There is NO approve here, by design (MOTIR-1747). A plan edit's proposals
 // land in the run's `Plan` (`addProposals` → `markPlanned`), and the ONE path
@@ -94,6 +95,30 @@ export interface PlanEditSubmitOptions {
  * `startGeneration` does by default; the review surfaces already render the
  * `untitledPlan` fallback.
  */
+/**
+ * Assert the actor may run a planning job on this project — `ai:plan`
+ * (Story MOTIR-2291 · Subtask MOTIR-2357).
+ *
+ * ⚠️ CALLED AT THE TOP OF EACH PUBLIC METHOD, not inside `submitPlanEditJob`.
+ * The one-seam version is tidier and is WRONG: `submitExpand` and `submitReplan`
+ * resolve their target work item first, so a gate behind them answers "no such
+ * item" to an actor who is not allowed to ask the question — a target oracle for
+ * anyone who can reach the route. The gate goes before the lookup.
+ *
+ * This service carried no assertion of its own. The guard read four of its five
+ * operations as governed only because of something else the ROUTE happened to
+ * call, which is exactly the indirection a named key replaces; a planning job
+ * spends the workspace's AI credits, so the key is deliberately narrower than
+ * `work_item:edit`.
+ */
+async function assertCanPlan(ctx: ProjectContext): Promise<void> {
+  await projectAccessService.assertPermission(
+    ctx.projectId,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    'ai:plan',
+  );
+}
+
 async function submitPlanEditJob(
   kind: PlanEditJobKind,
   context: JobContextBag,
@@ -161,9 +186,9 @@ export type PlanOutcomeRef = { planId: string } | { jobId: string };
  * than thrown, because the PLAN read already succeeded — degrading the job block
  * beats failing an answer we largely have.
  */
-async function resolveJobState(jobId: string): Promise<PlanJobStateDto> {
+async function resolveJobState(jobId: string, coreProjectId: string): Promise<PlanJobStateDto> {
   try {
-    const job = await getJob(jobId);
+    const job = await getJob(jobId, coreProjectId);
     return {
       status: job.status,
       reachable: true,
@@ -203,7 +228,7 @@ export const aiPlanEditsService = {
     const plan = await plansService.getPlan(planId, ctx);
     const job =
       plan.status === 'generating' && plan.sourceJobId
-        ? await resolveJobState(plan.sourceJobId)
+        ? await resolveJobState(plan.sourceJobId, plan.projectId)
         : null;
     return {
       planId: plan.id,
@@ -220,6 +245,7 @@ export const aiPlanEditsService = {
   },
 
   async submitAugment(prompt: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
+    await assertCanPlan(ctx);
     return submitPlanEditJob('augment', { prompt }, ctx);
   },
 
@@ -254,14 +280,15 @@ export const aiPlanEditsService = {
     targetKeys: readonly string[],
     ctx: ProjectContext,
   ): Promise<PlanEditSubmitResult> {
+    await assertCanPlan(ctx);
     return submitPlanEditJob('augment', { prompt, targetKeys: [...targetKeys] }, ctx);
   },
 
   /** The live channel for a contextual planning turn's job — the same 7.1.4 job
    *  stream every plan-edit surface relays, named for its caller so the panel's
    *  route reads as one seam. Browsers stream from CORE, never from motir-ai. */
-  streamContextual(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamContextual(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
   async submitExpand(
@@ -269,6 +296,7 @@ export const aiPlanEditsService = {
     ctx: ProjectContext,
     opts: PlanEditSubmitOptions = {},
   ): Promise<PlanEditSubmitResult> {
+    await assertCanPlan(ctx);
     const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
@@ -284,6 +312,7 @@ export const aiPlanEditsService = {
   },
 
   async submitReplan(itemKey: string, ctx: ProjectContext): Promise<PlanEditSubmitResult> {
+    await assertCanPlan(ctx);
     const wi = await workItemRepository.findByIdentifier(ctx.projectId, itemKey);
     if (!wi || wi.projectId !== ctx.projectId) {
       throw new InvalidTargetError(`Work item ${itemKey} not found in this project`);
@@ -298,15 +327,15 @@ export const aiPlanEditsService = {
     return submitPlanEditJob('replan', { rootItemKey: itemKey }, ctx);
   },
 
-  streamAugment(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamAugment(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
-  streamExpand(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamExpand(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
-  streamReplan(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamReplan(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 };

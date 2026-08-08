@@ -63,6 +63,14 @@ export const estimationService = {
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
     const value = validateStoryPoints(points);
+    // `work_item:edit` (MOTIR-2365). Setting a story-point estimate is a work-item
+    // MUTATION and it reached no project gate at all — the inventory called the
+    // row `existing` while its own `Gate today` column said "workspace only", so
+    // any workspace member could re-estimate any item in any project. The project
+    // is resolved from the ITEM, below.
+    const target = await workItemRepository.findById(itemId);
+    if (!target || target.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(itemId);
+    await projectAccessService.assertPermission(target.projectId, ctx, 'work_item:edit');
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -160,6 +168,13 @@ export const estimationService = {
   async rollupForSprint(sprintId: string, ctx: ServiceContext): Promise<SprintPointsDto> {
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
+    // `report:view` (MOTIR-2351), NOT `estimation:manage`. This method had no
+    // project gate; its sibling `setEstimationConfig` is the one MOTIR-2298 put
+    // behind `estimation:manage`, and CHANGING the scheme is a different act from
+    // reading a sprint's points. `report:view` is browse-wide, so the scrum
+    // header, the burndown and the velocity chart keep working for every actor
+    // who can see the project.
+    await projectAccessService.assertPermission(sprint.projectId, ctx, 'report:view');
 
     const statistic = await resolveStatistic(sprint.projectId);
     const { committed, completed } = await workItemRepository.sumPointsForSprint(
@@ -253,6 +268,9 @@ export const estimationService = {
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(parentId);
     }
+    // `project:browse` (MOTIR-2365) — the row said `existing` and the code had
+    // only the workspace check above.
+    await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
     const statistic = await resolveStatistic(item.projectId);
     return workItemRepository.sumPointsForParent(parentId, ctx.workspaceId, statistic);
   },

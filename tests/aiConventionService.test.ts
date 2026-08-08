@@ -26,7 +26,7 @@ const { aiConventionService } = await import('@/lib/services/aiConventionService
 const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
-const { NotProjectAdminError, ProjectNotFoundError } = await import('@/lib/projects/errors');
+const { PermissionDeniedError, ProjectNotFoundError } = await import('@/lib/projects/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { EmptyRepoScopeError, UnknownRepoScopeError } = await import('@/lib/codeHealth/errors');
 const { truncateAuthTables } = await import('./helpers/db');
@@ -650,7 +650,7 @@ describe('aiConventionService — project-admin gate', () => {
         project.identifier,
         { repoKeys: ['evil/elsewhere'] },
       ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
@@ -666,7 +666,7 @@ describe('aiConventionService — project-admin gate', () => {
         { userId: outsider.id, workspaceId: workspace.id },
         project.identifier,
       ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
@@ -681,7 +681,7 @@ describe('aiConventionService — project-admin gate', () => {
         userId: member.id,
         workspaceId: workspace.id,
       }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     expect(getConventionMock).not.toHaveBeenCalled();
   });
 

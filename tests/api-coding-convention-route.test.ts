@@ -38,7 +38,9 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 const { GET: auditGET } = await import('@/app/api/ai/coding-convention/audit/route');
 const { GET: conventionGET } = await import('@/app/api/ai/coding-convention/convention/route');
 const { POST: refreshPOST } = await import('@/app/api/ai/coding-convention/refresh/route');
-const { createTestWorkspace, createTestProject } = await import('./fixtures');
+const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
+const { workspacesService } = await import('@/lib/services/workspacesService');
+const { projectMembersService } = await import('@/lib/services/projectMembersService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { parseRepoScopeBody, parseOffsetParam, parseLimitParam, mapCodeHealthError } =
   await import('@/app/api/ai/coding-convention/_shared');
@@ -211,6 +213,52 @@ describe('POST /api/ai/coding-convention/refresh', () => {
     refreshCodeAuditMock.mockRejectedValue(new MotirAiUnavailableError('down'));
     const res = await refreshPOST(bodylessRequest());
     expect(res.status).toBe(502);
+  });
+
+  it('403s a project member and 404s a NON-BROWSER — the `ai:configure` gate, both arms', async () => {
+    // MOTIR-2362 re-pointed these four operations from `assertCanManage` to
+    // `assertPermission(…, 'ai:configure')`. No actor's answer changed — admin
+    // holds both — but the refusal now NAMES the key, and it comes in two shapes.
+    // Both are asserted here because the pair is what the ordering rule is about:
+    // a browser who lacks the key is forbidden, a non-browser is missing.
+    const { workspace, owner, project } = await signInAtProject();
+
+    const member = await createTestUser();
+    await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
+    sessionRef.current = { user: { id: member.id, email: `${member.id}@t.dev` } };
+    ctxRef.current = {
+      userId: member.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+      project,
+    };
+    const forbidden = await refreshPOST(bodylessRequest());
+    expect(forbidden.status).toBe(403);
+    expect((await forbidden.json()).permission).toBe('ai:configure');
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
+
+    // …and a NON-BROWSER gets the 404 instead. ⚠️ The outsider is created AFTER
+    // the project goes private: `setAccessLevel('private')` auto-seeds the
+    // then-current workspace members as project members, so an actor enrolled
+    // beforehand would still browse and this would assert the 403 again.
+    await projectMembersService.setAccessLevel({
+      key: project.identifier,
+      actorUserId: owner.id,
+      ctx: { userId: owner.id, workspaceId: workspace.id },
+      level: 'private',
+    });
+    const outsider = await createTestUser();
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
+    sessionRef.current = { user: { id: outsider.id, email: `${outsider.id}@t.dev` } };
+    ctxRef.current = {
+      userId: outsider.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+      project,
+    };
+    const missing = await refreshPOST(bodylessRequest());
+    expect(missing.status).toBe(404);
+    expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 
   // ── The MOTIR-2247 repo scope ────────────────────────────────────────────

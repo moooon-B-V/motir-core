@@ -9,6 +9,7 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { plansService } from '@/lib/services/plansService';
 import { NoPlanForJobError } from '@/lib/plans/errors';
 import type { PlanItemDto, ProposalInput, UpdateProposalInput } from '@/lib/dto/plans';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // Issue-tree generation, motir-core side (Subtask 7.4.4 · MOTIR-846). The thin
 // seam between the planning workspace and the motir-ai `generate_tree` handler
@@ -52,6 +53,14 @@ export const aiGenerationService = {
     ctx: ProjectContext,
     input: StartGenerationInput = {},
   ): Promise<{ jobId: string; planId: string }> {
+    // `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2358). Generation is the
+    // heaviest planning job the product runs — it builds a whole tree from
+    // nothing — and it reached no project gate at all.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     const { organizationId, isMeta } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -101,8 +110,8 @@ export const aiGenerationService = {
   // first yield (the route maps it to an HTTP status); the stream ends when
   // motir-ai closes it on a terminal state. The terminal-failure REASON (e.g.
   // out-of-credits) is appended by the stream ROUTE via `failureReasonFrame`.
-  streamGeneration(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamGeneration(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
   // The INTERNAL append seam motir-ai's handler calls (replaces the whole-delta

@@ -4,6 +4,7 @@ import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
 import type { FilterAst } from '@/lib/filters/ast';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
@@ -49,14 +50,53 @@ import type { RankedIssuePageDto, RankPlacementInput } from '@/lib/dto/backlog';
 // policies are the structural backstop (inert under the dev/CI BYPASSRLS
 // superuser), so the application-layer gate is primary.
 //
-// AUTHORIZATION: association + ranking is EVERYDAY backlog grooming, available
-// to any project member — NOT the owner-gated sprint-config tier (decision-
-// ladder rung 1: Jira grants "Schedule Issues" / "Edit Issues" to the board's
-// members, not just admins; only sprint *management* — create/start/complete —
-// is admin-gated, which lives in `sprintsService`). So there is no owner gate
-// here; the workspace-context tenancy gate (the actor already holds an active
-// workspace context, i.e. is a member) is the access boundary. TODO(6.4):
-// project-level roles refine "member".
+// AUTHORIZATION (Story MOTIR-2291 · Subtask MOTIR-2350 — the TODO(6.4) below,
+// now done): association + ranking is EVERYDAY backlog grooming, so it asks
+// `sprint:manage`, which the project `admin` and `member` hold and a `viewer`
+// does not (`docs/decisions/member-facing-permissions.md` §1). Until this card
+// there was NO project gate here at all — the comment that stood in this place
+// reasoned that the workspace-context tenancy gate WAS the access boundary, which
+// meant a project viewer could re-rank somebody else's backlog and move their
+// work into the active sprint. That is the hole this story closes, and unlike the
+// sprint LIFECYCLE (which MOTIR-2350 widens from a workspace-owner-only check),
+// this half strictly TIGHTENS.
+//
+// Three methods deliberately do NOT ask `sprint:manage`:
+//   * `getBacklog` / `getSprintIssues` ask `project:browse` — seeing the backlog
+//     is browsing, exactly as Jira splits *Manage Sprints* from *Browse Projects*;
+//   * `createBacklogIssue` asks `work_item:edit` — authoring work is not a sprint
+//     act however the issue enters the list.
+// Every gate is `projectAccessService.assertPermission`, so the 404-before-403
+// ordering (a project you cannot browse stays invisible) comes along with it.
+
+/**
+ * Assert the actor may GROOM this project's backlog — rank an issue, move it in
+ * or out of a sprint, or do either in bulk (Subtask MOTIR-2350).
+ *
+ * ⚠️ This is a TIGHTENING, and the first project gate this service has ever had.
+ * The methods below shipped with none: the header's original AUTHORIZATION note
+ * argued the workspace-context tenancy check WAS the boundary, so any signed-in
+ * workspace member — a project `viewer` included — could re-order somebody
+ * else's backlog and move their work into the active sprint. `sprint:manage` is
+ * held by the project `admin` and `member` and by the workspace-manager rail, so
+ * exactly the people who run the sprint keep the ability to groom it.
+ */
+async function assertCanGroom(projectId: string, ctx: ServiceContext): Promise<void> {
+  await projectAccessService.assertPermission(
+    projectId,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    'sprint:manage',
+  );
+}
+
+/** Assert the actor may SEE this project — the gate on the two backlog reads. */
+async function assertCanBrowseProject(projectId: string, ctx: ServiceContext): Promise<void> {
+  await projectAccessService.assertPermission(
+    projectId,
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    'project:browse',
+  );
+}
 
 /** Backlog/sprint page size — the bounded read cap (matches ISSUE_LIST_PAGE_SIZE). */
 export const BACKLOG_PAGE_SIZE = 50;
@@ -93,6 +133,7 @@ export const backlogService = {
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
     const item = await this.loadItem(itemId, ctx);
+    await assertCanGroom(item.projectId, ctx);
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
     if (sprint.projectId !== item.projectId) {
@@ -135,6 +176,7 @@ export const backlogService = {
    */
   async moveToBacklog(itemId: string, ctx: ServiceContext): Promise<WorkItemDto> {
     const item = await this.loadItem(itemId, ctx);
+    await assertCanGroom(item.projectId, ctx);
     if (item.sprintId === null) return toWorkItemDto(item); // already in the backlog
 
     return withWorkspaceContext(
@@ -173,6 +215,7 @@ export const backlogService = {
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
     const item = await this.loadItem(itemId, ctx);
+    await assertCanGroom(item.projectId, ctx);
     const newRank = await this.resolveNeighbourRank(placement, ctx);
     if (newRank === item.backlogRank) return toWorkItemDto(item); // no-op
 
@@ -240,6 +283,7 @@ export const backlogService = {
     // create sprint, then assign into it, in one transaction).
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId, tx);
     if (!sprint) throw new SprintNotFoundError(sprintId);
+    await assertCanGroom(sprint.projectId, ctx);
 
     // Load + validate the WHOLE batch before any write: a missing / foreign
     // (404) or cross-project (422) member rejects the entire move atomically.
@@ -316,6 +360,12 @@ export const backlogService = {
     for (const id of ids) {
       items.push(await this.loadItem(id, ctx));
     }
+    // A batch is workspace-scoped, not project-scoped, so gate every DISTINCT
+    // project it touches — one refusal aborts the whole move, atomically, before
+    // the transaction opens.
+    for (const projectId of new Set(items.map((i) => i.projectId))) {
+      await assertCanGroom(projectId, ctx);
+    }
 
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
@@ -363,6 +413,15 @@ export const backlogService = {
     input: Omit<CreateWorkItemInput, 'projectId'>,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
+    // `work_item:edit`, NOT `sprint:manage`: authoring work is not a sprint act,
+    // however the issue enters the list. Asserted here as well as inside
+    // `createWorkItem` so the inventory row can name the key this operation
+    // actually asks for rather than one it inherits transitively.
+    await projectAccessService.assertPermission(
+      projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'work_item:edit',
+    );
     return workItemsService.createWorkItem({ ...input, projectId }, ctx);
   },
 
@@ -384,6 +443,7 @@ export const backlogService = {
     options: { cursor?: string; limit?: number; filterAst?: FilterAst },
     ctx: ServiceContext,
   ): Promise<RankedIssuePageDto> {
+    await assertCanBrowseProject(projectId, ctx);
     const take = clampLimit(options.limit);
     const excludeStatusKeys = await this.backlogExcludedStatusKeys(projectId, ctx.workspaceId);
     // Resolve the inbound filter the SAME way the board does (the 6.15.2
@@ -434,6 +494,7 @@ export const backlogService = {
   ): Promise<RankedIssuePageDto> {
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
+    await assertCanBrowseProject(sprint.projectId, ctx);
 
     const take = clampLimit(options.limit);
     // Resolve the inbound filter the SAME way `getBacklog` does — the shared

@@ -156,7 +156,7 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     // ── 2. EDITOR upload — unlinked at birth (the create-modal truth) ───────
     const editorUpload = await attachmentsService.uploadAttachment(
       fileOf('embed.png', 'image/png'),
-      memberCtx,
+      { ...memberCtx, projectId: fx.projectId },
     );
     await expect(rowByUrl(editorUpload.url)).resolves.toMatchObject({ workItemId: null });
 
@@ -233,10 +233,10 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     await agePastWindow(stray.id);
     await agePastWindow(failed.id);
     // A YOUNG orphan rides along to prove the safety window holds mid-walk.
-    const young = await attachmentsService.uploadAttachment(
-      fileOf('fresh.png', 'image/png'),
-      memberCtx,
-    );
+    const young = await attachmentsService.uploadAttachment(fileOf('fresh.png', 'image/png'), {
+      ...memberCtx,
+      projectId: fx.projectId,
+    });
 
     const summary = await attachmentsService.sweepOrphanAttachments();
     expect(summary).toEqual({ scanned: 2, deleted: 2, failed: 0 });
@@ -290,7 +290,7 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     );
     const editorUpload = await attachmentsService.uploadAttachment(
       fileOf('doomed-embed.png', 'image/png'),
-      memberCtx,
+      { ...memberCtx, projectId: fx.projectId },
     );
     await workItemsService.updateWorkItem(
       issue.id,

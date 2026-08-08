@@ -119,7 +119,10 @@ export const triageService = {
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
-    await projectAccessService.assertCanBrowse(projectId, ctx);
+    // `work_item:triage`, not `project:browse` (MOTIR-2354): the queue is a
+    // MODERATION surface, and its contents are requests from outside the team
+    // that nobody has accepted yet. Reading it is part of triaging.
+    await projectAccessService.assertPermission(projectId, ctx, 'work_item:triage');
     return readTriageQueuePage(project.id, project.workspaceId, params);
   },
 
@@ -143,8 +146,11 @@ export const triageService = {
     );
     if (!project) throw new ProjectNotFoundError(projectKey);
     try {
-      await projectAccessService.assertCanBrowse(project.id, ctx);
+      await projectAccessService.assertPermission(project.id, ctx, 'work_item:triage');
     } catch (err) {
+      // A non-browser already arrives as ProjectNotFoundError; the legacy
+      // browse-flavoured denial is re-shaped to the same 404 so the key stays
+      // unable to confirm a project the actor may not see.
       if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
         throw new ProjectNotFoundError(projectKey);
       }
@@ -168,7 +174,7 @@ export const triageService = {
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(workItemId);
     }
-    await projectAccessService.assertCanBrowse(item.projectId, ctx);
+    await projectAccessService.assertPermission(item.projectId, ctx, 'work_item:triage');
     if (item.triagedAt === null) throw new NotInTriageError(workItemId);
 
     const submitter = await resolveSubmitter(item);
@@ -245,6 +251,14 @@ export const triageService = {
     );
     if (!project) throw new ProjectNotFoundError(input.projectKey);
     try {
+      // ⚠️ SUBMITTING IS NOT TRIAGING (MOTIR-2354). The inventory mapped this row
+      // to `work_item:triage`; that was wrong. Somebody filing an inbound request
+      // is the act `public_request:submit` already governs, and Plane draws the
+      // same line — a Guest or Commenter submits an intake item while only Admin
+      // and Contributor accept or decline one. So the gate stays browse-shaped
+      // (an internal member on a private project submits through here too, which
+      // the level-gated `public_request:submit` could not admit) and only the
+      // inventory row is corrected.
       await projectAccessService.assertCanBrowse(project.id, ctx);
     } catch (err) {
       if (err instanceof ProjectAccessDeniedError && err.kind === 'browse') {
@@ -465,12 +479,19 @@ export const triageService = {
 };
 
 /**
- * Lock + tenant-gate + edit-gate + assert-in-triage, inside the caller's `tx`.
+ * Lock + tenant-gate + TRIAGE-gate + assert-in-triage, inside the caller's `tx`.
  * The `SELECT FOR UPDATE` (via `lockById`) serialises concurrent triage actions
  * on the same item (lock-before-read-derived-update). A cross-workspace or
  * unknown id, and a non-browsable project, all read as 404 (no existence leak —
- * the `assertCanEdit` gate rejects a non-browser as 'browse' first); an item
+ * the gate rejects a non-browser as `ProjectNotFoundError` first); an item
  * that has already graduated (`triagedAt IS NULL`) is a 409 `NotInTriageError`.
+ *
+ * ⚠️ THE KEY IS `work_item:triage`, NOT `work_item:edit` (Subtask MOTIR-2354).
+ * Accepting, declining, promoting, de-duplicating and snoozing an inbound request
+ * are MODERATION acts on work somebody outside the team submitted — the same
+ * shape as `comment:moderate`, which the model story already made narrower than
+ * writing a comment. A member keeps both; a `viewer` loses the queue's actions
+ * and keeps reading it, which is where Plane draws the line too.
  */
 async function lockTriageItem(
   workItemId: string,
@@ -481,7 +502,7 @@ async function lockTriageItem(
   if (!locked) throw new WorkItemNotFoundError(workItemId);
   const item = await workItemRepository.findById(workItemId, tx);
   if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
-  await projectAccessService.assertCanEdit(item.projectId, ctx, tx);
+  await projectAccessService.assertPermission(item.projectId, ctx, 'work_item:triage', tx);
   if (item.triagedAt === null) throw new NotInTriageError(workItemId);
   return item;
 }

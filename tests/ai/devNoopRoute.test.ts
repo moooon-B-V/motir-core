@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@/lib/workspaces', () => ({ getWorkspaceContext: vi.fn() }));
+// MOTIR-2359 — the GET now resolves `?project=` so it can name the project the
+// job read is made FOR. Mocked like its sibling; the resolution itself is
+// projectsService's own test's business.
+vi.mock('@/lib/services/projectsService', () => ({
+  projectsService: { getByKey: vi.fn(async () => ({ id: 'pj_1', identifier: 'PROD' })) },
+}));
 vi.mock('@/lib/services/aiJobsService', () => ({
   aiJobsService: { submitNoopJob: vi.fn(), getJobStatus: vi.fn() },
 }));
@@ -20,7 +26,9 @@ describe('dev noop trigger — gate', () => {
   it('404s (route hidden) when AI_DEV_TRIGGER is off', async () => {
     delete process.env['AI_DEV_TRIGGER'];
     expect((await POST(url('?project=MOTIR'))).status).toBe(404);
-    expect((await GET(new Request('http://x/api/internal/ai/dev/noop?jobId=j'))).status).toBe(404);
+    expect(
+      (await GET(new Request('http://x/api/internal/ai/dev/noop?jobId=j&project=PROD'))).status,
+    ).toBe(404);
   });
 });
 
@@ -57,7 +65,7 @@ describe('dev noop trigger — enabled', () => {
       result: null,
       error: null,
     });
-    const res = await GET(new Request('http://x/api/internal/ai/dev/noop?jobId=j'));
+    const res = await GET(new Request('http://x/api/internal/ai/dev/noop?jobId=j&project=PROD'));
     expect(res.status).toBe(200);
     expect((await res.json()).status).toBe('running');
   });

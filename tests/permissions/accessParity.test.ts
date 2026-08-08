@@ -1402,3 +1402,1119 @@ describe('the two rails resolve INSIDE the set, not around it', () => {
     expect([...resolvePermissions({ ...base, accessLevel: 'private' })]).toEqual([]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// THE MEMBER-FACING TABLE (Story MOTIR-2291 · Subtask MOTIR-2349).
+//
+// The eleven-predicate table above proves NEUTRALITY: MOTIR-2255 moved the
+// decision onto a new mechanism and nothing an actor could do changed, so not one
+// of its 64 rows moves here either — this card touches no shipped predicate, and
+// that unchanged table is the assertion.
+//
+// This second table proves the opposite kind of thing, and it is this card's
+// deliverable rather than a chore. MOTIR-2291's eight keys are in NO role set on
+// `origin/main`, so today every cell below would be `false` for every actor: a
+// key nobody holds resolves to nobody. Each `true` here is therefore a grant
+// arriving — and, read the other way round, each `false` on a row whose actor can
+// reach the operation TODAY is the capability that actor loses when that key's
+// wiring card lands. The rows worth reading twice:
+//
+//   * `projectRole: 'viewer'` — holds `report:view` and NOTHING else of the
+//     eight. A viewer who today starts a sprint, re-ranks the backlog, runs the
+//     planner or accepts a triage submission stops being able to.
+//   * `projectRole: null` with a workspace role — the implicit workspace member.
+//     Same single key. This is the actor §2 of the decision is about: they may
+//     read the charts of a project nobody put them on, and nothing else.
+//   * `projectRole: 'member'` — holds six, and NOT `import:run` /
+//     `work_item:delete`. A project member loses running an import and deleting a
+//     subtree; both mirrors put those at admin.
+//   * `workspaceRole: 'owner' | 'admin'` — all eight on every access level, via
+//     the always-pass rail. Nothing decided here can lock a workspace owner out.
+//   * `accessLevel: 'private'` with `projectRole: null` — nothing at all, because
+//     the level denies a non-member before any key is consulted.
+//
+// ⚠️ TRANSCRIBED FROM `docs/decisions/member-facing-permissions.md`, NOT computed
+// from `resolvePermissions`. The role assignment is §1's table, the implicit
+// workspace-member row is §2, and the per-level behaviour is §3's decision to add
+// no `levelGrants` branch — so each of the eight behaves per level exactly as
+// `project:administer` does. Deriving these cells from the code under test would
+// only prove the code agrees with itself.
+const MEMBER_FACING_KEYS: readonly PermissionKey[] = [
+  'sprint:manage',
+  'report:view',
+  'saved_filter:manage',
+  'import:run',
+  'work_item:delete',
+  'work_item:triage',
+  'ai:plan',
+  'ai:view_plan',
+];
+
+type MemberFacingRow = {
+  accessLevel: ProjectAccessLevel;
+  workspaceRole: MemberRole | null;
+  projectRole: MemberRole | null;
+  held: Record<string, boolean>;
+};
+
+const MEMBER_FACING_TABLE: MemberFacingRow[] = [
+  {
+    accessLevel: 'public',
+    workspaceRole: 'owner',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'owner',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'owner',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'owner',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'admin',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'admin',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'admin',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'admin',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'member',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'member',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'member',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: 'member',
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: null,
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: null,
+    projectRole: 'member',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: null,
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'public',
+    workspaceRole: null,
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'owner',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'owner',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'owner',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'owner',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'admin',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'admin',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'admin',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'admin',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'member',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'member',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'member',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: 'member',
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: null,
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: null,
+    projectRole: 'member',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: null,
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'open',
+    workspaceRole: null,
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'owner',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'owner',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'owner',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'owner',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'admin',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'admin',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'admin',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'admin',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'member',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'member',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'member',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: 'member',
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: null,
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: null,
+    projectRole: 'member',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: null,
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'limited',
+    workspaceRole: null,
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'owner',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'owner',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'owner',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'owner',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'admin',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'admin',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'admin',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'admin',
+    projectRole: null,
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'member',
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': true,
+      'work_item:delete': true,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'member',
+    projectRole: 'member',
+    held: {
+      'sprint:manage': true,
+      'report:view': true,
+      'saved_filter:manage': true,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': true,
+      'ai:plan': true,
+      'ai:view_plan': true,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'member',
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': true,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: 'member',
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: null,
+    projectRole: 'admin',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: null,
+    projectRole: 'member',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: null,
+    projectRole: 'viewer',
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+  {
+    accessLevel: 'private',
+    workspaceRole: null,
+    projectRole: null,
+    held: {
+      'sprint:manage': false,
+      'report:view': false,
+      'saved_filter:manage': false,
+      'import:run': false,
+      'work_item:delete': false,
+      'work_item:triage': false,
+      'ai:plan': false,
+      'ai:view_plan': false,
+    },
+  },
+];
+
+describe('the eight member-facing keys resolve to exactly the actors the decision names', () => {
+  it('covers every combination exactly once, and asserts all eight keys on every row', () => {
+    expect(MEMBER_FACING_TABLE).toHaveLength(64);
+    const seen = new Set(
+      MEMBER_FACING_TABLE.map((r) => `${r.accessLevel}|${r.workspaceRole}|${r.projectRole}`),
+    );
+    expect(seen.size).toBe(64);
+    for (const row of MEMBER_FACING_TABLE) {
+      expect(Object.keys(row.held).sort()).toEqual([...MEMBER_FACING_KEYS].sort());
+    }
+  });
+
+  it.each(MEMBER_FACING_TABLE)(
+    'accessLevel=$accessLevel workspaceRole=$workspaceRole projectRole=$projectRole',
+    ({ accessLevel, workspaceRole, projectRole, held }) => {
+      const inputs: ProjectAccessInputs = { accessLevel, workspaceRole, projectRole };
+      for (const key of MEMBER_FACING_KEYS) {
+        expect(
+          hasPermission(inputs, key),
+          `${key}({ ${accessLevel}, ws=${workspaceRole}, proj=${projectRole} })`,
+        ).toBe(held[key]);
+      }
+    },
+  );
+
+  it('all eight are role-holdable — the workspace-manager rail resolves to the whole array', () => {
+    // The rail returns ROLE_GATED_PERMISSIONS verbatim, so this is really the
+    // assertion that the eight JOINED that array. Stated directly rather than
+    // trusted: a key left out of it is not holdable by anybody, and the wiring
+    // card that calls assertPermission for it would refuse the project admin.
+    for (const key of MEMBER_FACING_KEYS) {
+      expect(ROLE_GATED_PERMISSIONS.includes(key), `${key} is not role-gated`).toBe(true);
+    }
+    for (const accessLevel of ['public', 'open', 'limited', 'private'] as const) {
+      for (const workspaceRole of ['owner', 'admin'] as const) {
+        const held = resolvePermissions({ accessLevel, workspaceRole, projectRole: null });
+        for (const key of MEMBER_FACING_KEYS) {
+          expect(held.has(key), `${workspaceRole} on ${accessLevel} lacks ${key}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('a project VIEWER holds report:view and none of the other seven', () => {
+    for (const key of MEMBER_FACING_KEYS) {
+      expect(BUILTIN_ROLE_PERMISSIONS.viewer.has(key), `viewer / ${key}`).toBe(
+        key === 'report:view',
+      );
+    }
+  });
+
+  it('a project MEMBER holds six — not import:run, not work_item:delete', () => {
+    for (const key of MEMBER_FACING_KEYS) {
+      expect(BUILTIN_ROLE_PERMISSIONS.member.has(key), `member / ${key}`).toBe(
+        key !== 'import:run' && key !== 'work_item:delete',
+      );
+    }
+  });
+
+  it('the implicit workspace-member grant grew by exactly report:view', () => {
+    // The set the decision's §2 is about. Asserted as an exact set rather than a
+    // per-key loop, so a key added here later fails loudly instead of widening
+    // what a workspace membership means by itself.
+    expect([...IMPLICIT_WORKSPACE_MEMBER_PERMISSIONS].sort()).toEqual(
+      [
+        'attachment:create',
+        'comment:add',
+        'project:browse',
+        'report:view',
+        'work_item:edit',
+      ].sort(),
+    );
+  });
+
+  it('none of the eight is named by levelGrants — each behaves exactly as project:administer per level', () => {
+    // §3's decision, proved rather than asserted in prose: the umbrella takes the
+    // default arm of every level, so a key that also takes it must agree with the
+    // umbrella wherever both are HELD by the actor's role. Restricting to rows
+    // where the role holds the key is what separates "the level treats them the
+    // same" (this) from "the same roles hold them" (the tests above) — the two
+    // failures a levelGrants branch would produce look identical otherwise.
+    for (const row of MEMBER_FACING_TABLE) {
+      const inputs: ProjectAccessInputs = {
+        accessLevel: row.accessLevel,
+        workspaceRole: row.workspaceRole,
+        projectRole: row.projectRole,
+      };
+      const umbrella = hasPermission(inputs, 'project:administer');
+      if (!umbrella) continue;
+      for (const key of MEMBER_FACING_KEYS) {
+        expect(
+          hasPermission(inputs, key),
+          `${key} diverges from project:administer on { ${row.accessLevel}, ws=${row.workspaceRole}, proj=${row.projectRole} }`,
+        ).toBe(true);
+      }
+    }
+  });
+});

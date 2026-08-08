@@ -7,6 +7,7 @@ import {
   CrossProjectSprintAssignmentError,
   SprintNotFoundError,
 } from '@/lib/sprints/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // POST /api/sprints/[id]/issues/bulk (Subtask 4.2.2) — assign a multi-selection
 // of issues to a sprint ATOMICALLY (the backlog's "Move to sprint ▸" bulk
@@ -54,6 +55,8 @@ export async function POST(
     const items = await backlogService.bulkAssignToSprint(itemIds as string[], id, ctx);
     return NextResponse.json({ items });
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof BulkBatchTooLargeError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 400 });
     }

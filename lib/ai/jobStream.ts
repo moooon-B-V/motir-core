@@ -24,10 +24,14 @@ import type { JobStreamEvent } from '@/lib/ai/types';
 export async function failureReasonFrame(
   jobId: string,
   frame: JobStreamEvent,
+  // MOTIR-2359 — the default reader needs the caller's project, because `getJob`
+  // now names the project it is reading FOR. Callers that inject their own reader
+  // (the tests) are unaffected.
+  coreProjectId: string,
   readJobError: (jobId: string) => Promise<{ code: string; message: string } | null> = async (
     id,
   ) => {
-    const view = await getJob(id);
+    const view = await getJob(id, coreProjectId);
     return view.error ? { code: view.error.code, message: view.error.message } : null;
   },
 ): Promise<JobStreamEvent | null> {

@@ -36,6 +36,13 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
   submitJob: (...args: unknown[]) => submitJobMock(...args),
   getJob: (jobId: string) => getJobMock(jobId),
 }));
+// …and the project gate (MOTIR-2358). These cases drive a SYNTHETIC ProjectContext
+// with no rows behind it, so the real assert would 404 on the project id and
+// prove nothing about the boundary contract they are here for. The gate is
+// covered against real Postgres in `tests/integration/ai/planPermissionGate.test.ts`.
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { assertPermission: vi.fn() },
+}));
 
 const { POST: SUBMIT } = await import('@/app/api/ai/plan/sprint/route');
 const { GET: STREAM } = await import('@/app/api/ai/plan/sprint/[jobId]/stream/route');

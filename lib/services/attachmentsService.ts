@@ -37,6 +37,18 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 export interface UploadContext {
   userId: string;
   workspaceId: string;
+  /**
+   * The project the file is being uploaded INTO — the actor's active project, as
+   * the route resolves it (Story MOTIR-2291 · Subtask MOTIR-2366).
+   *
+   * ⚠️ REQUIRED, and it is what turned this from a session-only endpoint into a
+   * gated one. The upload happens BEFORE the attachment is linked to a work item,
+   * so there is no item to resolve a project from — `resolveGatedWorkItem` guards
+   * the link-on-write path and never ran here. The inventory called the row
+   * `existing` on the strength of that sibling; the code took bytes from anyone
+   * with a session.
+   */
+  projectId: string;
 }
 
 export interface UploadAttachmentResult {
@@ -179,6 +191,12 @@ function checkRateLimit(userId: string): void {
 
 export const attachmentsService = {
   async uploadAttachment(file: File, ctx: UploadContext): Promise<UploadAttachmentResult> {
+    // `attachment:create` FIRST — cheapest gate of all, and the one that was
+    // missing (MOTIR-2366). A viewer holds neither this key nor the right to
+    // spend the org's storage quota, so the refusal comes before any byte is read
+    // and before the entitlement round-trips below.
+    await projectAccessService.assertPermission(ctx.projectId, ctx, 'attachment:create');
+
     // Gates, cheapest first — reject BEFORE spending a Blob round-trip.
     // §4 upload caps (8.1.11): the per-file limit is now TIER-DERIVED — the
     // 10 MB baseline on every build (and cloud `free`), raised to 100 MB for a
@@ -280,7 +298,11 @@ export const attachmentsService = {
     const pre = await resolveGatedWorkItem(workItemId, ctx);
     if (!pre.caps.canCreate) throw new AttachmentForbiddenError('create');
 
-    const uploaded = await this.uploadAttachment(file, ctx);
+    // The panel-upload path already resolved the item, so it names the item's own
+    // project rather than the actor's active one (MOTIR-2366) — and it has already
+    // asserted `canCreate` on it one line up, so the gate inside is a no-op that
+    // keeps the invariant true from every entry point.
+    const uploaded = await this.uploadAttachment(file, { ...ctx, projectId: pre.item.projectId });
 
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },

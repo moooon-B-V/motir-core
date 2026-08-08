@@ -8,7 +8,7 @@ import {
   PlanNotGeneratingError,
   PlanNotInExpectedStatusError,
 } from '@/lib/plans/errors';
-import { ProjectAccessDeniedError } from '@/lib/projects/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
@@ -746,7 +746,16 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
     ).rejects.toBeInstanceOf(PlanNotInExpectedStatusError);
   });
 
-  it('enforces canEdit — a non-member is denied', async () => {
+  it('enforces ai:view_plan — a non-member is denied (MOTIR-2363)', async () => {
+    // Was `canEdit` → `ProjectAccessDeniedError`. Editing a PROPOSAL is acting on
+    // a generated plan, not on the tree, so it moved to `ai:view_plan` with
+    // approve and decline — a write key wearing a read's name.
+    //
+    // The refusal is now the 404-shaped one, and that is the point: this actor
+    // holds no workspace membership, so `assertPermission` rejects them as a
+    // NON-BROWSER before the key is ever tested. A 403 here would have confirmed
+    // the project exists to someone who may not see it, which the old
+    // `ProjectAccessDeniedError(browse)` did only by convention.
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlan(fx, [
       { op: 'add', proposedFields: { title: 'A', kind: 'task' } },
@@ -756,7 +765,7 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
     const outsiderCtx = { userId: outsider.id, workspaceId: fx.ctx.workspaceId };
     await expect(
       plansService.updateProposal(planId, item.id, { title: 'B' }, outsiderCtx),
-    ).rejects.toBeInstanceOf(ProjectAccessDeniedError);
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 
@@ -876,14 +885,14 @@ describe('plansService.deepenProposal — deepen a proposed add while generating
     ).rejects.toBeInstanceOf(InvalidEstimateError); // minutes must be a non-negative integer
   });
 
-  it('enforces canEdit — a non-member is denied', async () => {
+  it('enforces ai:view_plan — a non-member is denied (MOTIR-2363)', async () => {
     const fx = await makeWorkItemFixture();
     const { planId, itemId } = await generatingAdd(fx);
     const outsider = await createTestUser();
     const outsiderCtx = { userId: outsider.id, workspaceId: fx.ctx.workspaceId };
     await expect(
       plansService.deepenProposal(planId, itemId, { descriptionMd: 'x' }, outsiderCtx),
-    ).rejects.toBeInstanceOf(ProjectAccessDeniedError);
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 

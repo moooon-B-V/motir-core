@@ -7,6 +7,8 @@ import { failureReasonFrame } from '@/lib/ai/jobStream';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { mapContextualPlanError, noActiveProject } from '../../_errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/work-items/[id]/ai/plan/[jobId]/stream — relay a contextual planning
 // job's progress to the embedded panel as SSE (7.12.3 · MOTIR-909).
@@ -46,6 +48,28 @@ export async function GET(
 
   const { id, jobId } = await params;
 
+  // `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2359) — asserted BEFORE the
+  // stream opens, so the refusal is a real HTTP status and no SSE frame is ever
+  // written to an actor who may not plan.
+  //
+  // ⚠️ WHAT THIS GATE DOES AND DOES NOT ESTABLISH. It establishes that the caller
+  // may plan in THEIR OWN project. It does NOT establish that the job belongs to
+  // that project: motir-ai answers `GET /v1/jobs/:id` with no tenant filter, so a
+  // jobId is still readable across projects by an actor who has one. The core
+  // project id is now SENT on every read and stream; MOTIR-2360 is the card that
+  // makes motir-ai enforce it.
+  try {
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
+  } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
+    throw err;
+  }
+
   let generator: AsyncGenerator<JobStreamEvent>;
   try {
     generator = await contextualPlanningService.streamPlanJob(id, jobId, ctx);
@@ -80,7 +104,7 @@ export async function GET(
         while (!result.done) {
           controller.enqueue(encoder.encode(formatFrame(result.value)));
           if (!reasonEmitted) {
-            const reason = await failureReasonFrame(jobId, result.value);
+            const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);
             if (reason) {
               reasonEmitted = true;
               controller.enqueue(encoder.encode(formatFrame(reason)));

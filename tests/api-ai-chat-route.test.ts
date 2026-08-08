@@ -42,6 +42,15 @@ vi.mock('@/lib/projects', () => ({ getActiveProject: async () => activeCtx.curre
 const streamJobMock = vi.fn<(jobId: string) => AsyncGenerator<JobStreamEvent>>();
 const submitJobMock = vi.fn();
 const getJobMock = vi.fn();
+// MOTIR-2359 — the stream route now asserts `ai:plan` before it opens the
+// stream. `activeCtx` is a synthetic project with no rows behind it, so the real
+// gate would 404 and these cases would stop testing the SSE relay they exist for.
+// The gate is covered against real Postgres in
+// `tests/integration/ai/planPermissionGate.test.ts`; the refusal path has its own
+// case below.
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { assertPermission: vi.fn() },
+}));
 vi.mock('@/lib/ai/motirAiClient', () => ({
   streamJob: (jobId: string) => streamJobMock(jobId),
   submitJob: (...args: unknown[]) => submitJobMock(...args),
@@ -50,6 +59,8 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 // Import the handlers AFTER the mocks are registered.
 const { GET } = await import('@/app/api/ai/chat/[jobId]/stream/route');
+const { PermissionDeniedError } = await import('@/lib/projects/errors');
+const { projectAccessService } = await import('@/lib/services/projectAccessService');
 const { POST } = await import('@/app/api/ai/chat/route');
 const { MotirAiJobNotFoundError, MotirAiUnavailableError, MotirAiOutOfCreditsError } =
   await import('@/lib/ai/errors');
@@ -399,5 +410,28 @@ describe('POST /api/ai/chat', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('Cache-Control')).toBe('private, no-store');
     await expect(res.json()).resolves.toEqual({ jobId: 'job_live_1' });
+  });
+});
+
+// MOTIR-2359 — the gate runs BEFORE the stream opens, so a refused actor gets a
+// real HTTP status and never sees an SSE frame. Asserted here rather than only in
+// the integration file because "before the stream opens" is a property of the
+// ROUTE's ordering, not of the service.
+describe('GET /api/ai/chat/:jobId/stream — the ai:plan gate', () => {
+  it('refuses with a 403 and writes no SSE frame', async () => {
+    signIn();
+    activeCtx.current = {
+      userId: 'user_1',
+      workspaceId: 'ws_1',
+      projectId: 'pj_1',
+    } as ProjectContext;
+    vi.mocked(projectAccessService.assertPermission).mockRejectedValueOnce(
+      new PermissionDeniedError('pj_1', 'ai:plan'),
+    );
+    const res = await GET(new Request('http://x'), { params: Promise.resolve({ jobId: 'j' }) });
+    expect(res.status).toBe(403);
+    expect((await res.json()).permission).toBe('ai:plan');
+    // The upstream stream was never opened.
+    expect(streamJobMock).not.toHaveBeenCalled();
   });
 });

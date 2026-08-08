@@ -199,7 +199,17 @@ export const aiConventionService = {
     ctx: AccessActorContext,
     opts: { repoKey?: string; findingsOffset?: number; findingsLimit?: number } = {},
   ): Promise<CodeAuditSurfaceDTO> {
-    await projectAccessService.assertCanManage(projectId, ctx);
+    // `ai:configure`, NOT `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2362).
+    // The inventory mapped the four coding-convention operations to `ai:plan`,
+    // which the decision record puts at `member` — applying that mapping would
+    // have WIDENED admin-only operations to every member, in a story where every
+    // other row narrows. `docs/decisions/member-facing-permissions.md` §4 resolves
+    // it as a MAPPING fix: re-running a convention audit is AI CONFIGURATION
+    // wearing a usage-shaped URL, the same class as the AI settings MOTIR-2300
+    // already put behind `ai:configure`. `assertCanManage` was
+    // `assertPermission(…, 'project:administer')` and `admin` holds
+    // `ai:configure`, so NO actor's answer changes.
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
     const raw = await getCodeAudit({
       coreWorkspaceId: ctx.workspaceId,
       coreProjectId: projectId,
@@ -218,7 +228,17 @@ export const aiConventionService = {
     ctx: AccessActorContext,
     opts: { repoKey?: string; versionsCursor?: string } = {},
   ): Promise<ConventionSurfaceDTO> {
-    await projectAccessService.assertCanManage(projectId, ctx);
+    // `ai:configure`, NOT `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2362).
+    // The inventory mapped the four coding-convention operations to `ai:plan`,
+    // which the decision record puts at `member` — applying that mapping would
+    // have WIDENED admin-only operations to every member, in a story where every
+    // other row narrows. `docs/decisions/member-facing-permissions.md` §4 resolves
+    // it as a MAPPING fix: re-running a convention audit is AI CONFIGURATION
+    // wearing a usage-shaped URL, the same class as the AI settings MOTIR-2300
+    // already put behind `ai:configure`. `assertCanManage` was
+    // `assertPermission(…, 'project:administer')` and `admin` holds
+    // `ai:configure`, so NO actor's answer changes.
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
     const raw = await getConvention({
       coreWorkspaceId: ctx.workspaceId,
       coreProjectId: projectId,
@@ -263,7 +283,17 @@ export const aiConventionService = {
     projectKey: string,
     opts: { repoKeys?: string[] } = {},
   ): Promise<ReauditResultDTO> {
-    await projectAccessService.assertCanManage(projectId, ctx);
+    // `ai:configure`, NOT `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2362).
+    // The inventory mapped the four coding-convention operations to `ai:plan`,
+    // which the decision record puts at `member` — applying that mapping would
+    // have WIDENED admin-only operations to every member, in a story where every
+    // other row narrows. `docs/decisions/member-facing-permissions.md` §4 resolves
+    // it as a MAPPING fix: re-running a convention audit is AI CONFIGURATION
+    // wearing a usage-shaped URL, the same class as the AI settings MOTIR-2300
+    // already put behind `ai:configure`. `assertCanManage` was
+    // `assertPermission(…, 'project:administer')` and `admin` holds
+    // `ai:configure`, so NO actor's answer changes.
+    await projectAccessService.assertPermission(projectId, ctx, 'ai:configure');
     const code = await resolveCodeContext({ userId: ctx.userId, workspaceId: ctx.workspaceId });
     const { organizationId, isMeta } = await resolveTenantOrg({
       userId: ctx.userId,

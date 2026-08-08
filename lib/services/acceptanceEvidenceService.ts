@@ -26,6 +26,7 @@ import type {
   AcceptanceUploadTokensDTO,
 } from '@/lib/dto/acceptanceEvidence';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 /**
  * The status a story must sit in to be approved (MOTIR-1625) — the canonical
@@ -103,6 +104,18 @@ async function resolveStory(workItemId: string, ctx: ServiceContext): Promise<Wo
   );
   if (!story) throw new AcceptanceEvidenceNotFoundError(workItemId);
   if (story.kind !== 'story') throw new AcceptanceEvidenceNotAStoryError(story.kind);
+  // `work_item:edit` (Story MOTIR-2291 · Subtask MOTIR-2365) — THE SHARPEST ITEM
+  // IN THE BUCKET. Both acceptance-evidence rows were labelled `existing` while
+  // the SAME row's `Gate today` column read "— none —", a contradiction inside one
+  // line of a `done` document. The code agreed with the second half: this resolver
+  // loaded the story, checked its kind, and asked nothing about the project — so
+  // `createUploadTokens`, which MINTS a pre-signed upload token against the
+  // workspace's blob store, was reachable with a session and a story id alone.
+  //
+  // Both callers go through here, so the gate goes here: attaching acceptance
+  // evidence to a story is editing that story, and the project is resolved from
+  // the STORY rather than the actor's active project.
+  await projectAccessService.assertPermission(story.projectId, ctx, 'work_item:edit');
   return story;
 }
 

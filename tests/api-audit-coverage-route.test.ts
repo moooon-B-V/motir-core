@@ -25,7 +25,9 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
 
 const { GET: coverageGET } = await import('@/app/api/ai/coding-convention/audit-coverage/route');
 const { createTestWorkspace, createTestProject, createTestUser } = await import('./fixtures');
+const { auditCoverageService } = await import('@/lib/services/auditCoverageService');
 const { workspacesService } = await import('@/lib/services/workspacesService');
+const { projectMembersService } = await import('@/lib/services/projectMembersService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('./helpers/db');
@@ -117,6 +119,50 @@ describe('GET /api/ai/coding-convention/audit-coverage', () => {
     const res = await coverageGET();
 
     expect(res.status).toBe(403);
+    expect(getCodeAuditMock).not.toHaveBeenCalled();
+  });
+
+  it('maps a NON-gate failure through the code-health mapper, not the gate arm', async () => {
+    // The fall-through: `aiPlanGateErrorResponse` returns null for anything that
+    // is not a project refusal, and the route must still map it. Asserted with a
+    // boundary outage raised from the service itself, because the per-repo
+    // failure below is deliberately SWALLOWED (it reports the repo unreadable) and
+    // therefore never reaches this line.
+    await signInAtProject();
+    const spy = vi
+      .spyOn(auditCoverageService, 'getCoverage')
+      .mockRejectedValue(new MotirAiUnavailableError('down'));
+    const res = await coverageGET();
+    expect(res.status).toBe(502);
+    spy.mockRestore();
+  });
+
+  it('404s an actor who cannot BROWSE the project — never a 403 that confirms it', async () => {
+    // The other arm of the `ai:configure` gate (MOTIR-2362): `assertPermission`
+    // refuses a NON-BROWSER as `ProjectNotFoundError` before the key is tested, so
+    // a project they may not see stays missing rather than merely forbidden. The
+    // 403 case above proves the browser arm; this one is what makes the pair
+    // complete — and it is the branch the coverage floor was short of.
+    const { workspace, project } = await signInAtProject();
+    await projectMembersService.setAccessLevel({
+      key: project.identifier,
+      actorUserId: ctxRef.current!.userId,
+      ctx: { userId: ctxRef.current!.userId, workspaceId: workspace.id },
+      level: 'private',
+    });
+    const outsider = await createTestUser();
+    await workspacesService.addMember({ userId: outsider.id, workspaceId: workspace.id });
+    sessionRef.current = { user: { id: outsider.id, email: `${outsider.id}@t.dev` } };
+    ctxRef.current = {
+      userId: outsider.id,
+      workspaceId: workspace.id,
+      projectId: project.id,
+      project,
+    };
+
+    const res = await coverageGET();
+
+    expect(res.status).toBe(404);
     expect(getCodeAuditMock).not.toHaveBeenCalled();
   });
 

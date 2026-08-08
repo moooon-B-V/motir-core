@@ -324,7 +324,7 @@ describe('streamPlanJob — the browser streams from CORE', () => {
       projectCtx(fx),
     );
     expect(relayed).toBe(sentinel);
-    expect(streamJobMock).toHaveBeenCalledWith('job-contextual-1');
+    expect(streamJobMock).toHaveBeenCalledWith('job-contextual-1', expect.any(String));
   });
 
   it('refuses to stream against an anchor the actor cannot see', async () => {

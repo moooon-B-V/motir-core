@@ -10,6 +10,7 @@ import {
 } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import type { UpdateProposalInput } from '@/lib/dto/plans';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // PATCH /api/plans/[id]/items/[itemId] — edit a proposed `add` of a `planned`
 // plan (Subtask 7.21.6 / MOTIR-1370, calling the MOTIR-1336 substrate). Patches
@@ -63,6 +64,10 @@ export async function PATCH(
     const plan = await plansService.updateProposal(id, itemId, input, ctx);
     return NextResponse.json(plan);
   } catch (err) {
+    // MOTIR-2291 — the shared project gate's two refusals (404 for a non-browser,
+    // 403 naming the key). Without this arm they fall through to a 500.
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof PlanNotFoundError || err instanceof PlanItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

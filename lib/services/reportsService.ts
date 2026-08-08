@@ -18,7 +18,11 @@ import {
   toVelocityDto,
   toWorkloadDto,
 } from '@/lib/mappers/reportsMappers';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 import { UnknownStatisticTypeError } from '@/lib/reports/errors';
@@ -106,12 +110,12 @@ export const reportsService = {
     input: { projectId: string; lastN?: number },
     ctx: ServiceContext,
   ): Promise<VelocityDto> {
-    // Tenancy gate (finding #26): a missing / cross-workspace project is an
-    // indistinguishable 404. Mirrors `estimationService.getEstimationConfig`.
-    const project = await projectRepository.findById(input.projectId);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(input.projectId);
-    }
+    // `report:view` (MOTIR-2351), which SUBSUMES the hand-rolled tenancy gate that
+    // stood here: `assertPermission` resolves the project against the actor's
+    // workspace first and raises the same indistinguishable 404 for a missing or
+    // cross-workspace id, then tests the key. This route was ungated end-to-end
+    // before — the one row in this card that had no gate at all.
+    await projectAccessService.assertPermission(input.projectId, ctx, 'report:view');
 
     const limit = clampLastN(input.lastN);
     // The configured statistic, resolved ONCE for the project (the same default
@@ -181,6 +185,10 @@ export const reportsService = {
     // indistinguishable 404 (finding #26).
     const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
     if (!sprint) throw new SprintNotFoundError(sprintId);
+    // `report:view` (MOTIR-2351) — a burndown is a report; it was mapped to
+    // `sprint:manage` only because it lives under a sprint URL, and a URL is not
+    // a policy.
+    await projectAccessService.assertPermission(sprint.projectId, ctx, 'report:view');
 
     // A cycle graph needs a window: reject a not-yet-started (planned) sprint.
     if (sprint.state === 'planned' || sprint.startDate === null) {
@@ -591,20 +599,46 @@ type ResolvedReportScope =
  *     guaranteed registry-valid; stale OPEN referents inside it match
  *     nothing downstream (the 6.1.2 unknown-value rule).
  */
+/**
+ * Whether the actor may read this project's ANALYTICS — `report:view`
+ * (Story MOTIR-2291 · Subtask MOTIR-2351).
+ *
+ * ⚠️ IT RETURNS A BOOLEAN RATHER THAN THROWING, and that is the shipped widget
+ * contract, not a softened gate. A dashboard widget whose scope has gone away —
+ * the project deleted, the actor's access revoked, the saved filter dropped —
+ * degrades to a typed `no_access` / `stale` CARD so the rest of the dashboard
+ * survives; making the gate throw here would turn one revoked project into a
+ * broken page. The assert still runs BEFORE any data read, which is what the gate
+ * is for. The reads that are NOT widgets (`getVelocity`, `getSprintCycleGraph`,
+ * `sprintsService.getSprintReport`, `estimationService.rollupForSprint`,
+ * `workItemsService.getProjectRoadmap`) call `assertPermission` directly and
+ * throw, because their callers are pages, not cards.
+ *
+ * `report:view` is browse-wide by decision (`docs/decisions/member-facing-permissions.md`
+ * §1 — Jira has no report permission separate from *Browse Projects*), so this
+ * takes nothing from anyone who can already see the project. What it DOES change
+ * is that a non-browser can no longer summarise a whole project through an
+ * aggregate: `assertPermission` refuses them with `ProjectNotFoundError` before
+ * the key is ever tested, which is the same 404 the previous `canBrowse` check
+ * produced.
+ */
+async function mayViewReports(projectId: string, ctx: ServiceContext): Promise<boolean> {
+  try {
+    await projectAccessService.assertPermission(projectId, ctx, 'report:view');
+    return true;
+  } catch (err) {
+    if (err instanceof ProjectNotFoundError || err instanceof PermissionDeniedError) return false;
+    /* istanbul ignore next -- defensive: assertPermission throws nothing else */
+    throw err;
+  }
+}
+
 async function resolveReportScope(
   scope: ReportScopeDto,
   ctx: ServiceContext,
 ): Promise<ResolvedReportScope> {
   if ('projectId' in scope) {
-    try {
-      const caps = await projectAccessService.getCapabilities(scope.projectId, ctx);
-      if (!caps.canBrowse) return { state: 'no_access' };
-    } catch (err) {
-      /* istanbul ignore else -- defensive: getCapabilities throws nothing else */
-      if (err instanceof ProjectNotFoundError) return { state: 'no_access' };
-      /* istanbul ignore next -- defensive: see above */
-      throw err;
-    }
+    if (!(await mayViewReports(scope.projectId, ctx))) return { state: 'no_access' };
     return { state: 'ok', projectId: scope.projectId, ast: null };
   }
 

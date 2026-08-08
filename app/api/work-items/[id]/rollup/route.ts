@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { estimationService } from '@/lib/services/estimationService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { workItemGateErrorResponse } from '@/lib/workItems/gateResponse';
 
 // GET /api/work-items/[id]/rollup (Story 4.3 · Subtask 4.3.5) — the BOUNDED
 // epic/parent subtree roll-up (`{ total }`) the list/tree parent row binds to
@@ -27,6 +28,8 @@ export async function GET(
     const rollup = await estimationService.rollupForParent(id, ctx);
     return NextResponse.json(rollup);
   } catch (err) {
+    const gate = workItemGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof WorkItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

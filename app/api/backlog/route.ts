@@ -18,6 +18,7 @@ import { parseIssueFilter } from '@/lib/issues/issueListFilter';
 import { upgradeFacetsIntoAst } from '@/lib/issues/issueListAdvancedFilter';
 import { decodeFilterParam } from '@/lib/filters/ast';
 import { FilterValidationError } from '@/lib/filters/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 const MAX_TITLE_LENGTH = 200;
 
@@ -90,6 +91,8 @@ export async function GET(req: Request): Promise<Response> {
     );
     return NextResponse.json(page);
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     // A structurally-valid AST that fails registry validation (unknown
     // field/operator or a bad value) → typed 422, mirroring the board route.
     if (err instanceof FilterValidationError) {
@@ -186,6 +189,8 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(issue, { status: 201 });
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (
       err instanceof ProjectNotFoundError ||
       err instanceof SprintNotFoundError ||

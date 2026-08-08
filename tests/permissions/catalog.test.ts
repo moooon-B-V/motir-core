@@ -154,12 +154,43 @@ const ADMINISTRATIVE_ENFORCED: PermissionKey[] = [
   'estimation:manage',
 ];
 
+/**
+ * The MEMBER-FACING keys MOTIR-2291 wired — same progress-bar shape as the twelve
+ * above, and the card that wires a key added it here in the same change. It was
+ * empty before MOTIR-2350 and holds ALL EIGHT now that MOTIR-2356 has flipped the
+ * last flag; the partition test below is what turns that into "the model is fully
+ * enforced" rather than a list somebody maintains.
+ *
+ * ⚠️ Kept SEPARATE from `ADMINISTRATIVE_ENFORCED` rather than appended to it.
+ * The twelve are provably equivalent to `project:administer` for every actor
+ * (`accessParity.test.ts`); these eight are deliberately not, so a reader must
+ * never take membership of one list as evidence about the other.
+ */
+const MEMBER_FACING_ENFORCED: PermissionKey[] = [
+  'sprint:manage',
+  'report:view',
+  'saved_filter:manage',
+  'import:run',
+  'work_item:triage',
+  'work_item:delete',
+  'ai:view_plan',
+  'ai:plan',
+];
+
 describe('enforcement — the seam that lets naming and wiring land separately', () => {
   it('partitions the catalog exactly: enforced + planned = every key, no overlap', () => {
     expect([...ENFORCED_PERMISSIONS, ...PLANNED_PERMISSIONS].sort()).toEqual(
       [...PERMISSIONS].sort(),
     );
     expect(ENFORCED_PERMISSIONS.filter((k) => PLANNED_PERMISSIONS.includes(k))).toEqual([]);
+  });
+
+  it('THE MODEL IS FULLY ENFORCED — `PLANNED_PERMISSIONS` is empty (MOTIR-2356)', () => {
+    // The machine-readable definition `catalog.ts` gives itself, asserted as a
+    // SET rather than a count: a length constant would pass just as happily if a
+    // key were deleted from the catalog as if its gate were wired.
+    expect([...PLANNED_PERMISSIONS]).toEqual([]);
+    expect([...ENFORCED_PERMISSIONS].sort()).toEqual([...PERMISSIONS].sort());
   });
 
   it('marks every key with a known enforcement value', () => {
@@ -197,7 +228,13 @@ describe('enforcement — the seam that lets naming and wiring land separately',
     expect(ENFORCED_PERMISSIONS.filter((k) => ADMINISTRATIVE_ENFORCED.includes(k)).sort()).toEqual(
       [...ADMINISTRATIVE_ENFORCED].sort(),
     );
-    expect(ENFORCED_PERMISSIONS).toHaveLength(shipped.length + ADMINISTRATIVE_ENFORCED.length);
+    // …and the member-facing keys, on the same terms (MOTIR-2291).
+    expect(ENFORCED_PERMISSIONS.filter((k) => MEMBER_FACING_ENFORCED.includes(k)).sort()).toEqual(
+      [...MEMBER_FACING_ENFORCED].sort(),
+    );
+    expect(ENFORCED_PERMISSIONS).toHaveLength(
+      shipped.length + ADMINISTRATIVE_ENFORCED.length + MEMBER_FACING_ENFORCED.length,
+    );
   });
 
   it('renders the WHOLE model by default — the grid must not under-describe the product', () => {

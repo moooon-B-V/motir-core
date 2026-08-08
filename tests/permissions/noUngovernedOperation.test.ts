@@ -55,8 +55,18 @@ const DOC = join(ROOT, 'docs', 'decisions', 'permission-inventory.md');
 // definition. That is exactly the guard's question — not "is this gate the one
 // we would choose" (the inventory's row decides that) but "does this operation
 // consult the policy at all".
+//
+// ⚠️ AND `filterBrowsable(` IS ON IT (MOTIR-2365). It is the one gate shape that
+// answers the question in the PLURAL: `workItemsService.quickSearch` resolves
+// every project in the workspace and narrows to the browsable ones before it
+// searches, so the mention-search operation IS governed — the walk simply had no
+// name for "filter a set by the policy" as opposed to "assert one project". That
+// is a real gate reached by a hop the walk could not follow, which is exactly the
+// first of the two dispositions the CLAIMED_BUT_UNVERIFIED bucket asks for; the
+// other five rows in its half of the bucket turned out to be the second, and got
+// gates.
 const GATE =
-  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|isOwnerRole\(|isWorkspaceManager\(/;
+  /assertCan[A-Za-z]+|assertPermission\(|get[A-Za-z]*Capabilities|hasPermission\(|canManageProject\(|canBrowse\(|canEdit\(|isOwnerRole\(|isWorkspaceManager\(|filterBrowsable\(/;
 /**
  * Every `someService.someMethod(` call in `source`.
  *
@@ -113,7 +123,7 @@ function methodBody(src: string, afterOpenParen: number): string | null {
     else if (src[cursor] === ')') parenDepth -= 1;
   }
   if (parenDepth > 0) return null;
-  const open = src.indexOf('{', cursor);
+  const open = bodyBraceAfter(src, cursor);
   if (open < 0) return null;
   let depth = 0;
   let j = open;
@@ -122,6 +132,54 @@ function methodBody(src: string, afterOpenParen: number): string | null {
     else if (src[j] === '}' && --depth === 0) break;
   }
   return src.slice(open, j + 1);
+}
+
+/**
+ * The index of the BODY's opening brace, given `from` = just past the signature's
+ * closing `)`. Returns -1 when there is no body (an overload signature, an
+ * interface member).
+ *
+ * ⚠️ THE RETURN TYPE COMES FIRST, AND IT CAN CONTAIN BRACES (MOTIR-2443). Taking
+ * the first `{` after `)` looks right and is wrong the moment a method returns an
+ * object type — `): Promise<{ jobId: string }> {` — because THAT brace wins and
+ * the "body" becomes `{ jobId: string }`. A method whose first statement is an
+ * `assertPermission` then reports as UNGOVERNED. Reproduced on
+ * `aiChatService.submitDiscoveryTurn`, whose gate the guard could not see the day
+ * it was added.
+ *
+ * It is the MOTIR-2292 failure on the other side of the parameter list — that
+ * repair walked the PARAMS by paren depth and stopped there — so the rule is the
+ * mirror image: a `{` belongs to the TYPE, not the body, when it sits inside
+ * `<…>` (a generic argument) or immediately follows a `:` (a bare object return
+ * type). Skip those, and the first survivor is the body.
+ */
+function bodyBraceAfter(src: string, from: number): number {
+  let angle = 0;
+  let i = from;
+  while (i < src.length) {
+    const ch = src[i]!;
+    if (ch === ';') return -1; // an overload signature — no body at all
+    if (ch === '<') angle += 1;
+    else if (ch === '>') angle = Math.max(0, angle - 1);
+    else if (ch === '{') {
+      // Inside a generic argument, or the object type after a `:` — either way
+      // this brace is the annotation's. Walk past it and keep looking.
+      let prev = i - 1;
+      while (prev >= from && /\s/.test(src[prev]!)) prev -= 1;
+      if (angle > 0 || src[prev] === ':') {
+        let depth = 0;
+        for (; i < src.length; i++) {
+          if (src[i] === '{') depth += 1;
+          else if (src[i] === '}' && --depth === 0) break;
+        }
+        i += 1;
+        continue;
+      }
+      return i;
+    }
+    i += 1;
+  }
+  return -1;
 }
 
 /** Every service method body, by `service.method`. */
@@ -220,6 +278,14 @@ function bodyIsGated(svc: string, body: string, seen: Set<string>): boolean {
   for (const [otherSvc, method] of serviceCalls(body)) {
     if (methodIsGated(`${otherSvc}.${method}`, seen)) return true;
   }
+  // Hop 1b — to a SIBLING method on the same service object (MOTIR-2443). The
+  // walk hops across services and into module-local functions and could not see
+  // the shortest hop of all: `getOrCreateForProject` delegating to
+  // `this.getOrCreateForScope`, which asserts. `serviceCalls` cannot match it —
+  // `this` is not a `…Service` identifier — so the receiver is matched on its own.
+  for (const [, method] of [...body.matchAll(/\bthis\.([a-zA-Z_][\w]*)\s*\(/g)]) {
+    if (methodIsGated(`${svc}.${method}`, seen)) return true;
+  }
   // Hop 2 — into a MODULE-LOCAL function of the same file (MOTIR-2304). Recurses
   // through `bodyIsGated`, so a local calling another local, or a local calling
   // a service, resolves too.
@@ -299,12 +365,6 @@ function decisionFor(url: string): string | null {
   return cells ? (cells[cells.length - 2] ?? null) : null;
 }
 
-/** The permission the inventory names for an operation (`—` when none). */
-function permissionFor(url: string): string {
-  const cells = ROWS.get(url);
-  return cells ? (cells[cells.length - 3] ?? '') : '';
-}
-
 /**
  * Decisions that permanently justify NO project gate. These are answers, not
  * omissions — each is argued in the inventory's Reasons section.
@@ -318,50 +378,31 @@ const PERMANENTLY_UNGATED = new Set([
 ]);
 
 /**
- * Decisions that justify no gate YET. `new` means the inventory named the
- * permission and no card has wired the call sites yet. This set shrinks to
- * nothing as TWO stories land, and the count below is what stops it growing
- * meanwhile:
+ * ✅ THE TWO COUNTING-DOWN ARMS ARE GONE (MOTIR-2356). Two decision sets used to
+ * live here and be pinned by a `describe` below:
  *
- *   * **MOTIR-2256** — the twelve ADMINISTRATIVE keys that split out of
- *     `project:administer` (member, board, workflow, field, estimation,
- *     repository, ai:configure). Behaviour-neutral for the built-in roles
- *     wherever the umbrella already stood.
- *   * **MOTIR-2291** — the eight MEMBER-FACING keys (`ai:plan`, `sprint:manage`,
- *     `report:view`, `import:run`, `saved_filter:manage`, `ai:view_plan`,
- *     `work_item:triage`, `work_item:delete`) plus the `CLAIMED_BUT_UNVERIFIED`
- *     bucket below. Those operations are governed by NOTHING today, so wiring
- *     them removes capability from real actors — a different kind of change,
- *     argued on its own rather than inside a refactor that claims to change
- *     nothing.
+ *   * **`PENDING`** (`new`) — an operation whose key the inventory had named and
+ *     nobody had wired. It counted 95 → 0 across MOTIR-2256 and MOTIR-2291, and
+ *     three of those falls were the INSTRUMENT being repaired rather than gates
+ *     being added (MOTIR-2292, -2304, -2443), which is why every step had to say
+ *     which kind it was.
+ *   * **`CLAIMED_BUT_UNVERIFIED`** (`existing`) — an operation the inventory said
+ *     was governed and this walk could not confirm. It counted 38 → 0 across
+ *     MOTIR-2365 and MOTIR-2366; of the eighteen it still held after the
+ *     instrument repairs, seven were holes and the rest were mis-mappings or
+ *     gates the walk had no name for.
  *
- * This arm is deleted when the count reaches 0, which takes BOTH.
+ * Both files said, when they were written, that the arm is DELETED when its count
+ * reaches zero rather than re-pinned at it — a pin at zero is a slot for the next
+ * one to creep back into, and it makes an un-decided operation look decided. They
+ * are deleted.
+ *
+ * What remains is the assertion that outlives them: an ungated operation must
+ * carry a PERMANENTLY_UNGATED decision in the inventory. A new ungated route with
+ * a `new` or `existing` decision now fails THAT test — it is not in the allowed
+ * set — which is stricter than the pins ever were, because it does not wait for
+ * a number to move.
  */
-const PENDING = new Set(['new']);
-
-/**
- * ⚠️ THE DISCREPANCY BUCKET. The inventory marks these `existing` — "already
- * governed by a shipped predicate" — but this walk cannot CONFIRM a gate on the
- * path. Two readings, and the difference matters:
- *
- *   1. the gate is real but reached by a hop the static walk cannot follow (a
- *      dynamic dispatch, a wrapper, a re-export), or
- *   2. the claim is wrong and the operation is genuinely ungoverned.
- *
- * The inventory's `existing` labels were assigned by URL pattern — a CLAIM. This
- * guard is the verifier, and where the two disagree the disagreement is the
- * finding. It is recorded rather than resolved because resolving it either way
- * without reading each path would be guessing: silently trusting the claim hides
- * a possible hole, and silently failing them would block on investigations that
- * card was not scoped for.
- *
- * **MOTIR-2291 owns confirming these**, one read each: either the gate is real
- * and reached by a hop this walk cannot follow (record HOW, and teach the walk
- * to see it), or it is not — and that is a hole whose fix is a gate. None of
- * them is administrative, which is why they did not travel with MOTIR-2256.
- * The count is pinned so the bucket can only shrink.
- */
-const CLAIMED_BUT_UNVERIFIED = new Set(['existing']);
 
 describe('every actor-initiated operation has an ANSWER', () => {
   const ops = operations();
@@ -376,10 +417,13 @@ describe('every actor-initiated operation has an ANSWER', () => {
       .filter((o) => !o.gated)
       .filter((o) => {
         const d = decisionFor(o.url);
-        return (
-          d === null ||
-          !(PERMANENTLY_UNGATED.has(d) || PENDING.has(d) || CLAIMED_BUT_UNVERIFIED.has(d))
-        );
+        // ⚠️ ONLY `PERMANENTLY_UNGATED` now (MOTIR-2356). While the two stories
+        // were in flight, `new` and `existing` were also accepted here — an
+        // operation could be ungated because its gate was still coming. Both
+        // stories have landed, so an ungated operation whose row still says
+        // `new` or `existing` is no longer waiting for anything: it is undecided,
+        // and this test says so.
+        return d === null || !PERMANENTLY_UNGATED.has(d);
       })
       .map((o) => `${o.url} → ${decisionFor(o.url) ?? 'NOT IN THE INVENTORY'}`);
     expect(
@@ -395,69 +439,6 @@ describe('every actor-initiated operation has an ANSWER', () => {
     expect(
       unknown.map((o) => o.url),
       'a gated route still needs its inventory row',
-    ).toEqual([]);
-  });
-});
-
-describe('the PENDING set is bounded and shrinking', () => {
-  const ops = operations();
-
-  it('pins how many operations still await MOTIR-2256 / MOTIR-2291, so the number cannot creep', () => {
-    const pending = ops.filter((o) => !o.gated && PENDING.has(decisionFor(o.url) ?? ''));
-    // Adding an ungated route bumps this and fails the test; wiring one lowers
-    // it and fails it too — both are changes worth noticing. The arm is deleted
-    // when this reaches 0, which takes BOTH stories.
-    //
-    // Was 94, and the 94 was WRONG: the extractor above mistook a parameter's
-    // inline object type for a method body, so 24 gated operations counted as
-    // ungoverned. 95 → 81 was the measurement being corrected, not 14 gates
-    // being added — that PR added no gate at all (MOTIR-2292).
-    //
-    // 81 → 75 is MOTIR-2294 RETIRING `repository:connect`: its six operations
-    // (the GitHub + GitLab OAuth legs, `/api/github/setup`,
-    // `/api/github/organizations`) bind an installation to a WORKSPACE and
-    // resolve no project, so they are `workspace-scoped` / R3 in the inventory
-    // and leave the PENDING set. No gate was added and no route changed — six
-    // rows that were never this story's to wire stopped being counted as if
-    // they were.
-    //
-    // 75 → 36 is MOTIR-2304 REPAIRING THE WALK, and it is by far the largest
-    // correction this pin has taken — larger than the extractor fix that
-    // preceded it. `GATE` recognised only CALLS TO KNOWN GATE FUNCTIONS, so an
-    // operation whose authorization ran through a privately-named module-local
-    // helper that resolves the membership itself was invisible twice over. Both
-    // limbs were needed: following the same-file call finds the helper, and
-    // adding `isOwnerRole(` / `isWorkspaceManager(` lets the walk recognise the
-    // decision the helper makes once it arrives. 39 operations were never
-    // ungoverned. NO GATE WAS ADDED by that card — read its diff: two test
-    // files and a document. A FALL here means the instrument got better; only a
-    // RISE means a hole opened.
-    expect(pending.length).toBe(36);
-  });
-
-  it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
-    const unverified = ops.filter(
-      (o) => !o.gated && CLAIMED_BUT_UNVERIFIED.has(decisionFor(o.url) ?? ''),
-    );
-    // Operations the inventory calls `existing` that this walk cannot confirm.
-    // Each needs a human read in MOTIR-2291: either the gate is reached by a hop
-    // the walk cannot follow, or the operation is genuinely ungoverned. Lowering
-    // MOTIR-2304 moved this one 33 → 18 for the same reason as the pin above:
-    // the inventory marked these `existing` and the walk simply could not see
-    // the gate the row was claiming. Fifteen of the eighteen remaining
-    // discrepancies were never discrepancies.
-    // this number is progress; raising it is a regression. (38 → 33 for the same
-    // extractor fix as above — five of them were never unconfirmed.)
-    expect(unverified.length).toBe(18);
-  });
-
-  it('every pending operation names the permission that will govern it', () => {
-    const nameless = ops
-      .filter((o) => !o.gated && PENDING.has(decisionFor(o.url) ?? ''))
-      .filter((o) => !permissionFor(o.url).startsWith('`'));
-    expect(
-      nameless.map((o) => o.url),
-      'a pending operation must name its target key',
     ).toEqual([]);
   });
 });
@@ -499,6 +480,57 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     expect(
       GATE.test(methodBody(ungated, ungated.indexOf('(', ungated.indexOf('reaudit')) + 1)!),
     ).toBe(false);
+  });
+
+  it('finds a gate behind a RETURN TYPE that carries braces', () => {
+    // The MOTIR-2443 regression, pinned. `methodBody` walked the PARAMETER list
+    // by paren depth (the MOTIR-2292 repair) and then took the first `{` — which
+    // is the return annotation's when the method returns an object type. The
+    // "body" became `{ jobId: string }` and the assert on the next line was
+    // invisible. Both the generic form and the bare object form are here: the
+    // first is what `aiChatService.submitDiscoveryTurn` actually looks like.
+    const generic = [
+      'export const svc = {',
+      '  async submitDiscoveryTurn(',
+      '    prompt: string,',
+      '    ctx: ProjectContext,',
+      '  ): Promise<{ jobId: string }> {',
+      "    await projectAccessService.assertPermission(ctx.projectId, ctx, 'ai:plan');",
+      '  },',
+      '};',
+    ].join('\n');
+    const bodyOf = (src: string, name: string): string | null =>
+      methodBody(src, src.indexOf('(', src.indexOf(name)) + 1);
+    expect(GATE.test(bodyOf(generic, 'submitDiscoveryTurn')!)).toBe(true);
+
+    const bare = [
+      'export const svc = {',
+      '  async counts(projectId: string, ctx: Ctx): { created: number } {',
+      '    await projectAccessService.assertCanBrowse(projectId, ctx);',
+      '  },',
+      '};',
+    ].join('\n');
+    expect(GATE.test(bodyOf(bare, 'counts')!)).toBe(true);
+
+    // …and the repair is not just "answer true more often": with the assert
+    // removed, the same shape still reports NO gate.
+    const ungated = generic.replace(
+      "    await projectAccessService.assertPermission(ctx.projectId, ctx, 'ai:plan');",
+      '    return submitJob();',
+    );
+    expect(GATE.test(bodyOf(ungated, 'submitDiscoveryTurn')!)).toBe(false);
+  });
+
+  it('follows a `this.` hop to a sibling method, and still says no when the sibling gates nothing', () => {
+    // The other half of MOTIR-2443. `serviceCalls` matches `someService.method(`
+    // only, so a method delegating to a sibling on the SAME object was a dead
+    // end — `planChangeSessionsService.getOrCreateForProject` reads as ungated
+    // however plainly `getOrCreateForScope` asserts. Driven through the REAL
+    // walk rather than a synthetic string, because the hop is a property of
+    // `bodyIsGated`'s recursion, not of one regex.
+    expect(methodIsGated('planChangeSessionsService.getOrCreateForProject')).toBe(true);
+    // The negative control: a delegating method whose target gates nothing.
+    expect(methodIsGated('dashboardsService.listDashboards')).toBe(false);
   });
 
   it('follows a call into a MODULE-LOCAL helper, and still says no when the helper gates nothing', () => {
@@ -582,19 +614,16 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     const synthetic = { url: '/api/definitely-not-a-real-route', gated: false };
     const decision = decisionFor(synthetic.url);
     expect(decision).toBeNull();
-    const wouldFail =
-      decision === null ||
-      !(
-        PERMANENTLY_UNGATED.has(decision) ||
-        PENDING.has(decision) ||
-        CLAIMED_BUT_UNVERIFIED.has(decision)
-      );
+    const wouldFail = decision === null || !PERMANENTLY_UNGATED.has(decision);
     expect(wouldFail, 'an unknown ungated operation must be rejected').toBe(true);
   });
 
-  it('rejects a decision string that is not one of the seven', () => {
+  it('rejects a decision string that is not one of the five', () => {
     expect(PERMANENTLY_UNGATED.has('probably-fine')).toBe(false);
-    expect(PENDING.has('probably-fine')).toBe(false);
-    expect(CLAIMED_BUT_UNVERIFIED.has('probably-fine')).toBe(false);
+    // …and the two that USED to be accepted are not, now that nothing is pending
+    // (MOTIR-2356). This is the assertion that makes the deletion of the counting
+    // arms a tightening rather than a removal of coverage.
+    expect(PERMANENTLY_UNGATED.has('new')).toBe(false);
+    expect(PERMANENTLY_UNGATED.has('existing')).toBe(false);
   });
 });

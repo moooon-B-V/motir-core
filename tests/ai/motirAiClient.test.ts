@@ -7,6 +7,7 @@ import {
   createCheckoutSession,
   createPortalSession,
   mintCodeGraphRunCredential,
+  streamJob,
   MOTIR_AI_REQUEST_TIMEOUT_MS,
   type RequestActor,
 } from '@/lib/ai/motirAiClient';
@@ -26,6 +27,14 @@ const tenant = {
   projectKey: 'MOTIR',
 };
 const actor: RequestActor = { userId: 'user_1' };
+
+/** A text/event-stream response carrying the given SSE frames. */
+function sseResponse(frames: string[]): Response {
+  return new Response(frames.join(''), {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+  });
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -52,7 +61,7 @@ describe('config fail-fast', () => {
 
   it('throws MotirAiConfigError when the service token is unset', async () => {
     delete process.env['MOTIR_AI_SERVICE_TOKEN'];
-    await expect(getJob('job_1')).rejects.toBeInstanceOf(MotirAiConfigError);
+    await expect(getJob('job_1', 'pj_1')).rejects.toBeInstanceOf(MotirAiConfigError);
   });
 });
 
@@ -129,7 +138,7 @@ describe('getJob', () => {
           jsonResponse({ jobId: 'job_1', status: 'succeeded', result, error: null }),
         ),
     );
-    const view = await getJob('job_1');
+    const view = await getJob('job_1', 'pj_1');
     expect(view.status).toBe('succeeded');
     expect(view.result).toEqual(result);
     expect(view.error).toBeNull();
@@ -147,7 +156,7 @@ describe('getJob', () => {
         }),
       ),
     );
-    const view = await getJob('job_1');
+    const view = await getJob('job_1', 'pj_1');
     expect(view.status).toBe('failed');
     expect(view.error).toBeInstanceOf(MotirAiUnavailableError);
   });
@@ -164,7 +173,7 @@ describe('getJob', () => {
           ),
         ),
     );
-    await expect(getJob('job_x')).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
+    await expect(getJob('job_x', 'pj_1')).rejects.toBeInstanceOf(MotirAiJobNotFoundError);
   });
 });
 
@@ -392,7 +401,7 @@ describe('request deadlines', () => {
   it('reports the deadline rather than the runtime’s opaque abort message', async () => {
     vi.stubGlobal('fetch', hangingFetch());
 
-    const pending = getJob('job_1');
+    const pending = getJob('job_1', 'pj_1');
     const assertion = expect(pending).rejects.toThrow(
       `motir-ai did not respond within ${MOTIR_AI_REQUEST_TIMEOUT_MS}ms`,
     );
@@ -434,5 +443,35 @@ describe('parseSseFrame', () => {
   it('returns null for a comment-only / dataless frame', () => {
     expect(parseSseFrame(': keep-alive')).toBeNull();
     expect(parseSseFrame('event: status')).toBeNull();
+  });
+});
+
+// MOTIR-2359 — the core project id rides every job read and stream. Asserted on
+// the REQUEST URL the fake fetch receives, not on the return value: what is being
+// proved is that the id reaches motir-ai, and a service's own output cannot show
+// that. Until MOTIR-2360 lands, motir-ai ignores the parameter — sending one the
+// producer does not read is harmless; requiring one the consumer does not send is
+// not, which is why the order is this way round.
+describe('the boundary sends the core project id (MOTIR-2359)', () => {
+  it('getJob puts ?coreProjectId= on the job read', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ jobId: 'job_1', status: 'succeeded', result: null, error: null }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    await getJob('job_1', 'pj_42');
+    const url = String(fetchMock.mock.calls[0]![0]);
+    expect(url).toContain('/v1/jobs/job_1?');
+    expect(new URL(url).searchParams.get('coreProjectId')).toBe('pj_42');
+  });
+
+  it('streamJob puts ?coreProjectId= on the stream open', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(sseResponse(['event: done\ndata: {}\n\n']));
+    vi.stubGlobal('fetch', fetchMock);
+    for await (const _ of streamJob('job_1', 'pj_42')) break;
+    const url = String(fetchMock.mock.calls[0]![0]);
+    expect(url).toContain('/v1/jobs/job_1/stream?');
+    expect(new URL(url).searchParams.get('coreProjectId')).toBe('pj_42');
   });
 });

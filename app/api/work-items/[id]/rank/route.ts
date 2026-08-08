@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { backlogService } from '@/lib/services/backlogService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { sprintGateErrorResponse } from '@/lib/sprints/sprintGateResponse';
 
 // POST /api/work-items/[id]/rank (Subtask 4.1.4) — reorder an issue within its
 // current scope (its sprint, or the backlog) by dropping it between two
@@ -52,6 +53,8 @@ export async function POST(
     const item = await backlogService.rankIssue(id, { beforeId, afterId }, ctx);
     return NextResponse.json(item);
   } catch (err) {
+    const gate = sprintGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof WorkItemNotFoundError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
     }

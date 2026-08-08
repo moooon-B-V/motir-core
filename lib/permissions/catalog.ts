@@ -166,8 +166,8 @@ const PERMISSION_META: Record<
   'project:administer': { domain: 'project', enforcement: 'enforced' },
   'project:browse': { domain: 'project', enforcement: 'enforced' },
   'work_item:edit': { domain: 'work_item', enforcement: 'enforced' },
-  'work_item:delete': { domain: 'work_item', enforcement: 'planned' },
-  'work_item:triage': { domain: 'work_item', enforcement: 'planned' },
+  'work_item:delete': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
+  'work_item:triage': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
   'comment:add': { domain: 'comment', enforcement: 'enforced' },
   'comment:moderate': { domain: 'comment', enforcement: 'enforced' },
   'attachment:create': { domain: 'attachment', enforcement: 'enforced' },
@@ -179,21 +179,21 @@ const PERMISSION_META: Record<
   'member:manage': { domain: 'member', enforcement: 'enforced' },
   'project:manage_access': { domain: 'member', enforcement: 'enforced' },
   'board:configure': { domain: 'board', enforcement: 'enforced' },
-  'sprint:manage': { domain: 'sprint', enforcement: 'planned' },
+  'sprint:manage': { domain: 'sprint', enforcement: 'enforced' }, // MOTIR-2350
   'automation:manage': { domain: 'workflow', enforcement: 'enforced' },
   'workflow:manage': { domain: 'workflow', enforcement: 'enforced' },
   'component:manage': { domain: 'field', enforcement: 'enforced' },
   'field:manage': { domain: 'field', enforcement: 'enforced' },
   'label:manage': { domain: 'field', enforcement: 'enforced' },
   'estimation:manage': { domain: 'estimation', enforcement: 'enforced' },
-  'report:view': { domain: 'report', enforcement: 'planned' },
-  'saved_filter:manage': { domain: 'report', enforcement: 'planned' },
+  'report:view': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2351
+  'saved_filter:manage': { domain: 'report', enforcement: 'enforced' }, // MOTIR-2352
   'repository:manage': { domain: 'repository', enforcement: 'enforced' },
   'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
-  'import:run': { domain: 'import', enforcement: 'planned' },
+  'import:run': { domain: 'import', enforcement: 'enforced' }, // MOTIR-2353
   'ai:configure': { domain: 'ai', enforcement: 'enforced' },
-  'ai:plan': { domain: 'ai', enforcement: 'planned' },
-  'ai:view_plan': { domain: 'ai', enforcement: 'planned' },
+  'ai:plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2355 / -2357 / -2358 / -2359
+  'ai:view_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2363
 };
 
 /**
@@ -236,9 +236,16 @@ export const ENFORCED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter
 /**
  * The keys the inventory justified but nothing has wired yet. Named so a test
  * can pin it against the inventory document, and so "the model is fully
- * enforced" has a machine-readable definition: this array is empty. That takes
- * BOTH MOTIR-2256 (the twelve administrative keys) and MOTIR-2291 (the eight
- * member-facing ones) — neither story empties it alone.
+ * enforced" has a machine-readable definition: this array is empty.
+ *
+ * ✅ IT IS EMPTY (MOTIR-2356). It took BOTH stories, as designed — MOTIR-2256's
+ * twelve administrative keys and MOTIR-2291's eight member-facing ones — and
+ * neither could have emptied it alone. The array stays rather than being deleted:
+ * it is the definition, and a future card that adds a key to the catalog before
+ * its gate exists SHOULD see it become non-empty again. What is deleted is the
+ * scaffolding that counted DOWN to this point — the guard's PENDING and
+ * CLAIMED_BUT_UNVERIFIED arms — because a pin at zero is a slot for the next one
+ * to creep back into.
  */
 export const PLANNED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(
   (key) => !isEnforced(key),

@@ -9,6 +9,7 @@ import { SprintAssignmentValidationError } from '@/lib/ai/sprintAssignment';
 import { NotSprintAdminError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { MotirAiError } from '@/lib/ai/errors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // POST /api/ai/plan/sprint/approve (Subtask 7.13.5 · MOTIR-918) — commit an
 // APPROVED sprint packing. The body carries the packing the human approved,
@@ -52,6 +53,8 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json(result, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     // Both re-validation stages are a 400 — the submitted packing is bad and
     // NOTHING was written. They stay distinct codes so a client can tell a
     // malformed body from a legal-shape-but-illegal-packing.

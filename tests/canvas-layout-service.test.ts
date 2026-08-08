@@ -5,6 +5,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { canvasLayoutService } from '@/lib/services/canvasLayoutService';
 import { canvasNodePositionRepository } from '@/lib/repositories/canvasNodePositionRepository';
 import { InvalidCanvasPositionError } from '@/lib/canvasLayout/errors';
+import { ProjectNotFoundError } from '@/lib/projects/errors';
+import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import { truncateAuthTables } from './helpers/db';
 
 // Real-Postgres tests for the canvas-layout persistence (MOTIR-1237) — the
@@ -20,11 +22,12 @@ afterAll(async () => {
 
 interface Tenant {
   userId: string;
+  workspaceId: string;
   projectId: string;
 }
 
 let seq = 0;
-async function makeTenant(label: string): Promise<Tenant> {
+async function makeTenant(label: string, accessLevel?: ProjectAccessLevel): Promise<Tenant> {
   seq += 1;
   const user = await usersService.createUser({
     email: `canvas-${label}-${seq}@example.com`,
@@ -41,9 +44,10 @@ async function makeTenant(label: string): Promise<Tenant> {
       name: `Canvas P ${label}`,
       slug: 'canvas',
       identifier: 'CNV',
+      ...(accessLevel ? { accessLevel } : {}),
     },
   });
-  return { userId: user.id, projectId: project.id };
+  return { userId: user.id, workspaceId: ws.workspace.id, projectId: project.id };
 }
 
 describe('canvasLayoutService', () => {
@@ -124,5 +128,53 @@ describe('canvasLayoutService', () => {
     ).rejects.toBeInstanceOf(InvalidCanvasPositionError);
     // the valid entry in the first call must NOT have been written (atomic)
     expect((await canvasLayoutService.getLayout(t)).positions).toEqual([]);
+  });
+});
+
+// The PROJECT GATE (Subtask MOTIR-2346). Until this card the arrangement was
+// reachable by any signed-in actor whose active project resolved — `session only`
+// in the inventory, and mapped to `ai:plan`, a key for operations that spend AI
+// credits. It is now `project:browse`, asserted in the service so BOTH the route
+// and any future caller inherit it.
+describe('canvasLayoutService — the project gate', () => {
+  /** A workspace member holding NO project membership, on a PRIVATE project: cannot browse it. */
+  async function nonBrowser(t: Tenant, label: string): Promise<Tenant> {
+    seq += 1;
+    const user = await usersService.createUser({
+      email: `canvas-outsider-${label}-${seq}@example.com`,
+      password: 'hunter2hunter2',
+      name: `Canvas outsider ${label}`,
+    });
+    await workspacesService.addMember({ userId: user.id, workspaceId: t.workspaceId });
+    return { userId: user.id, workspaceId: t.workspaceId, projectId: t.projectId };
+  }
+
+  it('refuses a READ by an actor who cannot browse the project — as a 404-shaped refusal', async () => {
+    const owner = await makeTenant('gate-read', 'private');
+    const outsider = await nonBrowser(owner, 'read');
+    await expect(canvasLayoutService.getLayout(outsider)).rejects.toBeInstanceOf(
+      ProjectNotFoundError,
+    );
+  });
+
+  it('refuses a SAVE by the same actor, and writes nothing', async () => {
+    const owner = await makeTenant('gate-save', 'private');
+    const outsider = await nonBrowser(owner, 'save');
+    await expect(
+      canvasLayoutService.savePositions(outsider, [{ nodeKey: 'discovery', x: 1, y: 2 }]),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    // The gate runs BEFORE the transaction — nothing reached the table.
+    expect(
+      await canvasNodePositionRepository.findByUserAndProject(outsider.userId, outsider.projectId),
+    ).toEqual([]);
+  });
+
+  it('still admits an actor who CAN browse it (the gate is not "deny everyone")', async () => {
+    const owner = await makeTenant('gate-allow', 'private');
+    const saved = await canvasLayoutService.savePositions(owner, [
+      { nodeKey: 'discovery', x: 4, y: 5 },
+    ]);
+    expect(saved.positions).toEqual([{ nodeKey: 'discovery', x: 4, y: 5 }]);
+    expect(await canvasLayoutService.getLayout(owner)).toEqual(saved);
   });
 });
