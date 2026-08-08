@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService, InvalidTargetError } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 export async function POST(req: Request): Promise<Response> {
   const session = await getSession();
@@ -43,6 +44,8 @@ export async function POST(req: Request): Promise<Response> {
       { headers: { 'Cache-Control': 'private, no-store' } },
     );
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof InvalidTargetError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 422 });
     }

@@ -535,7 +535,13 @@ describe('the PENDING set is bounded and shrinking', () => {
     // could not follow a `this.siblingMethod(` hop. Three operations were never
     // ungoverned. A FALL here means the instrument got better; only a RISE means
     // a hole opened.
-    expect(pending.length).toBe(13);
+    //
+    // 13 → 12 is MOTIR-2357 wiring the plan-EDITING jobs. One row moves —
+    // `/api/ai/explanation`, which reached no gate at all — because the other
+    // four already reached one indirectly, through something the route happened
+    // to call. Replacing that indirection with a named key is the point of the
+    // card and is invisible to a count, which is why the card says so up front.
+    expect(pending.length).toBe(12);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

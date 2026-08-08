@@ -6,10 +6,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // resolveTenantOrg (covered by tenantOrg.test.ts).
 vi.mock('@/lib/ai/motirAiClient', () => ({ submitJob: vi.fn(), streamJob: vi.fn() }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
+// …and the project gate (MOTIR-2357). These cases drive a SYNTHETIC ProjectContext
+// with no rows behind it, so the real `ai:plan` assert would 404 on the project id
+// and prove nothing about the job envelope they are here for. The gate itself is
+// covered against real Postgres in `tests/integration/ai/planPermissionGate.test.ts`;
+// the mock is asserted below so it can never quietly hide the call.
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { assertPermission: vi.fn() },
+}));
 
 import { aiExplanationService } from '@/lib/services/aiExplanationService';
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 
@@ -41,6 +50,12 @@ describe('aiExplanationService.submitExplanationDraft', () => {
     );
 
     expect(out).toEqual({ jobId: 'job_1' });
+    // The gate runs, and it asks for `ai:plan` on THIS project (MOTIR-2357).
+    expect(projectAccessService.assertPermission).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ userId: 'user_1' }),
+      'ai:plan',
+    );
     expect(resolveTenantOrg).toHaveBeenCalledWith({ userId: 'user_1', workspaceId: 'ws_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'generate_explanation',

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { aiExplanationService } from '@/lib/services/aiExplanationService';
 import { MotirAiError } from '@/lib/ai/errors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // POST /api/ai/explanation (Subtask 8.8.12) — submit a `generate_explanation`
 // job (8.8.11) for the active project from a work item's draft context, and
@@ -67,6 +68,8 @@ export async function POST(req: Request): Promise<Response> {
     );
     return NextResponse.json({ jobId }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     // Any motir-ai-side failure (unreachable / misconfigured / rejected
     // envelope) maps through the 7.1.1 taxonomy to a typed error → 502.
     if (err instanceof MotirAiError) {

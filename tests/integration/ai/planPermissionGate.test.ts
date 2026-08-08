@@ -1,6 +1,8 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
+import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
+import { aiExplanationService } from '@/lib/services/aiExplanationService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -122,5 +124,49 @@ describe('the plan-change session asks ai:plan', () => {
     await expect(
       planChangeSessionsService.appendTurn('split the auth story', fx.memberPctx),
     ).resolves.toBeTruthy();
+  });
+});
+
+// MOTIR-2357 — the plan-EDITING jobs. `aiPlanEditsService` and
+// `aiExplanationService` carried no assertion of their own; four of their five
+// operations reached a gate only because of something else the ROUTE called, and
+// `submitExplanationDraft` reached none. The gate now lives at
+// `submitPlanEditJob`, the one seam every plan-edit passes through.
+describe('the plan-editing jobs ask ai:plan', () => {
+  it('refuses a VIEWER augment, expand and replan', async () => {
+    const fx = await makeFixture('edits-viewer');
+    await expect(
+      aiPlanEditsService.submitAugment('add a story', fx.viewerPctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(aiPlanEditsService.submitExpand('PROD-1', fx.viewerPctx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    await expect(aiPlanEditsService.submitReplan('PROD-1', fx.viewerPctx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+  });
+
+  it('refuses the implicit workspace member, who holds work_item:edit and not ai:plan', async () => {
+    const fx = await makeFixture('edits-implicit');
+    await expect(
+      aiPlanEditsService.submitAugment('add a story', fx.outsiderPctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('refuses a VIEWER the explanation drafter — the one that reached no gate at all', async () => {
+    const fx = await makeFixture('explain-viewer');
+    await expect(
+      aiExplanationService.submitExplanationDraft({ title: 'Why this matters' }, fx.viewerPctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('asserts BEFORE the work-item lookup — an expand of a nonexistent key still refuses on the key', async () => {
+    // Ordering matters: `submitExpand` resolves the target work item, and a gate
+    // that ran after that lookup would answer "no such item" to an actor who is
+    // not allowed to ask the question at all.
+    const fx = await makeFixture('edits-order');
+    await expect(
+      aiPlanEditsService.submitExpand('PROD-99999', fx.viewerPctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
   });
 });
