@@ -7,11 +7,22 @@ import { getTranslations } from 'next-intl/server';
 // pages (so the topic pages are reachable from every square page). The Product /
 // Company columns are future marketing pages and render as non-interactive
 // labels (no dead links). Server component; colour via --el-* tokens.
+//
+// EMPTY `topics` is a first-class state, not an accident (MOTIR-2452). Two
+// callers reach it: a fresh install where no public project is tagged yet, and
+// the documentation shell, which passes `[]` on purpose so that published docs
+// carry no database client (see `app/(public)/docs/layout.tsx`). Rendering the
+// heading over an empty list would leave an orphan column AND sever the only
+// crawl path from those pages into the square, so the column falls back to ONE
+// link to `/explore` — where the live per-topic links live.
 
 export async function ExploreFooter({
   topics,
 }: {
-  /** The top topics (by public-project count) to link from the footer. */
+  /**
+   * The top topics (by public-project count) to link from the footer. An empty
+   * array renders the "browse all topics" fallback link instead — see above.
+   */
   topics: Array<{ slug: string; label: string }>;
 }) {
   const t = await getTranslations('projectSquare');
@@ -37,16 +48,27 @@ export async function ExploreFooter({
           {t('footExploreByTopic')}
         </h2>
         <ul className="flex flex-col gap-1.5">
-          {topics.map((topic) => (
-            <li key={topic.slug}>
+          {topics.length === 0 ? (
+            <li>
               <Link
-                href={`/explore/topic/${topic.slug}`}
+                href="/explore"
                 className="text-[13px] text-(--el-text-secondary) hover:text-(--el-link)"
               >
-                {topic.label}
+                {t('footExploreAllTopics')}
               </Link>
             </li>
-          ))}
+          ) : (
+            topics.map((topic) => (
+              <li key={topic.slug}>
+                <Link
+                  href={`/explore/topic/${topic.slug}`}
+                  className="text-[13px] text-(--el-text-secondary) hover:text-(--el-link)"
+                >
+                  {topic.label}
+                </Link>
+              </li>
+            ))
+          )}
         </ul>
       </div>
 

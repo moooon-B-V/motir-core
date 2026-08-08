@@ -201,6 +201,42 @@ describe('THE PUBLIC DOOR — the shipped marketing chrome', () => {
     // The other Product entries stay labels.
     expect(screen.getByText('footProductOverview').closest('a')).toBeNull();
   });
+
+  it('falls back to ONE link into the square when there are no topics (MOTIR-2452)', async () => {
+    // The docs shell passes `[]` on purpose — reading the topic facet is what
+    // put a database client in every documentation function. A bare heading over
+    // an empty list would be an orphan column AND would sever the only crawl
+    // path from these pages into the square, so the column degrades to a link.
+    // (A fresh install with no tagged public project reaches the same state.)
+    const { ExploreFooter } = await import('@/app/(public)/explore/_components/ExploreFooter');
+    render(await ExploreFooter({ topics: [] }));
+
+    // The column still exists, so the four-column footer keeps its shape.
+    expect(screen.getByText('footExploreByTopic')).toBeTruthy();
+    expect(screen.getByText('footExploreAllTopics').closest('a')?.getAttribute('href')).toBe(
+      '/explore',
+    );
+  });
+
+  it('links each topic directly when it HAS topics — the fallback is not the default', async () => {
+    const { ExploreFooter } = await import('@/app/(public)/explore/_components/ExploreFooter');
+    render(
+      await ExploreFooter({
+        topics: [
+          { slug: 'ai-ml', label: 'AI & Machine Learning' },
+          { slug: 'devops', label: 'DevOps' },
+        ],
+      }),
+    );
+
+    expect(screen.getByText('AI & Machine Learning').closest('a')?.getAttribute('href')).toBe(
+      '/explore/topic/ai-ml',
+    );
+    expect(screen.getByText('DevOps').closest('a')?.getAttribute('href')).toBe(
+      '/explore/topic/devops',
+    );
+    expect(screen.queryByText('footExploreAllTopics')).toBeNull();
+  });
 });
 
 describe('THE IN-APP DOOR — the API-tokens settings page', () => {

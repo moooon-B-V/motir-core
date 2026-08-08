@@ -478,23 +478,33 @@ describe('the operation section’s envelope headings', () => {
 
 describe('the docs SHELL', () => {
   it('renders the shipped chrome around the content, with Docs marked current', async () => {
-    vi.doMock('@/lib/services/projectTagsService', () => ({
-      projectTagsService: { listCategories: async () => [{ slug: 'ai', label: 'AI' }] },
-    }));
     const { default: Layout } = await import('@/app/(public)/docs/layout');
     const html = await renderPageToHtml(await Layout({ children: <p>content</p> }));
 
     expect(html).toContain('href="/docs/api"');
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('content');
-    // The footer's topic crawl links made it through.
-    expect(html).toContain('/explore/topic/ai');
-    vi.doUnmock('@/lib/services/projectTagsService');
   });
 
-  it('still renders the documentation when the footer’s topic read FAILS', async () => {
-    // The topic column is a nice-to-have crawl surface; the documentation is
-    // not. A docs page must not 500 because a DB read for footer links did.
+  it('links the square from the footer instead of per-topic pages (MOTIR-2452)', async () => {
+    // The shell used to fill six `/explore/topic/<slug>` links from a DB read,
+    // which put a Prisma client in every function under `app/(public)/docs/**`.
+    // The column now falls back to ONE link into the square, whose own footer
+    // carries the live per-topic links — so every topic page is still reachable
+    // from any documentation page, one hop further out.
+    const { default: Layout } = await import('@/app/(public)/docs/layout');
+    const html = await renderPageToHtml(await Layout({ children: <p>content</p> }));
+
+    expect(html).not.toContain('/explore/topic/');
+    expect(html).toContain('href="/explore"');
+  });
+
+  it('cannot 500 on the footer’s topic read, because it no longer makes one', async () => {
+    // The guarantee this replaces was a try/catch: the documentation must not
+    // fail because a nice-to-have crawl surface did. It is now structural —
+    // a service that throws on EVERY call changes nothing, because the shell
+    // never asks it. (`tests/public-docs-db-imports.test.ts` is the guard that
+    // keeps the import itself out of the tree.)
     vi.doMock('@/lib/services/projectTagsService', () => ({
       projectTagsService: {
         listCategories: async () => {
@@ -506,7 +516,7 @@ describe('the docs SHELL', () => {
     const html = await renderPageToHtml(await Layout({ children: <p>content</p> }));
 
     expect(html).toContain('content');
-    expect(html).not.toContain('/explore/topic/');
+    expect(html).toContain('href="/explore"');
     vi.doUnmock('@/lib/services/projectTagsService');
   });
 
