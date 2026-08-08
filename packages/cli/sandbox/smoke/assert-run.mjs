@@ -54,6 +54,10 @@ function argOf(name, fallback) {
   return i === -1 ? fallback : process.argv[i + 1];
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 const CALLS_PATH = argOf('calls');
 const GH_PATH = argOf('gh');
 const ITEMS = Number.parseInt(argOf('items', '2'), 10);
@@ -85,7 +89,7 @@ check(
  *  — the per-item detail below is what checks that. */
 const shapeOf = (entry) =>
   `${entry.method} ${entry.path
-    .replace(new RegExp(`${PROJECT}-\\d+`, 'g'), '{key}')
+    .replace(new RegExp(`${escapeRegExp(PROJECT)}-\\d+`, 'g'), '{key}')
     .replace(`/${PROJECT}/`, '/{project}/')}`;
 
 const READY = `GET /api/v1/projects/{project}/ready`;
