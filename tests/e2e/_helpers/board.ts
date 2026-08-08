@@ -11,6 +11,7 @@ import { SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD } from '../../../scri
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { BoardColumnDto, BoardProjectionDto, MoveCardTarget } from '@/lib/dto/boards';
 import type { TestUser } from './work-item-setup';
+import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 
 // Board-API helpers for the Story-3.1 closing E2E (Subtask 3.1.7), lifted into
 // their own module so the Story-3.2 (Kanban UI) and 3.5 (Epic-3 test) specs can
@@ -432,4 +433,28 @@ export async function setColumnWip(page: Page, columnId: string, value: string):
   // matches a bare "Save", so a non-exact match resolves 2 elements.
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect((await patch).ok(), `set WIP ${value} on ${columnId} persisted`).toBeTruthy();
+}
+
+/**
+ * A viewport wide enough that EVERY default column fits with no horizontal
+ * scrolling — DERIVED from the shipped workflow, never pinned (MOTIR-2427).
+ *
+ * ⚠️ Why this is not a number. The at-scale drag specs pinned 1920 with the
+ * comment "wide enough for all six default columns (6 × 18rem ≈ 1728px) so a
+ * cross-column pointer drag never has to chase a horizontally-scrolling
+ * target". `Planning` (MOTIR-2425) made it SEVEN — 7 × 18rem = 2016px — so the
+ * board began scrolling horizontally and the pointer drags started missing, in
+ * exactly the way that comment said the width existed to prevent. The invariant
+ * was written down and the number quietly stopped satisfying it.
+ *
+ * Expressed as the arithmetic instead, so the next status to arrive widens the
+ * viewport rather than breaking a drag.
+ */
+export function boardViewportWidth(columns: number = DEFAULT_STATUSES.length): {
+  width: number;
+  height: number;
+} {
+  const COLUMN_PX = 288; // 18rem at the 16px root the app ships
+  const CHROME_PX = 280; // sidebar + page gutters, with slack
+  return { width: Math.max(1920, columns * COLUMN_PX + CHROME_PX), height: 1080 };
 }
