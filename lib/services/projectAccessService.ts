@@ -3,7 +3,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import type { Project } from '@/generated/prisma/client';
+import type { MemberRole, Project } from '@/generated/prisma/client';
 import {
   canBrowse,
   canComment,
@@ -18,7 +18,7 @@ import {
   canUpvotePublicRequest,
   type ProjectAccessInputs,
 } from '@/lib/projects/access';
-import { isWorkspaceManager } from '@/lib/projects/roles';
+import { asProjectRole, isWorkspaceManager, type ProjectRole } from '@/lib/projects/roles';
 import {
   NotProjectAdminError,
   PermissionDeniedError,
@@ -675,27 +675,61 @@ export const projectAccessService = {
   },
 
   /**
-   * The project's ROLE CATALOG — every role with the permissions it holds, plus
-   * the catalog's domain grouping. This is what the read-only Roles & permissions
-   * settings page renders (Subtask MOTIR-2263).
+   * The project's ROLE CATALOG — every role with the permissions it holds and how
+   * many people hold it, plus the ROLE-GATED permission rows grouped by domain
+   * and their total. This is what the read-only Roles & permissions screens
+   * render (Subtask MOTIR-2263), list and detail alike.
    *
    * ⚠️ A PROJECT-SCOPED SERVICE READ, not a static import, even though today's
-   * answer is the same for every project. Story MOTIR-2257 makes custom roles
-   * project-scoped, at which point the answer genuinely depends on which project
-   * is asked — and a page wired to a constant would need its data source torn out
-   * and replaced exactly then. The round trip costs nothing measurable now and
-   * saves that replacement. It also re-uses the same 404-not-403 gate, so the
-   * page cannot confirm a foreign project exists.
+   * PERMISSION answer is the same for every project. Story MOTIR-2257 makes
+   * custom roles project-scoped, at which point that half genuinely depends on
+   * which project is asked — and a page wired to a constant would need its data
+   * source torn out and replaced exactly then. The member counts are already
+   * per-project. It also re-uses the same 404-not-403 gate, so the page cannot
+   * confirm a foreign project exists.
+   *
+   * ⚠️ THE GATE RUNS BEFORE THE COUNT. `resolveInputs` throws
+   * ProjectNotFoundError for a project in another workspace, so a cross-tenant id
+   * never reaches a membership read at all — the 404 posture is not something the
+   * count is allowed to weaken by timing.
    */
   async getRoleCatalog(
     projectId: string,
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
   ): Promise<RoleCatalogDTO> {
-    // Resolves for its SIDE EFFECT — the ProjectNotFoundError guard. The catalog
-    // itself is code-owned today; MOTIR-2257 will read the project's own roles
-    // here, which is the reason the projectId is threaded at all.
+    // Resolves for its SIDE EFFECT — the ProjectNotFoundError guard. The
+    // permission half is code-owned today; MOTIR-2257 will read the project's own
+    // roles here, which is the reason the projectId is threaded at all.
     await resolveInputs(projectId, ctx, tx);
-    return toRoleCatalogDTO();
+    // ONE grouped read for every role's headcount — never one query per role.
+    // Outside a caller-supplied transaction it needs its own workspace context:
+    // the project_membership RLS policy reads the per-transaction GUC, so a bare
+    // `db` read returns zero rows under the non-bypass app role.
+    const counts = tx
+      ? await projectMembershipRepository.countByRole(projectId, tx)
+      : await withWorkspaceContext(
+          { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
+          (t) => projectMembershipRepository.countByRole(projectId, t),
+        );
+    return toRoleCatalogDTO(toRoleMemberCounts(counts));
   },
 };
+
+/**
+ * The repository's grouped rows narrowed to the PROJECT-assignable roles. The
+ * `MemberRole` enum is shared with workspace membership and carries `owner`,
+ * which a project membership can never hold — dropping it here keeps the mapper
+ * total over `ProjectRole` rather than defensive about an enum member that cannot
+ * occur. Roles with no members are absent; the mapper zero-fills them.
+ */
+function toRoleMemberCounts(
+  rows: { role: MemberRole; count: number }[],
+): Partial<Record<ProjectRole, number>> {
+  const counts: Partial<Record<ProjectRole, number>> = {};
+  for (const row of rows) {
+    const role = asProjectRole(row.role);
+    if (role) counts[role] = row.count;
+  }
+  return counts;
+}

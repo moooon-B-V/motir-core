@@ -1345,6 +1345,7 @@
       },
       "details": "详情",
       "members": "成员与访问",
+      "roles": "角色与权限",
       "codeAccess": "代码访问",
       "workflow": "工作流",
       "board": "面板",
@@ -1358,15 +1359,15 @@
     "roles": {
       "admin": {
         "name": "管理员",
-        "description": "对项目拥有完全控制权——设置、成员及全部工作内容。"
+        "description": "负责运营项目。每项设置、每个领域，以及工作本身。"
       },
       "member": {
         "name": "成员",
-        "description": "负责推进工作：创建和编辑工作项、发表评论、上传附件。"
+        "description": "负责推进工作——编辑工作项、发表评论、上传附件、运行规划器。不包含项目设置。"
       },
       "viewer": {
         "name": "访客",
-        "description": "只读。可查看项目中的全部内容，但不能做任何更改。"
+        "description": "可查看项目及其报表。不做任何更改。"
       }
     },
     "area": {
@@ -2618,6 +2619,28 @@
       "toast": {
         "title": "令牌已复制",
         "body": "现在就把它粘贴到 agent 的 MCP 配置中——它不会再次显示。"
+      }
+    },
+    "rolesPage": {
+      "title": "角色与权限",
+      "subtitle": "<strong>{projectName}</strong> 中每个角色可以做什么。工作区所有者和管理员始终拥有全部权限。",
+      "builtInNote": "三个内置角色无法修改——它们是 Motir 提供的基本保障。如果需要它们未涵盖的组合，请自建一个角色。",
+      "builtIn": "内置",
+      "builtInLocked": "内置 · 无法修改",
+      "permissionCount": "{total} 项权限中的 {held} 项",
+      "memberCount": "{count, plural, other {# 位成员}}",
+      "allRoles": "全部角色",
+      "crumbs": "设置 · {projectName} · 角色与权限 · {roleName}",
+      "holdsCount": "拥有 {total} 项中的 <strong>{held}</strong> 项",
+      "mark": {
+        "held": "已拥有",
+        "notHeld": "未拥有",
+        "levelGranted": "由访问级别授予"
+      },
+      "levelGated": {
+        "title": "公开请求",
+        "description": "由项目的访问级别授予，而非由角色授予——这也是它们没有出现在上方角色列表中的原因。公开项目的每位访客都拥有这三项，无论是否登录；在开放、受限或私有项目上则无人拥有，包括工作区所有者。",
+        "chip": "访问级别"
       }
     }
   },

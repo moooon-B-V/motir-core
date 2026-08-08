@@ -274,18 +274,46 @@ export const PLANNED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(
  * `{ include: 'enforced' }` narrows to the wired keys for a caller that needs
  * only those. Domains left empty by a filter are dropped, so a heading is never
  * drawn with nothing under it.
+ *
+ * ⚠️ `{ include: <an explicit key set> }` is the third arm (MOTIR-2439), and it
+ * takes the set rather than naming it. The Roles & permissions screens draw the
+ * ROLE-GATED rows — `ROLE_GATED_PERMISSIONS`, the catalog minus the three
+ * level-gated `public_request:*` grants the project's ACCESS LEVEL decides for
+ * everyone — because a permission no role can ever be granted would render as a
+ * permanent dash against every role, reading as "nobody has this" rather than
+ * "roles do not govern this".
+ *
+ * The set is a PARAMETER and not a named `'role_gated'` arm on purpose: naming it
+ * would mean importing `ROLE_GATED_PERMISSIONS` from `lib/permissions/builtinRoles.ts`,
+ * and this module is a LEAF with no imports at all — a property
+ * `tests/permissions/catalog.test.ts` asserts, so that the catalog loads
+ * identically in a server component, a client bundle and a bare test. The caller
+ * passing the constant keeps that intact AND keeps the single definition of the
+ * role-gated set where the roles live. Filter by the CONSTANT, never by a literal:
+ * the set grows, and a hardcoded count would be right only by accident.
  */
 export function permissionsByDomain(
-  options: { include?: 'enforced' | 'all' } = {},
+  options: { include?: 'enforced' | 'all' | readonly PermissionKey[] } = {},
 ): { domain: PermissionDomain; permissions: PermissionDescriptor[] }[] {
-  const all = options.include !== 'enforced';
+  const admits = permissionFilter(options.include);
   return PERMISSION_DOMAINS.map((domain) => ({
     domain,
     permissions: PERMISSIONS.map((key) => PERMISSION_CATALOG[key]).filter(
-      (descriptor) =>
-        descriptor.domain === domain && (all || descriptor.enforcement === 'enforced'),
+      (descriptor) => descriptor.domain === domain && admits(descriptor),
     ),
   })).filter((group) => group.permissions.length > 0);
+}
+
+/** The per-descriptor predicate behind each `include` arm of {@link permissionsByDomain}. */
+function permissionFilter(
+  include: 'enforced' | 'all' | readonly PermissionKey[] | undefined,
+): (descriptor: PermissionDescriptor) => boolean {
+  if (include === 'enforced') return (descriptor) => descriptor.enforcement === 'enforced';
+  if (Array.isArray(include)) {
+    const admitted = new Set<PermissionKey>(include as readonly PermissionKey[]);
+    return (descriptor) => admitted.has(descriptor.key);
+  }
+  return () => true;
 }
 
 /** Sort an arbitrary permission collection into canonical catalog order. */

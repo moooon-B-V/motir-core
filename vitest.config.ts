@@ -139,6 +139,28 @@ export default defineConfig({
         'lib/permissions/**',
         'lib/services/projectAccessService.ts',
 
+        // Story MOTIR-2282 · Subtask MOTIR-2264 — the Roles & permissions
+        // screens and the read behind them. The two files above were already
+        // report-only; these are the surface THIS story added or widened, and
+        // the four that are new code are GATED in `thresholds` below.
+        //
+        // ⚠️ `lib/repositories/projectMembershipRepository.ts` is REPORT-ONLY on
+        // purpose, exactly like `projectAccessService.ts`: this story added one
+        // method to a file most of which predates it, and pinning the whole file
+        // at 90% would gate code no card here wrote or tested. Measuring it is
+        // the honest first step; the pin belongs to whoever owns that surface.
+        'lib/mappers/permissionMappers.ts',
+        'lib/settings/projectSettingsNav.ts',
+        'lib/repositories/projectMembershipRepository.ts',
+        // ⚠️ WRITTEN WITH `app/**/`, NOT `app/(authed)/`, AND THAT IS LOAD-BEARING.
+        // A route-group segment's parentheses are extglob syntax to the matcher
+        // v8 coverage globs with, so a LITERAL `app/(authed)/…` path matches
+        // nothing and the file silently never enters the report. Measured on this
+        // branch: the same four files enter it under `app/**/…` and are absent
+        // under `app/(authed)/…`. See MOTIR-2449 — four component thresholds
+        // already in this file are keyed the literal way and are therefore inert.
+        'app/**/settings/project/roles/_components/*.tsx',
+
         // Story 5.7 (in-app notifications) · Subtask 5.7.6 — the per-user
         // notification-preference layer (the channel gate) lands gated.
         'lib/services/notificationPreferencesService.ts',
@@ -793,6 +815,18 @@ export default defineConfig({
       // fails SILENTLY when it matches nothing — see the route-group note on
       // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
+        // Story MOTIR-2282 · Subtask MOTIR-2264 — every file this story added,
+        // named explicitly and MEASURED before being pinned (all six are at 100%
+        // lines / branches / functions on this branch). The glob form matters for
+        // the same reason as in `include` above: a literal `app/(authed)/…` key
+        // matches no reported file, so the threshold would pass vacuously.
+        'lib/mappers/permissionMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/settings/projectSettingsNav.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/settings/project/roles/_components/*.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.
         'lib/api/v1/route.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-2275 — the ONE definition of the contract version, read by both

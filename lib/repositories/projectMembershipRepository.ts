@@ -105,6 +105,29 @@ export const projectMembershipRepository = {
     return tx.projectMembership.count({ where: { projectId, role: 'admin' } });
   },
 
+  /**
+   * How many of the project's members hold each role — ONE grouped read, not one
+   * count per role (Subtask MOTIR-2439). Backs the `3 members` the Roles &
+   * permissions list row draws beside every role. Only roles with at least one
+   * member come back; zero-filling belongs to the mapper, which knows the full
+   * role set. Optionally takes `tx` for the same RLS-GUC reason as
+   * `findByUserAndProject` — the project_membership policy keys off the
+   * per-transaction `app.workspace_id` GUC, so outside a `withWorkspaceContext`
+   * transaction the non-bypass role sees zero rows.
+   */
+  async countByRole(
+    projectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ role: MemberRole; count: number }[]> {
+    const client = tx ?? db;
+    const groups = await client.projectMembership.groupBy({
+      by: ['role'],
+      where: { projectId },
+      _count: { _all: true },
+    });
+    return groups.map((group) => ({ role: group.role, count: group._count._all }));
+  },
+
   async create(
     data: { workspaceId: string; projectId: string; userId: string; role: MemberRole },
     tx: Prisma.TransactionClient,

@@ -5,6 +5,7 @@ import {
   PROJECT_SETTINGS_NAV,
   PROJECT_SETTINGS_ROOT,
   PROJECT_SETTINGS_ROUTES,
+  PROJECT_SETTINGS_ROUTE_PATHS,
   SETTINGS_NAV_GROUP_ORDER,
   groupSettingsNav,
   isProjectSettingsPath,
@@ -40,13 +41,70 @@ const MEMBER: SettingsNavCapabilities = { canBrowse: true, canManage: false };
 const NO_ACCESS: SettingsNavCapabilities = { canBrowse: false, canManage: false };
 
 describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29)', () => {
-  it('every settings route has EXACTLY one registry entry, and vice versa', () => {
+  it('every settings route is accounted for EXACTLY once, and vice versa', () => {
     const fsRoutes = collectFsRoutes(SETTINGS_DIR, PROJECT_SETTINGS_ROOT).sort();
-    const registryRoutes = PROJECT_SETTINGS_ROUTES.map((e) => e.href).sort();
+    const registryRoutes = [...PROJECT_SETTINGS_ROUTE_PATHS].sort();
 
-    // No drift in either direction: a new page without an entry, or an entry
-    // without a page, both fail.
+    // No drift in either direction: a new page nothing accounts for, or an
+    // accounted-for route with no page, both fail.
     expect(registryRoutes).toEqual(fsRoutes);
+    expect(new Set(registryRoutes).size).toBe(registryRoutes.length);
+  });
+
+  // MOTIR-2263 added the area's first DRILL-DOWN — a second `page.tsx` under
+  // `roles/` whose door is its parent's rail row rather than a row of its own.
+  // The totality assertion above was widened to `PROJECT_SETTINGS_ROUTE_PATHS`
+  // rather than weakened, and these three keep that widening honest: a nested
+  // route must belong to its parent, must not become a rail row, and must still
+  // light one.
+  it('a declared nested route is a STRICT sub-path of the entry that owns it', () => {
+    for (const entry of PROJECT_SETTINGS_ROUTES) {
+      for (const nested of entry.nestedRoutes ?? []) {
+        expect(nested.startsWith(`${entry.href}/`), `${nested} is not under ${entry.href}`).toBe(
+          true,
+        );
+        expect(nested).not.toBe(entry.href);
+      }
+    }
+  });
+
+  it('a nested route never becomes a rail row or a palette action of its own', () => {
+    const nested = PROJECT_SETTINGS_ROUTES.flatMap((e) => e.nestedRoutes ?? []);
+    expect(nested.length, 'the drill-down this guard was widened for').toBeGreaterThan(0);
+    for (const route of nested) {
+      expect(PROJECT_SETTINGS_NAV.some((e) => e.href === route)).toBe(false);
+    }
+  });
+
+  it('a nested route still lights its parent row — no destination without a door', () => {
+    for (const entry of PROJECT_SETTINGS_ROUTES) {
+      for (const nested of entry.nestedRoutes ?? []) {
+        // The literal segment stands in for a real id; the rail matches by prefix.
+        const concrete = nested.replace(/\[[^\]]+\]/g, 'admin');
+        expect(isSettingsEntryActive(entry, concrete), `${entry.id} inactive on ${concrete}`).toBe(
+          true,
+        );
+      }
+    }
+  });
+
+  it('Roles & permissions is a browse-gated Access entry with the detail as its drill-down', () => {
+    const roles = PROJECT_SETTINGS_NAV.find((e) => e.id === 'roles');
+    expect(roles?.href).toBe('/settings/project/roles');
+    expect(roles?.group).toBe('access');
+    expect(roles?.labelKey).toBe('nav.roles');
+    expect(roles?.placeholder).toBeUndefined();
+    // Browse-gated like every other Access entry — a member READS what the roles
+    // mean. Making that a permission predicate is MOTIR-2258's job.
+    expect(roles?.access(MEMBER)).toBe(true);
+    expect(roles?.access(NO_ACCESS)).toBe(false);
+    expect(roles?.nestedRoutes).toEqual(['/settings/project/roles/[roleKey]']);
+    // Rail order within Access — the model sits between who is on the team and
+    // who can clone the code (design/projects/design-notes.md, access path).
+    const accessIds = groupSettingsNav(PROJECT_SETTINGS_NAV)
+      .find((g) => g.group === 'access')!
+      .entries.map((e) => e.id);
+    expect(accessIds).toEqual(['members', 'roles', 'code-access']);
   });
 
   it('has no duplicate hrefs and no duplicate ids', () => {

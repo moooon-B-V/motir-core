@@ -363,21 +363,20 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //    MCP/CLI note above describes, arriving through a different door — not two
   //    PRs racing, but a gate that made one of them invisible. MOTIR-2442 closes
   //    it; MOTIR-2441 is this repair.
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/project/roles',
-    why: 'Forward-looking: the Roles & permissions list page, built by MOTIR-2263, which deletes this row with the route.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/project/roles/[roleKey]',
-    why: 'Forward-looking: the role drill-down on the same unbuilt page, MOTIR-2263.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    address: '/settings/project/roles/new',
-    why: 'Forward-looking: the create-a-role page the asset reserves for the custom-roles story MOTIR-2257; the route lands no earlier than MOTIR-2263.',
-  },
+  // MOTIR-2263 SHIPPED THE ROUTES, so the three roles rows are gone — deleted by
+  // the card that built them, exactly as their own `why` said they would be.
+  // `/settings/project/roles` and `/settings/project/roles/[roleKey]` are real
+  // pages now.
+  //
+  // ⚠️ And `/settings/project/roles/new` went with them, for a reason worth
+  // stating: MOTIR-2257 has NOT built the create page, but `[roleKey]` is a
+  // dynamic segment, so `new` matches it and the address resolves. It resolves
+  // to a deliberate `notFound()` — `roles/[roleKey]/page.tsx` looks the segment
+  // up in the catalog the service returns and 404s on a miss — which is the
+  // right behaviour and is why the row's author pre-authorised this deletion
+  // ("the route lands no earlier than MOTIR-2263"). The guard reads the ROUTE
+  // TABLE, so a 404 rendered BY a matching route is invisible to it; that is a
+  // known limit of the sweep, not something this deletion introduces.
 ];
 
 type Entry = { file: string; address: string; why: string };
