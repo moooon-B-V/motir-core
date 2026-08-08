@@ -27,6 +27,29 @@ export interface PermissionDescriptorDTO {
   descriptionKey: string;
 }
 
+/**
+ * ONE custom role definition, as the write API returns it (Story MOTIR-2257 ·
+ * Subtask MOTIR-2472). Distinct from {@link RoleDTO}, which is what the READ
+ * screens render for every role in a project, built-in ones included — this is
+ * the row the create / rename / re-permission calls just wrote, and nothing
+ * more.
+ */
+export interface RoleDefinitionDTO {
+  id: string;
+  name: string;
+  /** The BUILT-IN this role was cloned from — provenance, never inheritance. */
+  basedOn: ProjectRole;
+  /** The permissions it holds, in CATALOG order (never insertion order). */
+  permissions: PermissionKey[];
+  /**
+   * How many permissions `basedOn` holds — so a client can render the
+   * `Based on Viewer · +2` chip's delta without importing the role sets.
+   */
+  basedOnPermissionCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** One role in the catalog: its identity, and the permissions it holds. */
 export interface RoleDTO {
   role: ProjectRole;

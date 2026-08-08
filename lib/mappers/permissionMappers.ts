@@ -7,11 +7,12 @@ import {
   type PermissionKey,
 } from '@/lib/permissions/catalog';
 import { BUILTIN_ROLE_PERMISSIONS, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
+import { asProjectRole, PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
 import type {
   ActorPermissionsDTO,
   PermissionDomainDTO,
   RoleCatalogDTO,
+  RoleDefinitionDTO,
   RoleDTO,
 } from '@/lib/dto/permissions';
 
@@ -108,4 +109,41 @@ export function toActorPermissionsDTO(
   held: Iterable<PermissionKey>,
 ): ActorPermissionsDTO {
   return { projectId, permissions: sortByCatalogOrder(held) };
+}
+
+/**
+ * ONE custom role definition → the DTO the write API returns (Story MOTIR-2257 ·
+ * Subtask MOTIR-2472). Not `RoleDTO`: that is what the READ screens render for
+ * every role in a project, built-ins included. This is the row that was just
+ * written.
+ *
+ * The stored `permissions` array is INTERSECTED with the role-gated set and
+ * re-sorted into catalog order on the way out — the same posture
+ * `resolvePermissions` takes on the read side (MOTIR-2470). The service refuses
+ * an ungrantable key at write time, so this is not a second policy: it is what
+ * keeps a row authored BEFORE a key was retired from reporting a permission the
+ * product no longer governs.
+ */
+export function toRoleDefinitionDTO(row: {
+  id: string;
+  name: string;
+  basedOn: string;
+  permissions: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}): RoleDefinitionDTO {
+  const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
+  const held = row.permissions.filter((key): key is PermissionKey => roleGated.has(key));
+  const base = asProjectRole(row.basedOn);
+  /* istanbul ignore next -- unreachable: `basedOn` is NOT NULL and the service refuses any value outside PROJECT_ASSIGNABLE_ROLES, so a row can only carry a valid base */
+  if (!base) throw new Error(`Role definition ${row.id} carries a non-assignable base.`);
+  return {
+    id: row.id,
+    name: row.name,
+    basedOn: base,
+    permissions: sortByCatalogOrder(held),
+    basedOnPermissionCount: BUILTIN_ROLE_PERMISSIONS[base].size,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
