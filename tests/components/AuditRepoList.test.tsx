@@ -42,6 +42,25 @@ const neverAudited = (repoKey: string): RepoAuditSurfaceDTO => ({
 
 const unloadable = (repoKey: string): RepoAuditSurfaceDTO => ({ repoKey, surface: null });
 
+/** An audit that landed but reported no grade — the `healthSummary` fields are
+ *  all optional, so this is a shape the DTO permits and the row must survive. */
+const ungraded = (repoKey: string, total: number): RepoAuditSurfaceDTO => ({
+  repoKey,
+  surface: {
+    audit: {
+      id: `audit_${repoKey}`,
+      healthSummary: {},
+      codeGraphRef: null,
+      repoKey,
+      createdAt: AUDITED_AT,
+    },
+    findings: [],
+    total,
+    nextOffset: null,
+    scanner: null,
+  },
+});
+
 function renderList(
   audits: RepoAuditSurfaceDTO[],
   over: {
@@ -49,6 +68,8 @@ function renderList(
     selected?: string | null;
     onSelect?: (repoKey: string) => void;
     onRetry?: (repoKey: string) => void;
+    onAuditRepos?: (repoKeys: string[]) => void;
+    busy?: boolean;
   } = {},
 ) {
   return renderWithIntl(
@@ -57,6 +78,8 @@ function renderList(
       selectedRepoKey={over.selected ?? audits[0]?.repoKey ?? null}
       onSelect={over.onSelect ?? vi.fn()}
       onRetry={over.onRetry ?? vi.fn()}
+      {...(over.onAuditRepos ? { onAuditRepos: over.onAuditRepos } : {})}
+      {...(over.busy === undefined ? {} : { busy: over.busy })}
     />,
     { now: NOW },
   );
@@ -219,5 +242,108 @@ describe('AuditRepoList — selection + a11y', () => {
     // our own, which is the whole reason the row is a button and not a div.
     fireEvent.click(second!);
     expect(onSelect).toHaveBeenCalledWith('a/two');
+  });
+});
+
+// The derive triggers (Panel 8 / MOTIR-2249). These were shipped untested: the
+// component's coverage entry named the literal `app/(authed)/…` path, which the
+// coverage matcher resolves to no file, so the ≥90% gate never saw this file
+// and the whole `onAuditRepos` half read as covered while being unexercised
+// (MOTIR-2449).
+describe('AuditRepoList — the derive triggers (Panel 8)', () => {
+  const MIXED = [
+    audited('a/graded', 34, 5),
+    neverAudited('a/fresh'),
+    neverAudited('a/pending'),
+    unloadable('a/broken'),
+  ];
+
+  it('the header action derives every repo with NO report, in one press', () => {
+    const onAuditRepos = vi.fn();
+    renderList(MIXED, { onAuditRepos });
+
+    const header = screen.getByRole('button', { name: 'Audit the 2 with no report' });
+    fireEvent.click(header);
+
+    // `unavailable` is excluded on purpose (Panel 8 §2): its read failed, so
+    // nothing here knows whether it needs deriving.
+    expect(onAuditRepos).toHaveBeenCalledWith(['a/fresh', 'a/pending']);
+  });
+
+  it('removes the header action when every repo already has a report', () => {
+    renderList([audited('a/one', 34, 5), audited('a/two', 90, 7)], { onAuditRepos: vi.fn() });
+
+    // ABSENT at zero, never disabled (Panel 8 §3).
+    expect(screen.queryByRole('button', { name: /Audit the/ })).toBeNull();
+  });
+
+  it('removes EVERY derive trigger while a run is in flight', () => {
+    renderList(MIXED, { onAuditRepos: vi.fn(), busy: true });
+
+    expect(screen.queryByRole('button', { name: /Audit the/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Audit a/fresh' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Re-audit a/graded' })).toBeNull();
+    // The free re-READ is untouched by a run — it is not a derive trigger.
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+
+  it('renders no derive trigger at all when the page passes no handler', () => {
+    renderList(MIXED);
+
+    expect(screen.queryByRole('button', { name: /Audit/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Re-audit/ })).toBeNull();
+  });
+
+  it('derives ONE repo from its own row, named by that repo', () => {
+    const onAuditRepos = vi.fn();
+    renderList(MIXED, { onAuditRepos });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Audit a/fresh' }));
+    expect(onAuditRepos).toHaveBeenCalledWith(['a/fresh']);
+
+    // A repo that HAS a report offers the rarer re-derive instead.
+    fireEvent.click(screen.getByRole('button', { name: 'Re-audit a/graded' }));
+    expect(onAuditRepos).toHaveBeenLastCalledWith(['a/graded']);
+    // Weight encodes price: the two repos with no report get the bordered
+    // `secondary` label, the graded one the quieter re-derive.
+    expect(screen.getAllByText('Audit this repo')).toHaveLength(2);
+    expect(screen.getByText('Re-audit')).toBeTruthy();
+  });
+
+  it('offers no derive trigger on a deriving or unavailable row', () => {
+    renderList([audited('a/one', 34, 5), neverAudited('a/two'), unloadable('a/broken')], {
+      deriving: ['a/two'],
+      onAuditRepos: vi.fn(),
+    });
+
+    // `deriving` — the work is already happening; `unavailable` — the read
+    // failed, so deriving would spend money to fix what may be a display error.
+    expect(screen.queryByRole('button', { name: /a\/two/ })?.getAttribute('aria-label')).toBe(
+      'Show the audit for a/two · Deriving…',
+    );
+    expect(screen.queryByRole('button', { name: 'Audit a/two' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Audit a/broken' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Re-audit a/broken' })).toBeNull();
+  });
+});
+
+describe('AuditRepoList — the states an audit’s own numbers can be missing', () => {
+  it('falls back to the bare word when an audit reported no grade', () => {
+    renderList([ungraded('a/one', 4), audited('a/two', 90, 7)]);
+
+    // `healthSummary` is all-optional, so "audited, no number" is reachable —
+    // the chip then carries the neutral tint and the word, never a grade of 0.
+    const chip = screen.getByText('Audited');
+    expect(chip.className).toContain('bg-(--el-muted)');
+    const names = rowButtons().map((b) => b.getAttribute('aria-label'));
+    expect(names).toContain('Show the audit for a/one · Audited');
+  });
+
+  it('times a deriving row from the audit it is replacing', () => {
+    // A repo whose PREVIOUS audit is on screen while a fresh one derives keeps
+    // its `createdAt`, so the row can say WHEN rather than "just started".
+    renderList([audited('a/one', 34, 5), audited('a/two', 90, 7)], { deriving: ['a/two'] });
+
+    expect(screen.getByText('started 5 minutes ago')).toBeTruthy();
   });
 });
