@@ -161,10 +161,20 @@ for (let i = 1; i <= ITEMS; i += 1) {
   // The harness self-report (MOTIR-1685) is how a Motir tenant can tell agent
   // work from human work; an unattended run that stopped sending it would erase
   // that provenance silently.
+  //
+  // ⚠️ It names the AGENT, not the CLI (MOTIR-2419). This used to assert a
+  // `motir-cli/<version>` prefix, which was the bug: that string is the same on
+  // every row ever integrated, so it distinguishes nothing. The loop derives the
+  // harness from the command it launched — here `fake-agent.sh` — which is the
+  // only value that could ever answer "what built this?".
+  const harness = integrated?.body?.implementationHarness;
   check(
-    typeof integrated?.body?.implementationHarness === 'string' &&
-      integrated.body.implementationHarness.startsWith('motir-cli/'),
-    `${key}: the integration carried no motir-cli harness stamp`,
+    typeof harness === 'string' && harness.includes('fake-agent'),
+    `${key}: the integration did not name the AGENT as its harness (got ${JSON.stringify(harness)})`,
+  );
+  check(
+    typeof harness === 'string' && !harness.startsWith('motir-cli/'),
+    `${key}: the integration reported the LAUNCHER as the harness — the MOTIR-2419 regression`,
   );
 
   if (typeof seed === 'string') branches.add(seed);

@@ -21,6 +21,7 @@ import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp, createProject, createItem, transition } from './_helpers/workflow';
 import { getBoard, moveCard, columnByStatus, cardIdsIn, addCustomStatus } from './_helpers/board';
+import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 
 // 3.8.2 retired the per-column page; the board loads the whole bounded set up to
 // BOARD_ISSUE_CAP (5,000). Seed comfortably past the OLD 50-card page size to
@@ -39,7 +40,7 @@ test.afterAll(async () => {
 // verification recipe + CI select with (`pnpm test:e2e --grep board-projection`)
 // and the `@smoke` tag the Story-closing E2E convention uses.
 test.describe('board-projection @smoke', () => {
-  test('default board projects six columns in workflow order, cards grouped by status, empty unmapped', async () => {
+  test('default board projects a column per workflow status, in order, cards grouped by status, empty unmapped', async () => {
     const owner = await signUp('e2e-board-projection@example.com');
     const project = await createProject(owner, 'Board', 'BRD');
 
@@ -53,15 +54,11 @@ test.describe('board-projection @smoke', () => {
 
     const board = await getBoard(owner.ctx);
 
-    // Six default columns, in workflow order, one status each.
-    expect(board.columns.map((c) => c.statusKeys)).toEqual([
-      ['todo'],
-      ['blocked'],
-      ['in_progress'],
-      ['in_review'],
-      ['done'],
-      ['cancelled'],
-    ]);
+    // ONE column per default status, in workflow order. Read from the shipped
+    // workflow rather than pinned to a literal list: the default vocabulary
+    // GREW (MOTIR-2425 added `Planning`), and a pinned list turns every future
+    // status into a browser-lane failure that says nothing about the product.
+    expect(board.columns.map((c) => c.statusKeys)).toEqual(DEFAULT_STATUSES.map((s) => [s.key]));
 
     // Cards land in the right column; per-column counts match.
     expect(cardIdsIn(board, 'todo')).toEqual([stay.id]);
@@ -83,9 +80,9 @@ test.describe('board-projection @smoke', () => {
     const board = await getBoard(owner.ctx);
     // Surfaced as unmapped (Jira's behaviour — never silently dropped)…
     expect(board.unmappedStatuses.map((s) => s.key)).toContain(key);
-    // …and given NO column (the six default columns are unchanged).
+    // …and given NO column (the default columns are unchanged).
     expect(board.columns.flatMap((c) => c.statusKeys)).not.toContain(key);
-    expect(board.columns).toHaveLength(6);
+    expect(board.columns).toHaveLength(DEFAULT_STATUSES.length);
   });
 
   test('a column past the old page size loads the WHOLE bounded set at once — no cursor, not truncated (3.8.2)', async () => {

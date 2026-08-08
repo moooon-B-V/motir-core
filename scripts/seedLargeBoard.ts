@@ -388,11 +388,37 @@ async function rawUpdateIn(ids: string[], assign: Prisma.Sql): Promise<void> {
   }
 }
 
+/** The greatest common divisor — the coprimality check the backlog stride needs. */
+function gcd(a: number, b: number): number {
+  return b === 0 ? a : gcd(b, a % b);
+}
+
+/**
+ * A backlog stride that cannot RESONATE with the status round-robin (MOTIR-2427).
+ *
+ * ⚠️ The board seed assigns statuses `spreadIdx % statusCount` in creation order,
+ * and this function partitions the SAME creation order `i % stride`. When those
+ * two cycles share a factor, one status lands in the backlog slot EVERY time —
+ * so that column is empty in the sprint scope, and the seed's own promise that
+ * "the sprint inherits the full column spread" is quietly false.
+ *
+ * It went unnoticed because the default workflow had SIX statuses and the stride
+ * is 7: coprime by luck. Adding a seventh (`Planning`, MOTIR-2425) made them
+ * equal, and the E2E that asserts every column is populated failed on a column
+ * that legitimately had nothing in it. Stepping the stride until it is coprime
+ * makes the property hold for any workflow rather than for the one we shipped.
+ */
+export function coprimeStride(stride: number, statusCount: number): number {
+  let candidate = Math.max(2, stride);
+  while (statusCount > 1 && gcd(candidate, statusCount) !== 1) candidate += 1;
+  return candidate;
+}
+
 export async function seedLargeScrumSprint(
   params: SeedLargeScrumSprintParams,
   options: SeedLargeScrumSprintOptions = {},
 ): Promise<SeedLargeScrumSprintManifest> {
-  const backlogSliceEvery = Math.max(2, options.backlogSliceEvery ?? 7);
+  const requestedBacklogEvery = Math.max(2, options.backlogSliceEvery ?? 7);
   const unestimatedEvery = Math.max(2, options.unestimatedEvery ?? 4);
   const startedDaysAgo = options.startedDaysAgo ?? 3;
   const endsInDays = options.endsInDays ?? 11;
@@ -407,6 +433,10 @@ export async function seedLargeScrumSprint(
   //    that would pass `doneAgedOutEvery: undefined`, which spreads OVER and
   //    clobbers the default, silently dropping the Done-age spread.)
   const boardManifest = await seedLargeBoard(params, options);
+
+  // The stride is chosen AFTER the board is seeded, because it depends on how
+  // many statuses this project's workflow actually has — see `coprimeStride`.
+  const backlogSliceEvery = coprimeStride(requestedBacklogEvery, boardManifest.statusKeys.length);
 
   // 2. Flip the project's seeded default board (kanban, 3.1.2) to scrum so
   //    `getBoard` takes the 4.5.2 sprint-scoped path. The columns + mappings are

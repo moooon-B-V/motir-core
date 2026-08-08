@@ -2306,6 +2306,7 @@
      lib/workflows/defaultWorkflow.ts. */
   --el-status-todo: var(--color-stone); /* neutral grey — not started */
   --el-status-in-progress: var(--color-info); /* blue — active */
+  --el-status-planning: var(--color-accent-teal); /* teal — being RE-PLANNED, not being worked */
   --el-status-in-review: var(--color-primary); /* brand — differentiate from in-progress */
   --el-status-done: var(--color-success); /* green — resolved */
   --el-status-blocked: var(--color-warning); /* amber — can't proceed (gap fixed) */
@@ -3910,6 +3911,14 @@
      apart on Mirotone's gray ramp. cancelled drops to gray-600. ΔE 20.6;
      contrast 7.5:1 / 8.3:1. */
   --el-status-in-review: #243797; /* Mirotone blue-650 — deep action blue */
+  /* Status ramp — planning vs the two blues (MOTIR-2427, the MOTIR-2073 class).
+     Citrine is a deliberate 5-hue Miro palette and it re-skins
+     `--color-accent-teal` to Mirotone BLUE, so the base teal source lands on
+     top of in_progress here. Mirotone red-500 is the only remaining documented
+     family: `Planning` means the card was found WRONG and is being re-planned,
+     which is the one status where an attention hue is honest — and `cancelled`
+     stays deliberately grey, so red is not overloaded. */
+  --el-status-planning: #d8182c; /* Mirotone red-500 — the attention family */
   --el-status-cancelled: #4a4e5e; /* Mirotone gray-600 — one step deeper */
 }
 
@@ -3978,6 +3987,11 @@
      cancelled is unchanged here (ΔE 17.8 from todo) and re-asserted only to
      pair the light block's override — see the cascade note in cobalt/dark. */
   --el-status-in-review: #d9dffc; /* Mirotone blue-200 — pale action blue */
+  /* The dark twin of the planning override above — declared in BOTH themes even
+     though it is the same family, because an unpaired light override loses to
+     the later palette block (the cascade trap). Brightened one step, as this
+     palette does with every semantic on dark. */
+  --el-status-planning: #ff6b78; /* Mirotone red-400 — brightened for dark */
   --el-status-cancelled: var(--color-steel);
 }
 
@@ -4051,6 +4065,11 @@
   --color-destructive-foreground: #ffffff;
   --color-info: #00749e; /* Sky-11 */
 
+  /* Status ramp — planning, the LIGHT twin of the dark override below (the
+     cascade trap: an unpaired light override loses to the later palette block).
+     Same documented Plum family, at the light scale step. */
+  --el-status-planning: #ab4aba; /* Plum-9 — the documented berry accent */
+
   /* links — Radix Sky-11 candy blue, distinct from the pink primary */
   --color-link: #00749e;
   --color-link-pressed: #1d3e56; /* Sky-12 */
@@ -4107,6 +4126,14 @@
   --color-destructive: #ff92ad; /* Crimson dark-11 */
   --color-destructive-foreground: #191114; /* dark ink on the bright danger */
   --color-info: #75c7f0; /* Sky dark-11 */
+
+  /* Status ramp — planning vs done (MOTIR-2427, the MOTIR-2073 class). Candy's
+     `--color-accent-teal` is Jade dark-11 (#1fd8a4) and its `--color-success` is
+     Grass dark-11 (#71d083): two bright dark-mode greens ΔE2000 9.2 apart, which
+     is one dot at a glance. The ramp takes the palette's own documented BERRY
+     instead of a fourth green — Plum, which candy.md names as its accent family
+     and which nothing else in the status ramp uses. */
+  --el-status-planning: #ab4aba; /* Plum-9 — the documented berry accent */
 
   --color-link: #75c7f0;
   --color-link-pressed: #c2f3ff; /* Sky dark-12 */
