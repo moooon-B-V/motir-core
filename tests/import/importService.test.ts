@@ -2,6 +2,8 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { importService } from '@/lib/services/importService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
+import { githubIdentityService } from '@/lib/services/githubIdentityService';
+import { encryptToken } from '@/lib/github/tokenCrypto';
 import { LinearOAuthExchangeError } from '@/lib/import/linear/errors';
 import { JiraOAuthExchangeError } from '@/lib/import/jira/errors';
 import { PlaneOAuthExchangeError } from '@/lib/import/plane/errors';
@@ -562,6 +564,109 @@ describe('importService.buildConnector — the Plane refresh path', () => {
 
     expect(err).toBeInstanceOf(ImportSourceNotConnectedError);
     expect((err as Error).cause).toBeInstanceOf(PlaneOAuthExchangeError);
+  });
+});
+
+// MOTIR-2456 — GitHub is the one live source whose credential does NOT live in
+// `ImportSourceIdentity`, and (per the three describes above) the one with no
+// refresh path to route through: the wizard badges it from the 7.10
+// `GithubIdentity` ("reuses your existing GitHub connection"), while
+// `buildConnector` read the other table, which nothing ever writes a `github`
+// row into. So the importer was dead for EVERY member — including one the
+// wizard had just called connected.
+//
+// These assert the two stores are now ONE, at the seam that actually failed:
+// the wizard's own read decides who is connected, and the connector built for
+// that member is checked by the Authorization header it puts on the wire.
+describe('importService.buildConnector — the GitHub identity', () => {
+  const GITHUB_CONNECTION = { source: 'github', owner: 'acme', repo: 'widgets' } as const;
+  const TOKEN = 'gho_member_token';
+
+  /** Record the Authorization header of every GitHub API request the connector
+   *  makes, answering the repo probe `connect()` performs. */
+  function stubGithubApi(): string[] {
+    const auth: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        if (!url.startsWith('https://api.github.com/repos/acme/widgets')) {
+          throw new Error(`unexpected fetch to ${url}`);
+        }
+        auth.push(String(new Headers(init?.headers).get('authorization')));
+        return new Response(JSON.stringify({ full_name: 'acme/widgets' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }),
+    );
+    return auth;
+  }
+
+  /** The identity the 7.10 OAuth grant writes — the row the wizard's badge and
+   *  (now) the importer both read. */
+  async function connectGithub(userId: string, token = TOKEN): Promise<void> {
+    await db.githubIdentity.create({
+      data: {
+        userId,
+        githubUserId: `gh-${userId}`,
+        githubLogin: 'octocat',
+        accessTokenEncrypted: encryptToken(token),
+      },
+    });
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('builds a connector carrying the token of the member the wizard calls connected', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectGithub(fx.ctx.userId);
+    const auth = stubGithubApi();
+
+    // The WIZARD's read, verbatim — `_data.ts`'s `githubConnection()` badges the
+    // source from exactly this call. Asserting it here is what makes the next
+    // two lines a claim about the two surfaces agreeing, not just about one.
+    expect(await githubIdentityService.getIdentityForUser(fx.ctx.userId)).not.toBeNull();
+
+    const connector = await importService.buildConnector('github', GITHUB_CONNECTION, fx.ctx);
+    await connector.connect();
+
+    expect(auth).toEqual([`Bearer ${TOKEN}`]);
+  });
+
+  it('rejects with ImportSourceNotConnectedError when the member has no identity', async () => {
+    const fx = await makeWorkItemFixture();
+    const auth = stubGithubApi();
+
+    // The same read, answering the other way — the wizard renders "connect
+    // GitHub", and the importer must agree rather than 500.
+    expect(await githubIdentityService.getIdentityForUser(fx.ctx.userId)).toBeNull();
+
+    await expect(
+      importService.buildConnector('github', GITHUB_CONNECTION, fx.ctx),
+    ).rejects.toBeInstanceOf(ImportSourceNotConnectedError);
+    // Not-connected costs no network call — it is a state, not a failed probe.
+    expect(auth).toEqual([]);
+  });
+
+  it('does NOT read the import-source store — a `github` row there is not a connection', async () => {
+    const fx = await makeWorkItemFixture();
+    // The row the OLD code required and nothing ever writes. Seeding it by hand
+    // pins the DECISION: the importer follows the wizard's identity, so this row
+    // must not resurrect a connection the badge would call absent.
+    await importSourceIdentityService.upsertIdentity({
+      userId: fx.ctx.userId,
+      workspaceId: fx.ctx.workspaceId,
+      source: 'github',
+      accessToken: 'ghs_wrong_store',
+    });
+    stubGithubApi();
+
+    expect(await githubIdentityService.getIdentityForUser(fx.ctx.userId)).toBeNull();
+    await expect(
+      importService.buildConnector('github', GITHUB_CONNECTION, fx.ctx),
+    ).rejects.toBeInstanceOf(ImportSourceNotConnectedError);
   });
 });
 

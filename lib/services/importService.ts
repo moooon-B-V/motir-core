@@ -13,7 +13,7 @@ import type { ImportSource } from '@/generated/prisma/client';
 import { importRepository } from '@/lib/repositories/importRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
+import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { linearImportOAuthService } from '@/lib/services/linearImportOAuthService';
 import { jiraOAuthService } from '@/lib/services/jiraOAuthService';
 import { planeImportOAuthService } from '@/lib/services/planeImportOAuthService';
@@ -339,29 +339,46 @@ export const importService = {
     //    site here — `githubIdentityService` would first have to persist an
     //    expiry + refresh token, which is a substrate change.
     //
-    // ⚠️ SEPARATE, PRE-EXISTING DEFECT — see MOTIR-2456, logged not absorbed
-    // (`notes.html` #27): the read below is against `ImportSourceIdentity`, and
-    // NOTHING in the repo ever writes a row there with `source: 'github'` (only
-    // the jira / linear / plane OAuth services call `upsertIdentity`). So a
-    // GitHub import throws `ImportSourceNotConnectedError` for every member,
-    // including one the wizard shows as connected — the wizard reads
-    // `GithubIdentity` and this reads a different table. That is a store
-    // mismatch, not a refresh gap, so it is fixed on its own card.
-    const token = await importSourceIdentityService.getLiveToken({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-      source,
-    });
-    if (!token) throw new ImportSourceNotConnectedError(source);
+    // ⚠️ So it reads `GithubIdentity` — the SAME row the wizard badges — and not
+    // `ImportSourceIdentity`, which is what MOTIR-2456 fixed. That failure was
+    // total: NOTHING in the repo ever writes an `ImportSourceIdentity` with
+    // `source: 'github'` (only the jira / linear / plane OAuth services call
+    // `upsertIdentity`, and there is no `app/api/import/github/*` route), so
+    // every GitHub import threw `ImportSourceNotConnectedError` — including for
+    // a member the wizard had just badged CONNECTED off the other table. Two
+    // surfaces answering one question from two stores: keep this read and
+    // `_data.ts`'s pointed at the SAME one, or the badge starts lying again.
+    if (connection.source === 'github') {
+      const live = await githubIdentityService.getLiveToken(ctx.userId);
+      if (!live) throw new ImportSourceNotConnectedError('github');
+      return new GithubConnector({
+        token: live.accessToken,
+        owner: connection.owner,
+        repo: connection.repo,
+        baseUrl: connection.baseUrl,
+      });
+    }
 
-    return new GithubConnector({
-      token: token.accessToken,
-      owner: connection.owner,
-      repo: connection.repo,
-      baseUrl: connection.baseUrl,
-    });
+    // Every source now reads its credential through the path that keeps it
+    // usable after connect day — the three `readFresh` branches above, and
+    // GitHub's identity read here. The raw `importSourceIdentityService`
+    // fetch-and-decrypt this tail used to do has no caller left: MOTIR-2454
+    // took Jira and Plane off it, and MOTIR-2456 took GitHub off it. Do not
+    // reintroduce it as a fallback — a stored token read without its refresh
+    // path is exactly the day-two failure both cards were filed for.
+    return exhaustive(connection);
   },
 };
+
+/** The `buildConnector` dispatch is TOTAL over `ImportConnectionConfig`. This
+ *  makes that a compile-time claim: a new `ImportSource` variant lands here as a
+ *  type error naming the unhandled member, rather than as a runtime fall-through
+ *  that would look, from the wizard, exactly like "not connected". */
+function exhaustive(connection: never): never {
+  throw new ImportConnectionConfigError(
+    `no connector for source "${(connection as { source?: string }).source ?? 'unknown'}"`,
+  );
+}
 
 /** Read one source's connection through its refresh path. A grant the vendor
  *  will no longer refresh (the refresh POST was rejected, or the identity

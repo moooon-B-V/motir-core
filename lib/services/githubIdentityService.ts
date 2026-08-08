@@ -116,6 +116,33 @@ export const githubIdentityService = {
   },
 
   /**
+   * The acting member's DECRYPTED GitHub user token, or null when unbound —
+   * `getIdentityForUser` (the token-free DTO the surfaces render) with the one
+   * field a caller that has to CALL GitHub needs. Same row, same RLS-bound read:
+   * a member the settings badge / the import wizard shows as connected is
+   * exactly a member this returns a token for, and one it returns null for is
+   * exactly the "connect your account" state those surfaces already render.
+   *
+   * ⚠️ Returns a live credential — callers put it on the wire and never persist,
+   * log or echo it. Import's GitHub connector is the second consumer, after
+   * `listOrganizations` below (MOTIR-2456).
+   *
+   * There is nothing to refresh: `GithubIdentity` stores one credential column,
+   * `access_token_encrypted` — no `expires_at`, no refresh token — because a
+   * GitHub App user-to-server token does not expire unless the App enables
+   * "Expire user authorization tokens". Were that ever turned on, the fix is a
+   * substrate change HERE (persist an expiry + refresh token), not at a call
+   * site (MOTIR-2454 settled this; MOTIR-2456 carried it forward).
+   */
+  async getLiveToken(userId: string): Promise<{ accessToken: string } | null> {
+    const row = await withUserContext(userId, (tx) =>
+      githubIdentityRepository.findByUserId(userId, tx),
+    );
+    if (!row) return null;
+    return { accessToken: decryptToken(row.accessTokenEncrypted) };
+  },
+
+  /**
    * The organizations the acting member's connected account belongs to (Story
    * MOTIR-1775 · MOTIR-1939) — the takeover picker's "Your organizations" group.
    *
@@ -128,11 +155,9 @@ export const githubIdentityService = {
    * error from the organization lookup.
    */
   async listOrganizations(userId: string): Promise<GithubUserOrg[]> {
-    const row = await withUserContext(userId, (tx) =>
-      githubIdentityRepository.findByUserId(userId, tx),
-    );
-    if (!row) return [];
-    return userOrgsClient.listForToken(decryptToken(row.accessTokenEncrypted));
+    const live = await this.getLiveToken(userId);
+    if (!live) return [];
+    return userOrgsClient.listForToken(live.accessToken);
   },
 
   /**
