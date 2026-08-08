@@ -200,7 +200,7 @@ services (`tests/e2e/_helpers/plans-review-seed.ts`), full-page screenshots at 1
   mirrors it as the hand-off target and redraws none of it.
 
 **Re-verified for this revision:** `git diff c76e2b7a origin/main` over `app/(authed)/plans`,
-`components/plans`, `app/globals.css`, `packages/design-system/theme.css` and
+`components/planning`, `app/globals.css`, `packages/design-system/theme.css` and
 `app/(authed)/settings/workspace/github` is **empty** — none of the composed shipped surfaces has
 moved since those renders, so they still describe reality and were not re-shot.
 

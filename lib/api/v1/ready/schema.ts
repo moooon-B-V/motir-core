@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import {
   actorRefSchema,
@@ -49,7 +49,7 @@ import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 //     `GET /api/v1/work-items/{key}/dispatch-prompt`, which 11.7 ships.
 //
 // ⚠️ `sessionBranch` USED TO BE ON THIS LIST TOO, grouped with the three above,
-// and **Amendment 15 moved it onto the row as `inheritedSessionBranch`**. The
+// and **Amendment 17 moved it onto the row as `inheritedSessionBranch`**. The
 // grouping was by proximity, not by meaning: the other three describe a local
 // checkout, while this one QUALIFIES the readiness the row already asserts —
 // ready from `main` and ready on top of unmerged work are materially different
@@ -141,7 +141,7 @@ export const readyItemSchema = z.object({
   descriptionExcerpt: z.string().nullable(),
   /**
    * READY RELATIVE TO WHAT: the single session branch this item's dependencies
-   * are integrated on, or `null` when it is ready from the trunk (Amendment 15).
+   * are integrated on, or `null` when it is ready from the trunk (Amendment 17).
    *
    * `blockedBy` says why the item is ready — it is empty. This says what that
    * readiness is measured against, and the two together are the whole answer.

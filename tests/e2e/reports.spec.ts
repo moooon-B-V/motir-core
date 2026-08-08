@@ -26,7 +26,7 @@ import { backlogService } from '@/lib/services/backlogService';
 import { createTestWorkItem, makeWorkItemFixture, TEST_PASSWORD } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 test.describe.configure({ timeout: 90_000 });
 

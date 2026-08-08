@@ -101,7 +101,7 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
       totalCount: page.totalCount,
       // This view counted comments and nothing else. `totalChanges: 0` would
       // say the item has no history, which is a different — and usually false —
-      // claim than "this read did not look" (ADR Amendment 13).
+      // claim than "this read did not look" (ADR Amendment 15).
       totalComments: page.totalCount,
       totalChanges: null,
     });

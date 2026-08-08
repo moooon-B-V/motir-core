@@ -15,11 +15,13 @@ import type { WorkItemDto } from '@/lib/dto/workItems';
 export const projectKeyField = z
   .string()
   .min(1)
-  .describe('The project key the sprint belongs to, e.g. "PROD".');
+  .describe(
+    'The project key the sprint belongs to — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+  );
 
 /**
  * The zod field every sprint-addressed tool shares. A sprint is addressed by
- * its opaque id (NOT a `PROD-<n>` work-item key) — obtain it from
+ * its opaque id (NOT a `<KEY>-<n>` work-item key) — obtain it from
  * `list_sprints`, which returns each sprint's `id` alongside its name/state.
  */
 export const sprintIdField = z

@@ -70,17 +70,21 @@ real structure, it does not redraw a stylised stand-in):
   DIRECTLY. This story inserts the entrance BEFORE that; MOTIR-1462 (the router) makes `/onboarding` render
   this entrance and route start-planning → `DiscoveryOnboarding` (seeded with the preserved idea) / import
   → the 7.15 wizard.
-- **`app/_components/PublicFrontDoor.tsx`** (7.3.14 / MOTIR-1022, the marketing hero) — the SOURCE of the
-  idea. This entrance **continues its exact vocabulary**: the `Sparkles` eyebrow chip on
-  `--el-tint-lavender`, the **serif** headline (`font-serif`), the idea-capture `Card` + `textarea` +
-  `ArrowRight` primary `Button`, and a "See how Motir works" link (the detailed explainer). The carried-over idea
-  (Panel 2) is the hero's typed idea preserved by MOTIR-1458 (`lib/onboarding/pendingIdea.ts`) and
+- **The MOTIR-1022 marketing hero (7.3.14)** — the SOURCE of the idea, and **no longer part of this
+  repo**: MOTIR-1457 (commit `37ee7c97`) pointed the root at `/sign-in` and relocated the hero to the
+  standalone motir-marketing site (Story 8.3 / MOTIR-1152). Read its markup out of git history at
+  `37ee7c97^` if you need it; there is no motir-core file to open. This entrance **continues its exact
+  vocabulary**: the `Sparkles` eyebrow chip on `--el-tint-lavender`, the **serif** headline
+  (`font-serif`), the idea-capture `Card` + `textarea` + `ArrowRight` primary `Button`, and a
+  "See how Motir works" link (the detailed explainer). The surviving in-repo seam is the **"Plan with
+  AI" door** on `app/(auth)/sign-in/page.tsx`, which carries the same `Sparkles` mark; the carried-over
+  idea (Panel 2) is the hero's typed idea preserved by MOTIR-1458 (`lib/onboarding/pendingIdea.ts`) and
   pre-filled here — so the post-login screen reads as "keep going," not a repeat of the hero.
 
 ## Access path (entry + the two exits)
 
 - **INBOUND (owned by sibling cards — drawn there, not redrawn here):** (a) the first-login / marketing
-  door — motir-core root → `/login` → **"Build with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
+  door — motir-core root → `/sign-in` → **"Build with AI"** → `/onboarding` (MOTIR-1457); (b) the IN-APP
   door — an authenticated user picks **"Build with AI"** in the create-project modal / switcher /
   empty-project state (design MOTIR-1485, code MOTIR-1486). Both land on THIS entrance.
 - **OUTBOUND (drawn here — the point of the card):** each path names its destination in the copy (Start

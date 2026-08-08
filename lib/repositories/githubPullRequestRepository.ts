@@ -4,7 +4,7 @@ import {
   type GithubPullRequest,
   type GithubRepo,
   type Prisma,
-} from '@prisma/client';
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // GitHub pull-request repository — single Prisma operations on the

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';

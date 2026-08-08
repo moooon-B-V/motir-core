@@ -30,6 +30,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKindDto, WorkItemPriorityDto } from '@/lib/dto/workItems';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
 
@@ -138,7 +139,7 @@ test('build a beyond-facet filter → live results + count + URL round-trip + Tr
     ],
   };
   const expectedParam = encodeURIComponent(encodeFilterParam(expectedAst));
-  await expect(page).toHaveURL(new RegExp(expectedParam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  await expect(page).toHaveURL(new RegExp(escapeRegExp(expectedParam)));
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: 'Advanced filter' })).not.toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: 'match' })).toHaveText(

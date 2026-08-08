@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { WorkItemImplementationSource, WorkItemPlanningSource } from '@prisma/client';
+import { WorkItemImplementationSource, WorkItemPlanningSource } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { plansService } from '@/lib/services/plansService';

@@ -1,5 +1,5 @@
 import 'server-only';
-import type { ImportSource } from '@prisma/client';
+import type { ImportSource } from '@/generated/prisma/client';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { projectsService } from '@/lib/services/projectsService';
 import { workflowsService } from '@/lib/services/workflowsService';

@@ -1,4 +1,4 @@
-import type { Prisma, ProjectRepoRole } from '@prisma/client';
+import type { Prisma, ProjectRepoRole } from '@/generated/prisma/client';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';

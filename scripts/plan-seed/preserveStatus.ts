@@ -31,7 +31,7 @@
  * STATUS authority moves. Re-running stays idempotent: a double reseed snapshots
  * the statuses the first reseed just preserved and re-applies the same values.
  */
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { DEFAULT_STATUS_KEYS } from '@/lib/workflows/defaultWorkflow';

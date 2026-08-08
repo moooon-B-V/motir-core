@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // MOTIR-1277 · 1266.6 — the onboarding / canvas semantic element tokens:
 // revision-diff kind chips, the discovery chat bubbles, the planning-canvas
@@ -34,9 +35,7 @@ const BASE_BLOCK = (() => {
 })();
 
 function mappingOf(token: string): string | null {
-  const m = BASE_BLOCK.match(
-    new RegExp(`${token.replace(/[-]/g, '\\-')}:\\s*var\\((--color-[a-z-]+)\\)`),
-  );
+  const m = BASE_BLOCK.match(new RegExp(`${escapeRegExp(token)}:\\s*var\\((--color-[a-z-]+)\\)`));
   return m?.[1] ?? null;
 }
 

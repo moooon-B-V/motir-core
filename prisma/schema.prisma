@@ -45,7 +45,11 @@
 // adapter), not here. This file declares only the provider and the models.
 
 generator client {
-  provider = "prisma-client-js"
+  provider            = "prisma-client"
+  output              = "../generated/prisma"
+  runtime             = "nodejs"
+  moduleFormat        = "cjs"
+  importFileExtension = ""
 }
 
 datasource db {

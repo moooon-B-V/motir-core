@@ -1,4 +1,4 @@
-import { Prisma, type Watcher } from '@prisma/client';
+import { Prisma, type Watcher } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Watcher repository — single Prisma operations on the `watcher` table

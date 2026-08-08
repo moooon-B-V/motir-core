@@ -1,0 +1,46 @@
+name: Register functions with Inngest
+description: >-
+  PUT the app's Inngest serve route so the cloud learns the function list this
+  release ships, and FAIL when the PUT does not succeed. Extracted from
+  `inngest-sync.yml` by MOTIR-2390 so the deploy job and the manual re-sync run
+  ONE definition — the retry loop, the 200 assertion and the error message
+  cannot drift between two copies.
+
+inputs:
+  serve-url:
+    description: >-
+      The full URL of the serve route to register (e.g.
+      https://app.motir.co/api/inngest). Use the CUSTOM domain, never a
+      per-deployment hostname — see the caller's header for why.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: PUT the serve route
+      shell: bash
+      env:
+        SERVE_URL: ${{ inputs.serve-url }}
+      run: |
+        set -euo pipefail
+        echo "Registering $SERVE_URL"
+        # Retry: a release is READY a moment before it takes traffic, and a cold
+        # first request can exceed the default timeout.
+        for attempt in 1 2 3 4 5; do
+          code=$(curl -sS -X PUT "$SERVE_URL" \
+            --max-time 30 \
+            -o response.json -w '%{http_code}' || echo 000)
+          echo "attempt $attempt → HTTP $code"
+          cat response.json || true
+          echo
+          if [ "$code" = "200" ]; then
+            # The SDK answers 200 with { "message": ..., "modified": bool }.
+            # `modified` tells us whether the registry actually CHANGED; both
+            # values are success, so it is reported, not asserted.
+            echo "Registered. modified=$(jq -r '.modified // "unknown"' response.json)"
+            exit 0
+          fi
+          sleep $((attempt * 10))
+        done
+        echo "::error::Inngest registration failed after 5 attempts. Jobs added since the last successful sync will silently consume nothing — see MOTIR-1970."
+        exit 1

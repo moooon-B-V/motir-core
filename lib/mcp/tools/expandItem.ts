@@ -164,7 +164,7 @@ export function registerExpandItem(server: McpServer, resolveContext: McpContext
       title: 'Expand work item',
       description:
         'Submit an AI expansion of one CONTAINER work item (epic / story / task / bug, by ' +
-        'identifier e.g. "PROD-7"): the planner drafts the children it should have. Returns ' +
+        'identifier e.g. "ACME-7"): the planner drafts the children it should have. Returns ' +
         '`{ jobId, planId }` IMMEDIATELY — it does not wait for the planner, so poll ' +
         `\`${GET_PLAN_STATUS_TOOL_NAME}\` for the outcome. ` +
         'IMPORTANT: this does NOT create work items. The job produces a PLAN of proposals; ' +

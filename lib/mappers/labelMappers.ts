@@ -1,4 +1,4 @@
-import type { Label } from '@prisma/client';
+import type { Label } from '@/generated/prisma/client';
 import type { LabelDto } from '@/lib/dto/labels';
 
 /**

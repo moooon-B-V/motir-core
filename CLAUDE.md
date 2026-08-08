@@ -316,8 +316,9 @@ async function dispatch(args: { inviterName: string; workspaceName: string; acce
 - ❌ Calling `sendEmail` from inside a template — templates are pure,
   the service dispatches
 - ❌ Reading `process.env` or DB inside a template — pass everything in
-  as props (e.g., the service builds `acceptUrl` from
-  `BETTER_AUTH_URL` + token and hands the finished URL to the template)
+  as props (e.g., the service builds `acceptUrl` from the app-origin accessor
+  `resolveBaseUrlTrimmed()` (`lib/baseUrl.ts`, backed by `MOTIR_BASE_URL`) plus
+  the token, and hands the finished URL to the template)
 - ❌ Putting auto-derived plain text (`{ plainText: true }`) into
   production — the dev-console contract requires the URL to appear
   verbatim, not as `label (url)`

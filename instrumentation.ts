@@ -7,10 +7,13 @@
 //     to Google's OAuth token endpoint and returns a synthetic id_token, so
 //     Playwright drives the real Better-Auth callback handler end-to-end
 //     without leaving localhost.
-//   - E2E_TEST_BLOB=1 → lib/test-blob-mock intercepts the @vercel/blob SDK's
-//     API calls (put/del) and returns synthetic public-store URLs, so the
-//     attachments E2E journey performs real uploads through the real route
-//     without a real blob store (CI runs a placeholder token by design).
+//   - E2E_TEST_BLOB=1 → lib/test-blob-mock installs an IN-PROCESS object store
+//     at the S3 SDK's transport seam, so the attachments E2E journey performs
+//     real uploads through the real route without a real blob store (CI runs
+//     placeholder credentials by design). NOTE this one does NOT use the shared
+//     undici agent below: undici's dispatcher governs `fetch`, and the AWS SDK
+//     transports over `node:https`, so an intercept there cannot see it — see
+//     that module's header (MOTIR-2389).
 //   - E2E_TEST_BILLING=1 → lib/test-billing-mock intercepts the motir-ai billing
 //     seam (the MOTIR_AI_URL origin's /v1/usage + /v1/stripe/*) and returns
 //     synthetic plan/usage state + hosted session URLs, so the billing journeys
@@ -80,9 +83,10 @@ export async function register() {
   }
   if (wantBlobMock) {
     const { installBlobStoreMock } = await import('@/lib/test-blob-mock');
-    installBlobStoreMock(agent);
+    // No `agent` — this seam replaces the S3 client's transport, not undici's.
+    installBlobStoreMock();
     // eslint-disable-next-line no-console -- instrumentation boot is the right place for this signal
-    console.log('[INSTRUMENT] E2E_TEST_BLOB active — Vercel Blob API mocked.');
+    console.log('[INSTRUMENT] E2E_TEST_BLOB active — in-process object store installed.');
   }
   if (wantBillingMock) {
     const { installBillingBoundaryMock } = await import('@/lib/test-billing-mock');

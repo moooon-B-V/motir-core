@@ -18,7 +18,7 @@
       (components/issues/WorkItemTypeChip.tsx) — DISTINCT from the kind icon
       (epic/story/task/bug/subtask) already shown in the Title cell. Both the
       list and tree render from the shared `buildIssueColumns` set
-      (app/(authed)/issues/_components/issueColumns.tsx), so the column is added
+      (app/(authed)/items/_components/issueColumns.tsx), so the column is added
       ONCE there and flows to both `IssueListTable` and `IssueTreeTable`.
 
       Built FROM the real design system: the token block below is copied 1:1 from
@@ -201,7 +201,7 @@
         margin: 0 auto;
       }
 
-      /* ── Page-head (mirrors app/(authed)/issues/page.tsx header) ─────────── */
+      /* ── Page-head (mirrors app/(authed)/items/page.tsx header) ─────────── */
       .page-head {
         display: flex;
         flex-wrap: wrap;

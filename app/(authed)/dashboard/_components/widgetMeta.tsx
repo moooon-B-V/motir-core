@@ -15,7 +15,7 @@ import {
   PieChart,
   type LucideIcon,
 } from 'lucide-react';
-import type { DashboardWidgetType } from '@prisma/client';
+import type { DashboardWidgetType } from '@/generated/prisma/client';
 import type { DashboardWidgetSourceDto } from '@/lib/dto/dashboards';
 import type { WidgetConfig, DistributionConfig } from '@/lib/dashboards/widgetRegistry';
 

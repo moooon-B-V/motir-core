@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import type { GithubRepo } from '@prisma/client';
+import type { GithubRepo } from '@/generated/prisma/client';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { dispatchPromptService } from '@/lib/services/dispatchPromptService';
@@ -12,6 +12,7 @@ import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // PROJECT-SCOPED repo resolution + the CLONE coordinates on the dispatch payload
 // (Story MOTIR-1775 · MOTIR-1783) — the two gaps MOTIR-1804 left, over real
@@ -86,7 +87,7 @@ async function connectRepo(
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
-      repoId: `${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `${name}-${randomToken(8)}`,
       owner,
       name,
       defaultBranch: opts.defaultBranch ?? 'main',
@@ -535,7 +536,7 @@ describe('contract discipline — additive only', () => {
         'descriptionMd',
         'executor',
         'id',
-        // Amendment 15 (MOTIR-2400) put the readiness qualifier on the ready
+        // Amendment 17 (MOTIR-2400) put the readiness qualifier on the ready
         // ROW, so the dispatch superset inherits it. `sessionBranch` below is
         // the SAME value addressed as an instruction, and both stay: this
         // payload tells an agent what to do, the row states a fact.

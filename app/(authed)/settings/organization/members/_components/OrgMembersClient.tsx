@@ -15,7 +15,7 @@ import {
   UserMinus,
   UserPlus,
 } from 'lucide-react';
-import type { OrganizationRole } from '@prisma/client';
+import type { OrganizationRole } from '@/generated/prisma/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';

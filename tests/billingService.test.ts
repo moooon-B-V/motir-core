@@ -129,12 +129,12 @@ beforeEach(async () => {
   createPortalSessionMock.mockResolvedValue({ url: 'https://billing.stripe.com/p/session/1' });
   setSeatQuantityMock.mockResolvedValue({ applied: true, outcome: 'updated' });
   process.env['MOTIR_CLOUD'] = 'true';
-  process.env['BETTER_AUTH_URL'] = APP_ORIGIN;
+  process.env['MOTIR_BASE_URL'] = APP_ORIGIN;
 });
 
 afterEach(() => {
   delete process.env['MOTIR_CLOUD'];
-  delete process.env['BETTER_AUTH_URL'];
+  delete process.env['MOTIR_BASE_URL'];
 });
 
 afterAll(async () => {

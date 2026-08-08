@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
 import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken } from '../helpers/random';
 
 // Operator-dashboard read + replay surface (Story 1.6 · Subtask 1.6.5). Drives
 // the service directly against a real Postgres (no mocks except inngest.send,
@@ -30,7 +31,7 @@ async function seedRun(opts: {
       workspaceId: opts.workspaceId,
       functionId: opts.functionId ?? 'email.send',
       eventName: opts.eventName ?? 'email.send',
-      eventId: `evt-${Math.random().toString(36).slice(2)}`,
+      eventId: `evt-${randomToken()}`,
       attempt: 0,
       status: opts.status,
     },

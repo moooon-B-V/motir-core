@@ -1,4 +1,4 @@
-import type { WorkItemRevision } from '@prisma/client';
+import type { WorkItemRevision } from '@/generated/prisma/client';
 import type { WorkItemRevisionDto } from '@/lib/dto/workItems';
 
 // Prisma → DTO conversion for work-item revisions (Subtask 1.4.6). Mirrors

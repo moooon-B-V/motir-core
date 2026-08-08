@@ -1,4 +1,4 @@
-import type { Workspace, WorkspaceMembership } from '@prisma/client';
+import type { Workspace, WorkspaceMembership } from '@/generated/prisma/client';
 import type { MembershipWithUser } from '@/lib/repositories/workspaceMembershipRepository';
 import type {
   CurrentWorkspaceDTO,

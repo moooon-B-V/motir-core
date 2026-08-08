@@ -4,6 +4,7 @@ import { nextCookies } from 'better-auth/next-js';
 import { deviceAuthorization } from 'better-auth/plugins';
 import { headers } from 'next/headers';
 import { db } from '@/lib/db';
+import { resolveBaseUrl } from '@/lib/baseUrl';
 import { sendEvent } from '@/lib/jobs/sendEvent';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { currentLocale } from '@/lib/i18n/serverLocale';
@@ -62,41 +63,23 @@ export const auth = betterAuth({
   // but does NOT, on its own, establish which origins are allowed to call
   // the /api/auth/* endpoints — that's `trustedOrigins` below.
   //
-  // Resolution order:
-  //   1. BETTER_AUTH_URL — explicit override; set on production with the
-  //      canonical public URL (e.g. https://motir-core.vercel.app).
-  //   2. VERCEL_BRANCH_URL — Vercel-injected, the stable branch-alias URL
-  //      (e.g. motir-core-git-<branch>-<team>.vercel.app). This is the
-  //      URL browsers actually visit on preview deployments.
-  //   3. VERCEL_URL — fallback to the per-deployment unique URL. Note:
-  //      Vercel's docs warn this var "cannot be used in conjunction with
-  //      Standard Deployment Protection," so prefer VERCEL_BRANCH_URL.
-  //   4. localhost — local dev (`pnpm dev` on :3000).
-  baseURL:
-    process.env['BETTER_AUTH_URL'] ??
-    (process.env['VERCEL_BRANCH_URL']
-      ? `https://${process.env['VERCEL_BRANCH_URL']}`
-      : process.env['VERCEL_URL']
-        ? `https://${process.env['VERCEL_URL']}`
-        : 'http://localhost:3000'),
+  // It is supplied IN CODE from `resolveBaseUrl()`, which owns the whole
+  // precedence (MOTIR_BASE_URL, else localhost — see lib/baseUrl.ts). This
+  // module used to duplicate that chain inline, which is how the app grew two
+  // answers to "what is my own origin"; nothing about Better-Auth depends on
+  // the variable's NAME, so there is no reason to keep a second reader here.
+  baseURL: resolveBaseUrl(),
   // trustedOrigins is the allowlist for cross-origin (and same-origin
   // with mismatched baseURL) requests to /api/auth/*. Without an explicit
-  // list, Better-Auth defaults to [baseURL] — which fails for Vercel
-  // previews where the request may arrive on the branch-alias URL, the
-  // deployment-unique URL, or a custom domain, all pointing at the same
-  // deployment. Listing all the URLs the deployment is reachable on
-  // closes the gap. Filter out empty/undefined values so a missing env
-  // var doesn't shrink the list to something with empty strings in it
-  // (which Better-Auth would happily allow any unknown origin against).
-  trustedOrigins: [
-    process.env['BETTER_AUTH_URL'],
-    process.env['VERCEL_BRANCH_URL'] ? `https://${process.env['VERCEL_BRANCH_URL']}` : undefined,
-    process.env['VERCEL_URL'] ? `https://${process.env['VERCEL_URL']}` : undefined,
-    process.env['VERCEL_PROJECT_PRODUCTION_URL']
-      ? `https://${process.env['VERCEL_PROJECT_PRODUCTION_URL']}`
-      : undefined,
-    'http://localhost:3000',
-  ].filter((u): u is string => Boolean(u)),
+  // list, Better-Auth defaults to [baseURL].
+  //
+  // It used to enumerate four Vercel-era URLs because a preview deployment was
+  // reachable on a branch alias, a deployment-unique URL AND a custom domain at
+  // once. The app is served on ONE origin, so the allowlist collapses to that
+  // origin plus the dev origin. De-duplicated because locally the two are the
+  // same string, and an allowlist that repeats itself invites the reader to
+  // think one of the entries means something else.
+  trustedOrigins: Array.from(new Set([resolveBaseUrl(), 'http://localhost:3000'])),
 
   emailAndPassword: {
     enabled: true,

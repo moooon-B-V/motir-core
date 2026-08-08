@@ -114,7 +114,7 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     }
 
     // 2b. COUNT — its whole promise is that it counts what the COLLECTION would
-    // page (ADR Amendment 12), so it is asserted AGAINST that page rather than
+    // page (ADR Amendment 14), so it is asserted AGAINST that page rather than
     // against a number this test knows: a count that drifts from the collection
     // is the only way this operation can be wrong.
     const counted = await http(`${project}/count`, caller);

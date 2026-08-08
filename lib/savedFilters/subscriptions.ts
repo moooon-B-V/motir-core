@@ -1,4 +1,4 @@
-import type { SavedFilterSubscriptionSchedule } from '@prisma/client';
+import type { SavedFilterSubscriptionSchedule } from '@/generated/prisma/client';
 
 // Filter-subscription schedule logic (Story 6.2 · Subtask 6.2.5) — Prisma-free
 // pure helpers so the cron's due-ness check is frozen-clock testable in

@@ -6,7 +6,7 @@ import { reportsService } from '@/lib/services/reportsService';
 import { SprintNotFoundError, SprintNotStartedError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { truncateAuthTables } from '../../helpers/db';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 
 // Story 8.14 · Subtask 8.14.4 — reportsService.getSprintCycleGraph. Real Postgres
 // (no mocks). Drives the full reportsService → repository → Prisma chain against a

@@ -279,7 +279,7 @@ describe('wire → transport → adapter → renderer, over real routes', () => 
     const { detail, payload } = await clientFor(caller).readWorkItem(item.identifier);
     expect(renderWorkItemDetail(detail)).toContain('A detail read');
 
-    // ADR Amendment 14: `--json` emits the RESOURCE, not the CLI's narrowed
+    // ADR Amendment 16: `--json` emits the RESOURCE, not the CLI's narrowed
     // view of it. Asserted against the payload's own keys, because the whole
     // point is that it carries fields the view model drops.
     const keys = Object.keys(payload as Record<string, unknown>);
@@ -331,7 +331,7 @@ describe('wire → transport → adapter → renderer, over real routes', () => 
       caller.ctx,
     );
 
-    // Amendment 12: counting is its OWN operation, so this is one request and
+    // Amendment 14: counting is its OWN operation, so this is one request and
     // says what it is — rather than a page read for its `total`.
     const total = await clientFor(caller).countWorkItems({ projectKey: caller.projectKey });
     expect(total).toBeGreaterThanOrEqual(1);

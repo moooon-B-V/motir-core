@@ -1,4 +1,4 @@
-import type { SprintState } from '@prisma/client';
+import type { SprintState } from '@/generated/prisma/client';
 
 // Typed errors for the sprint domain (Story 4.1 · Subtask 4.1.3). Kept in their
 // own file so callers — the service layer and the CRUD route handlers — can

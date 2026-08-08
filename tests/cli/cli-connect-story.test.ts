@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import type { User } from '@prisma/client';
+import type { User } from '@/generated/prisma/client';
 
 // Better-Auth's rate limiter buckets /sign-in per IP (window 10s, max 3) and
 // every test here signs in for real to obtain the session the plugin's claim /

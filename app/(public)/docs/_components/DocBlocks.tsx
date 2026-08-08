@@ -38,6 +38,20 @@ function renderInline(text: string): ReactNode[] {
   });
 }
 
+/**
+ * The two inline marks, for a caller laying out its OWN paragraph.
+ *
+ * Added by Story MOTIR-2309 (the MCP guide), whose per-client footnotes sit
+ * inline beside a link and so cannot be a `prose` block. Without this they were
+ * rendering `**name**` and backticks literally — the same marks every other
+ * string in this document set carries, silently untreated because the caller had
+ * laid out its own `<p>`. One treatment for the whole surface beats a second one
+ * the next page hand-rolls.
+ */
+export function DocInline({ text }: { text: string }) {
+  return <>{renderInline(text)}</>;
+}
+
 /** One authored block. */
 export function DocBlock({ block }: { block: GuideBlock }) {
   if (block.kind === 'prose') {
@@ -103,7 +117,12 @@ function DocTable({ block }: { block: Extract<GuideBlock, { kind: 'table' }> }) 
               <th
                 key={index}
                 scope="col"
-                className="border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase"
+                // The optional width is WIDE-ONLY and per column; the narrow arm
+                // below is a `<dl>` and has no columns to size. See the
+                // `columnWidths` note on `GuideBlock`.
+                className={`border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase${
+                  block.columnWidths?.[index] ? ` ${block.columnWidths[index]}` : ''
+                }`}
               >
                 {renderInline(column)}
               </th>

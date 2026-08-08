@@ -28,6 +28,7 @@ import {
   type FakeAgent,
   type FakeGh,
 } from '../helpers/cliHarness';
+import { randomToken } from '../helpers/random';
 
 // STORY-CLOSING suite for the Motir CLI (Story 7.9 · Subtask 7.9.5 · MOTIR-883).
 //
@@ -44,7 +45,7 @@ import {
 // (`v1Routes: true`, mounted by MOTIR-2379). The ASSERTIONS did not move with
 // it, and that is the migration's central proof: not one expected line of
 // human-readable output in this file changed. The only edits are three `--json`
-// payload assertions, where ADR Amendment 14 deliberately changed the shape —
+// payload assertions, where ADR Amendment 16 deliberately changed the shape —
 // `--json` now emits the v1 RESOURCE, which names an item by `key` rather than
 // `identifier`. `cli-v1-story.test.ts` (11.5.8) holds what this suite does not:
 // the harness's own dispatch, plus the scope-refused and rate-limited states.
@@ -144,7 +145,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
-      repoId: `repo-${name}-${Math.random().toString(36).slice(2, 10)}`,
+      repoId: `repo-${name}-${randomToken(8)}`,
       owner: 'moooon',
       name,
       defaultBranch: 'main',

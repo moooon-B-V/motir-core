@@ -267,7 +267,7 @@ export function v1ReadyRow(key: string, over: Record<string, unknown> = {}) {
     assigneeId: null,
     assignee: null,
     descriptionExcerpt: null,
-    // Amendment 15's readiness qualifier — null is "ready from the trunk", which
+    // Amendment 17's readiness qualifier — null is "ready from the trunk", which
     // is what a fixture row should be unless a test is about the other case.
     inheritedSessionBranch: null,
     dependencies: v1Edges(),
@@ -560,7 +560,7 @@ export const DEFAULT_V1: V1Script = {
   'GET /api/v1/work-items/{key}/activity': { body: v1Activity() },
   'GET /api/v1/projects/{projectKey}/work-items': { body: v1Page([]) },
   // Its OWN operation, not a field on the page above — a collection either
-  // promises a total or it does not (ADR Amendment 12).
+  // promises a total or it does not (ADR Amendment 14).
   'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 0 } },
   // The planning conversation. Opening and appending both answer with the
   // WHOLE thread; the submit answers 202 with a job handle and nothing else.

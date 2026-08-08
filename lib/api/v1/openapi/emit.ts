@@ -164,7 +164,7 @@ function responseBodySchema(body: V1ResponseBody): JsonObject | undefined {
  * ⚠️ This is not a weakening, it is what makes `allOf` mean anything here. A
  * `false` in one `allOf` branch is applied by a validator to the WHOLE instance,
  * not to that branch's own properties — so a strict envelope forbids the very
- * per-operation extension (ADR Amendment 13) a page body composes onto it, and
+ * per-operation extension (ADR Amendment 15) a page body composes onto it, and
  * every real response fails.
  *
  * The zod schema KEEPS `.strict()`: `tests/helpers/v1SpecConformance.ts` builds

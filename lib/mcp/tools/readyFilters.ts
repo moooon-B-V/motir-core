@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 
 // Shared zod fields for the ready-set tools (`list_ready`, `next_ready`) — the
 // MCP-side mirror of the `ReadyListFilter` facets the `/api/ready` routes parse
@@ -9,7 +9,9 @@ import { WorkItemKind, WorkItemPriority } from '@prisma/client';
 export const projectKeyField = z
   .string()
   .min(1)
-  .describe('The project key, e.g. "PROD" (case-insensitive).');
+  .describe(
+    'The project key — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value. Case-insensitive.',
+  );
 
 export const kindsField = z
   .array(z.nativeEnum(WorkItemKind))

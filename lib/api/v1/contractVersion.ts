@@ -40,15 +40,15 @@
  *   both with `getAll` since they shipped — and only the document, which
  *   described them as scalars while its own prose said "Repeatable", moves.
  * - `1.4.0` — MOTIR-2318 adds `GET …/work-items/count`, the operation
- *   Amendment 12 decided on so a client can learn how many items match a filter
+ *   Amendment 14 decided on so a client can learn how many items match a filter
  *   without paging the match set. Additive: a new operation, no declared shape
  *   changed.
  * - `1.5.0` — MOTIR-2320 adds `totalComments` / `totalChanges` to the activity
- *   page (Amendment 13). The merged `all` view reports two streams, and one
+ *   page (Amendment 15). The merged `all` view reports two streams, and one
  *   `totalCount` cannot say what it is made of. Additive: two new fields,
  *   `totalCount` unchanged in meaning on every view.
  * - `1.6.0` — MOTIR-2400 adds `inheritedSessionBranch` to the READY row
- *   (Amendment 15). The row asserted that an item is ready without saying what
+ *   (Amendment 17). The row asserted that an item is ready without saying what
  *   that readiness is measured against — from the trunk, or on top of unmerged
  *   work. Additive: one new field, and the `blockedBy` it sits beside is
  *   unchanged.

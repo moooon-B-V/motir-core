@@ -1,4 +1,4 @@
-import { Prisma, type Dashboard } from '@prisma/client';
+import { Prisma, type Dashboard } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { DashboardWithFacts } from '@/lib/mappers/dashboardMappers';
 

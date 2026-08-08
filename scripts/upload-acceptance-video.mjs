@@ -42,7 +42,6 @@
 /* eslint-disable no-console -- this is a CLI script; stdout is its interface. */
 import fs from 'node:fs';
 import path from 'node:path';
-import { put as putBlob } from '@vercel/blob/client';
 
 const DEFAULT_BASE_URL = 'https://app.motir.co';
 const DEFAULT_OUTPUT_DIR = 'out/playwright-output-acceptance';
@@ -382,10 +381,12 @@ export function assessWatchability(args = {}) {
 // platform ceiling, as it first looked: it is Motir's OWN per-file entitlement
 // (`entitlementsService.resolvePerFileLimitBytes` — 10 MB baseline, 100 MB on a
 // cloud `scaled` org), minted into the client upload token as
-// `maximumSizeInBytes`. @vercel/blob then rejects an over-size `put` client-side
-// with an opaque "File is too large, the file length cannot be greater than
-// 104857600 bytes" — thrown from inside the upload, after the story resolved,
-// after the watchability verdict, after the token mint.
+// `maxBytes`. Before MOTIR-2389 the client SDK rejected an over-size `put`
+// itself with an opaque "File is too large…"; the S3 presigned PUT that
+// replaced it has no size ceiling at all, so the ceiling is now enforced
+// SERVER-side when the register step re-reads the object's real size
+// (`recordFromPathnames` → `FileTooLargeError`). Either way the failure lands
+// after the story resolved, after the watchability verdict, after the mint.
 //
 // Measured on run 30579274284 (see the PR body): the CADENCE recording's video
 // is a few MB and its TRACE is well over the cap, so MOTIR-813 was the one story
@@ -492,6 +493,35 @@ function assertWithinMintedCap(label, file, target) {
 }
 
 /**
+ * PUT one artifact to the presigned URL the mint returned (MOTIR-2389).
+ *
+ * ⚠️ `content-type` MUST be sent, and MUST equal the type the server bound at
+ * signing time. The grant is an S3 presigned PUT with `content-type` inside
+ * `X-Amz-SignedHeaders` (`lib/blob/uploader.ts` → `mintPrivateUploadToken`),
+ * deliberately: a presigned PUT carries only the metadata the SIGNER bound, so
+ * an unbound type would let an artifact land as `application/octet-stream` and
+ * be served as a download instead of a video. The flip side is that a mismatched
+ * or missing header is a SIGNATURE failure — hence sending exactly
+ * `target.contentType`, never a guess from the filename.
+ *
+ * @param {'video' | 'trace'} label
+ * @param {string} filePath
+ * @param {{ token: string, contentType: string, pathname: string }} target
+ */
+async function putSignedArtifact(label, filePath, target) {
+  const res = await fetch(target.token, {
+    method: 'PUT',
+    headers: { 'content-type': target.contentType },
+    body: fs.readFileSync(filePath),
+  });
+  if (!res.ok) {
+    throw new Error(
+      `Acceptance ${label} upload failed: ${res.status} ${await res.text().catch(() => '')}`.trim(),
+    );
+  }
+}
+
+/**
  * Publish the artifacts DIRECT-TO-BLOB (MOTIR-1681), so a large video never
  * streams through the ~4.5MB serverless request-body cap the old multipart POST
  * hit. Three steps: (1) mint scoped client upload tokens from the endpoint;
@@ -539,27 +569,18 @@ export async function uploadAcceptanceVideo({
   // knowable before auth and that is where the run reports them; this is the
   // server's real number, which is tier-derived and can be lower (10 MB off-cloud
   // / on `free`). Checked here so an over-cap artifact fails with a message that
-  // names it, its size and the cap, instead of @vercel/blob's opaque "File is
-  // too large, the file length cannot be greater than 104857600 bytes" thrown
-  // from inside `put`. `maxBytes` is optional — an older server omits it and the
-  // check simply abstains.
+  // names it, its size and the cap, instead of the register step rejecting the
+  // artifact AFTER it has been uploaded in full. `maxBytes` is optional — an
+  // older server omits it and the check simply abstains.
   assertWithinMintedCap('video', artifacts.video, targets.video);
   if (artifacts.trace && targets.trace) {
     assertWithinMintedCap('trace', artifacts.trace, targets.trace);
   }
 
-  // 2. Upload the artifacts DIRECTLY to the private Blob store with the tokens.
-  await putBlob(targets.video.pathname, fs.readFileSync(artifacts.video), {
-    access: 'private',
-    token: targets.video.token,
-    contentType: targets.video.contentType,
-  });
+  // 2. Upload the artifacts DIRECTLY to the private bucket with the grants.
+  await putSignedArtifact('video', artifacts.video, targets.video);
   if (artifacts.trace && targets.trace) {
-    await putBlob(targets.trace.pathname, fs.readFileSync(artifacts.trace), {
-      access: 'private',
-      token: targets.trace.token,
-      contentType: targets.trace.contentType,
-    });
+    await putSignedArtifact('trace', artifacts.trace, targets.trace);
   }
 
   // 3. Register the pathnames (small JSON — the bytes are already in Blob).

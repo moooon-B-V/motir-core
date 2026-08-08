@@ -16,7 +16,7 @@
 // over a live set breaks the moment a row is inserted/removed, but the
 // seek-after position is reproducible.
 
-import { WorkItemKind, WorkItemPriority } from '@prisma/client';
+import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 
 /**
  * The faceted filter every ready read accepts. Each axis is optional and

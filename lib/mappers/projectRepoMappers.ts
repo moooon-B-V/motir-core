@@ -1,4 +1,4 @@
-import type { GithubRepo, Project, ProjectRepo } from '@prisma/client';
+import type { GithubRepo, Project, ProjectRepo } from '@/generated/prisma/client';
 import type {
   ProjectRepoDto,
   ProjectRepoOwnershipDto,

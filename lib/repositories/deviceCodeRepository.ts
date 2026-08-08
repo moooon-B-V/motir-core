@@ -1,4 +1,4 @@
-import type { DeviceCode, Prisma } from '@prisma/client';
+import type { DeviceCode, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the `device_code` table (Story MOTIR-1863 · Subtasks MOTIR-1865 /

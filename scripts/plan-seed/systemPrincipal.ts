@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';

@@ -14,6 +14,7 @@ import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { NormalizedWorkflowRunEvent } from '@/lib/git/types';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // The CI-minutes METER against real Postgres (Story MOTIR-1775 · MOTIR-1896) —
 // `docs/decisions/ci-minutes-allowance.md`. The GitHub HTTP boundary is stubbed
@@ -124,7 +125,7 @@ async function seedTenant(options?: {
     workspaceId: workspace.id,
     actorUserId: user.id,
     name: 'Acme',
-    identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+    identifier: `A${randomInt(100, 1000)}`,
   });
 
   await githubInstallationService.persistInstallation({

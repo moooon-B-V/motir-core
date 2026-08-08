@@ -1,164 +1,264 @@
-import { del, head, issueSignedToken, presignUrl, put } from '@vercel/blob';
-import { generateClientTokenFromReadWriteToken } from '@vercel/blob/client';
+import { randomBytes } from 'node:crypto';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { privateBucket, publicBaseUrl, publicBucket, s3Client } from '@/lib/blob/s3';
+import { publicAssetKeyFromUrl } from '@/lib/blob/referencedUrls';
 
-// The blob-storage adapter (Subtask 2.3.7; delete added in 5.2.7) — the ONE
-// place that talks to Vercel Blob, so swapping to S3/GCS for an enterprise
-// deployment is a single-file change (the card's stated reason for naming this
-// seam). `put`/`del` read `BLOB_READ_WRITE_TOKEN` from the env automatically.
-// Tests mock THIS module so nothing hits the network. `addRandomSuffix` keeps
-// two same-named uploads from clobbering each other; `access: 'public'` because
-// a Markdown `![]`/`[]` needs a directly-fetchable URL (the row is the
-// audit/billing trail, not the gate).
+// The blob-storage adapter (Subtask 2.3.7; delete added in 5.2.7; moved onto
+// the S3 API by MOTIR-2389) — the ONE place the app talks to object storage,
+// so swapping providers is a single-file change (the seam's stated charter,
+// now collected on). Everything else calls through these exports; tests mock
+// THIS module so nothing hits the network.
+//
+// Provider: an S3-compatible store, two buckets (public assets / private
+// content) — `docs/decisions/application-hosting.md` Q2 and
+// `attachment-access-control.md` Amendment 2. Bucket + credential policy lives
+// in `lib/blob/s3.ts`; this file is object operations only.
+//
+// ⚠️ TWO of these functions mint PERMISSION rather than move bytes, and that is
+// where a provider swap goes wrong quietly:
+//   - `signedDownloadUrl` → a presigned GET, 300 s (the ADR's §5 TTL, unchanged).
+//   - `mintPrivateUploadToken` → a presigned PUT whose CONTENT TYPE is bound
+//     INTO the signature. A presigned PUT carries only what the SIGNER bound;
+//     see that function's comment for why `signableHeaders` is not optional.
+
+/** Where an upload lands. Public assets are fetchable; private ones are not. */
+type Store = 'public' | 'private';
+
+function bucketFor(store: Store): string {
+  return store === 'public' ? publicBucket() : privateBucket();
+}
+
+/**
+ * `shot.png` → `shot-k3f9a1.png`: the `addRandomSuffix` shape the Vercel store
+ * applied server-side, reimplemented here because S3 stores exactly the key it
+ * is given. It keeps two same-named uploads from clobbering each other, and
+ * infixes BEFORE the extension so extension-based content-type sniffing (the
+ * E2E fulfiller, a browser download) still works.
+ */
+function withRandomSuffix(pathname: string): string {
+  const suffix = randomBytes(5).toString('hex');
+  const dot = pathname.lastIndexOf('.');
+  if (dot <= pathname.lastIndexOf('/')) return `${pathname}-${suffix}`;
+  return `${pathname.slice(0, dot)}-${suffix}${pathname.slice(dot)}`;
+}
+
+/**
+ * Normalize the accepted body types to something `PutObjectCommand` can size.
+ * A `File`/`Blob` is NOT a valid S3 body in Node, and a stream body would need
+ * an explicit `ContentLength`; a Buffer gives the SDK both.
+ */
+async function toBuffer(body: File | Blob | ArrayBuffer | Buffer): Promise<Buffer> {
+  if (Buffer.isBuffer(body)) return body;
+  if (body instanceof ArrayBuffer) return Buffer.from(body);
+  return Buffer.from(await body.arrayBuffer());
+}
+
+async function putObject(
+  store: Store,
+  pathname: string,
+  body: File | Blob | ArrayBuffer | Buffer,
+  contentType: string,
+): Promise<string> {
+  const key = withRandomSuffix(pathname);
+  await s3Client().send(
+    new PutObjectCommand({
+      Bucket: bucketFor(store),
+      Key: key,
+      Body: await toBuffer(body),
+      ContentType: contentType,
+    }),
+  );
+  return key;
+}
 
 export interface PutResult {
   url: string;
 }
 
+/**
+ * Legacy public put (Subtask 2.3.7). Retained with its signature intact — it
+ * has NO remaining caller (`git grep putAttachment -- app lib components` finds
+ * only this file), and removing a dead export belongs to the abandoned-path
+ * card MOTIR-2393, not here.
+ */
 export async function putAttachment(
   pathname: string,
   body: File | Blob | ArrayBuffer | Buffer,
   contentType: string,
 ): Promise<PutResult> {
-  const result = await put(pathname, body, {
-    access: 'public',
-    contentType,
-    addRandomSuffix: true,
-  });
-  return { url: result.url };
+  const key = await putObject('public', pathname, body, contentType);
+  return { url: `${publicBaseUrl()}/${key}` };
 }
 
 /**
- * Delete one stored blob by its URL (Subtask 5.2.7; 5.2.2's panel delete is
- * the other caller). Vercel Blob's `del` is idempotent — deleting an
- * already-gone URL resolves fine — which is what makes the GC's
- * blob-before-row ordering safe to re-run after a partial failure.
+ * Delete one stored PRIVATE object by its key (Subtask 5.2.7; 5.2.2's panel
+ * delete is the other caller). S3's delete-object is idempotent — deleting an
+ * already-gone key succeeds — which is what makes the GC's blob-before-row
+ * ordering safe to re-run after a partial failure.
+ *
+ * (The parameter is named `url` for signature compatibility; every caller has
+ * passed a `blobPathname` KEY since MOTIR-1665 made content private.)
  */
 export async function deleteAttachmentBlob(url: string): Promise<void> {
-  await del(url);
+  await s3Client().send(new DeleteObjectCommand({ Bucket: privateBucket(), Key: url }));
 }
 
 /**
- * Delete a PUBLIC-store asset (an avatar) by its URL (MOTIR-1673). Avatars live
- * in the dedicated public store, so their GC must authorize with the public
- * store's token — the default `del` targets the private store. Idempotent.
+ * Delete a PUBLIC-store asset (an avatar) by its URL (MOTIR-1673). `User.image`
+ * stores a full URL, so the key is derived from it — including for a row still
+ * carrying a pre-migration Vercel URL, whose object was copied across at the
+ * same key (MOTIR-2401). A URL that is not ours resolves to no key and is a
+ * no-op rather than an error: the caller already gates on `isOwnAvatarBlobUrl`,
+ * and deleting nothing is the safe outcome if that ever changes. Idempotent.
  */
 export async function deletePublicAsset(url: string): Promise<void> {
-  await del(url, { token: process.env.BLOB_PUBLIC_READ_WRITE_TOKEN });
+  const key = publicAssetKeyFromUrl(url);
+  if (!key) return;
+  await s3Client().send(new DeleteObjectCommand({ Bucket: publicBucket(), Key: key }));
 }
 
 // ── Access-controlled attachments (MOTIR-1665) — the two-store split ──────────
-// Avatars / public assets go to a dedicated PUBLIC store (a profile picture
-// renders everywhere with no per-item auth context → a directly-fetchable URL).
+// Avatars / public assets go to the PUBLIC bucket (a profile picture renders
+// everywhere with no per-item auth context → a directly-fetchable URL).
 // Content attachments (comment/description embeds, panel files, acceptance
-// video/trace) go to the PRIVATE store and are served ONLY through the
-// authenticated content route via `signedDownloadUrl`. The legacy `putAttachment`
-// above is retained until its consumers migrate onto these two seams.
+// video/trace) go to the PRIVATE bucket and are served ONLY through the
+// authenticated content route via `signedDownloadUrl`.
 
 export interface PrivatePutResult {
-  /** The blob key. A private blob has no world-readable URL; the content route
-   *  mints a short-lived signed URL from this via `signedDownloadUrl`. */
+  /** The object key. A private object has no world-readable URL; the content
+   *  route mints a short-lived signed URL from this via `signedDownloadUrl`. */
   pathname: string;
 }
 
 /**
- * Upload a PUBLIC asset (avatars) to the dedicated public store
- * (`BLOB_PUBLIC_READ_WRITE_TOKEN`). Returns a directly-fetchable public URL —
- * public by design, since it is rendered without any per-item authorization.
+ * Upload a PUBLIC asset (avatars) to the public bucket. Returns a
+ * directly-fetchable URL — public by design, since it is rendered without any
+ * per-item authorization.
  */
 export async function putPublicAsset(
   pathname: string,
   body: File | Blob | ArrayBuffer | Buffer,
   contentType: string,
 ): Promise<PutResult> {
-  const result = await put(pathname, body, {
-    access: 'public',
-    contentType,
-    addRandomSuffix: true,
-    token: process.env.BLOB_PUBLIC_READ_WRITE_TOKEN,
-  });
-  return { url: result.url };
+  const key = await putObject('public', pathname, body, contentType);
+  return { url: `${publicBaseUrl()}/${key}` };
 }
 
 /**
- * Upload a PRIVATE content attachment to the private store (default
- * `BLOB_READ_WRITE_TOKEN`). Returns the blob PATHNAME (the key), never a URL —
- * the bytes are reachable only through the authenticated content route.
+ * Upload a PRIVATE content attachment to the private bucket. Returns the object
+ * KEY, never a URL — the bytes are reachable only through the authenticated
+ * content route.
  */
 export async function putPrivateAttachment(
   pathname: string,
   body: File | Blob | ArrayBuffer | Buffer,
   contentType: string,
 ): Promise<PrivatePutResult> {
-  const result = await put(pathname, body, {
-    access: 'private',
-    contentType,
-    addRandomSuffix: true,
-  });
-  return { pathname: result.pathname };
+  return { pathname: await putObject('private', pathname, body, contentType) };
+}
+
+/** The key's last segment — the filename a download should land under. */
+function basename(pathname: string): string {
+  return pathname.slice(pathname.lastIndexOf('/') + 1);
 }
 
 /**
- * Mint a short-lived signed GET URL for a PRIVATE blob. Uses the `@vercel/blob`
- * 2.4.0 delegation flow — `issueSignedToken` (a `get`-scoped, time-boxed
- * delegation from the store's read-write token) → `presignUrl` — NOT
- * `getDownloadUrl` (which only decorates an already-known URL) or `head()`
- * (whose options take no `access`). The content route 302-redirects to the
- * result, so the TTL only needs to cover that immediate fetch.
+ * Mint a short-lived signed GET URL for a PRIVATE object — an **S3 presigned
+ * GET** (MOTIR-2389, replacing `@vercel/blob`'s `issueSignedToken` →
+ * `presignUrl` delegation, which has no counterpart outside that vendor). The
+ * content route 302-redirects to the result, so the TTL only needs to cover
+ * that immediate fetch; it stays at the ADR's 300 s.
+ *
+ * `download: true` binds `ResponseContentDisposition` INTO the signature rather
+ * than appending a query switch afterwards — on S3 an unsigned response-header
+ * override is simply rejected, so the old `?download=1` suffix would not have
+ * survived the move.
+ *
+ * ⚠️ ONE code path, deliberately — there is no `E2E_TEST_BLOB` branch here and
+ * re-adding one would silently un-test the seam (MOTIR-2395). MOTIR-2389 left
+ * such a branch because a presigned URL is derived CLIENT-side and points at a
+ * host the BROWSER fetches, which the in-process transport in `lib/blob/s3.ts`
+ * cannot reach; the consequence was that every "private" E2E download resolved
+ * through a fabricated, signature-free URL, so the suite asserted nothing about
+ * access control. The interception now happens where the fetch actually is — a
+ * Playwright `page.route` on the endpoint host (`tests/e2e/_helpers/object-store.ts`),
+ * which refuses a request carrying no `X-Amz-Signature` exactly as S3 does. So
+ * the URL the E2E exercises is minted by this line, not around it.
  */
 export async function signedDownloadUrl(
   pathname: string,
   opts: { ttlSeconds?: number; download?: boolean } = {},
 ): Promise<string> {
   const { ttlSeconds = 300, download = false } = opts;
-  // E2E: the undici blob mock (E2E_TEST_BLOB) intercepts server-side HTTP, but
-  // `presignUrl` derives the signed URL CLIENT-SIDE from real delegation
-  // material the mock can't forge — so short-circuit to a URL on the mock blob
-  // host the E2E's own `page.route` serves (the `.public.blob.vercel-storage.com`
-  // glob). `?download=1` is the store's content-disposition switch the fulfiller
-  // honours, so a download fires instead of an inline navigation.
-  if (process.env.E2E_TEST_BLOB === '1') {
-    return `https://e2etest.public.blob.vercel-storage.com/${pathname}${download ? '?download=1' : ''}`;
-  }
-  const validUntil = Date.now() + ttlSeconds * 1000;
-  const token = await issueSignedToken({ pathname, operations: ['get'], validUntil });
-  const { presignedUrl } = await presignUrl(token, {
-    operation: 'get',
-    pathname,
-    access: 'private',
-    validUntil,
-  });
-  // A download forces the store's content-disposition via the `?download=1`
-  // switch (the same one the public-store `downloadUrl` carried pre-1665).
-  if (!download) return presignedUrl;
-  return `${presignedUrl}${presignedUrl.includes('?') ? '&' : '?'}download=1`;
+  return getSignedUrl(
+    s3Client(),
+    new GetObjectCommand({
+      Bucket: privateBucket(),
+      Key: pathname,
+      ...(download
+        ? { ResponseContentDisposition: `attachment; filename="${basename(pathname)}"` }
+        : {}),
+    }),
+    { expiresIn: ttlSeconds },
+  );
 }
 
 // ── CLIENT-DIRECT upload for large private artifacts (MOTIR-1681) ─────────────
 // A server-proxied `putPrivateAttachment` streams the bytes THROUGH the
-// serverless function, whose request body is capped at ~4.5MB on Vercel — too
-// small for a full acceptance video (the allowlist permits up to 100MB). The
-// acceptance publish instead mints a scoped client token here, a trusted CI job
-// uploads the blob DIRECTLY to the private store with it, then reports the
-// pathname back (re-validated via `headPrivateBlob`). No `onUploadCompleted`
-// webhook (the ADR MOTIR-1628 avoided its localhost/preview fragility).
+// application, whose request body is capped well below a full acceptance video
+// (the allowlist permits up to 100MB). The acceptance publish instead mints a
+// scoped, single-object upload grant here, a trusted CI job PUTs the blob
+// DIRECTLY with it, then reports the key back (re-validated via
+// `headPrivateBlob`).
 
 /**
- * Mint a short-lived CLIENT upload token bound to EXACTLY `pathname`, a single
- * `contentType`, and `maxBytes`. A holder can only `put` that one private blob.
- * Delegated from the private store's `BLOB_READ_WRITE_TOKEN` (read from env).
+ * Mint a short-lived **presigned PUT URL** bound to EXACTLY `pathname` and
+ * `opts.contentType`. A holder can only write that one private object, as that
+ * one content type.
+ *
+ * ⚠️ `signableHeaders` is load-bearing, not a tuning knob. A presigned PUT
+ * carries only the metadata the SIGNER bound into it, and by default the
+ * presigner DROPS `ContentType` from the signature entirely — leaving the
+ * uploader free to send anything, so every client-uploaded object could land as
+ * `application/octet-stream` and every embedded image would render as a
+ * download. Forcing `content-type` into `X-Amz-SignedHeaders` makes the bound
+ * type part of the signature: an uploader that sends a different one is
+ * rejected. This is the behavioural difference `application-hosting.md` §3 and
+ * `attachment-access-control.md` Amendment 2 pin by name, and `notes.html` #207
+ * is the incident where the same class of unsigned metadata produced objects a
+ * later reader refused forever.
+ *
+ * ⚠️ `opts.maxBytes` has NO presigned-PUT equivalent — a size ceiling would
+ * require a POST policy, a different client contract. It is NOT silently
+ * dropped: the register step re-reads the object's AUTHORITATIVE size via
+ * {@link headPrivateBlob} and rejects an over-cap artifact
+ * (`acceptanceEvidenceService.recordFromPathnames` → `FileTooLargeError`), so
+ * the cap is enforced server-side after the write rather than at the grant. The
+ * value stays in the signature for the caller's own up-front check, which is
+ * what `assertWithinMintedCap` uses it for.
  */
 export async function mintPrivateUploadToken(
   pathname: string,
   opts: { contentType: string; maxBytes: number; ttlSeconds?: number },
 ): Promise<string> {
-  return generateClientTokenFromReadWriteToken({
-    token: process.env.BLOB_READ_WRITE_TOKEN,
-    pathname,
-    addRandomSuffix: false,
-    allowedContentTypes: [opts.contentType],
-    maximumSizeInBytes: opts.maxBytes,
-    validUntil: Date.now() + (opts.ttlSeconds ?? 300) * 1000,
-  });
+  return getSignedUrl(
+    s3Client(),
+    new PutObjectCommand({
+      Bucket: privateBucket(),
+      Key: pathname,
+      ContentType: opts.contentType,
+    }),
+    {
+      expiresIn: opts.ttlSeconds ?? 300,
+      signableHeaders: new Set(['content-type']),
+    },
+  );
 }
 
 export interface BlobHead {
@@ -167,15 +267,20 @@ export interface BlobHead {
 }
 
 /**
- * Read the AUTHORITATIVE size + contentType of a private blob by its pathname —
- * the register step `head`s each client-uploaded artifact to confirm it exists
+ * Read the AUTHORITATIVE size + contentType of a private object by its key —
+ * the register step HEADs each client-uploaded artifact to confirm it exists
  * (the upload actually happened) and to read its real metadata, never trusting
- * the values a caller reports. Returns null when the blob is absent.
+ * the values a caller reports. Returns null when the object is absent.
  */
 export async function headPrivateBlob(pathname: string): Promise<BlobHead | null> {
   try {
-    const result = await head(pathname);
-    return { size: result.size, contentType: result.contentType };
+    const result = await s3Client().send(
+      new HeadObjectCommand({ Bucket: privateBucket(), Key: pathname }),
+    );
+    return {
+      size: result.ContentLength ?? 0,
+      contentType: result.ContentType ?? 'application/octet-stream',
+    };
   } catch {
     return null;
   }

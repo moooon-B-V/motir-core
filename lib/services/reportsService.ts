@@ -1,4 +1,4 @@
-import type { EstimationStatistic, Sprint } from '@prisma/client';
+import type { EstimationStatistic, Sprint } from '@/generated/prisma/client';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';

@@ -44,6 +44,11 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { signIn } from './_helpers/shell-session';
 import { waitForEmail, emailsTo } from './_helpers/email-capture';
+// The seeded embed's thumbnail follows the content route's 302 to a presigned
+// URL on the object store; serve it so the read doesn't dangle (MOTIR-2395 —
+// this replaced a `teststore.public.blob.vercel-storage.com` route that had
+// matched nothing since the embed's `blobPathname` became a KEY).
+import { servePrivateObjectStore } from './_helpers/object-store';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -81,25 +86,12 @@ interface Tenant {
   owner: Persona;
 }
 
-/** A workspace-scoped blob URL the 5.2.3 extractor accepts (public Vercel-Blob
- *  host suffix + `/attachments/<workspaceId>/` prefix). The browser never
- *  uploads — a real editor row carrying this URL is seeded UNLINKED, and the
- *  comment body referencing it is what link-on-write attaches. */
+/** A workspace-scoped object KEY the 5.2.3 extractor accepts (the
+ *  `attachments/<workspaceId>/` prefix). The browser never uploads — a real
+ *  editor row carrying this key is seeded UNLINKED, and the comment body
+ *  referencing it is what link-on-write attaches. */
 function embedPathname(workspaceId: string): string {
   return `attachments/${workspaceId}/embed-collab.png`;
-}
-
-const PNG_BYTES = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
-  'base64',
-);
-
-/** Serve the seeded embed's blob URL with tiny PNG bytes so the panel
- *  thumbnail read doesn't dangle (nothing leaves localhost). */
-async function serveMockBlobHost(page: Page): Promise<void> {
-  await page.route('https://teststore.public.blob.vercel-storage.com/**', async (route) => {
-    await route.fulfill({ status: 200, contentType: 'image/png', body: PNG_BYTES });
-  });
 }
 
 async function makeUser(email: string, name: string): Promise<Persona> {
@@ -221,7 +213,7 @@ test('@smoke the combined collaboration journey: build-up across every Epic-5 fe
     },
   });
 
-  await serveMockBlobHost(page);
+  await servePrivateObjectStore(page);
   await signIn(page, tenant.owner.email, PWD);
   await page.goto(`/items/${issue.identifier}`);
   await expect(page.getByRole('heading', { name: ISSUE_TITLE, level: 1 })).toBeVisible();

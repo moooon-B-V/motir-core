@@ -44,7 +44,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import type { BoardProjectionDto } from '@/lib/dto/boards';
-import type { WorkItemKind, WorkItemType } from '@prisma/client';
+import type { WorkItemKind, WorkItemType } from '@/generated/prisma/client';
 
 const OWNER_EMAIL = 'e2e-board-filter-owner@example.com';
 

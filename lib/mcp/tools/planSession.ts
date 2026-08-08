@@ -77,7 +77,7 @@ const targetKeysField = z
   .max(MAX_SCOPE_TARGETS)
   .optional()
   .describe(
-    'Optional work-item identifiers (e.g. ["PROD-7", "PROD-9"], case-insensitive) ' +
+    'Optional work-item identifiers (e.g. ["ACME-7", "ACME-9"], case-insensitive) ' +
       'to ANCHOR the conversation at. Omit for the project-wide planning thread. The ' +
       "anchor SET is the thread's identity — order and duplicates do not matter, and " +
       'the same set always resumes the same conversation.',
@@ -146,7 +146,7 @@ async function resolveTarget(args: ScopeArgs, ctx: ServiceContext): Promise<Reso
   // Normalized the way every key-addressed tool normalizes (`normalizeIdentifier`):
   // identifiers are case-insensitive across the API, and the repository lookup
   // behind `getWorkItemByIdentifier` is an EXACT unique match — so "prod-7" must
-  // become "PROD-7" here or it reads as a not-found item.
+  // become "ACME-7" here or it reads as a not-found item.
   const requested = (args.targetKeys ?? []).map(normalizeIdentifier).filter(Boolean);
   if (requested.length === 0) return { pctx, scope: PROJECT_SCOPE };
   // Bound BEFORE the round-trips: the cost of a huge set is the resolution

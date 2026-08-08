@@ -1,4 +1,4 @@
-import { Prisma, type ProjectTag } from '@prisma/client';
+import { Prisma, type ProjectTag } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // projectTagRepository (Story 6.13 · Subtask 6.13.5) — single-op access to the

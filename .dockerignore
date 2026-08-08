@@ -5,6 +5,10 @@
 # trees are rebuilt inside the image and would otherwise dominate the upload.
 node_modules
 **/node_modules
+# Prisma's generated client — `prisma generate` runs INSIDE the image (the
+# Dockerfile's builder stage does it explicitly), so shipping the host's copy
+# in the context is both waste and a chance to bake in a stale one.
+/generated
 .git
 .next
 out

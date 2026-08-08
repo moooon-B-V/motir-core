@@ -13,6 +13,7 @@ import {
   type BillingSeed,
 } from './_helpers/billing';
 import { E2E_CHECKOUT_URL, E2E_PORTAL_URL } from '@/lib/test-billing-mock';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // Subtask 8.1.10 — the billing user journeys, CLOUD-ON lane (MOTIR_CLOUD via
 // playwright.billing.config.ts). The motir-ai side (AI plan/usage + Stripe
@@ -147,7 +148,7 @@ test('@smoke paywall: a free / out-of-credits org hitting AI sees the upgrade pr
   // The Upgrade CTA navigates to the pricing/checkout entry.
   const statusLoad = billingStatusGet(page, seed);
   await seePlans.click();
-  await page.waitForURL(new RegExp(billingPath.replace(/\//g, '\\/')));
+  await page.waitForURL(new RegExp(escapeRegExp(billingPath)));
   expect((await statusLoad).status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Billing & plans' })).toBeVisible();
 });

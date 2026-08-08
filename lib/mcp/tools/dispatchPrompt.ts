@@ -135,7 +135,7 @@ export function registerDispatchPrompt(
       title: 'Dispatch prompt',
       description:
         'Return the canonical, server-generated coding-agent prompt for one work item ' +
-        '(by identifier, e.g. "PROD-7"): the CONTEXT / WHAT TO DO / ACCEPTANCE CRITERIA / ' +
+        '(by identifier, e.g. "ACME-7"): the CONTEXT / WHAT TO DO / ACCEPTANCE CRITERIA / ' +
         'GIT WORKFLOW sections assembled from the item, its parent, its dependencies and ' +
         'its repo, plus the repo to run it in and which git workflow it carries. A pure ' +
         'read — it does NOT claim the item or change its status. Do not rewrite the prompt: ' +

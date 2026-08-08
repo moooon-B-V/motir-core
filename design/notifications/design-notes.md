@@ -133,7 +133,7 @@ Each row is a horizontal flex:
   `--el-surface-soft` wash.
 
 **Clickable target + the no-nested-interactive rule.** The whole row is ONE
-clickable deep-link to `/issues/[key]`. The per-row hover **mark-read toggle**
+clickable deep-link to `/items/[key]`. The per-row hover **mark-read toggle**
 (the Linear `U` model) is a **SIBLING control overlaid top-right — NOT nested
 inside the link** (the nested-interactive / portal-popover lessons): in markup
 the `<a class="n-row">` and the `<button class="n-toggle">` are siblings under a

@@ -9,7 +9,7 @@ import type {
   SourceIssue,
   SourceIssuePage,
 } from '@/lib/import/connectors/types';
-import type { ImportedIssue } from '@prisma/client';
+import type { ImportedIssue } from '@/generated/prisma/client';
 
 // Unit tests for the engine service (MOTIR-1504) with injected read seams — no
 // Postgres. Covers classify CREATE/UPDATE/SKIP, streaming preview, context

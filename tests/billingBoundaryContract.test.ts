@@ -144,12 +144,12 @@ beforeEach(async () => {
   getOrgUsageMock.mockResolvedValue(USAGE_CONTRACT);
   getOrgSubscriptionMock.mockResolvedValue(SUBSCRIPTION_CONTRACT);
   process.env['MOTIR_CLOUD'] = 'true';
-  process.env['BETTER_AUTH_URL'] = 'https://app.test';
+  process.env['MOTIR_BASE_URL'] = 'https://app.test';
 });
 
 afterEach(() => {
   delete process.env['MOTIR_CLOUD'];
-  delete process.env['BETTER_AUTH_URL'];
+  delete process.env['MOTIR_BASE_URL'];
 });
 
 afterAll(async () => {

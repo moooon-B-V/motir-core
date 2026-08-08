@@ -1215,6 +1215,13 @@ item. `motir doctor` diagnoses it and names the profile's install source.
 
 ## See also
 
+- **[`/docs/cli`](https://app.motir.co/docs/cli) — the published CLI guide.**
+  The first hour, for someone with no checkout: install, `motir login`,
+  `motir link`, `motir doctor`, the ready set, and one item dispatched, plus the
+  command table derived from the CLI's own record. **This file is the
+  reference** — everything past that first successful run (every flag, the three
+  run shapes, session branches, the failure policy, agent wiring,
+  troubleshooting) lives here and is not repeated there.
 - [**`/docs/api`**](https://app.motir.co/docs/api) — the reference for the API
   this CLI uses, and the machine-readable spec at
   [`/api/openapi/v1.json`](https://app.motir.co/api/openapi/v1.json). Everything

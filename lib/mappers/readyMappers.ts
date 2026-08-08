@@ -1,4 +1,4 @@
-import type { User, WorkItem } from '@prisma/client';
+import type { User, WorkItem } from '@/generated/prisma/client';
 import type { ReadyItemDispatchDto, ReadyItemDto } from '@/lib/dto/ready';
 import { isManualReadyItem } from '@/lib/dto/ready';
 import { markdownToExcerpt } from '@/lib/markdown/excerpt';

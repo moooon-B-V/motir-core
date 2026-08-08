@@ -1,4 +1,4 @@
-import { Prisma, type GithubInstallation, type GithubRepo } from '@prisma/client';
+import { Prisma, type GithubInstallation, type GithubRepo } from '@/generated/prisma/client';
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { GitProviderId, NormalizedStatusEvent } from '@/lib/git/types';
 import { changeRequestNoun } from '@/lib/git/labels';

@@ -76,7 +76,7 @@ export const MCP_UNREACHABLE_RESOURCES: Partial<Record<SharedResourceName, strin
     'WITH its reply thread: `get_work_item_activity` pages an activity stream whose envelope is ' +
     'MCP’s own.',
   WorkItemCount:
-    'ADR Amendment 12 made COUNTING a filtered set its own v1 operation, and the MCP surface has ' +
+    'ADR Amendment 14 made COUNTING a filtered set its own v1 operation, and the MCP surface has ' +
     'no counterpart: `search_work_items` still reports a `total` on the page itself, which is the ' +
     'shape that amendment moved AWAY from for v1 and deliberately left alone for MCP (an agent ' +
     'reading a page usually wants the number with it). So there is no MCP payload to compare — ' +

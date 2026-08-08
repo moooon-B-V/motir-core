@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
@@ -11,6 +11,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { labelsService } from '@/lib/services/labelsService';
 import { customFieldValuesService } from '@/lib/services/customFieldValuesService';
 import { sendEvent } from '@/lib/jobs/sendEvent';
+import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import { decodeFilterEnvelope, type FilterAst } from '@/lib/filters/ast';
 import {
   type AutomationActionConfig,
@@ -22,7 +23,7 @@ import {
 } from '@/lib/automation/constants';
 import type { AutomationRuleWithOwner } from '@/lib/repositories/automationRuleRepository';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import type { AutomationTriggerType } from '@prisma/client';
+import type { AutomationTriggerType } from '@/generated/prisma/client';
 
 // The automation EXECUTION ENGINE (Story 6.6 · Subtask 6.6.2) — events in,
 // attributed service calls out, every run audited. The heart of the story:
@@ -592,10 +593,12 @@ function describeActionError(err: unknown): string {
 
 /** The deep link to a project's Automation settings (the 6.6.5 surface) — the
  * email CTA. Built from the app base URL (the 1.6 email convention: the service
- * hands the template a finished URL). */
+ * hands the template a finished URL). Routed through `lib/baseUrl` since
+ * MOTIR-2388: it used to read the origin variable directly with an `?? ''`
+ * fallback, so an unset variable put a RELATIVE path in an outgoing email —
+ * a link that cannot resolve in a mail client. */
 function automationSettingsUrl(projectId: string): string {
-  const base = (process.env['BETTER_AUTH_URL'] ?? '').replace(/\/$/, '');
-  return `${base}/projects/${projectId}/settings/automation`;
+  return `${resolveBaseUrlTrimmed()}/projects/${projectId}/settings/automation`;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -1,4 +1,9 @@
-import { Prisma, type WorkItem, type WorkItemKind, type WorkItemPriority } from '@prisma/client';
+import {
+  Prisma,
+  type WorkItem,
+  type WorkItemKind,
+  type WorkItemPriority,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import {
   astHasEpic5Conditions,
@@ -2735,7 +2740,7 @@ export const workItemsService = {
 
   /**
    * COUNT the work items {@link listProjectWorkItemsPage} would page (ADR
-   * Amendment 12) — the read behind `GET …/work-items/count`.
+   * Amendment 14) — the read behind `GET …/work-items/count`.
    *
    * Deliberately a MIRROR of that method and not a variation on it: the same
    * project + workspace gate, the same `assertCanBrowse`, the same referent

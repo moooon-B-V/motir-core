@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { escapeRegExp } from '@/lib/utils/regexp';
 
 // MOTIR-1275 · 1266.4 — the ICON + TEXT-role element tokens (--el-icon-*,
 // --el-text-{eyebrow,subtitle,helper,identifier}) plus the COMPONENT-SURFACE
@@ -36,7 +37,7 @@ const BASE_BLOCK = (() => {
 
 function mappingOf(token: string): string | null {
   const m = BASE_BLOCK.match(
-    new RegExp(`${token.replace(/[-]/g, '\\-')}:\\s*var\\(\\s*(--color-[a-z-]+)\\s*\\)`),
+    new RegExp(`${escapeRegExp(token)}:\\s*var\\(\\s*(--color-[a-z-]+)\\s*\\)`),
   );
   return m?.[1] ?? null;
 }

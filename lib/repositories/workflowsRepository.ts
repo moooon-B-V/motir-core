@@ -1,4 +1,4 @@
-import { Prisma, type WorkflowStatus, type WorkflowTransition } from '@prisma/client';
+import { Prisma, type WorkflowStatus, type WorkflowTransition } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Data access for the per-project status-workflow tables (Story 2.2 · Subtask

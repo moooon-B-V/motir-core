@@ -23,7 +23,7 @@ const inputSchema = {
   keys: z
     .array(z.string().min(1))
     .min(1)
-    .describe('Work item identifiers to move to the backlog, e.g. ["PROD-7", "PROD-8"].'),
+    .describe('Work item identifiers to move to the backlog, e.g. ["ACME-7", "ACME-8"].'),
 };
 
 /** The adapter: resolve the keys to ids, then bulk-move to the backlog. */

@@ -124,7 +124,7 @@ describe('GET /api/v1/projects/{projectKey}/ready', () => {
   });
 
   // ⚠️ THE case a flat blocker check gets wrong.
-  // ⚠️ READY RELATIVE TO WHAT (Amendment 15 · MOTIR-2400). Both sides are
+  // ⚠️ READY RELATIVE TO WHAT (Amendment 17 · MOTIR-2400). Both sides are
   // asserted because the distinction IS the field: a row that always said null
   // would pass any test that only checked the ready-from-main case, and a
   // consumer reading it would open pull requests against a base that does not

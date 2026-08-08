@@ -1,4 +1,8 @@
-import { Prisma, type MigrateOnboarding, type MigrateOnboardingStep } from '@prisma/client';
+import {
+  Prisma,
+  type MigrateOnboarding,
+  type MigrateOnboardingStep,
+} from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 
 // Single Prisma operations on the `migrate_onboarding` table (Story 7.15 ·

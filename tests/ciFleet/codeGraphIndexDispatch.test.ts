@@ -32,6 +32,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { truncateAuthTables } from '../helpers/db';
+import { randomToken, randomInt } from '../helpers/random';
 
 // THE INDEX DISPATCH SERVICE (Story MOTIR-1981 · MOTIR-2026) —
 // `docs/decisions/code-graph-index-fleet.md` §2 · §4 · §5 · §10.
@@ -1128,7 +1129,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     // The meter is a CLOUD meter (§8.5) — off-cloud there is no fleet to bill.
     vi.stubEnv('MOTIR_CLOUD', 'true');
 
-    const email = `index-cogs-${Math.random().toString(36).slice(2, 8)}@example.com`;
+    const email = `index-cogs-${randomToken(6)}@example.com`;
     const user = await usersService.createUser({ email, password: PASSWORD, name: 'Owner' });
     const { workspace } = await workspacesService.createWorkspace({
       name: `WS ${email}`,
@@ -1138,7 +1139,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
       workspaceId: workspace.id,
       actorUserId: user.id,
       name: 'Acme',
-      identifier: `A${Math.floor(Math.random() * 900 + 100)}`,
+      identifier: `A${randomInt(100, 1000)}`,
     });
     tenant = {
       organizationId: workspace.organizationId,

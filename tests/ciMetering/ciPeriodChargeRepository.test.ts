@@ -5,6 +5,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { ciPeriodChargeRepository } from '@/lib/repositories/ciPeriodChargeRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { truncateAuthTables } from '../helpers/db';
+import { randomInt } from '../helpers/random';
 
 // The charge row's data access in isolation (Story MOTIR-1775 · MOTIR-1901) —
 // the row-level behaviours `ciAllowanceService`'s tests exercise only indirectly:
@@ -14,7 +15,7 @@ import { truncateAuthTables } from '../helpers/db';
 const PERIOD = new Date('2026-07-01T00:00:00.000Z');
 
 async function seedOrgId(): Promise<string> {
-  const suffix = Math.floor(Math.random() * 1_000_000);
+  const suffix = randomInt(1_000_000);
   const owner = await usersService.createUser({
     email: `charge-repo-${suffix}@example.com`,
     password: 'hunter2hunter2',

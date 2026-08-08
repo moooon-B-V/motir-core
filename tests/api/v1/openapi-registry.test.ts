@@ -205,7 +205,7 @@ describe('the emitted document', () => {
   // GENERATED from this document and inherited a type that cannot express two
   // kinds. The declaration and the wire form are asserted together, off the
   // emitted document rather than a fixture, so the two cannot drift apart again.
-  // MOTIR-2320 / ADR Amendment 13. A ranked page may EXTEND the envelope with
+  // MOTIR-2320 / ADR Amendment 15. A ranked page may EXTEND the envelope with
   // fields that belong to its own read. The separation is the point: a reader
   // must be able to see which fields are paging and which are this operation's,
   // so the extension rides as its own `allOf` member rather than being merged.

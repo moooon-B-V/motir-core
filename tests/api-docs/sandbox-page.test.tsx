@@ -176,10 +176,18 @@ describe('the profile table is DERIVED, not retyped', () => {
 });
 
 describe('guard: the cross-package import stays a single, bounded seam', () => {
-  it('is imported by exactly ONE module under app/ or lib/', () => {
-    // ADR Amendment 9 Q3 permits one crossing. One is a documented seam; a habit
-    // is a merged build, and the CLI's dependency graph arriving in the app
-    // through a documentation page is what this refuses.
+  it('is imported by exactly the TWO modules the ADR names', () => {
+    // ADR Amendment 9 Q3 permitted one crossing; Amendment 12 Q4 (Subtask
+    // MOTIR-2329, the /docs/cli guide) amends it to a NAMED two-module
+    // allowlist, because Motir now publishes documentation for two shipped
+    // artifacts and a page that documents a tool must read that tool.
+    //
+    // What did NOT widen is the invariant that matters: each crossing may only
+    // reach a CLI module with no dependency graph — `agentProfiles.ts` imports
+    // `node:path`, `commandCatalog.ts` imports nothing at all — which is what
+    // keeps `commander` out of `next build`. Named, not patterned
+    // (`lib/apiDocs/*` would permit the next one without a decision), so a third
+    // crossing is a deliberate edit somebody has to justify in a diff.
     const offenders: string[] = [];
     const walk = (dir: string) => {
       for (const entry of readdirSync(join(REPO_ROOT, dir), { withFileTypes: true })) {
@@ -197,14 +205,17 @@ describe('guard: the cross-package import stays a single, bounded seam', () => {
     };
     walk('lib');
     walk('app');
-    expect(offenders).toEqual(['lib/apiDocs/sandbox.ts']);
+    expect(offenders).toEqual(['lib/apiDocs/cli.ts', 'lib/apiDocs/sandbox.ts']);
   });
 
-  it('reaches a CLI module that imports nothing but node: builtins', () => {
-    const source = read('packages/cli/src/agentProfiles.ts');
-    const imports = [...source.matchAll(/^import .*? from '([^']+)';/gm)].map((m) => m[1]!);
-    expect(imports.every((specifier) => specifier.startsWith('node:'))).toBe(true);
-  });
+  it.each([['packages/cli/src/agentProfiles.ts'], ['packages/cli/src/commandCatalog.ts']])(
+    'reaches a CLI module (%s) that imports nothing but node: builtins',
+    (module) => {
+      const source = read(module);
+      const imports = [...source.matchAll(/^import .*? from '([^']+)';/gm)].map((m) => m[1]!);
+      expect(imports.every((specifier) => specifier.startsWith('node:'))).toBe(true);
+    },
+  );
 
   it('exports plain serializable data, so a row may cross to a client component', () => {
     for (const row of sandboxProfileRows()) {

@@ -2,7 +2,7 @@
 
 import { Lock, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
-import type { DashboardAccess } from '@prisma/client';
+import type { DashboardAccess } from '@/generated/prisma/client';
 
 // The access radio cards (6.3.5, design panel 1b) — the 6.4.1 access-card
 // grammar narrowed to `private | workspace` (the recorded deviation; the

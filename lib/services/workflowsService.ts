@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma } from '@/generated/prisma/client';
 import { createTranslator } from 'next-intl';
 import { getMessagesFor } from '@/lib/i18n/messages';
 import { currentLocale } from '@/lib/i18n/serverLocale';

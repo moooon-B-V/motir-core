@@ -6,7 +6,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Shared work-item-identifier plumbing for the write tools (Subtask 7.8.5).
 // `transition_status` and `add_comment` both address a work item by its
-// `PROD-<n>` identifier and must resolve it the SAME way the read tools do
+// `<KEY>-<n>` identifier and must resolve it the SAME way the read tools do
 // (`get_work_item`): derive the project key, normalize case. Kept in one place
 // so the write tools can't drift from each other on what a key means.
 //
@@ -17,7 +17,9 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 export const workItemKeyField = z
   .string()
   .min(1)
-  .describe('The work item identifier, e.g. "PROD-7" (case-insensitive).');
+  .describe(
+    'The work item identifier — the project key, a dash, the number (e.g. "ACME-7"). Case-insensitive.',
+  );
 
 /** The session/integration branch field the 7.8.11 integration tools share —
  *  the git branch a run's work was merged onto (`mark_integrated`) / is being
@@ -26,7 +28,7 @@ export const sessionBranchField = z
   .string()
   .trim()
   .min(1)
-  .describe('The session/integration branch name, e.g. "session/PROD-42-run".');
+  .describe('The session/integration branch name, e.g. "session/ACME-42-run".');
 
 /**
  * IMPLEMENTATION-provenance input the self-reported session tools share
@@ -87,14 +89,14 @@ export function normalizeIdentifier(raw: string): string {
   return raw.trim().toUpperCase();
 }
 
-/** Derive the owning project key from a `PROD-7`-style identifier. */
+/** Derive the owning project key from an `ACME-7`-style identifier. */
 export function projectKeyOf(identifier: string): string {
   const dash = identifier.lastIndexOf('-');
   return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
 /**
- * Resolve a list of `PROD-<n>` work-item keys to their internal ids, the form
+ * Resolve a list of `<KEY>-<n>` work-item keys to their internal ids, the form
  * the bulk backlog/sprint services take (Subtask 7.8.10's `move_to_sprint` /
  * `move_to_backlog`). Each key is normalized, its project resolved by key
  * prefix (cached so a same-project batch makes ONE project lookup), then the
@@ -118,7 +120,7 @@ export async function resolveWorkItemIdsByKeys(
 }
 
 /**
- * Resolve a PAIR of `PROD-<n>` keys to a fixed 2-tuple of ids — the shape the
+ * Resolve a PAIR of `<KEY>-<n>` keys to a fixed 2-tuple of ids — the shape the
  * link tools (Subtask 7.8.13) take (`fromKey`, `toKey`). Same per-item project
  * resolution + cache as {@link resolveWorkItemIdsByKeys}, but the tuple return
  * gives the caller two DEFINITE ids (no `noUncheckedIndexedAccess` guard on an
@@ -137,7 +139,7 @@ export async function resolveWorkItemIdPair(
 }
 
 /**
- * Resolve a SINGLE `PROD-<n>` key to the work item it names — the one-key form
+ * Resolve a SINGLE `<KEY>-<n>` key to the work item it names — the one-key form
  * of {@link resolveWorkItemIdsByKeys}, for a tool that addresses exactly one
  * item and needs more than its id (the canonical `identifier` for its summary
  * line). Added by MOTIR-1999's `get_work_item_activity` so the key → id

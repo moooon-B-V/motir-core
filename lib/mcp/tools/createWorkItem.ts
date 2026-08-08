@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import { Executor, WorkItemPriority, WorkItemType } from '@prisma/client';
+import { Executor, WorkItemPriority, WorkItemType } from '@/generated/prisma/client';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -56,7 +56,12 @@ import { normalizeIdentifier } from './workItemRef';
 export const CREATE_WORK_ITEM_TOOL_NAME = 'create_work_item';
 
 const inputSchema = {
-  projectKey: z.string().min(1).describe('The project key the item is created in, e.g. "PROD".'),
+  projectKey: z
+    .string()
+    .min(1)
+    .describe(
+      'The project key the item is created in — the prefix chosen for that project at creation (e.g. "ACME"), not a reserved value.',
+    ),
   kind: z
     .enum(['epic', 'story', 'task', 'bug', 'subtask'])
     .describe(
@@ -68,7 +73,7 @@ const inputSchema = {
     .string()
     .optional()
     .describe(
-      'Optional parent work item identifier (e.g. "PROD-3") — must be a kind-legal, same-project parent.',
+      'Optional parent work item identifier (e.g. "ACME-3") — must be a kind-legal, same-project parent.',
     ),
   descriptionMd: z.string().optional().describe('Optional Markdown description body.'),
   priority: z

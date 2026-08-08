@@ -1,4 +1,4 @@
-import { type CiRunnerProvisioningIntent, type Prisma } from '@prisma/client';
+import { type CiRunnerProvisioningIntent, type Prisma } from '@/generated/prisma/client';
 
 // Data access for the runner-fleet provisioning INTENTS (Story MOTIR-1916 ·
 // MOTIR-1920). Single-op methods only (CLAUDE.md 4-layer); every write requires

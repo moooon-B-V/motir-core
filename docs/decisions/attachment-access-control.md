@@ -15,7 +15,7 @@
 - **Supersedes / superseded by:** supersedes the "make the Blob store public"
   option floated in the incident triage (MOTIR-1665 was born a bug) — explicitly
   rejected here on security grounds.
-- **Amendment (2026-07-07, MOTIR-1665 re-decomposition) — TWO stores (public
+- **Amendment 1 (2026-07-07, MOTIR-1665 re-decomposition) — TWO stores (public
   avatars / private content), the real 2.4.0 signing flow, and id-based editor
   embeds.** Tracing the true blast radius refined three things this ADR's first
   draft under-specified:
@@ -39,6 +39,11 @@
     embed id (MOTIR-1668), acceptance video+trace (MOTIR-1674), tests
     (MOTIR-1669/1670). §1–§2 below read against the private (content) store; the
     public-avatar store is the parallel path.
+- **Amendment 2 (2026-08-07, MOTIR-2385) — the provider changes: S3 presigned
+  URLs on Tigris replace the `@vercel/blob` delegation flow, and the two stores
+  become two buckets.** See the section at the end of this file. Everything §1–§5
+  decides about the _model_ — private storage, the authenticated route, the
+  authorization matrix, the DTO surface, the 300 s TTL — survives unchanged.
 
 > Convention (set by `work-item-type-taxonomy.md`, followed by
 > `billing-tiering.md` / `acceptance-video.md`): a decision record is a markdown
@@ -161,3 +166,192 @@ re-hits the content route (re-authorized) whenever it needs the resource.
 - Off-cloud / self-host: unchanged — the same private-store + auth'd-route model
   works against any Blob-compatible store (the `lib/blob/uploader.ts` seam is the
   single swap point, per its original charter).
+
+---
+
+## Amendment 2 (2026-08-07) — the signing flow is S3 presigned URLs on Tigris; the two stores become two buckets
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2385**, whose decision record is
+> [`application-hosting.md`](./application-hosting.md). That record moves
+> motir-core's hosting from Vercel to Fly.io; this amendment is the part of the
+> move that lands inside a decision already accepted here.
+>
+> **Numbered 2.** The 2026-07-07 amendment in the Status block above is
+> Amendment 1; it was unnumbered when it was the only one.
+
+**Amends:** the **Signing flow** clause of Amendment 1, and the provider named in
+§1's Upload row and §2's presign step. **Nothing else in this record changes** —
+§1 private storage, §2's authenticated-route-then-redirect read model, §3's
+authorization matrix, §4's DTO surface and §5's TTL are all re-stated below
+against the new provider and are otherwise untouched.
+
+### Q1 — the signing flow
+
+#### What is being replaced
+
+Amendment 1 pinned the mechanism to a vendor's API **by name**:
+
+> A private download URL uses the `@vercel/blob` 2.4.0 **`issueSignedToken` →
+> `presignUrl`** delegation flow — NOT `head().downloadUrl` (which doesn't accept
+> `access`).
+
+That was correct when written and becomes false the moment the provider changes.
+The delegation flow is `@vercel/blob`-specific and has no counterpart outside it.
+
+#### The replacement
+
+**A private download URL is an S3 PRESIGNED GET**, issued server-side by the
+content route against the private bucket, for the object's key.
+
+| Concern          | Was (`@vercel/blob` 2.4.0)                                 | Is (S3-compatible, Tigris)                                   |
+| ---------------- | ---------------------------------------------------------- | ------------------------------------------------------------ |
+| Private download | `issueSignedToken({ operations: ['get'] })` → `presignUrl` | **presigned GET** on the private bucket's key                |
+| Browser upload   | `generateClientTokenFromReadWriteToken`                    | **presigned PUT** on the private bucket's key                |
+| Object existence | `head(pathname, { access: 'private' })`                    | a **HEAD** on the object                                     |
+| Delete           | `del(url)`                                                 | a **delete-object** on the owning bucket's key               |
+| Credential       | `BLOB_READ_WRITE_TOKEN` / `BLOB_PUBLIC_READ_WRITE_TOKEN`   | one S3 access-key pair per Fly-provisioned Tigris credential |
+
+**`head().downloadUrl` is still not the answer**, for the same reason it was not
+before: the read path is auth-then-presign, and an unauthenticated durable URL is
+what §2 exists to prevent.
+
+**⚠️ One genuine behavioural difference, pinned here rather than found at run
+time: a presigned PUT carries only the metadata the SIGNER set.** With
+`@vercel/blob` the client token flow negotiated the content type; with a
+presigned PUT the browser cannot add one that was not signed for. **Content type
+is therefore bound at signing time**, or every client-uploaded object lands as
+`application/octet-stream` and every embedded image renders as a download.
+
+**The TTL is unchanged: 300 s** (§5). A fresh presign is issued per request, so
+there is still no long-lived shareable URL, and expiry is still not a
+page-lifetime concern because the browser re-hits the content route.
+
+#### Rejected alternatives
+
+| Alternative                                              | Why rejected                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Keep `@vercel/blob`, called from Fly                     | The SDK is not tied to Vercel compute, so it would work — and it would keep the account and the billing relationship the move exists to end.                       |
+| Stream the bytes through the route instead of presigning | Already rejected in §2 and still rejected: streaming a multi-MB video through the function is what blew the ~15 s limit in the incident this record was born from. |
+| Make the bucket public and drop signing                  | Already rejected in Context, on security grounds. Changing hosts does not re-open it.                                                                              |
+
+### Q2 — the public/private split, re-stated against buckets
+
+Amendment 1's split survives **exactly**, expressed as two buckets rather than
+two Blob stores:
+
+| Store              | Contents                                                          | Access                                                    | Written by                               |
+| ------------------ | ----------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------- |
+| **Public bucket**  | avatars (`User.image`) and other public assets                    | **public-read** — a directly fetchable URL, CDN-cacheable | `putPublicAsset`                         |
+| **Private bucket** | comment/description embeds, panel files, acceptance video + trace | **no public read** — presigned GET only, via §2's route   | `putPrivateAttachment` / `putAttachment` |
+
+The reasoning is Amendment 1's and is unchanged: an avatar renders everywhere
+with **no per-item auth context** and wants a cacheable URL, so putting it behind
+a per-item signed redirect is both wrong and expensive; content is private
+because a leaked durable URL is an exposed file.
+
+**Two buckets, not one bucket with per-object ACLs.** The split is structural so
+that it cannot be got wrong one object at a time — the same reason it was two
+stores before.
+
+`Attachment` still persists the **key**, never a URL; the DTO still exposes only
+`contentUrl = /api/attachments/[id]/content`; editor embeds are still id-based.
+None of that is provider-dependent, which is why none of it changes.
+
+### Consequences of this amendment
+
+- **MOTIR-2389** reimplements all eleven `lib/blob/uploader.ts` exports — eight
+  functions and the three interfaces they return — against the S3 client with
+  their signatures unchanged, binds content type at signing time, and keeps the
+  300 s expiry. It also ships `scripts/migrate-blob-objects.ts`, the script that
+  copies the objects; it does not run it. _Corrected by Amendment 3._
+- **MOTIR-2401** copies the objects already in the old stores, by running that
+  script — a `manual` card, `blocked_by` MOTIR-2386 (which creates the buckets)
+  and MOTIR-2389 (which ships the script), because the copy needs both
+  platforms' credentials held at one moment and a person to accept the result.
+  **It has not run.** _Attribution corrected by Amendment 3._
+- **MOTIR-2386** provisions the two buckets — the public one with public-read —
+  and their credentials as Fly secrets.
+- **MOTIR-2393** removes `@vercel/blob` and the four `BLOB_*` env reads; after it,
+  the delegation flow named in Amendment 1 exists nowhere in the repository,
+  which is why leaving that clause unamended was not an option.
+- **§1–§5 need no other edit.** The model was always "private store +
+  authenticated route + short-lived presign"; only the vendor implementing it
+  changed.
+- **Off-cloud / self-host improves.** The original record already claimed the
+  model works "against any Blob-compatible store". It is now implemented against
+  the **S3 API**, which is what a self-hoster is most likely to have.
+
+---
+
+## Amendment 3 (2026-08-07) — the seam exports eleven, not nine; and MOTIR-2389 did not copy the objects
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2431.** This amendment corrects
+> two FACTS in Amendment 2's _Consequences_ list. **It re-opens no decision** —
+> Q1's presigned-GET signing flow, Q2's two-bucket split, §3's authorization
+> matrix, §4's DTO surface and §5's 300 s TTL all stand exactly as written. What
+> changes is a count, and which card owns a step.
+>
+> **Numbered 3.** Amendment 2 was the highest heading in this file, re-read at
+> edit time rather than taken from the card. The companion correction to the same
+> count in `application-hosting.md` is that record's Amendment 3, landed by this
+> same card.
+
+**Amends:** the **MOTIR-2389 bullet** under _Consequences of this amendment_ — its
+export count, and its final clause. Nothing else in this record changes, and no
+clause is withdrawn.
+
+### What was wrong — 1: the count
+
+The bullet stated that MOTIR-2389 reimplements **"all nine `lib/blob/uploader.ts`
+exports"**. The file exports **eleven** things: eight `async function`s and three
+`interface`s. Nine is neither number.
+
+Observed on `origin/main`, 2026-08-07:
+
+```
+$ git grep -c '^export' origin/main -- lib/blob/uploader.ts
+11
+$ git grep -c '^export async function' origin/main -- lib/blob/uploader.ts
+8
+$ git grep -c '^export interface' origin/main -- lib/blob/uploader.ts
+3
+```
+
+The same greps at `16bef033` — the last commit before MOTIR-2389 was authored —
+return the identical eight function names and three interfaces, so the number was
+wrong when written, not stale. The authoritative name-by-name list lives on
+MOTIR-2389 and MOTIR-2402; this record points at it rather than restating it.
+
+### What was wrong — 2: who copies the objects
+
+The same bullet ended **"and copies the objects already in the old stores."**
+MOTIR-2389 does not. It ships the script — `scripts/migrate-blob-objects.ts`,
+with a `--dry-run` default, an idempotent copy and a verify pass — and the
+**2026-08-07 re-plan moved the running of it onto its own card, MOTIR-2401**,
+which is `manual` / human-executed and `blocked_by` MOTIR-2386 and MOTIR-2389.
+The reason it was carved out is the reason it cannot be inferred from a merged
+PR: the copy reads one platform's object stores and writes another's, needing
+both credentials at one moment plus a person to accept the result. MOTIR-2389 has
+merged; **MOTIR-2401 has not run.**
+
+This is the correction that matters. A decision record stating that a merged card
+copied the objects tells a later reader that a live data migration has already
+happened — which is the single failure mode this Story has been most careful
+about, and the one that a green pipeline cannot contradict, because tests create
+the buckets they read.
+
+### Why an amendment rather than a silent replacement
+
+The convention in this directory is that a correction is recorded, not
+overwritten — Amendment 2 above, `application-hosting.md`'s Amendments 2 and 3,
+`public-api-conventions.md`'s Amendments 9–11. It matters more than usual here:
+anyone who read the old bullet may have concluded the objects were already moved,
+and that conclusion needs to be discoverable as wrong, with a date.
+
+### What this amendment does NOT touch
+
+- **Any decision.** Q1's signing flow, Q2's bucket split, §3, §4 and §5 stand.
+- **`lib/blob/uploader.ts`, the script, or any code.** Nothing is renamed, added
+  or removed.
+- **Anything on either platform.** No object is copied, listed or deleted by this
+  amendment; MOTIR-2401 remains the card that does that, and remains undone.

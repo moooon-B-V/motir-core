@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DOCS_REDIRECTS } from '../next.config';
@@ -224,10 +224,11 @@ function sweep(): Finding[] {
 // stay. Adding a row is a deliberate act with a written reason; the tightness
 // test below deletes the row for you the moment it stops applying.
 //
-// Genuinely-stale addresses found by this guard's first run are NOT silenced
-// here on the merits — every one is marked STALE and fixed by MOTIR-2340, per
-// this card's scope boundary (running the guard IS the audit; what it finds is
-// its own card).
+// Genuinely-stale addresses are NOT silenced here on the merits. This guard's
+// first run found 17 of them; they were parked as STALE rows naming MOTIR-2340
+// (per MOTIR-2316's scope boundary — running the guard IS the audit, and what
+// it finds is its own card), and MOTIR-2340 then corrected the assets and
+// deleted the rows. A stale address belongs in a fix, never in this table.
 const KNOWN: { file: string; address: string; why: string }[] = [
   // ── Prose that names an address without using it ──────────────────────────
   {
@@ -317,213 +318,121 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     address: '/explore/seedling/grove-cms',
     why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
   },
-  // The MCP + CLI documentation assets (MOTIR-2323, MOTIR-2326) merged AFTER
-  // this guard, so neither could add its rows and this table could not name
-  // assets that did not yet exist. Both green; the composition turned `main`
-  // red (MOTIR-2348). Each row below names the card that BUILDS its route and
-  // therefore deletes the row — the tightness test enforces that.
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the route this asset DRAWS. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the catalogue route this asset DRAWS. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the mock renders the address bar of the page it specifies. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: same unbuilt catalogue route, in the mock. Built by MOTIR-2309, which deletes this row.',
-  },
-  {
-    file: 'design/cli-guide/cli-guide.mock.html',
-    address: '/docs/cli',
-    why: 'Forward-looking: built by MOTIR-2308, whose PR #1910 was open when this landed — that PR adds app/(public)/docs/cli/page.tsx and MUST delete this row, or the tightness test fails.',
-  },
-  {
-    file: 'design/cli-guide/design-notes.md',
-    address: '/docs/cli',
-    why: 'Forward-looking: same route. Built by MOTIR-2308 (PR #1910), which deletes this row.',
-  },
   {
     file: 'design/project-square/project-square.mock.html',
     address: '/explore/vantage/pulse-analytics',
     why: 'Forward-looking: same unbuilt /explore/<org>/<project> page.',
   },
-  // ── Forward-looking, merged AFTER this guard and never listed ─────────────
-  //    MOTIR-2370. `design/cli-guide/` (#1905) and `design/mcp-server/` (#1906)
-  //    both landed on `main` after the guard did, and neither could see it: the
-  //    three PRs were in flight together, so each was green against a base that
-  //    did not contain the other. Their composition is what turned `main` red —
-  //    the same shape as two fixes that each pass alone.
+  // ── Forward-looking: the MCP + CLI documentation assets — ALL CLEARED ────
+  //    `design/mcp-server/` (#1906, MOTIR-2323) and `design/cli-guide/`
+  //    (#1905, MOTIR-2326) both merged AFTER this guard, so neither could add
+  //    its rows and this table could not name assets that did not yet exist.
+  //    The three PRs were in flight together, so each was green against a base
+  //    that did not contain the other, and their composition is what turned
+  //    `main` red — the same shape as two fixes that each pass alone.
   //
-  //    ⚠️ The two `design/cli-guide` rows are TEMPORARY and belong to
-  //    MOTIR-2308, which ships `/docs/cli`. The tightness test below fails on a
-  //    listed pair that no longer fires, so that PR DELETES them in the same
-  //    commit that adds the route — which is the mechanism working, not a
-  //    conflict. Land this PR first; #1910 removes its own two.
+  //    That shape then repeated one level up: MOTIR-2348 (#1913) and
+  //    MOTIR-2370 (#1916) diagnosed the same red `main` in parallel and both
+  //    merged, so this table carried TWO rows for each of the eight pairs until
+  //    MOTIR-2372 deduped them. The uniqueness test further down is what stops
+  //    that recurring; read it before adding a row.
+  //
+  //    Every one of those eight rows is now GONE, and each left the same way:
+  //    the card that BUILDS the route deleted its own rows in the commit that
+  //    added the route — `/docs/cli` by MOTIR-2308 (#1910), `/docs/mcp` and
+  //    `/docs/mcp/tools` by MOTIR-2309 (#1911). `expired()` below is what made
+  //    that the only way out: a row survives exactly as long as the gap it
+  //    describes, so it cannot quietly outlive the thing it excuses.
+  //
+  //    (MOTIR-2316's first run also parked 17 STALE pairs here — 13 assets
+  //    addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of
+  //    them in the assets, so those rows are gone too.)
+
+  // ── Forward-looking: the Roles & permissions settings page (MOTIR-2263) ───
+  //    The asset (MOTIR-2259, #1889) draws a settings page that does not exist
+  //    yet: `app/(authed)/settings/project/` holds `members`, `board`,
+  //    `automation`, `workflow` and the rest, but no `roles`. MOTIR-2263 builds
+  //    the route and the registry entry, and — per the pattern above — is the
+  //    card that deletes these three rows, in the commit that adds the route.
+  //
+  //    ⚠️ These rows exist because this guard did NOT run on the PR that made
+  //    them necessary. `ci.yml` skips the Vitest job on `design/*`, so the one
+  //    PR class that changes design assets is the one class that never runs the
+  //    assets' own guards; #1889 merged green and `main` went red for the next
+  //    `subtask/*` PR to run a full suite. That is the composition-red shape the
+  //    MCP/CLI note above describes, arriving through a different door — not two
+  //    PRs racing, but a gate that made one of them invisible. MOTIR-2442 closes
+  //    it; MOTIR-2441 is this repair.
   {
-    file: 'design/cli-guide/design-notes.md',
-    address: '/docs/cli',
-    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
-  {
-    file: 'design/cli-guide/cli-guide.mock.html',
-    address: '/docs/cli',
-    why: 'Forward-looking until MOTIR-2308 ships the route. That PR (#1910) deletes this row.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the asset proposes the route, and MOTIR-2309 ships it.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the second page of the same unbuilt sub-area (MOTIR-2309).',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp',
-    why: 'Forward-looking: the rail row the asset draws for its own unbuilt page (MOTIR-2309).',
-  },
-  {
-    file: 'design/mcp-server/mcp-server.mock.html',
-    address: '/docs/mcp/tools',
-    why: 'Forward-looking: the same unbuilt sub-area’s second rail row (MOTIR-2309).',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs',
-    why: 'The ownership row for the unbuilt `/docs` area root (MOTIR-2315), which states that `/docs` still 308s to `/docs/api` — the same note `design/api-docs/` carries.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/API/MCP',
-    why: 'Not an address: prose about how the catalogue’s header row RENDERS the string `/api/mcp` in uppercase.',
-  },
-  // ── STALE — real drift this guard found on its first run. Not silenced on
-  //    the merits: MOTIR-2340 corrects every one of them and deletes these
-  //    rows, and the tightness test below is what stops it re-allowlisting
-  //    them instead. `/issues*` is the work-item rename; `/login` never
-  //    shipped (the route is `/sign-in`).
-  {
-    file: 'design/backlog/backlog-filter.mock.html',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/backlog/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/boards/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/import/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/org-admin/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/ready/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/triage/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues',
-    why: 'STALE — /items since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/notifications/design-notes.md',
-    address: '/issues/[key]',
-    why: 'STALE — /items/[key] since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/public-projects/design-notes.md',
-    address: '/issues/[key]',
-    why: 'STALE — /items/[key] since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues/[key]',
-    why: 'STALE — /items/[key] since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues/[identifier]',
-    why: 'STALE — /items/[key] since the work-item rename; the parameter name is wrong too. Fixed by MOTIR-2340, not here.',
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/roles',
+    why: 'Forward-looking: the Roles & permissions list page, built by MOTIR-2263, which deletes this row with the route.',
   },
   {
     file: 'design/projects/design-notes.md',
-    address: '/issues/[key]/edit',
-    why: 'STALE — /items/[key]/edit since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/archived.mock.html',
-    address: '/issues/archived',
-    why: 'STALE — /items/archived since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/work-items/design-notes.md',
-    address: '/issues/archived',
-    why: 'STALE — /items/archived since the work-item rename. Fixed by MOTIR-2340, not here.',
-  },
-  {
-    file: 'design/onboarding-entrance/design-notes.md',
-    address: '/login',
-    why: 'STALE — the sign-in route is /sign-in; /login never shipped. Fixed by MOTIR-2340, not here.',
+    address: '/settings/project/roles/[roleKey]',
+    why: 'Forward-looking: the role drill-down on the same unbuilt page, MOTIR-2263.',
   },
   {
     file: 'design/projects/design-notes.md',
-    address: '/login',
-    why: 'STALE — the sign-in route is /sign-in; /login never shipped. Fixed by MOTIR-2340, not here.',
+    address: '/settings/project/roles/new',
+    why: 'Forward-looking: the create-a-role page the asset reserves for the custom-roles story MOTIR-2257; the route lands no earlier than MOTIR-2263.',
   },
 ];
 
 type Entry = { file: string; address: string; why: string };
 const idOf = (x: { file: string; address: string }) => `${x.file} ${x.address}`;
 
-/** Findings no `KNOWN` row covers — an asset went stale, or a new one shipped stale. */
-function unlisted(findings: Finding[], known: Entry[]): string[] {
-  const allowed = new Set(known.map(idOf));
-  // The file, the line to open, the address, and what is wrong with it —
-  // enough to fix without re-running the sweep by hand.
-  return findings
-    .filter((finding) => !allowed.has(idOf(finding)))
-    .map((finding) => `${finding.file}:${finding.line} — ${finding.address} (${finding.verdict})`);
+// Two sweeps live in this file — addresses, and the source paths below — and
+// they reconcile against their allowlist identically. So the two-direction
+// check is written once, over a finding reduced to an `id` (the asset plus the
+// thing it cites) and the `report` line to print when nothing allows for it.
+interface Reconcilable {
+  id: string;
+  report: string;
 }
 
-/** `KNOWN` rows that match nothing — the asset was corrected, so the row must go. */
-function expired(findings: Finding[], known: Entry[]): string[] {
-  const live = new Set(findings.map(idOf));
-  return known.map(idOf).filter((id) => !live.has(id));
+/** An address finding, as the reconciler sees it. */
+const reconcilable = (finding: Finding): Reconcilable => ({
+  id: idOf(finding),
+  // The file, the line to open, the address, and what is wrong with it —
+  // enough to fix without re-running the sweep by hand.
+  report: `${finding.file}:${finding.line} — ${finding.address} (${finding.verdict})`,
+});
+
+/** Findings no allowlist row covers — an asset went stale, or a new one shipped stale. */
+function unlisted(findings: Reconcilable[], allowed: string[]): string[] {
+  const covered = new Set(allowed);
+  return findings.filter((finding) => !covered.has(finding.id)).map((finding) => finding.report);
+}
+
+/** Allowlist rows that match nothing — the asset was corrected, so the row must go. */
+function expired(findings: Reconcilable[], allowed: string[]): string[] {
+  const live = new Set(findings.map((finding) => finding.id));
+  return allowed.filter((id) => !live.has(id));
+}
+
+/**
+ * `KNOWN` pairs listed more than once. Neither test above can see a duplicate:
+ * `unlisted()` matches findings against a `Set`, so the second row is a no-op,
+ * and `expired()` only reports a row matching NOTHING, which a duplicate still
+ * does. Uniqueness is the third axis, and it is the one a parallel merge
+ * attacks — reported once per pair however many copies exist.
+ */
+function duplicated(known: Entry[]): string[] {
+  const seen = new Set<string>();
+  const twice = new Set<string>();
+  for (const id of known.map(idOf)) {
+    if (seen.has(id)) twice.add(id);
+    seen.add(id);
+  }
+  return [...twice].sort();
 }
 
 describe('a design asset addresses pages that still exist', () => {
   it('finds no address the app no longer serves', () => {
     expect(
-      unlisted(sweep(), KNOWN),
+      unlisted(sweep().map(reconcilable), KNOWN.map(idOf)),
       'A design asset is the layout source of truth for its surface; an address it names that ' +
         'redirects away or resolves to nothing will be believed by the next card that reads it. ' +
         'Correct the asset, or add the pair to KNOWN with a reason if the address is deliberate.',
@@ -535,8 +444,24 @@ describe('a design asset addresses pages that still exist', () => {
     // its asset was corrected would silently pre-approve the SAME address
     // going stale again — an allowlist one edit away from being a mute button.
     expect(
-      expired(sweep(), KNOWN),
+      expired(sweep().map(reconcilable), KNOWN.map(idOf)),
       'These KNOWN entries no longer match anything — delete them.',
+    ).toEqual([]);
+  });
+
+  it('lists each (asset, address) pair exactly once', () => {
+    // MOTIR-2372. MOTIR-2348 (#1913) and MOTIR-2370 (#1916) diagnosed the same
+    // red `main` in parallel and both merged, so the SAME eight pairs were
+    // listed twice — invisible to both tests above, and green. Every one of
+    // these rows exists to be DELETED by the card that builds its route, so a
+    // second copy is a trap laid for that card: it removes the pair it finds,
+    // the survivor stops matching, and `expired()` reddens `main` naming rows
+    // that author believes they already removed.
+    expect(
+      duplicated(KNOWN),
+      'These pairs are listed more than once — delete the extra copies, keeping the ' +
+        'reason that reads best. A duplicate silences nothing today and reddens `main` ' +
+        'the day the pair is cleared.',
     ).toEqual([]);
   });
 
@@ -544,23 +469,23 @@ describe('a design asset addresses pages that still exist', () => {
     expect(KNOWN.filter((entry) => entry.why.trim().length < 20)).toEqual([]);
   });
 
-  it('lists each STALE row against the card that clears it', () => {
-    // The STALE rows are the guard's own first-run findings, parked rather than
-    // fixed here. Each has to name where it IS fixed, or "parked" quietly
-    // becomes "accepted".
+  it('parks no finding as STALE without naming the card that clears it', () => {
+    // MOTIR-2316 parked its own first-run findings here rather than fixing
+    // them, and asserted each named where it WAS fixed — or "parked" quietly
+    // becomes "accepted". MOTIR-2340 cleared all 17, so the table holds none
+    // today; the rule outlives them, because parking the NEXT batch is the
+    // same temptation. It no longer requires a STALE row to exist (that would
+    // oblige the table to keep one forever) — only that any row calling itself
+    // STALE cites a card.
     const stale = KNOWN.filter((entry) => entry.why.startsWith('STALE'));
-    expect(stale.length).toBeGreaterThan(0);
-    expect(stale.filter((entry) => !entry.why.includes('MOTIR-2340'))).toEqual([]);
+    expect(stale.filter((entry) => !/MOTIR-\d+/.test(entry.why))).toEqual([]);
   });
 });
 
-describe('the allowlist is checked in both directions', () => {
-  const finding = (file: string, address: string): Finding => ({
-    file,
-    address,
-    verdict: 'resolves-to-nothing',
-    line: 7,
-  });
+describe('the allowlist is checked in both directions, and for uniqueness', () => {
+  const finding = (file: string, address: string): Reconcilable =>
+    reconcilable({ file, address, verdict: 'resolves-to-nothing', line: 7 });
+  const allow = (file: string, address: string): string => idOf({ file, address });
   const entry = (file: string, address: string): Entry => ({ file, address, why: 'because' });
 
   it('reports a finding no row covers, with its file, line and verdict', () => {
@@ -570,15 +495,50 @@ describe('the allowlist is checked in both directions', () => {
   });
 
   it('reports a row that matches nothing, so a corrected asset cannot keep its exemption', () => {
-    expect(expired([], [entry('design/a/notes.md', '/gone')])).toEqual(['design/a/notes.md /gone']);
+    expect(expired([], [allow('design/a/notes.md', '/gone')])).toEqual(['design/a/notes.md /gone']);
   });
 
   it('scopes a row to ONE asset — the same address going stale elsewhere still fails', () => {
-    const rows = [entry('design/a/notes.md', '/gone')];
+    const rows = [allow('design/a/notes.md', '/gone')];
     expect(unlisted([finding('design/a/notes.md', '/gone')], rows)).toEqual([]);
     expect(unlisted([finding('design/b/notes.md', '/gone')], rows)).toEqual([
       'design/b/notes.md:7 — /gone (resolves-to-nothing)',
     ]);
+  });
+
+  it('names a pair listed twice, so a parallel merge cannot double a row unseen', () => {
+    const a = entry('design/a/notes.md', '/gone');
+    expect(duplicated([a, a])).toEqual(['design/a/notes.md /gone']);
+    // Reported ONCE per pair however many copies there are, and the reported
+    // string is the pair itself — the same id `expired()` prints, so both
+    // failures read the same way.
+    expect(duplicated([a, a, a])).toEqual(['design/a/notes.md /gone']);
+  });
+
+  it('stays silent on rows that share only the file, or only the address', () => {
+    const rows = [
+      entry('design/a/notes.md', '/gone'),
+      entry('design/a/notes.md', '/other'),
+      entry('design/b/notes.md', '/gone'),
+    ];
+    expect(duplicated(rows)).toEqual([]);
+    // Uniqueness is per PAIR, not per file or per address: one asset naming two
+    // dead addresses, and two assets naming the same one, are both legitimate —
+    // the second is exactly what the four /docs/mcp[/tools] rows are.
+    expect(duplicated([])).toEqual([]);
+  });
+
+  it('the duplicate axis is the one the two tightness tests cannot see', () => {
+    // The regression MOTIR-2372 cleaned up, in miniature: two rows for one
+    // pair, matched by a single live finding. `unlisted()` is satisfied (the
+    // finding is covered) and `expired()` is satisfied (both rows match), so
+    // the table is green — while carrying a row that will outlive its pair.
+    const a = entry('design/a/notes.md', '/gone');
+    const findings = [finding('design/a/notes.md', '/gone')];
+    const id = allow('design/a/notes.md', '/gone');
+    expect(unlisted(findings, [id, id])).toEqual([]);
+    expect(expired(findings, [id, id])).toEqual([]);
+    expect(duplicated([a, a])).toEqual(['design/a/notes.md /gone']);
   });
 });
 
@@ -648,5 +608,389 @@ describe('the sweep catches the drift it was written for', () => {
     expect(classify('/docs/api')).toBeNull();
     expect(classify('/docs/api/getting-started')).toBeNull();
     expect(classify('/docs/sandbox')).toBeNull();
+  });
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+// The SOURCE-PATH sweep — MOTIR-2364
+// ════════════════════════════════════════════════════════════════════════════
+//
+// An asset names two kinds of thing, and everything above guards only one of
+// them. It names ADDRESSES — where a surface lives for a user — and it names
+// SOURCE PATHS: the shipped file the next agent is told to open, in lines that
+// literally read "mirrors `app/(authed)/items/page.tsx`".
+//
+// ── The defect this guards ──────────────────────────────────────────────────
+// The work-item rename moved `app/(authed)/issues/` to `app/(authed)/items/`
+// and KEPT the component filenames, so `app/(authed)/issues/_components/
+// issueCellPrimitives.tsx` was wrong in its first half and right in its
+// second. Nineteen such citations across fourteen assets survived the rename,
+// a referrer sweep (`issues` is still everywhere, legitimately, in
+// `components/issues/` and `lib/issues/`), and the guard above.
+//
+// That guard could not have found them: a source path is not an address, and
+// `toPageAddress` discards one twice over — exclusion (2) rejects anything
+// whose last segment has a file extension (`page.tsx`), and `(authed)` is
+// stripped from every route pattern, so `app/(authed)/…` can never match one.
+// Invisible by construction, not by omission — hence a second sweep rather
+// than a `KNOWN` row.
+//
+// ── Why this half is the load-bearing one ───────────────────────────────────
+// An asset's addresses are read by a human orienting themselves. Its source
+// paths are read by an agent about to write code. A dead address briefly
+// confuses a reader; a dead source path sends a coding agent to open a file
+// that does not exist — and what it does then is improvise the layout, which
+// is the exact outcome the design-reference rule exists to prevent.
+
+/**
+ * The repo's own top-level directories. Anchoring a citation on one of these
+ * is what keeps the sweep quiet: an unanchored `word/word` matches every
+ * alternative in English prose ("a Card/Pill split", "green/mint").
+ */
+const SOURCE_ROOTS = readdirSync(ROOT, { withFileTypes: true })
+  .filter(
+    (entry) => entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules',
+  )
+  .map((entry) => entry.name)
+  .sort();
+
+// A path segment is a route group `(authed)`, a dynamic segment `[key]`, or a
+// plain name. The trailing capture is the character that ENDED the token —
+// only a brace matters, and only as an exclusion below.
+const PATH_SEGMENT = String.raw`(?:\([a-z][\w-]*\)|\[[^\]/\s]+\]|[\w.@+-]+)`;
+const PATH_TOKEN = new RegExp(
+  String.raw`(?:^|[^\w./-])((?:${SOURCE_ROOTS.join('|')})(?:/${PATH_SEGMENT})+)([{]?)`,
+  'g',
+);
+
+interface RawPath {
+  raw: string;
+  brace: boolean;
+  line: number;
+}
+
+/** Every path-shaped token in one asset's source, with its line number. */
+function pathsIn(source: string): RawPath[] {
+  const found: RawPath[] = [];
+  for (const match of source.matchAll(PATH_TOKEN)) {
+    found.push({
+      raw: match[1]!,
+      brace: match[2] === '{',
+      line: source.slice(0, match.index).split('\n').length,
+    });
+  }
+  return found;
+}
+
+/**
+ * Reduce a raw match to the repo path it names, or `null` when it is not one.
+ * Two exclusions, both the source-path analogue of `toPageAddress`'s
+ * placeholder rule — a token that names a FAMILY rather than a file.
+ */
+function toRepoPath({ raw, brace }: RawPath): string | null {
+  // (1) A brace expansion — `ExpansionNudge{Banner,Review}.tsx` truncates to a
+  //     stem that is neither of the two files it means.
+  if (brace) return null;
+  // (2) An elided path — `app/(authed)/org/.../OrgUsageClient.tsx`.
+  if (raw.includes('…') || /(^|\/)\.\.\.(\/|$)/.test(raw)) return null;
+  // Sentence punctuation the token swallowed: "… in app/…/page.tsx."
+  return raw.replace(/\.+$/, '') || null;
+}
+
+// A citation often drops the extension — `components/ui/Card` is an import
+// specifier, not a filename. Resolve it the way an editor's go-to-file would.
+const CITED_EXTENSIONS = [
+  '.ts',
+  '.tsx',
+  '.md',
+  '.mock.html',
+  '.html',
+  '.json',
+  '.css',
+  '.png',
+  '.svg',
+  '.pen',
+];
+
+function resolvesInRepo(path: string): boolean {
+  if (existsSync(join(ROOT, path))) return true;
+  // It already carries an extension and did not resolve — nothing to try.
+  if (/\.[a-z0-9]+$/i.test(path.split('/').pop()!)) return false;
+  return CITED_EXTENSIONS.some((extension) => existsSync(join(ROOT, path + extension)));
+}
+
+interface PathFinding {
+  file: string;
+  path: string;
+  line: number;
+}
+
+function sweepPaths(): PathFinding[] {
+  const assets = walk(join(ROOT, 'design')).filter((path) => /\.(md|html|pen)$/.test(path));
+  const findings = new Map<string, PathFinding>();
+  for (const asset of assets) {
+    const file = relative(ROOT, asset).split(sep).join('/');
+    for (const rawPath of pathsIn(readFileSync(asset, 'utf8'))) {
+      const path = toRepoPath(rawPath);
+      if (path === null || resolvesInRepo(path)) continue;
+      const id = `${file} ${path}`;
+      // First occurrence wins, so the reported line is the one to open.
+      if (!findings.has(id)) findings.set(id, { file, path, line: rawPath.line });
+    }
+  }
+  return [...findings.values()].sort((a, b) =>
+    `${a.file} ${a.path}`.localeCompare(`${b.file} ${b.path}`),
+  );
+}
+
+const pathIdOf = (x: { file: string; path: string }) => `${x.file} ${x.path}`;
+
+/** A source-path finding, as the shared reconciler sees it. */
+const reconcilablePath = (finding: PathFinding): Reconcilable => ({
+  id: pathIdOf(finding),
+  report: `${finding.file}:${finding.line} — ${finding.path} (does not exist)`,
+});
+
+// ── The judgement, in one table ─────────────────────────────────────────────
+//
+// Same contract as `KNOWN` above: every pair the sweep finds today, with why
+// it is allowed to stay, asserted TIGHT in both directions so the list cannot
+// rot into a mute button. Four families, and the reason says which.
+//
+// This sweep's own first-run findings were parked here as `STALE` rather than
+// fixed in the run that found them — the boundary MOTIR-2316 set and MOTIR-2340
+// inherited: the run that finds a class is not the run that clears it.
+// MOTIR-2369 cleared all six, so the table holds no STALE row today.
+const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── A slash in prose that is not a path ───────────────────────────────────
+  {
+    file: 'design/epic-privacy/design-notes.md',
+    path: 'public/non-member',
+    why: 'Prose alternation — "a public/non-member viewer" — not a path. `public/` being a real root is the whole reason it matches.',
+  },
+  {
+    file: 'design/public-projects/design-notes.md',
+    path: 'public/non-member',
+    why: 'The same alternation in the sibling asset — "a public/non-member viewer lands on".',
+  },
+  {
+    file: 'design/onboarding-migrate/design-notes.md',
+    path: 'design/build',
+    why: 'A verb pair — "Nothing to design/build here for the plan screen itself" — not the `design/` folder.',
+  },
+  {
+    file: 'design/work-items/attachments.mock.html',
+    path: 'docs/text/markdown',
+    why: "The attachment-icon legend's docs group and its MIME type (`text/markdown`), read as one token because `docs/` is a real root.",
+  },
+  {
+    file: 'design/work-items/design-notes.md',
+    path: 'docs/text',
+    why: 'The same legend in the design notes — the row label "docs/text (`msword`, docx, `text/plain`, `text/markdown`)".',
+  },
+  // ── Sample data, not this repo's tree ─────────────────────────────────────
+  {
+    file: 'design/coding-convention/convention.mock.html',
+    path: 'app/api/auth/route.ts',
+    why: "A fabricated code-review finding's `coderef`, paired with `src/repositories/userRepo.ts` — a `src/` root this repo does not have. The mock shows the report, not this codebase.",
+  },
+  // ── The asset asserts the path does NOT exist ─────────────────────────────
+  {
+    file: 'design/brand/design-notes.md',
+    path: 'design/brand/brand-mark.design-notes.md',
+    why: "The asset's own File-name note, recording the filename the card asked for and why it ships as `design/brand/design-notes.md` instead. It has to name the path it did not use.",
+  },
+  {
+    file: 'design/audit-coverage/design-notes.md',
+    path: 'design/code-context',
+    why: 'A verified-absent claim the asset makes inline — "its asset is not drawn yet — verified: there is no `design/code-context/` on `origin/main`".',
+  },
+  // ── Forward-looking: the asset proposes the file ──────────────────────────
+  {
+    file: 'design/ai-usage/usage.mock.html',
+    path: 'components/ui/Skeleton',
+    why: 'Forward-looking: `components/ui/` has no Skeleton primitive; the loading state is proposed here, drawn inline.',
+  },
+  {
+    file: 'design/billing/billing.mock.html',
+    path: 'components/ui/Skeleton',
+    why: 'Forward-looking: the same unbuilt Skeleton primitive.',
+  },
+  {
+    file: 'design/billing/ci-line.mock.html',
+    path: 'components/ui/Skeleton',
+    why: 'Forward-looking: the same unbuilt Skeleton primitive.',
+  },
+  {
+    file: 'design/org-admin/members-billing.mock.html',
+    path: 'components/ui/Skeleton',
+    why: 'Forward-looking: the same unbuilt Skeleton primitive.',
+  },
+  {
+    file: 'design/org-admin/org-admin.mock.html',
+    path: 'components/ui/Skeleton',
+    why: 'Forward-looking: the same unbuilt Skeleton primitive.',
+  },
+  {
+    file: 'design/import/design-notes.md',
+    path: 'components/ui/Progress',
+    why: 'Forward-looking, and the asset says so inline — "if reused elsewhere it becomes a `components/ui/Progress` primitive (per-component growth)".',
+  },
+  {
+    file: 'design/platform-admin/design-notes.md',
+    path: 'app/(admin)/admin',
+    why: 'Forward-looking: the platform-admin console is unbuilt, and this asset proposes both its route group and its directory. The address half is allowlisted above as `/admin`.',
+  },
+  // (`design/cli-guide/`'s two assets cited `packages/cli/src/commandCatalog.ts`
+  //  as forward-looking. MOTIR-2324 built it, so both rows expired and are
+  //  gone — the same mechanism, one sweep down, as the address table above.)
+  // (`design/mcp-server/design-notes.md` cited `lib/apiDocs/mcp.ts` as
+  //  forward-looking. MOTIR-2309 built it, so the row expired and is gone —
+  //  the same mechanism the address table above records, one sweep down.)
+  // (§5's favicon set — `app/icon.svg`, `app/apple-icon.png`, `app/manifest.ts`,
+  //  cited by both brand assets — was parked here as forward-looking. MOTIR-1150
+  //  shipped all three, so the six rows are gone: `expired()` is what turned
+  //  "that card merged" into a failing test rather than a silent exemption.)
+  // (The six STALE rows this sweep parked on its first run — `app/(authed)/board`
+  //  ×2, `components/plans`, `components/automation`,
+  //  `app/_components/PublicFrontDoor.tsx`, `scripts/plan-seed/data/story-6.16.ts`
+  //  — are gone: MOTIR-2369 corrected all six assets, so `expired()` below is what
+  //  turned "that card landed" into a failing test rather than a stale exemption.
+  //  Two were claim corrections, not repoints: the marketing hero left this repo
+  //  with MOTIR-1457, and Story 6.16 never had a seed file to name.)
+  {
+    file: 'design/brand/design-notes.md',
+    path: 'app/icon-192.png',
+    why: "Not a citation: §5's ⚠️ blockquote names the path the maskable icons did NOT take, and says why — Next's static-metadata matcher is `icon\\d?`, so `app/icon-<size>.png` is served at no URL and the manifest entry would 404. MOTIR-1150 put them in `public/`; the asset records the rejected path so the next reader does not re-propose it.",
+  },
+  {
+    file: 'design/brand/design-notes.md',
+    path: 'app/icon1.png',
+    why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
+  },
+
+  // ── An instruction to BUILD a primitive, not a citation of one ────────────
+  {
+    file: 'design/projects/roles-permissions.mock.html',
+    path: 'components/ui/Checkbox.tsx',
+    why: 'Not a citation: the sentence is an instruction to BUILD the primitive — "`components/ui/Checkbox.tsx` to this spec: `--radius-control` …" — for the editable grid the custom-roles story adds. `components/ui/` ships `Combobox.tsx`, not `Checkbox.tsx`; whichever card creates it deletes this row with the file.',
+  },
+];
+
+describe('a design asset cites source paths that still exist', () => {
+  it('finds no cited repo path that resolves to nothing', () => {
+    expect(
+      unlisted(sweepPaths().map(reconcilablePath), KNOWN_PATHS.map(pathIdOf)),
+      'A design asset tells the next agent which shipped file to mirror; a path it names that ' +
+        'does not exist sends that agent looking for nothing, and what it does next is improvise. ' +
+        'Correct the asset, or add the pair to KNOWN_PATHS with a reason if the path is deliberate.',
+    ).toEqual([]);
+  });
+
+  it('carries no KNOWN_PATHS entry that has stopped applying', () => {
+    expect(
+      expired(sweepPaths().map(reconcilablePath), KNOWN_PATHS.map(pathIdOf)),
+      'These KNOWN_PATHS entries no longer match anything — the asset was corrected or the file ' +
+        'now exists. Delete them, so the pair is guarded again.',
+    ).toEqual([]);
+  });
+
+  it('lists every KNOWN_PATHS entry with a reason', () => {
+    expect(KNOWN_PATHS.filter((entry) => entry.why.trim().length < 20)).toEqual([]);
+  });
+
+  it('parks no finding as STALE without naming the card that clears it', () => {
+    // The same rule the address table above carries, and it reached the same
+    // place one sweep later: this table parked six of its own first-run
+    // findings rather than fixing them, MOTIR-2369 cleared all six, and none
+    // remains. The rule outlives them, because parking the NEXT batch is the
+    // same temptation — so it no longer requires a STALE row to exist (that
+    // would oblige the table to keep one forever), only that any row calling
+    // itself STALE cites the card that clears it.
+    const stale = KNOWN_PATHS.filter((entry) => entry.why.startsWith('STALE'));
+    expect(stale.filter((entry) => !/MOTIR-\d+/.test(entry.why))).toEqual([]);
+  });
+});
+
+// ── The sweep, seen failing ─────────────────────────────────────────────────
+//
+// A guard that has never been observed to fail is not evidence. These run the
+// real extractor and the real resolver over the assets' own pre-fix content —
+// verbatim from `git show 44e55eff`, the last revision before this card's
+// correction — and assert the sweep would have named them.
+describe('the source-path sweep catches the drift it was written for', () => {
+  const missing = (source: string) =>
+    [
+      ...new Set(
+        pathsIn(source)
+          .map(toRepoPath)
+          .filter((path): path is string => path !== null)
+          .filter((path) => !resolvesInRepo(path)),
+      ),
+    ].sort();
+
+  it('names the stale directory in a design-notes citation', () => {
+    // `design/work-items/design-notes.md` L3349 and L3356, and `design/ready/
+    // design-notes.md` L217 — the "which file to open" lines.
+    expect(
+      missing(
+        [
+          '- **`app/(authed)/issues/[key]/_components/IssueExplanation.tsx`** — the detail',
+          '- **`app/(authed)/issues/[key]/edit/_components/EditIssueForm.tsx`** — an',
+          '| row peek               | `app/(authed)/issues/_components/IssueQuickView.tsx`      |',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      'app/(authed)/issues/[key]/_components/IssueExplanation.tsx',
+      'app/(authed)/issues/[key]/edit/_components/EditIssueForm.tsx',
+      'app/(authed)/issues/_components/IssueQuickView.tsx',
+    ]);
+  });
+
+  it('names it inside a mockup comment, where no backtick marks it as code', () => {
+    // `design/work-items/list.mock.html` L193 and `design/boards/board.mock.html`
+    // L19 — a CSS comment and an HTML one. Ten of the nineteen citations looked
+    // like this, which is why the extractor cannot require a code span.
+    expect(
+      missing(
+        [
+          '      /* ── Page shell — header + toolbar (mirrors app/(authed)/issues/page.tsx) ─ */',
+          '      primitives from app/(authed)/issues/_components/issueCellPrimitives.tsx —',
+        ].join('\n'),
+      ),
+    ).toEqual([
+      'app/(authed)/issues/_components/issueCellPrimitives.tsx',
+      'app/(authed)/issues/page.tsx',
+    ]);
+  });
+
+  it('passes the corrected citations that shipped in their place', () => {
+    expect(
+      missing(
+        [
+          '- **`app/(authed)/items/[key]/_components/IssueExplanation.tsx`** — the detail',
+          '      /* ── Page shell — header + toolbar (mirrors app/(authed)/items/page.tsx) ─ */',
+          '      primitives from app/(authed)/items/_components/issueCellPrimitives.tsx —',
+        ].join('\n'),
+      ),
+    ).toEqual([]);
+  });
+
+  it('leaves the citations the rename did NOT touch alone', () => {
+    // The reason a referrer sweep for "issues" could not be used: these two
+    // directories still exist, and their citations are correct.
+    expect(
+      missing(
+        'the SHIPPED `components/issues/WorkItemTypeChip.tsx` and `lib/issues/issueListFilter.ts`',
+      ),
+    ).toEqual([]);
+  });
+
+  it('ignores a slash in prose that is not anchored on a repo directory', () => {
+    expect(missing('a `Card`/`Pill` split, in green/mint, per the and/or rule')).toEqual([]);
+  });
+
+  it('resolves an extension-less citation the way an import specifier reads', () => {
+    expect(missing('composed from `components/ui/Card` and `components/ui/Pill`')).toEqual([]);
   });
 });

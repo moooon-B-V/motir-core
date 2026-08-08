@@ -27,7 +27,7 @@ else and this asset must not be read as re-deciding any of it.
   empty state as it ships today and changes one link's destination. It does not
   redraw the create modal, the token list, or anything else on that surface.
 - **The route set, the page count and the derivation are
-  ADR Amendment 12's** (MOTIR-2321). This asset is drawn _to_ them; it does not
+  ADR Amendment 13's** (MOTIR-2321). This asset is drawn _to_ them; it does not
   re-open them.
 
 ## Drawn against SHIPPED REALITY, rendered not remembered
@@ -44,7 +44,7 @@ caught:
 1. **The rail's operation count reads `38 operations`, not `~28`.** ADR
    Amendment 11 recorded 28 and was correct when written; Story 11.7's ten
    work-loop operations have landed since. The count matters here because
-   Amendment 12 Q1's argument compares the size of the two indexes — and at
+   Amendment 13 Q1's argument compares the size of the two indexes — and at
    39 tools against 38 operations they are the same size, which is a stronger
    version of the argument than the one the card carried.
 2. **A page outside the API sub-area gets no search box and no operation
@@ -89,7 +89,7 @@ that says the choice costs them nothing to reverse.
 `/api/mcp` as `/API/MCP`. The header row carries the two surface NAMES and the
 endpoints are the first body row. Worth knowing before adding a column here.
 
-**Step 2 wires FIVE clients, and the shape is the argument.** ADR Amendment 12
+**Step 2 wires FIVE clients, and the shape is the argument.** ADR Amendment 13
 **Q3a** replaced _"one wired client"_ with a client matrix, for two reasons — one
 factual (`docs/mcp.md` holds no other client either, so the original allocation
 pointed nowhere) and one about the product (Motir does not ship the agent; the
@@ -132,7 +132,7 @@ typo.
 
 ### Panel 2 — `/docs/mcp/tools`, the catalogue
 
-The sub-area's second-tier resource index (Amendment 12 Q1). **Drawn at its real
+The sub-area's second-tier resource index (Amendment 13 Q1). **Drawn at its real
 size: all 39 rows, in six groups.**
 
 | Element              | Primitive / class      | Tokens                                                                                                      |
@@ -144,7 +144,7 @@ size: all 39 rows, in six groups.**
 | What the scope gates | `.cat-gates`           | `--el-text-secondary`, max-width `68ch`                                                                     |
 | The rows             | `table.spec.cat-table` | as Panel 1's table; first column fixed at `15.5rem`, `nowrap`                                               |
 
-**Grouped by SCOPE, and the grouping is derived** (Amendment 12 Q2). Each tool's
+**Grouped by SCOPE, and the grouping is derived** (Amendment 13 Q2). Each tool's
 group is its own `TOOL_SCOPES` entry; only the six labels and their order
 (`TOKEN_SCOPES` order) are authored. Two consequences worth naming:
 
@@ -163,7 +163,7 @@ should read as one vocabulary rather than two.
 
 **Copy note.** The lede says the grouping's reason out loud (_"because that is
 the choice you make when you mint the token"_). The callout under it states that
-these are summaries and the arguments live in `docs/mcp.md` — Amendment 12 Q3's
+these are summaries and the arguments live in `docs/mcp.md` — Amendment 13 Q3's
 boundary, said once, where the reader would otherwise go looking.
 
 ### Panel 3 — the catalogue at the tablet width
@@ -240,7 +240,7 @@ non-zero if a tool has no authored summary, or if `SUMMARIES` carries a tool the
 registry no longer has, so an asset regenerated after the registry grows is
 either correct or a hard error.
 
-That is the same split Amendment 12 Q2 decided for `lib/apiDocs/mcp.ts`, applied
+That is the same split Amendment 13 Q2 decided for `lib/apiDocs/mcp.ts`, applied
 one layer up: the mock cannot show a stale tool list, and the 39 one-line
 summaries in `build.py`'s `SUMMARIES` are **the draft MOTIR-2325 inherits**. The
 mechanism that keeps those summaries true against the shipped `tools/list` is
@@ -283,7 +283,7 @@ check, which is what makes Panel 4's claim a measurement rather than a hope.
 4. **MOTIR-2315 (the `/docs` area root) is reopened by its own trigger.** The MCP
    is the first `/docs` sub-area that is neither the API reference nor a single
    page, which is verbatim the condition Amendment 11 recorded. Recorded in
-   Amendment 12 Q1's consequences. Nothing in this asset decides it — but note
+   Amendment 13 Q1's consequences. Nothing in this asset decides it — but note
    that Panel 1 and Panel 2's top bars still send `Docs` to `/docs/api`, which is
    that card's whole complaint.
 

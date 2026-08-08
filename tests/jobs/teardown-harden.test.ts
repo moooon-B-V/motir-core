@@ -3,7 +3,7 @@ import { db } from '@/lib/db';
 import { jobRunsService } from '@/lib/services/jobRunsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // MOTIR-1545 — a background inngest job can complete (or start, or terminally

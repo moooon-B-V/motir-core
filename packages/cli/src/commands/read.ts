@@ -261,7 +261,7 @@ export function activityView(opts: ShowOptions): 'all' | 'comments' | null {
  * Both halves are the shipped `--json` contract and both are kept: a script that
  * reads this never re-derives the graph, and never has to sort. The only thing
  * the port changes is that the surrounding resource is the SERVER's own rather
- * than the CLI's narrowed view of it (ADR Amendment 14).
+ * than the CLI's narrowed view of it (ADR Amendment 16).
  *
  * The order and the wave come from the VIEW MODEL — `assignChildWaves` is
  * `render.ts`'s, and that file does not change — and are applied to the
@@ -307,7 +307,7 @@ export async function showCommand(key: string, opts: ShowOptions): Promise<void>
 
   if (opts.json) {
     // The SERVER's own resource, not the CLI's narrowed view of it (ADR
-    // Amendment 14). The view model deliberately omits fields nothing renders —
+    // Amendment 16). The view model deliberately omits fields nothing renders —
     // labels, components, the comment count, the provenance triple — and this
     // flag is the escape hatch that makes that omission safe, so it must carry
     // everything the server sent.

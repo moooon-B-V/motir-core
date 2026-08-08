@@ -511,7 +511,7 @@ drawn (the design-content rule):
 | -------------------------- | ---------------------------------- | ------- | ------------------------------------------------------------------------------------------- |
 | **Sprint report**          | `app/(authed)/sprints/[id]/report` | full    | the sprint's **View report** action (replaces the burndown seam)                            |
 | **Backlog sprint section** | `app/(authed)/backlog`             | full    | the active-sprint panel (where `BurndownChart` renders today)                               |
-| **Board sprint header**    | `app/(authed)/board`               | compact | always-visible beside the numeric remaining                                                 |
+| **Board sprint header**    | `app/(authed)/boards`              | compact | always-visible beside the numeric remaining                                                 |
 | **Reports → Burndown**     | `/reports/burndown`                | full    | the **Reports** nav → **Burndown** entry (label stays "Burndown"; chart is the cycle model) |
 
 8.14.5 builds the component once; **8.14.6** repoints every consumer to the new

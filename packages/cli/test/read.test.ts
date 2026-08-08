@@ -259,7 +259,7 @@ describe('motir show', () => {
     ],
   };
 
-  // MOTIR-2345 / ADR Amendment 14: `--json` emits the SERVER's resource, not the
+  // MOTIR-2345 / ADR Amendment 16: `--json` emits the SERVER's resource, not the
   // CLI's narrowed view of it. The view model omits `labels`, `components`,
   // `commentCount` and the provenance triple because nothing renders them — and
   // this flag is the escape hatch that makes those omissions safe.

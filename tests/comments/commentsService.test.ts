@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { User, WorkItem } from '@prisma/client';
+import type { User, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
 import { commentsService, COMMENT_PAGE_SIZE } from '@/lib/services/commentsService';

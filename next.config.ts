@@ -85,6 +85,32 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [...DOCS_REDIRECTS];
   },
+  // The two `next/og` cards read Inter's bytes off disk at request time
+  // (`app/_brand/ogFonts.ts` — satori has no CSS tree and no system font stack,
+  // so `ImageResponse`'s `fonts` option is the ONLY way a card gets a typeface).
+  // A `readFile(join(process.cwd(), …))` is the kind of read a bundler's static
+  // analysis can miss, and a font that is absent from the deployed function does
+  // not error — the card falls back to a face nobody chose, invisibly, because
+  // locally the file is always there. Naming the directory declares the intent.
+  //
+  // ⚠️ This key does NOT currently do anything, and the fonts arrive anyway —
+  // both halves verified, MOTIR-2403. `outputFileTracingIncludes` /
+  // `outputFileTracingExcludes` are read in exactly one place,
+  // `next/dist/build/collect-build-traces.js`, and `next/dist/build/index.js`
+  // guards that call with `if (bundler !== Bundler.Turbopack && …)`. Next 16
+  // builds with Turbopack, so the module never runs and neither key is consulted.
+  // Turbopack's own tracer follows the read on its own: the three TTFs appear in
+  // `.next/server/app/(public)/explore/opengraph-image-*/route.js.nft.json` and
+  // in no unrelated route's trace.
+  //
+  // It is kept, rather than deleted, because it is the only written record of
+  // WHY those bytes must ship, and it is the safety net on the webpack path
+  // (`next build --webpack`, which CI still has available). Anything that
+  // depends on it taking effect must not assume this build applies it.
+  outputFileTracingIncludes: {
+    '/explore/opengraph-image': ['./app/_brand/fonts/**'],
+    '/p/[identifier]/opengraph-image': ['./app/_brand/fonts/**'],
+  },
   // The Next.js dev-mode tools indicator renders a fixed portal in the
   // bottom-left corner by default — directly over the app shell's sidebar
   // footer (the collapse toggle). In `next dev` that portal intercepts pointer
@@ -94,6 +120,26 @@ const nextConfig: NextConfig = {
   // server — gated on an env flag the Playwright webServer sets, leaving a
   // normal `pnpm dev` session's indicator untouched.
   ...(process.env['E2E_DISABLE_DEV_INDICATOR'] ? { devIndicators: false as const } : {}),
+  output: 'standalone',
+
+  // ⚠️ There is deliberately NO `outputFileTracingExcludes` here, and the
+  // pruning it used to claim lives in the `Dockerfile`'s BUILDER stage instead
+  // (MOTIR-2403). This file used to carry
+  //
+  //     outputFileTracingExcludes: { '**/*': ['./design/**', './tests/**', …] }
+  //
+  // with a comment stating a measured size, and it removed nothing. The key is
+  // consulted only by `next/dist/build/collect-build-traces.js`, which
+  // `next/dist/build/index.js` calls behind
+  // `if (bundler !== Bundler.Turbopack && …)` — so under Next 16's Turbopack
+  // build the whole module is skipped and the key is inert. Measured on a clean
+  // build at `origin/main`: `.next/standalone` = 381 MB, of which `design/` was
+  // 222 MB, every directory the exclusion named still present, and all 324
+  // `design/` files reachable from one trace (`instrumentation.js.nft.json`).
+  //
+  // Re-adding an exclusion here will not shrink anything while this repo builds
+  // with Turbopack. If that ever changes, the Dockerfile step is written to fail
+  // loudly rather than quietly stop mattering.
 };
 
 export default withNextIntl(nextConfig);

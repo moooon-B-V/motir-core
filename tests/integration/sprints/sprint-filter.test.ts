@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import type { WorkItem } from '@prisma/client';
+import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { backlogService } from '@/lib/services/backlogService';

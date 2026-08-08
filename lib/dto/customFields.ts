@@ -1,4 +1,4 @@
-import type { CustomFieldType } from '@prisma/client';
+import type { CustomFieldType } from '@/generated/prisma/client';
 
 // DTOs for the custom-fields definitions surface (Story 5.3 · Subtask 5.3.2)
 // — what crosses the API boundary from customFieldsService. The VALUE-side

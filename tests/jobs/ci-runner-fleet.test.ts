@@ -25,6 +25,7 @@ import {
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
+import { randomToken, randomInt } from '../helpers/random';
 
 // The runner FLEET's job WIRING (Story MOTIR-1916 · MOTIR-1921).
 //
@@ -116,7 +117,7 @@ const SETTLED_JSON = JSON.parse(JSON.stringify(SETTLED_OUTCOME)) as unknown;
 let intentId: string;
 
 async function seedIntent(): Promise<string> {
-  const email = `fleet-jobs-${Math.random().toString(36).slice(2, 8)}@example.com`;
+  const email = `fleet-jobs-${randomToken(6)}@example.com`;
   const user = await usersService.createUser({ email, password: 'hunter2hunter2', name: 'Owner' });
   const { workspace } = await workspacesService.createWorkspace({
     name: `WS ${email}`,
@@ -129,7 +130,7 @@ async function seedIntent(): Promise<string> {
       installationId: '556677',
       runId: '7001',
       runAttempt: 1,
-      jobId: String(44000 + Math.floor(Math.random() * 900)),
+      jobId: String(44000 + randomInt(900)),
       repoOwner: 'moooon-B-V',
       repoName: 'motir-core',
       requestedLabels: ['motir-runner'],

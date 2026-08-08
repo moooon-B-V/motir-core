@@ -267,7 +267,7 @@ export type WorkItemSummary = z.infer<typeof workItemSummarySchema>;
 
 /**
  * How many work items match a filter — the answer to a question the COLLECTION
- * deliberately does not answer (ADR Amendment 12).
+ * deliberately does not answer (ADR Amendment 14).
  *
  * A resource of its own rather than a `totalCount` on the page, because the
  * collection's read is a keyset walk that computes no count, and putting one on

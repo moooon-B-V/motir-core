@@ -181,7 +181,7 @@ export interface DispatchItem {
   executor: string | null;
   /**
    * READY RELATIVE TO WHAT — the branch this item's dependencies are integrated
-   * on, or `null` when it is ready from the trunk (ADR Amendment 15).
+   * on, or `null` when it is ready from the trunk (ADR Amendment 17).
    *
    * `motir batch` refuses a non-null row: it opens ONE pull request per item off
    * `main`, and a lineage item's base has not merged.
@@ -859,7 +859,7 @@ export class MotirClient {
    * mapped from.
    *
    * `--json` emits the server's own resource rather than the CLI's narrowed
-   * view of it (ADR Amendment 14): the view model deliberately omits fields
+   * view of it (ADR Amendment 16): the view model deliberately omits fields
    * nothing renders, and `--json` is the escape hatch that makes that omission
    * safe. The payload is typed `unknown` on purpose — a command needs BYTES
    * here, not a shape, and typing it would put a generated wire type outside

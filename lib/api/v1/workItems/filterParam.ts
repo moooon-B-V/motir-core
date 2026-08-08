@@ -3,7 +3,7 @@ import { FILTER_PARAM, decodeFilterParam } from '@/lib/filters/ast';
 import type { FilterAst } from '@/lib/filters/ast';
 
 // The `?filter=` decode, shared by the work-item COLLECTION and its COUNT
-// (ADR Amendment 12 · MOTIR-2318).
+// (ADR Amendment 14 · MOTIR-2318).
 //
 // It lived inside the collection route until the count arrived beside it. Two
 // routes that must narrow by the same filter cannot each own a copy of the

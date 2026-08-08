@@ -1,4 +1,4 @@
-import type { MemberRole, ProjectAccessLevel } from '@prisma/client';
+import type { MemberRole, ProjectAccessLevel } from '@/generated/prisma/client';
 import { describe, expect, it } from 'vitest';
 import {
   canBrowse,

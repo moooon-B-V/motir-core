@@ -27,8 +27,20 @@ import { grantedScopeMeta, grantsDelete, summarizeScopes } from './scopeMeta';
 // (account-level) + the org → workspace tree (`listScopeOptions`) the create
 // modal scopes a new token within (bug 7.21).
 
-// The MCP setup guide the empty state links to (`docs/mcp.md`, the 7.8.8 doc).
-const MCP_GUIDE_HREF = 'https://github.com/moooon-B-V/motir-core/blob/main/docs/mcp.md';
+// The MCP setup guide the empty state links to.
+//
+// ⚠️ It used to be `https://github.com/…/blob/main/docs/mcp.md` — a raw file on a
+// source-code host, handed to a user at the exact moment they have just minted
+// their first token and have nothing to do with it. Story MOTIR-2309 published
+// the guide (ADR Amendment 13 Q1), so this points INTO the product.
+//
+// `/docs/mcp` and not `/docs/mcp/tools`: this reader holds a credential and has
+// no client wired yet, so the catalogue is the wrong first thing to hand them —
+// they need the wiring procedure, which links on to the catalogue itself.
+//
+// Now an INTERNAL link, so it opens in this tab like every other in-product
+// navigation rather than in a new one the way an off-site handoff did.
+const MCP_GUIDE_HREF = '/docs/mcp';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** An expiry within this window shows the peach "expiring soon" warning chip. */
@@ -102,8 +114,6 @@ export function ApiTokensManager({
               {t('empty.body')}{' '}
               <a
                 href={MCP_GUIDE_HREF}
-                target="_blank"
-                rel="noreferrer"
                 className="text-(--el-link) underline hover:text-(--el-link-pressed)"
               >
                 {t('empty.guideLink')}

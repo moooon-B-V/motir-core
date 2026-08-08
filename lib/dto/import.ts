@@ -4,7 +4,7 @@
 // MINUS the credential — that comes from the `ImportSourceIdentity` token store
 // for live sources; CSV carries its file content and needs none).
 
-import type { ImportSource, ImportStatus } from '@prisma/client';
+import type { ImportSource, ImportStatus } from '@/generated/prisma/client';
 import type { CsvColumnMap } from '@/lib/import/connectors/csvConnector';
 import type { ImportMapping } from '@/lib/import/engine/types';
 import type { SourceFieldVocabulary } from '@/lib/import/connectors/types';

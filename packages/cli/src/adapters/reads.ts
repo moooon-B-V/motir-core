@@ -546,7 +546,7 @@ export function toSearchPage(body: SuccessBody<'listProjectWorkItems'>): SearchP
 /**
  * How many work items match — the whole body, unwrapped to the number.
  *
- * The envelope exists because ADR Amendment 12 says a count is its own
+ * The envelope exists because ADR Amendment 14 says a count is its own
  * operation with its own response object; the CLI has no use for the wrapper,
  * and a caller asking "how many" should get a number.
  */

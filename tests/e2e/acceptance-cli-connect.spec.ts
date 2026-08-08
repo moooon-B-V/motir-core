@@ -38,6 +38,7 @@ import { signIn } from './_helpers/shell-session';
 import { formatUserCode } from '@/lib/cliDevice/userCode';
 import { cliTokenLabel } from '@/lib/cliDevice/constants';
 import { CLI_TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { escapeRegExp } from '@/lib/utils/regexp';
 import {
   expireGrant,
   mcpBearerWorks,
@@ -86,10 +87,6 @@ async function openApiTokensPane(page: Page): Promise<void> {
 /** The tokens-table row for a label — the surface the CLI token must appear in. */
 const tokenRow = (page: Page, label: string) =>
   page.getByRole('row', { name: new RegExp(escapeRegExp(label)) });
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Sign in and land back on the `/device` hand-off rather than `/dashboard`.

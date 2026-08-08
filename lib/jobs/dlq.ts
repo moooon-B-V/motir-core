@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '@/generated/prisma/client';
 import { inngest } from './client';
 import { jobRunDlqRepository } from '@/lib/repositories/jobRunDlqRepository';
 import { toJobRunDlqDTO } from '@/lib/mappers/jobMappers';
