@@ -410,3 +410,100 @@ describe('workItemLinkRepository.createIfAbsent — idempotent insert (5.8.3)', 
     expect(second).toBeNull();
   });
 });
+
+// THE INHERITED-LINEAGE READ (MOTIR-2400) — "is this item ready from `main`, or
+// on top of unmerged work?", for a whole page in one query.
+//
+// ⚠️ Its filter lives in the MAPPER rather than the `where` (MOTIR-2427): a
+// blocker with no branch is the COMMON case, and duplicating the null test in
+// both places made the mapper's arm unreachable — untestable by construction,
+// and the reason this file could never reach its branch-coverage floor.
+describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
+  it('returns one row per blocker that carries a branch', async () => {
+    const fx = await makeFixture();
+    const dependent = await createWorkItem(fx, { kind: 'task', title: 'dependent' });
+    const blocker = await createWorkItem(fx, { kind: 'task', title: 'blocker' });
+    await db.workItem.update({
+      where: { id: blocker.id },
+      data: { sessionBranch: 'motir/auto-1' },
+    });
+    await createLink({
+      workspaceId: fx.workspace.id,
+      fromId: dependent.id,
+      toId: blocker.id,
+      kind: 'is_blocked_by',
+      createdById: fx.owner.id,
+    });
+
+    expect(
+      await workItemLinkRepository.findBlockerSessionBranchesForItems(
+        [dependent.id],
+        fx.workspace.id,
+      ),
+    ).toEqual([{ fromId: dependent.id, sessionBranch: 'motir/auto-1' }]);
+  });
+
+  it('DROPS a blocker with no branch — the ordinary case, and the arm that used to be unreachable', async () => {
+    const fx = await makeFixture();
+    const dependent = await createWorkItem(fx, { kind: 'task', title: 'dependent' });
+    const trunkBlocker = await createWorkItem(fx, {
+      kind: 'task',
+      title: 'not integrated anywhere',
+    });
+    await createLink({
+      workspaceId: fx.workspace.id,
+      fromId: dependent.id,
+      toId: trunkBlocker.id,
+      kind: 'is_blocked_by',
+      createdById: fx.owner.id,
+    });
+
+    // An item whose blockers are all on `main` is simply ABSENT from the result
+    // — the caller reads that as "ready from the trunk".
+    expect(
+      await workItemLinkRepository.findBlockerSessionBranchesForItems(
+        [dependent.id],
+        fx.workspace.id,
+      ),
+    ).toEqual([]);
+  });
+
+  it('answers an EMPTY id list without touching the database', async () => {
+    const fx = await makeFixture();
+    expect(
+      await workItemLinkRepository.findBlockerSessionBranchesForItems([], fx.workspace.id),
+    ).toEqual([]);
+  });
+
+  it('scopes to a workspace when given one, and reads unscoped when not', async () => {
+    // The `workspaceId` argument is optional, so BOTH arms ship. Unscoped is the
+    // operator/internal path; scoped is what every request-time caller uses.
+    const mine = await makeFixture();
+    const theirs = await makeFixture({ name: 'Other', identifier: 'OTH' });
+    const dependent = await createWorkItem(mine, { kind: 'task', title: 'dependent' });
+    const blocker = await createWorkItem(mine, { kind: 'task', title: 'blocker' });
+    await db.workItem.update({
+      where: { id: blocker.id },
+      data: { sessionBranch: 'motir/auto-2' },
+    });
+    await createLink({
+      workspaceId: mine.workspace.id,
+      fromId: dependent.id,
+      toId: blocker.id,
+      kind: 'is_blocked_by',
+      createdById: mine.owner.id,
+    });
+
+    // Unscoped: found.
+    expect(await workItemLinkRepository.findBlockerSessionBranchesForItems([dependent.id])).toEqual(
+      [{ fromId: dependent.id, sessionBranch: 'motir/auto-2' }],
+    );
+    // Scoped to ANOTHER tenant: nothing, without an existence leak.
+    expect(
+      await workItemLinkRepository.findBlockerSessionBranchesForItems(
+        [dependent.id],
+        theirs.workspace.id,
+      ),
+    ).toEqual([]);
+  });
+});

@@ -318,6 +318,13 @@ export const workItemLinkRepository = {
    * Returns one row per (item, blocker-with-a-branch) pair — the caller
    * collapses. Blockers with no branch produce no row at all, so an item ready
    * from `main` is simply absent from the result.
+   *
+   * ⚠️ The branch filter lives in the MAPPER, not in the `where`. Having both —
+   * `sessionBranch: { not: null }` in the query AND a null check on the way out
+   * — is not defence in depth: it makes the mapper's null arm UNREACHABLE, so
+   * it can never be exercised and the file's branch coverage can never be
+   * complete. One filter, in the place that can be tested with an ordinary
+   * blocker that has no branch, which is the common case.
    */
   async findBlockerSessionBranchesForItems(
     fromIds: string[],
@@ -328,7 +335,7 @@ export const workItemLinkRepository = {
       where: {
         fromId: { in: fromIds },
         kind: 'is_blocked_by',
-        toItem: { archivedAt: null, sessionBranch: { not: null } },
+        toItem: { archivedAt: null },
         ...(workspaceId ? { workspaceId } : {}),
       },
       select: { fromId: true, toItem: { select: { sessionBranch: true } } },

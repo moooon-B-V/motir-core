@@ -109,6 +109,10 @@ const ITEMS = Array.from({ length: ITEM_COUNT }, (_unused, i) => ({
   status: { key: 'todo', category: 'todo' },
   type: 'code',
   executor: 'coding_agent',
+  // The READY row stays unclaimed: the loop re-reads the set each iteration, and
+  // an item it already took is held out by its STATUS (in review), not by the
+  // claim — so leaving this null keeps the fixture honest about which rule does
+  // the work (MOTIR-2427).
   assigneeId: null,
   assignee: null,
   descriptionExcerpt: null,
@@ -134,6 +138,9 @@ const ITEMS = Array.from({ length: ITEM_COUNT }, (_unused, i) => ({
  * assertions exist to catch.
  */
 const statuses = new Map(ITEMS.map((item) => [item.key, item.status]));
+/** Who has claimed each item — written by the PATCH the loop makes before every
+ *  dispatch (MOTIR-2427), and read back by the detail body. */
+const assignees = new Map();
 
 const IN_PROGRESS = { key: 'in_progress', category: 'in_progress' };
 const IN_REVIEW = { key: 'in_review', category: 'in_progress' };
@@ -236,6 +243,18 @@ function transition(key, body) {
   return workItemDetail(key);
 }
 
+/**
+ * The CLAIM (MOTIR-2427) — a plain assignment before every dispatch.
+ *
+ * Answers the full `WorkItemDetail` the PATCH declares, for the same reason the
+ * transition does: the CLI discards the body but VALIDATES it first, so a thin
+ * one fails the run with a field name rather than a routing error.
+ */
+function claim(key, body) {
+  if (typeof body?.assigneeId === 'string') assignees.set(key, body.assigneeId);
+  return workItemDetail(key);
+}
+
 function integration(key, body) {
   // Integration lands the item In Review, which keeps it out of the ready set
   // for the rest of the run even if a future CLI stopped transitioning first.
@@ -261,7 +280,9 @@ function workItemDetail(key) {
     title: item?.title ?? `Smoke item ${key}`,
     status: statuses.get(key)?.key ?? 'todo',
     priority: item?.priority ?? 'medium',
-    assigneeId: null,
+    // Reflects the claim the loop wrote, so the smoke can assert the item really
+    // was assigned rather than that a request merely 200'd (MOTIR-2427).
+    assigneeId: assignees.get(key) ?? null,
     reporterId: 'u1',
     dueDate: null,
     estimateMinutes: null,
@@ -327,6 +348,7 @@ const ROUTES = [
     '/api/v1/work-items/{key}/transitions',
     (params, _query, body) => transition(params.key, body),
   ],
+  ['PATCH', '/api/v1/work-items/{key}', (params, _query, body) => claim(params.key, body)],
   [
     'POST',
     '/api/v1/work-items/{key}/integration',

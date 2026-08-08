@@ -92,6 +92,9 @@ const READY = `GET /api/v1/projects/{project}/ready`;
 const TRANSITION = 'POST /api/v1/work-items/{key}/transitions';
 const PROMPT = 'GET /api/v1/work-items/{key}/dispatch-prompt';
 const INTEGRATION = 'POST /api/v1/work-items/{key}/integration';
+/** The CLAIM (MOTIR-2427) — a plain assignment, written before the status moves
+ *  and long before the agent launches. */
+const CLAIM = 'PATCH /api/v1/work-items/{key}';
 
 // The suite runs `motir ready` against this same stub before the loop starts —
 // it is the cheapest proof that the credential resolved, whichever tier supplied
@@ -100,13 +103,37 @@ const INTEGRATION = 'POST /api/v1/work-items/{key}/integration';
 // would be the batch read-ahead this file exists to refuse, and the count check
 // below is what catches it.
 const shapes = v1.map(shapeOf);
-const preflight = shapes[0] === READY ? 1 : 0;
+// What runs BEFORE the loop proper, skipped here rather than folded into the
+// per-item shape:
+//   • `GET /me` + `GET /workspaces` — ONE `whoami` per invocation, resolving the
+//     token owner every card is then claimed for (MOTIR-2427). Once, never per
+//     item: the answer cannot change inside a run, and an unattended drain that
+//     asked per dispatch would spend a request on a constant. That it appears
+//     exactly once is asserted just below.
+//   • ONE ready read — the suite's own `motir ready` pre-flight, the cheapest
+//     proof the credential resolved whichever tier supplied it (MOTIR-1877).
+// Only a LEADING ready read: an extra one from inside the loop would be the
+// batch read-ahead this file exists to refuse, and the count check further down
+// is what catches it.
+const WHOAMI = ['GET /api/v1/me', 'GET /api/v1/workspaces'];
+let preflight = 0;
+// In recorded order: the suite's `motir ready` runs first, THEN `motir auto`
+// resolves its owner, then the loop begins.
+if (shapes[preflight] === READY) preflight += 1;
+for (const shape of WHOAMI) if (shapes[preflight] === shape) preflight += 1;
 const loop = v1.slice(preflight);
 const loopShapes = shapes.slice(preflight);
 
+// The owner is resolved ONCE for the whole run, not once per item.
+const whoamiCount = shapes.filter((shape) => shape === 'GET /api/v1/me').length;
+check(whoamiCount === 1, `expected exactly ONE whoami for the run, got ${whoamiCount}`);
+
 // The expected shape, built rather than hard-coded so the item count is a knob.
 const expected = [];
-for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, TRANSITION, INTEGRATION);
+// ⚠️ THE CLAIM COMES BEFORE THE TRANSITION, and the ORDER is the assertion. A
+// claim written after the work is history; the only version that tells a
+// teammate anything is the one that lands while the work is happening.
+for (let i = 1; i <= ITEMS; i += 1) expected.push(READY, PROMPT, CLAIM, TRANSITION, INTEGRATION);
 expected.push(READY); // the drain probe
 
 check(
@@ -126,10 +153,17 @@ const keyOf = (entry) => entry?.path?.match(new RegExp(`${PROJECT}-\\d+`))?.[0] 
 
 for (let i = 1; i <= ITEMS; i += 1) {
   const key = `${PROJECT}-${i}`;
-  const base = (i - 1) * 4;
+  const base = (i - 1) * 5;
 
   const dispatch = loop[base + 1];
-  const transition = loop[base + 2];
+  const claim = loop[base + 2];
+  const transition = loop[base + 3];
+  check(
+    keyOf(claim) === key && typeof claim?.body?.assigneeId === 'string',
+    `${key}: expected a CLAIM assigning the item, got ${keyOf(claim)} ${JSON.stringify(
+      claim?.body,
+    )}`,
+  );
   check(
     keyOf(transition) === key && transition?.body?.status === 'in_progress',
     `${key}: expected a transition to in_progress, got ${keyOf(transition)} ${JSON.stringify(
@@ -149,7 +183,7 @@ for (let i = 1; i <= ITEMS; i += 1) {
     `${key}: the dispatch prompt carried no session-branch seed (got ${JSON.stringify(seed)})`,
   );
 
-  const integrated = loop[base + 3];
+  const integrated = loop[base + 4];
   check(
     keyOf(integrated) === key,
     `${key}: the integration was recorded for ${keyOf(integrated) ?? '(nothing)'}`,
