@@ -719,7 +719,13 @@ describe('motir auto — the close-out', () => {
 
 describe('the session pull request', () => {
   it('titles without a key and bodies with every key plus the close-out', () => {
-    const title = sessionPrTitle('20260729-010203', 3);
+    // Three cards under THREE different parents — the mixed case, which falls
+    // back to the run form (MOTIR-2422).
+    const title = sessionPrTitle('20260729-010203', [
+      { key: 'PROD-1', title: 'A', parentKey: 'PROD-90' },
+      { key: 'PROD-2', title: 'B', parentKey: 'PROD-91' },
+      { key: 'PROD-3', title: 'C', parentKey: null },
+    ]);
     expect(title).toBe('Motir auto run 20260729-010203 — 3 work items');
     expect(title).not.toMatch(/[A-Z]+-\d+/);
 
@@ -731,6 +737,7 @@ describe('the session pull request', () => {
         durationMs: 1,
         sessionBranch: BRANCH,
         repo: 'motir-core',
+        parentKey: null,
       },
       {
         key: 'PROD-2',
@@ -739,6 +746,7 @@ describe('the session pull request', () => {
         durationMs: 1,
         sessionBranch: null,
         repo: 'motir-core',
+        parentKey: null,
       },
     ]);
     expect(body).toContain('## Work items carried (1)');
@@ -886,6 +894,7 @@ describe('records with missing pieces still render honestly', () => {
           durationMs: 1000,
           sessionBranch: null,
           repo: null,
+          parentKey: null,
         },
       ],
       skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
@@ -917,6 +926,7 @@ describe('records with missing pieces still render honestly', () => {
         durationMs: 0,
         sessionBranch: BRANCH,
         repo: null,
+        parentKey: null,
       },
       {
         key: 'PROD-2',
@@ -925,6 +935,7 @@ describe('records with missing pieces still render honestly', () => {
         durationMs: 0,
         sessionBranch: null,
         repo: null,
+        parentKey: null,
       },
     ]);
     expect(body).toContain('- PROD-1 — (untitled)');
@@ -999,5 +1010,84 @@ describe('more of the run’s edges', () => {
 
     expect(git.log).toContain(`git push origin ${BRANCH} @${join(root, 'motir-core')}`);
     expect(summary.prs[0]?.outcome).toBe('opened');
+  });
+});
+
+// THE TITLE NAMES WHAT THE RUN DELIVERED (MOTIR-2422).
+//
+// A title is read in a LIST — the repo's open pull requests, a notification, a
+// review queue — where it is the only thing shown and its job is to help someone
+// decide whether to open it. `Motir auto run 20260807-141522 — 4 work items`
+// says a machine did something, four times.
+//
+// The parent rides the dispatch prompt the loop already fetches (MOTIR-2445), so
+// none of this costs a request.
+describe('sessionPrTitle — the shared parent, when there is one', () => {
+  const card = (key: string, parentKey: string | null, title = `Card ${key}`) => ({
+    key,
+    title,
+    parentKey,
+  });
+
+  it('names the SHARED parent when every card has it', () => {
+    const title = sessionPrTitle('20260807-141522', [
+      card('PROD-10', 'PROD-2'),
+      card('PROD-11', 'PROD-2'),
+      card('PROD-12', 'PROD-2'),
+    ]);
+    expect(title).toBe('PROD-2 — 3 work items');
+  });
+
+  it('falls back when the cards span SEVERAL parents', () => {
+    // The case a naive implementation gets wrong by naming the first card's
+    // parent — and nothing about that result looks incorrect. It is a real
+    // story, genuinely in the pull request. It is just not what the branch is.
+    const title = sessionPrTitle('20260807-141522', [
+      card('PROD-10', 'PROD-2'),
+      card('PROD-11', 'PROD-3'),
+    ]);
+    expect(title).toBe('Motir auto run 20260807-141522 — 2 work items');
+  });
+
+  it('a NULL parent in the set is a distinct answer, not an absence', () => {
+    // A set containing a top-level card does not share a parent. Ignoring the
+    // null would name the story the OTHERS sit under and quietly overstate it.
+    const title = sessionPrTitle('20260807-141522', [
+      card('PROD-10', 'PROD-2'),
+      card('PROD-11', null),
+    ]);
+    expect(title).toBe('Motir auto run 20260807-141522 — 2 work items');
+  });
+
+  it('a run of ONE names the CARD, not its parent', () => {
+    // For one item the card IS the deliverable; its story describes something
+    // much larger than what shipped.
+    expect(sessionPrTitle('20260807-141522', [card('PROD-10', 'PROD-2', 'Wire the seam')])).toBe(
+      'PROD-10 Wire the seam',
+    );
+  });
+
+  it('a run of one TOP-LEVEL card still names the card', () => {
+    expect(sessionPrTitle('20260807-141522', [card('PROD-10', null, 'Standalone')])).toBe(
+      'PROD-10 Standalone',
+    );
+  });
+
+  it('fits the list-render budget rather than discovering it in GitHub', () => {
+    const long = sessionPrTitle('20260807-141522', [
+      card('PROD-10', null, 'A card whose title runs on and on and on well past what a list shows'),
+    ]);
+    expect(long.length).toBeLessThanOrEqual(72);
+    expect(long.endsWith('…')).toBe(true);
+    // The key survives the trim — an elided title still says WHICH card.
+    expect(long.startsWith('PROD-10 ')).toBe(true);
+  });
+
+  it('an EMPTY carried set falls back rather than naming nothing', () => {
+    // Reachable: a run whose every item failed pushes a branch with no carried
+    // cards, and the close-out still opens the pull request.
+    expect(sessionPrTitle('20260807-141522', [])).toBe(
+      'Motir auto run 20260807-141522 — 0 work items',
+    );
   });
 });

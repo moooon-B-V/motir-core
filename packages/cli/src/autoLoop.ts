@@ -66,6 +66,14 @@ export interface DispatchRecord {
   /** The branch the work was integrated onto, when it was. */
   sessionBranch: string | null;
   repo: string | null;
+  /**
+   * The card's PARENT key, or `null` for a top-level item (MOTIR-2422).
+   *
+   * Carried on the record because the TITLE is decided at close-out, from the
+   * whole set — and it costs nothing: it rides the dispatch prompt the loop
+   * already fetches per item (MOTIR-2445).
+   */
+  parentKey: string | null;
   /** Extra detail for the summary (an exit code, a lineage note). */
   detail?: string;
 }
@@ -178,8 +186,40 @@ const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
 /** The PR title for a session branch. Carries NO `MOTIR-<n>`: see
  *  {@link import('./git.js').sessionBranchName} for why a session PR must not
  *  name one item. */
-export function sessionPrTitle(runId: string, itemCount: number): string {
-  return `Motir auto run ${runId} — ${itemCount} work item${itemCount === 1 ? '' : 's'}`;
+export function sessionPrTitle(
+  runId: string,
+  carried: readonly Pick<DispatchRecord, 'key' | 'title' | 'parentKey'>[],
+): string {
+  const count = carried.length;
+  const fallback = `Motir auto run ${runId} — ${count} work item${count === 1 ? '' : 's'}`;
+
+  // ⚠️ ONE card: the CARD is the deliverable, and its parent describes something
+  // much larger than what shipped. Naming the story here would overstate a
+  // single subtask as its whole feature.
+  const only = count === 1 ? carried[0] : undefined;
+  if (only) return fitTitle(`${only.key}${only.title ? ` ${only.title}` : ''}`);
+
+  // ⚠️ SHARED means EVERY card, and a `null` counts as a distinct answer. A set
+  // containing a top-level card does not share a parent, so it falls back rather
+  // than naming the story the OTHERS happen to sit under — a title that says
+  // less beats one that says something untrue.
+  const parents = new Set(carried.map((r) => r.parentKey));
+  const shared = parents.size === 1 ? [...parents][0] : null;
+  if (!shared) return fallback;
+
+  return fitTitle(`${shared} — ${count} work items`);
+}
+
+/**
+ * GitHub renders a pull-request title in a list at roughly this width before it
+ * elides; stating the budget here beats discovering it in the UI. Titles are
+ * built to fit rather than trimmed after the fact, so the elision — when it
+ * happens — falls at the end of a card title, never mid-key.
+ */
+const TITLE_BUDGET = 72;
+
+function fitTitle(title: string): string {
+  return title.length <= TITLE_BUDGET ? title : `${title.slice(0, TITLE_BUDGET - 1).trimEnd()}…`;
 }
 
 /**

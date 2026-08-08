@@ -483,6 +483,8 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     title: item.title,
     durationMs,
     repo: dispatch.targetRepo,
+    // Off the prompt the loop already fetched — no extra request (MOTIR-2445).
+    parentKey: dispatch.parentKey,
   };
 
   if (result.exitCode !== 0) {
@@ -569,7 +571,7 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
       repo.cwd,
       {
         branch: repo.branch,
-        title: sessionPrTitle(summary.runId, carried.length),
+        title: sessionPrTitle(summary.runId, carried),
         body: renderSessionPrBody(summary.runId, repo.branch, mine),
       },
       run,
