@@ -358,15 +358,38 @@ export async function dragCardOntoCell(
 ): Promise<void> {
   const card = page.getByTestId(cardTestId);
   // Settle BOTH into view BEFORE measuring — capturing the source box and THEN
-  // scrolling the target would invalidate the source coords (the target scroll
-  // shifts the page), so the pickup would grab whatever now sits at the stale
-  // point. Source + target lanes are adjacent + short here, so both fit on screen.
-  await card.scrollIntoViewIfNeeded();
+  // scrolling the target would invalidate the source coords. Source + target
+  // lanes are adjacent + short here, so both fit on screen.
+  //
+  // ⚠️ THE SOURCE IS SCROLLED LAST, AND THE ORDER IS THE FIX (MOTIR-2427).
+  // Scrolling the source first and the target second left the source under the
+  // STICKY HEADER: its box was still accurate, so nothing looked wrong, but the
+  // centre landed on the app chrome and `mouse.down()` grabbed the header
+  // instead of the card. Every retry recomputed the identical bad point, so a
+  // 4× retry loop failed 4× the same way — a silent mis-press, never a missed
+  // drop. (Read off the trace: pickup y = 24 under a ~64px header, four
+  // byte-identical attempts.) Pressing the wrong element is the failure that
+  // cannot recover, so the PICKUP gets the last scroll and the drop tolerates
+  // the drift.
   await target.scrollIntoViewIfNeeded();
+  await card.scrollIntoViewIfNeeded();
   const from = (await card.boundingBox())!;
   const to = (await target.boundingBox())!;
   const fx = from.x + from.width / 2;
   const fy = from.y + from.height / 2;
+  // Fail LOUDLY rather than pressing chrome. The premise of this helper is that
+  // both cells fit on screen at once; when a layout change breaks it, the test
+  // that says so is worth more than a drag that silently does nothing.
+  const viewport = page.viewportSize();
+  if (viewport) {
+    const header = 64;
+    if (fy < header || fy > viewport.height) {
+      throw new Error(
+        `drag pickup (${fx}, ${fy}) is outside the usable viewport (header ${header}, height ${viewport.height}) — ` +
+          'the source card is not fully on screen, so the press would land on the app chrome',
+      );
+    }
+  }
   const tx = to.x + to.width / 2;
   const ty = to.y + to.height / 2;
   await page.mouse.move(fx, fy);
