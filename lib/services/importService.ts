@@ -15,7 +15,11 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import { linearImportOAuthService } from '@/lib/services/linearImportOAuthService';
+import { jiraOAuthService } from '@/lib/services/jiraOAuthService';
+import { planeImportOAuthService } from '@/lib/services/planeImportOAuthService';
 import { LinearOAuthExchangeError } from '@/lib/import/linear/errors';
+import { JiraOAuthExchangeError } from '@/lib/import/jira/errors';
+import { PlaneOAuthExchangeError } from '@/lib/import/plane/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ImportConnectionConfig, ImportDiscoverResult, ImportDto } from '@/lib/dto/import';
 import { toImportDto } from '@/lib/mappers/importMappers';
@@ -250,13 +254,21 @@ export const importService = {
       });
     }
 
-    // Linear expires every OAuth access token after 24 hours (all OAuth2 apps
-    // moved to refresh tokens on 2026-04-01), so it does NOT take the raw stored
-    // token below — it reads through the refresh path, which re-mints and
-    // re-persists an expired token before the connector ever calls Linear
-    // (MOTIR-2434).
+    // ⚠️ EVERY OAuth source reads through its `getFreshConnection`, NEVER the raw
+    // stored token: each vendor expires the access token (Jira ~60 minutes,
+    // Linear 24 hours, Plane per its instance), so the refresh path — which
+    // re-mints and re-persists an expired token BEFORE the connector calls the
+    // vendor — is the only credential source that still works after connect day.
+    // Linear was wired in MOTIR-2434; Jira + Plane in MOTIR-2454, which found
+    // that both had shipped the helper and never called it (`getLiveToken`
+    // below reached straight past it and replayed a dead Bearer).
     if (connection.source === 'linear') {
-      const live = await readFreshLinearConnection(ctx);
+      const live = await readFresh('linear', LinearOAuthExchangeError, () =>
+        linearImportOAuthService.getFreshConnection({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
       if (!live) throw new ImportSourceNotConnectedError('linear');
       return new LinearConnector({
         apiKey: live.accessToken,
@@ -266,7 +278,75 @@ export const importService = {
       });
     }
 
-    // Live sources — fetch-and-decrypt the acting member's token.
+    if (connection.source === 'jira') {
+      const live = await readFresh('jira', JiraOAuthExchangeError, () =>
+        jiraOAuthService.getFreshConnection({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
+      if (!live) throw new ImportSourceNotConnectedError('jira');
+      return new JiraConnector({
+        // ⚠️ The GATEWAY base URL from the grant, not `connection.baseUrl` (the
+        // member-typed site). A 3LO Bearer does NOT authenticate against
+        // `<site>.atlassian.net`: "Requests that use OAuth 2.0 (3LO) are made
+        // via api.atlassian.com (not https://your-domain.atlassian.net)"
+        // — developer.atlassian.com/cloud/jira/platform/oauth-2-3lo-apps. That
+        // is exactly why the identity persists the cloud id and
+        // `getFreshConnection` returns `apiBaseUrl` (= /ex/jira/<cloudId>);
+        // taking the credential from it and the host from somewhere else would
+        // renew a token only to send it where it is rejected.
+        baseUrl: live.apiBaseUrl,
+        apiToken: live.accessToken,
+        email: connection.email,
+        projectKey: connection.projectKey,
+        jql: connection.jql,
+      });
+    }
+
+    if (connection.source === 'plane') {
+      const live = await readFresh('plane', PlaneOAuthExchangeError, () =>
+        planeImportOAuthService.getFreshConnection({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
+      if (!live) throw new ImportSourceNotConnectedError('plane');
+      return new PlaneConnector({
+        apiKey: live.accessToken,
+        // The grant's own API origin wins: the token is bound to the instance
+        // that issued it (Cloud or a self-host), so a connection config naming
+        // a different host would send it somewhere it is not valid. Fall back
+        // to the config only when the identity stored no origin.
+        baseUrl: live.baseUrl ?? connection.baseUrl,
+        workspaceSlug: connection.workspaceSlug,
+        projectId: connection.projectId,
+      });
+    }
+
+    // GITHUB — the one live source with NO `getFreshConnection` to call, and the
+    // reason is structural, not an oversight (settled by MOTIR-2454):
+    //
+    //  • There is no `githubImportOAuthService`. GitHub is not an import-source
+    //    OAuth flow at all — the wizard "reuses your existing GitHub connection"
+    //    (`_data.ts` → `githubIdentityService.getIdentityForUser`), i.e. the 7.10
+    //    per-user identity grant (MOTIR-1498).
+    //  • Nothing to refresh FROM. `model GithubIdentity` persists exactly one
+    //    credential column, `access_token_encrypted` — no `expires_at`, no
+    //    refresh token. A GitHub App user-to-server token is non-expiring unless
+    //    the App turns on "Expire user authorization tokens" (a dashboard
+    //    setting, not code); if that were ever flipped on, the fix is NOT a call
+    //    site here — `githubIdentityService` would first have to persist an
+    //    expiry + refresh token, which is a substrate change.
+    //
+    // ⚠️ SEPARATE, PRE-EXISTING DEFECT — see MOTIR-2456, logged not absorbed
+    // (`notes.html` #27): the read below is against `ImportSourceIdentity`, and
+    // NOTHING in the repo ever writes a row there with `source: 'github'` (only
+    // the jira / linear / plane OAuth services call `upsertIdentity`). So a
+    // GitHub import throws `ImportSourceNotConnectedError` for every member,
+    // including one the wizard shows as connected — the wizard reads
+    // `GithubIdentity` and this reads a different table. That is a store
+    // mismatch, not a refresh gap, so it is fixed on its own card.
     const token = await importSourceIdentityService.getLiveToken({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
@@ -274,51 +354,32 @@ export const importService = {
     });
     if (!token) throw new ImportSourceNotConnectedError(source);
 
-    switch (connection.source) {
-      case 'jira':
-        return new JiraConnector({
-          baseUrl: connection.baseUrl,
-          apiToken: token.accessToken,
-          email: connection.email,
-          projectKey: connection.projectKey,
-          jql: connection.jql,
-        });
-      case 'github':
-        return new GithubConnector({
-          token: token.accessToken,
-          owner: connection.owner,
-          repo: connection.repo,
-          baseUrl: connection.baseUrl,
-        });
-      case 'plane':
-        return new PlaneConnector({
-          apiKey: token.accessToken,
-          baseUrl: connection.baseUrl,
-          workspaceSlug: connection.workspaceSlug,
-          projectId: connection.projectId,
-        });
-    }
+    return new GithubConnector({
+      token: token.accessToken,
+      owner: connection.owner,
+      repo: connection.repo,
+      baseUrl: connection.baseUrl,
+    });
   },
 };
 
-/** Read the acting member's Linear connection through the refresh path. A grant
- *  Linear will no longer refresh (the refresh POST was rejected, or the identity
- *  predates MOTIR-2434 and stored no refresh token) is, in effect, NOT a
- *  connection: translate it to the not-connected error, which the wizard already
- *  renders as "connect Linear first" — the member's actual remedy — instead of
- *  letting a vendor error escape as an opaque 500. The vendor detail rides along
- *  as the `cause` for logs. */
-async function readFreshLinearConnection(
-  ctx: ServiceContext,
-): Promise<{ accessToken: string } | null> {
+/** Read one source's connection through its refresh path. A grant the vendor
+ *  will no longer refresh (the refresh POST was rejected, or the identity
+ *  predates the refresh wiring and stored no refresh token) is, in effect, NOT a
+ *  connection: translate that vendor error to the not-connected error, which the
+ *  wizard already renders as "connect <source> first" — the member's actual
+ *  remedy — instead of letting it escape as an opaque 500. The vendor detail
+ *  rides along as the `cause` for logs. Any OTHER error propagates untouched. */
+async function readFresh<T>(
+  source: Extract<ImportSource, 'jira' | 'linear' | 'plane'>,
+  vendorError: abstract new (...args: never[]) => Error,
+  read: () => Promise<T | null>,
+): Promise<T | null> {
   try {
-    return await linearImportOAuthService.getFreshConnection({
-      userId: ctx.userId,
-      workspaceId: ctx.workspaceId,
-    });
+    return await read();
   } catch (err) {
-    if (!(err instanceof LinearOAuthExchangeError)) throw err;
-    const notConnected = new ImportSourceNotConnectedError('linear');
+    if (!(err instanceof vendorError)) throw err;
+    const notConnected = new ImportSourceNotConnectedError(source);
     notConnected.cause = err;
     throw notConnected;
   }

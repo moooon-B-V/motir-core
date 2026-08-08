@@ -3,6 +3,8 @@ import { db } from '@/lib/db';
 import { importService } from '@/lib/services/importService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import { LinearOAuthExchangeError } from '@/lib/import/linear/errors';
+import { JiraOAuthExchangeError } from '@/lib/import/jira/errors';
+import { PlaneOAuthExchangeError } from '@/lib/import/plane/errors';
 import type { ImportConnectionConfig } from '@/lib/dto/import';
 import type { ImportMapping } from '@/lib/import/engine/types';
 import {
@@ -281,6 +283,285 @@ describe('importService.buildConnector — the Linear refresh path', () => {
     // wizard to say; the vendor detail survives as the cause.
     expect(err).toBeInstanceOf(ImportSourceNotConnectedError);
     expect((err as Error).cause).toBeInstanceOf(LinearOAuthExchangeError);
+  });
+});
+
+// MOTIR-2454 — the same defect MOTIR-2434 fixed for Linear, in the two
+// connectors that were cited as its working precedent: `jiraOAuthService` and
+// `planeImportOAuthService` each shipped a `getFreshConnection`, and NOTHING
+// called it, so `buildConnector` replayed a Bearer the vendor had already
+// expired. Jira is the sharpest case — an Atlassian 3LO access token lives ~60
+// minutes, so the import broke about an hour after connect.
+//
+// These assert at the seam the importer actually uses (`notes.html` #208: a path
+// is not verified from one end, only THROUGH): the credential the BUILT
+// connector puts on the wire, and the host it puts it on — not what the OAuth
+// service returns.
+describe('importService.buildConnector — the Jira refresh path', () => {
+  const JIRA_CONNECTION = {
+    source: 'jira',
+    baseUrl: 'https://acme.atlassian.net',
+    projectKey: 'ACME',
+  } as const;
+  const CLOUD_ID = 'cloud-1';
+  const TOKEN_URL = 'https://auth.atlassian.com/oauth/token';
+  /** Where a 3LO Bearer is actually accepted — NOT the `*.atlassian.net` site. */
+  const GATEWAY = `https://api.atlassian.com/ex/jira/${CLOUD_ID}`;
+
+  interface JiraStub {
+    /** The JSON body of each POST to the token endpoint. */
+    tokenPosts: Record<string, string>[];
+    /** `{ url, auth }` for every REST call the connector made. */
+    apiCalls: { url: string; auth: string }[];
+  }
+
+  function stubJira(token: { status?: number; body: unknown }): JiraStub {
+    const stub: JiraStub = { tokenPosts: [], apiCalls: [] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const json = (body: unknown, status = 200) =>
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+
+        if (url === TOKEN_URL) {
+          stub.tokenPosts.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, string>);
+          return json(token.body, token.status ?? 200);
+        }
+        if (url.startsWith(GATEWAY)) {
+          stub.apiCalls.push({
+            url,
+            auth: String(new Headers(init?.headers).get('authorization')),
+          });
+          // `connect()` validates with /myself, then probes the count.
+          return json(url.includes('/search') ? { total: 7 } : {});
+        }
+        throw new Error(`unexpected fetch to ${url}`);
+      }),
+    );
+    return stub;
+  }
+
+  async function connectJira(ctx: ServiceContext, args: { expiresAt: Date; accessToken: string }) {
+    await importSourceIdentityService.upsertIdentity({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      source: 'jira',
+      accessToken: args.accessToken,
+      refreshToken: 'refresh_1',
+      expiresAt: args.expiresAt,
+      metadata: { cloudId: CLOUD_ID, siteUrl: 'https://acme.atlassian.net' },
+    });
+  }
+
+  beforeEach(() => {
+    // Jira is the one import OAuth app vitest.config.ts leaves unset (the
+    // routes test sets it per-file too) — the exchange itself is stubbed.
+    vi.stubEnv('JIRA_OAUTH_CLIENT_ID', 'test-jira-client-id');
+    vi.stubEnv('JIRA_OAUTH_CLIENT_SECRET', 'test-jira-client-secret');
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
+
+  it('renews an EXPIRED token before the connector calls Jira, and calls the api.atlassian.com GATEWAY', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectJira(fx.ctx, {
+      accessToken: 'stale_token',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    const stub = stubJira({
+      body: { access_token: 'fresh_token', refresh_token: 'refresh_2', expires_in: 3_600 },
+    });
+
+    const connector = await importService.buildConnector('jira', JIRA_CONNECTION, fx.ctx);
+    const result = await connector.connect();
+
+    expect(stub.tokenPosts.map((p) => p['grant_type'])).toEqual(['refresh_token']);
+    expect(stub.tokenPosts[0]?.['refresh_token']).toBe('refresh_1');
+    // Every outbound REST call carried the RENEWED token, and went to the
+    // gateway — a 3LO Bearer is rejected on `acme.atlassian.net`, so sending
+    // the member's own site URL would renew a token only to waste it.
+    expect(stub.apiCalls.map((c) => c.auth)).toEqual(['Bearer fresh_token', 'Bearer fresh_token']);
+    expect(stub.apiCalls.every((c) => c.url.startsWith(GATEWAY))).toBe(true);
+    expect(result.issueCount).toBe(7);
+  });
+
+  it('PERSISTS the rotated token — a second build finds it unexpired and refreshes nothing', async () => {
+    // The round trip (`notes.html` #208): "the refresh returned a token" is a
+    // claim about the OAuth service; that the NEXT import reads it back is the
+    // claim worth making, and only a second build through the real path makes it.
+    const fx = await makeWorkItemFixture();
+    await connectJira(fx.ctx, {
+      accessToken: 'stale_token',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    const first = stubJira({
+      body: { access_token: 'fresh_token', refresh_token: 'refresh_2', expires_in: 3_600 },
+    });
+    await (await importService.buildConnector('jira', JIRA_CONNECTION, fx.ctx)).connect();
+    expect(first.tokenPosts).toHaveLength(1);
+
+    const second = stubJira({ body: { access_token: 'should_not_be_used' } });
+    await (await importService.buildConnector('jira', JIRA_CONNECTION, fx.ctx)).connect();
+
+    expect(second.tokenPosts).toHaveLength(0);
+    expect(second.apiCalls.map((c) => c.auth)).toEqual([
+      'Bearer fresh_token',
+      'Bearer fresh_token',
+    ]);
+  });
+
+  it('passes an unexpired token straight through (no refresh POST)', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectJira(fx.ctx, {
+      accessToken: 'live_token',
+      expiresAt: new Date(Date.now() + 30 * 60_000),
+    });
+    const stub = stubJira({ body: { access_token: 'should_not_be_used' } });
+
+    await (await importService.buildConnector('jira', JIRA_CONNECTION, fx.ctx)).connect();
+
+    expect(stub.tokenPosts).toHaveLength(0);
+    expect(stub.apiCalls.map((c) => c.auth)).toEqual(['Bearer live_token', 'Bearer live_token']);
+  });
+
+  it('turns a grant Atlassian will not refresh into the 422 not-connected error, not a 500', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectJira(fx.ctx, {
+      accessToken: 'stale_token',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    stubJira({ status: 400, body: { error: 'invalid_grant' } });
+
+    const err = await importService
+      .buildConnector('jira', JIRA_CONNECTION, fx.ctx)
+      .then(() => null)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ImportSourceNotConnectedError);
+    expect((err as Error).cause).toBeInstanceOf(JiraOAuthExchangeError);
+  });
+});
+
+describe('importService.buildConnector — the Plane refresh path', () => {
+  const PLANE_CONNECTION = {
+    source: 'plane',
+    workspaceSlug: 'acme',
+    projectId: 'proj-1',
+  } as const;
+  const ORIGIN = 'https://api.plane.so';
+  const TOKEN_URL = `${ORIGIN}/auth/o/token/`;
+  const WORK_ITEMS = `${ORIGIN}/api/v1/workspaces/acme/projects/proj-1/work-items/`;
+
+  interface PlaneStub {
+    /** The form-encoded body of each POST to the token endpoint. */
+    tokenPosts: URLSearchParams[];
+    /** The credential header value on every REST call the connector made. */
+    apiCredentials: string[];
+  }
+
+  function stubPlane(token: { status?: number; body: unknown }): PlaneStub {
+    const stub: PlaneStub = { tokenPosts: [], apiCredentials: [] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const json = (body: unknown, status = 200) =>
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+
+        if (url === TOKEN_URL) {
+          stub.tokenPosts.push(new URLSearchParams(String(init?.body ?? '')));
+          return json(token.body, token.status ?? 200);
+        }
+        if (url.startsWith(WORK_ITEMS)) {
+          // ⚠️ Read off `X-API-Key`, which is what PlaneConnector sends today —
+          // the header this card asserts the RENEWED token reaches. Plane's own
+          // docs put an OAuth access token in `Authorization: Bearer` and
+          // reserve `X-API-Key` for a `plane_api_*` PAT, so the scheme itself is
+          // wrong; that is a separate, pre-existing defect (MOTIR-2457, logged
+          // not absorbed per `notes.html` #27) and this assertion moves to
+          // `authorization` when it lands.
+          stub.apiCredentials.push(String(new Headers(init?.headers).get('x-api-key')));
+          return json({ total_count: 3, results: [] });
+        }
+        throw new Error(`unexpected fetch to ${url}`);
+      }),
+    );
+    return stub;
+  }
+
+  async function connectPlane(ctx: ServiceContext, args: { expiresAt: Date; accessToken: string }) {
+    await importSourceIdentityService.upsertIdentity({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      source: 'plane',
+      accessToken: args.accessToken,
+      refreshToken: 'refresh_1',
+      expiresAt: args.expiresAt,
+      metadata: { baseUrl: ORIGIN, workspaceSlug: 'acme' },
+    });
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('renews an EXPIRED token before the connector calls Plane', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectPlane(fx.ctx, {
+      accessToken: 'stale_token',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    const stub = stubPlane({
+      body: { access_token: 'fresh_token', refresh_token: 'refresh_2', expires_in: 3_600 },
+    });
+
+    const connector = await importService.buildConnector('plane', PLANE_CONNECTION, fx.ctx);
+    const result = await connector.connect();
+
+    expect(stub.tokenPosts.map((p) => p.get('grant_type'))).toEqual(['refresh_token']);
+    expect(stub.tokenPosts[0]?.get('refresh_token')).toBe('refresh_1');
+    expect(stub.apiCredentials).toEqual(['fresh_token']);
+    expect(result.issueCount).toBe(3);
+  });
+
+  it('passes an unexpired token straight through (no refresh POST)', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectPlane(fx.ctx, {
+      accessToken: 'live_token',
+      expiresAt: new Date(Date.now() + 12 * 60 * 60_000),
+    });
+    const stub = stubPlane({ body: { access_token: 'should_not_be_used' } });
+
+    await (await importService.buildConnector('plane', PLANE_CONNECTION, fx.ctx)).connect();
+
+    expect(stub.tokenPosts).toHaveLength(0);
+    expect(stub.apiCredentials).toEqual(['live_token']);
+  });
+
+  it('turns a grant Plane will not refresh into the 422 not-connected error, not a 500', async () => {
+    const fx = await makeWorkItemFixture();
+    await connectPlane(fx.ctx, {
+      accessToken: 'stale_token',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    stubPlane({ status: 400, body: { error: 'invalid_grant' } });
+
+    const err = await importService
+      .buildConnector('plane', PLANE_CONNECTION, fx.ctx)
+      .then(() => null)
+      .catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(ImportSourceNotConnectedError);
+    expect((err as Error).cause).toBeInstanceOf(PlaneOAuthExchangeError);
   });
 });
 
