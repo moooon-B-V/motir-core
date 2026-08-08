@@ -83,18 +83,35 @@ export function Segmented<T extends string>({
               'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
               'disabled:cursor-not-allowed disabled:opacity-50',
               active
-                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_.seg-ic]:text-(--el-tabnav-active) [&_.seg-trail]:text-(--el-tabnav-active)'
-                : 'text-(--el-text-secondary) hover:text-(--el-text) [&_.seg-ic]:text-(--el-text-faint) [&_.seg-trail]:text-(--el-text-faint)',
+                ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)'
+                : 'text-(--el-text-secondary) hover:text-(--el-text)',
             )}
           >
+            {/* The icon and the trailing count take their ink HERE rather than
+                through the segment's `[&_.seg-*]:…` descendant variants
+                (MOTIR-2475). Two things follow: the glyph says it is
+                `aria-hidden`, so its faint ink is one of the token's legitimate
+                jobs; and the trailing COUNT — text a reader reads — is no
+                longer painted at 2.4:1 on an inactive segment. */}
             {opt.icon ? (
-              <span className="seg-ic inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+              <span
+                aria-hidden
+                className={cn(
+                  'seg-ic inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center',
+                  active ? 'text-(--el-tabnav-active)' : 'text-(--el-text-faint)',
+                )}
+              >
                 {opt.icon}
               </span>
             ) : null}
             {opt.label}
             {opt.trailing != null ? (
-              <span className="seg-trail text-[11px] font-semibold tabular-nums">
+              <span
+                className={cn(
+                  'seg-trail text-[11px] font-semibold tabular-nums',
+                  active ? 'text-(--el-tabnav-active)' : 'text-(--el-text-secondary)',
+                )}
+              >
                 {opt.trailing}
               </span>
             ) : null}

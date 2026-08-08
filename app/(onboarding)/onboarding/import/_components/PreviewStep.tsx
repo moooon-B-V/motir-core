@@ -204,7 +204,9 @@ function SummaryTile({
         {value}
       </span>
       <span className="text-sm font-medium text-(--el-text-strong)">{label}</span>
-      <span className={cn('text-xs', muted ? 'text-(--el-text-faint)' : 'text-(--el-text-strong)')}>
+      <span
+        className={cn('text-xs', muted ? 'text-(--el-text-secondary)' : 'text-(--el-text-strong)')}
+      >
         {meta}
       </span>
     </div>

@@ -52,7 +52,7 @@ export default async function GettingStartedPage() {
         {GUIDE_STEPS.map((step, index) => (
           <section key={step.id} id={step.id} className="mb-10 scroll-mt-6">
             <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-              <span className="mr-2 font-mono text-(--el-text-faint)">{index + 1}</span>
+              <span className="mr-2 font-mono text-(--el-text-secondary)">{index + 1}</span>
               {step.title}
             </h2>
             <DocBlocks blocks={step.blocks} />

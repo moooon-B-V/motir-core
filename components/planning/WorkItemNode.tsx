@@ -313,7 +313,7 @@ export function WorkItemNode({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="font-mono text-xs text-(--el-text-faint)">{item.identifier}</span>
+            <span className="font-mono text-xs text-(--el-text-secondary)">{item.identifier}</span>
             {/* The Manual chip rides the id line (right-aligned), NOT the crowded
                 status row — a hairline `--el-border` lifts it off every node fill.
                 Composed from the shipped WorkItemTypeChip; manual-only by design. */}

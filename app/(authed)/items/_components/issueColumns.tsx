@@ -91,7 +91,7 @@ export function buildIssueColumns(t: Translator): IssueColumn[] {
         r.type ? (
           <WorkItemTypeChip type={r.type} />
         ) : (
-          <span className="text-(--el-text-faint)">—</span>
+          <span className="text-(--el-text-secondary)">—</span>
         ),
     },
     {

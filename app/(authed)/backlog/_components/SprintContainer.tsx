@@ -193,7 +193,7 @@ export function SprintContainer({
         <SprintPointsBadge points={points} state={sprint.state} />
         {/* Velocity SEAM → Story 4.6 (reserved, not computed). */}
         <span
-          className="flex items-center gap-1 text-xs text-(--el-text-faint)"
+          className="flex items-center gap-1 text-xs text-(--el-text-secondary)"
           title={t('velocitySeam')}
           aria-label={t('velocitySeam')}
         >

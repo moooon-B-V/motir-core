@@ -25,7 +25,7 @@ export async function DangerZoneCard() {
           <Button variant="danger" disabled>
             {t('settings.deleteOrg')}
           </Button>
-          <span className="text-(--el-text-faint) font-sans text-xs">
+          <span className="text-(--el-text-secondary) font-sans text-xs">
             {t('settings.deleteUnavailable')}
           </span>
         </div>

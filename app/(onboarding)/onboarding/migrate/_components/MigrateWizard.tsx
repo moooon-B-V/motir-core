@@ -233,7 +233,7 @@ function Rail({ step }: { step: MigrateOnboardingStepDto | null }) {
       <p className="text-sm font-semibold text-(--el-text)">{t('rail.title')}</p>
       <p className="mt-1 text-xs text-(--el-text-muted)">{t('rail.sub')}</p>
 
-      <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <p className="mt-5 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {t('rail.setUp')}
       </p>
       <ul className="mt-2 flex flex-row gap-2 md:flex-col md:gap-1">
@@ -241,7 +241,7 @@ function Rail({ step }: { step: MigrateOnboardingStepDto | null }) {
         <RailStep label={t('rail.index')} state={stateOf(1)} />
       </ul>
 
-      <p className="mt-5 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <p className="mt-5 flex items-center gap-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {t('rail.import')}
         <span className="rounded-(--radius-badge) bg-(--el-muted) px-(--spacing-chip-x) py-0.5 text-[0.65rem] text-(--el-text-secondary) normal-case">
           {t('rail.importOptional')}
@@ -490,7 +490,7 @@ function IndexPanel({
 
         {status && total > 0 ? (
           <>
-            <p className="mt-4 mb-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+            <p className="mt-4 mb-2 text-[0.7rem] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
               {t('index.perRepo')}
             </p>
             <ul className="flex flex-col gap-2">

@@ -494,7 +494,7 @@ function MemberRow({
       </div>
       <div className="hidden items-center gap-1 sm:flex">
         {member.workspaces.length === 0 ? (
-          <span className="text-(--el-text-faint) font-sans text-xs">
+          <span className="text-(--el-text-secondary) font-sans text-xs">
             {t('members.noWorkspaces')}
           </span>
         ) : (

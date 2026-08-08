@@ -108,6 +108,13 @@ export function FilterResultsBody({
               <td className="px-2 py-2">
                 <span
                   title={item.assigneeId ? t('assigned') : t('unassigned')}
+                  // The person glyph carries no text of its own — the label
+                  // does. Saying that with `role="img"` + `aria-label` is what
+                  // makes the faint unassigned ink legitimate, and it also
+                  // gives the cell an accessible name a bare `title` does not
+                  // reliably announce (MOTIR-2475).
+                  role="img"
+                  aria-label={item.assigneeId ? t('assigned') : t('unassigned')}
                   className={`inline-flex size-5 items-center justify-center rounded-full ${
                     item.assigneeId
                       ? 'bg-(--el-tint-lavender) text-(--el-text-strong)'

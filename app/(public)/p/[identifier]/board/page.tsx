@@ -49,13 +49,13 @@ export default async function PublicBoardPage({
                     <h2 className="text-xs font-bold uppercase tracking-wide text-(--el-text-secondary)">
                       {col.name}
                     </h2>
-                    <span className="rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-2 py-px text-[11.5px] font-semibold text-(--el-text-faint)">
+                    <span className="rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-2 py-px text-[11.5px] font-semibold text-(--el-text-secondary)">
                       {col.totalCount}
                     </span>
                   </header>
                   <div className="flex flex-col gap-2.5">
                     {col.cards.length === 0 ? (
-                      <p className="rounded-(--radius-card) border border-dashed border-(--el-border) px-1 py-3.5 text-center text-[12.5px] text-(--el-text-faint)">
+                      <p className="rounded-(--radius-card) border border-dashed border-(--el-border) px-1 py-3.5 text-center text-[12.5px] text-(--el-text-secondary)">
                         {t('boardColumnEmpty')}
                       </p>
                     ) : (

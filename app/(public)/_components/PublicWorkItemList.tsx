@@ -41,7 +41,7 @@ function Row({ item, identifier }: { item: PublicWorkItemListItemDto; identifier
       className="flex scroll-mt-24 items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-3 shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong)"
     >
       <IssueTypeIcon type={item.kind} className="h-4 w-4 flex-none" />
-      <span className="font-mono text-[11.5px] text-(--el-text-faint)">{item.identifier}</span>
+      <span className="font-mono text-[11.5px] text-(--el-text-secondary)">{item.identifier}</span>
       <span className="min-w-0 flex-1 truncate text-[13.5px] font-semibold text-(--el-text)">
         {item.title}
       </span>

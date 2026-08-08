@@ -237,7 +237,7 @@ export function CatalogueNav({
             aria-label={t('findLabel')}
             placeholder={t('findPlaceholder')}
           />
-          <p className="mt-2 pl-(--spacing-control-x) text-[11.5px] text-(--el-text-faint)">
+          <p className="mt-2 pl-(--spacing-control-x) text-[11.5px] text-(--el-text-secondary)">
             {query.trim() ? t('findCount', { shown, total }) : t('operationCount', { total })}
           </p>
         </>

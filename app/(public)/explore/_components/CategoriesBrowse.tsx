@@ -40,7 +40,7 @@ export async function CategoriesBrowse({ categories }: { categories: ProjectCate
               />
             </span>
             <span
-              className="w-10 flex-none text-right font-mono text-xs text-(--el-text-faint)"
+              className="w-10 flex-none text-right font-mono text-xs text-(--el-text-secondary)"
               aria-label={t('browseCountAria', { count: cat.projectCount })}
             >
               {cat.projectCount}

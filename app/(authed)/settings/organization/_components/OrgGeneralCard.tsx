@@ -107,7 +107,7 @@ export function OrgGeneralCard({
           value={slug}
           readOnly
           disabled
-          addonStart={<span className="text-(--el-text-faint)">motir.co/</span>}
+          addonStart={<span className="text-(--el-text-secondary)">motir.co/</span>}
           helperText={t('settings.urlHint')}
         />
       </div>
