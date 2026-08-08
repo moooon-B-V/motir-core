@@ -34,6 +34,7 @@ import {
   openSessionPr,
   pushSessionBranchIfAhead,
   runIdFromDate,
+  sessionBranchCommits,
   sessionBranchHasCommits,
   sessionBranchName,
   type CommandRunner,
@@ -572,7 +573,15 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
       {
         branch: repo.branch,
         title: sessionPrTitle(summary.runId, carried),
-        body: renderSessionPrBody(summary.runId, repo.branch, mine),
+        // The agents' own commit messages, read from THIS repo's checkout
+        // against THIS repo's branch — a multi-repo run must not put another
+        // repo's commits in this body (MOTIR-2411).
+        body: renderSessionPrBody(
+          summary.runId,
+          repo.branch,
+          mine,
+          sessionBranchCommits(repo.cwd, repo.branch, run),
+        ),
       },
       run,
     );

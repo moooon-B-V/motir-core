@@ -146,6 +146,53 @@ export function sessionBranchHasCommits(
   return Number.parseInt(res.stdout.trim(), 10) > 0;
 }
 
+/** One commit on a session branch — the agent's own narrative for its card. */
+export interface SessionCommit {
+  /** The subject line, as the agent wrote it. */
+  subject: string;
+  /** The message body beneath it — `''` when the commit has none. */
+  body: string;
+}
+
+/**
+ * Every commit the session branch adds, OLDEST FIRST — the order they were
+ * dispatched in (MOTIR-2411).
+ *
+ * ⚠️ Read from THIS repo's checkout against THIS repo's branch. A multi-repo run
+ * opens one pull request per repo, and a range read anywhere else would put
+ * another repo's commits in this body.
+ *
+ * Uses an ASCII record separator rather than a delimiter that could appear in a
+ * message: a commit body is arbitrary prose and will eventually contain any
+ * printable string someone picks as a marker. `%x1e`/`%x1f` are control
+ * characters git emits literally and no author types.
+ *
+ * A failed read yields `[]`, not a throw — by the time this runs the work is
+ * already integrated and pushed, so a git hiccup must degrade the BODY, never
+ * abandon the pull request (the same discipline `openSessionPr` applies to a
+ * missing `gh`).
+ */
+export function sessionBranchCommits(
+  cwd: string,
+  branch: string,
+  run: CommandRunner = execCommand,
+): SessionCommit[] {
+  const res = run(
+    'git',
+    ['log', '--reverse', '--format=%s%x1f%b%x1e', `origin/main..origin/${branch}`],
+    cwd,
+  );
+  if (res.exitCode !== 0) return [];
+  return res.stdout
+    .split('\x1e')
+    .map((record) => record.replace(/^\n+/, ''))
+    .filter((record) => record.trim().length > 0)
+    .map((record) => {
+      const [subject = '', ...rest] = record.split('\x1f');
+      return { subject: subject.trim(), body: rest.join('\x1f').trim() };
+    });
+}
+
 export interface SessionPrResult {
   /** The PR URL when one was opened or already existed. */
   url: string | null;

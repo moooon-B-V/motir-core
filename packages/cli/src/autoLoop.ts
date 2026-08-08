@@ -1,4 +1,5 @@
 import { formatTable, truncate } from './render.js';
+import type { SessionCommit } from './git.js';
 
 // The PURE half of `motir auto` (Story 7.9 · Subtask 7.9.4 · MOTIR-882): what
 // the loop DECIDES and what it REPORTS, with no MCP call, no spawn, no git and
@@ -223,15 +224,37 @@ function fitTitle(title: string): string {
 }
 
 /**
- * The PR body: every item this branch carries, plus the close-out instruction.
- * The keys live HERE rather than in the title precisely because the status sync
- * does not parse a body — so a reviewer gets full traceability while the run's
- * many items stay un-linked to this one PR.
+ * The PR body: the LOOP's frame around the AGENTS' own commit messages
+ * (MOTIR-2411).
+ *
+ * ── Who writes what, and why neither can do the other's job ────────────────
+ * The body used to be a MANIFEST — one `- KEY — title` line per card. Fully
+ * traceable, and it said nothing about what the branch DOES. A card title is
+ * what was PLANNED; the commit is what was DONE, including everything that only
+ * surfaced while doing it, and those diverge.
+ *
+ * So: **the AGENT writes the substance** — one card, one commit, composed at the
+ * moment it had the most context it will ever have (11.5.25 tells it that this
+ * message becomes this body). **The loop writes the frame** — which run, which
+ * branch, what failed, how to close out. An agent saw one card and can know none
+ * of that; the loop knows the run and nothing about what the change means.
+ *
+ * ⚠️ It reads the COMMITS, it does not reconstruct them from `records`. An
+ * implementation that kept building from `DispatchRecord[]` and merely appended
+ * a subject would look right in a single-repo test and silently drop any commit
+ * the loop did not record — which is exactly the commit a reviewer most needs
+ * told about.
+ *
+ * ⚠️ KNOWN LIMIT, not papered over: concatenated commits do not SYNTHESISE.
+ * Four commits that together deliver one capability read as four changes. Saying
+ * "these four do X" needs something that read the whole diff — a close-out agent
+ * call, which is MOTIR-2423. This gets most of the value for none of that cost.
  */
 export function renderSessionPrBody(
   runId: string,
   branch: string,
   records: DispatchRecord[],
+  commits: SessionCommit[] = [],
 ): string {
   const carried = records.filter((r) => r.outcome !== 'failed');
   const failed = records.filter((r) => r.outcome === 'failed');
@@ -242,6 +265,21 @@ export function renderSessionPrBody(
     '',
     ...carried.map((r) => `- ${r.key} — ${r.title ?? '(untitled)'}`),
   ];
+
+  if (commits.length > 0) {
+    lines.push('', `## What the commits say (${commits.length})`, '');
+    for (const [index, commit] of commits.entries()) {
+      if (index > 0) lines.push('');
+      lines.push(`### ${commit.subject}`);
+      // A THIN commit degrades to the card's title rather than to a bare
+      // subject with nothing under it — today's output, not worse than it. The
+      // pairing is positional because one card is one commit, in dispatch order.
+      const fallback = carried[index]?.title;
+      const beneath = commit.body || (fallback ? `_${fallback}_` : '');
+      if (beneath) lines.push('', beneath);
+    }
+  }
+
   if (failed.length > 0) {
     lines.push(
       '',

@@ -6,6 +6,7 @@ import {
   openSessionPr,
   pushSessionBranchIfAhead,
   runIdFromDate,
+  sessionBranchCommits,
   sessionBranchHasCommits,
   sessionBranchName,
   type CommandResult,
@@ -167,6 +168,73 @@ describe('sessionBranchHasCommits — an empty branch gets no pull request', () 
 
   it('is false when the count cannot be read at all', () => {
     expect(sessionBranchHasCommits('/repo', 'b', scriptedRunner(() => fail()).run)).toBe(false);
+  });
+});
+
+describe("sessionBranchCommits — the agents' own messages (MOTIR-2411)", () => {
+  // ⚠️ THE RECORD SEPARATORS ARE THE POINT. A commit body is arbitrary prose and
+  // will eventually contain any printable marker someone picks — `---`, `===`,
+  // a row of dashes in a table. `%x1f` / `%x1e` are control characters git emits
+  // literally and no author types, so the parse cannot be broken by content.
+  const RS = '\x1e';
+  const FS = '\x1f';
+
+  it('splits subject from body, OLDEST first', () => {
+    const log = `feat(a): first${FS}Because the old path was wrong.${RS}\nfix(b): second${FS}And B needed it.${RS}\n`;
+    const commits = sessionBranchCommits('/repo', 'b', scriptedRunner(() => ok(log)).run);
+
+    expect(commits).toEqual([
+      { subject: 'feat(a): first', body: 'Because the old path was wrong.' },
+      { subject: 'fix(b): second', body: 'And B needed it.' },
+    ]);
+  });
+
+  it("reads the range in THIS repo's cwd against THIS repo's branch", () => {
+    // The multi-repo scoping, asserted on the CWD the command ran in — a run
+    // opens one pull request per repo, and a range read anywhere else would put
+    // another repo's commits in this body. `scriptedRunner`'s log drops the cwd,
+    // and the cwd is the whole claim, so this one records it.
+    const seen: { cwd: string; args: string[] }[] = [];
+    const run: CommandRunner = (_bin, args, cwd) => {
+      seen.push({ cwd, args });
+      return ok('');
+    };
+    sessionBranchCommits('/repos/motir-ai', 'motir/auto-9', run);
+
+    expect(seen[0]?.cwd).toBe('/repos/motir-ai');
+    expect(seen[0]?.args).toContain('origin/main..origin/motir/auto-9');
+    expect(seen[0]?.args).toContain('--reverse');
+  });
+
+  it('a commit with NO body yields an empty body, not a missing entry', () => {
+    const commits = sessionBranchCommits(
+      '/repo',
+      'b',
+      scriptedRunner(() => ok(`chore: thin${FS}${RS}\n`)).run,
+    );
+    expect(commits).toEqual([{ subject: 'chore: thin', body: '' }]);
+  });
+
+  it('a body containing the marker-ish prose a human writes survives', () => {
+    const body = 'Rejected:\n\n---\n\n| a | b |\n| --- | --- |\n';
+    const commits = sessionBranchCommits(
+      '/repo',
+      'b',
+      scriptedRunner(() => ok(`feat: x${FS}${body}${RS}\n`)).run,
+    );
+    expect(commits).toHaveLength(1);
+    expect(commits[0]!.body).toContain('| --- | --- |');
+  });
+
+  it('a FAILED read is an empty list, never a throw', () => {
+    // By the time this runs the work is integrated and pushed. A git hiccup must
+    // degrade the body, not abandon the pull request — the same discipline
+    // `openSessionPr` applies to a missing `gh`.
+    expect(sessionBranchCommits('/repo', 'b', scriptedRunner(() => fail()).run)).toEqual([]);
+  });
+
+  it('an empty range is an empty list', () => {
+    expect(sessionBranchCommits('/repo', 'b', scriptedRunner(() => ok('')).run)).toEqual([]);
   });
 });
 

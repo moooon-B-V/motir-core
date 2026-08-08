@@ -1091,3 +1091,85 @@ describe('sessionPrTitle — the shared parent, when there is one', () => {
     );
   });
 });
+
+// THE BODY IS THE AGENTS' COMMITS, FRAMED BY THE LOOP (MOTIR-2411).
+//
+// A card title is what was PLANNED. The commit is what was DONE, including what
+// only surfaced while doing it. The body used to be a manifest of the former.
+describe('renderSessionPrBody — the commits, not the card titles', () => {
+  const record = (key: string, title: string, outcome: 'integrated' | 'failed' = 'integrated') => ({
+    key,
+    title,
+    outcome,
+    durationMs: 1,
+    sessionBranch: outcome === 'failed' ? null : BRANCH,
+    repo: 'motir-core',
+    parentKey: null,
+  });
+
+  const commit = (subject: string, body = '') => ({ subject, body });
+
+  it('carries every commit — subject AND body — in branch order', () => {
+    // Order is asserted by INDEX, not by presence: a set-shaped implementation
+    // passes a contains-check and still scrambles the narrative.
+    const out = renderSessionPrBody(
+      '20260729-010203',
+      BRANCH,
+      [record('PROD-1', 'A'), record('PROD-2', 'B')],
+      [
+        commit('feat(a): the first thing', 'Because the old path was wrong.'),
+        commit('fix(b): the second thing', 'And it turned out B depended on it.'),
+      ],
+    );
+
+    expect(out).toContain('## What the commits say (2)');
+    expect(out).toContain('### feat(a): the first thing');
+    expect(out).toContain('Because the old path was wrong.');
+    expect(out).toContain('### fix(b): the second thing');
+    expect(out).toContain('And it turned out B depended on it.');
+    expect(out.indexOf('feat(a)')).toBeLessThan(out.indexOf('fix(b)'));
+  });
+
+  it('a commit with an EMPTY body falls back to the card title, never a bare subject', () => {
+    const out = renderSessionPrBody(
+      '20260729-010203',
+      BRANCH,
+      [record('PROD-1', 'Wire the seam')],
+      [commit('feat(seam): wire it')],
+    );
+
+    expect(out).toContain('### feat(seam): wire it');
+    // Degrades to TODAY's output — the title — rather than to a heading with
+    // nothing under it.
+    expect(out).toContain('_Wire the seam_');
+  });
+
+  it('the FRAME is unchanged — run id, branch, carried, failed, close-out', () => {
+    // This card trades nothing for what it adds: every string the manifest body
+    // carried is still here, asserted verbatim.
+    const out = renderSessionPrBody(
+      '20260729-010203',
+      BRANCH,
+      [record('PROD-1', 'A'), record('PROD-9', 'Broke', 'failed')],
+      [commit('feat(a): a', 'why')],
+    );
+
+    expect(out).toContain('Unattended `motir auto` run `20260729-010203`');
+    expect(out).toContain(`integrated on \`${BRANCH}\``);
+    expect(out).toContain('## Work items carried (1)');
+    expect(out).toContain('- PROD-1 — A');
+    expect(out).toContain('## Attempted and failed (1)');
+    expect(out).toContain('- PROD-9 — Broke');
+    expect(out).toContain(`motir done --session ${BRANCH}`);
+    expect(out).toContain('Review this pull request as ONE unit.');
+  });
+
+  it('renders the manifest ALONE when no commits could be read', () => {
+    // `sessionBranchCommits` yields `[]` on a failed git read rather than
+    // throwing: by then the work is integrated and pushed, so a git hiccup must
+    // degrade the body, never abandon the pull request.
+    const out = renderSessionPrBody('20260729-010203', BRANCH, [record('PROD-1', 'A')], []);
+    expect(out).not.toContain('## What the commits say');
+    expect(out).toContain('- PROD-1 — A');
+  });
+});
