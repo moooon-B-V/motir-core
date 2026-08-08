@@ -37,7 +37,11 @@ export function UserMenu({ name, email }: UserMenuProps) {
         <button
           type="button"
           aria-label={t('userMenu.account')}
-          className="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-9 w-9 items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          // SLOT 4 of the bar's four-slot below-`md` budget (MOTIR-2373). The
+          // box is `--height-control` square, not `h-9`: at 375px the avatar
+          // used to measure 28px wide against a 36px height and render as an
+          // ELLIPSE, because a shrinking flex row squeezed a fixed `w-9`.
+          className="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           {initial}
         </button>

@@ -104,7 +104,13 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
           type="button"
           aria-label={t('bellAria', { count: unreadCount })}
           className={cn(
-            'relative inline-flex items-center justify-center rounded-(--radius-control) p-(--spacing-icon-btn) text-(--el-text-muted) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+            // SLOT 3 of the bar's four-slot below-`md` budget (MOTIR-2373): a
+            // `--height-control` SQUARE rather than icon-button padding, so all
+            // four slots are one box under a `data-style` swap. The bell is the
+            // one displaced-candidate that STAYS below `md` — it is the only
+            // control with no second door, and a badge inside a closed drawer
+            // conveys nothing.
+            'relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             open && 'bg-(--el-surface) text-(--el-text)',
           )}
         >

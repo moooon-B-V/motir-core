@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Monitor, Moon, Sun } from 'lucide-react';
 import { useTheme } from '@/lib/contexts/theme-context';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { cn } from '@/lib/utils/cn';
 import type { ThemePattern } from '@/lib/theme/types';
 
 /**
@@ -16,6 +17,15 @@ import type { ThemePattern } from '@/lib/theme/types';
  * while the tooltip + accessible label also announce the currently *resolved*
  * pattern — relevant when the choice is `system`, where the active theme isn't
  * obvious from the icon alone.
+ *
+ * `placement` is WHERE it renders, and that decides its display utility
+ * (MOTIR-2373 · design/shell design-notes.md § *Every control's disposition
+ * below `md`*). The theme toggle is DISPLACED from the below-`md` bar — a
+ * preference, changed rarely, with two working second doors (⌘K `acct-theme`
+ * and /settings/account/appearance) — so in the bar it is `hidden md:inline-flex`
+ * and in the drawer's utility strip it is a plain `inline-flex`. The display
+ * utility is SELECTED, never appended: `.hidden` and `.inline-flex` have equal
+ * specificity and the winner would be whichever Tailwind emits last.
  */
 const CYCLE: ThemePattern[] = ['light', 'dark', 'system'];
 
@@ -25,7 +35,7 @@ const META: Record<ThemePattern, { Icon: typeof Sun }> = {
   system: { Icon: Monitor },
 };
 
-export function ThemeToggle() {
+export function ThemeToggle({ placement = 'bar' }: { placement?: 'bar' | 'drawer' } = {}) {
   const t = useTranslations('shell');
   const { pattern, resolvedPattern, setPattern } = useTheme();
   const { Icon } = META[pattern];
@@ -47,7 +57,10 @@ export function ThemeToggle() {
         type="button"
         onClick={cycle}
         aria-label={t('theme.ariaLabel', { state: announced })}
-        className="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-9 w-9 items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2"
+        className={cn(
+          'text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2',
+          placement === 'bar' ? 'hidden md:inline-flex' : 'inline-flex',
+        )}
       >
         <Icon className="h-4 w-4" aria-hidden />
       </button>

@@ -25,6 +25,12 @@ import { ProjectAccessProvider } from './_components/ProjectAccessProvider';
 import { ReportProvider } from './_components/ReportProvider';
 import { AppCommandPalette } from './_components/AppCommandPalette';
 import { OnboardingResumeProvider } from './_components/OnboardingResumeProvider';
+// The drawer's utility strip (MOTIR-2373) renders the SAME three controls the
+// top bar's four-slot budget displaced below `md` — not copies of them.
+import { ReportButton } from './_components/ReportButton';
+import { ThemeToggle } from './_components/ThemeToggle';
+import { BuildInPublicButton } from './_components/build-in-public/BuildInPublicButton';
+import { BuildingInPublicHeaderLink } from './_components/build-in-public/BuildingInPublicHeaderLink';
 import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 
 // Layout for every authenticated route. Story 1.5 migrates this from a bare
@@ -247,6 +253,28 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       activeWorkspaceId={activeWorkspaceId}
                       cloudBilling={cloudBilling}
                     />
+                  }
+                  // The utility strip (MOTIR-2373 · design/shell Panel D): the
+                  // room for the controls the below-md bar's four-slot budget
+                  // displaced. Each one is the SAME component the bar renders,
+                  // re-homed — build-in-public (labelled, truncating), then
+                  // report, then theme. The Plan-with-AI pill is deliberately
+                  // absent: PlanWithAIFab below is already its phone-width door.
+                  footer={
+                    <>
+                      <div className="min-w-0 flex-1">
+                        {buildInPublicProjectKey ? (
+                          <BuildInPublicButton
+                            projectKey={buildInPublicProjectKey}
+                            placement="drawer"
+                          />
+                        ) : buildingInPublic ? (
+                          <BuildingInPublicHeaderLink placement="drawer" />
+                        ) : null}
+                      </div>
+                      <ReportButton display="drawer" />
+                      <ThemeToggle placement="drawer" />
+                    </>
                   }
                 >
                   <SidebarNav

@@ -42,6 +42,41 @@ import type { OrgControlActiveOrg } from './OrgControl';
 // context (`ProjectSwitcher`, or the create-project CTA when there is no
 // project); the 8.3.1 renders established that putting the brand there costs
 // the project its identity (design-notes.md §0 finding #3).
+//
+// ════════════════════════════════════════════════════════════════════════════
+// THE CONTROL BUDGET — read this before adding anything to the right cluster.
+// (MOTIR-2373 · `design/shell/design-notes.md` § *The rule for the ninth
+// control*, quoted verbatim:)
+//
+//   The below-`md` bar is CLOSED AT FOUR SLOTS. A control added to the right
+//   cluster is a `md`-and-up control by default. To appear below `md` it must
+//   displace one of the four, and the displaced one must land in the drawer's
+//   utility strip — DRAWN, not cited. A control whose label is not
+//   breakpoint-gated does not qualify for the bar at all until it is: that is
+//   exactly how the widest state in the product came to exist.
+//
+// The ceiling is arithmetic, not taste. At the smallest viewport the app
+// supports (320px): 320 − 32 (px-4 gutters) − 36 (hamburger) − 8 − 8 (gaps) − 68
+// (tier-nav floor) = 168px = 4 × 36 + 3 × 8. The pixels move with
+// `--height-control` under a `data-style` swap; the slot COUNT does not.
+//
+//   `< md`      4 slots, icon-only  — palette · create · bell · avatar
+//   `md`–`lg`   all 8, icon-only    — the brand has replaced the hamburger, so
+//                                     there is nothing left to cover
+//   `≥ lg`      all 8, labelled
+//
+// The label breakpoint is `lg`, NOT `sm`, and a label moves together with its
+// `<kbd>` hint chip — that pair is what closes the 640–767px band, where every
+// label used to switch on at once (350 → 656px inside a 640px viewport) while
+// the hamburger was still mounted (`md:hidden` lives to 767px).
+//
+// The four displaced controls — the Plan-with-AI pill, the report button, the
+// theme toggle, the build-in-public slot — are `hidden md:inline-flex` (the
+// display utility is REPLACED, not appended: `.hidden` and `.inline-flex` have
+// equal specificity). Three of them are re-homed in `SidebarDrawer`'s utility
+// strip (`app/(authed)/layout.tsx`); the pill is DROPPED, because
+// `PlanWithAIFab` already ships on every authed screen under the same gate.
+// ════════════════════════════════════════════════════════════════════════════
 
 export interface TopNavProps {
   activeOrg: OrgControlActiveOrg | null;
@@ -154,26 +189,37 @@ export async function TopNav({
             cloudBilling={cloudBilling}
           />
         </div>
-        <div className="flex items-center gap-2">
+        {/* `flex-none`: the right cluster may no longer take width from the
+            left one. Its children are fixed-size boxes, so as a shrinkable flex
+            item it squeezed its `min-w-0` sibling to ZERO and painted over the
+            hamburger — the defect this budget closes. */}
+        <div className="flex flex-none items-center gap-2">
           {/* The "Plan with AI" hero launcher (MOTIR-1299) — the universal
               entrance to the AI planning workspace, present on every screen as
               the leading hero of the right cluster. The header context is
               project-scoped; the detail panel (MOTIR-910) + roadmap toggle
-              (MOTIR-1011) reuse the same component with their own context. */}
-          {showPlanWithAi ? <PlanWithAILauncher context={{ kind: 'project' }} /> : null}
+              (MOTIR-1011) reuse the same component with their own context.
+              `placement="bar"` DROPS it below md: the PlanWithAIFab orb ships on
+              every authed screen under this same gate, so the entrance survives
+              at phone width without costing a slot. */}
+          {showPlanWithAi ? (
+            <PlanWithAILauncher context={{ kind: 'project' }} placement="bar" />
+          ) : null}
           {/* The single stateful build-in-public slot (design §6.17.6 · Panel
               12): the admin "Build in public" CTA when the project is NOT
               public, OR the all-members "Building in public" linked indicator
-              when it IS — exactly one, never both, never empty. */}
+              when it IS — exactly one, never both, never empty. Below md BOTH
+              states move to the drawer's utility strip, which is what stops the
+              two-state slot from being a width variable. */}
           {buildInPublicProjectKey ? (
-            <BuildInPublicButton projectKey={buildInPublicProjectKey} />
+            <BuildInPublicButton projectKey={buildInPublicProjectKey} placement="bar" />
           ) : buildingInPublic ? (
-            <BuildingInPublicHeaderLink />
+            <BuildingInPublicHeaderLink placement="bar" />
           ) : null}
           <CreateIssueButton />
           <CommandPaletteTrigger />
-          <ReportButton />
-          <ThemeToggle />
+          <ReportButton display="shell" />
+          <ThemeToggle placement="bar" />
           {initialUnreadCount !== null ? (
             <NotificationBell initialUnreadCount={initialUnreadCount} />
           ) : null}

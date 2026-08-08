@@ -105,15 +105,21 @@ describe('the shell brand slot (§7a)', () => {
   });
 
   it('YIELDS to the hamburger below md — the slot is desktop-only', async () => {
-    // Measured, not preferred. This bar already overflows at 375px: the right
-    // cluster alone is 290–409px inside a 375px viewport, so the left cluster
-    // collapses to zero width and its children spill under it. On `main` the
-    // hamburger lands at x=16–52 and clears the right cluster's leading edge at
-    // x=69; 57px of brand ahead of it moves it to x=73–109, INSIDE that cluster,
-    // where the build-in-public megaphone intercepts every tap and "Open
-    // navigation" times out. Deleting these two `md:` variants re-breaks
-    // `shell-flows` and `settings-area` at narrow width, which is why they are
-    // pinned here and not left as styling.
+    // Measured, not preferred — and STILL measured after MOTIR-2373 closed the
+    // overflow this guard was originally written against. The bar's below-`md`
+    // budget is four right-cluster slots against a 320px floor:
+    // 320 − 32 gutters − 36 hamburger − 8 − 8 gaps − 68 tier-nav = 168px, with
+    // no brand in the sum (design/shell design-notes.md § *The budget*). So the
+    // left cluster below `md` is hamburger + tier nav, and the brand is a `md`+
+    // slot by design rather than by deferral: deleting these two `md:` variants
+    // spends 57px the budget has not allocated, pushing the hamburger from
+    // x=16–52 to x=73–109 and re-breaking `shell-flows` and `settings-area` at
+    // narrow width. Pinned here, not left as styling.
+    //
+    // The budget itself — the four slots, the `hidden md:inline-flex` gates on
+    // the displaced controls, the `lg` label breakpoint — is
+    // `top-nav-control-budget.test.tsx`; the hit-test is
+    // `tests/e2e/top-bar-budget.spec.ts`.
     const { container } = render(await TopNav(props));
     const brand = container.querySelector('a[href="/dashboard"]')!;
     const divider = brand.nextElementSibling!;
