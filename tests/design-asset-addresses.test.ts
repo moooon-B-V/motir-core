@@ -347,6 +347,37 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   //    (MOTIR-2316's first run also parked 17 STALE pairs here — 13 assets
   //    addressing `/issues*` and `/login`. MOTIR-2340 corrected every one of
   //    them in the assets, so those rows are gone too.)
+
+  // ── Forward-looking: the Roles & permissions settings page (MOTIR-2263) ───
+  //    The asset (MOTIR-2259, #1889) draws a settings page that does not exist
+  //    yet: `app/(authed)/settings/project/` holds `members`, `board`,
+  //    `automation`, `workflow` and the rest, but no `roles`. MOTIR-2263 builds
+  //    the route and the registry entry, and — per the pattern above — is the
+  //    card that deletes these three rows, in the commit that adds the route.
+  //
+  //    ⚠️ These rows exist because this guard did NOT run on the PR that made
+  //    them necessary. `ci.yml` skips the Vitest job on `design/*`, so the one
+  //    PR class that changes design assets is the one class that never runs the
+  //    assets' own guards; #1889 merged green and `main` went red for the next
+  //    `subtask/*` PR to run a full suite. That is the composition-red shape the
+  //    MCP/CLI note above describes, arriving through a different door — not two
+  //    PRs racing, but a gate that made one of them invisible. MOTIR-2442 closes
+  //    it; MOTIR-2441 is this repair.
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/roles',
+    why: 'Forward-looking: the Roles & permissions list page, built by MOTIR-2263, which deletes this row with the route.',
+  },
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/roles/[roleKey]',
+    why: 'Forward-looking: the role drill-down on the same unbuilt page, MOTIR-2263.',
+  },
+  {
+    file: 'design/projects/design-notes.md',
+    address: '/settings/project/roles/new',
+    why: 'Forward-looking: the create-a-role page the asset reserves for the custom-roles story MOTIR-2257; the route lands no earlier than MOTIR-2263.',
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -836,6 +867,13 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/brand/design-notes.md',
     path: 'app/icon1.png',
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
+  },
+
+  // ── An instruction to BUILD a primitive, not a citation of one ────────────
+  {
+    file: 'design/projects/roles-permissions.mock.html',
+    path: 'components/ui/Checkbox.tsx',
+    why: 'Not a citation: the sentence is an instruction to BUILD the primitive — "`components/ui/Checkbox.tsx` to this spec: `--radius-control` …" — for the editable grid the custom-roles story adds. `components/ui/` ships `Combobox.tsx`, not `Checkbox.tsx`; whichever card creates it deletes this row with the file.',
   },
 ];
 
