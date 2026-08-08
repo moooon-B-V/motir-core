@@ -217,3 +217,28 @@ describe('generation and sprint planning ask ai:plan; the two reads do not', () 
     );
   });
 });
+
+// MOTIR-2359 — the job read and the eight streams. Until this card a job was
+// readable by its ID ALONE on both sides of the boundary. The gate closes the
+// CORE half; the producer half (does this job belong to this project?) is
+// MOTIR-2360's, and the route header says so rather than implying otherwise.
+describe('the job read asks ai:plan', () => {
+  it('refuses a VIEWER before the boundary is called at all', async () => {
+    const fx = await makeFixture('jobs-viewer');
+    // The gate is the ROUTE's here, because the route is what resolves the
+    // actor's project — and the route-level refusal (a 403 with no SSE frame
+    // written) is pinned in `tests/api-ai-chat-route.test.ts`. What THIS file
+    // proves is the key the route asserts: a viewer does not hold `ai:plan` on
+    // this project and a member does, so the assertion has teeth on both sides.
+    const held = await projectAccessService.getPermissions(fx.viewerPctx.projectId, {
+      userId: fx.viewerPctx.userId,
+      workspaceId: fx.viewerPctx.workspaceId,
+    });
+    expect(held.has('ai:plan')).toBe(false);
+    const memberHeld = await projectAccessService.getPermissions(fx.memberPctx.projectId, {
+      userId: fx.memberPctx.userId,
+      workspaceId: fx.memberPctx.workspaceId,
+    });
+    expect(memberHeld.has('ai:plan')).toBe(true);
+  });
+});

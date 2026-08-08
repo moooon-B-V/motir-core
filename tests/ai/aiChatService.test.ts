@@ -88,9 +88,11 @@ describe('aiChatService.streamDiscovery', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiChatService.streamDiscovery('job_1')) got.push(f);
+    for await (const f of aiChatService.streamDiscovery('job_1', 'pj_1')) got.push(f);
+    // MOTIR-2359 — the core project id rides every stream open.
+    expect(streamJob).toHaveBeenCalledWith('job_1', 'pj_1');
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 });

@@ -35,7 +35,7 @@ const { buildRepoAuditRows } = await import('@/lib/codeHealth/repoAuditRows');
 const { createTestWorkspace, createTestProject, createTestUser } = await import('../fixtures');
 const { workspacesService } = await import('@/lib/services/workspacesService');
 const { githubInstallationService } = await import('@/lib/services/githubInstallationService');
-const { NotProjectAdminError } = await import('@/lib/projects/errors');
+const { PermissionDeniedError } = await import('@/lib/projects/errors');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables } = await import('../helpers/db');
 
@@ -253,14 +253,14 @@ describe('guard · the story crosses no boundary', () => {
 
 // ── GUARD 2 · the capability gate is on the SERVER ───────────────────────────
 describe('guard · the admin gate exists on the server, not only in the component', () => {
-  it('refuses a workspace member who is not a project admin, before any boundary read', async () => {
+  it('refuses a workspace member who is not a project admin, before any boundary read (ai:configure)', async () => {
     const { workspace, project: p } = await project('inst-guard-2');
     const member = await createTestUser();
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
 
     await expect(
       auditCoverageService.getCoverage(p.id, { userId: member.id, workspaceId: workspace.id }),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     expect(getCodeAuditMock).not.toHaveBeenCalled();
 
     // …and the same for the derivation the banner points at.
@@ -270,7 +270,7 @@ describe('guard · the admin gate exists on the server, not only in the componen
         { userId: member.id, workspaceId: workspace.id },
         p.identifier,
       ),
-    ).rejects.toBeInstanceOf(NotProjectAdminError);
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
     expect(refreshCodeAuditMock).not.toHaveBeenCalled();
   });
 });

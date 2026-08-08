@@ -395,7 +395,7 @@ export const planChangeSessionsService = {
     // yields the current thread rather than throwing at the user.
     if (session.lastJobId !== jobId) return toDto(session, pctx);
 
-    const job = await getJob(jobId);
+    const job = await getJob(jobId, pctx.projectId);
     const utterance = readPlanningTurn(job.result);
     if (!utterance) return toDto(session, pctx); // (3)
 

@@ -72,7 +72,7 @@ export const aiExplanationService = {
   // that to an HTTP status); the generator ends when motir-ai closes the stream.
   // (The terminal-failure REASON — e.g. out-of-credits — is appended by the
   // stream ROUTE; see lib/ai/jobStream.failureReasonFrame.)
-  streamExplanation(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamExplanation(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 };

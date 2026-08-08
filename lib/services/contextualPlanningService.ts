@@ -234,6 +234,6 @@ export const contextualPlanningService = {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
     const anchor = await workItemsService.getWorkItem(anchorId, ctx);
     if (anchor.projectId !== pctx.projectId) throw new WorkItemNotFoundError(anchorId);
-    return aiPlanEditsService.streamContextual(jobId);
+    return aiPlanEditsService.streamContextual(jobId, pctx.projectId);
   },
 };

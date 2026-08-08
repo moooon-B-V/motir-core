@@ -89,8 +89,9 @@ describe('aiJobsService.getJobStatus', () => {
       result: null,
       error: null,
     });
-    const view = await aiJobsService.getJobStatus('j');
+    const view = await aiJobsService.getJobStatus('j', 'pj_1');
+    expect(getJob).toHaveBeenCalledWith('j', 'pj_1');
     expect(view.status).toBe('succeeded');
-    expect(getJob).toHaveBeenCalledWith('j');
+    expect(getJob).toHaveBeenCalledWith('j', expect.any(String));
   });
 });

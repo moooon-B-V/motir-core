@@ -186,9 +186,9 @@ export type PlanOutcomeRef = { planId: string } | { jobId: string };
  * than thrown, because the PLAN read already succeeded — degrading the job block
  * beats failing an answer we largely have.
  */
-async function resolveJobState(jobId: string): Promise<PlanJobStateDto> {
+async function resolveJobState(jobId: string, coreProjectId: string): Promise<PlanJobStateDto> {
   try {
-    const job = await getJob(jobId);
+    const job = await getJob(jobId, coreProjectId);
     return {
       status: job.status,
       reachable: true,
@@ -228,7 +228,7 @@ export const aiPlanEditsService = {
     const plan = await plansService.getPlan(planId, ctx);
     const job =
       plan.status === 'generating' && plan.sourceJobId
-        ? await resolveJobState(plan.sourceJobId)
+        ? await resolveJobState(plan.sourceJobId, plan.projectId)
         : null;
     return {
       planId: plan.id,
@@ -287,8 +287,8 @@ export const aiPlanEditsService = {
   /** The live channel for a contextual planning turn's job — the same 7.1.4 job
    *  stream every plan-edit surface relays, named for its caller so the panel's
    *  route reads as one seam. Browsers stream from CORE, never from motir-ai. */
-  streamContextual(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamContextual(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
   async submitExpand(
@@ -327,15 +327,15 @@ export const aiPlanEditsService = {
     return submitPlanEditJob('replan', { rootItemKey: itemKey }, ctx);
   },
 
-  streamAugment(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamAugment(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
-  streamExpand(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamExpand(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
-  streamReplan(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamReplan(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 };

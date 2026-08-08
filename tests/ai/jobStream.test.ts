@@ -16,7 +16,7 @@ describe('failureReasonFrame', () => {
       .fn()
       .mockResolvedValue({ code: 'MOTIR_AI_OUT_OF_CREDITS', message: 'out of credits' });
 
-    const frame = await failureReasonFrame('j', failed, readJobError);
+    const frame = await failureReasonFrame('j', failed, 'pj_1', readJobError);
 
     expect(frame).toEqual({
       event: 'error',
@@ -28,27 +28,27 @@ describe('failureReasonFrame', () => {
   it('returns null for a non-failed status frame (and never reads the job error)', async () => {
     const readJobError = vi.fn();
     const running: JobStreamEvent = { event: 'status', data: { jobId: 'j', status: 'running' } };
-    expect(await failureReasonFrame('j', running, readJobError)).toBeNull();
+    expect(await failureReasonFrame('j', running, 'pj_1', readJobError)).toBeNull();
     expect(readJobError).not.toHaveBeenCalled();
   });
 
   it('returns null for non-status frames (token / done)', async () => {
     const readJobError = vi.fn();
     expect(
-      await failureReasonFrame('j', { event: 'token', data: { text: 'hi' } }, readJobError),
+      await failureReasonFrame('j', { event: 'token', data: { text: 'hi' } }, 'pj_1', readJobError),
     ).toBeNull();
     expect(
-      await failureReasonFrame('j', { event: 'done', data: { jobId: 'j' } }, readJobError),
+      await failureReasonFrame('j', { event: 'done', data: { jobId: 'j' } }, 'pj_1', readJobError),
     ).toBeNull();
     expect(readJobError).not.toHaveBeenCalled();
   });
 
   it('returns null when the failed job exposes no readable error', async () => {
-    expect(await failureReasonFrame('j', failed, async () => null)).toBeNull();
+    expect(await failureReasonFrame('j', failed, 'pj_1', async () => null)).toBeNull();
   });
 
   it('degrades to null if reading the reason throws (a boundary blip)', async () => {
-    const frame = await failureReasonFrame('j', failed, async () => {
+    const frame = await failureReasonFrame('j', failed, 'pj_1', async () => {
       throw new Error('boundary down');
     });
     expect(frame).toBeNull();

@@ -421,9 +421,9 @@ describe('aiPlanEditsService.stream*', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamAugment('job_1')) got.push(f);
+    for await (const f of aiPlanEditsService.streamAugment('job_1', 'pj_1')) got.push(f);
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 
@@ -434,9 +434,9 @@ describe('aiPlanEditsService.stream*', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamExpand('job_1')) got.push(f);
+    for await (const f of aiPlanEditsService.streamExpand('job_1', 'pj_1')) got.push(f);
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 
@@ -447,9 +447,9 @@ describe('aiPlanEditsService.stream*', () => {
     vi.mocked(streamJob).mockReturnValue(gen());
 
     const got: JobStreamEvent[] = [];
-    for await (const f of aiPlanEditsService.streamReplan('job_1')) got.push(f);
+    for await (const f of aiPlanEditsService.streamReplan('job_1', 'pj_1')) got.push(f);
 
-    expect(streamJob).toHaveBeenCalledWith('job_1');
+    expect(streamJob).toHaveBeenCalledWith('job_1', expect.any(String));
     expect(got).toEqual(frames);
   });
 });

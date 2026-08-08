@@ -110,8 +110,8 @@ export const aiGenerationService = {
   // first yield (the route maps it to an HTTP status); the stream ends when
   // motir-ai closes it on a terminal state. The terminal-failure REASON (e.g.
   // out-of-credits) is appended by the stream ROUTE via `failureReasonFrame`.
-  streamGeneration(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamGeneration(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
   // The INTERNAL append seam motir-ai's handler calls (replaces the whole-delta

@@ -177,8 +177,8 @@ export const aiSprintPlanningService = {
 
   /** The live channel for a sprint-planning job — the 7.1.4 job stream, relayed
    *  by core. Browsers stream from CORE, never from motir-ai. */
-  streamSprintPlan(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamSprintPlan(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 
   /**
@@ -214,7 +214,7 @@ export const aiSprintPlanningService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       'ai:plan',
     );
-    const job = await getJob(jobId);
+    const job = await getJob(jobId, ctx.projectId);
     const raw = job.result?.sprintAssignment;
     if (!raw) return { jobStatus: job.status, proposal: null, items: {} };
 
@@ -295,7 +295,7 @@ export const aiSprintPlanningService = {
     if (editedDelta !== undefined && editedDelta !== null) {
       raw = editedDelta;
     } else {
-      const job = await getJob(jobId);
+      const job = await getJob(jobId, ctx.projectId);
       if (!job.result?.sprintAssignment) {
         throw new SprintPlanApproveError(
           `Job ${jobId} carries no sprint-assignment result — job status is ${job.status}`,

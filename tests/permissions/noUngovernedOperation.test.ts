@@ -549,7 +549,14 @@ describe('the PENDING set is bounded and shrinking', () => {
     // the four take a key OTHER than `ai:plan` — the pre-plan READ and the access
     // PROBE ask `project:browse`, so an actor who may not plan can still see that
     // planning exists rather than discovering it through a failed write.
-    expect(pending.length).toBe(8);
+    //
+    // 8 → 0 is MOTIR-2359 wiring the last of `ai:plan`: the job read and the eight
+    // streams, which until that card read ANY job by its id alone. The PENDING
+    // bucket is now EMPTY, which is the story's terminal condition — and this arm
+    // does not survive it. MOTIR-2356 DELETES the `PENDING` set and this pin
+    // rather than re-pinning them at 0, because a guard whose whole job is to
+    // stop a number creeping has nothing left to watch once the number is gone.
+    expect(pending.length).toBe(0);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

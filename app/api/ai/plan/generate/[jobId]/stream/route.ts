@@ -5,6 +5,8 @@ import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { failureReasonFrame } from '@/lib/ai/jobStream';
 import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 import type { JobStreamEvent } from '@/lib/ai/types';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // GET /api/ai/plan/generate/:jobId/stream (Subtask 7.4.4 · MOTIR-846) — the live
 // channel the 7.4.9 generation UI subscribes to. Proxies the motir-ai
@@ -55,7 +57,31 @@ export async function GET(
   }
 
   const { jobId } = await params;
-  const iterator = aiGenerationService.streamGeneration(jobId)[Symbol.asyncIterator]();
+
+  // `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2359) — asserted BEFORE the
+  // stream opens, so the refusal is a real HTTP status and no SSE frame is ever
+  // written to an actor who may not plan.
+  //
+  // ⚠️ WHAT THIS GATE DOES AND DOES NOT ESTABLISH. It establishes that the caller
+  // may plan in THEIR OWN project. It does NOT establish that the job belongs to
+  // that project: a jobId is still readable across projects by an actor who has
+  // one, because motir-ai answers `GET /v1/jobs/:id` with no tenant filter. The
+  // id is now SENT (see `getJob` / `streamJob`); MOTIR-2360 is the card that makes
+  // motir-ai enforce it.
+  try {
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
+  } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
+    throw err;
+  }
+  const iterator = aiGenerationService
+    .streamGeneration(jobId, ctx.projectId)
+    [Symbol.asyncIterator]();
 
   // Prime the first frame so a pre-stream transport failure (motir-ai unreachable
   // / unknown job) maps to a real HTTP status rather than a stream that opens and
@@ -86,7 +112,7 @@ export async function GET(
           // frame (7.4.9 ← 8.1.8) so the client learns WHY — out-of-credits → the
           // paywall — not just THAT it failed. Once only.
           if (!reasonEmitted) {
-            const reason = await failureReasonFrame(jobId, result.value);
+            const reason = await failureReasonFrame(jobId, result.value, ctx.projectId);
             if (reason) {
               reasonEmitted = true;
               controller.enqueue(encoder.encode(formatFrame(reason)));

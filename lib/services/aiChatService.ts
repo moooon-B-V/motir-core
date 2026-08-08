@@ -71,7 +71,7 @@ export const aiChatService = {
   // terminal state. (The terminal-failure REASON — e.g. out-of-credits — is
   // appended by the stream ROUTE, which owns the iterator so client-disconnect
   // cancellation stays prompt; see lib/ai/jobStream.failureReasonFrame.)
-  streamDiscovery(jobId: string): AsyncGenerator<JobStreamEvent> {
-    return streamJob(jobId);
+  streamDiscovery(jobId: string, coreProjectId: string): AsyncGenerator<JobStreamEvent> {
+    return streamJob(jobId, coreProjectId);
   },
 };

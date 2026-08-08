@@ -32,7 +32,9 @@ export const aiJobsService = {
   },
 
   // Poll a job's status (status + result/error mapped to a typed error).
-  async getJobStatus(jobId: string): Promise<JobView> {
-    return getJob(jobId);
+  // `coreProjectId` names the project the read is made FOR (MOTIR-2359) — see the
+  // ⚠️ on `getJob`; the caller has already asserted `ai:plan` on it.
+  async getJobStatus(jobId: string, coreProjectId: string): Promise<JobView> {
+    return getJob(jobId, coreProjectId);
   },
 };
