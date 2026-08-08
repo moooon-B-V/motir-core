@@ -136,7 +136,16 @@ function callsTo(name: string): Record<string, unknown>[] {
 }
 
 function sessionPayload(
-  turns: { body: string; role?: 'user' | 'system'; jobId?: string }[] = [],
+  turns: {
+    body: string;
+    role?: 'user' | 'system' | 'assistant';
+    jobId?: string;
+    /** The ONE clarifying question an `assistant` turn asked (MOTIR-2397). */
+    question?: string;
+    /** A `user` turn sent in REPLY to that question, rather than one that
+     *  changed the subject. */
+    isAnswer?: boolean;
+  }[] = [],
   over: Record<string, unknown> = {},
 ) {
   return v1PlanSession(
@@ -146,6 +155,8 @@ function sessionPayload(
         role: t.role ?? 'user',
         body: t.body,
         jobId: t.jobId ?? null,
+        question: t.question ?? null,
+        isAnswer: t.isAnswer ?? false,
         authorId: 'u1',
         createdAt: '2026-07-29T10:00:00.000Z',
       }),
@@ -257,6 +268,81 @@ describe('motir plan — the interactive conversation', () => {
     expect(ERR()).toContain('[you] add auth to billing');
     expect(ERR()).toContain('[submitted → job job_0]');
     expect(ERR()).toContain('Last submitted 2026-07-29T11:00:00.000Z');
+  });
+
+  // MOTIR-2397 end to end: a thread carrying ALL THREE roles, resumed through
+  // the real server → transport → adapter → renderer path. The regression this
+  // holds is that the planner's own words reached the terminal under the user's
+  // name, which in a conversation is the one thing a reader relies on.
+  it('attributes each of the THREE roles to its own author on a resumed thread', async () => {
+    server.scriptV1(
+      planScript({
+        'POST /api/v1/projects/{projectKey}/plan-session': {
+          body: sessionPayload([
+            { body: 'add auth to billing' },
+            { body: 'Submitted.', role: 'system', jobId: 'job_0' },
+            { body: 'I searched the tree — MOTIR-812 already covers this.', role: 'assistant' },
+          ]),
+        },
+      }),
+    );
+
+    await planCommand([], {}, reader(['/exit']));
+
+    expect(ERR()).toContain('[you] add auth to billing');
+    expect(ERR()).toContain('[submitted → job job_0] Submitted.');
+    expect(ERR()).toContain('[Motir AI] I searched the tree — MOTIR-812 already covers this.');
+    // A report wants nothing: it changes only the transcript.
+    expect(ERR()).not.toContain('Waiting for your answer');
+  });
+
+  it('resumes a thread BLOCKED on a question saying what it waits for', async () => {
+    server.scriptV1(
+      planScript({
+        'POST /api/v1/projects/{projectKey}/plan-session': {
+          body: sessionPayload([
+            { body: 'add billing' },
+            {
+              body: 'Two readings here, and I cannot rank them.',
+              role: 'assistant',
+              question: 'Should billing cover refunds too?',
+            },
+          ]),
+        },
+      }),
+    );
+
+    await planCommand([], {}, reader(['/exit']));
+
+    expect(ERR()).toContain('[Motir AI · asking] Two readings here');
+    expect(ERR()).toContain('[?] Waiting for your answer');
+    expect(ERR()).toContain('Should billing cover refunds too?');
+    expect(ERR()).toContain('Type your answer as the next turn');
+  });
+
+  it('marks how a question was disposed of — answered, and superseded', async () => {
+    server.scriptV1(
+      planScript({
+        'POST /api/v1/projects/{projectKey}/plan-session': {
+          body: sessionPayload([
+            { body: 'Refunds?', role: 'assistant', question: 'Refunds too?' },
+            { body: 'yes, refunds', isAnswer: true },
+            { body: 'And credits?', role: 'assistant', question: 'Credits as well?' },
+            { body: 'actually, drop billing entirely' },
+          ]),
+        },
+      }),
+    );
+
+    await planCommand([], {}, reader(['/exit']));
+
+    expect(ERR()).toContain('[you · answer] yes, refunds');
+    expect(ERR()).toContain('↳ Answered — planning resumed.');
+    expect(ERR()).toContain('↳ Not answered — Motir AI carried on with what you asked.');
+    // The superseded question is MARKED, never dropped — and the thread is no
+    // longer blocked, so nothing claims it is waiting.
+    expect(ERR()).toContain('[Motir AI · asking] And credits?');
+    expect(ERR()).not.toContain('Waiting for your answer');
   });
 
   it('ACCUMULATES turns and sends them as ONE job on /submit', async () => {

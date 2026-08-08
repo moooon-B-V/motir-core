@@ -403,16 +403,30 @@ export interface PlanTurn {
   id: string;
   seq: number;
   /**
-   * ⚠️ THREE roles, not two. `assistant` is a real turn the planner writes (the
-   * Gate-2 clarifying question, MOTIR-2222); the view model claimed two until
-   * MOTIR-2341 read the union off the wire. `renderTurn` still labels anything
-   * that is not `system` as "you", which mislabels an assistant turn — a
-   * pre-existing gap this port made VISIBLE rather than introduced, and one
-   * whose fix is a new label, so it belongs to a card that may change output.
+   * THREE roles, not two. `assistant` is a real turn the PLANNER writes — the
+   * findings report it owes on every turn, and the one Gate-2 clarifying
+   * question (MOTIR-2222) — persisted on the same thread the web panel renders.
+   * The view model claimed two until MOTIR-2341 read the union off the wire, and
+   * `renderTurn` labelled everything that was not `system` as "you" until
+   * MOTIR-2397 gave the planner its own marker.
    */
   role: 'user' | 'system' | 'assistant';
   body: string;
   jobId: string | null;
+  /**
+   * The ONE clarifying question an `assistant` turn asked, or null when it only
+   * reported. Null on every other role. This is what makes the awaiting state
+   * DERIVED from the thread rather than held in the terminal — see
+   * {@link ../plan.js#pendingQuestion}, the CLI's port of the shipped
+   * `lib/planning/planChangeThread.ts`.
+   */
+  question: string | null;
+  /**
+   * A `user` turn that REPLIED to the pending question, as opposed to one that
+   * changed the subject and superseded it. The two render different markers —
+   * design states C and E (`design/ai-chat/design-notes.md`).
+   */
+  isAnswer: boolean;
   authorId: string | null;
   createdAt: string;
 }

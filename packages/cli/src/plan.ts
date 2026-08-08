@@ -140,15 +140,122 @@ export function scopeLabel(targetKeys: string[]): string {
   return targetKeys.length > 0 ? `anchored at ${targetKeys.join(', ')}` : 'project-wide';
 }
 
+/** What the planner is called on screen — the rail's own `Motir AI` label. */
+const PLANNER = 'Motir AI';
+
+/**
+ * How the terminal names the author of one turn.
+ *
+ * THREE authors, not two (MOTIR-2397). The planner writes real turns on this
+ * thread — a findings report on every planning turn, and the one Gate-2
+ * clarifying question (MOTIR-2222) — so labelling everything that is not a
+ * submission marker as `you` put the user's name on the planner's words in the
+ * one CLI surface that is a conversation.
+ *
+ * The two sub-labels are the terminal's carry of `MOTIR-2225`'s design, not a
+ * second design: `asking` is the label slot that design fills on a question
+ * bubble, and `answer` is the label it gives the user turn that replied.
+ */
+export function turnMarker(turn: PlanTurn): string {
+  if (turn.role === 'system') return `submitted → job ${turn.jobId ?? '?'}`;
+  if (turn.role === 'assistant') return turn.question === null ? PLANNER : `${PLANNER} · asking`;
+  return turn.isAnswer ? 'you · answer' : 'you';
+}
+
 /** One turn, ordinal-prefixed, with continuation lines aligned under the body.
  *  Full text — never truncated: this is the user's own intent, and a resumed
  *  thread that shows an excerpt reads as if something was lost. */
 export function renderTurn(turn: PlanTurn, ordinal: number): string {
-  const marker = turn.role === 'system' ? `submitted → job ${turn.jobId ?? '?'}` : 'you';
-  const head = `  ${String(ordinal).padStart(2)}. [${marker}] `;
+  const head = `  ${String(ordinal).padStart(2)}. [${turnMarker(turn)}] `;
   const indent = ' '.repeat(head.length);
   const [first = '', ...rest] = turn.body.split('\n');
   return [head + first, ...rest.map((line) => indent + line)].join('\n');
+}
+
+// ── the thread that is WAITING on you (MOTIR-2397, design states B / C / E) ──
+// Ported from the shipped `lib/planning/planChangeThread.ts`, which the web rail
+// reads, so the two surfaces of ONE thread cannot disagree about whether it is
+// waiting. The CLI is a published package and cannot import the app's `lib/`, so
+// this is a deliberate port rather than a shared module; keep the two in step.
+
+/**
+ * The question the thread is currently waiting on, or null when it is not
+ * waiting.
+ *
+ * AWAITING IS DERIVED, never remembered by the client: the thread is waiting
+ * exactly when THE LAST PLANNER TURN IS A QUESTION WITH NO USER TURN AFTER IT.
+ * Scanning from the END makes both closing conditions fall out of one pass — the
+ * first `user` turn seen means whatever question preceded it is already disposed
+ * of (answered or superseded), and the first `assistant` turn seen is the latest
+ * planner turn, which is a question only if it carries one. A `system` marker is
+ * provenance, not conversation, and neither opens nor closes the state.
+ *
+ * Deriving it is what makes a RESUMED terminal thread come back to the identical
+ * state hours later: the transcript it reads has not changed.
+ */
+export function pendingQuestion(turns: readonly PlanTurn[]): PlanTurn | null {
+  for (let i = turns.length - 1; i >= 0; i -= 1) {
+    const turn = turns[i]!;
+    if (turn.role === 'user') return null;
+    if (turn.role === 'assistant') return turn.question === null ? null : turn;
+  }
+  return null;
+}
+
+/** How a question that is no longer pending was DISPOSED of. */
+export type QuestionDisposition = 'answered' | 'superseded';
+
+/**
+ * The disposition marker owed BENEATH the turn at `index`, or null.
+ *
+ * Owed by the USER turn that closed a question — not by the question itself —
+ * because that is the moment the thread changed direction. `answered` when the
+ * user replied to it; `superseded` when they changed the subject and the planner
+ * carried on with the original request. The distinction is RECORDED at send time
+ * (`isAnswer`), never inferred from the words.
+ */
+export function dispositionMarkerFor(
+  turns: readonly PlanTurn[],
+  index: number,
+): QuestionDisposition | null {
+  const turn = turns[index];
+  if (!turn || turn.role !== 'user') return null;
+  if (!pendingQuestion(turns.slice(0, index))) return null;
+  return turn.isAnswer ? 'answered' : 'superseded';
+}
+
+/** The disposition's own line, in the design's wording. A superseded question is
+ *  MARKED, never dropped: the reader has to be able to see later WHY a plan
+ *  rests on an assumption they never confirmed. */
+function renderDisposition(disposition: QuestionDisposition): string {
+  return disposition === 'answered'
+    ? '      ↳ Answered — planning resumed.'
+    : `      ↳ Not answered — ${PLANNER} carried on with what you asked.`;
+}
+
+/**
+ * The block that says the thread is BLOCKED ON YOU, or null when it is not.
+ *
+ * The terminal's form of the design's answer bar. That bar carries the state on
+ * three cues, none of them colour, and all three survive the translation: a WORD
+ * (*Waiting for your answer*), a GLYPH (`[?]`, standing in for the question
+ * icon), and a POSITION — the bar sits against the input, and this block is the
+ * last thing printed before the prompt is offered.
+ *
+ * The third line is the terminal's carry of the two affordances the web changes
+ * and a CLI has no equivalent of (the composer's *Answer Motir AI…* placeholder
+ * and the Send button relabelled *Answer*): the loop is unchanged, so an answer
+ * is an ordinary turn, and saying so is what stops a question from reading as
+ * narration nobody replies to.
+ */
+export function renderAwaiting(turns: readonly PlanTurn[]): string | null {
+  const asking = pendingQuestion(turns);
+  if (!asking) return null;
+  return [
+    '  [?] Waiting for your answer',
+    ...(asking.question ?? '').split('\n').map((line) => `      ${line}`),
+    '      Type your answer as the next turn; nothing is sent until /submit.',
+  ].join('\n');
 }
 
 /**
@@ -171,8 +278,21 @@ export function renderThread(session: PlanSession): string {
       : 'Never submitted — nothing has been sent to the planner yet.',
   ];
   if (session.turns.length > 0) {
-    lines.push('', ...session.turns.map((turn, i) => renderTurn(turn, i + 1)));
+    lines.push('');
+    session.turns.forEach((turn, i) => {
+      lines.push(renderTurn(turn, i + 1));
+      // The question's disposition rides under the turn that CLOSED it, which is
+      // where the design draws it and where the transcript actually changed
+      // direction.
+      const disposition = dispositionMarkerFor(session.turns, i);
+      if (disposition) lines.push(renderDisposition(disposition));
+    });
   }
+  // LAST, so it sits against the prompt: the terminal's form of a bar pinned to
+  // the composer. A resumed thread that is blocked on the user must say so, or
+  // the question reads as narration and the plan silently never comes.
+  const awaiting = renderAwaiting(session.turns);
+  if (awaiting) lines.push('', awaiting);
   return lines.join('\n');
 }
 
