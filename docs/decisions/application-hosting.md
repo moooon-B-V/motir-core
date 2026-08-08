@@ -160,7 +160,7 @@ decided:
 
 | Bucket      | Contents                                                          | Access                                |
 | ----------- | ----------------------------------------------------------------- | ------------------------------------- |
-| **public**  | avatars (`User.image`) and other public assets                    | public-read; a directly fetchable URL |
+| **public**  | avatars (the object `User.image` keys) and other public assets    | public-read; a directly fetchable URL |
 | **private** | comment/description embeds, panel files, acceptance video + trace | no public read; presigned GET only    |
 
 **The signing flow becomes S3 presigned URLs.** `@vercel/blob`'s
@@ -891,3 +891,58 @@ command, and it is the difference between a fact and an impression.
   expiry and the signing-time content type all stand.
 - **The eight names themselves.** They live on MOTIR-2389 / MOTIR-2402; this
   record points at them rather than copying them.
+
+---
+
+## Amendment 4 (2026-08-08) — the public bucket's contents are the objects `User.image` KEYS, not a URL it stores
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2444.** This amendment
+> disambiguates ONE table cell. **It re-opens no decision and changes no fact** —
+> Q2 still chooses S3-on-Tigris, the two-bucket split stands, the public bucket is
+> still public-read, the 300 s presigned GET and the signing-time content type are
+> untouched. Avatars are **not** becoming private.
+>
+> **Numbered 4.** Amendment 3 was the highest heading in this file, re-read at
+> edit time rather than taken from the card, and no unmerged branch carries a
+> higher one. The primary correction — the false sentence this cell merely sat
+> near — is `attachment-access-control.md`'s Amendment 4, landed by this same
+> card, and carries the full reasoning.
+
+**Amends:** the **public** row of §3's bucket table. Nothing else in this record
+changes, and no clause is withdrawn.
+
+### What was ambiguous
+
+The row read:
+
+> | **public** | avatars (`User.image`) and other public assets | public-read; a directly fetchable URL |
+
+Each half is true of what it describes — the parenthetical names which assets go
+in the bucket, the access clause describes what the bucket grants — but they sit
+on one row, and after **MOTIR-2404** (motir-core#1937) the juxtaposition reads as
+a claim the column does not support. `User.image` now persists the object **key**;
+the public URL is composed at the read boundary by `storedAssetUrl`
+(`lib/blob/referencedUrls.ts`). The bucket is still directly fetchable. The column
+no longer stores what you fetch.
+
+The row now reads "avatars (the object `User.image` keys)". The access clause is
+unchanged, because it was never wrong.
+
+### Why the cell was worth touching at all
+
+An ambiguity a reader resolves correctly nine times out of ten is not free in a
+record like this one. `User.image` was the last place a **hosting origin** was
+persisted as data, and removing it is what lets this Story move hosts without a
+data migration. A table that can be read as "the column holds the URL" is an
+invitation to put one back, and the invitation is hardest to refuse in exactly the
+situation that produces it — a future migration, written by someone reading this
+record precisely because they were not there.
+
+### What this amendment does NOT touch
+
+- **Any decision.** Q1's choice of Fly, Q2's S3-on-Tigris and the two-bucket
+  split, and every other Q stand.
+- **The access model.** The public bucket is public-read; the private bucket is
+  presigned-GET only.
+- **Any code or anything on the platform.** MOTIR-2404 shipped the change this
+  cell now reflects; no bucket, object or ACL is touched here.
