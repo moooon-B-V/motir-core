@@ -292,6 +292,15 @@ export function isRepoStraddleAdvisory(a: DispatchAdvisory): a is DispatchRepoSt
 export interface DispatchPrompt {
   key: string;
   prompt: string;
+  /**
+   * The item's PARENT key, or `null` for a top-level item (MOTIR-2445).
+   *
+   * The prompt already names it in its CONTEXT prose; this is that fact as a
+   * field, so `motir auto` can title its pull request after the shared parent of
+   * the cards it carried (MOTIR-2422) without parsing text or paying a request
+   * per card.
+   */
+  parentKey: string | null;
   targetRepo: string | null;
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;

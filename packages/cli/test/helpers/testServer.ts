@@ -382,6 +382,9 @@ export function v1DispatchPrompt(key: string, over: Record<string, unknown> = {}
   return {
     key,
     prompt: `Prompt for ${key}`,
+    // MOTIR-2445 — the parent, promoted out of the prompt's prose. The client
+    // VALIDATES this body, so an omission fails the run rather than the render.
+    parentKey: null,
     targetRepo: null,
     targetRepoCloneUrl: null,
     targetRepoDefaultBranch: null,

@@ -120,6 +120,14 @@ export const dispatchPromptSchema = z.object({
   key: workItemKeySchema,
   /** The full multi-section prompt text, ready to hand to a coding agent. */
   prompt: z.string(),
+  /**
+   * The item's PARENT key, or `null` for a top-level item (MOTIR-2445).
+   *
+   * The prompt already NAMES it, in the CONTEXT section's `- Parent:` line; this
+   * is that fact as a field, so a client does not have to parse prose the server
+   * may reword. Additive under §8.
+   */
+  parentKey: workItemKeySchema.nullable(),
   /** The RESOLVED bare repo name, or `null` when Motir cannot say. */
   targetRepo: z.string().nullable(),
   /** Its HTTPS clone URL, or `null` when Motir does not know one. */
@@ -144,6 +152,7 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
   return {
     key: dto.key,
     prompt: dto.prompt,
+    parentKey: dto.parentKey,
     targetRepo: dto.targetRepo,
     targetRepoCloneUrl: dto.targetRepoCloneUrl,
     targetRepoDefaultBranch: dto.targetRepoDefaultBranch,

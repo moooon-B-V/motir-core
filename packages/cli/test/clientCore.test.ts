@@ -407,6 +407,8 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(Object.keys(bare).sort()).toEqual([
       'advisories',
       'key',
+      // MOTIR-2445 — the parent, so a run can title its PR after the shared story.
+      'parentKey',
       'prompt',
       'sessionBranch',
       'targetRepo',

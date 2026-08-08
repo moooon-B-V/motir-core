@@ -202,6 +202,9 @@ function dispatchPrompt(key, query) {
   const branch = query.get('sessionBranch');
   return {
     key,
+    // MOTIR-2445 — the parent as a field. The v1 client validates every body,
+    // so this is required even though the smoke loop never reads it.
+    parentKey: null,
     prompt: [
       `You are executing ${key}.`,
       '',

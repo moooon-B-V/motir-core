@@ -254,6 +254,60 @@ describe('dispatchPromptService.getDispatchPrompt — over real state', () => {
   });
 });
 
+describe('dispatchPromptService — `parentKey` (MOTIR-2445)', () => {
+  // The field exists so `motir auto` can title its pull request after the shared
+  // parent of the cards it carried (MOTIR-2422) WITHOUT a request per card and
+  // WITHOUT parsing the prompt's prose. Both halves are asserted: the value, and
+  // that it agrees with the line the prompt already renders.
+  it('is the parent key, and AGREES with the prompt line it was promoted from', async () => {
+    const fx = await makeWorkItemFixture();
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The owning story' },
+      fx.ctx,
+    );
+    const item = await workItemsService.createWorkItem(
+      {
+        projectId: fx.projectId,
+        kind: 'subtask',
+        title: 'A parented card',
+        parentId: parent.id,
+        type: 'code',
+        executor: 'coding_agent',
+      },
+      fx.ctx,
+    );
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      item.identifier,
+      fx.ctx,
+    );
+
+    expect(dto.parentKey).toBe(parent.identifier);
+    // ⚠️ THE ASSERTION THAT MAKES THE FIELD WORTH HAVING. A regex over this line
+    // was the alternative; the field beats it only while the two agree, and this
+    // is what fails if a later change moves one without the other.
+    expect(dto.prompt).toContain(`- Parent: ${parent.identifier} — The owning story`);
+  });
+
+  it('is null for a top-level item, matching the prompt saying so', async () => {
+    const fx = await makeWorkItemFixture();
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'No parent', type: 'code' },
+      fx.ctx,
+    );
+
+    const dto = await dispatchPromptService.getDispatchPrompt(
+      fx.projectId,
+      item.identifier,
+      fx.ctx,
+    );
+
+    expect(dto.parentKey).toBeNull();
+    expect(dto.prompt).toContain('- Parent: none (top-level item)');
+  });
+});
+
 describe('dispatchPromptService — the GIT WORKFLOW variant is chosen SERVER-SIDE', () => {
   it('an item with an INHERITED session branch gets the session-lineage variant', async () => {
     const fx = await makeWorkItemFixture();
@@ -515,6 +569,8 @@ describe('dispatch_prompt tool — access + shape', () => {
     expect(Object.keys(dto).sort()).toEqual([
       'advisories',
       'key',
+      // MOTIR-2445 — the parent the prompt already names, as a field.
+      'parentKey',
       'prompt',
       'sessionBranch',
       'targetRepo',

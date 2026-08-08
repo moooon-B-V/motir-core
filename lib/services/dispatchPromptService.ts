@@ -131,6 +131,9 @@ export const dispatchPromptService = {
     return {
       key: item.identifier,
       prompt: assembled.prompt,
+      // The same row the prompt's `- Parent:` line is rendered from — read once,
+      // used twice (MOTIR-2445). Promoting it costs no query.
+      parentKey: parentRow?.identifier ?? null,
       targetRepo,
       // The same coordinates the ready dispatch payload carries (MOTIR-1783) —
       // present with a null value whenever Motir cannot say, so a CLI reading

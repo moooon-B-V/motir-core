@@ -466,6 +466,7 @@ export function toDispatchPrompt(body: PromptBody): DispatchPrompt {
   return {
     key: body.key,
     prompt: body.prompt,
+    parentKey: body.parentKey,
     targetRepo: body.targetRepo,
     workflowMode: body.workflowMode,
     sessionBranch: body.sessionBranch,

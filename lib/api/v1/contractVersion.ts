@@ -52,5 +52,10 @@
  *   that readiness is measured against — from the trunk, or on top of unmerged
  *   work. Additive: one new field, and the `blockedBy` it sits beside is
  *   unchanged.
+ * - `1.7.0` — MOTIR-2445 adds `parentKey` to the DISPATCH PROMPT. The prompt
+ *   already named the parent in its CONTEXT prose; the field lets a client read
+ *   it without parsing text the server may reword — and costs no query, since
+ *   the parent row is already read to render that line. Additive: one new
+ *   field, the prompt text byte-identical.
  */
-export const V1_CONTRACT_VERSION = '1.6.0';
+export const V1_CONTRACT_VERSION = '1.7.0';

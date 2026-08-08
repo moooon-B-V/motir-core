@@ -40,6 +40,7 @@ function dispatchPrompt(over: Partial<DispatchPrompt> = {}): DispatchPrompt {
   return {
     key: 'PROD-7',
     prompt: PROMPT_TEXT,
+    parentKey: 'PROD-2',
     targetRepo: 'motir-core',
     workflowMode: 'per_item_pr',
     sessionBranch: null,

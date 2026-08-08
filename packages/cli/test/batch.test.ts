@@ -158,6 +158,7 @@ class FakeServer {
           return {
             key,
             prompt: `PROMPT ${key}`,
+            parentKey: 'PROD-1',
             targetRepo: item.targetRepo,
             workflowMode: 'session_lineage',
             sessionBranch: null,
@@ -168,6 +169,7 @@ class FakeServer {
         return {
           key,
           prompt: `PROMPT ${key}`,
+          parentKey: 'PROD-1',
           targetRepo: item.targetRepo,
           workflowMode: branch ? 'session_lineage' : 'per_item_pr',
           sessionBranch: branch,
