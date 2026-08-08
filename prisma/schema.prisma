@@ -597,6 +597,10 @@ model Workspace {
   boardColumnStatuses         BoardColumnStatus[]
   sprints                     Sprint[]
   projectMemberships          ProjectMembership[]
+  // Back-relation for ProjectRoleDefinition (Story MOTIR-2257 · MOTIR-2467). A
+  // workspace holds the custom roles of all its projects; Cascade with the
+  // workspace, matching projectMemberships.
+  projectRoleDefinitions      ProjectRoleDefinition[]
   // Retired project keys (Story 6.8) — workspace-scoped reservation rows.
   // Cascade with the workspace (a deleted workspace frees its keys).
   projectKeyAliases           ProjectKeyAlias[]
@@ -689,12 +693,12 @@ model Workspace {
 /// archive/delete clears a member's `activeProjectId` (onDelete: SetNull)
 /// rather than cascading the membership away.
 model Project {
-  id                      String                @id @default(cuid())
-  workspaceId             String
-  name                    String
-  slug                    String
-  identifier              String
-  lastWorkItemNumber      Int                   @default(0)
+  id                               String                @id @default(cuid())
+  workspaceId                      String
+  name                             String
+  slug                             String
+  identifier                       String
+  lastWorkItemNumber               Int                   @default(0)
   /// Per-project status-transition enforcement mode (Story 2.2). `restricted`
   /// (default) consults the `workflow_transition` rows — only an explicit
   /// edge is a legal move. `open` ignores them: any status → any status is
@@ -703,7 +707,7 @@ model Project {
   /// flipping to `open` does NOT delete the curated transition rows, so a
   /// flip back to `restricted` restores the graph. Jira and Linear both ship
   /// this same "guarded vs anything-goes" project-level toggle.
-  workflowPolicyMode      WorkflowPolicyMode    @default(restricted)
+  workflowPolicyMode               WorkflowPolicyMode    @default(restricted)
   /// UPWARD status rollup switch (MOTIR-1615 · MOTIR-1618;
   /// `docs/decisions/status-derivation.md` §2). When true, a child's status
   /// transition rolls its PARENT up the derivation ladder — any child in progress
@@ -714,7 +718,7 @@ model Project {
   /// no data step, only the column default. The rollup only ever advances the
   /// parent along the project's REAL workflow edges, so a team whose workflow
   /// cannot take the move simply gets no derivation.
-  autoRollupParentStatus  Boolean               @default(true) @map("auto_rollup_parent_status")
+  autoRollupParentStatus           Boolean               @default(true) @map("auto_rollup_parent_status")
   /// DOWNWARD status cascade switch (MOTIR-1615 · MOTIR-1618; same ADR). When
   /// true, an item transitioning INTO a done-category status completes every
   /// not-done direct child (grandchildren follow by event re-emission). A SECOND,
@@ -723,7 +727,7 @@ model Project {
   /// which a team may legitimately not want), and one switch could not express
   /// upward-only, the commonest preference. Default `true` for the same reason as
   /// its sibling.
-  autoCompleteChildrenOnParentDone Boolean      @default(true) @map("auto_complete_children_on_parent_done")
+  autoCompleteChildrenOnParentDone Boolean               @default(true) @map("auto_complete_children_on_parent_done")
   /// Browse-access level (Story 6.4), mirroring Jira team-managed projects:
   /// `open` = any workspace member views + edits; `limited` = any member views
   /// + comments (no edit); `private` = only explicit project members (+ the
@@ -731,7 +735,7 @@ model Project {
   /// existing projects backfill to it on migration — a `private` default would
   /// lock every current member out. The browse/edit policy that reads this is
   /// computed at the service layer in Subtask 6.4.3.
-  accessLevel             ProjectAccessLevel    @default(open)
+  accessLevel                      ProjectAccessLevel    @default(open)
   /// Public Overview / README (Story 6.12 · Subtask 6.12.3) — the authored
   /// Markdown body shown on the DEFAULT public Overview tab (6.12.4), edited by
   /// the project admin via the shipped `MarkdownEditor` in settings (6.12.8).
@@ -739,7 +743,7 @@ model Project {
   /// is `public`. Nullable — an empty field falls back to a slim auto-intro
   /// (never a blank page), so every existing project backfills to NULL with no
   /// migration data step.
-  publicOverviewMd        String?               @map("public_overview_md")
+  publicOverviewMd                 String?               @map("public_overview_md")
   /// The moment the project most recently BECAME `public` (Story 6.13 · Subtask
   /// 6.13.4) — the "newest" axis the project square's Recent/New rank orders by
   /// (GitLab Explore → Newest). Stamped by `setAccessLevel` whenever the access
@@ -750,20 +754,20 @@ model Project {
   /// non-public project, backfill to NULL with no migration data step; the
   /// Recent rank COALESCEs NULL to `createdAt` so such rows still order
   /// deterministically (their creation moment as the fallback "made public").
-  madePublicAt            DateTime?             @map("made_public_at")
+  madePublicAt                     DateTime?             @map("made_public_at")
   /// Public hero subtitle (Story 6.16 · Subtask 6.16.2) — the short tagline
   /// shown under the project name on the public hero, edited in-place by the
   /// project admin. A public-SAFE field: it rides the public projection only
   /// when the project is `public`. Nullable — unset falls back to a generic
   /// i18n tagline (never a blank subtitle), so every existing project backfills
   /// to NULL with no migration data step.
-  publicTagline           String?               @map("public_tagline")
+  publicTagline                    String?               @map("public_tagline")
   /// Public hero meta pills (Story 6.16 · Subtask 6.16.2) — the short tags
   /// shown as pills on the public hero, edited in-place by the project admin. A
   /// public-SAFE field: it rides the public projection only when the project is
   /// `public`. Defaults to an empty array — an unset field shows no pills, so
   /// every existing project backfills to `[]` with no migration data step.
-  publicTags              String[]              @default([]) @map("public_tags")
+  publicTags                       String[]              @default([]) @map("public_tags")
   /// Immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264). Stamped ONCE —
   /// with the approval timestamp — when the project's FIRST `Plan` is approved +
   /// materialized (`plansService.approvePlan`), then NEVER cleared or re-written:
@@ -776,7 +780,7 @@ model Project {
   /// source of truth (no second derived signal): the `/onboarding` redirect and
   /// the roadmap planning-origin cluster (MOTIR-1013), which assert a planning
   /// journey only a truly-onboarded project has.
-  onboardingRanAt         DateTime?             @map("onboarding_ran_at")
+  onboardingRanAt                  DateTime?             @map("onboarding_ran_at")
   /// Estimation config (Story 4.3) — the planning estimate is a property of the
   /// PROJECT's planning, not of a particular board read view. Jira configures
   /// estimation in BOARD settings, but here a board is a per-project read
@@ -788,17 +792,17 @@ model Project {
   /// default · Time estimate · Issue count — exactly Jira board Estimation
   /// settings). Defaults to `story_points` so every existing project backfills
   /// to the agile default (no lock-out).
-  estimationStatistic     EstimationStatistic   @default(story_points)
+  estimationStatistic              EstimationStatistic   @default(story_points)
   /// The suggested-value DECK the estimate picker offers (it does not
   /// hard-constrain entry — story points stay a free numeric value): `fibonacci`
   /// (the planning-poker default — 1,2,3,5,8,13,21,…), `linear` (1,2,3,4,5,…),
   /// or `custom` (the project-defined list in `customScaleValues`).
-  pointScale              PointScale            @default(fibonacci)
+  pointScale                       PointScale            @default(fibonacci)
   /// The project-defined deck values, used ONLY when `pointScale = custom`.
   /// These are UI SUGGESTIONS for the picker — summation uses the `Decimal`
   /// `work_item.storyPoints`, so a `Float[]` for the suggestion list is fine
   /// (avoids a Decimal-array column). Backfills to `[]` on migration.
-  customScaleValues       Float[]               @default([])
+  customScaleValues                Float[]               @default([])
   /// AI-drafted explanations opt-in (Story 7.4 · MOTIR-850). When true, the
   /// `generate_tree` planner drafts a "why this matters" `explanationMd`
   /// (`explanationSource = ai_draft`) for every proposed item; the flag rides
@@ -807,7 +811,7 @@ model Project {
   /// Default `false` — proposals carry no explanation until a project opts in
   /// (the toggle is SURFACED by the 7.13 AI-settings panel, MOTIR-919), so every
   /// existing project backfills to OFF with no data step.
-  aiGenerateExplanations  Boolean               @default(false) @map("ai_generate_explanations")
+  aiGenerateExplanations           Boolean               @default(false) @map("ai_generate_explanations")
   /// AUTO-PLAN cadence switch (Story 7.13 · MOTIR-915). When true, the cadence
   /// engine (MOTIR-916) watches the project's ready set and fires a 7.4
   /// expand-the-plan run once it drains below `aiAutoPlanThreshold`. Default
@@ -815,7 +819,7 @@ model Project {
   /// project backfills to OFF with no migration data step. An open-core
   /// `Project` COLUMN (not an AI-only table): the open PM core reads it to
   /// decide whether to schedule the run at all.
-  aiAutoPlanEnabled       Boolean               @default(false) @map("ai_auto_plan_enabled")
+  aiAutoPlanEnabled                Boolean               @default(false) @map("ai_auto_plan_enabled")
   /// The ready-set low-water mark the auto-expand fires at (Story 7.13 ·
   /// MOTIR-915) — "fewer than N ready items left ⇒ expand". Default `5`,
   /// mirroring Principle #17's "enough work, not all the work" (a
@@ -826,13 +830,13 @@ model Project {
   /// `projectAiSettingsService` with a typed 422 (never silently clamped at the
   /// DB); the column carries no CHECK constraint, matching how every other
   /// project-settings column here is validated in the service.
-  aiAutoPlanThreshold     Int                   @default(5) @map("ai_auto_plan_threshold")
+  aiAutoPlanThreshold              Int                   @default(5) @map("ai_auto_plan_threshold")
   /// AI SPRINT-PLANNING switch (Story 7.13 · MOTIR-915). When true, the
   /// `plan_sprint` packing job (MOTIR-917) may pack the ready set into short
   /// dependency-aware sprints, persisted through the Epic-4 sprint services
   /// (MOTIR-918). Default `false` — OFF until opted in, so an existing project's
   /// sprint board is never rearranged by a feature nobody enabled.
-  aiSprintPlanningEnabled Boolean               @default(false) @map("ai_sprint_planning_enabled")
+  aiSprintPlanningEnabled          Boolean               @default(false) @map("ai_sprint_planning_enabled")
   /// The length, in days, of a sprint the AI packs (Story 7.13 · MOTIR-915).
   /// Default `2` — the deliberate, RECORDED deviation from the mirror's 1–4
   /// WEEK sprint: Motir's executor is a coding agent that lands a subtask in
@@ -841,7 +845,7 @@ model Project {
   /// {@link AI_SPRINT_LENGTH_DAYS_MIN}..{@link AI_SPRINT_LENGTH_DAYS_MAX} (1–14)
   /// app-side, so a human-paced team can still stretch it to a fortnight
   /// without the column becoming a free-form integer.
-  aiSprintLengthDays      Int                   @default(2) @map("ai_sprint_length_days")
+  aiSprintLengthDays               Int                   @default(2) @map("ai_sprint_length_days")
   /// PER-PROJECT planner-model override (Story 7.13 · MOTIR-915). NULL — the
   /// default — means "use the platform default planner model", which is
   /// motir-ai's `plannerModel()` (`PLANNER_MODEL` env → `PLANNER_MODELS.default`,
@@ -853,7 +857,7 @@ model Project {
   /// model-id-charset token) and normalizes `''` → NULL, so clearing the field
   /// in the settings panel means "back to the default" rather than "the empty
   /// model".
-  aiPlannerModel          String?               @map("ai_planner_model")
+  aiPlannerModel                   String?               @map("ai_planner_model")
   /// WHO OWNS the project's repository set (`docs/decisions/project-repository-set.md`
   /// §3, MOTIR-1780) — `user` (created in the user's own account/org, theirs from
   /// the first commit) or `motir` (created under Motir's org, recorded as
@@ -863,13 +867,13 @@ model Project {
   /// rather than silently retargeting — which is only expressible if the target is
   /// one value for the whole set. NULL until the establish step decides, so every
   /// existing project backfills to NULL with no data step.
-  repoSetOwnership        ProjectRepoOwnership? @map("repo_set_ownership")
+  repoSetOwnership                 ProjectRepoOwnership? @map("repo_set_ownership")
   /// The ACCOUNT LOGIN the set's repositories live under (§3.2) — the user's
   /// personal account by default, or an org they administer, or Motir's org when
   /// `repoSetOwnership = motir`. One choice for the SET (see above), which is what
   /// lets 9.3.7 find every claimable repo of a project with ONE project-scoped read
   /// instead of a GitHub account scan. NULL until the establish step decides.
-  repoSetTargetAccount    String?               @map("repo_set_target_account")
+  repoSetTargetAccount             String?               @map("repo_set_target_account")
   /// The project's OWN GitHub Actions runner group (Story MOTIR-1916 ·
   /// MOTIR-1972) — `docs/decisions/ci-runner-fleet.md` §7.3: one group per Motir
   /// PROJECT, access-listed to exactly that project's repositories, created
@@ -887,16 +891,16 @@ model Project {
   /// NULL for every project that predates the fleet and for every self-hosted
   /// deployment (which never provisions a repository at all) — a first-class
   /// state, backfilled with no data step.
-  runnerGroupId           Int?                  @map("runner_group_id")
+  runnerGroupId                    Int?                  @map("runner_group_id")
   /// The group's deterministic name (`motir-project-<projectId>`), stored so an
   /// ORPHANED group in Motir's org is attributable to the project that made it
   /// without a reverse lookup, and so a group deleted out of band can be
   /// re-adopted by name before a second one is created.
-  runnerGroupName         String?               @map("runner_group_name")
+  runnerGroupName                  String?               @map("runner_group_name")
   /// When the group's access list was last written to GitHub SUCCESSFULLY. Read
   /// together with `runnerGroupSyncPending`: this answers "when was it last
   /// right?", that one answers "is it right NOW?".
-  runnerGroupSyncedAt     DateTime?             @map("runner_group_synced_at")
+  runnerGroupSyncedAt              DateTime?             @map("runner_group_synced_at")
   /// TRUE when a sync is OWED — the GitHub half of the last attempt failed, so
   /// the access list on GitHub is behind this project's repository set. The
   /// repository is established regardless (the group call is a side effect that
@@ -905,7 +909,7 @@ model Project {
   /// `runnerGroupSyncedAt` cannot express this on its own — after the FIRST
   /// successful sync the stamp is non-null forever — which is why the flag is its
   /// own column rather than a derived read.
-  runnerGroupSyncPending  Boolean               @default(false) @map("runner_group_sync_pending")
+  runnerGroupSyncPending           Boolean               @default(false) @map("runner_group_sync_pending")
   /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
   /// validated at the service layer against the avatar registry
   /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
@@ -913,11 +917,11 @@ model Project {
   /// letters), so every existing row backfills with no migration data step.
   /// NOT an image upload — Jira's own default avatars are a preset library; the
   /// 2.3.7 upload primitive is attachment-scoped (the recorded deviation).
-  avatarIcon              String?
-  avatarColor             String?
-  createdAt               DateTime              @default(now())
-  updatedAt               DateTime              @updatedAt
-  archivedAt              DateTime?
+  avatarIcon                       String?
+  avatarColor                      String?
+  createdAt                        DateTime              @default(now())
+  updatedAt                        DateTime              @updatedAt
+  archivedAt                       DateTime?
 
   workspace                   Workspace                    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   // Back-relation for WorkspaceMembership.activeProject. Named explicitly
@@ -944,6 +948,12 @@ model Project {
   // Explicit project membership (Story 6.4). Cascades: deleting a project
   // removes its membership rows.
   memberships                 ProjectMembership[]
+  // The project's OWN roles (Story MOTIR-2257 · MOTIR-2467). Cascades with the
+  // project — a project's roles are its own and go with it. Deleting a role
+  // that a membership points at is REFUSED (the Restrict FK on
+  // ProjectMembership.roleDefinitionId), but a project delete removes both
+  // sides, so the cascade never trips it.
+  roleDefinitions             ProjectRoleDefinition[]
   // Label folksonomy + component taxonomy (Subtask 5.4.1). Both cascade with
   // the project (project-scoped rows; projects are soft-archived in practice,
   // so this is the rare hard-delete path).
@@ -1069,23 +1079,92 @@ model WorkspaceMembership {
 /// All three FKs cascade — deleting the user, project, or workspace removes the
 /// row (a membership is meaningless without all three).
 model ProjectMembership {
-  id          String     @id @default(cuid())
-  workspaceId String     @map("workspace_id")
-  projectId   String     @map("project_id")
-  userId      String     @map("user_id")
-  role        MemberRole @default(member)
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  id               String     @id @default(cuid())
+  workspaceId      String     @map("workspace_id")
+  projectId        String     @map("project_id")
+  userId           String     @map("user_id")
+  role             MemberRole @default(member)
+  /// The CUSTOM role this membership holds, or NULL (Story MOTIR-2257 ·
+  /// MOTIR-2467). NULL keeps meaning exactly what it meant before this column
+  /// existed — "this membership names a BUILT-IN role through `role`" — so every
+  /// pre-existing row backfills to NULL and nobody's access changes on deploy.
+  ///
+  /// ⚠️ `onDelete: Restrict`, and that is the load-bearing choice. `Cascade`
+  /// would delete the MEMBERSHIP when a role is deleted (the holder loses the
+  /// project); `SetNull` would silently drop every holder back to whatever their
+  /// `role` column says (a silent promotion or a silent strip). Both look like
+  /// success from the admin's side. `Restrict` makes the DATABASE refuse, so the
+  /// only route to deleting a role is the service's reassign-then-delete path.
+  ///
+  /// ⚠️ This column and `role` MOVE TOGETHER, and
+  /// `projectMembershipRepository.setRoleDefinition` / `.reassignRoleDefinition`
+  /// are the only writers. A membership on a custom role carries
+  /// `role = definition.basedOn`, which is what keeps the access-LEVEL
+  /// subtraction in `lib/permissions/resolve.ts` (`levelGrants`) applying to a
+  /// custom role at exactly the tier its base sits at — no new branch there.
+  roleDefinitionId String?    @map("role_definition_id")
+  createdAt        DateTime   @default(now()) @map("created_at")
+  updatedAt        DateTime   @updatedAt @map("updated_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace      Workspace              @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project        Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleDefinition ProjectRoleDefinition? @relation(fields: [roleDefinitionId], references: [id], onDelete: Restrict)
 
   @@unique([userId, projectId])
   @@index([workspaceId])
   @@index([projectId])
   @@index([userId])
+  @@index([roleDefinitionId])
   @@map("project_membership")
+}
+
+/// A project's OWN role — a custom role an admin authored (Story MOTIR-2257 ·
+/// Subtask MOTIR-2467). The three BUILT-IN roles are NOT rows: they live in
+/// `lib/permissions/builtinRoles.ts` and are immutable, which is what makes
+/// "reset to the default" always available and what the mirror product does. A
+/// custom role is a NAME + a chosen SET over the code-owned catalog
+/// (`lib/permissions/catalog.ts`), scoped to ONE project.
+///
+/// `permissions` is a `String[]` rather than a join table on purpose: the
+/// catalog is code-owned and bounded (`ROLE_GATED_PERMISSIONS`), a role's set is
+/// read whole every time it is read at all, and no query asks "which roles hold
+/// X" — a join table would add a row set with no reader. The values are catalog
+/// keys; the SERVICE (MOTIR-2472) validates them, and the RESOLUTION (MOTIR-2470)
+/// intersects them with the catalog so a key retired after the role was authored
+/// is ignored rather than granted.
+///
+/// `basedOn` is PROVENANCE, not inheritance: a snapshot of which built-in the
+/// author started from, recorded once at creation. Later edits to that built-in
+/// never re-flow into the role, and a role can never point at another role — so
+/// no self-relation, and the `Based on Viewer · +2` chip is a comparison rather
+/// than a chain. (`MemberRole` also carries `owner`, which is workspace-only and
+/// not project-assignable; the service refuses it — see
+/// `PROJECT_ASSIGNABLE_ROLES` in `lib/projects/roles.ts`.)
+///
+/// It carries its OWN `workspace_id` column with the same
+/// `FOR ALL USING (workspace_id = current_setting('app.workspace_id', true))`
+/// policy every workspace-bearing table takes — not an RLS join through
+/// `project`. A role is a description of who may do what, so leaking one across
+/// tenants would leak the shape of somebody's organisation.
+model ProjectRoleDefinition {
+  id          String     @id @default(cuid())
+  workspaceId String     @map("workspace_id")
+  projectId   String     @map("project_id")
+  name        String
+  basedOn     MemberRole @map("based_on")
+  permissions String[]
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  memberships ProjectMembership[]
+
+  @@unique([projectId, name])
+  @@index([workspaceId])
+  @@index([projectId])
+  @@map("project_role_definition")
 }
 
 /// Where a user dragged each node on a project's planning canvas (Subtask 7.3.77
