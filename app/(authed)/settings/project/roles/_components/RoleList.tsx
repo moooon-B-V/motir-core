@@ -18,6 +18,16 @@ import { PermissionMark } from './PermissionMark';
 // a ROW you drill into and the comparison the matrix gave is carried by the
 // `N of M` on every row.
 //
+// ⚠️ THE INK IS ONE STEP DARKER THAN THE MOCK DRAWS IT, DELIBERATELY. The mock
+// puts the `Built-in` chip and the member count in `--el-text-faint` on
+// `--el-surface`; measured by axe on the real route that is 2.39:1, well under
+// AA's 4.5:1, and `--el-text-muted` on the same surface is 4.16:1 — also under.
+// Both are INFORMATION, not decoration, so they take `--el-text-secondary` and
+// the containers take `--el-card` (which is what the shipped `Card` primitive the
+// design's own table names actually paints). `motir-core/CLAUDE.md` says AA
+// contrast holds, and the design notes restate it; where a mock's token choice
+// and that rule disagree, the rule wins. Logged so the asset can follow.
+//
 // ⚠️ EVERY NUMBER COMES FROM THE READ. `N` is the role's own set length, `M` is
 // `roleGatedPermissionCount`, and the headcount is `memberCount` — all three off
 // `getRoleCatalog` (MOTIR-2439). Nothing here imports the catalog or counts a
@@ -41,7 +51,7 @@ export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
         <span>{t('builtInNote')}</span>
       </div>
 
-      <ul className="border-(--el-border) bg-(--el-surface) list-none overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
+      <ul className="border-(--el-border) bg-(--el-card) list-none overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
         {catalog.roles.map((role) => (
           <li key={role.role} className="border-(--el-border-soft) border-b last:border-b-0">
             <RoleRow role={role} total={catalog.roleGatedPermissionCount} />
@@ -82,7 +92,7 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
             {tRoles(role.labelKey)}
           </span>
           {role.builtIn ? (
-            <span className="text-(--el-text-faint) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
+            <span className="text-(--el-text-secondary) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
               <Lock aria-hidden="true" className="h-3 w-3" />
               {t('builtIn')}
             </span>
@@ -97,7 +107,7 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
         <span className="text-(--el-text-secondary) font-mono text-xs">
           {t('permissionCount', { held: role.permissions.length, total })}
         </span>
-        <span className="text-(--el-text-faint) font-sans text-[11.5px]">
+        <span className="text-(--el-text-secondary) font-sans text-[11.5px]">
           {t('memberCount', { count: role.memberCount })}
         </span>
       </span>

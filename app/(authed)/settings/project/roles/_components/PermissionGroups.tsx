@@ -34,7 +34,7 @@ export function PermissionGroups({
     <>
       {domains.map((group) => (
         <div key={group.domain}>
-          <div className="border-(--el-border-soft) bg-(--el-muted) text-(--el-text-faint) border-b px-(--spacing-card-padding) py-(--spacing-control-y) font-sans text-[11px] font-semibold tracking-[0.06em] uppercase">
+          <div className="border-(--el-border-soft) bg-(--el-muted) text-(--el-text-secondary) border-b px-(--spacing-card-padding) py-(--spacing-control-y) font-sans text-[11px] font-semibold tracking-[0.06em] uppercase">
             {t(group.labelKey)}
           </div>
           <ul className="list-none">

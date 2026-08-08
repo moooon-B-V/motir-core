@@ -43,7 +43,7 @@ export function RoleDetail({
 
   return (
     <div className="flex flex-col">
-      <p className="text-(--el-text-faint) mb-2 font-mono text-[11px] tracking-[0.02em]">
+      <p className="text-(--el-text-secondary) mb-2 font-mono text-[11px] tracking-[0.02em]">
         {t('crumbs', { projectName, roleName })}
       </p>
 
@@ -70,7 +70,7 @@ export function RoleDetail({
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {role.builtIn ? (
-                <span className="text-(--el-text-faint) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
+                <span className="text-(--el-text-secondary) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
                   <Lock aria-hidden="true" className="h-3 w-3" />
                   {t('builtInLocked')}
                 </span>
@@ -91,7 +91,7 @@ export function RoleDetail({
         </p>
       </div>
 
-      <div className="border-(--el-border) bg-(--el-surface) mt-5 overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
+      <div className="border-(--el-border) bg-(--el-card) mt-5 overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
         <PermissionGroups domains={catalog.domains} held={role.permissions} />
       </div>
     </div>
