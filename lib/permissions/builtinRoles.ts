@@ -34,8 +34,9 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  *
  * ⚠️ Membership here is INERT until a gate consults the key, which is why a key
  * can be role-holdable while its `enforcement` is still `planned`. The eight
- * below are exactly that: they resolve for the right actors from this commit,
- * and no call site asks for them until each key's own wiring card lands.
+ * below were exactly that when MOTIR-2349 added them; every one is now wired and
+ * `enforced` (MOTIR-2356), so the seam has served its purpose and the property it
+ * describes is what makes the NEXT such key safe to name before it is gated.
  *
  * ⚠️ THE TWELVE ADMINISTRATIVE KEYS ARE HERE, AND THAT IS BEHAVIOUR-NEUTRAL.
  * They enter alongside `project:administer` and nowhere else: `member` /

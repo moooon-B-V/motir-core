@@ -365,12 +365,6 @@ function decisionFor(url: string): string | null {
   return cells ? (cells[cells.length - 2] ?? null) : null;
 }
 
-/** The permission the inventory names for an operation (`—` when none). */
-function permissionFor(url: string): string {
-  const cells = ROWS.get(url);
-  return cells ? (cells[cells.length - 3] ?? '') : '';
-}
-
 /**
  * Decisions that permanently justify NO project gate. These are answers, not
  * omissions — each is argued in the inventory's Reasons section.
@@ -384,50 +378,31 @@ const PERMANENTLY_UNGATED = new Set([
 ]);
 
 /**
- * Decisions that justify no gate YET. `new` means the inventory named the
- * permission and no card has wired the call sites yet. This set shrinks to
- * nothing as TWO stories land, and the count below is what stops it growing
- * meanwhile:
+ * ✅ THE TWO COUNTING-DOWN ARMS ARE GONE (MOTIR-2356). Two decision sets used to
+ * live here and be pinned by a `describe` below:
  *
- *   * **MOTIR-2256** — the twelve ADMINISTRATIVE keys that split out of
- *     `project:administer` (member, board, workflow, field, estimation,
- *     repository, ai:configure). Behaviour-neutral for the built-in roles
- *     wherever the umbrella already stood.
- *   * **MOTIR-2291** — the eight MEMBER-FACING keys (`ai:plan`, `sprint:manage`,
- *     `report:view`, `import:run`, `saved_filter:manage`, `ai:view_plan`,
- *     `work_item:triage`, `work_item:delete`) plus the `CLAIMED_BUT_UNVERIFIED`
- *     bucket below. Those operations are governed by NOTHING today, so wiring
- *     them removes capability from real actors — a different kind of change,
- *     argued on its own rather than inside a refactor that claims to change
- *     nothing.
+ *   * **`PENDING`** (`new`) — an operation whose key the inventory had named and
+ *     nobody had wired. It counted 95 → 0 across MOTIR-2256 and MOTIR-2291, and
+ *     three of those falls were the INSTRUMENT being repaired rather than gates
+ *     being added (MOTIR-2292, -2304, -2443), which is why every step had to say
+ *     which kind it was.
+ *   * **`CLAIMED_BUT_UNVERIFIED`** (`existing`) — an operation the inventory said
+ *     was governed and this walk could not confirm. It counted 38 → 0 across
+ *     MOTIR-2365 and MOTIR-2366; of the eighteen it still held after the
+ *     instrument repairs, seven were holes and the rest were mis-mappings or
+ *     gates the walk had no name for.
  *
- * This arm is deleted when the count reaches 0, which takes BOTH.
+ * Both files said, when they were written, that the arm is DELETED when its count
+ * reaches zero rather than re-pinned at it — a pin at zero is a slot for the next
+ * one to creep back into, and it makes an un-decided operation look decided. They
+ * are deleted.
+ *
+ * What remains is the assertion that outlives them: an ungated operation must
+ * carry a PERMANENTLY_UNGATED decision in the inventory. A new ungated route with
+ * a `new` or `existing` decision now fails THAT test — it is not in the allowed
+ * set — which is stricter than the pins ever were, because it does not wait for
+ * a number to move.
  */
-const PENDING = new Set(['new']);
-
-/**
- * ⚠️ THE DISCREPANCY BUCKET. The inventory marks these `existing` — "already
- * governed by a shipped predicate" — but this walk cannot CONFIRM a gate on the
- * path. Two readings, and the difference matters:
- *
- *   1. the gate is real but reached by a hop the static walk cannot follow (a
- *      dynamic dispatch, a wrapper, a re-export), or
- *   2. the claim is wrong and the operation is genuinely ungoverned.
- *
- * The inventory's `existing` labels were assigned by URL pattern — a CLAIM. This
- * guard is the verifier, and where the two disagree the disagreement is the
- * finding. It is recorded rather than resolved because resolving it either way
- * without reading each path would be guessing: silently trusting the claim hides
- * a possible hole, and silently failing them would block on investigations that
- * card was not scoped for.
- *
- * **MOTIR-2291 owns confirming these**, one read each: either the gate is real
- * and reached by a hop this walk cannot follow (record HOW, and teach the walk
- * to see it), or it is not — and that is a hole whose fix is a gate. None of
- * them is administrative, which is why they did not travel with MOTIR-2256.
- * The count is pinned so the bucket can only shrink.
- */
-const CLAIMED_BUT_UNVERIFIED = new Set(['existing']);
 
 describe('every actor-initiated operation has an ANSWER', () => {
   const ops = operations();
@@ -442,10 +417,13 @@ describe('every actor-initiated operation has an ANSWER', () => {
       .filter((o) => !o.gated)
       .filter((o) => {
         const d = decisionFor(o.url);
-        return (
-          d === null ||
-          !(PERMANENTLY_UNGATED.has(d) || PENDING.has(d) || CLAIMED_BUT_UNVERIFIED.has(d))
-        );
+        // ⚠️ ONLY `PERMANENTLY_UNGATED` now (MOTIR-2356). While the two stories
+        // were in flight, `new` and `existing` were also accepted here — an
+        // operation could be ungated because its gate was still coming. Both
+        // stories have landed, so an ungated operation whose row still says
+        // `new` or `existing` is no longer waiting for anything: it is undecided,
+        // and this test says so.
+        return d === null || !PERMANENTLY_UNGATED.has(d);
       })
       .map((o) => `${o.url} → ${decisionFor(o.url) ?? 'NOT IN THE INVENTORY'}`);
     expect(
@@ -461,160 +439,6 @@ describe('every actor-initiated operation has an ANSWER', () => {
     expect(
       unknown.map((o) => o.url),
       'a gated route still needs its inventory row',
-    ).toEqual([]);
-  });
-});
-
-describe('the PENDING set is bounded and shrinking', () => {
-  const ops = operations();
-
-  it('pins how many operations still await MOTIR-2256 / MOTIR-2291, so the number cannot creep', () => {
-    const pending = ops.filter((o) => !o.gated && PENDING.has(decisionFor(o.url) ?? ''));
-    // Adding an ungated route bumps this and fails the test; wiring one lowers
-    // it and fails it too — both are changes worth noticing. The arm is deleted
-    // when this reaches 0, which takes BOTH stories.
-    //
-    // Was 94, and the 94 was WRONG: the extractor above mistook a parameter's
-    // inline object type for a method body, so 24 gated operations counted as
-    // ungoverned. 95 → 81 was the measurement being corrected, not 14 gates
-    // being added — that PR added no gate at all (MOTIR-2292).
-    //
-    // 81 → 75 is MOTIR-2294 RETIRING `repository:connect`: its six operations
-    // (the GitHub + GitLab OAuth legs, `/api/github/setup`,
-    // `/api/github/organizations`) bind an installation to a WORKSPACE and
-    // resolve no project, so they are `workspace-scoped` / R3 in the inventory
-    // and leave the PENDING set. No gate was added and no route changed — six
-    // rows that were never this story's to wire stopped being counted as if
-    // they were.
-    //
-    // 75 → 36 is MOTIR-2304 REPAIRING THE WALK, and it is by far the largest
-    // correction this pin has taken — larger than the extractor fix that
-    // preceded it. `GATE` recognised only CALLS TO KNOWN GATE FUNCTIONS, so an
-    // operation whose authorization ran through a privately-named module-local
-    // helper that resolves the membership itself was invisible twice over. Both
-    // limbs were needed: following the same-file call finds the helper, and
-    // adding `isOwnerRole(` / `isWorkspaceManager(` lets the walk recognise the
-    // decision the helper makes once it arrives. 39 operations were never
-    // ungoverned. NO GATE WAS ADDED by that card — read its diff: two test
-    // files and a document. A FALL here means the instrument got better; only a
-    // RISE means a hole opened.
-    //
-    // 36 → 27 is MOTIR-2346, and it is the FIRST fall on this pin that is not
-    // purely a re-measurement — it is eight rows re-decided plus one real gate.
-    // Nine operations the inventory mapped to `import:run` / `ai:plan` resolve no
-    // project, so no project permission could ever govern them: the six importer
-    // OAuth legs bind a provider credential to a WORKSPACE (`workspace-scoped` /
-    // R3, exactly the GitHub + GitLab legs MOTIR-2294 retired), and the two
-    // `/api/idea-draft` operations run before the visitor has an account at all
-    // (`no-gate` / R48 and `user-scoped` / R49). The ninth, `/api/canvas-layout`,
-    // leaves this set the other way: it GAINED `project:browse` in
-    // `canvasLayoutService`, so the walk now sees a gate and it is no longer
-    // pending. 8 re-decided + 1 gated = 9.
-    //
-    // 27 → 22 is MOTIR-2350 wiring `sprint:manage`: five ungated rows gained a
-    // gate — `/api/backlog/bulk-move`, `/api/sprints/[id]/issues` (+ `/bulk`),
-    // `/api/work-items/[id]/rank` and `/api/work-items/[id]/sprint`. The three
-    // sprint ANALYTICS rows (`burndown` / `points` / `report`) stay pending: they
-    // are re-pointed at `report:view` and belong to MOTIR-2351, so one key has one
-    // owner and two cards never flip the same enforcement flag.
-    //
-    // 22 → 18 is MOTIR-2351 wiring `report:view`: the three sprint ANALYTICS rows
-    // the sprint card handed over (`burndown` / `points` / `report`) plus
-    // `/api/projects/[key]/velocity`, the one row in this story that was ungated
-    // end to end. The six `/api/reports/*` widget reads were already gated — they
-    // ran through `resolveReportScope`'s `canBrowse` check — so re-pointing them at
-    // the key moves no count, which is what a re-pointing looks like from here.
-    //
-    // 18 → 17 is MOTIR-2352 wiring `saved_filter:manage`. Only ONE row moves,
-    // and that is the honest shape of this card: the saved-filter domain already
-    // consulted the access policy through `getSavedFilterCapabilities`, so nine
-    // of its ten rows were gated and merely mis-NAMED.
-    // `/api/projects/[key]/saved-filters/[filterId]/subscription` was the
-    // exception — it reached the SEE gate and no project gate at all, so a
-    // viewer could put a recurring email on somebody else's shared query.
-    //
-    // 17 → 16 is MOTIR-2353 wiring `import:run`. One row again: four of the five
-    // project-scoped importer operations already asserted `assertCanEdit`, so
-    // they were gated and merely mis-named. `GET /api/import/[id]` was the
-    // ungated one — an import draft holds the connection config and the field
-    // mapping, and nothing was asking who could read it.
-    //
-    // 16 → 13 is MOTIR-2443 REPAIRING THE WALK again, and like MOTIR-2292 and
-    // MOTIR-2304 before it, NO GATE WAS ADDED: `methodBody` was taking a RETURN
-    // TYPE's braces as the body (`): Promise<{ jobId: string }> {`), and the walk
-    // could not follow a `this.siblingMethod(` hop. Three operations were never
-    // ungoverned. A FALL here means the instrument got better; only a RISE means
-    // a hole opened.
-    //
-    // 13 → 12 is MOTIR-2357 wiring the plan-EDITING jobs. One row moves —
-    // `/api/ai/explanation`, which reached no gate at all — because the other
-    // four already reached one indirectly, through something the route happened
-    // to call. Replacing that indirection with a named key is the point of the
-    // card and is invisible to a count, which is why the card says so up front.
-    //
-    // 12 → 8 is MOTIR-2358 wiring generation, sprint planning, the pre-plan pair
-    // and the AI-access probe. FOUR rows, the largest single-card fall in the
-    // story, because these were genuinely ungated: generation is the heaviest
-    // planning job the product runs and reached no project gate at all. Two of
-    // the four take a key OTHER than `ai:plan` — the pre-plan READ and the access
-    // PROBE ask `project:browse`, so an actor who may not plan can still see that
-    // planning exists rather than discovering it through a failed write.
-    //
-    // 8 → 0 is MOTIR-2359 wiring the last of `ai:plan`: the job read and the eight
-    // streams, which until that card read ANY job by its id alone. The PENDING
-    // bucket is now EMPTY, which is the story's terminal condition — and this arm
-    // does not survive it. MOTIR-2356 DELETES the `PENDING` set and this pin
-    // rather than re-pinning them at 0, because a guard whose whole job is to
-    // stop a number creeping has nothing left to watch once the number is gone.
-    expect(pending.length).toBe(0);
-  });
-
-  it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {
-    const unverified = ops.filter(
-      (o) => !o.gated && CLAIMED_BUT_UNVERIFIED.has(decisionFor(o.url) ?? ''),
-    );
-    // Operations the inventory calls `existing` that this walk cannot confirm.
-    // Each needs a human read in MOTIR-2291: either the gate is reached by a hop
-    // the walk cannot follow, or the operation is genuinely ungoverned. Lowering
-    // MOTIR-2304 moved this one 33 → 18 for the same reason as the pin above:
-    // the inventory marked these `existing` and the walk simply could not see
-    // the gate the row was claiming. Fifteen of the eighteen remaining
-    // discrepancies were never discrepancies.
-    // this number is progress; raising it is a regression. (38 → 33 for the same
-    // extractor fix as above — five of them were never unconfirmed.)
-    // MOTIR-2443 moved this one 18 → 11 for the same reason as the pin above —
-    // seven of the eighteen discrepancies were the walk failing to see a body,
-    // not a gate failing to exist. What is left is MOTIR-2365 / MOTIR-2366's
-    // worklist, and it is now seven items shorter than either card was sized for.
-    // 11 → 5 is MOTIR-2365 reading its half of the bucket, and the shape of the
-    // answer is the finding: of its six remaining rows, ONE was a real gate the
-    // walk could not follow (`quickSearch` narrows to browsable projects through
-    // `filterBrowsable` — the one gate that answers in the plural, now in `GATE`)
-    // and FIVE were holes. The estimate WRITE, the parent roll-up, the activity
-    // history and both acceptance-evidence paths had only a workspace check; the
-    // upload-token minter was reachable with a session and a story id alone. Every
-    // one of them was labelled `existing` in a `done` document, three of them on a
-    // row whose own `Gate today` column said "— none —".
-    // 5 → 0 is MOTIR-2366 reading the other half, and the bucket is now EMPTY —
-    // the story's second terminal condition. Two of its five were gates
-    // (`/api/upload/issue-attachment` took bytes from anyone with a session;
-    // `/api/ready/nudge` asked only whether the project was in the workspace) and
-    // THREE were mis-mappings: the anonymous project square is `no-gate` / R33
-    // and the avatar upload is `user-scoped` / R31, neither of which any project
-    // permission could ever have governed.
-    //
-    // Like the PENDING arm above, this one does not survive reaching zero:
-    // MOTIR-2356 deletes both rather than re-pinning them at 0.
-    expect(unverified.length).toBe(0);
-  });
-
-  it('every pending operation names the permission that will govern it', () => {
-    const nameless = ops
-      .filter((o) => !o.gated && PENDING.has(decisionFor(o.url) ?? ''))
-      .filter((o) => !permissionFor(o.url).startsWith('`'));
-    expect(
-      nameless.map((o) => o.url),
-      'a pending operation must name its target key',
     ).toEqual([]);
   });
 });
@@ -790,19 +614,16 @@ describe('the guard can actually fail (a guard never seen red is not evidence)',
     const synthetic = { url: '/api/definitely-not-a-real-route', gated: false };
     const decision = decisionFor(synthetic.url);
     expect(decision).toBeNull();
-    const wouldFail =
-      decision === null ||
-      !(
-        PERMANENTLY_UNGATED.has(decision) ||
-        PENDING.has(decision) ||
-        CLAIMED_BUT_UNVERIFIED.has(decision)
-      );
+    const wouldFail = decision === null || !PERMANENTLY_UNGATED.has(decision);
     expect(wouldFail, 'an unknown ungated operation must be rejected').toBe(true);
   });
 
-  it('rejects a decision string that is not one of the seven', () => {
+  it('rejects a decision string that is not one of the five', () => {
     expect(PERMANENTLY_UNGATED.has('probably-fine')).toBe(false);
-    expect(PENDING.has('probably-fine')).toBe(false);
-    expect(CLAIMED_BUT_UNVERIFIED.has('probably-fine')).toBe(false);
+    // …and the two that USED to be accepted are not, now that nothing is pending
+    // (MOTIR-2356). This is the assertion that makes the deletion of the counting
+    // arms a tightening rather than a removal of coverage.
+    expect(PERMANENTLY_UNGATED.has('new')).toBe(false);
+    expect(PERMANENTLY_UNGATED.has('existing')).toBe(false);
   });
 });

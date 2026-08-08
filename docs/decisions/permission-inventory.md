@@ -42,14 +42,21 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **30** are
-enforced by a gate today; **1** is `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains — and as of MOTIR-2356, ALL 31 are enforced by
+a gate. `PLANNED_PERMISSIONS` is empty.** The paragraph below records how the
+`planned` tier worked while it existed, because the seam it describes is what
+makes the NEXT key safe to name before it is wired.
+
+Historically **23** were
+enforced by a gate; **8** were `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
 `saved_filter:manage`, `import:run`, `work_item:triage`, `work_item:delete`) — those are governed by
 nothing at all today, so wiring them takes capability away from real actors and is argued on its own.
-A `planned` key is never offered in the grid or the role editor.
+A `planned` key is never offered in the role editor. **There are none left**: every
+key in the catalog is consulted by a shipped gate, every row in the table below
+carries a decided policy, and no row says `new`.
 
 > **The enforced / planned split moves as MOTIR-2256 lands, one domain per card.** The counts above
 > are read on this branch, not as of the day the document was written — `tests/permissions/catalog.test.ts`
@@ -64,8 +71,17 @@ A `planned` key is never offered in the grid or the role editor.
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
 > (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352) ·
 > **`import:run`** (MOTIR-2353) · **`work_item:triage` · `work_item:delete`** (MOTIR-2354).
-> **`ai:view_plan`** (MOTIR-2363). `ai:plan` is wired across MOTIR-2355 / -2357 / -2358 /
-> -2359 and its flag flips on the last of them. `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> **`ai:view_plan`** (MOTIR-2363) · **`ai:plan`** (MOTIR-2355 / -2357 / -2358 / -2359,
+> flag flipped by MOTIR-2356) — **the whole eight are now wired, and with MOTIR-2256's
+> twelve that is the entire catalog.**
+>
+> ✅ **The guard's two counting-down arms are DELETED, not re-pinned at zero**
+> (MOTIR-2356). `PENDING` went 95 → 0 and `CLAIMED_BUT_UNVERIFIED` 38 → 0; a pin at
+> zero is a slot for the next one to creep back into, and what replaces both is
+> stricter: an ungated operation must now carry one of the five PERMANENTLY_UNGATED
+> decisions, so a new route with a `new` or `existing` row fails immediately rather
+> than waiting for a number to move. Verified by adding a deliberately ungated route
+> and watching the suite go red, then removing it. `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -394,16 +410,16 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `board`
 
-| Operation                       | Verbs        | Gate today                                      | Permission        | Decision | Why |
-| ------------------------------- | ------------ | ----------------------------------------------- | ----------------- | -------- | --- |
-| `/api/board`                    | GET          | `assertCanBrowse` (`boardsService.getBoard`)    | `project:browse`  | existing | R9  |
-| `/api/board`                    | PATCH        | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
-| `/api/board/columns`            | POST         | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
-| `/api/board/columns/[columnId]` | DELETE/PATCH | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
-| `/api/board/move`               | POST         | `assertCanEdit`                                 | `work_item:edit`  | existing | R9  |
-| `/api/boards`                   | GET          | none (`listBoards` has no gate)                 | `project:browse`  | new      | R9  |
-| `/api/boards`                   | POST         | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
-| `/api/boards/[id]`              | DELETE/PATCH | `assertBoardConfigAdmin` — workspace OWNER only | `board:configure` | new      | R9  |
+| Operation                       | Verbs        | Gate today                                                  | Permission        | Decision | Why |
+| ------------------------------- | ------------ | ----------------------------------------------------------- | ----------------- | -------- | --- |
+| `/api/board`                    | GET          | `assertCanBrowse` (`boardsService.getBoard`)                | `project:browse`  | existing | R9  |
+| `/api/board`                    | PATCH        | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)  | `board:configure` | existing | R9  |
+| `/api/board/columns`            | POST         | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)  | `board:configure` | existing | R9  |
+| `/api/board/columns/[columnId]` | DELETE/PATCH | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)  | `board:configure` | existing | R9  |
+| `/api/board/move`               | POST         | `assertCanEdit`                                             | `work_item:edit`  | existing | R9  |
+| `/api/boards`                   | GET          | `boardsService.listBoards` → `assertCanBrowse` (MOTIR-2296) | `project:browse`  | existing | R9  |
+| `/api/boards`                   | POST         | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)  | `board:configure` | existing | R9  |
+| `/api/boards/[id]`              | DELETE/PATCH | `assertBoardConfigAdmin` → `assertPermission` (MOTIR-2296)  | `board:configure` | existing | R9  |
 
 ### `comment`
 
@@ -692,30 +708,30 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `'use server'` actions
 
-| File                                                | Exported actions                                                                  | Gate today                         | Permission           | Decision    | Why |
-| --------------------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------- | -------------------- | ----------- | --- |
-| `app/(authed)/_actions.ts`                          | createOrganizationAction, createWorkspaceAction, switchOrganizationAction         | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/_project-actions.ts`                  | archiveProjectAction, createProjectAction, setActiveProjectAction                 | — none —                           | `project:administer` | existing    | R15 |
-| `app/(authed)/items/[key]/acceptanceActions.ts`     | decideAcceptanceAction, turnOnAcceptanceVideoAction                               | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/items/[key]/actions.ts`               | createLinkAction, linkPullRequestAction, listLinkCandidatesAction                 | `assertCanBrowse`, `assertCanEdit` | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/items/[key]/commentActions.ts`        | addCommentAction, deleteCommentAction, editCommentAction                          | — none —                           | `comment:add`        | existing    | R4  |
-| `app/(authed)/items/[key]/customFieldActions.ts`    | setCustomFieldValueAction                                                         | `assertCanEdit`                    | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/items/[key]/edit/actions.ts`          | changeStatusAction, updateIssueAction                                             | `assertCanBrowse`                  | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/items/[key]/labelComponentActions.ts` | addComponentAction, addLabelAction, removeComponentAction                         | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/items/[key]/watcherActions.ts`        | addWatcherAction, removeWatcherAction, toggleWatchAction                          | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/items/actions.ts`                     | createIssueAction, listArchivedWorkItemsAction, listCandidateParentsAction        | `assertCanEdit`                    | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/plans/_actions.ts`                    | loadMorePlansAction                                                               | `getCapabilities`                  | `ai:plan`            | new         | R5  |
-| `app/(authed)/ready/_actions.ts`                    | loadMoreReadyAction                                                               | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/settings/account/profile/actions.ts`  | changePasswordAction, sendSetPasswordLinkAction, updateProfileAvatarAction        | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/settings/project/actions.ts`          | changeProjectKeyAction, releaseProjectKeyAction, updateProjectDetailsAction       | — none —                           | `project:administer` | existing    | R15 |
-| `app/(authed)/settings/project/workflow/actions.ts` | addTransitionAction, createStatusAction, deleteStatusAction                       | — none —                           | `project:administer` | existing    | R15 |
-| `app/(authed)/settings/workspace/actions.ts`        | deleteWorkspaceAction, leaveWorkspaceAction, removeMemberAction                   | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/settings/workspace/github/actions.ts` | disconnectGithubAction                                                            | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/settings/workspace/gitlab/actions.ts` | connectGitlabProjectAction, disconnectGitlabAction, disconnectGitlabProjectAction | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(authed)/settings/workspace/jobs/actions.ts`   | replayDlqAction                                                                   | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(onboarding)/onboarding/actions.ts`            | clearPendingIdeaAction, startPlanningAction                                       | — none —                           | `work_item:edit`     | existing    | R41 |
-| `app/(public)/p/[identifier]/overview-actions.ts`   | savePublicOverviewAction                                                          | — none —                           | `work_item:edit`     | existing    | R41 |
-| `lib/i18n/actions.ts`                               | setLocale                                                                         | — none —                           | —                    | user-scoped | R47 |
+| File                                                | Exported actions                                                                  | Gate today                                         | Permission           | Decision    | Why |
+| --------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------- | -------------------- | ----------- | --- |
+| `app/(authed)/_actions.ts`                          | createOrganizationAction, createWorkspaceAction, switchOrganizationAction         | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/_project-actions.ts`                  | archiveProjectAction, createProjectAction, setActiveProjectAction                 | — none —                                           | `project:administer` | existing    | R15 |
+| `app/(authed)/items/[key]/acceptanceActions.ts`     | decideAcceptanceAction, turnOnAcceptanceVideoAction                               | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/items/[key]/actions.ts`               | createLinkAction, linkPullRequestAction, listLinkCandidatesAction                 | `assertCanBrowse`, `assertCanEdit`                 | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/items/[key]/commentActions.ts`        | addCommentAction, deleteCommentAction, editCommentAction                          | — none —                                           | `comment:add`        | existing    | R4  |
+| `app/(authed)/items/[key]/customFieldActions.ts`    | setCustomFieldValueAction                                                         | `assertCanEdit`                                    | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/items/[key]/edit/actions.ts`          | changeStatusAction, updateIssueAction                                             | `assertCanBrowse`                                  | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/items/[key]/labelComponentActions.ts` | addComponentAction, addLabelAction, removeComponentAction                         | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/items/[key]/watcherActions.ts`        | addWatcherAction, removeWatcherAction, toggleWatchAction                          | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/items/actions.ts`                     | createIssueAction, listArchivedWorkItemsAction, listCandidateParentsAction        | `assertCanEdit`                                    | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/plans/_actions.ts`                    | loadMorePlansAction                                                               | `plansService.*` → `assertPermission` (MOTIR-2363) | `ai:view_plan`       | existing    | R5  |
+| `app/(authed)/ready/_actions.ts`                    | loadMoreReadyAction                                                               | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/settings/account/profile/actions.ts`  | changePasswordAction, sendSetPasswordLinkAction, updateProfileAvatarAction        | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/settings/project/actions.ts`          | changeProjectKeyAction, releaseProjectKeyAction, updateProjectDetailsAction       | — none —                                           | `project:administer` | existing    | R15 |
+| `app/(authed)/settings/project/workflow/actions.ts` | addTransitionAction, createStatusAction, deleteStatusAction                       | — none —                                           | `project:administer` | existing    | R15 |
+| `app/(authed)/settings/workspace/actions.ts`        | deleteWorkspaceAction, leaveWorkspaceAction, removeMemberAction                   | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/settings/workspace/github/actions.ts` | disconnectGithubAction                                                            | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/settings/workspace/gitlab/actions.ts` | connectGitlabProjectAction, disconnectGitlabAction, disconnectGitlabProjectAction | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(authed)/settings/workspace/jobs/actions.ts`   | replayDlqAction                                                                   | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(onboarding)/onboarding/actions.ts`            | clearPendingIdeaAction, startPlanningAction                                       | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `app/(public)/p/[identifier]/overview-actions.ts`   | savePublicOverviewAction                                                          | — none —                                           | `work_item:edit`     | existing    | R41 |
+| `lib/i18n/actions.ts`                               | setLocale                                                                         | — none —                                           | —                    | user-scoped | R47 |
 
 ---
 

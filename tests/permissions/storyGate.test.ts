@@ -290,7 +290,14 @@ describe('guard 2 — every administrative key is ENFORCED and actually WIRED', 
     ).toEqual([]);
   });
 
-  it('THE GUARD CAN ACTUALLY FAIL — a key nothing consults is reported', () => {
+  // ⚠️ RETIRED BY MOTIR-2356. The control needed a key that was justified by the
+  // inventory and deliberately unwired, and there is no longer one — every key in
+  // the catalog is `enforced`. It moved three times as its subject was wired
+  // (`import:run` → `work_item:delete` → `ai:view_plan` → `ai:plan`), which is
+  // exactly the signal it was built to carry, and it has now carried it to the
+  // end. What survives is the assertion ABOVE, which is the one with teeth: every
+  // enforced key must appear in a gate call somewhere outside `lib/permissions/`.
+  it.skip('THE GUARD CAN ACTUALLY FAIL — a key nothing consults is reported', () => {
     // A key from MOTIR-2291's eight that is justified by the inventory and
     // deliberately unwired. It is the honest negative control, and when a card
     // wires it this assertion flips and asks to be updated — which is exactly
@@ -311,27 +318,19 @@ describe('guard 2 — every administrative key is ENFORCED and actually WIRED', 
   });
 });
 
-describe('the story leaves exactly MOTIR-2291 behind', () => {
-  it('every remaining `planned` key is one of the eight member-facing ones', () => {
+describe('the story leaves nothing behind', () => {
+  it('NO key is `planned` any more — both stories have landed (MOTIR-2356)', () => {
     const stillPlanned = Object.values(PERMISSION_CATALOG)
       .filter((d) => d.enforcement === 'planned')
       .map((d) => d.key)
       .sort();
-    // The eight MOTIR-2291 keys, MINUS the ones its own cards have since wired.
-    // Each wiring card deletes its key from this list in the same change, so the
-    // array is the story's remaining worklist and MOTIR-2356 empties it.
-    expect(stillPlanned).toEqual(
-      [
-        // 'work_item:delete' — wired by MOTIR-2354.
-        // 'work_item:triage' — wired by MOTIR-2354.
-        // 'sprint:manage' — wired by MOTIR-2350.
-        // 'report:view' — wired by MOTIR-2351.
-        // 'saved_filter:manage' — wired by MOTIR-2352.
-        // 'import:run' — wired by MOTIR-2353.
-        'ai:plan',
-        // 'ai:view_plan' — wired by MOTIR-2363.
-      ].sort(),
-    );
+    // This array was MOTIR-2291's worklist: each wiring card deleted its own key
+    // in the same change — `sprint:manage` (2350), `report:view` (2351),
+    // `saved_filter:manage` (2352), `import:run` (2353), `work_item:triage` +
+    // `work_item:delete` (2354), `ai:view_plan` (2363), and `ai:plan` across
+    // 2355/2357/2358/2359 with the flag flipped here. It is empty, and the
+    // emptiness is the story's definition of done.
+    expect(stillPlanned).toEqual([]);
   });
 });
 

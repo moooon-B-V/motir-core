@@ -192,7 +192,7 @@ const PERMISSION_META: Record<
   'repository:manage_access': { domain: 'repository', enforcement: 'enforced' },
   'import:run': { domain: 'import', enforcement: 'enforced' }, // MOTIR-2353
   'ai:configure': { domain: 'ai', enforcement: 'enforced' },
-  'ai:plan': { domain: 'ai', enforcement: 'planned' },
+  'ai:plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2355 / -2357 / -2358 / -2359
   'ai:view_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2363
 };
 
@@ -236,9 +236,16 @@ export const ENFORCED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter
 /**
  * The keys the inventory justified but nothing has wired yet. Named so a test
  * can pin it against the inventory document, and so "the model is fully
- * enforced" has a machine-readable definition: this array is empty. That takes
- * BOTH MOTIR-2256 (the twelve administrative keys) and MOTIR-2291 (the eight
- * member-facing ones) — neither story empties it alone.
+ * enforced" has a machine-readable definition: this array is empty.
+ *
+ * ✅ IT IS EMPTY (MOTIR-2356). It took BOTH stories, as designed — MOTIR-2256's
+ * twelve administrative keys and MOTIR-2291's eight member-facing ones — and
+ * neither could have emptied it alone. The array stays rather than being deleted:
+ * it is the definition, and a future card that adds a key to the catalog before
+ * its gate exists SHOULD see it become non-empty again. What is deleted is the
+ * scaffolding that counted DOWN to this point — the guard's PENDING and
+ * CLAIMED_BUT_UNVERIFIED arms — because a pin at zero is a slot for the next one
+ * to creep back into.
  */
 export const PLANNED_PERMISSIONS: readonly PermissionKey[] = PERMISSIONS.filter(
   (key) => !isEnforced(key),

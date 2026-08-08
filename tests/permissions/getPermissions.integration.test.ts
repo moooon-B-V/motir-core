@@ -371,7 +371,12 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // Each row carries its `enforcement` so the UI can mark the not-yet-wired
     // ones; hiding them showed a quarter of the catalog and implied it was all.
     expect([...flattened].sort()).toEqual([...PERMISSIONS].sort());
-    expect(flattened.filter((k) => !ENFORCED_PERMISSIONS.includes(k)).length).toBeGreaterThan(0);
+    // ⚠️ The second half of this used to assert that SOME row was not enforced —
+    // a live check while two stories were mid-flight. MOTIR-2356 wired the last
+    // key, so the honest assertion inverts: the grid renders the whole catalog
+    // and EVERY row is now live. (The "render the whole model, enforced or not"
+    // contract is unchanged and is what the line above pins.)
+    expect(flattened.filter((k) => !ENFORCED_PERMISSIONS.includes(k))).toEqual([]);
     for (const domain of catalog.domains) {
       expect(domain.permissions.length, `${domain.domain} is empty`).toBeGreaterThan(0);
       expect(domain.labelKey).toBe(`permissions.domain.${domain.domain}`);
