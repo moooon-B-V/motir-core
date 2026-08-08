@@ -74,6 +74,28 @@
         (2) a CUSTOM role drilled into — Edit / Delete + its base provenance
         (3) CREATING a role — a whole PAGE, with a sticky action bar
         (4) the MEMBER (non-admin) view — same list, no write affordances
+        (5) DELETING a custom role — the reassign dialog, both states  [2463]
+        (6) CREATE ROLE at the cap — disabled, with its explanation    [2463]
+
+      REVISION 2026-08-09 (MOTIR-2463) — three amendments, no re-draw:
+        * PANELS 5 + 6 ADDED. Panel 2 drew a Delete button and panel 0 drew a
+          Create role button; neither drew what happens when the role is in USE
+          or when the project is at its CAP. Both are surfaces a person touches
+          and neither was specified, so a code card would have had to invent
+          them. Panel 5 composes the INHERITED Modal block — which this file's
+          notes had marked "inherited but no longer used"; it is used now, and
+          so is .btn-danger.
+        * REPORTER RE-CUT OFF A BUILT-IN. Its row previously read "A Contractor
+          who also triages…", i.e. a custom role based on another custom role.
+          `basedOn` is one of the three BUILT-INS and is PROVENANCE, not
+          inheritance — a snapshot taken at creation that never re-flows. The
+          illustrative chain specified a shape the schema will not have.
+        * THE BULK GRANT-ALL / CLEAR-ALL TOGGLE IS REJECTED, not omitted. The
+          measurement and the reasoning are in design-notes; the short form is
+          that 28 rows over 15 headings is a median of TWO rows per heading, and
+          the "get to a sensible set in one move" job is already done by the
+          base picker.
+
       Toggle dark mode to confirm token parity. See design-notes.md
       "Roles & permissions grid (MOTIR-2255)" for the spec.
     -->
@@ -182,6 +204,13 @@
         --el-type-task: var(--color-info);
         --el-type-bug: var(--color-destructive);
         --el-type-subtask: var(--color-accent-teal);
+        /* Tooltip fill/ink — copied from packages/design-system/theme.css:2447.
+           Both resolve through --color-foreground / --color-background, which
+           the [data-theme='dark'] block already flips, so the cap tooltip in
+           panel 6 inverts with the theme and needs no dark companion.
+           (MOTIR-2463) */
+        --el-tooltip-bg: var(--color-foreground);
+        --el-tooltip-text: var(--color-background);
 
         /* Shell — sidebar tokens (app/globals.css §App shell, Subtask 1.5.2) */
         --el-sidebar-bg: var(--color-surface);
@@ -862,6 +891,84 @@
         color: var(--el-text-secondary);
         margin-bottom: 7px;
         display: block;
+      }
+
+      /* ── MOTIR-2463 additions ─────────────────────────────────────────────
+         Two surfaces the MOTIR-2259 asset did not draw: the delete-with-
+         reassign dialog (panel 5) and the `Create role` button at the cap
+         (panel 6). Both compose blocks already in this file — the inherited
+         Modal above, and .btn / .btn-danger / .input.select — so the only new
+         rules are the tooltip (the shipped Tooltip primitive's markup) and
+         two small layout helpers. No new colour, no raw shape value.        */
+
+      /* Tooltip — packages/design-system/src/components/ui/Tooltip.tsx renders
+         exactly this: --radius-control, --spacing-tooltip-x/y, --shadow-elevated,
+         and the inverted --el-tooltip-* pair. Drawn STATICALLY here (a mock has
+         no hover), which is why .tipwrap positions it rather than Radix. */
+      .tipwrap {
+        position: relative;
+        display: inline-flex;
+      }
+      /* Below the trigger, not above it. The shipped Tooltip defaults to
+         side="top", but this trigger sits in the page header row with 30px of
+         `.content` padding over it — less than the tooltip needs — so a
+         top-side tooltip is clipped by the settings frame. side="bottom". */
+      .tip {
+        position: absolute;
+        top: calc(100% + 6px);
+        right: 0;
+        white-space: nowrap;
+        background: var(--el-tooltip-bg);
+        color: var(--el-tooltip-text);
+        border-radius: var(--radius-control);
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        font-size: 12px;
+        line-height: 1.4;
+        box-shadow: var(--shadow-elevated);
+      }
+      .tip::after {
+        content: '';
+        position: absolute;
+        bottom: 100%;
+        right: 18px;
+        border: 5px solid transparent;
+        border-bottom-color: var(--el-tooltip-bg);
+      }
+      /* The reassign picker is the last thing in .modal-body, whose inherited
+         bottom padding is 8px — enough under a paragraph, tight under a 40px
+         control sitting on the footer rule. */
+      .modal-body .cfield {
+        margin-bottom: 10px;
+      }
+
+      /* The two dialog states sit side by side for review only. */
+      .dlgpair {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        align-items: start;
+      }
+      .dlgcap {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin: 0 0 10px;
+      }
+      /* The affected-member count. --el-text on --el-card (white) — the count is
+         the load-bearing sentence in this dialog, so it is NOT muted. */
+      .affected {
+        font-size: 13px;
+        color: var(--el-text);
+        line-height: 1.55;
+        margin: 0 0 16px;
+      }
+      .affected b {
+        font-weight: 600;
+      }
+      /* Placeholder ink inside an .input — muted on the input's white
+         --el-page-bg fill (4.54:1, the one pairing the contrast table clears
+         it on). Named to match access-members.mock.html's combobox. */
+      .ph {
+        color: var(--el-text-muted);
       }
 
       /* ── Roles & permissions page ─────────────────────────────────────────
@@ -1687,8 +1794,8 @@
                       <span class="pill pill-member">Custom</span>
                     </span>
                     <span class="rdesc"
-                      >A Contractor who also triages the request queue and reads generated
-                      plans.</span
+                      >Files and triages requests and reads generated plans — but changes no work
+                      item.</span
                     >
                   </span>
                   <span class="rsum">
@@ -3416,8 +3523,8 @@
                       <span class="pill pill-member">Custom</span>
                     </span>
                     <span class="rdesc"
-                      >A Contractor who also triages the request queue and reads generated
-                      plans.</span
+                      >Files and triages requests and reads generated plans — but changes no work
+                      item.</span
                     >
                   </span>
                   <span class="rsum">
@@ -3469,6 +3576,153 @@
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 5 (MOTIR-2463) ════════════ -->
+    <div class="panel-label">
+      5 · DELETING A CUSTOM ROLE — the flow behind panel 2’s <strong>Delete</strong>, in both of its
+      states. A role in use cannot vanish out from under the people holding it, so the delete is
+      <strong>refused</strong> until the admin says where those people go: the server answers a
+      destination-less DELETE with the affected COUNT, and that number is what this dialog says
+      before it asks. The zero-members case is a plain confirm with no picker — asking where nobody
+      should go is a question with no answer. This is <code>workflowsService.deleteStatus</code>’
+      shipped shape one domain over (<code>StatusInUseError</code> + <code>ReassignModal</code> in
+      <code>WorkflowEditor.tsx</code>), reused rather than re-invented. Composed from the
+      <strong>inherited Modal block</strong> — which this asset had marked “inherited but no longer
+      used”, and no longer is. <strong>MOTIR-2480 builds this.</strong>
+    </div>
+
+    <div class="panel">
+      <div class="stage">
+        <div class="dlgpair">
+          <div>
+            <p class="dlgcap">
+              A · <strong>4 members hold it</strong> — the destination picker is REQUIRED, so the
+              destructive confirm stays disabled until one is chosen.
+            </p>
+            <div class="modal-scrim">
+              <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-a-title">
+                <div class="modal-body">
+                  <div class="modal-head">
+                    <span class="modal-icon danger" aria-hidden="true"
+                      ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg
+                    ></span>
+                    <span class="mtitle" id="del-a-title">Delete “Contractor”?</span>
+                  </div>
+                  <p class="affected">
+                    <b>4 members</b> hold this role. Choose the role they move to — they will hold
+                    it the moment Contractor is deleted.
+                  </p>
+                  <p class="modal-lede">
+                    Deleting a role does not remove anybody from the project. It cannot be undone.
+                  </p>
+                  <label class="cfield">
+                    <span class="field-label">Move those 4 members to</span>
+                    <span class="input select"
+                      ><span class="ph">Choose a role…</span
+                      ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+                    ></span>
+                  </label>
+                </div>
+                <div class="modal-foot">
+                  <span class="btn btn-ghost">Cancel</span>
+                  <span class="btn btn-danger is-disabled" aria-disabled="true">Delete role</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p class="dlgcap">
+              B · <strong>nobody holds it</strong> — no picker, and the confirm is armed. The dialog
+              still says so out loud rather than silently dropping the question.
+            </p>
+            <div class="modal-scrim">
+              <div class="modal" role="dialog" aria-modal="true" aria-labelledby="del-b-title">
+                <div class="modal-body">
+                  <div class="modal-head">
+                    <span class="modal-icon danger" aria-hidden="true"
+                      ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg
+                    ></span>
+                    <span class="mtitle" id="del-b-title">Delete “Reporter”?</span>
+                  </div>
+                  <p class="affected"><b>No one</b> holds this role, so nobody is affected.</p>
+                  <p class="modal-lede">
+                    It will be removed from this project. It cannot be undone.
+                  </p>
+                  <div class="consequence">
+                    <span class="cq go"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                      ><span
+                        >Admin, Member and Viewer are built in and are never affected.</span
+                      ></span
+                    >
+                    <span class="cq warn"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg
+                      ><span
+                        >A role that someone is put on before you confirm is refused again, with the
+                        new count.</span
+                      ></span
+                    >
+                  </div>
+                </div>
+                <div class="modal-foot">
+                  <span class="btn btn-ghost">Cancel</span>
+                  <span class="btn btn-danger">Delete role</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 6 (MOTIR-2463) ════════════ -->
+    <div class="panel-label">
+      6 · <strong>CREATE ROLE AT THE CAP</strong> — a project holds a bounded number of custom roles
+      (<code>MAX_CUSTOM_ROLES_PER_PROJECT</code>, the posture
+      <code>lib/customFields/limits.ts</code> already ships for fields). At the cap the button stays
+      <strong>visible and disabled with its explanation</strong>, never hidden: that is the
+      treatment design-notes § <em>Gating affordances (6.4.6)</em> prescribes for an IN-PLACE
+      control, and the reason is that a missing button reads as “this project cannot have custom
+      roles” while a disabled one reads as “you have used them all”. Disabled text is exempt from
+      1.4.3, which is the one place <code>--el-text-faint</code> would be legitimate — the tooltip
+      does not need it, because it inverts. <strong>MOTIR-2480 builds this.</strong>
+    </div>
+
+    <div class="panel narrow">
+      <div class="stage">
+        <div class="content">
+          <div class="rp-headrow">
+            <div>
+              <h2>Roles &amp; permissions</h2>
+              <p class="page-lede">
+                What each role in <strong>motir</strong> can do. Workspace owners and admins always
+                hold everything.
+              </p>
+            </div>
+            <span class="tipwrap">
+              <span class="tip" role="tooltip" id="cap-tip"
+                >This project has all 10 custom roles. Delete one to create another.</span
+              >
+              <span
+                class="btn btn-primary is-disabled"
+                aria-disabled="true"
+                aria-describedby="cap-tip"
+                ><svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create role</span
+              >
+            </span>
+          </div>
+          <div class="ro-note">
+            <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+            <span
+              >The count is the SAME constant the server enforces
+              (<code>lib/permissions/limits.ts</code>), read by the page rather than restated — so
+              the button and the refusal can never disagree.</span
+            >
           </div>
         </div>
       </div>

@@ -238,12 +238,47 @@ Pencil→code translation gap.
 | -------------------------- | -------------------- |
 | `access-members.mock.html` | `access-members.png` |
 
-The mockup is a five-panel board (review EACH): **(0)** the populated
+The mockup is a **six**-panel board (review EACH): **(0)** the populated
 project-admin settings view (Access + Members); **(1)** the add-member
 Combobox open + a per-row role select open; **(2)** the Access control with
 Private selected + the go-private note; **(3)** the no-access state;
 **(4)** the role affordances (viewer disabled-with-tooltip + non-admin
-read-only).
+read-only); **(5)** the role select once the project has **custom roles**
+(MOTIR-2463 — see below).
+
+## The role picker with CUSTOM roles — panel 5 (MOTIR-2463; **MOTIR-2485 builds it**)
+
+[MOTIR-2257](motir:cmsgmdaim001g04joump8d6mi) lets a project author roles of
+its own, and this is the surface where a person is put on one. The picker is
+panel 1's, grown:
+
+- **The three built-ins stay first, under a `Built-in` heading; the project's
+  own roles are APPENDED under a `Custom roles` heading.** Not interleaved and
+  not alphabetised across the two: the built-ins are the same three in every
+  project and are what an admin reaches for by reflex.
+- **The `Built-in` heading is drawn even when the project has NO custom roles**
+  (panel 5 draws both cases side by side), so the list grows rather than
+  changes shape the first time somebody creates a role.
+- **Each custom option carries `Custom · based on Viewer`** — the provenance
+  chip's sentence, one surface over — so the kind and the base are read in
+  words at the moment of the choice.
+
+### The tint slot — why the roles asset's pairing does NOT transfer
+
+`roles-permissions.mock.html` pairs **built-in `--el-tint-lavender`** with
+**custom `--el-tint-sky`**, because on THAT surface the tile signals the
+role's KIND. Here the three slots are already spent on role IDENTITY —
+`pill-admin` lavender, `pill-member` sky, `pill-viewer` mint — so a custom
+chip in sky would simply be a Member chip.
+
+So a custom role's chip (`.pill-custom`) takes the next free slot,
+**`--el-tint-peach` with `--el-text-strong` ink** — the same rule (hue in the
+tint background, AA-safe per finding #35) applied to a slot this surface had
+not used — plus the `user-round` glyph the roles asset gives the same role's
+tile, so one role reads the same on both screens. **The kind is stated in
+WORDS** in the picker headings, in each option's line, and in the chip's
+accessible name (`Contractor — a custom role`), so nothing about
+built-in-versus-custom rests on the hue.
 
 ## Mirror product (rung 1, VERIFIED June 2026 — Atlassian docs, not asserted)
 
@@ -1596,6 +1631,8 @@ show the whole model, so "not held" has to be as readable as "held".
 4. **The member (non-admin) view** — browse-gated, so a member reads the same list and drills into
    the same screens. Two differences, both admin-only WRITE affordances: no `Create role`, and a
    custom role's screen carries no `Edit` or `Delete`.
+5. **Deleting a custom role** (MOTIR-2463) — the reassign dialog in both states. See below.
+6. **`Create role` at the cap** (MOTIR-2463) — visible, disabled, explained. See below.
 
 ## Creating a role is a PAGE, not a dialog
 
@@ -1654,6 +1691,98 @@ Rejected: **a shorter modal** with a domain navigator inside it (still a dialog 
 duplicates); **a two-step dialog** (moves the height into step 2 rather than removing it); and
 **authoring in a live column of the matrix** (elegant while the matrix existed, and dead with it).
 
+## Deleting a custom role — panel 5 (MOTIR-2463; **MOTIR-2480 builds it**)
+
+Panel 2 drew a `Delete` button and stopped there. This is the flow behind it, and it is the moment
+this feature is most able to hurt somebody: a role that vanishes out from under the four people
+holding it either silently promotes them or silently strips them, and both are discovered by the
+person who can no longer do their job.
+
+So **the delete is refused until the admin says where those people go.** The dialog is the shipped
+`workflowsService.deleteStatus` shape one domain over — a typed in-use refusal carrying the affected
+count when no destination is given, and a reassign-then-delete in one transaction when one is
+(`lib/services/workflowsService.ts`'s `StatusInUseError`, and `ReassignModal` in `WorkflowEditor.tsx`,
+which this composes rather than re-invents). Custom-field options are the _counter_-example, not the
+precedent: `customFieldsService.deleteOption` throws and the UI offers archive instead. A role has no
+archive.
+
+**Two states, both drawn:**
+
+|                    | members > 0                                                                           | members = 0                                                             |
+| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| the count line     | `4 members hold this role.` — `--el-text`, not muted: it is the load-bearing sentence | `No one holds this role, so nobody is affected.`                        |
+| destination picker | **required** (`Move those 4 members to`)                                              | **absent** — asking where nobody should go is a question with no answer |
+| the confirm        | `.btn-danger`, **disabled** until a destination is chosen                             | `.btn-danger`, armed                                                    |
+
+**Where the count comes from.** The DELETE is fired WITHOUT a destination first; the server answers
+`409` with the count, and that number is what the dialog says. It is not re-fetched and not guessed —
+which is also why a role somebody is added to between the refusal and the confirm is simply refused
+again, with the new number (drawn as the second consequence line in state B).
+
+**The picker stays CLOSED here, deliberately.** `access-members.mock.html` owns the role-select
+grammar and this asset composes it; its panel 5 draws the open list (built-ins, then the project's
+own roles). Drawing a second open list here would be this asset re-specifying something it inherits.
+
+**The `Modal` block is used again.** This section previously recorded the inherited `Modal` as
+_"inherited but no longer used"_ because role authoring became a page. Panel 5 uses it, and uses
+`.btn-danger` with it — so of the two `color: #fff` literals the inheritance note lists, only
+`.proj .pav`'s is still on an unused rule.
+
+## `Create role` at the cap — panel 6 (MOTIR-2463; **MOTIR-2480 builds it**)
+
+A project holds a bounded number of custom roles (`MAX_CUSTOM_ROLES_PER_PROJECT` in
+`lib/permissions/limits.ts`, the posture `lib/customFields/limits.ts` already ships for fields). At
+the cap the button is **visible and disabled, carrying its explanation in a `Tooltip`** — the
+treatment § _Gating affordances (6.4.6)_ prescribes for an **in-place** control (as opposed to
+navigation-to-an-edit-surface, which that section hides). The reason it is not hidden: a missing
+button reads as _"this project cannot have custom roles"_, and a disabled one reads as _"you have
+used them all"_ — which is the true statement and the one that tells the admin what to do next.
+
+The tooltip composes the shipped `Tooltip` primitive verbatim — `--el-tooltip-bg` / `--el-tooltip-text`
+(both added to this mock's token block from `packages/design-system/theme.css`, and both resolving
+through `--color-foreground` / `--color-background`, so they invert with the theme on their own),
+`--radius-control`, `--spacing-tooltip-x/y`, `--shadow-elevated`. **Disabled text is the one place
+`--el-text-faint` would be legitimate** (1.4.3 exempts it) and it is still not needed here: the
+button dims via `opacity`, and the explanation lives on the inverted tooltip.
+
+**The number in the copy is read from the constant, never restated** — the page imports the same
+`limits.ts` the service enforces, so the button and the refusal cannot disagree.
+
+## The bulk grant-all / clear-all toggle — DECIDED, and REJECTED (MOTIR-2463)
+
+**There is no domain-level grant-all / clear-all control, and its absence is a decision, not an
+omission.** This paragraph exists so that nobody building the editor has to wonder.
+
+The affordance was worth asking about: with 28 role-gated permissions, a heading that could tick its
+whole group is the shape Jira's named permission bundles amount to on a catalog that is already
+grouped. Two measurements killed it.
+
+**First, the group sizes.** Counted from `PERMISSION_META` on `origin/main`, the 28 role-gated keys
+fall under 15 headings like this:
+
+| rows under one heading | headings                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------- |
+| **3**                  | `work_item`, `field`, `ai`                                                       |
+| **2**                  | `project`, `comment`, `attachment`, `member`, `workflow`, `report`, `repository` |
+| **1**                  | `watcher`, `board`, `sprint`, `estimation`, `import`                             |
+
+The **median heading governs two checkboxes** and five govern exactly one. A bulk control saves at
+most two clicks and, on a third of the headings, saves none while adding a control that cannot be
+anything but already-on or already-off. Against that: fifteen new tri-state controls on the page, an
+indeterminate arm on a `Checkbox` primitive being introduced by this very story, and a second way to
+change the same value — so a reader of the page has to work out which of two controls last spoke.
+
+**Second, the job is already done by the base picker.** The one-move-to-a-sensible-set problem is
+real, and this design already answers it: the editor opens on a copy of a **built-in base**, so the
+author starts from a role that works and takes two things away. That is the same problem Jira's
+bundles solve, solved once, at the top of the page, in the grammar the rest of the surface uses.
+
+**What the editor does instead**: the pinned action bar carries the running count, so the author can
+always see the size of what they are composing without a per-domain control to read it off.
+
+If this is ever revisited, the trigger to watch for is the catalog growing headings of **six or more**
+rows — not the total. That is the number at which "tick this whole group" stops being two clicks.
+
 ## Access path (drawn, not just named)
 
 The rail's **ACCESS** group, beneath **Members & access** and above **Code access** — drawn in every
@@ -1674,31 +1803,34 @@ drilled into, so the rail keeps **Roles & permissions** active on all three.
 | `Input` / editable-field rows, and the `Modal`                          | `design/projects/details.mock.html` (6.8.3)        |
 
 All three are inherited **verbatim** — their CSS is copied in unchanged so this asset cannot drift
-from them. A change to any belongs in _that_ asset. (The `Modal` block is inherited but **no longer
-used**: role authoring is a page. It stays byte-identical rather than being pruned, so the
-inheritance is still a copy rather than an edit.)
+from them. A change to any belongs in _that_ asset. (The `Modal` block was inherited and, while role
+authoring became a page, unused — **MOTIR-2463's panel 5 uses it again** for the delete-with-reassign
+dialog, which is the one thing on this surface that genuinely is a dialog. It was kept
+byte-identical rather than pruned, which is exactly why it was there to compose from.)
 
-> Two `color: #fff` literals survive inside the inherited blocks (`.proj .pav`, the unused
-> `.btn-danger`). They are **pre-existing**, carried byte-identical rather than silently diverged;
-> this asset introduces no colour literal of its own.
+> Two `color: #fff` literals survive inside the inherited blocks (`.proj .pav`, and `.btn-danger` —
+> now used, by panel 5's destructive confirm). They are **pre-existing**, carried byte-identical
+> rather than silently diverged; this asset introduces no colour literal of its own.
 
 ## Primitives composed — MOTIR-2263's screens need NO new primitive; MOTIR-2257's page needs exactly ONE
 
-| Element                             | Shipped primitive                               | Token role                                                                      |
-| ----------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------- |
-| The role list · the permission card | `Card`                                          | `--radius-card` · `--shadow-card` · `--el-border`                               |
-| A role ROW                          | the `MembersCard` row grammar                   | `--spacing-card-padding` · hover `--el-surface-soft`                            |
-| A role's TILE                       | `Pill` tint grammar                             | built-in `--el-tint-lavender` · custom `--el-tint-sky` · `--el-text-strong` ink |
-| `Built-in` lock · `Custom` chip     | `Pill`                                          | `--el-text-faint` · `pill-member` sky                                           |
-| Domain heading                      | `SectionLabel` grammar                          | `--el-muted` · `--el-text-faint`                                                |
-| Held / withheld / level-gated mark  | icon + `aria-label`                             | `--el-success` · `--el-text-faint`                                              |
-| `Based on …` provenance chip        | `Pill` (neutral)                                | `--el-muted` + `--el-text-secondary`                                            |
-| `Create role` · `Cancel` · `Edit`   | `Button` (primary / ghost / secondary)          | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md`         |
-| `Delete` on a custom role           | `Button` (icon)                                 | `--spacing-icon-btn` (PADDING) · `--radius-control`                             |
-| Name field · Start-from picker      | `Input` / `FormField`                           | `--radius-input` · `--height-input` · `--spacing-input-x/y`                     |
-| The sticky action bar               | `Card`                                          | `--radius-card` · `--shadow-elevated`                                           |
-| Rail, groups, rows                  | `Sidebar` / `SidebarSection` / `SidebarNavItem` | `--el-sidebar-*` · `--radius-control` · `--height-control`                      |
-| **Permission checkbox** — **NEW**   | ⚠️ **`Checkbox`, to be added by MOTIR-2257**    | `--radius-control` · `--el-border-strong` · `--el-accent`                       |
+| Element                               | Shipped primitive                                   | Token role                                                                                                   |
+| ------------------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| The role list · the permission card   | `Card`                                              | `--radius-card` · `--shadow-card` · `--el-border`                                                            |
+| A role ROW                            | the `MembersCard` row grammar                       | `--spacing-card-padding` · hover `--el-surface-soft`                                                         |
+| A role's TILE                         | `Pill` tint grammar                                 | built-in `--el-tint-lavender` · custom `--el-tint-sky` · `--el-text-strong` ink                              |
+| `Built-in` lock · `Custom` chip       | `Pill`                                              | `--el-text-faint` · `pill-member` sky                                                                        |
+| Domain heading                        | `SectionLabel` grammar                              | `--el-muted` · `--el-text-faint`                                                                             |
+| Held / withheld / level-gated mark    | icon + `aria-label`                                 | `--el-success` · `--el-text-faint`                                                                           |
+| `Based on …` provenance chip          | `Pill` (neutral)                                    | `--el-muted` + `--el-text-secondary`                                                                         |
+| `Create role` · `Cancel` · `Edit`     | `Button` (primary / ghost / secondary)              | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md`                                      |
+| `Delete` on a custom role             | `Button` (icon)                                     | `--spacing-icon-btn` (PADDING) · `--radius-control`                                                          |
+| Name field · Start-from picker        | `Input` / `FormField`                               | `--radius-input` · `--height-input` · `--spacing-input-x/y`                                                  |
+| The sticky action bar                 | `Card`                                              | `--radius-card` · `--shadow-elevated`                                                                        |
+| Rail, groups, rows                    | `Sidebar` / `SidebarSection` / `SidebarNavItem`     | `--el-sidebar-*` · `--radius-control` · `--height-control`                                                   |
+| **Permission checkbox** — **NEW**     | ⚠️ **`Checkbox`, to be added by MOTIR-2257**        | `--radius-control` · `--el-border-strong` · `--el-accent`                                                    |
+| Delete-with-reassign dialog (p5)      | `Modal` (inherited) + `Button` (`danger` / `ghost`) | `--radius-modal` · `--shadow-modal` · `--el-danger` · destination picker on `Input`/`FormField`              |
+| Cap explanation on `Create role` (p6) | `Tooltip`                                           | `--el-tooltip-bg` / `--el-tooltip-text` · `--radius-control` · `--spacing-tooltip-x/y` · `--shadow-elevated` |
 
 **The one new primitive.** `components/ui/` ships `Switch` and `MultiSelectPicker` but no `Checkbox`;
 the product's only checkbox is a raw unstyled `<input type="checkbox">` in `WorkflowEditor.tsx`.
@@ -1779,8 +1911,32 @@ code nothing while diverging would cost it a sort.)
 
 Copy matches the `permissions.*` i18n namespace, so MOTIR-2263 renders the same strings this mock
 shows. **`Contractor` (4 of 28) and `Reporter` (6 of 28) are illustrative** — custom roles, not
-shipped ones; they exist to draw the list at five roles and to show the `Based on …` provenance
-(Reporter is cut from Contractor, so the chip chains).
+shipped ones; they exist to draw the list at five roles and to show the `Based on …` provenance.
+
+> **A base is ALWAYS one of the three BUILT-INS, and `basedOn` is PROVENANCE, not inheritance
+> (corrected 2026-08-09, MOTIR-2463).** An earlier revision drew `Reporter` as _"a Contractor who
+> also triages…"_ — a custom role cut from another custom role, so the provenance chip chained. That
+> is a shape the schema will not have: `ProjectRoleDefinition.basedOn` is the `MemberRole` enum, and
+> it records the base's permission set **as it stood at creation**. Later edits to the base never
+> re-flow into the role, and a role can never point at another role. So `Reporter` is now cut from
+> `Viewer` like `Contractor` is, and its description no longer names another custom role. The chip
+> reads `Based on Viewer · +N` — a comparison, taken once — and never a chain.
+
+## Who builds what (MOTIR-2257's allocation, readable from the asset)
+
+The 2026-08-09 amendment (MOTIR-2463) drew four things and rejected a fifth. Each is owned by exactly
+one card, so no code card has to decide whether a surface is its:
+
+| amendment                                                           | drawn in                                                          | **built by**                                                                                               |
+| ------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| the delete-with-reassign dialog, both states                        | `roles-permissions.mock.html` panel 5                             | **MOTIR-2480** (the list + detail write affordances)                                                       |
+| `Create role` at the cap, disabled + explained                      | `roles-permissions.mock.html` panel 6                             | **MOTIR-2480**                                                                                             |
+| the Members role picker with custom roles, and the custom-role chip | `access-members.mock.html` panel 5 (+ its chip in panels 0 and 4) | **MOTIR-2485** (assigning a custom role)                                                                   |
+| `Reporter` re-cut off a built-in base                               | `roles-permissions.mock.html` panels 0 and 4                      | asset-only — the content correction is this card's, and **MOTIR-2467** is what makes it true in the schema |
+| the bulk grant-all / clear-all toggle                               | **REJECTED** — see the section above                              | nobody. The editor card (**MOTIR-2483**) does not build one, and does not need to ask                      |
+
+The `Checkbox` primitive the create page composes is **MOTIR-2465**'s, and it needs **no**
+indeterminate arm — that arm existed only for the bulk toggle, which is rejected.
 
 ## Source of truth
 
