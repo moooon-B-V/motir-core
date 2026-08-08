@@ -28,6 +28,14 @@ import { scopesInGroup, type ScopeGroup, type ScopeMeta } from './scopeMeta';
 //     "Default"; ≥2 → Comboboxes). The wide (~42rem) modal shows all six
 //     permission scopes at once — width, not scroll (Yue, 2026-06-16). The CTA
 //     needs a non-empty label, a selected workspace, AND ≥1 permission scope.
+//     WIDTH buys the scope grid; it does not buy HEIGHT. The fields therefore
+//     live in `Modal.Body` and the footer is pinned beside it (MOTIR-2488):
+//     the Modal panel is `max-h-[90vh] overflow-hidden`, so a bare <form> as
+//     its flex child cannot shrink (`min-height: auto`) and the whole footer —
+//     Cancel AND Create token — gets clipped outside the panel with no
+//     scrollbar anywhere. This is the tallest form in the app and it grows
+//     further on a ≥2-org / ≥2-workspace account, which is exactly the shape
+//     the single-tenant E2E fixture never rendered.
 //   * SHOWN-ONCE — after the create POST returns the plaintext secret (7.8.1
 //     returns it exactly once), the modal flips to a read-only monospace secret
 //     field + Copy + the peach one-time warning. "Done" closes; the secret is
@@ -299,124 +307,129 @@ export function CreateTokenModal({
         </div>
       ) : (
         <form
-          className="flex flex-col gap-4"
+          className="flex min-h-0 flex-1 flex-col"
           onSubmit={(e) => {
             e.preventDefault();
             void submit();
           }}
         >
-          <Input
-            id={labelId}
-            label={t('createModal.labelField')}
-            helperText={t('createModal.labelHelper')}
-            placeholder={t('createModal.labelPlaceholder')}
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            autoFocus
-            required
-          />
-          {/* BINDING scope — the organization → workspace this token is bound to
-              (bug 7.21). When the account spans ≥2 orgs the org picker leads as a
-              full-width row; otherwise the lone org is implicit and only the
-              Workspace (reading "Default") + Expires pair shows. */}
-          {multiOrg ? (
-            <div className="flex flex-col gap-1.5">
-              <label
-                htmlFor={orgFieldId}
-                className="font-sans text-sm font-medium text-(--el-text)"
-              >
-                {t('createModal.orgField')}
-              </label>
-              <Combobox
-                id={orgFieldId}
-                label={t('createModal.orgField')}
-                options={orgOptions}
-                value={scope.orgId}
-                onChange={handleOrgChange}
-              />
-            </div>
-          ) : null}
-          {/* Workspace + Expires pair up side by side (the design's `.meta-cols`,
-              Yue 2026-06-16) — using the wide modal's width and saving a row. */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
-            <div className="flex flex-col gap-1.5">
-              {multiWorkspace ? (
-                <>
-                  <label
-                    htmlFor={workspaceFieldId}
-                    className="font-sans text-sm font-medium text-(--el-text)"
-                  >
-                    {t('createModal.workspaceField')}
-                  </label>
-                  <Combobox
+          <Modal.Body className="gap-4">
+            <Input
+              id={labelId}
+              label={t('createModal.labelField')}
+              helperText={t('createModal.labelHelper')}
+              placeholder={t('createModal.labelPlaceholder')}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              autoFocus
+              required
+            />
+            {/* BINDING scope — the organization → workspace this token is bound to
+                (bug 7.21). When the account spans ≥2 orgs the org picker leads as a
+                full-width row; otherwise the lone org is implicit and only the
+                Workspace (reading "Default") + Expires pair shows. */}
+            {multiOrg ? (
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={orgFieldId}
+                  className="font-sans text-sm font-medium text-(--el-text)"
+                >
+                  {t('createModal.orgField')}
+                </label>
+                <Combobox
+                  id={orgFieldId}
+                  label={t('createModal.orgField')}
+                  options={orgOptions}
+                  value={scope.orgId}
+                  onChange={handleOrgChange}
+                />
+              </div>
+            ) : null}
+            {/* Workspace + Expires pair up side by side (the design's `.meta-cols`,
+                Yue 2026-06-16) — using the wide modal's width and saving a row. */}
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              <div className="flex flex-col gap-1.5">
+                {multiWorkspace ? (
+                  <>
+                    <label
+                      htmlFor={workspaceFieldId}
+                      className="font-sans text-sm font-medium text-(--el-text)"
+                    >
+                      {t('createModal.workspaceField')}
+                    </label>
+                    <Combobox
+                      id={workspaceFieldId}
+                      label={t('createModal.workspaceField')}
+                      options={workspaceOptions}
+                      value={scope.workspaceId}
+                      onChange={(wid) => setScope((s) => ({ ...s, workspaceId: wid }))}
+                    />
+                  </>
+                ) : (
+                  <ReadonlyField
                     id={workspaceFieldId}
                     label={t('createModal.workspaceField')}
-                    options={workspaceOptions}
-                    value={scope.workspaceId}
-                    onChange={(wid) => setScope((s) => ({ ...s, workspaceId: wid }))}
+                    value={t('createModal.defaultWorkspace')}
                   />
-                </>
-              ) : (
-                <ReadonlyField
-                  id={workspaceFieldId}
-                  label={t('createModal.workspaceField')}
-                  value={t('createModal.defaultWorkspace')}
-                />
-              )}
-              <span className="font-sans text-xs text-(--el-text-muted)">
-                {t('createModal.scopeHelper')}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor={expiryId} className="font-sans text-sm font-medium text-(--el-text)">
-                {t('createModal.expiresField')}
-              </label>
-              <Combobox
-                id={expiryId}
-                label={t('createModal.expiresField')}
-                options={expiryOptions}
-                value={expiry}
-                onChange={setExpiry}
-              />
-              <span className="font-sans text-xs text-(--el-text-muted)">
-                {t('createModal.expiresHelper')}
-              </span>
-            </div>
-          </div>
-          {/* PERMISSION scopes (7.7.18) — what the token may DO. Grouped Switch
-              toggles in a 2-column grid (all six visible at once); default
-              all-on-except-delete; the delete scope as its own rose danger row.
-              A token must grant ≥1 permission (the empty-scope error + CTA gate). */}
-          <div className="flex flex-col gap-2">
-            <span id={permLabelId} className="font-sans text-sm font-medium text-(--el-text)">
-              {t('scopes.permissionsLabel')}
-            </span>
-            <span className="font-sans text-xs text-(--el-text-muted)">
-              {t('scopes.permissionsHelper')}
-            </span>
-            <div
-              role="group"
-              aria-labelledby={permLabelId}
-              className="mt-1 grid grid-cols-2 gap-x-6 gap-y-4"
-            >
-              <div className="flex flex-col gap-4">
-                {renderScopeGroup('read')}
-                {renderScopeGroup('sprints')}
-                {renderScopeGroup('integrations')}
+                )}
+                <span className="font-sans text-xs text-(--el-text-muted)">
+                  {t('createModal.scopeHelper')}
+                </span>
               </div>
-              <div className="flex flex-col gap-4">{renderScopeGroup('workItems')}</div>
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={expiryId}
+                  className="font-sans text-sm font-medium text-(--el-text)"
+                >
+                  {t('createModal.expiresField')}
+                </label>
+                <Combobox
+                  id={expiryId}
+                  label={t('createModal.expiresField')}
+                  options={expiryOptions}
+                  value={expiry}
+                  onChange={setExpiry}
+                />
+                <span className="font-sans text-xs text-(--el-text-muted)">
+                  {t('createModal.expiresHelper')}
+                </span>
+              </div>
             </div>
-            {grantedScopes.size === 0 ? (
-              <p
-                role="alert"
-                className="mt-1 flex items-center gap-1.5 font-sans text-xs text-(--el-danger)"
+            {/* PERMISSION scopes (7.7.18) — what the token may DO. Grouped Switch
+                toggles in a 2-column grid (all six visible at once); default
+                all-on-except-delete; the delete scope as its own rose danger row.
+                A token must grant ≥1 permission (the empty-scope error + CTA gate). */}
+            <div className="flex flex-col gap-2">
+              <span id={permLabelId} className="font-sans text-sm font-medium text-(--el-text)">
+                {t('scopes.permissionsLabel')}
+              </span>
+              <span className="font-sans text-xs text-(--el-text-muted)">
+                {t('scopes.permissionsHelper')}
+              </span>
+              <div
+                role="group"
+                aria-labelledby={permLabelId}
+                className="mt-1 grid grid-cols-2 gap-x-6 gap-y-4"
               >
-                <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
-                {t('scopes.emptyError')}
-              </p>
-            ) : null}
-          </div>
-          <Modal.Footer>
+                <div className="flex flex-col gap-4">
+                  {renderScopeGroup('read')}
+                  {renderScopeGroup('sprints')}
+                  {renderScopeGroup('integrations')}
+                </div>
+                <div className="flex flex-col gap-4">{renderScopeGroup('workItems')}</div>
+              </div>
+              {grantedScopes.size === 0 ? (
+                <p
+                  role="alert"
+                  className="mt-1 flex items-center gap-1.5 font-sans text-xs text-(--el-danger)"
+                >
+                  <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
+                  {t('scopes.emptyError')}
+                </p>
+              ) : null}
+            </div>
+          </Modal.Body>
+          <Modal.Footer className="shrink-0">
             <Button type="button" variant="ghost" onClick={close} disabled={creating}>
               {t('createModal.cancel')}
             </Button>
