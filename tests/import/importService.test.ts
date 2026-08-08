@@ -1,6 +1,8 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { importService } from '@/lib/services/importService';
+import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
+import { LinearOAuthExchangeError } from '@/lib/import/linear/errors';
 import type { ImportConnectionConfig } from '@/lib/dto/import';
 import type { ImportMapping } from '@/lib/import/engine/types';
 import {
@@ -161,6 +163,124 @@ describe('importService', () => {
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(ImportSourceNotConnectedError);
+  });
+});
+
+// MOTIR-2434 — Linear expires every OAuth access token after 24 hours, so the
+// connector must be built from a token that was RENEWED first. These assert the
+// wiring at the seam the importer actually uses: the credential the built
+// connector puts on the wire, not just what the OAuth service returns.
+describe('importService.buildConnector — the Linear refresh path', () => {
+  const LINEAR_CONNECTION = { source: 'linear', authScheme: 'bearer' } as const;
+  const GRAPHQL = 'https://api.linear.app/graphql';
+
+  interface LinearStub {
+    tokenPosts: URLSearchParams[];
+    graphqlAuth: string[];
+  }
+
+  /** Stub `fetch` for BOTH Linear endpoints: the OAuth token exchange (answered
+   *  from `token`) and the GraphQL API the connector calls, recording the
+   *  Authorization header each request carried. */
+  function stubLinear(token: { status?: number; body: unknown }): LinearStub {
+    const stub: LinearStub = { tokenPosts: [], graphqlAuth: [] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url =
+          typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+        const json = (body: unknown, status = 200) =>
+          new Response(JSON.stringify(body), {
+            status,
+            headers: { 'content-type': 'application/json' },
+          });
+
+        if (url.includes('api.linear.app/oauth/token')) {
+          stub.tokenPosts.push(new URLSearchParams(String(init?.body ?? '')));
+          return json(token.body, token.status ?? 200);
+        }
+        if (url.startsWith(GRAPHQL)) {
+          stub.graphqlAuth.push(String(new Headers(init?.headers).get('authorization')));
+          return json({ data: { viewer: { id: 'u1', name: 'Member' } } });
+        }
+        throw new Error(`unexpected fetch to ${url}`);
+      }),
+    );
+    return stub;
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('rejects with ImportSourceNotConnectedError when Linear was never connected', async () => {
+    const fx = await makeWorkItemFixture();
+    await expect(
+      importService.buildConnector('linear', LINEAR_CONNECTION, fx.ctx),
+    ).rejects.toBeInstanceOf(ImportSourceNotConnectedError);
+  });
+
+  it('renews an EXPIRED token before the connector calls Linear (the day-two failure)', async () => {
+    const fx = await makeWorkItemFixture();
+    await importSourceIdentityService.upsertIdentity({
+      userId: fx.ctx.userId,
+      workspaceId: fx.ctx.workspaceId,
+      source: 'linear',
+      accessToken: 'stale_token',
+      refreshToken: 'refresh_1',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    const stub = stubLinear({
+      body: { access_token: 'fresh_token', refresh_token: 'refresh_2', expires_in: 86_399 },
+    });
+
+    const connector = await importService.buildConnector('linear', LINEAR_CONNECTION, fx.ctx);
+    await connector.connect();
+
+    // The refresh ran, and the connector went out with the RENEWED token — the
+    // stale one never reached Linear.
+    expect(stub.tokenPosts.map((p) => p.get('grant_type'))).toEqual(['refresh_token']);
+    expect(stub.graphqlAuth).toEqual(['Bearer fresh_token']);
+  });
+
+  it('passes an unexpired token straight through (no refresh POST)', async () => {
+    const fx = await makeWorkItemFixture();
+    await importSourceIdentityService.upsertIdentity({
+      userId: fx.ctx.userId,
+      workspaceId: fx.ctx.workspaceId,
+      source: 'linear',
+      accessToken: 'live_token',
+      refreshToken: 'refresh_1',
+      expiresAt: new Date(Date.now() + 12 * 60 * 60_000),
+    });
+    const stub = stubLinear({ body: { access_token: 'should_not_be_used' } });
+
+    const connector = await importService.buildConnector('linear', LINEAR_CONNECTION, fx.ctx);
+    await connector.connect();
+
+    expect(stub.tokenPosts).toHaveLength(0);
+    expect(stub.graphqlAuth).toEqual(['Bearer live_token']);
+  });
+
+  it('turns a grant Linear will not refresh into the 422 not-connected error, not a 500', async () => {
+    const fx = await makeWorkItemFixture();
+    await importSourceIdentityService.upsertIdentity({
+      userId: fx.ctx.userId,
+      workspaceId: fx.ctx.workspaceId,
+      source: 'linear',
+      accessToken: 'stale_token',
+      refreshToken: 'refresh_dead',
+      expiresAt: new Date(Date.now() - 60 * 60_000),
+    });
+    stubLinear({ status: 400, body: { error: 'invalid_grant' } });
+
+    const err = await importService
+      .buildConnector('linear', LINEAR_CONNECTION, fx.ctx)
+      .then(() => null)
+      .catch((e: unknown) => e);
+
+    // The member's remedy is to re-connect, which is what this code tells the
+    // wizard to say; the vendor detail survives as the cause.
+    expect(err).toBeInstanceOf(ImportSourceNotConnectedError);
+    expect((err as Error).cause).toBeInstanceOf(LinearOAuthExchangeError);
   });
 });
 

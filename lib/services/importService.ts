@@ -14,6 +14,8 @@ import { importRepository } from '@/lib/repositories/importRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
+import { linearImportOAuthService } from '@/lib/services/linearImportOAuthService';
+import { LinearOAuthExchangeError } from '@/lib/import/linear/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ImportConnectionConfig, ImportDiscoverResult, ImportDto } from '@/lib/dto/import';
 import { toImportDto } from '@/lib/mappers/importMappers';
@@ -248,6 +250,22 @@ export const importService = {
       });
     }
 
+    // Linear expires every OAuth access token after 24 hours (all OAuth2 apps
+    // moved to refresh tokens on 2026-04-01), so it does NOT take the raw stored
+    // token below — it reads through the refresh path, which re-mints and
+    // re-persists an expired token before the connector ever calls Linear
+    // (MOTIR-2434).
+    if (connection.source === 'linear') {
+      const live = await readFreshLinearConnection(ctx);
+      if (!live) throw new ImportSourceNotConnectedError('linear');
+      return new LinearConnector({
+        apiKey: live.accessToken,
+        authScheme: connection.authScheme,
+        teamKey: connection.teamKey,
+        endpoint: connection.endpoint,
+      });
+    }
+
     // Live sources — fetch-and-decrypt the acting member's token.
     const token = await importSourceIdentityService.getLiveToken({
       userId: ctx.userId,
@@ -264,13 +282,6 @@ export const importService = {
           email: connection.email,
           projectKey: connection.projectKey,
           jql: connection.jql,
-        });
-      case 'linear':
-        return new LinearConnector({
-          apiKey: token.accessToken,
-          authScheme: connection.authScheme,
-          teamKey: connection.teamKey,
-          endpoint: connection.endpoint,
         });
       case 'github':
         return new GithubConnector({
@@ -289,6 +300,29 @@ export const importService = {
     }
   },
 };
+
+/** Read the acting member's Linear connection through the refresh path. A grant
+ *  Linear will no longer refresh (the refresh POST was rejected, or the identity
+ *  predates MOTIR-2434 and stored no refresh token) is, in effect, NOT a
+ *  connection: translate it to the not-connected error, which the wizard already
+ *  renders as "connect Linear first" — the member's actual remedy — instead of
+ *  letting a vendor error escape as an opaque 500. The vendor detail rides along
+ *  as the `cause` for logs. */
+async function readFreshLinearConnection(
+  ctx: ServiceContext,
+): Promise<{ accessToken: string } | null> {
+  try {
+    return await linearImportOAuthService.getFreshConnection({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+    });
+  } catch (err) {
+    if (!(err instanceof LinearOAuthExchangeError)) throw err;
+    const notConnected = new ImportSourceNotConnectedError('linear');
+    notConnected.cause = err;
+    throw notConnected;
+  }
+}
 
 /** The connector's human-facing source ref (Jira project key / `owner/repo` /
  *  filename) for `Import.sourceRef`, best-effort. */
