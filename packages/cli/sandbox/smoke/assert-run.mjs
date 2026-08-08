@@ -54,16 +54,16 @@ function argOf(name, fallback) {
   return i === -1 ? fallback : process.argv[i + 1];
 }
 
+/** Escape a value for literal use inside a `RegExp` — `PROJECT` comes from argv,
+ *  so it is interpolated into a pattern and must not be able to BE a pattern. */
 function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 const CALLS_PATH = argOf('calls');
 const GH_PATH = argOf('gh');
 const ITEMS = Number.parseInt(argOf('items', '2'), 10);
 const PROJECT = argOf('project', 'SMOKE');
-
-const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const failures = [];
 const check = (condition, message) => {
