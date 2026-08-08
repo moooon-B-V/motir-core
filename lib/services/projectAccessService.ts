@@ -86,15 +86,22 @@ async function resolveInputs(
         tx,
       )
     : await workspaceMembershipRepository.findByUserAndWorkspace(ctx.userId, ctx.workspaceId);
-  const projectMembership = await projectMembershipRepository.findByUserAndProject(
-    ctx.userId,
-    projectId,
-    tx,
-  );
+  // ONE round trip for the membership AND the custom role it points at (Story
+  // MOTIR-2257 · MOTIR-2470) — a `findUnique` with an `include` is a single
+  // Prisma operation, so inside a transaction both tables are read on the same
+  // snapshot under the same `app.workspace_id` GUC their RLS policies key off.
+  // `roleDefinition` is null for every membership that names a built-in.
+  const projectMembership =
+    await projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
+      ctx.userId,
+      projectId,
+      tx,
+    );
   return {
     accessLevel: project.accessLevel,
     workspaceRole: workspaceMembership?.role ?? null,
     projectRole: projectMembership?.role ?? null,
+    customRolePermissions: projectMembership?.roleDefinition?.permissions ?? null,
   };
 }
 
@@ -138,15 +145,21 @@ async function resolvePublicInputs(
         tx,
       )
     : await workspaceMembershipRepository.findByUserAndWorkspace(actorUserId, project.workspaceId);
-  const projectMembership = await projectMembershipRepository.findByUserAndProject(
-    actorUserId,
-    projectId,
-    tx,
-  );
+  // Same ONE-round-trip read as `resolveInputs` (MOTIR-2470): an authenticated
+  // actor who is ALSO a member of the public project's workspace keeps their
+  // real capabilities, and if that membership is on a custom role, that role is
+  // what decides them here too.
+  const projectMembership =
+    await projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
+      actorUserId,
+      projectId,
+      tx,
+    );
   return {
     accessLevel: project.accessLevel,
     workspaceRole: workspaceMembership?.role ?? null,
     projectRole: projectMembership?.role ?? null,
+    customRolePermissions: projectMembership?.roleDefinition?.permissions ?? null,
   };
 }
 

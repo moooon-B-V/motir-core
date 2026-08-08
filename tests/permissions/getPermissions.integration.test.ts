@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -481,6 +482,225 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
     await expect(
       projectAccessService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+});
+
+describe('a membership on a CUSTOM role, resolved through the database (MOTIR-2470)', () => {
+  /**
+   * Put `ctx`'s user on a brand-new custom role in `projectId`, writing BOTH
+   * columns through the repository — the only sanctioned write path, and the
+   * one that holds `role = definition.basedOn`. Returns the role's id.
+   */
+  async function putOnCustomRole(args: {
+    workspaceId: string;
+    projectId: string;
+    userId: string;
+    name: string;
+    basedOn: 'admin' | 'member' | 'viewer';
+    permissions: string[];
+  }): Promise<string> {
+    const definition = await db.projectRoleDefinition.create({
+      data: {
+        workspaceId: args.workspaceId,
+        projectId: args.projectId,
+        name: args.name,
+        basedOn: args.basedOn,
+        permissions: args.permissions,
+      },
+    });
+    await db.$transaction((tx) =>
+      projectMembershipRepository.setRoleDefinition(
+        args.userId,
+        args.projectId,
+        { roleDefinitionId: definition.id, role: args.basedOn },
+        tx,
+      ),
+    );
+    return definition.id;
+  }
+
+  it('resolves the ROLE`s set, not the built-in the membership used to name', async () => {
+    const s = await buildScenario('open', 'custom-basic');
+    // The `member` actor moves onto a Contractor role: viewer-based, plus
+    // comments and attachments — the epic's own motivating gap.
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.member.userId,
+      name: 'Contractor',
+      basedOn: 'viewer',
+      permissions: ['project:browse', 'comment:add', 'attachment:create'],
+    });
+
+    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
+    expect([...held].sort()).toEqual(['attachment:create', 'comment:add', 'project:browse'].sort());
+    // Specifically NOT what `member` holds — the whole point.
+    expect(held.has('work_item:edit')).toBe(false);
+    expect(held.has('sprint:manage')).toBe(false);
+
+    // And the sibling on a built-in is untouched by any of it.
+    const untouched = await projectAccessService.getPermissions(s.projectId, s.ctxs.viewer);
+    expect(untouched.has('comment:add')).toBe(false);
+  });
+
+  it('the workspace-manager RAIL wins over a custom role the OWNER is on', async () => {
+    const s = await buildScenario('private', 'custom-rail');
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.owner.userId,
+      name: 'Nearly nothing',
+      basedOn: 'viewer',
+      permissions: [], // grants absolutely nothing
+    });
+    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.owner);
+    for (const key of ROLE_GATED_PERMISSIONS) {
+      expect(held.has(key), `owner lacks ${key}`).toBe(true);
+    }
+  });
+
+  it('the access LEVEL subtracts from a custom role at its base`s tier', async () => {
+    // Two roles holding the SAME set, differing only in `basedOn`. On a
+    // `limited` project the viewer-based one loses `work_item:edit` and the
+    // member-based one keeps it — the parity `levelGrants` needed no branch for.
+    const s = await buildScenario('limited', 'custom-level');
+    const permissions = ['project:browse', 'work_item:edit', 'comment:add'];
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.viewer.userId,
+      name: 'From viewer',
+      basedOn: 'viewer',
+      permissions,
+    });
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.member.userId,
+      name: 'From member',
+      basedOn: 'member',
+      permissions,
+    });
+
+    const fromViewer = await projectAccessService.getPermissions(s.projectId, s.ctxs.viewer);
+    const fromMember = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
+    expect(fromViewer.has('work_item:edit')).toBe(false);
+    expect(fromViewer.has('comment:add')).toBe(true);
+    expect(fromMember.has('work_item:edit')).toBe(true);
+  });
+
+  it('a stored key that is no longer in the catalog is ignored, not granted', async () => {
+    const s = await buildScenario('open', 'custom-stale');
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.member.userId,
+      name: 'Stale',
+      basedOn: 'viewer',
+      // `repository:connect` is the real shape: MOTIR-2294 retired it. A row
+      // authored before that is exactly this.
+      permissions: ['project:browse', 'repository:connect', 'not:a:permission'],
+    });
+    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
+    expect([...held]).toEqual(['project:browse']);
+  });
+
+  it('the role definition is INVISIBLE under a foreign workspace GUC — the actor resolves as if it did not exist', async () => {
+    const s = await buildScenario('open', 'custom-rls');
+    const other = await buildScenario('open', 'custom-rls-other');
+    const roleId = await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.member.userId,
+      name: 'Contractor',
+      basedOn: 'viewer',
+      permissions: ['project:browse', 'comment:add'],
+    });
+
+    // Under the OTHER workspace's GUC, dropped to the non-bypass app role, the
+    // membership's own row is hidden too (project_membership carries the same
+    // policy) — so the join returns nothing and there is no way to read the
+    // role's set across the tenant boundary.
+    const leaked = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
+      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
+    });
+    expect(leaked).toEqual([]);
+
+    // Under its OWN workspace's GUC it is right there — so the emptiness above
+    // is the policy biting, not a missing row.
+    const visible = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${s.workspaceId}, true)`;
+      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
+    });
+    expect(visible.map((r) => r.id)).toEqual([roleId]);
+  });
+
+  it('resolveInputs reads the membership AND its role in ONE round trip, inside the caller`s tx', async () => {
+    const s = await buildScenario('open', 'custom-onetrip');
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.member.userId,
+      name: 'Contractor',
+      basedOn: 'viewer',
+      permissions: ['project:browse', 'comment:add'],
+    });
+
+    // Count the SELECTs the gate issues, with and without a custom role in
+    // play. Reading the role definition must cost ZERO extra queries — it rides
+    // the membership read's `include` — so the two counts are equal, and both
+    // run entirely inside the caller's transaction (no second connection).
+    async function countSelectsFor(ctx: WorkspaceContext): Promise<number> {
+      let selects = 0;
+      const client = db.$extends({
+        query: {
+          async $allOperations({ args, query, operation }) {
+            if (operation.startsWith('find') || operation === 'count') selects += 1;
+            return query(args);
+          },
+        },
+      });
+      await (client as unknown as typeof db).$transaction(async (tx) => {
+        await projectAccessService.assertPermission(s.projectId, ctx, 'project:browse', tx);
+      });
+      return selects;
+    }
+
+    const withCustom = await countSelectsFor(s.ctxs.member);
+    const withBuiltIn = await countSelectsFor(s.ctxs.viewer);
+    expect(withCustom).toBe(withBuiltIn);
+    // And it really is the three facts, not a fourth read bolted on.
+    expect(withCustom).toBe(3);
+  });
+
+  it('moving a membership BACK to a built-in restores that built-in`s set', async () => {
+    const s = await buildScenario('open', 'custom-back');
+    await putOnCustomRole({
+      workspaceId: s.workspaceId,
+      projectId: s.projectId,
+      userId: s.ctxs.member.userId,
+      name: 'Contractor',
+      basedOn: 'viewer',
+      permissions: ['project:browse'],
+    });
+    expect([...(await projectAccessService.getPermissions(s.projectId, s.ctxs.member))]).toEqual([
+      'project:browse',
+    ]);
+
+    await db.$transaction((tx) =>
+      projectMembershipRepository.setRoleDefinition(
+        s.ctxs.member.userId,
+        s.projectId,
+        { roleDefinitionId: null, role: 'member' },
+        tx,
+      ),
+    );
+    const restored = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
+    expect(restored.has('work_item:edit')).toBe(true);
+    expect(restored.has('comment:add')).toBe(true);
   });
 });
 

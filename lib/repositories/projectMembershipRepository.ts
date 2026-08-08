@@ -2,6 +2,7 @@ import {
   type MemberRole,
   Prisma,
   type ProjectMembership,
+  type ProjectRoleDefinition,
   type User,
 } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -12,6 +13,14 @@ import { db } from '@/lib/db';
 // `MembershipWithUser` on workspaceMembershipRepository.
 export type ProjectMembershipWithUser = ProjectMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
+};
+
+// A membership joined with the CUSTOM role it points at, if any (Story
+// MOTIR-2257 · MOTIR-2470). `roleDefinition` is null for every membership that
+// names a built-in through `role`. The resolution reads this shape so the
+// membership and its permission set arrive in one round trip.
+export type ProjectMembershipWithRoleDefinition = ProjectMembership & {
+  roleDefinition: ProjectRoleDefinition | null;
 };
 
 // ProjectMembership repository — single Prisma operations on the
@@ -38,6 +47,30 @@ export const projectMembershipRepository = {
     const client = tx ?? db;
     return client.projectMembership.findUnique({
       where: { userId_projectId: { userId, projectId } },
+    });
+  },
+
+  /**
+   * The user's membership in a project WITH the custom role it points at, in
+   * ONE query (Story MOTIR-2257 · Subtask MOTIR-2470). The read behind
+   * `projectAccessService.resolveInputs`: a `findUnique` with an `include` is a
+   * single Prisma operation and a single round trip, so a caller inside a
+   * transaction gets the membership and its role definition on ONE snapshot,
+   * under ONE binding of the `app.workspace_id` GUC that both tables' RLS
+   * policies read.
+   *
+   * `roleDefinition` is null when the membership names a BUILT-IN through
+   * `role` — which is every membership until somebody authors a role.
+   */
+  async findByUserAndProjectWithRoleDefinition(
+    userId: string,
+    projectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ProjectMembershipWithRoleDefinition | null> {
+    const client = tx ?? db;
+    return client.projectMembership.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      include: { roleDefinition: true },
     });
   },
 
