@@ -196,15 +196,25 @@ export function presentReadyItem(
 // ⚠️ These two vocabularies are derived from the DTO unions declared at the top
 // of this file, NOT from the generated Prisma enums (MOTIR-2458).
 //
-// A generated enum is a runtime VALUE. Naming one in a plain (non-`type`) import
-// is visually indistinguishable from importing a type — it reads as a type, it
-// sat among a dozen schema imports, and it was used once to build a Set of five
-// strings — but it pulled the whole `@prisma/client` runtime into every module
-// graph reaching this file. The OpenAPI operation registry reaches this file, so
-// three published documentation pages (`/docs/api`, `/docs/api/getting-started`,
-// `/docs/api/stability`) shipped a database client to render prose and a schema
-// table. Nothing here is data access, which is why the 4-layer convention never
-// caught it: it was reaching for a list of five words Prisma happens to know.
+// A generated enum is a runtime VALUE. This file used to open with
+//
+//   import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
+//
+// which is visually indistinguishable from importing a type — it reads as a
+// type, it sat among a dozen schema imports, and it was used once to build a Set
+// of five strings — but it pulled the whole `@prisma/client` runtime into every
+// module graph reaching this file. The OpenAPI operation registry reaches this
+// file, so three published documentation pages (`/docs/api`,
+// `/docs/api/getting-started`, `/docs/api/stability`) shipped a database client
+// to render prose and a schema table. Nothing here is data access, which is why
+// the 4-layer convention never caught it: it was reaching for a list of five
+// words Prisma happens to know.
+//
+// ⚠️ The statement above is quoted VERBATIM on purpose. It could not be, until
+// MOTIR-2461: `tests/helpers/importGraph.ts` did not strip comments, so writing
+// down the import this file had just removed re-flagged this file as still
+// carrying the client — and the cheapest way past that was to stop documenting
+// it, which is the one habit these guards exist to encourage.
 //
 // `READY_KINDS` / `READY_PRIORITIES` carry the same five values each, already
 // assert totality over the DTO union at compile time, and cost nothing at
