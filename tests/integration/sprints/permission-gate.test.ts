@@ -115,6 +115,26 @@ describe('the sprint LIFECYCLE — sprint:manage, a deliberate WIDENING', () => 
     expect(started.state).toBe('active');
   });
 
+  it('a MEMBER can START one — the board it provisions must not need board:configure', async () => {
+    // ⚠️ THE REGRESSION THIS CARD INTRODUCED AND ITS E2E CAUGHT. `startSprint`
+    // provisions the scrum board the sprint is viewed on. That went through
+    // `boardsService.createBoard`, which asserts `board:configure` — ADMIN-only.
+    // While starting a sprint was workspace-OWNER-only the inner assert always
+    // passed and the coupling was invisible; `sprint:manage` admits a MEMBER, who
+    // does not hold `board:configure`, so the inner call refused them and the
+    // route had no arm for it — a 500 on the most ordinary sprint action there is.
+    //
+    // Pinned here as well as in the E2E because this is the tier that runs on
+    // every push, and a 500 is exactly the failure a service test can catch first.
+    const fx = await makeFixture('life-board');
+    const sprint = await sprintsService.createSprint(fx.projectId, {}, fx.projectMemberCtx);
+    const started = await sprintsService.startSprint(sprint.id, {}, fx.projectMemberCtx);
+    expect(started.state).toBe('active');
+    // …and the board really was provisioned, by an actor who may not configure one.
+    const boards = await db.board.findMany({ where: { projectId: fx.projectId } });
+    expect(boards.some((b) => b.type === 'scrum')).toBe(true);
+  });
+
   it('admits a project MEMBER — the team that runs the sprint can run the sprint', async () => {
     const fx = await makeFixture('life-member');
     const sprint = await sprintsService.createSprint(fx.projectId, {}, fx.projectMemberCtx);
