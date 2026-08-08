@@ -6,10 +6,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // by tenantOrg.test.ts).
 vi.mock('@/lib/ai/motirAiClient', () => ({ submitJob: vi.fn(), streamJob: vi.fn() }));
 vi.mock('@/lib/ai/tenantOrg', () => ({ resolveTenantOrg: vi.fn() }));
+// …and the project gate (MOTIR-2355). `submitDiscoveryTurn` now asserts `ai:plan`
+// before it does anything else; this file drives a SYNTHETIC ProjectContext with
+// no rows behind it, so the real gate would 404 on `pj_1` and prove nothing about
+// the job envelope these cases are here for. The gate itself is covered against
+// real Postgres in `tests/integration/ai/planPermissionGate.test.ts`; the mock is
+// asserted below so it can never quietly hide the call.
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { assertPermission: vi.fn() },
+}));
 
 import { aiChatService } from '@/lib/services/aiChatService';
 import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 
@@ -30,6 +40,12 @@ describe('aiChatService.submitDiscoveryTurn', () => {
     const out = await aiChatService.submitDiscoveryTurn('build me a tracker', ctx);
 
     expect(out).toEqual({ jobId: 'job_1' });
+    // The gate runs, and it asks for `ai:plan` on THIS project (MOTIR-2355).
+    expect(projectAccessService.assertPermission).toHaveBeenCalledWith(
+      'pj_1',
+      { userId: 'user_1', workspaceId: 'ws_1' },
+      'ai:plan',
+    );
     expect(resolveTenantOrg).toHaveBeenCalledWith({ userId: 'user_1', workspaceId: 'ws_1' });
     expect(submitJob).toHaveBeenCalledWith(
       'discovery',

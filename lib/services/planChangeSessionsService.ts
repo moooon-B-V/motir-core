@@ -115,6 +115,24 @@ async function toDto(
   return toPlanChangeSessionDto(row, turns, workItemRefs);
 }
 
+/**
+ * Assert the actor may run the PLANNER on this project — `ai:plan`
+ * (Story MOTIR-2291 · Subtask MOTIR-2355).
+ *
+ * ⚠️ IT REPLACES `assertCanEdit`, AND THE TWO ARE NOT THE SAME ACTOR SET. Editing
+ * a work item and submitting a planning job look alike from a route — both are
+ * writes a member does — but a planning job SPENDS THE WORKSPACE'S AI CREDITS,
+ * and `work_item:edit` is held by the implicit workspace-member grant while
+ * `ai:plan` deliberately is not (`docs/decisions/member-facing-permissions.md`
+ * §2). So a workspace member with no membership on THIS project could open a
+ * plan-change thread and run the planner on somebody else's project, on the
+ * workspace's bill. That is the case this card is really about, and it does not
+ * follow from the viewer case.
+ */
+async function assertCanPlan(projectId: string, ctx: ServiceContext): Promise<void> {
+  await projectAccessService.assertPermission(projectId, ctx, 'ai:plan');
+}
+
 /** Resolve ONE of the project's conversations — the shared precondition of append
  *  + submit. `scopeKey` selects the thread: `''` is the project-wide one (the
  *  shipped 7.30 behaviour), a canonical anchor-set key is a contextual planning
@@ -127,7 +145,7 @@ async function requireSession(
   scopeKey: string = PROJECT_SCOPE_KEY,
 ): Promise<PlanChangeSession> {
   const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
-  await projectAccessService.assertCanEdit(pctx.projectId, ctx);
+  await assertCanPlan(pctx.projectId, ctx);
   const session = await planChangeSessionRepository.findByProjectAndScope(
     pctx.projectId,
     scopeKey,
@@ -231,7 +249,7 @@ export const planChangeSessionsService = {
     scope: PlanChangeScope = PROJECT_SCOPE,
   ): Promise<PlanChangeSessionDto> {
     const ctx: ServiceContext = { userId: pctx.userId, workspaceId: pctx.workspaceId };
-    await projectAccessService.assertCanEdit(pctx.projectId, ctx);
+    await assertCanPlan(pctx.projectId, ctx);
 
     const existing = await planChangeSessionRepository.findByProjectAndScope(
       pctx.projectId,

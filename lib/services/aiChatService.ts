@@ -2,6 +2,7 @@ import { submitJob, streamJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { ExistingWorkItemRef, JobStreamEvent } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // The chat front door's dispatch side (Subtask 7.3.4): the thin motir-core seam
 // between the chat UI (7.3.5) and the motir-ai `discovery` job handler (7.3.3).
@@ -31,6 +32,16 @@ export const aiChatService = {
     ctx: ProjectContext,
     opts?: { existingWorkItems?: ExistingWorkItemRef[] },
   ): Promise<{ jobId: string }> {
+    // `ai:plan` (Story MOTIR-2291 · Subtask MOTIR-2355). This reached NO project
+    // gate at all: any signed-in workspace member with the project open could
+    // send a discovery turn, and a discovery turn spends the workspace's AI
+    // credits. The key is held by the project `admin` and `member` and NOT by the
+    // implicit workspace-member grant, which is the actor this closes off.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     const { organizationId, isMeta } = await resolveTenantOrg({
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,

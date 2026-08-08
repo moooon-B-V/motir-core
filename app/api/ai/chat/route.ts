@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { MotirAiError } from '@/lib/ai/errors';
+import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 
 // POST /api/ai/chat (Subtask 7.3.4) — submit a user turn into the onboarding
 // `discovery` job for the active project, and return its `jobId`. The 7.3.5 chat
@@ -56,6 +57,17 @@ export async function POST(req: Request): Promise<Response> {
     // upstream dependency failed, not the caller's request.
     if (err instanceof MotirAiError) {
       return NextResponse.json({ code: err.code, error: err.message }, { status: 502 });
+    }
+    // MOTIR-2355 — the `ai:plan` gate. A non-browser is the 404 (no existence
+    // leak); a browser without the key is the 403 that names it.
+    if (err instanceof ProjectNotFoundError) {
+      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
+    }
+    if (err instanceof PermissionDeniedError) {
+      return NextResponse.json(
+        { code: err.code, error: err.message, permission: err.permission },
+        { status: 403 },
+      );
     }
     throw err;
   }

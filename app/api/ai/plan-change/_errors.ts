@@ -6,7 +6,11 @@ import {
   PlanChangeSessionNotFoundError,
   PlanChangeTurnConflictError,
 } from '@/lib/planChange/errors';
-import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  PermissionDeniedError,
+  ProjectAccessDeniedError,
+  ProjectNotFoundError,
+} from '@/lib/projects/errors';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 
 // Shared typed-error → HTTP mapping for the plan-change conversation routes
@@ -36,6 +40,15 @@ export function mapPlanChangeError(err: unknown): NextResponse | null {
     return NextResponse.json(
       { code: err.code, error: err.message },
       { status: err.kind === 'browse' ? 404 : 403 },
+    );
+  }
+  // MOTIR-2355 — the `ai:plan` refusal, carrying the key. A NON-browser never
+  // produces it (the 404 above catches them first), so this is precisely "you are
+  // on this project and may not spend its AI credits".
+  if (err instanceof PermissionDeniedError) {
+    return NextResponse.json(
+      { code: err.code, error: err.message, permission: err.permission },
+      { status: 403 },
     );
   }
   // The submit path drives the METERED motir-ai job — the same credit / transport
