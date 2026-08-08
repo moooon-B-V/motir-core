@@ -325,6 +325,7 @@ so no one loses access" — the visible counterpart of 6.4.4's seeding.
     read-only banner), and the issue-detail **inline field pickers**
     (status / assignee / priority / …). Disabled, not removed, so the viewer
     sees _that_ the action exists and _that_ they lack rights.
+    **UNCHANGED by the 2026-08-08 amendment below.**
   - **Navigation-to-an-edit-surface is HIDDEN, and the surface itself is
     blocked** — the issue-detail **"Edit"** link (header + per-section
     Description / Explanation edit links) and the relationships **add / remove**
@@ -333,8 +334,100 @@ so no one loses access" — the visible counterpart of 6.4.4's seeding.
     viewer has no reason to land on an edit form; the server rejects the save
     regardless). A hidden Edit button + a guarded edit route is the
     mirror-product (Jira) behaviour.
-  - A non-admin sees Members + Access **read-only** (a `Read-only` chip + an
-    info line "Only project admins can add members or change access").
+    **UNCHANGED by the 2026-08-08 amendment below** — and generalised by it.
+  - ~~A non-admin sees Members + Access **read-only** (a `Read-only` chip + an
+    info line "Only project admins can add members or change access").~~
+    **SUPERSEDED 2026-08-08** — see the amendment immediately below. The
+    sentence is kept, struck, rather than deleted, so a reader who arrives
+    holding it can tell it was retired on purpose and on what date. **Reason:**
+    it was written when a project role was a RANK (admin / member / viewer), and
+    in that world a read-only Members screen was the more informative of two
+    poor options — the alternative was a door that vanished with no explanation
+    and no way to ask about it. `project:administer` has since been split into
+    twelve per-domain administrative permissions (MOTIR-2256) and a role is now
+    a permission SET a person deliberately composed, so a missing entry is no
+    longer a mystery: it is simply not part of the role someone was given. The
+    reasoning expired; the sentence did not become false, it became obsolete.
+
+## Amendment 2026-08-08 — hide the entry point, disable the in-place control, guard the destination
+
+**Author:** MOTIR-2462, under Story MOTIR-2258 (_Permission-gated UI_).
+**Amends:** the _Role affordances_ bullet list above, and only its third bullet.
+**Scope:** which affordance families are HIDDEN and which stay visible-and-disabled.
+It does **not** re-open the in-place treatments the 2026-06-09 directive settled —
+this amendment widens the hidden set and leaves the disabled set exactly as it is.
+
+### The rule, in three parts
+
+1. **HIDE an entry point** whose destination the actor cannot use at all — a
+   settings rail row, a settings AREA door, a command-palette action, a
+   project-nav row, a menu item. An entry point is a promise about a room; if
+   the room is closed to you, the honest interface does not draw the door.
+2. **DISABLE with a tooltip an in-place control** on a surface the actor CAN
+   see. There the control is what TEACHES the action exists, so removing it
+   removes the only explanation the actor would ever get. It stays visible,
+   disabled, and says why.
+3. **GUARD every hidden destination on the server.** Hiding is presentation and
+   never enforcement. A direct navigation to a hidden route renders the
+   no-access state or redirects — exactly as `/items/[key]/edit` already does
+   for a read-only actor — and the write behind it is refused by its own
+   service gate regardless of what the interface drew.
+
+The dividing line, stated once so it can be applied to a surface this table does
+not list: **hide when the actor has no path to the destination and no need to
+know it exists; disable when the actor is already standing on the surface and
+the control is the only thing that would tell them the action exists.**
+
+### Treatment table — every affordance family the product ships today
+
+| #   | Affordance family                                                                                                            | Treatment                                                         | Why                                                                                                                                                                                                                               | Shipped today                                                                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | **Settings rail entry** — one row per `PROJECT_SETTINGS_NAV` entry (`lib/settings/projectSettingsNav.ts`)                    | **HIDE**                                                          | The row's only purpose is to open a page; a page the role cannot use has no door to draw.                                                                                                                                         | The registry already filters (`visibleSettingsNav`), but 11 of 12 entries gate on `canBrowse`, so today a member sees nearly all of them.             |
+| 2   | **Settings AREA door** — the sidebar `Settings` row that enters `/settings/project` (`SidebarNav.tsx`, the `bottom` section) | **HIDE when every entry inside filters away**                     | An area door that opens onto an empty rail is worse than no door: it promises a room and delivers a corridor.                                                                                                                     | Always rendered when a project is active. `groupSettingsNav` already drops an EMPTY GROUP; the area door is the same rule one level up.               |
+| 3   | **Command-palette action** — the `settings-<id>` deep links in `AppCommandPalette.tsx`                                       | **HIDE**                                                          | ⌘K is the same door with a different handle. It reads the SAME registry, which is what stops the two from drifting.                                                                                                               | Reads `visibleSettingsNav(caps, PROJECT_SETTINGS_ROUTES)` — inherits row 1 automatically.                                                             |
+| 4   | **Project-nav entry** — Dashboard / Work items / Ready / Boards / Roadmap / Plans / Backlog / Triage / Reports / Code health | **HIDE** the entries whose destination refuses the actor outright | Same reason as row 1. Note the qualifier: most of these are READ surfaces, so most stay for any actor who can browse — this row hides the ones whose page has nothing to show a role that cannot reach it, not the nav wholesale. | Ungated: every row renders for anyone with an active project.                                                                                         |
+| 5   | **Work-item ⋯ action row** — `WorkItemActionsMenu` (Edit / Expand / Re-plan / Add to sprint / Copy link / Archive / Delete)  | **HIDE**                                                          | A menu row is an entry point, and this menu is only ever opened by someone already on the surface — the surface itself is the teaching, not the row.                                                                              | **Already correct.** The component's own comment states the rule: a user without a capability "does NOT see that row (hidden, never shown-disabled)". |
+| 6   | **In-place field control** — the issue-detail inline pickers (status / assignee / priority / due date / estimate)            | **DISABLE**                                                       | The control IS the explanation. `CoreFieldsPanel` puts it plainly: disabling "makes the affordance honest rather than letting a viewer edit then bounce off a 403".                                                               | **Already correct** — `readOnly = !canEdit` in `CoreFieldsPanel.tsx`. UNCHANGED.                                                                      |
+| 7   | **Board drag**                                                                                                               | **DISABLE** + the read-only banner                                | Ditto, at board scale: the banner is what tells a viewer the board is normally interactive.                                                                                                                                       | **Already correct** — `BoardContainer.tsx` renders a `role="status"` `readOnlyBoardBanner` and passes `canEdit` to the card. UNCHANGED.               |
+| 8   | **Create button** — the top-bar `+`, the `C` shortcut, the ⌘K create action                                                  | **DISABLE** + tooltip                                             | The single most-used action in the product; a viewer who cannot find it at all cannot tell whether they lack the right or the product lacks the feature.                                                                          | **Already correct** — `CreateIssueButton.tsx` renders a `Tooltip`-wrapped `aria-disabled` span when `!canEdit`. UNCHANGED.                            |
+| 9   | **Issue-detail Edit link** — the header link and the per-section Description / Explanation edit doors                        | **HIDE** (destination guarded)                                    | It navigates to an edit SURFACE — an entry point, not an in-place control.                                                                                                                                                        | **Already correct** — `editHref={canEdit ? … : undefined}` in `app/(authed)/items/[key]/page.tsx`, and `/items/[key]/edit` redirects. UNCHANGED.      |
+
+Read the table as a whole and the amendment is small: rows 5–9 already follow
+the rule, and what actually changes is rows 1–4 — the settings rail, its area
+door, the palette links it feeds, and the project nav. The 2026-06-09 directive
+got the ROOM right and the DOORS wrong, because in an admin-versus-member world
+there was only ever one door to get wrong.
+
+### Mirror evidence (rung 1) — what was OBSERVED, per product
+
+Each row below records what was actually read on the date given, not what is
+believed about the product. Where a product's documentation does not answer the
+question, that is recorded as such rather than filled in from memory.
+
+| Product                                                                           | What was observed                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | Where                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Jira** (team-managed)                                                           | _"Today, space settings are completely hidden from non-admin users."_ Atlassian is **exploring** read-only visibility for some settings pages — i.e. hidden is the shipped behaviour and read-only is a proposal, not a product. The same article names the cost of hiding, honestly: a member "has to ask the administrator" what a field or workflow does.                                                                                                                                                                             | [Help us decide which space settings your team members should see](https://community.atlassian.com/forums/Jira-Cloud-Admins-articles/Help-us-decide-which-space-settings-your-team-members-should-see/ba-p/3261424) (Atlassian, 2026-07-14)                                                                                                                                                                                                                                     |
+| **Plane** (open source; shipped custom roles + a permissions redesign 2026-04-25) | Read in source, since the docs do not state the UI treatment. Each project-settings nav item declares `access: [EUserProjectRoles…]`, and the sidebar filters: `const accessibleItems = categoryItems.filter((item) => allowPermissions(item.access, EUserPermissionsLevel.PROJECT, …)); if (accessibleItems.length === 0) return null;` — **items the role lacks are omitted, and a CATEGORY with nothing left renders nothing at all.** That second half is row 2 of our table, already shipped by the closest open-source equivalent. | `makeplane/plane` — [the project-settings constants](https://github.com/makeplane/plane/blob/preview/packages/constants/src/settings/project.ts) · [the settings-sidebar categories](https://github.com/makeplane/plane/blob/preview/apps/web/core/components/settings/project/sidebar/item-categories.tsx) · [changelog 2026-04-25](https://plane.so/changelog/2026-04-25-custom-roles-granular-access-permissions-redesign) (the two source links are Plane's tree, not ours) |
+| **GitHub**                                                                        | A repository's **Settings** tab is admin-only, and a direct URL does not render a read-only form — it 404s. From the community thread: _"The 404 is GitHub's way of saying 'this page doesn't exist for your permission level.'"_ GitHub goes one step further than this amendment does (it hides the destination's EXISTENCE); we render the no-access state instead, because a Motir project member already knows the project exists.                                                                                                  | [community discussion #179083](https://github.com/orgs/community/discussions/179083) · [Managing teams and people with access to your repository](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/managing-repository-settings/managing-teams-and-people-with-access-to-your-repository)                                                                                                                                                |
+| **Linear** (the counter-example — no custom roles)                                | A guest "cannot see or discover any other teams in the workspace" and cannot see workspace-wide features at all: the nav is filtered to what the role holds rather than shown-and-refused. Useful only as a third data point on nav treatment; Linear has no per-domain role model to mirror.                                                                                                                                                                                                                                            | [Members and roles](https://linear.app/docs/members-roles) · [Guest accounts changelog](https://linear.app/changelog/2022-07-14-guest-accounts)                                                                                                                                                                                                                                                                                                                                 |
+
+Three of four hide the entry point; none of the four ships a read-only settings
+screen for a role that cannot use it, and the one product publicly considering
+one (Jira) frames it as a NEW capability rather than as the status quo. That is
+the evidence the amendment rests on.
+
+### What this amendment deliberately does NOT do
+
+- It does not assign permission KEYS to surfaces. Which of the 31 catalog keys
+  (`lib/permissions/catalog.ts`) gates each row is each implementing card's own
+  work, decided against that surface's own server guard — because a key chosen
+  here, away from the call site, is exactly the kind of claim that gets written
+  down without being checked.
+- It does not weaken any gate. Every row that changes is a change to what is
+  DRAWN; the service- and route-level refusals behind them are untouched, which
+  is what rule 3 exists to keep true.
+- It does not treat "the actor cannot use this" as a UI-only fact. A row that
+  hides without a matching server guard is a bug, not a shortcut.
 
 ## Tokens & a11y
 
@@ -353,6 +446,14 @@ When a string here disagrees with shipped 6.4.5 / 6.4.6 code, the code wins —
 file a fix so the mockup stays the reference. `access-members.mock.html` is
 the layout-confirmation artifact; it may drift from pixel-exact production
 once the React lands.
+
+**One carve-out, and it is load-bearing: the _Amendment 2026-08-08_ section
+above is a SPEC, not a description.** It states what the interface must become,
+and on the day it landed the shipped code disagreed with rows 1–4 of its
+treatment table by construction — that disagreement is the work Story MOTIR-2258
+exists to do, not drift to file a fix against. Read the code-wins rule as
+governing everything that DESCRIBES a surface; an amendment that carries a date,
+a reason and the card that owns it governs the code until that card ships.
 
 ---
 
