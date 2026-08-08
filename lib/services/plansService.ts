@@ -935,7 +935,15 @@ async function editAddProposal(
 ): Promise<PlanWithItemsDto> {
   const plan = await planRepository.findById(planId, ctx.workspaceId);
   if (!plan) throw new PlanNotFoundError(planId);
-  await projectAccessService.assertCanEdit(plan.projectId, ctx);
+  // `ai:view_plan` (Story MOTIR-2291 · Subtask MOTIR-2363). ⚠️ THE NAME IS THE
+  // MISLEADING PART: this key governs reading a generated plan AND acting on it,
+  // because they are the same surface and a reviewer who may not act has nothing
+  // to review for. Approving MATERIALIZES work items, so it is a write key
+  // wearing a read's name — which is why the decision record puts it at `member`
+  // rather than at browse, and why every method that writes to a PLAN row asks it,
+  // not just the two the routes call. The project comes from the PLAN row, never
+  // from the actor's active project.
+  await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
   const { row, items } = await withWorkspaceContext(
     { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
@@ -1021,7 +1029,7 @@ export const plansService = {
   ): Promise<PlanWithItemsDto> {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertCanEdit(plan.projectId, ctx);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
     if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
     proposals.forEach(validateProposal);
 
@@ -1067,7 +1075,7 @@ export const plansService = {
   ): Promise<PlanDto> {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertCanEdit(plan.projectId, ctx);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
     // The AI-suggested project name (MOTIR-1554/1551) rides the final append and
     // ONLY the onboarding generation. Persist it when present; a non-onboarding
@@ -1257,7 +1265,7 @@ export const plansService = {
   ): Promise<PlanWithItemsDto> {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertCanEdit(plan.projectId, ctx);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
     // The project's TERMINAL statuses — every `category = 'done'` key, never a
     // hardcoded `'done'`, so `cancelled` is terminal too. Workflow statuses are
@@ -1455,7 +1463,7 @@ export const plansService = {
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
     const plan = await planRepository.findById(planId, ctx.workspaceId);
     if (!plan) throw new PlanNotFoundError(planId);
-    await projectAccessService.assertCanEdit(plan.projectId, ctx);
+    await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
     const row = await withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },

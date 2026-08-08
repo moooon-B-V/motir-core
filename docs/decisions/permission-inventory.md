@@ -42,8 +42,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **29** are
-enforced by a gate today; **2** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **30** are
+enforced by a gate today; **1** is `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -64,7 +64,8 @@ A `planned` key is never offered in the grid or the role editor.
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
 > (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352) ·
 > **`import:run`** (MOTIR-2353) · **`work_item:triage` · `work_item:delete`** (MOTIR-2354).
-> `ai:plan` is wired across MOTIR-2355 / -2357 / -2358 / -2359 and flips on the last of them. `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> **`ai:view_plan`** (MOTIR-2363). `ai:plan` is wired across MOTIR-2355 / -2357 / -2358 /
+> -2359 and its flag flips on the last of them. `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -211,7 +212,7 @@ worse failure than a gap.
 
 **R10.** The workflow statuses a board column projects. Statuses live here, not under /projects.
 
-**R11.** Reads a generated plan and its proposals. Today workspace-only — any workspace member can read any project’s plan.
+**R11.** Reads a generated plan and its proposals — AND acts on it. MOTIR-2363 wired `ai:view_plan` on every method that WRITES to a plan row (approve, decline, edit a proposal, add proposals, mark planned); the READ keeps `assertCanBrowse` through `plansService.getPlan`, because a plan you may not act on is still a plan you may read. ⚠️ The key's NAME is the misleading part: approving materializes work items, so it is a write key, which is why the decision record puts it at `member` rather than at browse.
 
 **R12.** Better-Auth endpoint — authenticates, does not authorise.
 
@@ -336,10 +337,10 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/canvas-layout`                          | GET/PATCH | `canvasLayoutService.{getLayout,savePositions}` → `assertPermission`                                                              | `project:browse` | existing    | R50 |
 | `/api/idea-draft`                             | POST      | — none — origin-allowlisted + per-IP rate-limited, pre-auth                                                                       | —                | no-gate     | R48 |
 | `/api/idea-draft/[id]/claim`                  | POST      | — none — consumes a single-use draft id at sign-in                                                                                | —                | user-scoped | R49 |
-| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                                                                                    | `ai:view_plan`   | new         | R11 |
-| `/api/plans/[id]/approve`                     | POST      | workspace only                                                                                                                    | `ai:view_plan`   | new         | R11 |
-| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                                                                                   | `ai:view_plan`   | new         | R11 |
-| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                                                                                    | `ai:view_plan`   | new         | R11 |
+| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` → `plansService.getPlan` → `assertCanBrowse`                                                    | `ai:view_plan`   | existing    | R11 |
+| `/api/plans/[id]/approve`                     | POST      | `plansService.approvePlan` → `assertPermission`                                                                                   | `ai:view_plan`   | existing    | R11 |
+| `/api/plans/[id]/decline`                     | POST      | `plansService.declinePlan` → `assertPermission`                                                                                   | `ai:view_plan`   | existing    | R11 |
+| `/api/plans/[id]/items/[itemId]`              | PATCH     | `plansService.updateProposal` → `assertPermission`                                                                                | `ai:view_plan`   | existing    | R11 |
 | `/api/projects/[key]/ai-settings`             | GET       | `assertCanBrowse`                                                                                                                 | `project:browse` | existing    | R17 |
 | `/api/projects/[key]/ai-settings`             | PATCH     | `assertPermission(ai:configure)`                                                                                                  | `ai:configure`   | existing    | R17 |
 | `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService` → `planChangeSessionsService` → `assertPermission`                                                    | `ai:plan`        | existing    | R5  |

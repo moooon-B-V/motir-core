@@ -297,11 +297,17 @@ describe('guard 2 — every administrative key is ENFORCED and actually WIRED', 
     // what happened: the control was `import:run` until MOTIR-2353 wired it and
     // `work_item:delete` until MOTIR-2354 did, each time moving on rather than
     // being deleted. MOTIR-2356 retires it for good.
+    // ⚠️ ONLY `ai:plan` IS LEFT, and it is a control of a different kind: its
+    // operations ARE wired (MOTIR-2355 / -2357 / -2358), and the FLAG is what
+    // MOTIR-2359 and then MOTIR-2356 still owe. So the assertion inverts — the
+    // key is consulted and still `planned`, which is exactly the seam that lets
+    // naming and wiring land separately. MOTIR-2356 retires this control with the
+    // arm it belongs to.
     const wired = SOURCES.filter((f) => !f.path.startsWith('lib/permissions/')).some((f) =>
-      f.code.includes("'ai:view_plan'"),
+      f.code.includes("'ai:plan'"),
     );
-    expect(wired, 'ai:view_plan is now wired — move it out of the negative control').toBe(false);
-    expect(PERMISSION_CATALOG['ai:view_plan'].enforcement).toBe('planned');
+    expect(wired, 'ai:plan should be consulted by the cards that wired it').toBe(true);
+    expect(PERMISSION_CATALOG['ai:plan'].enforcement).toBe('planned');
   });
 });
 
@@ -323,7 +329,7 @@ describe('the story leaves exactly MOTIR-2291 behind', () => {
         // 'saved_filter:manage' — wired by MOTIR-2352.
         // 'import:run' — wired by MOTIR-2353.
         'ai:plan',
-        'ai:view_plan',
+        // 'ai:view_plan' — wired by MOTIR-2363.
       ].sort(),
     );
   });

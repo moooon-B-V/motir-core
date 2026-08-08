@@ -193,7 +193,7 @@ const PERMISSION_META: Record<
   'import:run': { domain: 'import', enforcement: 'enforced' }, // MOTIR-2353
   'ai:configure': { domain: 'ai', enforcement: 'enforced' },
   'ai:plan': { domain: 'ai', enforcement: 'planned' },
-  'ai:view_plan': { domain: 'ai', enforcement: 'planned' },
+  'ai:view_plan': { domain: 'ai', enforcement: 'enforced' }, // MOTIR-2363
 };
 
 /**
