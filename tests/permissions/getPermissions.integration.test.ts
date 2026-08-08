@@ -363,25 +363,124 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     }
   });
 
-  it('groups every catalog permission under a labelled, non-empty domain', async () => {
+  it('groups every ROLE-GATED permission under a labelled, non-empty domain', async () => {
     const s = await buildScenario('open', 'dto-domains');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
     const flattened = catalog.domains.flatMap((d) => d.permissions.map((p) => p.key));
-    // The WHOLE model — the grid tells the truth about what the product governs.
-    // Each row carries its `enforcement` so the UI can mark the not-yet-wired
-    // ones; hiding them showed a quarter of the catalog and implied it was all.
-    expect([...flattened].sort()).toEqual([...PERMISSIONS].sort());
-    // ⚠️ The second half of this used to assert that SOME row was not enforced —
-    // a live check while two stories were mid-flight. MOTIR-2356 wired the last
-    // key, so the honest assertion inverts: the grid renders the whole catalog
-    // and EVERY row is now live. (The "render the whole model, enforced or not"
-    // contract is unchanged and is what the line above pins.)
+    // ⚠️ NARROWED BY MOTIR-2439, and the narrowing is the point. This used to
+    // assert the WHOLE catalog, on the reasoning that the settings page must show
+    // the whole model rather than a quarter of it. That reasoning stands and is
+    // unchanged — what changed is which set "the whole model" means for a screen
+    // about ROLES. The three level-gated `public_request:*` keys are decided by
+    // the project's ACCESS LEVEL for every actor including an anonymous one, so no
+    // role can hold or withhold one; drawn as role rows they are a permanent dash
+    // against every role, which reads as "nobody has this" rather than "roles do
+    // not govern this". They are not hidden — they get their own card.
+    expect([...flattened].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+    expect(PERMISSIONS.filter((k) => !flattened.includes(k)).sort()).toEqual(
+      PERMISSIONS.filter((k) => k.startsWith('public_request:')).sort(),
+    );
+    // Every row the screens draw is live — MOTIR-2356 wired the last key.
     expect(flattened.filter((k) => !ENFORCED_PERMISSIONS.includes(k))).toEqual([]);
     for (const domain of catalog.domains) {
       expect(domain.permissions.length, `${domain.domain} is empty`).toBeGreaterThan(0);
       expect(domain.labelKey).toBe(`permissions.domain.${domain.domain}`);
     }
+    // The `M` in the list row's `N of M`, carried on the DTO so no client
+    // re-derives it by importing the catalog.
+    expect(catalog.roleGatedPermissionCount).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(catalog.roleGatedPermissionCount).toBe(flattened.length);
+    // …and the keys the role rows leave out come back on their own card, so the
+    // two together are the whole catalog and nothing falls off the page.
+    const levelGated = catalog.levelGatedDomains.flatMap((d) => d.permissions.map((p) => p.key));
+    expect([...flattened, ...levelGated].sort()).toEqual([...PERMISSIONS].sort());
     expect(JSON.parse(JSON.stringify(catalog))).toEqual(catalog);
+  });
+});
+
+// The per-role headcount the list row draws (Subtask MOTIR-2439) — read back
+// through the service against the memberships `buildScenario` actually seeds, so
+// the numbers are checked against real rows rather than against the mapper.
+describe('getRoleCatalog reports each role`s member count from real memberships', () => {
+  it('counts the seeded membership at each role, and only that project`s', async () => {
+    const s = await buildScenario('open', 'counts');
+    const other = await buildScenario('open', 'counts-other');
+
+    const seeded = await db.projectMembership.groupBy({
+      by: ['role'],
+      where: { projectId: s.projectId },
+      _count: { _all: true },
+    });
+    const expected = new Map(seeded.map((row) => [row.role, row._count._all]));
+
+    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    for (const role of catalog.roles) {
+      expect(role.memberCount, `${role.role} headcount`).toBe(expected.get(role.role) ?? 0);
+    }
+    // `buildScenario` adds exactly one project member per role on an `open`
+    // project (the owner is a workspace manager, not a project membership row).
+    expect(catalog.roles.map((r) => r.memberCount)).toEqual([1, 1, 1]);
+
+    // A sibling project's memberships never leak in — the count is scoped to the
+    // project asked about, not to the workspace.
+    await projectMembersService.addMember({
+      key: (await db.project.findUniqueOrThrow({ where: { id: other.projectId } })).identifier,
+      actorUserId: other.ctxs.owner.userId,
+      ctx: other.ctxs.owner,
+      targetUserId: (
+        await db.user.findFirstOrThrow({ where: { email: 'plain-counts-other@ex.com' } })
+      ).id,
+      role: 'member',
+    });
+    const again = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    expect(again.roles.map((r) => r.memberCount)).toEqual([1, 1, 1]);
+    expect(
+      (await projectAccessService.getRoleCatalog(other.projectId, other.ctxs.owner)).roles.find(
+        (r) => r.role === 'member',
+      )?.memberCount,
+    ).toBe(2);
+  });
+
+  it('reports 0 for a role nobody holds, rather than omitting it', async () => {
+    // A `private` project auto-seeds the then-current workspace members as
+    // project MEMBERS, so nothing holds `viewer` here.
+    const owner = await usersService.createUser({
+      email: 'solo-owner@ex.com',
+      password: PASSWORD,
+      name: 'Solo',
+    });
+    const { workspace } = await workspacesService.createWorkspace({
+      name: 'Solo WS',
+      ownerUserId: owner.id,
+    });
+    const project = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Solo Project',
+    });
+    const catalog = await projectAccessService.getRoleCatalog(
+      project.id,
+      ctxFor(owner.id, workspace.id),
+    );
+    expect(catalog.roles.map((r) => r.role)).toEqual(['admin', 'member', 'viewer']);
+    for (const role of catalog.roles) {
+      expect(role.memberCount, `${role.role} must be a number, not undefined`).toBe(0);
+    }
+  });
+
+  it('gates BEFORE it counts — a foreign project 404s rather than reading memberships', async () => {
+    const mine = await buildScenario('open', 'count-gate-mine');
+    const theirs = await buildScenario('open', 'count-gate-theirs');
+    // The membership rows exist and are non-zero; the guard is what stops the
+    // read, not an empty result.
+    expect(
+      (await projectAccessService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)).roles.some(
+        (r) => r.memberCount > 0,
+      ),
+    ).toBe(true);
+    await expect(
+      projectAccessService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 

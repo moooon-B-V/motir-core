@@ -17,6 +17,7 @@ import {
   sortByCatalogOrder,
 } from '@/lib/permissions/catalog';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 
 // The permission-CATALOG guards (Story MOTIR-2255 · Subtask MOTIR-2260). The
 // catalog is typed `Record<PermissionKey, …>`, so a key added without a
@@ -125,11 +126,72 @@ describe('every domain in the render order earns its heading', () => {
   });
 
   it('never emits an EMPTY group under any filter', () => {
-    for (const opts of [{}, { include: 'enforced' as const }]) {
+    for (const opts of [
+      {},
+      { include: 'enforced' as const },
+      { include: ROLE_GATED_PERMISSIONS },
+      { include: ['comment:add'] as PermissionKey[] },
+    ]) {
       for (const group of permissionsByDomain(opts)) {
         expect(group.permissions.length, `domain "${group.domain}" is empty`).toBeGreaterThan(0);
       }
     }
+  });
+});
+
+// The third `include` arm (Subtask MOTIR-2439) — the Roles & permissions screens
+// draw the ROLE-GATED rows, and the arm takes the SET rather than naming it, so
+// `catalog.ts` stays the import-free leaf the purity guard below asserts.
+describe('permissionsByDomain narrows to an explicit key set', () => {
+  it('yields exactly ROLE_GATED_PERMISSIONS — asserted against the constant, never a count', () => {
+    const flattened = permissionsByDomain({ include: ROLE_GATED_PERMISSIONS }).flatMap((group) =>
+      group.permissions.map((p) => p.key),
+    );
+    expect([...flattened].sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
+  });
+
+  it('drops exactly the level-gated public_request keys, which no role can hold', () => {
+    const flattened = permissionsByDomain({ include: ROLE_GATED_PERMISSIONS }).flatMap((group) =>
+      group.permissions.map((p) => p.key),
+    );
+    const dropped = PERMISSIONS.filter((key) => !flattened.includes(key));
+    expect([...dropped].sort()).toEqual(
+      PERMISSIONS.filter((key) => key.startsWith('public_request:')).sort(),
+    );
+    // …and the whole `public_request` DOMAIN goes with them: an empty heading is
+    // never drawn.
+    expect(
+      permissionsByDomain({ include: ROLE_GATED_PERMISSIONS }).map((g) => g.domain),
+    ).not.toContain('public_request');
+  });
+
+  it('preserves catalog order within a group and PERMISSION_DOMAINS order across them', () => {
+    const groups = permissionsByDomain({ include: ROLE_GATED_PERMISSIONS });
+    const domainPositions = groups.map((g) => PERMISSION_DOMAINS.indexOf(g.domain));
+    expect(domainPositions).toEqual([...domainPositions].sort((a, b) => a - b));
+    for (const group of groups) {
+      const positions = group.permissions.map((p) => PERMISSIONS.indexOf(p.key));
+      expect(positions, `domain "${group.domain}" out of catalog order`).toEqual(
+        [...positions].sort((a, b) => a - b),
+      );
+    }
+  });
+
+  it('leaves the existing `enforced` and `all` arms untouched', () => {
+    expect(
+      permissionsByDomain({ include: 'all' }).flatMap((g) => g.permissions.map((p) => p.key))
+        .length,
+    ).toBe(PERMISSIONS.length);
+    expect(permissionsByDomain({ include: 'all' })).toEqual(permissionsByDomain());
+    for (const group of permissionsByDomain({ include: 'enforced' })) {
+      for (const descriptor of group.permissions) {
+        expect(descriptor.enforcement).toBe('enforced');
+      }
+    }
+  });
+
+  it('admits an empty set as empty, not as everything', () => {
+    expect(permissionsByDomain({ include: [] })).toEqual([]);
   });
 });
 
