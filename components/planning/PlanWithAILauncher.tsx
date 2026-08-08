@@ -36,6 +36,21 @@ import { planningWorkspaceHref, type PlanningLaunchContext } from '@/lib/plannin
 export interface PlanWithAILauncherProps {
   /** The surface the launcher is invoked from — resolved to the planning mode. */
   context: PlanningLaunchContext;
+  /**
+   * WHERE the pill renders, which decides its two responsive gates
+   * (MOTIR-2373 · design/shell design-notes.md § *Every control's disposition
+   * below `md`*).
+   *
+   * - `'page'` (default) — a page-level CTA (/plans, /roadmap, code-health).
+   *   Always laid out; label from `sm`. Unchanged.
+   * - `'bar'` — the top nav's right cluster. The pill is DROPPED below `md`
+   *   (`hidden md:inline-flex`) and its label waits for `lg`. It is the one
+   *   control that can leave the bar and cost nothing, which is why it leaves
+   *   first: `PlanWithAIFab` — the floating orb — already ships on every authed
+   *   screen behind the SAME `showPlanWithAi` gate, and ⌘K carries a
+   *   `plan-with-ai` action. Two doors already exist at 375px.
+   */
+  placement?: 'bar' | 'page';
   className?: string;
 }
 
@@ -53,9 +68,14 @@ const HERO_STYLE: CSSProperties = {
   ].join(', '),
 };
 
-export function PlanWithAILauncher({ context, className }: PlanWithAILauncherProps) {
+export function PlanWithAILauncher({
+  context,
+  placement = 'page',
+  className,
+}: PlanWithAILauncherProps) {
   const t = useTranslations('shell');
   const label = t('planWithAI.label');
+  const inBar = placement === 'bar';
 
   return (
     <Link
@@ -65,7 +85,10 @@ export function PlanWithAILauncher({ context, className }: PlanWithAILauncherPro
       className={cn(
         // Layout + pill shape (radius/height/padding via shape tokens so the
         // pill reshapes with the active style).
-        'group relative inline-flex h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x)',
+        'group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x)',
+        // Selected, not appended — `.hidden` and `.inline-flex` have equal
+        // specificity, so appending would leave the winner to emission order.
+        inBar ? 'hidden md:inline-flex' : 'inline-flex',
         // Typography — white ink on the accent-dominant fill.
         'font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text)',
         // Interaction parity with the Button primitive.
@@ -92,7 +115,7 @@ export function PlanWithAILauncher({ context, className }: PlanWithAILauncherPro
           filter: 'drop-shadow(0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent))',
         }}
       />
-      <span className="relative hidden sm:inline">{label}</span>
+      <span className={cn('relative hidden', inBar ? 'lg:inline' : 'sm:inline')}>{label}</span>
     </Link>
   );
 }

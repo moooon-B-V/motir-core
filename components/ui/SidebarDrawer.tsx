@@ -30,7 +30,22 @@ import { useShortcut } from '@/lib/hooks/useShortcut';
  * `header` is the drawer's top bar (the workspace switcher in the mockup),
  * shown beside the close button. `children` is the drawer body — pass a
  * `<Sidebar collapsed={false} … />` so it always renders expanded regardless
- * of the desktop rail's persisted collapse state.
+ * of the desktop rail's persisted collapse state. `footer` is the UTILITY STRIP
+ * (below) — the room the top bar's displaced controls moved into.
+ *
+ * ## The utility strip (MOTIR-2373 · design/shell design-notes.md Panel D)
+ *
+ * The below-`md` top bar is closed at four slots, so the controls that no longer
+ * fit — the build-in-public slot, the report button, the theme toggle — need a
+ * DRAWN home rather than a cited one. This is it: a footer strip with the
+ * geometry of the drawer's own header, mirrored to the bottom edge. The door is
+ * the hamburger the bar already carries; this is the room.
+ *
+ * Nothing in the strip is a new component — each control is the element that
+ * left the bar, re-homed. It is a horizontal row rather than `SidebarItem` rows
+ * because a `SidebarItem` is an `href` link and these are buttons and stateful
+ * slots. The strip renders only when a `footer` is passed, so the `/tokens`
+ * specimen mount is unaffected.
  *
  * The drawer is breakpoint-agnostic — the `<md`-only gating lives on its
  * trigger (the consumer wraps `<SidebarToggle variant="hamburger" />` in
@@ -47,12 +62,25 @@ export interface SidebarDrawerProps {
   header?: ReactNode;
   /** The drawer body — typically a `<Sidebar collapsed={false} … />`. */
   children: ReactNode;
+  /**
+   * The utility strip's contents — the controls displaced from the below-`md`
+   * top bar, left to right: the build-in-public slot (labelled, in a
+   * `min-w-0 flex-1` wrapper so it truncates rather than pushing), then the
+   * report button, then the theme toggle. Omit it and no strip renders.
+   */
+  footer?: ReactNode;
   /** Drawer width in px. Default 300 (the mockup's pin). */
   width?: number;
   className?: string;
 }
 
-export function SidebarDrawer({ header, children, width = 300, className }: SidebarDrawerProps) {
+export function SidebarDrawer({
+  header,
+  children,
+  footer,
+  width = 300,
+  className,
+}: SidebarDrawerProps) {
   const [open, setOpen] = useSidebarDrawer();
 
   // Auto-close on route change. Compare the previous pathname to the current
@@ -103,6 +131,15 @@ export function SidebarDrawer({ header, children, width = 300, className }: Side
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+
+          {/* The utility strip — the drawer header's geometry mirrored to the
+              bottom edge (design/shell Panel D). `shrink-0` keeps it pinned
+              while the nav above scrolls. */}
+          {footer ? (
+            <div className="flex h-14 shrink-0 items-center gap-2 border-t border-(--el-sidebar-border) px-3">
+              {footer}
+            </div>
+          ) : null}
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

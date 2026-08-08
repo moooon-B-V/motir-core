@@ -38,8 +38,21 @@ import { cn } from '@/lib/utils/cn';
  * A plain server-rendered `<a>` (no client state), so a `router.refresh()`
  * after going public / stopping swaps the slot's state with no hard reload
  * (page-state-after-mutation surface kind 2 — the slot is server-rendered).
+ *
+ * `placement` is WHERE the slot renders (MOTIR-2373 · design/shell
+ * design-notes.md § *Every control's disposition below `md`*). This is the
+ * control whose label was NEVER breakpoint-gated — measured at 117px inside a
+ * 375px viewport, against the 38px CTA it replaces, which is the asymmetry that
+ * made a public project the widest surface in the product (409px of right
+ * cluster, a `<nav>` scrolling to 433px). The label is not gated here either,
+ * because a status stripped of its label is not a status: instead the WHOLE slot
+ * leaves the bar below `md` (`hidden md:inline-flex`) and is re-homed, labelled,
+ * in `SidebarDrawer`'s utility strip (`placement="drawer"`), which has the width
+ * the bar does not.
  */
-export function BuildingInPublicHeaderLink() {
+export function BuildingInPublicHeaderLink({
+  placement = 'bar',
+}: { placement?: 'bar' | 'drawer' } = {}) {
   const t = useTranslations('settings.buildInPublic');
   return (
     <Link
@@ -47,7 +60,10 @@ export function BuildingInPublicHeaderLink() {
       aria-label={t('manageAriaLabel')}
       className={cn(
         // The BuildingInPublicBadge `pill-building` visual recipe, on the anchor.
-        'inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent',
+        'items-center gap-1 rounded-(--radius-badge) border border-transparent',
+        // Selected, not appended: `.hidden` and `.inline-flex` have equal
+        // specificity, so the winner would be Tailwind's emission order.
+        placement === 'drawer' ? 'inline-flex max-w-full' : 'hidden md:inline-flex',
         'px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium',
         'bg-(--el-build-bg) text-(--el-build-text) no-underline',
         // The secondary manage affordances (design §6.17.6b).
@@ -56,9 +72,9 @@ export function BuildingInPublicHeaderLink() {
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2',
       )}
     >
-      <Megaphone className="size-3 text-(--el-build-glyph)" aria-hidden />
-      {t('statusBadge')}
-      <Settings className="size-3 text-(--el-build-text) opacity-55" aria-hidden />
+      <Megaphone className="size-3 shrink-0 text-(--el-build-glyph)" aria-hidden />
+      <span className="truncate">{t('statusBadge')}</span>
+      <Settings className="size-3 shrink-0 text-(--el-build-text) opacity-55" aria-hidden />
     </Link>
   );
 }
