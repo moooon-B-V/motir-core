@@ -63,6 +63,8 @@ const GH_PATH = argOf('gh');
 const ITEMS = Number.parseInt(argOf('items', '2'), 10);
 const PROJECT = argOf('project', 'SMOKE');
 
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const failures = [];
 const check = (condition, message) => {
   if (!condition) failures.push(message);
@@ -153,7 +155,8 @@ check(
 // would satisfy the shape above.
 
 const branches = new Set();
-const keyOf = (entry) => entry?.path?.match(new RegExp(`${PROJECT}-\\d+`))?.[0] ?? null;
+const keyOf = (entry) =>
+  entry?.path?.match(new RegExp(`${escapeRegExp(PROJECT)}-\\d+`))?.[0] ?? null;
 
 for (let i = 1; i <= ITEMS; i += 1) {
   const key = `${PROJECT}-${i}`;
