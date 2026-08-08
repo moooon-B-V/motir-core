@@ -23,8 +23,9 @@
     everywhere (member lists, mentions, assignee chips) with **no per-item auth
     context** and wants CDN-cacheable URLs; putting it behind a per-item signed
     redirect is both wrong and expensive. So avatars go to a dedicated **public**
-    Blob store (`putPublicAsset`; `User.image` stays a public URL). Only
-    **content** (comment/description embeds, panel files, acceptance video +
+    Blob store (`putPublicAsset`; `User.image` persists the object **key**, and
+    the public URL is composed at the read boundary — _refined by Amendment 4_).
+    Only **content** (comment/description embeds, panel files, acceptance video +
     trace) is **private** (`putPrivateAttachment` + the content route). The single
     `putAttachment` splits into `putPublicAsset` / `putPrivateAttachment`.
   - **Signing flow.** A private download URL uses the `@vercel/blob` 2.4.0
@@ -241,7 +242,7 @@ two Blob stores:
 
 | Store              | Contents                                                          | Access                                                    | Written by                               |
 | ------------------ | ----------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------- |
-| **Public bucket**  | avatars (`User.image`) and other public assets                    | **public-read** — a directly fetchable URL, CDN-cacheable | `putPublicAsset`                         |
+| **Public bucket**  | avatars (the object `User.image` keys) and other public assets    | **public-read** — a directly fetchable URL, CDN-cacheable | `putPublicAsset`                         |
 | **Private bucket** | comment/description embeds, panel files, acceptance video + trace | **no public read** — presigned GET only, via §2's route   | `putPrivateAttachment` / `putAttachment` |
 
 The reasoning is Amendment 1's and is unchanged: an avatar renders everywhere
@@ -256,6 +257,8 @@ stores before.
 `Attachment` still persists the **key**, never a URL; the DTO still exposes only
 `contentUrl = /api/attachments/[id]/content`; editor embeds are still id-based.
 None of that is provider-dependent, which is why none of it changes.
+**`User.image` now persists a key too** (MOTIR-2404), so no column on either side
+of the split stores a hosting origin — _added by Amendment 4._
 
 ### Consequences of this amendment
 
@@ -355,3 +358,108 @@ and that conclusion needs to be discoverable as wrong, with a date.
   or removed.
 - **Anything on either platform.** No object is copied, listed or deleted by this
   amendment; MOTIR-2401 remains the card that does that, and remains undone.
+
+---
+
+## Amendment 4 (2026-08-08) — `User.image` persists the object KEY; the public URL is composed at the read boundary
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2444.** This amendment corrects
+> ONE sentence and disambiguates one table cell. **It re-opens no decision, and it
+> does not make avatars private** — Amendment 1's public-not-private choice and
+> its reasoning stand word for word, Q1's presigned-GET signing flow stands, Q2's
+> two-bucket split stands, and §1–§5 are untouched. What changes is the SHAPE of
+> the value the database column holds, which MOTIR-2404 changed and this record
+> had not caught up with.
+>
+> **Numbered 4.** Amendment 3 was the highest heading in this file, re-read at
+> edit time rather than taken from the card, and no unmerged branch carries a
+> higher one. The companion disambiguation in `application-hosting.md` is that
+> record's Amendment 4, landed by this same card.
+
+**Amends:** the bucket-split clause of **Amendment 1**, the **Public bucket** row
+of Amendment 2's Q2 table, and the "persists the key, never a URL" paragraph
+below it. Nothing else in this record changes, and no clause is withdrawn.
+
+### What was wrong
+
+Amendment 1 read:
+
+> avatars go to a dedicated **public** Blob store (`putPublicAsset`;
+> **`User.image` stays a public URL**)
+
+**MOTIR-2404** (motir-core#1937, merged 2026-08-08) changed that. `User.image`
+now stores the object **key**; every read path composes the public URL from it at
+the DTO boundary via `storedAssetUrl` (`lib/blob/referencedUrls.ts`), which
+prefixes `MOTIR_S3_PUBLIC_BASE_URL` and passes an already-absolute legacy value
+through unchanged. So the clause described the column's contents, and after
+MOTIR-2404 the description is simply false.
+
+Observed on the branch:
+
+```
+$ grep -rn 'User\.image' docs/decisions/
+docs/decisions/application-hosting.md:163:| **public**  | avatars … |
+docs/decisions/attachment-access-control.md:26:    Blob store (`putPublicAsset`; …
+docs/decisions/attachment-access-control.md:244:| **Public bucket**  | avatars … |
+```
+
+Three sites, two records. Only the first is false; the two table cells were
+ambiguous rather than wrong, and are handled below.
+
+### What did NOT change, and why saying so matters
+
+**Avatars are still public, for exactly the reasons Amendment 1 gave.** A profile
+picture renders everywhere — member lists, mentions, assignee chips — with no
+per-item auth context, and wants a CDN-cacheable URL; a per-item signed redirect
+is still both wrong and expensive. The public bucket is still public-read. The
+private/public split is still structural rather than per-object.
+
+This is stated at length because the plausible mis-reading of a fix like this one
+is worse than the stale sentence it fixes. "The URL left the column" is not "the
+avatar left the public bucket". A reader who came away thinking avatars had
+become private would be acting on a decision this record never made.
+
+What moved is narrower and worth naming precisely: `User.image` was the last
+place a **hosting origin** was persisted as data. After MOTIR-2404 the origin
+lives in configuration and is applied on read, which is what makes a host move
+possible without a data migration — the whole point of the Story this amendment
+is written under.
+
+### The two table cells
+
+Amendment 2's Q2 table and `application-hosting.md`'s bucket table both listed
+the public bucket's contents as "avatars (`User.image`)" beside an access column
+reading "a directly fetchable URL". Each cell was **accurate about the bucket**
+and misleading about the column: the access clause describes what the bucket
+grants, but the two sit on one row, and the parenthetical invited reading
+`User.image` as the fetchable URL itself.
+
+Both now read "avatars (the object `User.image` keys)". Neither row's access
+clause changed, because neither was wrong.
+
+### Why an amendment rather than a silent replacement
+
+The convention in this directory — Amendment 2 above, Amendment 3 above,
+`application-hosting.md`'s Amendments 2–3, `public-api-conventions.md`'s
+Amendments 9–11 — is that a correction is recorded, not overwritten. The clause
+corrected here had already been amended twice, which is precisely what makes it
+authoritative-looking: a reader has every reason to treat a twice-revised
+sentence as current, and needs to be able to see that this specific clause was
+superseded, when, and by which card.
+
+There is a second reason particular to this one. A decision record is never
+executed, so nothing pushes back on it the way a failing test pushes back on a
+stale comment. Left saying the column holds a URL, this record would have
+authorised the next author to put one back there during some future migration,
+with an ADR's blessing and nobody left who remembered why it was a key.
+
+### What this amendment does NOT touch
+
+- **Any decision.** Amendment 1's public-avatar choice, Q1's signing flow, Q2's
+  bucket split, §3's authorization matrix, §4's DTO surface and §5's 300 s TTL
+  all stand.
+- **Any code.** MOTIR-2404 shipped the change this records; nothing here renames,
+  adds or removes anything.
+- **The private side.** `Attachment` persisted the key before MOTIR-2404 and
+  still does; the content route and its presigned GET are unchanged.
+- **Anything on either platform.** No bucket, object or ACL is touched.
