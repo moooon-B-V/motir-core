@@ -497,10 +497,292 @@ describe('the polled async job (§14.10)', () => {
   });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// The states below were shipped UNTESTED, and invisibly so: all three of this
+// room's components were entered in the coverage gate as literal
+// `app/(authed)/…` paths, which the coverage matcher resolves to no file — so
+// they never appeared in a report and their ≥90% thresholds gated nothing
+// (MOTIR-2449). What follows is what that gate would have asked for.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('a row whose repository was never realized (§14.7)', () => {
+  it('degrades the reference to text and drops the hand-off rather than linking nowhere', () => {
+    renderRoom({
+      rows: [hostedRow({ realizedRepo: null, takeover: takeover({ state: 'transfer_pending' }) })],
+    });
+    const row = screen.getByTestId('takeover-row-web');
+
+    // A dead control is worse than an absent one — the same call the missing
+    // install-slug case makes one panel up.
+    expect(within(row).queryByRole('link')).toBeNull();
+    expect(within(row).getByText('acme-booking-web')).toBeTruthy();
+    // The row is still not a dead end: the re-probe survives, named by the
+    // fallback reference rather than by a repoRef that does not exist.
+    expect(within(row).getByRole('button', { name: 'Check acme-booking-web again' })).toBeTruthy();
+  });
+});
+
+describe('the waits that have been sitting for days say so (panel 5)', () => {
+  it('renders a long-outstanding re-install as still-yours, never as an error', () => {
+    renderRoom({
+      rows: [
+        hostedRow({
+          takeover: takeover({ state: 'awaiting_reinstall', transferredAt: LONG_AGO }),
+        }),
+      ],
+    });
+    const row = screen.getByTestId('takeover-row-web');
+
+    expect(within(row).getByText('Install Motir on yue-personal to finish')).toBeTruthy();
+    expect(within(row).getByText(/It's yours and it stays yours/)).toBeTruthy();
+    expect(within(row).queryByText("Couldn't move it")).toBeNull();
+  });
+});
+
+describe('the failed row’s two recoveries actually go somewhere (panel 7)', () => {
+  const failedRow = (over: Partial<ProjectRepoTakeoverDto> = {}) =>
+    hostedRow({ takeover: takeover({ state: 'failed', ...over }) });
+
+  it('opens the picker from BOTH Try again and Pick a different account', async () => {
+    renderRoom({ rows: [failedRow({ failureReason: 'GitHub was unreachable.' })] });
+
+    await click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    await click(screen.getByRole('button', { name: 'Close' }));
+
+    await click(screen.getByRole('button', { name: 'Pick a different account' }));
+    // Both land in the SAME decision, which is the point: a refusal sends you
+    // back to the choice, never to a dead end or to a silent re-attempt.
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+    expect(screen.getByRole('option', { name: /yue-personal/ })).toBeTruthy();
+  });
+
+  it('renders a refusal GitHub gave no reason for without an empty line where it would go', () => {
+    renderRoom({ rows: [failedRow()] });
+    const row = screen.getByTestId('takeover-row-web');
+
+    expect(within(row).getByText("Couldn't move it")).toBeTruthy();
+    // The target was the user's own account and GitHub said nothing, so the
+    // alert carries neither the org explanation nor a blank reason paragraph.
+    expect(within(row).queryByRole('alert')).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
+
+describe('the picker’s remaining paths (panels 2–3)', () => {
+  it('selects the personal account by pointer and by keyboard', async () => {
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: /Move .* to my GitHub/ }));
+
+    const org = await screen.findByRole('option', { name: /acme-inc/ });
+    await click(org);
+    expect(
+      (await screen.findByRole('option', { name: /yue-personal/ })).getAttribute('aria-selected'),
+    ).toBe('false');
+
+    // An option is a div with `role="option"`, so Enter/Space are handled by
+    // hand — the keyboard path is a different code path from the click, and
+    // both have to select.
+    const personal = screen.getByRole('option', { name: /yue-personal/ });
+    fireEvent.keyDown(personal, { key: 'Enter' });
+    await act(async () => {});
+    expect(
+      (await screen.findByRole('option', { name: /yue-personal/ })).getAttribute('aria-selected'),
+    ).toBe('true');
+
+    await click(await screen.findByRole('option', { name: /acme-inc/ }));
+    fireEvent.keyDown(screen.getByRole('option', { name: /yue-personal/ }), { key: ' ' });
+    await act(async () => {});
+    expect(
+      (await screen.findByRole('option', { name: /yue-personal/ })).getAttribute('aria-selected'),
+    ).toBe('true');
+  });
+
+  it('ignores a key that is neither Enter nor Space', async () => {
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: /Move .* to my GitHub/ }));
+
+    const org = await screen.findByRole('option', { name: /acme-inc/ });
+    fireEvent.keyDown(org, { key: 'a' });
+    await act(async () => {});
+    expect(org.getAttribute('aria-selected')).toBe('false');
+  });
+
+  it('goes BACK from the costs to the choice, with the choice intact', async () => {
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: /Move .* to my GitHub/ }));
+    await click(await screen.findByRole('option', { name: /acme-inc/ }));
+    await click(await screen.findByRole('button', { name: 'Continue' }));
+
+    expect(await screen.findByText('What this takes')).toBeTruthy();
+    await click(screen.getByRole('button', { name: 'Back' }));
+
+    // Step 2 is a REVIEW, so leaving it must not discard what was chosen.
+    expect(
+      (await screen.findByRole('option', { name: /acme-inc/ })).getAttribute('aria-selected'),
+    ).toBe('true');
+  });
+
+  it('closes the picker without moving anything', async () => {
+    renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: /Move .* to my GitHub/ }));
+    expect(await screen.findByRole('dialog')).toBeTruthy();
+
+    await click(screen.getByRole('button', { name: 'Close' }));
+
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(
+      fetchMock.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === 'POST'),
+    ).toBe(false);
+  });
+
+  it('drops an org lookup that lands after the identity it was made for changed', async () => {
+    const pending = pendingOrgLookups();
+    const { rerender } = renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: /Move .* to my GitHub/ }));
+    expect(await screen.findByText('Looking up your organizations…')).toBeTruthy();
+    expect(pending).toHaveLength(1);
+
+    // The connected identity changes under an open picker — a `router.refresh()`
+    // re-render with a new view — so the lookup is re-issued for the new login
+    // while the first is still in flight.
+    rerender(room(roomView({ rows: [hostedRow()], githubLogin: 'yue-work' })));
+    await act(async () => {});
+    expect(pending).toHaveLength(2);
+
+    // The FIRST lookup now answers, for an account nobody is looking at any
+    // more. Applying it would list the wrong organizations under the right
+    // heading, which is the whole reason the call is sequence-guarded.
+    pending[0]!.resolve(jsonOk({ organizations: [{ login: 'stale-org', avatarUrl: null }] }));
+    await act(async () => {});
+    expect(screen.queryByRole('option', { name: /stale-org/ })).toBeNull();
+    expect(screen.getByText('Looking up your organizations…')).toBeTruthy();
+
+    pending[1]!.resolve(jsonOk({ organizations: [{ login: 'fresh-org', avatarUrl: null }] }));
+    expect(await screen.findByRole('option', { name: /fresh-org/ })).toBeTruthy();
+  });
+
+  it('does not let a stale lookup’s FAILURE mark the current one failed', async () => {
+    const pending = pendingOrgLookups();
+    const { rerender } = renderRoom({ rows: [hostedRow()] });
+    await click(screen.getByRole('button', { name: /Move .* to my GitHub/ }));
+    expect(await screen.findByText('Looking up your organizations…')).toBeTruthy();
+
+    rerender(room(roomView({ rows: [hostedRow()], githubLogin: 'yue-work' })));
+    await act(async () => {});
+
+    pending[0]!.reject(new Error('network'));
+    await act(async () => {});
+
+    // The superseded attempt's failure says nothing about the current one, so
+    // the picker stays in its loading state rather than announcing a failure
+    // the live lookup has not had.
+    expect(screen.queryByText(/couldn’t reach your GitHub organizations/)).toBeNull();
+    expect(screen.getByText('Looking up your organizations…')).toBeTruthy();
+  });
+
+  it('titles the picker from the row name when no repository was realized', async () => {
+    renderRoom({ rows: [hostedRow({ realizedRepo: null })] });
+    await click(screen.getByRole('button', { name: 'Move acme-booking-web to my GitHub' }));
+
+    expect(await screen.findByRole('dialog', { name: /acme-booking-web/ })).toBeTruthy();
+  });
+});
+
+describe('the island survives what the network does to it (§14.10)', () => {
+  it('shows the error banner when the mutation never reaches the server', async () => {
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/takeover') && init?.method === 'POST') {
+        throw new TypeError('Failed to fetch');
+      }
+      return jsonOk(defaultFetch(String(url)));
+    });
+
+    renderRoom({ rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })] });
+    await click(screen.getByRole('button', { name: /Check .* again/ }));
+
+    expect(
+      await screen.findByText("That didn't go through. Nothing was changed — try again."),
+    ).toBeTruthy();
+    // …and the row is left pressable rather than stuck busy.
+    expect(screen.getByRole('button', { name: /Check .* again/ })).toHaveProperty(
+      'disabled',
+      false,
+    );
+  });
+
+  it('leaves the rendered rows alone when a background re-read fails or answers nothing', async () => {
+    vi.useFakeTimers();
+    let setReads = 0;
+    fetchMock.mockImplementation(async (url: string) => {
+      if (String(url).endsWith('/repositories')) {
+        setReads += 1;
+        // First tick: a refused read. Second: a 200 with no set in it at all.
+        return setReads === 1 ? new Response('', { status: 502 }) : jsonOk({});
+      }
+      return jsonOk(defaultFetch(String(url)));
+    });
+
+    renderRoom({ rows: [hostedRow({ takeover: takeover({ state: 'transfer_pending' }) })] });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+    });
+
+    expect(setReads).toBeGreaterThanOrEqual(2);
+    // The last thing the server actually said still stands — a failed or empty
+    // background read must not blank the room out.
+    expect(screen.getByText('Waiting for you to accept on GitHub')).toBeTruthy();
+  });
+
+  it('skips the tick while the user’s own request is in flight', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/takeover') && init?.method === 'POST') {
+        return new Promise(() => {}) as unknown as Response;
+      }
+      return jsonOk(defaultFetch(String(url)));
+    });
+
+    renderRoom({ rows: [hostedRow({ takeover: takeover({ state: 'awaiting_reinstall' }) })] });
+    fireEvent.click(screen.getByRole('button', { name: /Check .* again/ }));
+    await act(async () => {});
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+    });
+
+    // A click and a tick racing for the same row is exactly what `busyRef`
+    // exists to prevent.
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/repositories')),
+    ).toHaveLength(0);
+  });
+
+  it('skips the tick while the tab is hidden', async () => {
+    vi.useFakeTimers();
+    const visibility = vi
+      .spyOn(document, 'visibilityState', 'get')
+      .mockReturnValue('hidden' as DocumentVisibilityState);
+
+    renderRoom({ rows: [hostedRow({ takeover: takeover({ state: 'transfer_pending' }) })] });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(45_000);
+    });
+
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/repositories')),
+    ).toHaveLength(0);
+    visibility.mockRestore();
+  });
+});
+
 // ── fixtures ────────────────────────────────────────────────────────────────
 
-function renderRoom(overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[] }) {
-  const view: ProjectRepoRoomViewDto = {
+function roomView(
+  overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[] },
+): ProjectRepoRoomViewDto {
+  return {
     projectId: 'proj-1',
     hostOwner: 'motir-projects',
     githubLogin: 'yue-personal',
@@ -510,15 +792,23 @@ function renderRoom(overrides: Partial<ProjectRepoRoomViewDto> & { rows: Project
     otherHostedProjects: [],
     ...overrides,
   };
-  currentRows = view.rows;
-  return renderWithIntl(
+}
+
+function room(view: ProjectRepoRoomViewDto) {
+  return (
     <RepositoriesRoom
       projectKey="ACME"
       view={view}
       connectHref="/settings/workspace/github"
       nowIso={NOW}
-    />,
+    />
   );
+}
+
+function renderRoom(overrides: Partial<ProjectRepoRoomViewDto> & { rows: ProjectRepoDto[] }) {
+  const view = roomView(overrides);
+  currentRows = view.rows;
+  return renderWithIntl(room(view));
 }
 
 function hostedRow(overrides: Partial<ProjectRepoDto> = {}): ProjectRepoDto {
@@ -586,6 +876,26 @@ function defaultFetch(url: string): unknown {
     return { organizations: [{ login: 'acme-inc', avatarUrl: null }] };
   }
   return { set: { rows: currentRows } };
+}
+
+/**
+ * Makes every org lookup hang until the test settles it by hand, and hands back
+ * the live list of outstanding ones — so "the answer arrives after the question
+ * stopped mattering" is a state to assert in rather than a race to catch.
+ */
+function pendingOrgLookups(): Array<{
+  resolve: (value: Response) => void;
+  reject: (reason: unknown) => void;
+}> {
+  const pending: Array<{ resolve: (value: Response) => void; reject: (reason: unknown) => void }> =
+    [];
+  fetchMock.mockImplementation(async (url: string) => {
+    if (String(url).includes('/api/github/organizations')) {
+      return new Promise<Response>((resolve, reject) => pending.push({ resolve, reject }));
+    }
+    return jsonOk(defaultFetch(String(url)));
+  });
+  return pending;
 }
 
 function jsonOk(body: unknown): Response {

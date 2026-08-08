@@ -289,8 +289,16 @@ describe('the coverage floor covers what this story shipped', () => {
   it('gives the page and its data module per-file thresholds at the CI floor', () => {
     // The story's own files must be inside the ≥90% gate rather than diluted
     // into the global average — the same floor 11.4's pages carry.
+    //
+    // ⚠️ The page is entered as `app/**/docs/sandbox/page.tsx`, NOT as its
+    // literal path: a Next.js route group is a literal `(public)` directory on
+    // disk, but `(` is grouping syntax to the coverage matcher, so the literal
+    // form resolves to no file and gates nothing (MOTIR-2449 — this test used
+    // to assert the literal string and passed on an inert entry). That the
+    // pattern reaches a real file is asserted repo-wide, for every entry, by
+    // `tests/coverage-gate-globs.test.ts`; this test asserts the FLOOR.
     const config = read('vitest.config.ts');
-    for (const file of ['app/(public)/docs/sandbox/page.tsx', 'lib/apiDocs/sandbox.ts']) {
+    for (const file of ['app/**/docs/sandbox/page.tsx', 'lib/apiDocs/sandbox.ts']) {
       expect(config, `${file} is not in the coverage include list`).toContain(`'${file}'`);
       expect(
         new RegExp(`'${escapeRegExp(file)}':\\s*\\{[^}]*lines:\\s*9\\d`).test(config),

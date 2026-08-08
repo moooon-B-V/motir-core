@@ -110,6 +110,17 @@ export default defineConfig({
     // responsible for, rather than diluting the signal across the whole tree.
     // Other modules carry their own coverage stories in their own Subtasks. v8
     // is the provider (matches @vitest/coverage-v8).
+    //
+    // ⚠️ A FILE UNDER A NEXT.JS ROUTE GROUP IS ENTERED AS `app/**/…`, NEVER AS
+    // ITS LITERAL PATH (MOTIR-2449). `(authed)` is a real directory on disk, but
+    // `(` is GROUPING SYNTAX to picomatch/tinyglobby — the matchers the coverage
+    // provider uses — so `app/(authed)/settings/…` resolves to no file at all.
+    // The file then never enters the report, and a `thresholds` key naming it
+    // gates nothing: an unmatched key is not an error in Vitest, it is an empty
+    // coverage map that passes every percentage. Twenty entries sat in exactly
+    // that state, silently, until `tests/coverage-gate-globs.test.ts` was
+    // written — that test now fails the build on any pattern or key that reaches
+    // no file, in EITHER half, so this comment is a courtesy and not the guard.
     coverage: {
       provider: 'v8',
       include: [
@@ -271,8 +282,8 @@ export default defineConfig({
         // Story MOTIR-2284 · Subtask MOTIR-2289 — the Children panel's List ↔
         // Graph switcher. (`WorkItemRoadmap`, the adapter it mounts, is already
         // gated above.)
-        'app/(authed)/items/[key]/_components/ChildPanel.tsx',
-        'app/(authed)/items/[key]/_components/ChildList.tsx',
+        'app/**/items/[key]/_components/ChildPanel.tsx',
+        'app/**/items/[key]/_components/ChildList.tsx',
         'lib/mcp/registry.ts',
         'lib/mcp/tools/getWorkItem.ts',
         'lib/mcp/tools/listReady.ts',
@@ -428,8 +439,8 @@ export default defineConfig({
         'app/api/cli/device/token/route.ts',
         'app/api/cli/device/approve/route.ts',
         'app/api/cli/device/grant/route.ts',
-        'app/(auth)/device/_components/DeviceApproval.tsx',
-        'app/(authed)/settings/account/_components/ConnectCliPanel.tsx',
+        'app/**/device/_components/DeviceApproval.tsx',
+        'app/**/settings/account/_components/ConnectCliPanel.tsx',
         // Story MOTIR-1775 · MOTIR-1896 — the CI-minutes METER (the measurement
         // half of `docs/decisions/ci-minutes-allowance.md`). Gated from day one:
         // every figure here becomes a charge on a user's credit balance via
@@ -572,7 +583,7 @@ export default defineConfig({
         // could break it are exercised. The view model carries the roll-up those
         // claims are made of.
         'lib/projectRepos/teamAccessView.ts',
-        'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx',
+        'app/**/settings/project/code-access/_components/CodeAccessSettings.tsx',
         // Story MOTIR-1775 · MOTIR-1939 — the TAKE-IT-OVER surface. Gated because
         // the card is a set of claims about STATE that only hold while the
         // branches expressing them are exercised: that a waiting state is a
@@ -584,9 +595,9 @@ export default defineConfig({
         'lib/github/userOrgs.ts',
         'lib/services/projectRepoRoomService.ts',
         'app/api/github/organizations/route.ts',
-        'app/(authed)/settings/project/repositories/_components/TakeoverRow.tsx',
-        'app/(authed)/settings/project/repositories/_components/TakeoverModal.tsx',
-        'app/(authed)/settings/project/repositories/_components/RepositoriesRoom.tsx',
+        'app/**/settings/project/repositories/_components/TakeoverRow.tsx',
+        'app/**/settings/project/repositories/_components/TakeoverModal.tsx',
+        'app/**/settings/project/repositories/_components/RepositoriesRoom.tsx',
         // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
         // BACKFILL's decision table. It shipped ungated, and it is the one file
         // in that subtask whose branches ARE the safety argument: each branch is
@@ -696,18 +707,18 @@ export default defineConfig({
         // wrong — a spec that would not build, a footer read that failed, a
         // filter that matches nothing. Each is a way the published reference can
         // be silently useless while every module beneath it is green.
-        'app/(public)/docs/layout.tsx',
-        'app/(public)/docs/api/page.tsx',
-        'app/(public)/docs/api/getting-started/page.tsx',
-        'app/(public)/docs/api/stability/page.tsx',
-        'app/(public)/docs/_components/CatalogueNav.tsx',
-        'app/(public)/docs/_components/CodeBlock.tsx',
-        'app/(public)/docs/_components/DocBlocks.tsx',
-        'app/(public)/docs/_components/MethodPill.tsx',
-        'app/(public)/docs/_components/OperationSection.tsx',
-        'app/(public)/docs/sandbox/page.tsx',
+        'app/**/docs/layout.tsx',
+        'app/**/docs/api/page.tsx',
+        'app/**/docs/api/getting-started/page.tsx',
+        'app/**/docs/api/stability/page.tsx',
+        'app/**/docs/_components/CatalogueNav.tsx',
+        'app/**/docs/_components/CodeBlock.tsx',
+        'app/**/docs/_components/DocBlocks.tsx',
+        'app/**/docs/_components/MethodPill.tsx',
+        'app/**/docs/_components/OperationSection.tsx',
+        'app/**/docs/sandbox/page.tsx',
         'lib/apiDocs/sandbox.ts',
-        'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx',
+        'app/**/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
         'app/api/v1/projects/[projectKey]/sprints/route.ts',
@@ -732,7 +743,7 @@ export default defineConfig({
         // saying the other repos exist at all — an untested branch in either is
         // a project silently showing one repo's grade as if it were its own.
         'lib/codeHealth/repoAuditRows.ts',
-        'app/(authed)/code-health/_components/AuditRepoList.tsx',
+        'app/**/code-health/_components/AuditRepoList.tsx',
         // Story MOTIR-2244 · Subtask MOTIR-2247 — the repo-SCOPED audit trigger.
         // The scope decides how many derivations a click PAYS for, so an
         // untested branch here is either a fan-out that spends N times what was
@@ -777,6 +788,10 @@ export default defineConfig({
       // Per-file thresholds keyed by glob: each of the six modules gates
       // independently, so a regression in any one fails the run (rather than a
       // blended average hiding a weak module).
+      //
+      // ⚠️ A key here gates ONLY a file `include` above also resolves to, and it
+      // fails SILENTLY when it matches nothing — see the route-group note on
+      // `include`. Write a route-group path as `app/**/…`.
       thresholds: {
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.
         'lib/api/v1/route.ts': { branches: 90, functions: 90, lines: 90 },
@@ -836,7 +851,7 @@ export default defineConfig({
         // Story MOTIR-2192 · Subtask MOTIR-2166 — the code-graph offboarding queue.
         // Story MOTIR-1755 · Subtask MOTIR-2207 — the multi-repo audit tab.
         'lib/codeHealth/repoAuditRows.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/(authed)/code-health/_components/AuditRepoList.tsx': {
+        'app/**/code-health/_components/AuditRepoList.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -906,42 +921,42 @@ export default defineConfig({
         // Story 11.4 · Subtask 11.4.8 — the guide + the published policy.
         'lib/apiDocs/guide.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.4 · Subtask 11.4.9 (MOTIR-2190) — the docs surface.
-        'app/(public)/docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/docs/api/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/docs/api/getting-started/page.tsx': {
+        'app/**/docs/layout.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/docs/api/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/docs/api/getting-started/page.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/api/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/docs/_components/CatalogueNav.tsx': {
+        'app/**/docs/api/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/docs/_components/CatalogueNav.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/_components/CodeBlock.tsx': {
+        'app/**/docs/_components/CodeBlock.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/_components/DocBlocks.tsx': {
+        'app/**/docs/_components/DocBlocks.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/_components/MethodPill.tsx': {
+        'app/**/docs/_components/MethodPill.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(public)/docs/sandbox/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/docs/sandbox/page.tsx': { branches: 90, functions: 90, lines: 90 },
         'lib/apiDocs/sandbox.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/(public)/docs/_components/OperationSection.tsx': {
+        'app/**/docs/_components/OperationSection.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(authed)/settings/account/_components/ApiDocsLinkPanel.tsx': {
+        'app/**/settings/account/_components/ApiDocsLinkPanel.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -1297,7 +1312,7 @@ export default defineConfig({
         'lib/projectRepos/errorResponse.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-1775 · MOTIR-1945 — the team code-access surface.
         'lib/projectRepos/teamAccessView.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx': {
+        'app/**/settings/project/code-access/_components/CodeAccessSettings.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -1307,17 +1322,17 @@ export default defineConfig({
         'lib/github/userOrgs.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/projectRepoRoomService.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/github/organizations/route.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/(authed)/settings/project/repositories/_components/TakeoverRow.tsx': {
+        'app/**/settings/project/repositories/_components/TakeoverRow.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(authed)/settings/project/repositories/_components/TakeoverModal.tsx': {
+        'app/**/settings/project/repositories/_components/TakeoverModal.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(authed)/settings/project/repositories/_components/RepositoriesRoom.tsx': {
+        'app/**/settings/project/repositories/_components/RepositoriesRoom.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -1423,7 +1438,7 @@ export default defineConfig({
         'lib/cliDevice/userCode.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/cli/device/approve/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/cli/device/grant/route.ts': { branches: 90, functions: 90, lines: 90 },
-        'app/(authed)/settings/account/_components/ConnectCliPanel.tsx': {
+        'app/**/settings/account/_components/ConnectCliPanel.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
@@ -1457,7 +1472,7 @@ export default defineConfig({
         'lib/services/cliDeviceService.ts': { functions: 90, lines: 90 },
         'app/api/cli/device/start/route.ts': { functions: 90, lines: 90 },
         'app/api/cli/device/token/route.ts': { functions: 90, lines: 90 },
-        'app/(auth)/device/_components/DeviceApproval.tsx': { functions: 90, lines: 90 },
+        'app/**/device/_components/DeviceApproval.tsx': { functions: 90, lines: 90 },
         // Story MOTIR-1755 · MOTIR-1758 → gated by MOTIR-1760. The provenance
         // backfill's decision table (see the `include` note). It measures at
         // 100/100/100 today, so this pins what MOTIR-1758 already earned rather
@@ -1501,12 +1516,12 @@ export default defineConfig({
         'lib/mcp/payloads/driftGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/payloads/registry.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2284 · Subtask MOTIR-2289.
-        'app/(authed)/items/[key]/_components/ChildPanel.tsx': {
+        'app/**/items/[key]/_components/ChildPanel.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
         },
-        'app/(authed)/items/[key]/_components/ChildList.tsx': {
+        'app/**/items/[key]/_components/ChildList.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
