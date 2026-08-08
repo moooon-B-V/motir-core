@@ -18,6 +18,14 @@ import { dirname, join, relative, resolve } from 'node:path';
 // so they are stripped before the walk — and so are COMMENTS, which are not
 // imports either however exactly they quote one (MOTIR-2461).
 //
+// A DYNAMIC `import('…')` counts (MOTIR-2484). Next traces a lazily imported
+// module into the calling function's closure exactly as it traces a static one,
+// so `await import('@/lib/db')` puts a client in the bundle just as surely as
+// `import { db } from '@/lib/db'` does. It is recognised by the SCANNER rather
+// than by a third regex: `import(` written in prose or quoted in a string is
+// not an import, and a pattern run over the stripped text cannot tell the
+// difference for the string case.
+//
 // ⚠️ THE TWO FAILURE DIRECTIONS ARE NOT SYMMETRIC, and every edit here has to
 // keep them that way. OVER-reporting blocks a clean file on a red build someone
 // has to read. UNDER-reporting ships a database client to an anonymous reader
@@ -25,9 +33,12 @@ import { dirname, join, relative, resolve } from 'node:path';
 // gives up on any construct it cannot close on the SAME LINE and treats the
 // opening character as ordinary code, because a scanner that guesses wrong then
 // loses one line rather than the whole rest of the file. Its behaviour is
-// pinned by `tests/helpers/importGraph.test.ts`, including a sweep over every
-// real source file in `app/`, `lib/` and `components/` asserting that no
-// specifier quoted on a code line ever disappears.
+// pinned by `tests/helpers/importGraph.test.ts`, including sweeps over every
+// real source file in `app/`, `lib/` and `components/` asserting that neither a
+// specifier quoted on a code line nor a dynamic import written on one ever
+// disappears — the second sweep exists because the scanner's literal-skipping
+// is what decides whether a dynamic import is seen, and a region it mis-skips
+// would fail SILENTLY, in the unsafe direction.
 
 export const REPO_ROOT = resolve(__dirname, '..', '..');
 
@@ -124,21 +135,39 @@ function endOfTemplate(source: string, start: number): number {
 }
 
 /**
- * The source with every `//` and `/* … *\/` comment blanked to spaces.
+ * One left-to-right pass over the source, producing the two things the walk
+ * needs and a comment-blanking regex could not produce on its own.
  *
- * The result has the SAME LENGTH and the same newlines as the input, so every
+ * `code` is the source with every `//` and `/* … *\/` comment blanked to
+ * spaces. It has the SAME LENGTH and the same newlines as the input, so every
  * offset, line and column still points where it did — a stripper that deleted
  * instead could join two lines into a specifier neither of them contained.
+ *
+ * `dynamic` is every specifier named by a `import('…')` call, collected HERE
+ * rather than by a pattern over `code` because only the scan knows whether the
+ * quote it is looking at opens a real string literal. A `import('@/lib/db')`
+ * sitting inside a comment or inside a string is text about an import, not an
+ * import, and the scan sees both as one literal it steps over (MOTIR-2484).
  *
  * A `//` inside a string, template or regex literal is not a comment, so those
  * are recognised and skipped. Each is required to close on its own line (a
  * template may span lines, as the language allows); anything that does not is
  * treated as an ordinary character rather than as an opener that runs away.
  */
-export function stripComments(source: string): string {
+function scan(source: string): { code: string; dynamic: string[] } {
   const out = source.split('');
+  const dynamic: string[] = [];
+  // The two most recent significant tokens. Two is what `import ( '…'` needs:
+  // the specifier's opening quote sees `(` in front of it and `import` behind
+  // that, and no other shape puts a string in that position.
   let previousToken = '';
+  let tokenBefore = '';
   let i = 0;
+
+  const take = (token: string) => {
+    tokenBefore = previousToken;
+    previousToken = token;
+  };
 
   while (i < source.length) {
     const char = source[i]!;
@@ -159,14 +188,19 @@ export function stripComments(source: string): string {
 
     if (char === "'" || char === '"') {
       const end = endOfQuoted(source, i);
-      previousToken = char;
+      // A closed string in `import( … )` position IS the dynamic specifier. An
+      // unclosed one (end === -1) is not a string at all — see `endOfQuoted`.
+      if (end !== -1 && previousToken === '(' && tokenBefore === 'import') {
+        dynamic.push(source.slice(i + 1, end - 1));
+      }
+      take(char);
       i = end === -1 ? i + 1 : end;
       continue;
     }
 
     if (char === '`') {
       const end = endOfTemplate(source, i);
-      previousToken = char;
+      take(char);
       i = end === -1 ? i + 1 : end;
       continue;
     }
@@ -174,7 +208,7 @@ export function stripComments(source: string): string {
     if (char === '/' && regexCanFollow(previousToken)) {
       const end = endOfRegex(source, i);
       if (end !== -1) {
-        previousToken = '/';
+        take('/');
         i = end;
         continue;
       }
@@ -183,16 +217,21 @@ export function stripComments(source: string): string {
     if (/[A-Za-z_$]/.test(char)) {
       let end = i;
       while (end < source.length && /[A-Za-z0-9_$]/.test(source[end]!)) end++;
-      previousToken = source.slice(i, end);
+      take(source.slice(i, end));
       i = end;
       continue;
     }
 
-    if (!/\s/.test(char)) previousToken = char;
+    if (!/\s/.test(char)) take(char);
     i++;
   }
 
-  return out.join('');
+  return { code: out.join(''), dynamic };
+}
+
+/** The source with every `//` and `/* … *\/` comment blanked to spaces. */
+export function stripComments(source: string): string {
+  return scan(source).code;
 }
 
 /** Strip `import type … from '…'` — erased at compile time, never bundled. */
@@ -200,12 +239,22 @@ export function stripTypeOnlyImports(source: string): string {
   return source.replace(/(^|\n)\s*import\s+type\s+[\s\S]*?\s+from\s+['"][^'"]+['"];?/g, '$1');
 }
 
-/** Every runtime module specifier a file imports or re-exports from. */
+/**
+ * Every runtime module specifier a file imports or re-exports from — the static
+ * `from '…'` / `import '…'` forms, and the dynamic `import('…')` one.
+ *
+ * The static forms stay on patterns over the comment-stripped text, which can
+ * only ever over-report (the safe direction). The dynamic form comes from the
+ * scan, which is the only reader that can tell `import('x')` written as code
+ * from the same characters quoted inside a string.
+ */
 export function specifiersOf(source: string): string[] {
-  const code = stripTypeOnlyImports(stripComments(source));
+  const { code, dynamic } = scan(source);
+  const stripped = stripTypeOnlyImports(code);
   const found = new Set<string>();
-  for (const match of code.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)) found.add(match[1]!);
-  for (const match of code.matchAll(/\bimport\s+['"]([^'"]+)['"]/g)) found.add(match[1]!);
+  for (const match of stripped.matchAll(/\bfrom\s+['"]([^'"]+)['"]/g)) found.add(match[1]!);
+  for (const match of stripped.matchAll(/\bimport\s+['"]([^'"]+)['"]/g)) found.add(match[1]!);
+  for (const specifier of dynamic) found.add(specifier);
   return [...found];
 }
 
