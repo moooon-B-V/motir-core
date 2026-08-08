@@ -42,6 +42,11 @@ vi.mock('@/lib/ai/motirAiClient', () => ({
     }),
   ),
 }));
+// …and the project gate (MOTIR-2358) — a synthetic ProjectContext has no rows
+// behind it, so the real assert would 404 before the seam under test runs.
+vi.mock('@/lib/services/projectAccessService', () => ({
+  projectAccessService: { assertPermission: vi.fn() },
+}));
 
 import { aiPreplanService } from '@/lib/services/aiPreplanService';
 

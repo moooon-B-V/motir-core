@@ -301,46 +301,46 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `ai`
 
-| Operation                                     | Verbs     | Gate today                                                                     | Permission       | Decision    | Why |
-| --------------------------------------------- | --------- | ------------------------------------------------------------------------------ | ---------------- | ----------- | --- |
-| `/api/ai/access`                              | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/augment`                             | POST      | `aiPlanEditsService.submitAugment` → `assertPermission`                        | `ai:plan`        | existing    | R5  |
-| `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/chat`                                | POST      | `aiChatService.submitDiscoveryTurn` → `assertPermission`                       | `ai:plan`        | existing    | R5  |
-| `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`                             | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`                         | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`                        | `ai:plan`        | new         | R5  |
-| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`                              | `ai:plan`        | new         | R5  |
-| `/api/ai/expand`                              | POST      | `aiPlanEditsService.submitExpand` → `assertPermission`                         | `ai:plan`        | existing    | R5  |
-| `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/explanation`                         | POST      | `aiExplanationService.submitExplanationDraft` → `assertPermission`             | `ai:plan`        | existing    | R5  |
-| `/api/ai/explanation/[jobId]/stream`          | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/jobs/[jobId]`                        | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/plan-change/session`                 | POST      | `planChangeSessionsService.getOrCreateForProject` → `assertPermission`         | `ai:plan`        | existing    | R5  |
-| `/api/ai/plan-change/session/planner-turn`    | POST      | `planChangeSessionsService.recordPlannerTurn` → `assertPermission`             | `ai:plan`        | existing    | R5  |
-| `/api/ai/plan-change/session/submit`          | POST      | `planChangeSessionsService.submit` → `assertPermission`                        | `ai:plan`        | existing    | R5  |
-| `/api/ai/plan-change/session/turns`           | POST      | `planChangeSessionsService.appendTurn` → `assertPermission`                    | `ai:plan`        | existing    | R5  |
-| `/api/ai/plan/generate`                       | POST      | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/plan/generate/[jobId]/stream`        | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/plan/sprint`                         | POST      | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/plan/sprint/[jobId]/review`          | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/plan/sprint/[jobId]/stream`          | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/plan/sprint/approve`                 | POST      | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/pre-plan`                            | GET/PATCH | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/ai/replan`                              | POST      | `aiPlanEditsService.submitReplan` → `assertPermission`                         | `ai:plan`        | existing    | R5  |
-| `/api/ai/replan/[jobId]/stream`               | GET       | session only                                                                   | `ai:plan`        | new         | R5  |
-| `/api/canvas-layout`                          | GET/PATCH | `canvasLayoutService.{getLayout,savePositions}` → `assertPermission`           | `project:browse` | existing    | R50 |
-| `/api/idea-draft`                             | POST      | — none — origin-allowlisted + per-IP rate-limited, pre-auth                    | —                | no-gate     | R48 |
-| `/api/idea-draft/[id]/claim`                  | POST      | — none — consumes a single-use draft id at sign-in                             | —                | user-scoped | R49 |
-| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                                 | `ai:view_plan`   | new         | R11 |
-| `/api/plans/[id]/approve`                     | POST      | workspace only                                                                 | `ai:view_plan`   | new         | R11 |
-| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                                | `ai:view_plan`   | new         | R11 |
-| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                                 | `ai:view_plan`   | new         | R11 |
-| `/api/projects/[key]/ai-settings`             | GET       | `assertCanBrowse`                                                              | `project:browse` | existing    | R17 |
-| `/api/projects/[key]/ai-settings`             | PATCH     | `assertPermission(ai:configure)`                                               | `ai:configure`   | existing    | R17 |
-| `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService` → `planChangeSessionsService` → `assertPermission` | `ai:plan`        | existing    | R5  |
-| `/api/work-items/[id]/ai/plan/[jobId]/stream` | GET       | `contextualPlanningService.streamPlanJob` (transitive)                         | `ai:plan`        | new         | R5  |
+| Operation                                     | Verbs     | Gate today                                                                                                                        | Permission       | Decision    | Why |
+| --------------------------------------------- | --------- | --------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ----------- | --- |
+| `/api/ai/access`                              | GET       | route → `assertPermission`; degrades to `not applicable`                                                                          | `project:browse` | existing    | R5  |
+| `/api/ai/augment`                             | POST      | `aiPlanEditsService.submitAugment` → `assertPermission`                                                                           | `ai:plan`        | existing    | R5  |
+| `/api/ai/augment/[jobId]/stream`              | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/chat`                                | POST      | `aiChatService.submitDiscoveryTurn` → `assertPermission`                                                                          | `ai:plan`        | existing    | R5  |
+| `/api/ai/chat/[jobId]/stream`                 | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/coding-convention/audit`             | GET       | `aiConventionService.getAudit` → `assertCanManage`                                                                                | `ai:plan`        | new         | R5  |
+| `/api/ai/coding-convention/audit-coverage`    | GET       | `auditCoverageService.getCoverage` → `assertCanManage`                                                                            | `ai:plan`        | new         | R5  |
+| `/api/ai/coding-convention/convention`        | GET       | `aiConventionService.getConvention` → `assertCanManage`                                                                           | `ai:plan`        | new         | R5  |
+| `/api/ai/coding-convention/refresh`           | POST      | `aiConventionService.reaudit` → `assertCanManage`                                                                                 | `ai:plan`        | new         | R5  |
+| `/api/ai/expand`                              | POST      | `aiPlanEditsService.submitExpand` → `assertPermission`                                                                            | `ai:plan`        | existing    | R5  |
+| `/api/ai/expand/[jobId]/stream`               | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/explanation`                         | POST      | `aiExplanationService.submitExplanationDraft` → `assertPermission`                                                                | `ai:plan`        | existing    | R5  |
+| `/api/ai/explanation/[jobId]/stream`          | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/jobs/[jobId]`                        | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/plan-change/session`                 | POST      | `planChangeSessionsService.getOrCreateForProject` → `assertPermission`                                                            | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan-change/session/planner-turn`    | POST      | `planChangeSessionsService.recordPlannerTurn` → `assertPermission`                                                                | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan-change/session/submit`          | POST      | `planChangeSessionsService.submit` → `assertPermission`                                                                           | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan-change/session/turns`           | POST      | `planChangeSessionsService.appendTurn` → `assertPermission`                                                                       | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan/generate`                       | POST      | `aiGenerationService.startGeneration` → `assertPermission`                                                                        | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan/generate/[jobId]/stream`        | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/plan/sprint`                         | POST      | `aiSprintPlanningService.submitSprintPlan` → `assertPermission`                                                                   | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan/sprint/[jobId]/review`          | GET       | `aiSprintPlanningService.reviewSprintPlan` → `assertPermission`                                                                   | `ai:plan`        | existing    | R5  |
+| `/api/ai/plan/sprint/[jobId]/stream`          | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/ai/plan/sprint/approve`                 | POST      | `aiSprintPlanningService.approveSprintPlan` → `assertPermission`                                                                  | `ai:plan`        | existing    | R5  |
+| `/api/ai/pre-plan`                            | GET/PATCH | `aiPreplanService.{getPreplanState,saveDesignChoice}` → `assertPermission` (`project:browse` on the READ, `ai:plan` on the WRITE) | `ai:plan`        | existing    | R5  |
+| `/api/ai/replan`                              | POST      | `aiPlanEditsService.submitReplan` → `assertPermission`                                                                            | `ai:plan`        | existing    | R5  |
+| `/api/ai/replan/[jobId]/stream`               | GET       | session only                                                                                                                      | `ai:plan`        | new         | R5  |
+| `/api/canvas-layout`                          | GET/PATCH | `canvasLayoutService.{getLayout,savePositions}` → `assertPermission`                                                              | `project:browse` | existing    | R50 |
+| `/api/idea-draft`                             | POST      | — none — origin-allowlisted + per-IP rate-limited, pre-auth                                                                       | —                | no-gate     | R48 |
+| `/api/idea-draft/[id]/claim`                  | POST      | — none — consumes a single-use draft id at sign-in                                                                                | —                | user-scoped | R49 |
+| `/api/plans/[id]`                             | GET       | `planReviewService.getPlanReview` (transitive)                                                                                    | `ai:view_plan`   | new         | R11 |
+| `/api/plans/[id]/approve`                     | POST      | workspace only                                                                                                                    | `ai:view_plan`   | new         | R11 |
+| `/api/plans/[id]/decline`                     | POST      | `assertCanEdit`                                                                                                                   | `ai:view_plan`   | new         | R11 |
+| `/api/plans/[id]/items/[itemId]`              | PATCH     | workspace only                                                                                                                    | `ai:view_plan`   | new         | R11 |
+| `/api/projects/[key]/ai-settings`             | GET       | `assertCanBrowse`                                                                                                                 | `project:browse` | existing    | R17 |
+| `/api/projects/[key]/ai-settings`             | PATCH     | `assertPermission(ai:configure)`                                                                                                  | `ai:configure`   | existing    | R17 |
+| `/api/work-items/[id]/ai/plan`                | GET/POST  | `contextualPlanningService` → `planChangeSessionsService` → `assertPermission`                                                    | `ai:plan`        | existing    | R5  |
+| `/api/work-items/[id]/ai/plan/[jobId]/stream` | GET       | `contextualPlanningService.streamPlanJob` (transitive)                                                                            | `ai:plan`        | new         | R5  |
 
 ### `api`
 

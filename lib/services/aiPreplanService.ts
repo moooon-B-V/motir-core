@@ -11,6 +11,7 @@ import { isTypeId, type TypeId } from '@/lib/theme/typography';
 import type { RawPreplanSession, RawPreplanStateResponse } from '@/lib/ai/types';
 import type { ProjectContext } from '@/lib/projects';
 import type { DesignChoiceDTO, PreplanStateDTO } from '@/lib/dto/aiPreplan';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // The starter flag set ALONGSIDE the design choice (motir-ai stores it as the
 // distinct `designStarter` column). A real pick → 'bare' (the project scaffolds
@@ -49,6 +50,15 @@ export const aiPreplanService = {
   // each artifact's forward revision log, and the per-revision diffs — mapped to
   // the motir-core DTO the browser consumes.
   async getPreplanState(ctx: ProjectContext): Promise<PreplanStateDTO> {
+    // `project:browse`, NOT `ai:plan` (MOTIR-2358). The route carries a READ and
+    // a WRITE, and they are different acts: this one returns the project's
+    // pre-plan tier documents, which is closer to browsing than to spending. One
+    // file is not one key.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'project:browse',
+    );
     const raw = await fetchPreplanState({
       coreWorkspaceId: ctx.workspaceId,
       coreProjectId: ctx.projectId,
@@ -63,6 +73,12 @@ export const aiPreplanService = {
   // find-or-creates the AiProject) and the 'bare' starter flag. Returns the
   // (validated) choice the upstream echoed back, so the route can confirm it.
   async saveDesignChoice(ctx: ProjectContext, choice: DesignChoiceInput): Promise<DesignChoiceDTO> {
+    // The WRITE half is a planning act — `ai:plan` (MOTIR-2358).
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     const validated = validateDesignChoice(choice);
     const organizationId = await resolveOrganizationId(ctx);
     const raw = await saveDesignChoiceUpstream({

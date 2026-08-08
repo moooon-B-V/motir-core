@@ -541,7 +541,15 @@ describe('the PENDING set is bounded and shrinking', () => {
     // four already reached one indirectly, through something the route happened
     // to call. Replacing that indirection with a named key is the point of the
     // card and is invisible to a count, which is why the card says so up front.
-    expect(pending.length).toBe(12);
+    //
+    // 12 → 8 is MOTIR-2358 wiring generation, sprint planning, the pre-plan pair
+    // and the AI-access probe. FOUR rows, the largest single-card fall in the
+    // story, because these were genuinely ungated: generation is the heaviest
+    // planning job the product runs and reached no project gate at all. Two of
+    // the four take a key OTHER than `ai:plan` — the pre-plan READ and the access
+    // PROBE ask `project:browse`, so an actor who may not plan can still see that
+    // planning exists rather than discovering it through a failed write.
+    expect(pending.length).toBe(8);
   });
 
   it('pins the CLAIMED-BUT-UNVERIFIED bucket so it can only shrink', () => {

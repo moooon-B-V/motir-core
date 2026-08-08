@@ -6,6 +6,7 @@ import {
   SprintPlanningDisabledError,
 } from '@/lib/services/aiSprintPlanningService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
+import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 
 // POST /api/ai/plan/sprint (Subtask 7.13.5 · MOTIR-918) — submit a `plan_sprint`
 // packing job for the active project. HTTP only: session, active project, ONE
@@ -28,6 +29,8 @@ export async function POST(): Promise<Response> {
     const { jobId } = await aiSprintPlanningService.submitSprintPlan(ctx);
     return NextResponse.json({ jobId }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
+    const gate = aiPlanGateErrorResponse(err);
+    if (gate) return gate;
     if (err instanceof SprintPlanningDisabledError) {
       // 409: the request is well-formed, the project's configuration refuses it.
       return NextResponse.json({ code: err.code, error: err.message }, { status: 409 });

@@ -3,6 +3,9 @@ import { db } from '@/lib/db';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { aiExplanationService } from '@/lib/services/aiExplanationService';
+import { aiGenerationService } from '@/lib/services/aiGenerationService';
+import { aiSprintPlanningService } from '@/lib/services/aiSprintPlanningService';
+import { aiPreplanService } from '@/lib/services/aiPreplanService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
@@ -168,5 +171,49 @@ describe('the plan-editing jobs ask ai:plan', () => {
     await expect(
       aiPlanEditsService.submitExpand('PROD-99999', fx.viewerPctx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+});
+
+// MOTIR-2358 — generation, sprint planning, and the two reads beside them. Four
+// of these six reached NO project gate at all, including the heaviest planning
+// job the product runs. Two take a key OTHER than `ai:plan`, and that split is
+// the decision worth pinning: an actor who may not PLAN can still SEE that
+// planning exists, rather than discovering it through a failed write.
+describe('generation and sprint planning ask ai:plan; the two reads do not', () => {
+  it('refuses a VIEWER generation and sprint planning', async () => {
+    const fx = await makeFixture('gen-viewer');
+    await expect(aiGenerationService.startGeneration(fx.viewerPctx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+    await expect(aiSprintPlanningService.submitSprintPlan(fx.viewerPctx)).rejects.toBeInstanceOf(
+      PermissionDeniedError,
+    );
+  });
+
+  it('refuses a VIEWER the sprint-plan review and approve, before either reads the job back', async () => {
+    // `approveSprintPlan` materializes real work items into real sprints, so its
+    // gate must run before anything is resolved — a fake job id still refuses on
+    // the KEY, which is what proves the ordering.
+    const fx = await makeFixture('gen-approve');
+    await expect(
+      aiSprintPlanningService.reviewSprintPlan('job_does_not_exist', fx.viewerPctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    await expect(
+      aiSprintPlanningService.approveSprintPlan('job_does_not_exist', undefined, fx.viewerPctx),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+  });
+
+  it('refuses a VIEWER the pre-plan WRITE and admits them the pre-plan READ’s gate', async () => {
+    const fx = await makeFixture('gen-preplan');
+    await expect(
+      aiPreplanService.saveDesignChoice(fx.viewerPctx, {} as never),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+    // The READ asks `project:browse`, which a viewer holds — so it gets PAST the
+    // gate and fails (or succeeds) on the motir-ai boundary instead. Asserting
+    // "not a permission refusal" is the honest form here: the boundary is not
+    // wired in this environment, and the gate is what is under test.
+    await expect(aiPreplanService.getPreplanState(fx.viewerPctx)).rejects.not.toBeInstanceOf(
+      PermissionDeniedError,
+    );
   });
 });

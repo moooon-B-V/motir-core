@@ -18,6 +18,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 
 // AI SPRINT PLANNING (Story 7.13 · Subtask 7.13.5 · MOTIR-918) — the motir-core
 // half of the `plan_sprint` seam: SUBMIT the packing job, STREAM its progress,
@@ -140,6 +141,12 @@ export const aiSprintPlanningService = {
    * the typed `MotirAiError`s on a submit failure (unreachable / out of credits).
    */
   async submitSprintPlan(ctx: ProjectContext): Promise<{ jobId: string }> {
+    // `ai:plan` (MOTIR-2358) — ungated before this card.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     const project = await loadProjectSettings(ctx);
     if (!project.aiSprintPlanningEnabled) {
       throw new SprintPlanningDisabledError(ctx.project.identifier);
@@ -200,6 +207,13 @@ export const aiSprintPlanningService = {
    * is a valid outcome the design draws (panel 4), not a failure.
    */
   async reviewSprintPlan(jobId: string, ctx: ProjectContext): Promise<SprintPlanReviewDto> {
+    // `ai:plan` BEFORE the job read (MOTIR-2358): a gate behind `getJob` would
+    // let an ungranted actor probe job ids for existence.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     const job = await getJob(jobId);
     const raw = job.result?.sprintAssignment;
     if (!raw) return { jobStatus: job.status, proposal: null, items: {} };
@@ -268,6 +282,15 @@ export const aiSprintPlanningService = {
     editedDelta: unknown | undefined,
     ctx: ProjectContext,
   ): Promise<ApproveSprintPlanResult> {
+    // `ai:plan`, asserted BEFORE anything is read back or materialized
+    // (MOTIR-2358). Approving a sprint plan is the one write in this card whose
+    // output is durable project data — real work items move into real sprints —
+    // so the gate cannot sit after the plan is resolved.
+    await projectAccessService.assertPermission(
+      ctx.projectId,
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      'ai:plan',
+    );
     let raw: unknown;
     if (editedDelta !== undefined && editedDelta !== null) {
       raw = editedDelta;
