@@ -42,8 +42,8 @@ permissions page, as a complete answer.
 
 ## The resulting catalog
 
-**31 permissions across 16 domains.** **27** are
-enforced by a gate today; **4** are `planned` — justified by a row below, and wired by **two**
+**31 permissions across 16 domains.** **29** are
+enforced by a gate today; **2** are `planned` — justified by a row below, and wired by **two**
 stories: **MOTIR-2256** takes the twelve ADMINISTRATIVE keys that split out of `project:administer`
 (member, board, workflow, field, estimation, repository, `ai:configure`), and **MOTIR-2291** takes the
 eight MEMBER-FACING ones (`ai:plan`, `ai:view_plan`, `sprint:manage`, `report:view`,
@@ -63,7 +63,7 @@ A `planned` key is never offered in the grid or the role editor.
 >
 > **MOTIR-2291's eight move the same way, one key per card.** Wired so far: **`sprint:manage`**
 > (MOTIR-2350) · **`report:view`** (MOTIR-2351) · **`saved_filter:manage`** (MOTIR-2352) ·
-> **`import:run`** (MOTIR-2353). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
+> **`import:run`** (MOTIR-2353) · **`work_item:triage` · `work_item:delete`** (MOTIR-2354). `tests/permissions/catalog.test.ts` keeps its own list — deliberately separate from
 > the twelve, because these keys are NOT equivalent to `project:administer` and a reader must never
 > take membership of one list as evidence about the other.
 
@@ -232,7 +232,9 @@ worse failure than a gap.
 
 **R22.** Who on the team may clone the code. Its own key: a lead may grant code access without administering the project.
 
-**R23.** Triage queue: accept / decline / promote an inbound request.
+**R23.** Triage queue: accept / decline / promote an inbound request — a MODERATION act on work somebody outside the team submitted, the same shape as `comment:moderate`. Reading the queue rides the same key: its contents are requests nobody has accepted yet.
+
+> ⚠️ **CORRECTED by MOTIR-2354.** `/api/projects/[key]/triage/submissions` was mapped here, and it is not triage — it is somebody SUBMITTING, which `public_request:submit` already governs. Plane draws the identical line: a Guest or Commenter submits an intake item, only Admin and Contributor accept or decline one. Its gate is unchanged (browse-shaped, so an internal member on a private project can still file one — the level-gated `public_request:submit` could not admit them); only the mapping moved.
 
 **R24.** Components vocabulary.
 
@@ -270,7 +272,9 @@ worse failure than a gap.
 
 **R41.** Governed by canEdit.
 
-**R42.** Archive / delete cascades over a subtree — separable from editing a field.
+**R42.** Archive / delete cascades over a subtree — separable from editing a field. Jira grants _Delete Issues_ to the Administrators project role, so a member keeps every edit and loses the cascade.
+
+> ⚠️ **CORRECTED by MOTIR-2354.** `DELETE /api/work-items/[id]` was filed under R41 / `work_item:edit` while its own DRY RUN (`/delete-preview`) was mapped here — and in the code the preview was the tighter of the two (`assertCanManage` vs the delete's `assertCanManage`, against an inventory row claiming `work_item:edit`). A destroy and its preview cannot be governed by different keys; both now ask `work_item:delete`.
 
 **R43.** Acceptance evidence attached to a work item.
 
@@ -616,35 +620,35 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `work_item`
 
-| Operation                                               | Verbs       | Gate today                           | Permission         | Decision | Why |
-| ------------------------------------------------------- | ----------- | ------------------------------------ | ------------------ | -------- | --- |
-| `/api/projects/[key]/triage/queue`                      | GET         | workspace only                       | `work_item:triage` | new      | R23 |
-| `/api/projects/[key]/triage/submissions`                | POST        | `assertCanBrowse`                    | `work_item:triage` | new      | R23 |
-| `/api/ready`                                            | GET         | workspace only                       | `project:browse`   | existing | R2  |
-| `/api/ready/next`                                       | POST        | workspace only                       | `project:browse`   | existing | R2  |
-| `/api/ready/nudge`                                      | GET         | session only                         | `project:browse`   | existing | R2  |
-| `/api/work-items/[id]`                                  | DELETE      | `assertCanManage`                    | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/acceptance-evidence`              | POST        | — none —                             | `work_item:edit`   | existing | R43 |
-| `/api/work-items/[id]/acceptance-evidence/upload-token` | POST        | — none —                             | `work_item:edit`   | existing | R43 |
-| `/api/work-items/[id]/activity/all`                     | GET         | workspace only                       | `project:browse`   | existing | R2  |
-| `/api/work-items/[id]/activity/history`                 | GET         | workspace only                       | `project:browse`   | existing | R2  |
-| `/api/work-items/[id]/archive`                          | DELETE/POST | `assertCanEdit`                      | `work_item:delete` | new      | R42 |
-| `/api/work-items/[id]/components`                       | POST/PUT    | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/components/[componentId]`         | DELETE      | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/delete-preview`                   | GET         | `assertCanManage`                    | `work_item:delete` | new      | R42 |
-| `/api/work-items/[id]/epic-privacy`                     | PATCH       | `assertCanManageProject`             | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/estimate`                         | PATCH       | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/labels`                           | POST/PUT    | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/labels/[labelId]`                 | DELETE      | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/rollup`                           | GET         | workspace only                       | `project:browse`   | existing | R2  |
-| `/api/work-items/[id]/triage/accept`                    | POST        | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/triage/decline`                   | POST        | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/triage/detail`                    | GET         | `assertCanBrowse`                    | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/triage/duplicate`                 | POST        | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/triage/promote`                   | POST        | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/[id]/triage/snooze`                    | DELETE/POST | workspace only                       | `work_item:edit`   | existing | R41 |
-| `/api/work-items/mention-search`                        | GET         | workspace only                       | `project:browse`   | existing | R2  |
-| `/api/work-items/peek`                                  | GET         | `assertCanBrowse`, `getCapabilities` | `project:browse`   | existing | R2  |
+| Operation                                               | Verbs       | Gate today                                                          | Permission              | Decision | Why |
+| ------------------------------------------------------- | ----------- | ------------------------------------------------------------------- | ----------------------- | -------- | --- |
+| `/api/projects/[key]/triage/queue`                      | GET         | `triageService.getTriageQueueByKey` → `assertPermission`            | `work_item:triage`      | existing | R23 |
+| `/api/projects/[key]/triage/submissions`                | POST        | `triageService.createSubmission` → `assertCanBrowse`                | `public_request:submit` | existing | R23 |
+| `/api/ready`                                            | GET         | workspace only                                                      | `project:browse`        | existing | R2  |
+| `/api/ready/next`                                       | POST        | workspace only                                                      | `project:browse`        | existing | R2  |
+| `/api/ready/nudge`                                      | GET         | session only                                                        | `project:browse`        | existing | R2  |
+| `/api/work-items/[id]`                                  | DELETE      | `workItemsService.deleteWorkItem` → `assertPermission`              | `work_item:delete`      | existing | R42 |
+| `/api/work-items/[id]/acceptance-evidence`              | POST        | — none —                                                            | `work_item:edit`        | existing | R43 |
+| `/api/work-items/[id]/acceptance-evidence/upload-token` | POST        | — none —                                                            | `work_item:edit`        | existing | R43 |
+| `/api/work-items/[id]/activity/all`                     | GET         | workspace only                                                      | `project:browse`        | existing | R2  |
+| `/api/work-items/[id]/activity/history`                 | GET         | workspace only                                                      | `project:browse`        | existing | R2  |
+| `/api/work-items/[id]/archive`                          | DELETE/POST | `workItemsService.{archive,unarchive}WorkItem` → `assertPermission` | `work_item:delete`      | existing | R42 |
+| `/api/work-items/[id]/components`                       | POST/PUT    | workspace only                                                      | `work_item:edit`        | existing | R41 |
+| `/api/work-items/[id]/components/[componentId]`         | DELETE      | workspace only                                                      | `work_item:edit`        | existing | R41 |
+| `/api/work-items/[id]/delete-preview`                   | GET         | `workItemsService.getDeletePreview` → `assertPermission`            | `work_item:delete`      | existing | R42 |
+| `/api/work-items/[id]/epic-privacy`                     | PATCH       | `assertCanManageProject`                                            | `work_item:edit`        | existing | R41 |
+| `/api/work-items/[id]/estimate`                         | PATCH       | workspace only                                                      | `work_item:edit`        | existing | R41 |
+| `/api/work-items/[id]/labels`                           | POST/PUT    | workspace only                                                      | `work_item:edit`        | existing | R41 |
+| `/api/work-items/[id]/labels/[labelId]`                 | DELETE      | workspace only                                                      | `work_item:edit`        | existing | R41 |
+| `/api/work-items/[id]/rollup`                           | GET         | workspace only                                                      | `project:browse`        | existing | R2  |
+| `/api/work-items/[id]/triage/accept`                    | POST        | `triageService.*` → `assertPermission`                              | `work_item:triage`      | existing | R23 |
+| `/api/work-items/[id]/triage/decline`                   | POST        | `triageService.*` → `assertPermission`                              | `work_item:triage`      | existing | R23 |
+| `/api/work-items/[id]/triage/detail`                    | GET         | `triageService.getTriageItemDetail` → `assertPermission`            | `work_item:triage`      | existing | R23 |
+| `/api/work-items/[id]/triage/duplicate`                 | POST        | `triageService.*` → `assertPermission`                              | `work_item:triage`      | existing | R23 |
+| `/api/work-items/[id]/triage/promote`                   | POST        | `triageService.*` → `assertPermission`                              | `work_item:triage`      | existing | R23 |
+| `/api/work-items/[id]/triage/snooze`                    | DELETE/POST | `triageService.*` → `assertPermission`                              | `work_item:triage`      | existing | R23 |
+| `/api/work-items/mention-search`                        | GET         | workspace only                                                      | `project:browse`        | existing | R2  |
+| `/api/work-items/peek`                                  | GET         | `assertCanBrowse`, `getCapabilities`                                | `project:browse`        | existing | R2  |
 
 ### `workflow`
 

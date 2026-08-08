@@ -294,15 +294,14 @@ describe('guard 2 — every administrative key is ENFORCED and actually WIRED', 
     // A key from MOTIR-2291's eight that is justified by the inventory and
     // deliberately unwired. It is the honest negative control, and when a card
     // wires it this assertion flips and asks to be updated — which is exactly
-    // what happened: the control was `import:run` until MOTIR-2353 wired it, and
-    // moved here rather than being deleted. MOTIR-2356 retires it for good.
+    // what happened: the control was `import:run` until MOTIR-2353 wired it and
+    // `work_item:delete` until MOTIR-2354 did, each time moving on rather than
+    // being deleted. MOTIR-2356 retires it for good.
     const wired = SOURCES.filter((f) => !f.path.startsWith('lib/permissions/')).some((f) =>
-      f.code.includes("'work_item:delete'"),
+      f.code.includes("'ai:view_plan'"),
     );
-    expect(wired, 'work_item:delete is now wired — move it out of the negative control').toBe(
-      false,
-    );
-    expect(PERMISSION_CATALOG['work_item:delete'].enforcement).toBe('planned');
+    expect(wired, 'ai:view_plan is now wired — move it out of the negative control').toBe(false);
+    expect(PERMISSION_CATALOG['ai:view_plan'].enforcement).toBe('planned');
   });
 });
 
@@ -317,8 +316,8 @@ describe('the story leaves exactly MOTIR-2291 behind', () => {
     // array is the story's remaining worklist and MOTIR-2356 empties it.
     expect(stillPlanned).toEqual(
       [
-        'work_item:delete',
-        'work_item:triage',
+        // 'work_item:delete' — wired by MOTIR-2354.
+        // 'work_item:triage' — wired by MOTIR-2354.
         // 'sprint:manage' — wired by MOTIR-2350.
         // 'report:view' — wired by MOTIR-2351.
         // 'saved_filter:manage' — wired by MOTIR-2352.

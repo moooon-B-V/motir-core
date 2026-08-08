@@ -166,8 +166,8 @@ const PERMISSION_META: Record<
   'project:administer': { domain: 'project', enforcement: 'enforced' },
   'project:browse': { domain: 'project', enforcement: 'enforced' },
   'work_item:edit': { domain: 'work_item', enforcement: 'enforced' },
-  'work_item:delete': { domain: 'work_item', enforcement: 'planned' },
-  'work_item:triage': { domain: 'work_item', enforcement: 'planned' },
+  'work_item:delete': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
+  'work_item:triage': { domain: 'work_item', enforcement: 'enforced' }, // MOTIR-2354
   'comment:add': { domain: 'comment', enforcement: 'enforced' },
   'comment:moderate': { domain: 'comment', enforcement: 'enforced' },
   'attachment:create': { domain: 'attachment', enforcement: 'enforced' },

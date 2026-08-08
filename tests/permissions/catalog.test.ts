@@ -171,6 +171,8 @@ const MEMBER_FACING_ENFORCED: PermissionKey[] = [
   'report:view',
   'saved_filter:manage',
   'import:run',
+  'work_item:triage',
+  'work_item:delete',
 ];
 
 describe('enforcement — the seam that lets naming and wiring land separately', () => {

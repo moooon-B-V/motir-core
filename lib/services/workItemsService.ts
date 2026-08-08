@@ -2115,7 +2115,7 @@ export const workItemsService = {
       // the archive write.
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
-      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+      await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
 
       const row = await workItemRepository.archive(id, tx); // throws WorkItemNotFoundError if absent
       await workItemRevisionsService.recordRevision(
@@ -2144,7 +2144,7 @@ export const workItemsService = {
     return db.$transaction(async (tx) => {
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
-      await projectAccessService.assertCanEdit(current.projectId, ctx, tx);
+      await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
 
       const wasArchivedAt = current.archivedAt?.toISOString() ?? null;
       const row = await workItemRepository.unarchive(id, tx); // throws WorkItemNotFoundError if absent
@@ -2198,8 +2198,12 @@ export const workItemsService = {
       const root = await workItemRepository.findById(id, tx);
       if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
 
-      // 2. Permission gate — delete is the project-admin "manage" capability.
-      await projectAccessService.assertCanManage(root.projectId, ctx, tx);
+      // 2. Permission gate — `work_item:delete` (MOTIR-2354). It was
+      //    `assertCanManage`, i.e. `project:administer`, while the DRY RUN below
+      //    (`getDeletePreview`) was mapped in the inventory to `work_item:delete`:
+      //    a destroy and its own preview cannot be governed by different keys.
+      //    Both now ask the same one, which admin holds and member does not.
+      await projectAccessService.assertPermission(root.projectId, ctx, 'work_item:delete', tx);
 
       // 3. Resolve the full subtree (root + every descendant) in one round-trip.
       const subtree = await workItemRepository.findSubtree(id, tx);
@@ -2257,7 +2261,7 @@ export const workItemsService = {
     // so the access check has the item's project and an unknown id never leaks.
     const root = await workItemRepository.findById(id);
     if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
-    await projectAccessService.assertCanManage(root.projectId, ctx);
+    await projectAccessService.assertPermission(root.projectId, ctx, 'work_item:delete');
 
     // One recursive-CTE round-trip: root + every descendant, each with its kind.
     const subtree = await workItemRepository.findSubtree(id);
