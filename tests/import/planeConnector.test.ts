@@ -4,8 +4,10 @@ import { ConnectorConfigError } from '@/lib/import/connectors/errors';
 import type { RetryOptions } from '@/lib/import/connectors/http';
 
 // Unit tests for the Plane connector (MOTIR-1639) with an injected fetch stub —
-// no real network. Asserts X-API-Key auth, self-host base URL, cursor paging,
-// state-group mapping (completed → closed), UUID externalId, per-issue
+// no real network. Asserts `Authorization: Bearer` auth (MOTIR-2457 — Plane
+// reserves `X-API-Key` for a `plane_api_*` personal key and wants Bearer for the
+// OAuth access token this connector is given), self-host base URL, cursor
+// paging, state-group mapping (completed → closed), UUID externalId, per-issue
 // resilience.
 
 const RETRY: RetryOptions = {
@@ -25,21 +27,22 @@ function json(body: unknown): Response {
 function makeFetch(handler: (url: string) => Response): {
   fetchImpl: typeof fetch;
   urls: string[];
-  apiKeys: string[];
+  /** Every outbound header the connector sends, so a stray `X-API-Key` shows up. */
+  headers: Record<string, string>[];
 } {
   const urls: string[] = [];
-  const apiKeys: string[] = [];
+  const headers: Record<string, string>[] = [];
   const fetchImpl = vi.fn(async (url: string | URL | Request, init: RequestInit) => {
     urls.push(String(url));
-    apiKeys.push(String((init.headers as Record<string, string>)?.['X-API-Key'] ?? ''));
+    headers.push({ ...((init.headers as Record<string, string>) ?? {}) });
     return handler(String(url));
   });
-  return { fetchImpl: fetchImpl as unknown as typeof fetch, urls, apiKeys };
+  return { fetchImpl: fetchImpl as unknown as typeof fetch, urls, headers };
 }
 
 function connector(fetchImpl: typeof fetch, overrides = {}) {
   return new PlaneConnector({
-    apiKey: 'plane_pat',
+    accessToken: 'plane_oauth_token',
     workspaceSlug: 'acme',
     projectId: 'proj-uuid',
     includeComments: false,
@@ -67,23 +70,36 @@ function workItem(id: string, extra = {}) {
 }
 
 describe('PlaneConnector — construction', () => {
-  it('requires apiKey + workspaceSlug + projectId', () => {
-    expect(() => new PlaneConnector({ apiKey: '', workspaceSlug: 'a', projectId: 'p' })).toThrow(
-      ConnectorConfigError,
-    );
-    expect(() => new PlaneConnector({ apiKey: 'k', workspaceSlug: '', projectId: 'p' })).toThrow(
-      ConnectorConfigError,
-    );
+  it('requires accessToken + workspaceSlug + projectId', () => {
+    expect(
+      () => new PlaneConnector({ accessToken: '', workspaceSlug: 'a', projectId: 'p' }),
+    ).toThrow(ConnectorConfigError);
+    expect(
+      () => new PlaneConnector({ accessToken: 'k', workspaceSlug: '', projectId: 'p' }),
+    ).toThrow(ConnectorConfigError);
   });
 });
 
 describe('PlaneConnector.connect', () => {
-  it('hits work-items with X-API-Key and returns the total', async () => {
-    const { fetchImpl, urls, apiKeys } = makeFetch(() => json({ results: [], total_count: 12 }));
+  it('hits work-items with an Authorization: Bearer token and returns the total', async () => {
+    const { fetchImpl, urls, headers } = makeFetch(() => json({ results: [], total_count: 12 }));
     const r = await connector(fetchImpl).connect();
     expect(r).toEqual({ source: 'plane', sourceRef: 'acme/proj-uuid', issueCount: 12 });
     expect(urls[0]).toContain('/api/v1/workspaces/acme/projects/proj-uuid/work-items/');
-    expect(apiKeys[0]).toBe('plane_pat');
+    expect(headers[0]?.Authorization).toBe('Bearer plane_oauth_token');
+  });
+
+  // The credential must not ALSO ride the PAT header: Plane distinguishes the two
+  // schemes by which header carries the token, and an OAuth token in `X-API-Key`
+  // is what MOTIR-2457 fixed. A rename alone would leave a dual-send passing.
+  it('sends the token ONLY as Bearer — never in the X-API-Key PAT header', async () => {
+    const { fetchImpl, headers } = makeFetch(() => json({ results: [], total_count: 0 }));
+    await connector(fetchImpl).connect();
+    const sent = headers[0] ?? {};
+    const names = Object.keys(sent).map((h) => h.toLowerCase());
+    expect(names).toContain('authorization');
+    expect(names).not.toContain('x-api-key');
+    expect(Object.values(sent)).not.toContain('plane_oauth_token'); // never raw/unprefixed
   });
 
   it('uses a self-hosted base URL when provided', async () => {

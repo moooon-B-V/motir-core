@@ -313,7 +313,10 @@ export const importService = {
       );
       if (!live) throw new ImportSourceNotConnectedError('plane');
       return new PlaneConnector({
-        apiKey: live.accessToken,
+        // Sent as `Authorization: Bearer` — Plane reserves `X-API-Key` for a
+        // `plane_api_*` personal key, and this is an OAuth access token
+        // (MOTIR-2457 moved the scheme; MOTIR-1657 left OAuth as the only one).
+        accessToken: live.accessToken,
         // The grant's own API origin wins: the token is bound to the instance
         // that issued it (Cloud or a self-host), so a connection config naming
         // a different host would send it somewhere it is not valid. Fall back
