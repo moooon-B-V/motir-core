@@ -197,7 +197,7 @@ describe('motir batch — a whole run through the real session', () => {
         clock: () => 0,
         runAgentFn: async ({ prompt }) => {
           prompts.push(prompt);
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: null };
         },
       },
     );
@@ -233,7 +233,7 @@ describe('motir batch — a whole run through the real session', () => {
 
     await batchCommand(
       { ...AGENT },
-      { clock: () => 0, runAgentFn: async () => ({ exitCode: 7, signal: null }) },
+      { clock: () => 0, runAgentFn: async () => ({ exitCode: 7, signal: null, model: null }) },
     );
 
     expect(process.exitCode).toBe(1);
@@ -254,7 +254,7 @@ describe('motir batch — a whole run through the real session', () => {
         clock: () => 0,
         runAgentFn: async ({ prompt }) => {
           prompts.push(prompt);
-          return { exitCode: prompt.endsWith('PROD-1') ? 5 : 0, signal: null };
+          return { exitCode: prompt.endsWith('PROD-1') ? 5 : 0, signal: null, model: null };
         },
       },
     );

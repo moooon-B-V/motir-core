@@ -979,6 +979,9 @@ export class MotirClient {
     key: string;
     sessionBranch: string;
     implementationHarness?: string;
+    /** The model the agent SELF-REPORTED (MOTIR-2419). Omitted when it reported
+     *  none — the field is left null rather than filled with a guess. */
+    implementationModel?: string | null;
   }): Promise<void> {
     await this.v1.request('recordWorkItemIntegration', {
       path: { key: args.key },
@@ -987,6 +990,9 @@ export class MotirClient {
         ...(args.implementationHarness === undefined
           ? {}
           : { implementationHarness: args.implementationHarness }),
+        ...(args.implementationModel === undefined || args.implementationModel === null
+          ? {}
+          : { implementationModel: args.implementationModel }),
       },
     });
   }

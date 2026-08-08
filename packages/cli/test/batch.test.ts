@@ -225,7 +225,11 @@ function session(server: FakeServer): ProjectSession {
 interface DriveOptions {
   opts?: BatchOptions;
   kinds?: string[];
-  agentResults?: (key: string, index: number) => AgentRunResult;
+  /** `model` defaults to null — an agent that self-reported nothing. */
+  agentResults?: (
+    key: string,
+    index: number,
+  ) => Omit<AgentRunResult, 'model'> & { model?: string | null };
   onDispatch?: (key: string, index: number) => void;
 }
 
@@ -247,7 +251,8 @@ async function drive(
       const index = dispatched.length;
       dispatched.push(key);
       drives.onDispatch?.(key, index);
-      return drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      return { model: null, ...result };
     },
   };
   const summary = await runBatch(input);
@@ -506,7 +511,7 @@ describe('motir batch — exclusions', () => {
         clock: () => 0,
         runAgentFn: async ({ prompt }) => {
           dispatched.push(prompt);
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: null };
         },
       }),
     ).rejects.toThrow(/FORBIDDEN/);

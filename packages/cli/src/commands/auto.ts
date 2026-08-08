@@ -39,7 +39,7 @@ import {
   sessionBranchName,
   type CommandRunner,
 } from '../git.js';
-import { CLI_VERSION } from '../version.js';
+import { deriveAgentHarness } from '../agentProfiles.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
@@ -87,9 +87,6 @@ export interface AutoDeps {
    *  scripted agent — the fixture the acceptance criteria are written against. */
   runAgentFn?: typeof runAgent;
 }
-
-/** The harness string the CLI self-reports on the write tools (MOTIR-1685). */
-const HARNESS = `motir-cli/${CLI_VERSION}`;
 
 /** A resolved agent — `motir auto` refuses to start without one, so every
  *  downstream signature takes the non-null form. */
@@ -517,7 +514,11 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     await client.markIntegrated({
       key: item.key,
       sessionBranch: dispatch.sessionBranch,
-      implementationHarness: HARNESS,
+      // The provenance triple, split by WHO KNOWS (MOTIR-2419): the harness is
+      // derived from the command this loop launched, the model comes from the
+      // agent's own report and is null when it made none.
+      implementationHarness: deriveAgentHarness(agent.parsed.binary),
+      implementationModel: result.model,
     });
     onIntegrated(item.key);
     info(`${item.key}: integrated on ${dispatch.sessionBranch} in ${formatDuration(durationMs)}.`);

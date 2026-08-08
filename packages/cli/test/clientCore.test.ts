@@ -376,6 +376,37 @@ describe('typed wrappers — each names its operation and forwards its arguments
     expect(server.v1Calls[2]?.body).toEqual({ sessionBranch: 'motir/auto-1' });
   });
 
+  it('sends the self-reported model, and OMITS it when the agent reported none', async () => {
+    // The wire is the only place this can be proved (MOTIR-2419): a null model
+    // must leave the field alone rather than send `null`, because the server
+    // writes what it receives and `implementationModel: null` would erase a
+    // model an earlier report had recorded.
+    const client = connected();
+
+    await client.markIntegrated({
+      key: 'PROD-7',
+      sessionBranch: 'motir/auto-1',
+      implementationHarness: 'claude',
+      implementationModel: 'claude-opus-5',
+    });
+    await client.markIntegrated({
+      key: 'PROD-8',
+      sessionBranch: 'motir/auto-1',
+      implementationHarness: 'claude',
+      implementationModel: null,
+    });
+
+    expect(server.v1Calls[0]?.body).toEqual({
+      sessionBranch: 'motir/auto-1',
+      implementationHarness: 'claude',
+      implementationModel: 'claude-opus-5',
+    });
+    expect(server.v1Calls[1]?.body).toEqual({
+      sessionBranch: 'motir/auto-1',
+      implementationHarness: 'claude',
+    });
+  });
+
   it('the dispatch prompt is a GET, and seeds the session branch only when there is one', async () => {
     const client = connected();
     server.scriptV1({

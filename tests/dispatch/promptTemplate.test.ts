@@ -409,6 +409,49 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     expect(outcomeSection(prompt)).toContain('Two outcomes end this work');
   });
 
+  // THE MODEL SELF-REPORT (MOTIR-2419) — the one fact only the agent holds.
+  // It rides in this section because it applies to BOTH outcomes: a card that
+  // turned out to be wrong was still worked by a model.
+  it.each([
+    ['per_item_pr', null],
+    ['session_lineage', 'session/PROD-2-run'],
+  ])('asks for the model in the %s variant', (mode, sessionBranch) => {
+    // Same half-shipped hazard as the protocol around it: a line added to one
+    // branch of the assembler leaves every first-item-of-a-run with no model.
+    const { prompt, workflowMode } = assembleDispatchPrompt(source({ sessionBranch }));
+    expect(workflowMode).toBe(mode);
+    const outcome = outcomeSection(prompt);
+    expect(outcome).toContain('MOTIR_AGENT_REPORT');
+    expect(outcome).toContain('{"model": "<the model you are running as>"}');
+  });
+
+  it('tells the agent to write NOTHING rather than guess', () => {
+    // The version of the provenance bug that would survive the fix: a model the
+    // agent inferred looks exactly like one it observed.
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('write no file at all');
+    expect(outcome).toContain('and a guessed one is not');
+    // …and the REASON it is the only chance, so the instruction is not read as
+    // ceremony to skip when busy.
+    expect(outcome).toContain('Nothing outside your process can observe which model answered');
+  });
+
+  it('is conditional on the variable, so a --print reader is not told to invent a path', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('If the variable is unset, skip this entirely');
+  });
+
+  it('comes BEFORE the two outcomes, because it applies to both', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    const report = outcome.indexOf('MOTIR_AGENT_REPORT');
+    expect(report).toBeGreaterThan(-1);
+    for (const later of ['FINISHED —', 'THE CARD IS WRONG']) {
+      expect(outcome.indexOf(later), `${later} comes after the self-report`).toBeGreaterThan(
+        report,
+      );
+    }
+  });
+
   it('the FINISHED signal names in_review and says it is REQUIRED', () => {
     const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
     expect(outcome).toContain('status in_review');
@@ -483,6 +526,9 @@ describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
     const { prompt } = assembleDispatchPrompt(source({ type: 'manual' }));
     expect(prompt).not.toContain('REPORTING THE OUTCOME');
     expect(prompt).not.toContain('YOUR COMMIT');
+    // Nor the model self-report: no agent runs, so there is no model to name
+    // and nothing writes the file the loop would read (MOTIR-2419).
+    expect(prompt).not.toContain('MOTIR_AGENT_REPORT');
     expect(prompt).toContain('There is no git workflow for this work item');
   });
 });

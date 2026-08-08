@@ -18,7 +18,7 @@ import type {
 // stderr, and what the failure path records.
 
 const { agentResult, runAgentMock, sessionRef } = vi.hoisted(() => ({
-  agentResult: { exitCode: 0 } as { exitCode: number },
+  agentResult: { exitCode: 0, model: null } as { exitCode: number; model: string | null },
   runAgentMock: vi.fn(),
   sessionRef: { current: null as unknown },
 }));
@@ -178,8 +178,13 @@ beforeEach(() => {
   process.env['MOTIR_CONFIG_HOME'] = home;
   delete process.env['MOTIR_AGENT'];
   agentResult.exitCode = 0;
+  agentResult.model = null;
   runAgentMock.mockReset();
-  runAgentMock.mockImplementation(async () => ({ exitCode: agentResult.exitCode, signal: null }));
+  runAgentMock.mockImplementation(async () => ({
+    exitCode: agentResult.exitCode,
+    signal: null,
+    model: agentResult.model,
+  }));
   process.exitCode = undefined;
 });
 
@@ -267,6 +272,36 @@ describe('motir next --agent', () => {
     // it must NOT also hand-flip to in_review — mark_integrated does that move
     expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
     expect(harness.stderr).toContain('motir done --session story/PROD-9');
+  });
+
+  it('stamps the AGENT and its self-reported model as implementation provenance', async () => {
+    // `motir run` is the other seam that launches an agent and records what
+    // built the item — it must answer the same way `motir auto` does
+    // (MOTIR-2419), or the provenance depends on which command you used.
+    agentResult.model = 'claude-opus-5';
+    setup({
+      prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
+    });
+    await nextCommand({ agent: '/usr/local/bin/cursor-agent --force' });
+
+    expect(harness.calls.find((c) => c.tool === 'mark_integrated')?.args).toMatchObject({
+      implementationHarness: 'cursor',
+      implementationModel: 'claude-opus-5',
+    });
+  });
+
+  it('omits the model — and still names the agent — when the agent reported none', async () => {
+    setup({
+      prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
+    });
+    await nextCommand({ agent: 'claude' });
+
+    // Null, never defaulted: the harness is derivable and stays truthful, the
+    // model is not and stays empty.
+    expect(harness.calls.find((c) => c.tool === 'mark_integrated')?.args).toMatchObject({
+      implementationHarness: 'claude',
+      implementationModel: null,
+    });
   });
 
   it('on a NON-ZERO exit: item stays In Progress, is excluded, and the exit code propagates', async () => {

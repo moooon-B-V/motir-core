@@ -242,7 +242,7 @@ describe('motir auto — a whole run through the real session', () => {
         clock: () => 0,
         runAgentFn: async ({ prompt }) => {
           prompts.push(prompt);
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: 'claude-opus-5' };
         },
       },
     );
@@ -254,8 +254,16 @@ describe('motir auto — a whole run through the real session', () => {
     expect(integrated.map((c) => c.params['key'])).toEqual(['PROD-1', 'PROD-2']);
     const bodies = integrated.map((c) => c.body as Record<string, unknown>);
     expect(new Set(bodies.map((b) => b['sessionBranch']))).toEqual(new Set([branch]));
-    // …the harness identified itself (MOTIR-1685 provenance)…
-    expect(String(bodies[0]?.['implementationHarness'])).toMatch(/^motir-cli\//);
+    // …the provenance names the AGENT and its model, on the wire (MOTIR-1685
+    // provenance, corrected by MOTIR-2419). The fixture's agent command is
+    // `node -e ""`, so `node` IS the honest answer here — what matters is that
+    // it is derived from the command the loop launched, and that the CLI never
+    // reports itself as the thing that built the work.
+    expect(bodies[0]?.['implementationHarness']).toBe('node');
+    expect(bodies[0]?.['implementationModel']).toBe('claude-opus-5');
+    for (const body of bodies) {
+      expect(String(body['implementationHarness'])).not.toMatch(/^motir-cli\//);
+    }
     // …and the close-out opened exactly one pull request, never a merge.
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     expect(git.log.some((cmd) => cmd.includes('pr merge'))).toBe(false);
@@ -296,7 +304,7 @@ describe('motir auto — a whole run through the real session', () => {
         run: gitRunner().run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       },
     );
 
@@ -318,7 +326,7 @@ describe('motir auto — a whole run through the real session', () => {
         run: gitRunner().run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       },
     );
 
@@ -345,7 +353,7 @@ describe('motir auto — a whole run through the real session', () => {
         run: gitRunner().run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       },
     );
 
@@ -365,7 +373,7 @@ describe('motir auto — a whole run through the real session', () => {
         run: git.run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: 7, signal: null }),
+        runAgentFn: async () => ({ exitCode: 7, signal: null, model: null }),
       },
     );
 
@@ -404,7 +412,11 @@ describe('motir auto — a whole run through the real session', () => {
         run: git.run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: (runs += 1) === 1 ? 0 : 9, signal: null }),
+        runAgentFn: async () => ({
+          exitCode: (runs += 1) === 1 ? 0 : 9,
+          signal: null,
+          model: null,
+        }),
       },
     );
 
@@ -433,7 +445,7 @@ describe('motir auto — a whole run through the real session', () => {
         clock: () => 0,
         runAgentFn: async () => {
           dispatches += 1;
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: null };
         },
       },
     );
@@ -479,7 +491,7 @@ describe('motir auto — a whole run through the real session', () => {
         clock: () => 0,
         // The agent "creates" nothing, so the bootstrap post-condition fails —
         // which is a FAILED dispatch, and the run still completes cleanly.
-        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       },
     );
 

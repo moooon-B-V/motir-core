@@ -3,7 +3,11 @@ import { info, outVerbatim } from '../output.js';
 import { parseKinds } from './read.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { getAgentCommand } from '../config/userConfig.js';
-import { parseAgentCommand, type ParsedAgentCommand } from '../agentProfiles.js';
+import {
+  deriveAgentHarness,
+  parseAgentCommand,
+  type ParsedAgentCommand,
+} from '../agentProfiles.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
@@ -44,7 +48,18 @@ const IN_PROGRESS = 'in_progress';
 const IN_REVIEW = 'in_review';
 const DONE = 'done';
 
-/** The harness string the CLI self-reports on the write tools (MOTIR-1685). */
+/**
+ * The harness `motir done --session` self-reports at the bulk close-out.
+ *
+ * This is the ONE seam where the CLI is the honest answer: nothing was launched
+ * here. `done --session` runs after a human merged the pull request, minutes or
+ * days after the agents that did the work exited, and the only actor present is
+ * this process.
+ *
+ * Every seam where an agent DID run derives its harness from that agent's
+ * command instead (see {@link deriveAgentHarness} · MOTIR-2419) — a CLI version
+ * string there is the same on every row and therefore says nothing.
+ */
 const HARNESS = `motir-cli/${CLI_VERSION}`;
 
 // ── agent resolution ────────────────────────────────────────────────────────
@@ -178,7 +193,11 @@ async function deliver(input: DeliverInput): Promise<void> {
     await client.markIntegrated({
       key,
       sessionBranch: dispatch.sessionBranch,
-      implementationHarness: HARNESS,
+      // Same split as the loop's (MOTIR-2419): the harness names the agent this
+      // command launched — not the CLI that launched it — and the model is the
+      // agent's own report, or null.
+      implementationHarness: deriveAgentHarness(agent.parsed.binary),
+      implementationModel: result.model,
     });
   } else {
     await client.transitionStatus({ key, status: IN_REVIEW });

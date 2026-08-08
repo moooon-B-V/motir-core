@@ -22,6 +22,8 @@ import {
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
+import { parseAgentCommand } from '../src/agentProfiles.js';
+import { CLI_VERSION } from '../src/version.js';
 import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 
@@ -78,6 +80,8 @@ function story(id: string, key: string): FakeItem {
 class FakeServer {
   readonly transitions: { key: string; status: string }[] = [];
   readonly integrated: { key: string; sessionBranch: string }[] = [];
+  /** The implementation provenance each integration carried (MOTIR-2419). */
+  readonly provenance: { key: string; harness: string | null; model: string | null }[] = [];
   readonly promptCalls: { key: string; sessionBranch: string | null }[] = [];
   readonly nextReadyCalls: number[] = [];
   readonly expandCalls: string[] = [];
@@ -188,8 +192,21 @@ class FakeServer {
         this.byKey(args.key).status = args.status;
         return {};
       },
-      markIntegrated: async (args: { key: string; sessionBranch: string }) => {
+      markIntegrated: async (args: {
+        key: string;
+        sessionBranch: string;
+        implementationHarness?: string;
+        implementationModel?: string | null;
+      }) => {
         this.integrated.push({ key: args.key, sessionBranch: args.sessionBranch });
+        // Recorded SEPARATELY from `integrated` so the provenance assertions
+        // read the triple as the server would receive it — including a field
+        // the CLI omitted (MOTIR-2419).
+        this.provenance.push({
+          key: args.key,
+          harness: args.implementationHarness ?? null,
+          model: args.implementationModel ?? null,
+        });
         const item = this.byKey(args.key);
         item.status = 'in_review';
         item.sessionBranch = args.sessionBranch;
@@ -281,8 +298,14 @@ function session(server: FakeServer): ProjectSession {
 
 interface DriveOptions {
   opts?: AutoOptions;
-  agentResults?: (key: string, index: number) => AgentRunResult;
+  /** `model` defaults to null — an agent that self-reported nothing. */
+  agentResults?: (
+    key: string,
+    index: number,
+  ) => Omit<AgentRunResult, 'model'> & { model?: string | null };
   onDispatch?: (key: string, index: number) => void;
+  /** The agent command the loop launched — what the harness is derived FROM. */
+  agentCommand?: string;
 }
 
 async function drive(
@@ -297,7 +320,10 @@ async function drive(
     opts: drives.opts ?? {},
     kinds: undefined,
     max: drives.opts?.max ? parseMax(drives.opts.max) : null,
-    agent: { parsed: { command: 'fake-agent', binary: 'fake-agent', args: [] }, source: 'flag' },
+    agent: {
+      parsed: parseAgentCommand(drives.agentCommand ?? 'fake-agent')!,
+      source: 'flag',
+    },
     runId: '20260729-010203',
     branch: BRANCH,
     run: git.runner,
@@ -307,7 +333,8 @@ async function drive(
       const index = dispatched.length;
       dispatched.push(key);
       drives.onDispatch?.(key, index);
-      return drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      return { model: null, ...result };
     },
   };
   const summary = await runAutoLoop(input);
@@ -643,6 +670,50 @@ describe('motir auto — failure policy', () => {
     expect(renderAutoSummary(summary)).toContain('motir run PROD-2');
   });
 
+  // ── implementation provenance (MOTIR-2419) ────────────────────────────────
+  // Split by WHO KNOWS: the loop derives the harness from the command it
+  // launched, the agent self-reports the model. The bug being fixed is a field
+  // that read `motir-cli/<version>` on every card ever integrated — true of all
+  // of them, and therefore an answer to nothing.
+
+  it('records the AGENT as the harness, and the model the agent reported', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    const git = new FakeGit();
+    await drive(server, git, {
+      agentCommand: 'claude --dangerously-skip-permissions',
+      agentResults: () => ({ exitCode: 0, signal: null, model: 'claude-opus-5' }),
+    });
+
+    expect(server.provenance).toEqual([
+      { key: 'PROD-1', harness: 'claude', model: 'claude-opus-5' },
+      { key: 'PROD-2', harness: 'claude', model: 'claude-opus-5' },
+    ]);
+  });
+
+  it('leaves the model NULL when the agent reports none — and still names the agent', async () => {
+    // The version of this bug that would survive the fix: a defaulted model is
+    // a wrong answer wearing the shape of a right one. The harness does not
+    // degrade with it — it never needed the agent's cooperation.
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    const git = new FakeGit();
+    await drive(server, git, { agentCommand: 'codex exec' });
+
+    expect(server.provenance).toEqual([{ key: 'PROD-1', harness: 'codex', model: null }]);
+  });
+
+  it('never records the LAUNCHER, whatever the agent is', async () => {
+    for (const [command, harness] of [
+      ['claude', 'claude'],
+      ['/usr/local/bin/cursor-agent --force', 'cursor'],
+      ['my-own-agent --go', 'my-own-agent'],
+    ] as const) {
+      const server = new FakeServer([leaf('idA', 'PROD-1')]);
+      await drive(server, new FakeGit(), { agentCommand: command });
+      expect(server.provenance).toEqual([{ key: 'PROD-1', harness, model: null }]);
+      expect(server.provenance[0]!.harness).not.toBe(`motir-cli/${CLI_VERSION}`);
+    }
+  });
+
   it('--keep-going finishes the remainder and never re-dispatches the failure', async () => {
     const server = chain();
     const git = new FakeGit();
@@ -833,7 +904,7 @@ describe('an item with no lineage ships as its own pull request', () => {
       branch: BRANCH,
       run: rootIsNotARepo,
       clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
     });
 
     expect(summary.records[0]?.outcome).toBe('in_review');
@@ -871,7 +942,7 @@ describe('the close-out survives a git failure', () => {
       branch: BRANCH,
       run: pushRejected,
       clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
     });
     closeOutRepos(summary, pushRejected);
 
@@ -1004,7 +1075,7 @@ describe('more of the run’s edges', () => {
       branch: BRANCH,
       run: localBranchAhead,
       clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
     });
     closeOutRepos(summary, localBranchAhead);
 

@@ -917,6 +917,17 @@ Supplying both means a new agent usually needs no Motir change at all. The child
 inherits stdout/stderr, so its output **streams through live** — a coding-agent
 run is minutes long, and a silent terminal is indistinguishable from a hang.
 
+**One channel runs the other way: `$MOTIR_AGENT_REPORT`.** It names a path in the
+same per-dispatch temp directory, and the prompt asks the agent to write
+`{"model": "<the model it is running as>"}` there. That answer becomes the item's
+`implementationModel`, because nothing outside the agent process can observe which
+model answered — while the `implementationHarness` beside it is derived from the
+agent command Motir launched, and needs no cooperation at all. An agent that
+writes nothing leaves the model **null**: a guessed model is a wrong answer that
+looks like a right one, and the record cannot be re-interrogated after the run.
+The directory is created for one dispatch and removed when it ends, so a report
+can only ever describe the run it came from.
+
 ### Headless recipes
 
 An unattended run needs the agent to stop asking for approval. These flags

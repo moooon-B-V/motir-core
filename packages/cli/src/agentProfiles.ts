@@ -409,10 +409,34 @@ export function parseAgentCommand(command: string | undefined): ParsedAgentComma
  * case → null.
  */
 export function findAgentProfile(binary: string): AgentProfile | null {
-  const name = basename(binary)
+  return AGENT_PROFILES.find((p) => p.binaries.includes(binaryName(binary))) ?? null;
+}
+
+/** A binary as a profile lookup key: basename, lowercased, no Windows suffix. */
+function binaryName(binary: string): string {
+  return basename(binary)
     .toLowerCase()
     .replace(/\.(exe|cmd|bat|ps1)$/, '');
-  return AGENT_PROFILES.find((p) => p.binaries.includes(name)) ?? null;
+}
+
+/**
+ * The HARNESS that an agent command runs — the value recorded as
+ * `implementationHarness` on every item a run integrates (MOTIR-2419).
+ *
+ * Derived from the command the loop LAUNCHED, which is the half of the
+ * provenance triple the loop is the only actor able to answer: it cannot be
+ * misreported, and it needs no cooperation from the agent. (The other half —
+ * the model — only the agent knows, so it arrives by self-report or not at
+ * all.)
+ *
+ * A recognised binary reports its PROFILE ID, so `cursor-agent` and `agent`
+ * both record `cursor` and the same agent is one value in the data rather than
+ * two. An unrecognised one reports its own normalised name: Motir is
+ * agent-agnostic, and `my-agent` is a truthful answer where a fallback to
+ * something generic would put every tier-3 run back where this bug started.
+ */
+export function deriveAgentHarness(binary: string): string {
+  return findAgentProfile(binary)?.id ?? binaryName(binary);
 }
 
 /** Every profile id, for help text / docs (`claude, codex, …`). */

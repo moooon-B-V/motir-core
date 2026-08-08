@@ -465,6 +465,47 @@ function sessionLineageWorkflow(src: DispatchPromptSource, sessionBranch: string
 }
 
 /**
+ * WHICH MODEL RAN (MOTIR-2419) — the one fact only the agent holds.
+ *
+ * Every other half of the implementation provenance triple is derivable by the
+ * launcher: it knows the source (a BYOK machine) and it knows the harness (it
+ * ran the command). The MODEL is visible nowhere outside the agent process, so
+ * either the agent says it or the record is empty forever — a run cannot be
+ * re-interrogated after it exits.
+ *
+ * Applies to BOTH outcomes, which is why it sits above them: a card that turned
+ * out to be wrong was still worked by a model, and knowing which one is part of
+ * knowing what the finding is worth.
+ *
+ * The instruction is conditional on the environment variable rather than on a
+ * prompt variant, because this prompt is also what a human reads when they run
+ * `motir next --print` — there is no report file in that case, and an
+ * unconditional instruction would have them inventing a path.
+ *
+ * The channel is a file rather than a tool call on purpose. Reporting the model
+ * over MCP would put a claim about the run on the ITEM, where nothing could
+ * check it against the process that made it; the file is written by the agent
+ * into a directory the launcher created for this one dispatch and deletes when
+ * it ends, so a report can only ever describe the run it came from.
+ */
+function modelSelfReport(): string[] {
+  return [
+    'FIRST, one line of bookkeeping that applies to BOTH outcomes below. If the',
+    'environment variable MOTIR_AGENT_REPORT is set, write a JSON file at that path:',
+    '',
+    '         {"model": "<the model you are running as>"}',
+    '',
+    '  Name the model as precisely as you can — the identifier, not the family.',
+    '  Nothing outside your process can observe which model answered, so this is the',
+    "  only chance to record it, and it becomes the work item's implementation",
+    '  provenance.',
+    '',
+    '  If you genuinely cannot tell, write no file at all: an empty record is honest,',
+    '  and a guessed one is not. If the variable is unset, skip this entirely.',
+  ];
+}
+
+/**
  * REPORTING THE OUTCOME (MOTIR-2406) — the two signals the loop cannot infer.
  *
  * ⚠️ WHY THIS IS IN THE PROMPT AND CANNOT BE ANYWHERE ELSE. `motir auto` runs
@@ -491,6 +532,8 @@ function outcomeProtocol(src: DispatchPromptSource): string[] {
     'Two outcomes end this work, and the loop can only tell them apart if you SAY',
     'which one happened. A process that exits 0 proves the process ended, nothing',
     'more.',
+    '',
+    ...modelSelfReport(),
     '',
     'FINISHED — the work is done and committed:',
     '',
