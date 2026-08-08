@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { betterAuth } from 'better-auth';
 import { prismaAdapter } from '@better-auth/prisma-adapter';
 import { nextCookies } from 'better-auth/next-js';
@@ -323,9 +324,46 @@ export const auth = betterAuth({
  * Usage:
  *   const session = await getSession();
  *   if (!session) redirect('/sign-in');
+ *
+ * ── Why this is wrapped in React `cache()` (MOTIR-2453) ─────────────────────
+ *
+ * An authenticated page render used to validate the session FOUR times, and a
+ * `/dashboard` render five: `app/layout.tsx` (the applied appearance, 7.3.61),
+ * `app/(authed)/layout.tsx` (the enforcement point + the shell's menus),
+ * `getWorkspaceContext()` inside that layout, and the page's own read. Every
+ * one of them was a separate database round-trip on the hottest path in the
+ * product, because nothing deduped them: this was a plain `async function`,
+ * so React's per-request memoisation did not apply.
+ *
+ * `cache()` is per-RENDER-PASS memoisation and nothing else, so it costs no
+ * behaviour: the first caller in a render pays the lookup, the rest read the
+ * same promise, and a REVOKED session is still rejected on the very next
+ * request. Route handlers and Server Actions are not part of a page render, so
+ * they keep their own lookup — correct, not a gap: each is its own request and
+ * must re-validate. `cache()` is also inert outside a React server render (it
+ * calls straight through), so `middleware`/`proxy.ts` are unaffected.
+ *
+ * ⚠️ Better-Auth's `session.cookieCache` was CONSIDERED AND REJECTED. It would
+ * remove the round-trip more broadly by trusting a signed copy of the session
+ * carried in the cookie, but it buys that with a window — up to its `maxAge` —
+ * in which a REVOKED session still authenticates. Sign-out, a removed
+ * workspace member and an admin revoking access are all supposed to take
+ * effect immediately, and no `maxAge` short enough to preserve that saves a
+ * meaningful number of round-trips once `cache()` has collapsed the duplicates
+ * within a render. So the redundancy is removed and the security property is
+ * kept whole. (Note it is OFF here by Better-Auth's own default, not by
+ * omission: `better-auth/dist/context/create-context.mjs` enables it only
+ * under `if (!options.database)`, and this instance passes `database:
+ * prismaAdapter(db, …)`.) Do not turn it on without re-arguing that trade.
+ *
+ * Measured, not asserted from this comment: `tests/auth/session-request-memo.test.ts`
+ * renders a three-deep server-component tree through the real RSC renderer and
+ * counts calls to `auth.api.getSession` — 1 through this helper, 3 for the same
+ * tree calling Better-Auth directly (the control that proves the harness can
+ * see duplicates at all).
  */
-export async function getSession() {
+export const getSession = cache(async () => {
   return auth.api.getSession({
     headers: await headers(),
   });
-}
+});
