@@ -131,6 +131,61 @@ jobs:
       - run: pnpm --filter @motir/cli build
       - run: pnpm --filter @motir/cli test:coverage
 
+  # ── The design-asset guards (MOTIR-2442) ──────────────────────────────────
+  # The one lane in this file with NO branch-prefix `if:`, and that absence is
+  # the whole job. Every other skip below reads "a design-only diff has no app
+  # code to exercise", which is true of the app suites and exactly backwards for
+  # the two specs that read the design ASSETS rather than the app: the only pull
+  # requests that can break them were the only ones that never ran them.
+  # MOTIR-2259 merged green on `design/MOTIR-2259-roles-permissions`, `main`
+  # went red, and it surfaced hours later on an unrelated `subtask/*` PR that
+  # had touched no design asset (MOTIR-2441).
+  #
+  # WHY A JOB OF ITS OWN rather than widening the Vitest skip: the Vitest lane
+  # needs Postgres, a migrate deploy and three sharded runners, plus the
+  # `coverage` merge that is `needs: test` — the saving the prefix exists for.
+  # This lane needs none of it. `vitest.design.config.ts` drops the root
+  # config's per-worker-database globalSetup, so the run is an install and ~3
+  # seconds of Node, and it can afford to be unconditional.
+  #
+  # It reports `success` on every branch prefix and `skipped` on none, so it
+  # adds no greyed check anywhere (the e2e job's note on the acceptance lane:
+  # a job-level `if:` only downgrades a check, it does not remove it). The
+  # required-context set is untouched — `CI complete` is still the one required
+  # check, and this job is gated through it like every other.
+  #
+  # `tests/ci-design-guards-lane.test.ts` guards the arrangement, including the
+  # part a workflow file cannot state: that every spec reading `design/**` is in
+  # the config's include list.
+
+  design-guards:
+    name: Design asset guards
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Cache node_modules
+        id: cache-node-modules-design-guards
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('pnpm-lock.yaml') }}
+      # No `prisma generate` and no Postgres: neither spec in the lane imports
+      # the Prisma client, and the config it runs under provisions no database.
+      # Adding either would put this lane back in the cost class the `design/*`
+      # prefix exists to avoid.
+      - run: pnpm install --frozen-lockfile
+        if: steps.cache-node-modules-design-guards.outputs.cache-hit != 'true'
+        env:
+          HUSKY: '0'
+      - run: pnpm vitest run --config vitest.design.config.ts
+
   build:
     name: Next.js build
     runs-on: ubuntu-latest
@@ -640,7 +695,10 @@ jobs:
   #     (`design-system`, `cli`) and the image lanes (`sandbox`, `runner-image`)
   #     are NOT in the list: each is released by its own tag and none of them is
   #     part of this service's artifact — the same reasoning motir-ai's deploy
-  #     uses to exclude `indexer-image`.
+  #     uses to exclude `indexer-image`. `design-guards` is out for that same
+  #     reason and not by oversight: the Dockerfile prunes `design/` out of the
+  #     standalone bundle, so a stale mockup cannot reach the running service.
+  #     It still gates the MERGE — `ci-complete` needs it like everything else.
   #   • `if:` — the default branch, on a real push. A pull request's `github.ref`
   #     is `refs/pull/<n>/merge`, so a PR cannot deploy even by targeting main.
   #
@@ -804,6 +862,7 @@ jobs:
         lint,
         typecheck,
         design-system,
+        design-guards,
         cli,
         build,
         test,
