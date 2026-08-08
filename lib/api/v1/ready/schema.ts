@@ -1,5 +1,4 @@
 import { z } from 'zod/v4';
-import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import {
   actorRefSchema,
@@ -194,8 +193,32 @@ export function presentReadyItem(
 // AST onto it would promise fields (`lbl`, `cmp`, `text`, dates) the ready read
 // cannot narrow by.
 
-const KIND_VALUES = new Set<string>(Object.values(WorkItemKind));
-const PRIORITY_VALUES = new Set<string>(Object.values(WorkItemPriority));
+// ⚠️ These two vocabularies are derived from the DTO unions declared at the top
+// of this file, NOT from the generated Prisma enums (MOTIR-2458).
+//
+// A generated enum is a runtime VALUE. Naming one in a plain (non-`type`) import
+// is visually indistinguishable from importing a type — it reads as a type, it
+// sat among a dozen schema imports, and it was used once to build a Set of five
+// strings — but it pulled the whole `@prisma/client` runtime into every module
+// graph reaching this file. The OpenAPI operation registry reaches this file, so
+// three published documentation pages (`/docs/api`, `/docs/api/getting-started`,
+// `/docs/api/stability`) shipped a database client to render prose and a schema
+// table. Nothing here is data access, which is why the 4-layer convention never
+// caught it: it was reaching for a list of five words Prisma happens to know.
+//
+// `READY_KINDS` / `READY_PRIORITIES` carry the same five values each, already
+// assert totality over the DTO union at compile time, and cost nothing at
+// runtime. The Prisma enums remain the upstream authority for what those unions
+// must contain — `tests/api/v1/ready-filter-vocabulary.test.ts` asserts the two
+// agree, from a test where reaching for the client is free.
+//
+// `import type` is erased and free; the same line without the keyword ships an
+// ORM. That is the sharp edge, and the test above is the warning on it.
+const KIND_VALUES = new Set<string>(READY_KINDS);
+const PRIORITY_VALUES = new Set<string>(READY_PRIORITIES);
+
+const isReadyKind = (value: string): value is WorkItemKindDto => KIND_VALUES.has(value);
+const isReadyPriority = (value: string): value is WorkItemPriorityDto => PRIORITY_VALUES.has(value);
 
 /** The literal a caller sends to mean "the UNASSIGNED bucket". */
 export const UNASSIGNED = 'none';
@@ -216,25 +239,31 @@ export const UNASSIGNED = 'none';
 export function parseReadyFilters(req: Request): ReadyListFilter {
   const params = new URL(req.url).searchParams;
 
-  const kinds = params.getAll('kind');
-  for (const kind of kinds) {
-    if (!KIND_VALUES.has(kind)) {
+  // The guards NARROW rather than validate-then-cast: `isReadyKind` is a type
+  // predicate, so the accumulated arrays are typed by the same check that
+  // rejects an off-vocabulary value. The previous `kinds as WorkItemKind[]` was
+  // an unchecked assertion that happened to be true.
+  const kinds: WorkItemKindDto[] = [];
+  for (const kind of params.getAll('kind')) {
+    if (!isReadyKind(kind)) {
       throw new InvalidRequestError('INVALID_READY_FILTER', `Unknown \`kind\`: ${kind}.`);
     }
+    kinds.push(kind);
   }
 
-  const priorities = params.getAll('priority');
-  for (const priority of priorities) {
-    if (!PRIORITY_VALUES.has(priority)) {
+  const priorities: WorkItemPriorityDto[] = [];
+  for (const priority of params.getAll('priority')) {
+    if (!isReadyPriority(priority)) {
       throw new InvalidRequestError('INVALID_READY_FILTER', `Unknown \`priority\`: ${priority}.`);
     }
+    priorities.push(priority);
   }
 
   const rawAssignee = params.get('assigneeId');
 
   return {
-    ...(kinds.length > 0 ? { kinds: kinds as WorkItemKind[] } : {}),
-    ...(priorities.length > 0 ? { priority: priorities as WorkItemPriority[] } : {}),
+    ...(kinds.length > 0 ? { kinds } : {}),
+    ...(priorities.length > 0 ? { priority: priorities } : {}),
     ...(rawAssignee !== null && rawAssignee !== ''
       ? { assigneeId: rawAssignee === UNASSIGNED ? null : rawAssignee }
       : {}),
