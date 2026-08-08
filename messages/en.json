@@ -1344,6 +1344,7 @@
       },
       "details": "Details",
       "members": "Members & access",
+      "roles": "Roles & permissions",
       "codeAccess": "Code access",
       "workflow": "Workflow",
       "board": "Boards",
@@ -1357,15 +1358,15 @@
     "roles": {
       "admin": {
         "name": "Admin",
-        "description": "Full control of the project — its settings, its members and all of its work."
+        "description": "Runs the project. Every setting, every domain, and the work itself."
       },
       "member": {
         "name": "Member",
-        "description": "Does the work: creates and edits work items, comments and attaches files."
+        "description": "Does the work — edits items, comments, attaches, runs the planner. No project settings."
       },
       "viewer": {
         "name": "Viewer",
-        "description": "Read-only. Sees everything in the project and changes nothing."
+        "description": "Reads the project and its reports. Changes nothing."
       }
     },
     "area": {
@@ -2617,6 +2618,28 @@
       "toast": {
         "title": "Token copied",
         "body": "Paste it into your agent's MCP config now — it won't be shown again."
+      }
+    },
+    "rolesPage": {
+      "title": "Roles & permissions",
+      "subtitle": "What each role in <strong>{projectName}</strong> can do. Workspace owners and admins always hold everything.",
+      "builtInNote": "The three built-in roles can’t be changed — they’re what Motir guarantees. To fit a shape they don’t cover, create a role of your own.",
+      "builtIn": "Built-in",
+      "builtInLocked": "Built-in · can’t be changed",
+      "permissionCount": "{held} of {total} permissions",
+      "memberCount": "{count, plural, one {# member} other {# members}}",
+      "allRoles": "All roles",
+      "crumbs": "Settings · {projectName} · Roles & permissions · {roleName}",
+      "holdsCount": "Holds <strong>{held}</strong> of {total}",
+      "mark": {
+        "held": "Held",
+        "notHeld": "Not held",
+        "levelGranted": "Granted by access level"
+      },
+      "levelGated": {
+        "title": "Public requests",
+        "description": "Granted by the project’s access level, not by a role — which is why they are not a role in the list above. Every visitor of a public project holds all three, signed in or not; nobody holds them on an open, limited or private project, a workspace owner included.",
+        "chip": "Access level"
       }
     }
   },
