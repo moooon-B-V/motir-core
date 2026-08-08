@@ -407,6 +407,25 @@ describe('typed wrappers — each names its operation and forwards its arguments
     });
   });
 
+  it('the session close-out sends the SOURCE, and only what it was given', async () => {
+    // MOTIR-2447: what reaches the wire is the whole fix. A harness sent from
+    // here overwrites the run's own record server-side, and nothing renders the
+    // body, so only the wire can prove it was left out.
+    const client = connected();
+    server.scriptV1({
+      'POST /api/v1/sessions/complete': {
+        body: v1CloseOut('motir/auto-1', [v1CloseOutItem('PROD-7')]),
+      },
+    });
+
+    await client.completeSession({ sessionBranch: 'motir/auto-1', implementationSource: 'byok' });
+
+    expect(server.v1Calls[0]?.body).toEqual({
+      sessionBranch: 'motir/auto-1',
+      implementationSource: 'byok',
+    });
+  });
+
   it('the dispatch prompt is a GET, and seeds the session branch only when there is one', async () => {
     const client = connected();
     server.scriptV1({

@@ -372,14 +372,28 @@ describe('the close-out contract', () => {
     // The `undefined` is what leaves a hosted run's own record alone; a
     // half-built object would stamp `byok` over it.
     expect(toProvenanceInput({})).toBeUndefined();
+  });
+
+  it('carries a PARTIAL report as partial — an absent field never becomes null', () => {
+    // MOTIR-2447: `?? null` here turned "I do not know" into "there is none",
+    // which is how `motir done --session` — a caller that knows only the source
+    // — erased the agent and model the run had already recorded. Asserted with
+    // `toEqual`, which fails on an extra key, so a reintroduced default cannot
+    // pass.
     expect(toProvenanceInput({ implementationHarness: 'Claude Code' })).toEqual({
       harness: 'Claude Code',
-      model: null,
     });
-    expect(toProvenanceInput({ implementationSource: 'manual' })).toEqual({
-      source: 'manual',
-      harness: null,
-      model: null,
+    expect(toProvenanceInput({ implementationSource: 'manual' })).toEqual({ source: 'manual' });
+    expect(toProvenanceInput({ implementationModel: 'claude-opus-5' })).toEqual({
+      model: 'claude-opus-5',
     });
+    // A full report still carries all three.
+    expect(
+      toProvenanceInput({
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+        implementationModel: 'claude-opus-5',
+      }),
+    ).toEqual({ source: 'byok', harness: 'claude', model: 'claude-opus-5' });
   });
 });

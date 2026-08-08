@@ -1002,6 +1002,10 @@ export class MotirClient {
   async completeSession(args: {
     sessionBranch: string;
     implementationHarness?: string;
+    /** The one axis the close-out actually knows (MOTIR-2447). Sent alone, it
+     *  stamps a lane that never reported provenance without disturbing the
+     *  harness and model an integration already recorded. */
+    implementationSource?: 'byok' | 'manual';
   }): Promise<CompleteSessionResult> {
     const body = await this.v1.request('completeSession', {
       body: {
@@ -1009,6 +1013,9 @@ export class MotirClient {
         ...(args.implementationHarness === undefined
           ? {}
           : { implementationHarness: args.implementationHarness }),
+        ...(args.implementationSource === undefined
+          ? {}
+          : { implementationSource: args.implementationSource }),
       },
     });
     return toCompleteSessionResult(body);

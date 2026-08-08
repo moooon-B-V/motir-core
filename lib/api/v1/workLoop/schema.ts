@@ -504,6 +504,13 @@ export const sessionCloseOutBodySchema = z
  * spread at each route: passing a half-built object would stamp `byok` over a
  * hosted run's own record. Omitted → the item's recorded provenance is left
  * exactly as it is.
+ *
+ * The SAME distinction runs per FIELD (MOTIR-2447): an absent `implementation-
+ * Harness` stays absent here rather than becoming an explicit `null`, so the
+ * service can tell "I do not know" from "there is none" and leave a field a
+ * previous report filled in. Writing `?? null` here is what let the close-out —
+ * which knows only that the work was BYOK — erase the agent and model the run
+ * had already recorded.
  */
 export function toProvenanceInput(body: {
   implementationSource?: 'byok' | 'manual';
@@ -519,8 +526,8 @@ export function toProvenanceInput(body: {
   }
   return {
     ...(body.implementationSource === undefined ? {} : { source: body.implementationSource }),
-    harness: body.implementationHarness ?? null,
-    model: body.implementationModel ?? null,
+    ...(body.implementationHarness === undefined ? {} : { harness: body.implementationHarness }),
+    ...(body.implementationModel === undefined ? {} : { model: body.implementationModel }),
   };
 }
 

@@ -1788,6 +1788,22 @@ export const workItemsService = {
    * the item (the session flows lock + tenant/access-check it via
    * `applyStatusTransition` in the same `tx`). `harness`/`model` are recorded
    * as-is (self-reported; no verification implied for byok/manual). Required `tx`.
+   *
+   * ⚠️ A PARTIAL REPORT UPDATES ONLY WHAT IT REPORTS (MOTIR-2447). `harness` and
+   * `model` distinguish three states, and all three are load-bearing:
+   *
+   *   • OMITTED (`undefined`) — the caller does not know. The stored value is
+   *     left exactly as it is.
+   *   • `null` — the caller knows there is none, and clears it.
+   *   • a string — the caller's report, recorded verbatim.
+   *
+   * Collapsing the first two (`harness ?? null`) is what made the close-out
+   * erase the run's own record: `motir auto` stamped the agent and its model at
+   * integration, and `motir done --session` — which knows only that the work was
+   * BYOK — overwrote both with what it happened to hold. Every caller here holds
+   * a DIFFERENT subset (the loop: harness + model; the close-out: source alone;
+   * a hosted runner: all three), so a report has to be able to say nothing about
+   * a field without that meaning "there is nothing".
    */
   async recordImplementationProvenance(
     workItemId: string,
@@ -1798,8 +1814,8 @@ export const workItemsService = {
       workItemId,
       {
         implementationSource: provenance.source,
-        implementationHarness: provenance.harness ?? null,
-        implementationModel: provenance.model ?? null,
+        ...(provenance.harness === undefined ? {} : { implementationHarness: provenance.harness }),
+        ...(provenance.model === undefined ? {} : { implementationModel: provenance.model }),
       },
       tx,
     );

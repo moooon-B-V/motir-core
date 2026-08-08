@@ -537,6 +537,24 @@ describe('motir done', () => {
     expect(harness.stderr).toContain('PROD-8: failed — no legal path');
   });
 
+  it('reports the SOURCE and nothing else — it knows no agent and no model', async () => {
+    // MOTIR-2447. The close-out ran after a human merged, days after the agents
+    // exited. Sending `motir-cli/<version>` as the harness here overwrote the
+    // agent name and model `mark_integrated` recorded during the run.
+    setup();
+    await doneCommand(undefined, { session: 'story/PROD-9' });
+
+    const args = harness.calls.find((c) => c.tool === 'complete_session')?.args as Record<
+      string,
+      unknown
+    >;
+    expect(args).toEqual({ sessionBranch: 'story/PROD-9', implementationSource: 'byok' });
+    // Named explicitly, because it is the whole defect: `toEqual` above already
+    // fails on it, and saying so keeps the reason attached to the assertion.
+    expect(args).not.toHaveProperty('implementationHarness');
+    expect(JSON.stringify(args)).not.toContain('motir-cli');
+  });
+
   it('refuses a key AND --session together', async () => {
     setup();
     await expect(doneCommand('PROD-7', { session: 'story/PROD-9' })).rejects.toThrow(/not both/);

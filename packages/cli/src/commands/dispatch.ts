@@ -20,7 +20,6 @@ import {
   resolveDispatchTarget,
   type AgentSource,
 } from '../dispatch.js';
-import { CLI_VERSION } from '../version.js';
 import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir next` / `motir run <key>` / `motir done <key>` — SINGLE DISPATCH
@@ -49,18 +48,22 @@ const IN_REVIEW = 'in_review';
 const DONE = 'done';
 
 /**
- * The harness `motir done --session` self-reports at the bulk close-out.
+ * What `motir done --session` reports about how the work was implemented: the
+ * SOURCE, and nothing else (MOTIR-2447).
  *
- * This is the ONE seam where the CLI is the honest answer: nothing was launched
- * here. `done --session` runs after a human merged the pull request, minutes or
- * days after the agents that did the work exited, and the only actor present is
- * this process.
+ * The bulk close-out runs after a human merged the pull request — minutes or
+ * days after the agents that did the work exited. It knows the work was BYOK
+ * (that is what this CLI is), and it knows nothing whatsoever about which agent
+ * ran or on which model. It used to send `motir-cli/<version>` as the harness,
+ * which overwrote the agent name and model `mark_integrated` had recorded during
+ * the run — the fix in MOTIR-2419 undone by the very next step of the lifecycle.
  *
- * Every seam where an agent DID run derives its harness from that agent's
- * command instead (see {@link deriveAgentHarness} · MOTIR-2419) — a CLI version
- * string there is the same on every row and therefore says nothing.
+ * Reporting only this leaves those fields alone (the service treats an omitted
+ * field as "I do not know", not "there is none") while still stamping the source
+ * for the `--print` lane, whose items never reach `mark_integrated` and would
+ * otherwise carry no implementation provenance at all.
  */
-const HARNESS = `motir-cli/${CLI_VERSION}`;
+const CLOSE_OUT_SOURCE = 'byok' as const;
 
 // ── agent resolution ────────────────────────────────────────────────────────
 
@@ -373,7 +376,7 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
     await withProjectSession(async ({ client }) => {
       const result = await client.completeSession({
         sessionBranch: opts.session as string,
-        implementationHarness: HARNESS,
+        implementationSource: CLOSE_OUT_SOURCE,
       });
       info(renderSessionOutcomes(result.sessionBranch, result.results));
     });
