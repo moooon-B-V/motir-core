@@ -1,7 +1,7 @@
 import { useTranslations } from 'next-intl';
 import type { PermissionDomainDTO } from '@/lib/dto/permissions';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import { PermissionMark, type PermissionMarkKind } from './PermissionMark';
+import { PermissionMark } from './PermissionMark';
 
 // The permission LIST the role detail renders at full width (Subtask
 // MOTIR-2263) — domain headings interleaved with one row per permission, each a
@@ -15,30 +15,20 @@ import { PermissionMark, type PermissionMarkKind } from './PermissionMark';
 // there is nothing here to change.
 //
 // ⚠️ NO ROW RENDERS A RAW CATALOG KEY. Every label and description is an i18n
-// lookup; a missing string throws rather than painting `permissions.work_item:edit`
-// onto a customer's settings page (next-intl's default for a missing key in a
-// non-production environment, which is what the tests run in).
+// lookup, so a missing string is a visible i18n path in the DOM that the unit
+// suite fails on — not a `permissions.work_item:edit` shipped to a customer.
 
 export function PermissionGroups({
   domains,
   held,
-  markFor,
 }: {
   domains: PermissionDomainDTO[];
-  /** The keys this role holds. Ignored when `markFor` is supplied. */
-  held?: readonly PermissionKey[];
-  /** Overrides the per-row mark — the level-gated card marks every row `level`. */
-  markFor?: (key: PermissionKey) => PermissionMarkKind;
+  /** The keys this role holds. Everything else in `domains` renders withheld. */
+  held: readonly PermissionKey[];
 }) {
   const t = useTranslations();
   const tRoles = useTranslations('settings.rolesPage');
-  const holds = new Set<PermissionKey>(held ?? []);
-  const kindOf = markFor ?? ((key: PermissionKey) => (holds.has(key) ? 'held' : 'withheld'));
-  const markLabel: Record<PermissionMarkKind, string> = {
-    held: tRoles('mark.held'),
-    withheld: tRoles('mark.notHeld'),
-    level: tRoles('mark.levelGranted'),
-  };
+  const holds = new Set<PermissionKey>(held);
 
   return (
     <>
@@ -49,14 +39,17 @@ export function PermissionGroups({
           </div>
           <ul className="list-none">
             {group.permissions.map((permission) => {
-              const kind = kindOf(permission.key);
+              const isHeld = holds.has(permission.key);
               return (
                 <li
                   key={permission.key}
                   data-permission={permission.key}
                   className="border-(--el-border-soft) grid grid-cols-[20px_minmax(0,1fr)] items-baseline gap-3 border-b px-(--spacing-card-padding) py-(--spacing-control-y) last:border-b-0"
                 >
-                  <PermissionMark kind={kind} label={markLabel[kind]} />
+                  <PermissionMark
+                    kind={isHeld ? 'held' : 'withheld'}
+                    label={isHeld ? tRoles('mark.held') : tRoles('mark.notHeld')}
+                  />
                   <span className="min-w-0">
                     <span className="text-(--el-text) font-sans text-[13px] font-medium">
                       {t(permission.labelKey)}

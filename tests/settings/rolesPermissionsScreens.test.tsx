@@ -9,6 +9,7 @@ import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { PERMISSIONS } from '@/lib/permissions/catalog';
 import { RoleList } from '@/app/(authed)/settings/project/roles/_components/RoleList';
 import { RoleDetail } from '@/app/(authed)/settings/project/roles/_components/RoleDetail';
+import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 
 // The Roles & permissions SCREENS (Story MOTIR-2282 · Subtask MOTIR-2263), built
 // to `design/projects/roles-permissions.mock.html` panels 0 and 1.
@@ -234,5 +235,56 @@ describe('a11y — zero axe violations on both screens', () => {
       <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
     );
     expect((await axe.run(container, AXE)).violations).toEqual([]);
+  });
+});
+
+// The branches the three built-in roles cannot reach on their own. `builtIn` is a
+// FIELD on the DTO precisely so the chip reads it rather than assuming — a
+// distinction that only becomes visible when MOTIR-2257 ships a role for which it
+// is false. Driving it now with a synthetic DTO tests the component's actual
+// contract; waiting for that story would mean shipping an untested branch and
+// discovering it in the story that depends on it.
+describe('the branches a built-in-only catalog cannot reach', () => {
+  const CUSTOM: RoleCatalogDTO = {
+    ...CATALOG,
+    roles: [
+      {
+        ...CATALOG.roles.find((role) => role.role === 'member')!,
+        builtIn: false,
+        memberCount: 4,
+      },
+    ],
+  };
+
+  it('a NON-built-in role gets no lock chip on the list', () => {
+    renderWith(<RoleList catalog={CUSTOM} />);
+    expect(screen.queryByText('Built-in')).toBeNull();
+    expect(screen.getByText('4 members')).toBeTruthy();
+  });
+
+  it('a NON-built-in role gets no lock line on the detail', () => {
+    renderWith(<RoleDetail role={CUSTOM.roles[0]!} catalog={CUSTOM} projectName="motir" />);
+    expect(screen.queryByText('Built-in · can’t be changed')).toBeNull();
+    // …and the rest of the screen is unchanged: the permissions still render.
+    expect(document.querySelector('[data-permission]')).toBeTruthy();
+  });
+
+  it('omits the access-level card entirely when the read returns no level-gated keys', () => {
+    // Not hypothetical: the day every catalog key becomes role-gated, the card
+    // has nothing to say and must not render an empty heading.
+    renderWith(<RoleList catalog={{ ...CATALOG, levelGatedDomains: [] }} />);
+    expect(screen.queryByText('Public requests')).toBeNull();
+    expect(screen.getAllByRole('link').length).toBe(CATALOG.roles.length);
+  });
+
+  it('marks every row withheld for a role that holds nothing at all', () => {
+    const empty: RoleDTO = {
+      ...CATALOG.roles.find((role) => role.role === 'viewer')!,
+      permissions: [],
+    };
+    renderWith(<RoleDetail role={empty} catalog={CATALOG} projectName="motir" />);
+    const marks = screen.getAllByRole('img');
+    expect(marks.length).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(marks.every((mark) => mark.getAttribute('aria-label') === 'Not held')).toBe(true);
   });
 });
