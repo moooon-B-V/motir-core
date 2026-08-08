@@ -36,6 +36,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
+import { encodeFilterParam } from '@/lib/filters/ast';
 
 const PWD = 'member-facing-e2e-pass-123';
 const PROJECT_KEY = 'MFP';
@@ -141,6 +142,8 @@ function readsEveryBrowserKeeps(t: Tenant): string[] {
   ];
 }
 
+let filterSeq = 0;
+
 /** The writes this story moved, one per key, driven through the real stack. */
 function gatedWrites(t: Tenant, page: Page): { name: string; run: () => Promise<APIResponse> }[] {
   return [
@@ -154,10 +157,21 @@ function gatedWrites(t: Tenant, page: Page): { name: string; run: () => Promise<
         page.request.post(`/api/work-items/${t.itemId}/sprint`, { data: { sprintId: t.sprintId } }),
     },
     {
+      // ⚠️ A REAL encoded filter, not the `'v1:'` stub this started as — an
+      // invalid AST is rejected at 400 before the gate is ever consulted, so the
+      // stub made the ADMIN row fail and would have made every REFUSAL row pass
+      // for the wrong reason.
       name: 'saved_filter:manage — author a filter',
       run: () =>
         page.request.post(`/api/projects/${PROJECT_KEY}/saved-filters`, {
-          data: { name: 'Mine', visibility: 'private', filterParam: 'v1:' },
+          data: {
+            name: `Filter ${(filterSeq += 1)}`,
+            visibility: 'private',
+            filterParam: encodeFilterParam({
+              combinator: 'and',
+              conditions: [{ field: 'priority', operator: 'is_any_of', value: ['high'] }],
+            }),
+          },
         }),
     },
     {
@@ -285,10 +299,14 @@ test.describe('MOTIR-2291 — the member-facing permissions, end to end', () => 
     // Still a full participant on an `open` project…
     const board = await page.request.get('/api/board');
     expect(board.status(), 'the implicit grant still browses').toBe(200);
-    const edited = await page.request.patch(`/api/work-items/${t.itemId}`, {
-      data: { title: 'Edited by a non-member' },
+    // `work_item:edit`, through the route that actually carries it: authoring an
+    // issue into the backlog. (A field edit is a Server Action, not a REST PATCH —
+    // `PATCH /api/work-items/[id]` is a 405, which is what this assertion first
+    // caught about its own request rather than about the product.)
+    const authored = await page.request.post('/api/backlog', {
+      data: { title: 'Authored by a non-member', kind: 'task' },
     });
-    expect(edited.status(), 'the implicit grant still holds work_item:edit').toBeLessThan(300);
+    expect(authored.status(), 'the implicit grant still holds work_item:edit').toBeLessThan(300);
     const charts = await page.request.get(`/api/projects/${PROJECT_KEY}/velocity`);
     expect(charts.status(), 'report:view is the ONE of the eight they take').toBe(200);
 

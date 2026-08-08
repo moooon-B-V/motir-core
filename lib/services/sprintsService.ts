@@ -396,14 +396,16 @@ export const sprintsService = {
     // allowed; `createBoard` owns its own transaction + seeds default columns
     // (3.7.3). Intentionally NOT inside the activation transaction — board
     // provisioning is independent + idempotent, not part of the atomic flip.
-    const boards = await boardsService.listBoards(existing.projectId, ctx);
-    if (!boards.some((b) => b.type === 'scrum')) {
-      await boardsService.createBoard(
-        existing.projectId,
-        { name: 'Sprint board', type: 'scrum' },
-        ctx,
-      );
-    }
+    //
+    // ⚠️ THROUGH `ensureScrumBoard`, NOT `createBoard` (MOTIR-2350's E2E found
+    // this). `createBoard` asserts `board:configure`, which is ADMIN-only. While
+    // starting a sprint was workspace-owner-only the inner assert always passed
+    // and the coupling was invisible; `sprint:manage` admits a project MEMBER,
+    // who does not hold `board:configure`, so the inner call began refusing them
+    // — and this route had no arm for that refusal, so starting a sprint returned
+    // a 500. Provisioning the board a sprint is viewed on is a SYSTEM side effect
+    // of the sprint act, not the actor configuring a board.
+    await boardsService.ensureScrumBoard(existing.projectId, ctx);
 
     const activate = withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId },

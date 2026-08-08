@@ -1001,38 +1001,32 @@ export const boardsService = {
     // Resolve + tenant-gate the project AND owner-authorize in one call (the
     // gate 404s a foreign projectId before any membership probe).
     await assertBoardConfigAdmin(ctx.userId, projectId, ctx.workspaceId);
+    return createBoardUnchecked(projectId, input, ctx);
+  },
 
-    const name = input.name?.trim();
-    if (!name) throw new InvalidBoardNameError();
-    const type = input.type ?? BoardType.kanban;
-    if (!isBoardType(type)) throw new InvalidBoardTypeError(String(type));
-
-    const row = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId },
-      async (tx) => {
-        // Append after the last board by position (the switcher order).
-        const boards = await boardRepository.findByProjectByPosition(
-          projectId,
-          ctx.workspaceId,
-          tx,
-        );
-        const last = boards.length ? boards[boards.length - 1]!.position : null;
-        const board = await boardRepository.create(
-          {
-            workspaceId: ctx.workspaceId,
-            projectId,
-            name,
-            type,
-            isDefault: false,
-            position: keyForAppend(last),
-          },
-          tx,
-        );
-        await seedColumnsForBoard(board.id, projectId, ctx.workspaceId, tx);
-        return board;
-      },
-    );
-    return toBoardSummaryDto(row);
+  /**
+   * Ensure the project has a SCRUM board, creating one if it has none — the
+   * "board opens" side effect of starting a sprint (Story 4.4).
+   *
+   * ⚠️ IT IS NOT GATED ON `board:configure`, AND THAT IS THE POINT (Story
+   * MOTIR-2291 · Subtask MOTIR-2350, fixed here after the story's own E2E caught
+   * it). Starting a sprint provisions the board the sprint is viewed on; that is
+   * a SYSTEM side effect of the sprint act, not the actor configuring a board.
+   *
+   * Until MOTIR-2350, `startSprint` was workspace-OWNER-only, so the
+   * `board:configure` assert inside `createBoard` always passed and the coupling
+   * was invisible. `sprint:manage` admits a project MEMBER — who does not hold
+   * `board:configure` — so the inner call began refusing them, and the sprint
+   * route had no arm for that refusal: starting a sprint returned a **500**.
+   *
+   * The caller's own authority is checked by the caller (`sprintsService`
+   * asserts `sprint:manage` first). Nothing else may call this: it is exported on
+   * the service so the sprint flow can reach it, and its name says what it is.
+   */
+  async ensureScrumBoard(projectId: string, ctx: ServiceContext): Promise<void> {
+    const boards = await boardRepository.findByProjectByPosition(projectId, ctx.workspaceId);
+    if (boards.some((b) => b.type === BoardType.scrum)) return;
+    await createBoardUnchecked(projectId, { name: 'Sprint board', type: 'scrum' }, ctx);
   },
 
   /**
@@ -1625,4 +1619,44 @@ async function buildSwimlanes(
     });
   }
   return lanes;
+}
+
+/**
+ * Create a board — validation, the transaction and the seeded columns — with NO
+ * authorization of its own. Every caller gates first: `createBoard` asserts
+ * `board:configure`, and `ensureScrumBoard` is reached only from a sprint start
+ * that has already asserted `sprint:manage` (see the ⚠️ there).
+ */
+async function createBoardUnchecked(
+  projectId: string,
+  input: { name: string; type?: string },
+  ctx: ServiceContext,
+): Promise<BoardSummaryDto> {
+  const name = input.name?.trim();
+  if (!name) throw new InvalidBoardNameError();
+  const type = input.type ?? BoardType.kanban;
+  if (!isBoardType(type)) throw new InvalidBoardTypeError(String(type));
+
+  const row = await withWorkspaceContext(
+    { userId: ctx.userId, workspaceId: ctx.workspaceId },
+    async (tx) => {
+      // Append after the last board by position (the switcher order).
+      const boards = await boardRepository.findByProjectByPosition(projectId, ctx.workspaceId, tx);
+      const last = boards.length ? boards[boards.length - 1]!.position : null;
+      const board = await boardRepository.create(
+        {
+          workspaceId: ctx.workspaceId,
+          projectId,
+          name,
+          type,
+          isDefault: false,
+          position: keyForAppend(last),
+        },
+        tx,
+      );
+      await seedColumnsForBoard(board.id, projectId, ctx.workspaceId, tx);
+      return board;
+    },
+  );
+  return toBoardSummaryDto(row);
 }
