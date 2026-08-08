@@ -131,6 +131,13 @@ afterAll(async () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('system.code-graph-index — the FIRST-audit trigger', () => {
+  it('reaches the trigger through the injected service bag, not an ad-hoc import', async () => {
+    // The 4-layer seam: `defineJob` hands the handler `jobServices`, so the step
+    // resolves the singleton off the bag rather than importing it itself.
+    const { jobServices } = await import('@/lib/jobs/services');
+    expect(jobServices.firstAuditTrigger).toBe(firstAuditTriggerService);
+  });
+
   it('submits exactly ONE code_audit + propose_convention pair for a repo with no audit', async () => {
     const { workspaceId, projectIds, installationId } = await seedIndexWorkspace('fa-first', 1);
     stubIndexFleet();

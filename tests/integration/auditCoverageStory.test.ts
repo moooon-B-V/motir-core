@@ -324,7 +324,15 @@ describe('guard · one repo failing never collapses the whole answer', () => {
     expect(page).toMatch(/catch\s*\(err\)\s*\{\s*\n?\s*if \(err instanceof MotirAiError\)/);
 
     const service = read('lib/services/auditCoverageService.ts');
-    const perRepo = service.slice(service.indexOf('async function readRepoCoverage'));
+    // ⚠️ ASSERT THE ANCHOR BEFORE SLICING ON IT. `indexOf` returns -1 for a name
+    // that moved, and `slice(-1)` is the file's LAST CHARACTER — so a renamed
+    // function turns this guard into an assertion about a newline, in EITHER
+    // direction: it fails noisily here (MOTIR-2266 renamed `readRepoCoverage` to
+    // the exported `readRepoAuditState`), but a rename that happened to leave a
+    // matching tail would have disabled it silently.
+    const anchor = 'async function readRepoAuditState';
+    expect(service).toContain(anchor);
+    const perRepo = service.slice(service.indexOf(anchor));
     expect(perRepo).toMatch(/catch \(err\) \{/);
     expect(perRepo).toMatch(/MotirAiError/);
   });
