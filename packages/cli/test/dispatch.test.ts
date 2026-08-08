@@ -18,7 +18,7 @@ import type {
   DispatchPrompt,
   DispatchReferenceAdvisory,
   DispatchRepoStraddleAdvisory,
-} from '../src/mcpClient.js';
+} from '../src/client.js';
 
 // The PURE dispatch engine: repo routing, the bootstrap post-condition, agent
 // resolution, and the human-facing text. No MCP, no spawn, no filesystem —
@@ -43,6 +43,7 @@ function prompt(over: Partial<DispatchPrompt> = {}): DispatchPrompt {
   return {
     key: 'PROD-7',
     prompt: 'CONTEXT\nWHAT TO DO\n',
+    parentKey: 'PROD-2',
     targetRepo: 'motir-core',
     workflowMode: 'per_item_pr',
     sessionBranch: null,

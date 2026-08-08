@@ -24,6 +24,11 @@ const STATUS_KEY_EL: Record<string, string> = {
   todo: '--el-status-todo',
   blocked: '--el-status-blocked',
   in_progress: '--el-status-in-progress',
+  // A card being RE-PLANNED (MOTIR-2425). It sits in the in-progress category,
+  // so without its own key entry it would fall through to that category's hue
+  // and render identically to `in_progress` — the exact collapse MOTIR-1273
+  // un-did for `in_review`, reintroduced by adding a status.
+  planning: '--el-status-planning',
   in_review: '--el-status-in-review',
   done: '--el-status-done',
   cancelled: '--el-status-cancelled',

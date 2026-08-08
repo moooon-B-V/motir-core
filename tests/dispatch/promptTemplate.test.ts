@@ -50,7 +50,22 @@ function source(over: Partial<DispatchPromptSource> = {}): DispatchPromptSource 
 
 /** The four canonical section headings, in the order the grammar emits them.
  *  Matched as a line PREFIX — `ACCEPTANCE CRITERIA` carries a suffix. */
-const SECTIONS = ['CONTEXT', 'WHAT TO DO', 'ACCEPTANCE CRITERIA', 'GIT WORKFLOW'];
+const SECTIONS = [
+  'CONTEXT',
+  'WHAT TO DO',
+  'ACCEPTANCE CRITERIA',
+  'GIT WORKFLOW',
+  'REPORTING THE OUTCOME',
+];
+
+/** Everything from the outcome heading to the end — the section under test in
+ *  the MOTIR-2406 block, sliced so an assertion about it cannot be satisfied by
+ *  text somewhere else in the prompt. */
+function outcomeSection(prompt: string): string {
+  const at = prompt.indexOf('REPORTING THE OUTCOME');
+  expect(at, 'the prompt carries a REPORTING THE OUTCOME section').toBeGreaterThan(-1);
+  return prompt.slice(at);
+}
 
 describe('splitPlanBody — the plan-body section parser', () => {
   it('partitions narrative / acceptance criteria / context refs', () => {
@@ -371,5 +386,173 @@ describe('assembleDispatchPrompt — the prose-vs-graph advisory block (MOTIR-20
     // …and the sections AFTER context are untouched, character for character.
     const tail = (p: string) => p.slice(p.indexOf('WHAT TO DO'));
     expect(tail(with_.prompt)).toBe(tail(without.prompt));
+  });
+});
+
+// THE OUTCOME PROTOCOL (MOTIR-2406).
+//
+// `motir auto` runs `claude --dangerously-skip-permissions` in a sandbox against
+// the user's own key: no wrapper, no policy layer, no second channel. The prompt
+// is the entire contract with the agent, so every assertion here is about text
+// that either reaches it or does not exist.
+describe('assembleDispatchPrompt — REPORTING THE OUTCOME', () => {
+  // ⚠️ BOTH VARIANTS, asserted separately. A section added to one branch of a
+  // two-branch assembler is the classic half-shipped prompt change, and it would
+  // read as working right up until the first item of a run — which is exactly
+  // the one with no lineage.
+  it.each([
+    ['per_item_pr', null],
+    ['session_lineage', 'session/PROD-2-run'],
+  ])('is present in the %s variant', (mode, sessionBranch) => {
+    const { prompt, workflowMode } = assembleDispatchPrompt(source({ sessionBranch }));
+    expect(workflowMode).toBe(mode);
+    expect(outcomeSection(prompt)).toContain('Two outcomes end this work');
+  });
+
+  // THE MODEL SELF-REPORT (MOTIR-2419) — the one fact only the agent holds.
+  // It rides in this section because it applies to BOTH outcomes: a card that
+  // turned out to be wrong was still worked by a model.
+  it.each([
+    ['per_item_pr', null],
+    ['session_lineage', 'session/PROD-2-run'],
+  ])('asks for the model in the %s variant', (mode, sessionBranch) => {
+    // Same half-shipped hazard as the protocol around it: a line added to one
+    // branch of the assembler leaves every first-item-of-a-run with no model.
+    const { prompt, workflowMode } = assembleDispatchPrompt(source({ sessionBranch }));
+    expect(workflowMode).toBe(mode);
+    const outcome = outcomeSection(prompt);
+    expect(outcome).toContain('MOTIR_AGENT_REPORT');
+    expect(outcome).toContain('{"model": "<the model you are running as>"}');
+  });
+
+  it('tells the agent to write NOTHING rather than guess', () => {
+    // The version of the provenance bug that would survive the fix: a model the
+    // agent inferred looks exactly like one it observed.
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('write no file at all');
+    expect(outcome).toContain('and a guessed one is not');
+    // …and the REASON it is the only chance, so the instruction is not read as
+    // ceremony to skip when busy.
+    expect(outcome).toContain('Nothing outside your process can observe which model answered');
+  });
+
+  it('is conditional on the variable, so a --print reader is not told to invent a path', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('If the variable is unset, skip this entirely');
+  });
+
+  it('comes BEFORE the two outcomes, because it applies to both', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    const report = outcome.indexOf('MOTIR_AGENT_REPORT');
+    expect(report).toBeGreaterThan(-1);
+    for (const later of ['FINISHED —', 'THE CARD IS WRONG']) {
+      expect(outcome.indexOf(later), `${later} comes after the self-report`).toBeGreaterThan(
+        report,
+      );
+    }
+  });
+
+  it('the FINISHED signal names in_review and says it is REQUIRED', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('status in_review');
+    expect(outcome).toContain('REQUIRED, not a courtesy');
+    // The reason, not just the rule: an agent told only "do this" treats it as
+    // ceremony, and the loop's whole ability to tell success from a quiet death
+    // rests on it.
+    expect(outcome).toContain('died quietly');
+  });
+
+  it('the defect signal names Planning and NEVER offers `blocked`', () => {
+    // The intuitive word for "this card cannot proceed" is `blocked`, and an
+    // agent offered both will reach for it — where it would change a label and
+    // nothing else, leaving the card ready and pickable (MOTIR-2425).
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('status planning');
+    expect(outcome).toContain('in-progress');
+    expect(outcome.toLowerCase()).not.toContain('blocked');
+  });
+
+  it('REVERT FIRST comes before every other defect step', () => {
+    // Ordering is the assertion, not presence. An agent that reads "record the
+    // finding" before "commit nothing" has already had four steps in which to
+    // commit a half-change.
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    const revert = outcome.indexOf('REVERT FIRST');
+    expect(revert).toBeGreaterThan(-1);
+    for (const later of ['Do not improvise', 'Comment the finding', 'Move PROD-7 to Planning']) {
+      expect(outcome.indexOf(later), `${later} comes after REVERT FIRST`).toBeGreaterThan(revert);
+    }
+  });
+
+  it('names the exact `motir plan` invocation, key substituted', () => {
+    // Verbatim, because an agent told to "submit your findings for re-planning"
+    // will invent an invocation — and the likely invention is an unanchored
+    // thread, which produces a project-wide plan about one card's defect.
+    const outcome = outcomeSection(assembleDispatchPrompt(source({ key: 'PROD-99' })).prompt);
+    expect(outcome).toContain('motir plan --detach PROD-99 "<what you found>"');
+    expect(outcome).toContain('anchors the thread to this card');
+    expect(outcome).toContain('`--detach`');
+  });
+
+  it('states that a plan is PROPOSALS and the agent must not write cards', () => {
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('do not create or edit work items yourself');
+    expect(outcome).toContain('PROPOSALS');
+  });
+
+  it('gives the no-retry rule its REASON, not a bare prohibition', () => {
+    // A rule with no reason is a rule an agent reasons its way around — "the
+    // timeout means it did not land, so retrying is safe" is exactly the
+    // inference that spends the credits twice.
+    const outcome = outcomeSection(assembleDispatchPrompt(source()).prompt);
+    expect(outcome).toContain('Never retry it');
+    expect(outcome).toContain('credits');
+  });
+
+  it('comes LAST — after the git workflow, not before it', () => {
+    // Placement is emphasis: the last thing in the prompt is what the agent is
+    // holding when it starts acting. With the protocol earlier, the git workflow
+    // is the final word and "move the card to In Review" is the step that gets
+    // forgotten.
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt.indexOf('REPORTING THE OUTCOME')).toBeGreaterThan(prompt.indexOf('GIT WORKFLOW'));
+    expect(prompt.trimEnd().endsWith('Do not pick up other work.')).toBe(true);
+  });
+
+  it('a MANUAL item gets NEITHER — it has no branch, no commit and no session', () => {
+    // `motir auto` skips human work, and a person is not going to call
+    // `transition_status`. The manual closing note already says how to report
+    // completion.
+    const { prompt } = assembleDispatchPrompt(source({ type: 'manual' }));
+    expect(prompt).not.toContain('REPORTING THE OUTCOME');
+    expect(prompt).not.toContain('YOUR COMMIT');
+    // Nor the model self-report: no agent runs, so there is no model to name
+    // and nothing writes the file the loop would read (MOTIR-2419).
+    expect(prompt).not.toContain('MOTIR_AGENT_REPORT');
+    expect(prompt).toContain('There is no git workflow for this work item');
+  });
+});
+
+describe('assembleDispatchPrompt — ONE CARD, ONE COMMIT (MOTIR-2406)', () => {
+  it.each([
+    ['per_item_pr', null],
+    ['session_lineage', 'session/PROD-2-run'],
+  ])('the commit contract rides the %s git workflow', (_mode, sessionBranch) => {
+    const { prompt } = assembleDispatchPrompt(source({ sessionBranch }));
+    expect(prompt).toContain('ONE commit for PROD-7');
+  });
+
+  it('says the message BECOMES the pull request, and what that asks of it', () => {
+    // The reason the instruction is here rather than in a reviewer's
+    // expectations: nobody reading the pull request opens the card, so this
+    // message is the only per-card narrative that reaches them.
+    const { prompt } = assembleDispatchPrompt(source());
+    expect(prompt).toContain('THE MESSAGE BECOMES THE PULL REQUEST');
+    expect(prompt).toContain('REVIEWER WHO WAS NOT');
+    expect(prompt).toContain('will not open the card');
+    // Subject AND body, because a one-liner leaves the pull request with a
+    // heading and no reasoning under it.
+    expect(prompt).toContain('Subject: what changed');
+    expect(prompt).toContain('one-liner');
   });
 });

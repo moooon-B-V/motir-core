@@ -265,6 +265,25 @@ export const workItemSummarySchema = workItemFieldsSchema.extend({
 });
 export type WorkItemSummary = z.infer<typeof workItemSummarySchema>;
 
+/**
+ * How many work items match a filter — the answer to a question the COLLECTION
+ * deliberately does not answer (ADR Amendment 14).
+ *
+ * A resource of its own rather than a `totalCount` on the page, because the
+ * collection's read is a keyset walk that computes no count, and putting one on
+ * the envelope would run a `COUNT` under an arbitrary filter on every page of
+ * every caller — including the paging walks that want no count at all. As a
+ * separate operation, the count is paid for exactly once, by the caller who
+ * asked for it, and Amendment 3 Q2's two-envelope rule stays intact.
+ *
+ * EXACT, never capped: a "999+" would stop being true precisely when the number
+ * starts to matter.
+ */
+export const workItemCountSchema = z.object({
+  count: z.number().int().nonnegative(),
+});
+export type V1WorkItemCount = z.infer<typeof workItemCountSchema>;
+
 /** One dependency / relationship edge, as both `GET …/links` and the detail
  *  aggregate render it — ONE declaration, so the two cannot drift (11.2.9). */
 export const workItemLinkSchema = z.object({
@@ -782,6 +801,24 @@ export const illegalTransitionSchema = z.object({
 });
 
 /**
+ * The MINIMAL ACTOR a v1 collection row embeds (Amendment 10 Q1).
+ *
+ * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes
+ * back) and the name a client displays. Deliberately NOT a user resource — it
+ * has no endpoint, no collection, no expansion and cannot be queried — which is
+ * the distinction the pre-Amendment-10 rationale collapsed.
+ *
+ * Declared HERE, beside the other cross-resource shapes, because two resource
+ * modules now use it: the ready row (Amendment 10 Q1) and the comment author
+ * (11.5.14). `ready/schema.ts` already imports from this module, so declaring it
+ * there and importing back would invert the dependency.
+ */
+export const actorRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+});
+
+/**
  * The statuses legal FROM `fromStatusKey`, presented from a project's workflow.
  *
  * ONE function, used by BOTH the `GET` and the refusal path, so the two surfaces
@@ -834,7 +871,15 @@ export function presentTransitionTargets(
 export const commentSchema = z.object({
   id: z.string(),
   parentCommentId: z.string().nullable(),
+  /**
+   * The author's id — KEPT beside `author`, not replaced by it. Removing a
+   * shipped field is a §8 violation, and it stays the cheaper read for a client
+   * that only routes on identity. `author.id` is the same value; a test asserts
+   * they cannot diverge.
+   */
   authorId: z.string(),
+  /** Who wrote it, for a client that renders a name (Amendment 10 Q1). */
+  author: actorRefSchema,
   bodyMd: z.string(),
   createdAt: isoDateTimeSchema,
   editedAt: isoDateTimeSchema.nullable(),
@@ -852,7 +897,7 @@ export type V1CommentThread = z.infer<typeof commentThreadSchema>;
 export interface CommentSource {
   id: string;
   parentCommentId: string | null;
-  author: { id: string };
+  author: { id: string; name: string };
   bodyMd: string;
   createdAt: string;
   editedAt: string | null;
@@ -864,10 +909,16 @@ export function presentComment(source: CommentSource): V1Comment {
   return {
     id: source.id,
     parentCommentId: source.parentCommentId,
-    // The AUTHOR's id only: `CommentAuthorDTO` also carries the display name and
-    // avatar the web app renders, and a public API must not acquire a second,
-    // accidental user resource. 11.3 owns users if they are ever exposed.
+    // The author's ID and NAME. The name arrived with ADR Amendment 10 Q1
+    // (MOTIR-2283), which overturned the rationale this comment used to state —
+    // "a public API must not acquire a second, accidental user resource".
+    // That fear is right about a user RESOURCE and wrong about an embedded,
+    // minimal, read-only actor: it has no endpoint, no collection, no expansion
+    // and cannot be queried. Without it no client can render a comment thread
+    // showing who wrote what, because v1 has no user endpoint to resolve an id
+    // against — and both mirror products embed one. `avatarUrl` stays off.
     authorId: source.author.id,
+    author: { id: source.author.id, name: source.author.name },
     bodyMd: source.bodyMd,
     createdAt: source.createdAt,
     editedAt: source.editedAt,

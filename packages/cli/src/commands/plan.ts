@@ -17,7 +17,7 @@ import {
   WATCH_POLL_MS,
   WATCH_TIMEOUT_MS,
 } from '../plan.js';
-import type { MotirClient, PlanSession, PlanSubmitResult } from '../mcpClient.js';
+import type { MotirClient, PlanSession, PlanSubmitResult } from '../client.js';
 
 // `motir plan` — TERMINAL PLANNING AS A CONVERSATION (Story 7.9 · Subtask 7.9.9
 // · MOTIR-887). The CLI form of the planning front door, on the SAME server-side
@@ -159,8 +159,11 @@ export async function planCommand(
  * void.
  */
 async function requirePlannedProject(session: ProjectSession): Promise<void> {
-  const page = await session.client.searchWorkItems({ projectKey: session.projectKey, limit: 1 });
-  if (page.total > 0) return;
+  // A COUNT, not a one-row search: "does this project have any work items" is a
+  // count question, and asking it as a search was an artefact of the transport
+  // that made a total free (ADR Amendment 11 Q3).
+  const count = await session.client.countWorkItems({ projectKey: session.projectKey });
+  if (count > 0) return;
   throw new CliError(
     `${session.projectKey} has no work items yet — there is no plan here to change.`,
     {

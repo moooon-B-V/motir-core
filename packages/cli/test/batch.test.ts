@@ -19,7 +19,8 @@ import { parseMax } from '../src/commands/auto.js';
 import { addExclude, readExcludes } from '../src/sessionExcludes.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
-import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/mcpClient.js';
+import { parseAgentCommand } from '../src/agentProfiles.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 
 // `motir batch` — the FROZEN snapshot (Subtask 7.9.10 · MOTIR-888).
@@ -52,6 +53,8 @@ interface FakeItem {
   /** This item's OWN recorded integration branch (set by `mark_integrated` in
    *  the real system; pre-set here to build an integrated-dependency fixture). */
   sessionBranch: string | null;
+  /** Who holds it — null is unclaimed (MOTIR-2427). */
+  assigneeId: string | null;
 }
 
 function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
@@ -66,19 +69,25 @@ function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
     deps: [],
     status: 'todo',
     sessionBranch: null,
+    assigneeId: null,
     ...over,
   };
 }
 
 class FakeServer {
   readonly transitions: { key: string; status: string }[] = [];
+  /** Every `reportImplementation` call, verbatim (MOTIR-2421). */
+  readonly provenance: Record<string, unknown>[] = [];
+  /** Every claim the run wrote, in order (MOTIR-2427). */
+  readonly claims: { key: string; ownerId: string }[] = [];
+  /** The `ownerId` each enumeration was narrowed by. */
+  readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; seeded: boolean }[] = [];
   readonly nextReadyCalls: { kinds?: string[]; excluded: number }[] = [];
   /** Set to make every write fail the way a read-only PAT does. */
   readOnly = false;
   /** Model a server that IGNORES `excludeIds` — it keeps answering with the
    *  same item. The enumeration must still terminate. */
-  ignoreExcludes = false;
   /** Keys the server reports as `session_lineage` WITHOUT naming the branch.
    *  `sessionBranch` is nullable on the dispatch payload, so the refusal has to
    *  read without a name rather than printing `null`. */
@@ -125,33 +134,36 @@ class FakeServer {
       completeSession: (): never => {
         throw new Error('`motir batch` has no session to complete.');
       },
-      nextReady: async (args: { kinds?: string[]; excludeIds?: string[] }) => {
-        this.nextReadyCalls.push({
-          ...(args.kinds ? { kinds: args.kinds } : {}),
-          excluded: args.excludeIds?.length ?? 0,
-        });
-        const excluded = new Set(this.ignoreExcludes ? [] : (args.excludeIds ?? []));
-        const item = this.items.find(
-          (i) =>
-            i.status === 'todo' &&
-            !excluded.has(i.id) &&
-            (!args.kinds || args.kinds.includes(i.kind)) &&
-            i.deps.every((d) => this.satisfied(d)),
-        );
-        if (!item) return { item: null };
-        const payload: DispatchItem = {
-          id: item.id,
-          key: item.key,
-          kind: item.kind,
-          title: item.title,
-          priority: 'medium',
-          status: { key: item.status, category: 'todo' },
-          type: item.type,
-          executor: item.executor,
-          targetRepo: item.targetRepo,
-          sessionBranch: this.inherited(item),
-        };
-        return { item: payload };
+      // The whole ready set in one call (MOTIR-2398) — the shape the v1
+      // collection has. `motir batch` enumerates once and freezes it.
+      listReadyForDispatch: async (args: { kinds?: string[]; ownerId?: string }) => {
+        this.nextReadyCalls.push({ ...(args.kinds ? { kinds: args.kinds } : {}), excluded: 0 });
+        this.ownerIdsAsked.push(args.ownerId);
+        return this.items
+          .filter(
+            (i) =>
+              i.status === 'todo' &&
+              (!args.kinds || args.kinds.includes(i.kind)) &&
+              // The pickable rule, applied at ENUMERATION as the real client
+              // does — the snapshot is the boundary a human reads (MOTIR-2427).
+              (args.ownerId === undefined ||
+                i.assigneeId === null ||
+                i.assigneeId === args.ownerId) &&
+              i.deps.every((d) => this.satisfied(d)),
+          )
+          .map(
+            (i): DispatchItem => ({
+              key: i.key,
+              kind: i.kind,
+              title: i.title,
+              assigneeId: i.assigneeId,
+              priority: 'medium',
+              status: { key: i.status, category: 'todo' },
+              type: i.type,
+              executor: i.executor,
+              inheritedSessionBranch: this.inherited(i),
+            }),
+          );
       },
       dispatchPrompt: async (
         key: string,
@@ -163,6 +175,7 @@ class FakeServer {
           return {
             key,
             prompt: `PROMPT ${key}`,
+            parentKey: 'PROD-1',
             targetRepo: item.targetRepo,
             workflowMode: 'session_lineage',
             sessionBranch: null,
@@ -173,10 +186,16 @@ class FakeServer {
         return {
           key,
           prompt: `PROMPT ${key}`,
+          parentKey: 'PROD-1',
           targetRepo: item.targetRepo,
           workflowMode: branch ? 'session_lineage' : 'per_item_pr',
           sessionBranch: branch,
         };
+      },
+      claimWorkItem: async (args: { key: string; ownerId: string }) => {
+        this.claims.push(args);
+        this.byKey(args.key).assigneeId = args.ownerId;
+        return {};
       },
       transitionStatus: async (args: { key: string; status: string }) => {
         if (this.readOnly) {
@@ -184,6 +203,13 @@ class FakeServer {
         }
         this.transitions.push(args);
         this.byKey(args.key).status = args.status;
+        return {};
+      },
+      // The provenance report (MOTIR-2421) — recorded on its own, with no
+      // branch. The fake keeps the whole argument object so a test can assert
+      // what it did NOT contain.
+      reportImplementation: async (args: Record<string, unknown>) => {
+        this.provenance.push(args);
         return {};
       },
     };
@@ -225,11 +251,22 @@ function session(server: FakeServer): ProjectSession {
   };
 }
 
+/** The token owner every run below claims for (MOTIR-2427). */
+const OWNER = 'user_me';
+
 interface DriveOptions {
   opts?: BatchOptions;
   kinds?: string[];
-  agentResults?: (key: string, index: number) => AgentRunResult;
+  /** `model` defaults to null — an agent that self-reported nothing. */
+  agentResults?: (
+    key: string,
+    index: number,
+  ) => Omit<AgentRunResult, 'model'> & { model?: string | null };
   onDispatch?: (key: string, index: number) => void;
+  /** The agent command the run launched — what the harness is derived FROM. */
+  agentCommand?: string;
+  /** The token owner this run claims for (MOTIR-2427). */
+  ownerId?: string;
 }
 
 async function drive(
@@ -243,15 +280,20 @@ async function drive(
     opts: drives.opts ?? {},
     kinds: drives.kinds,
     max: drives.opts?.max ? parseMax(drives.opts.max) : null,
-    agent: { parsed: { command: 'fake-agent', binary: 'fake-agent', args: [] }, source: 'flag' },
+    agent: {
+      parsed: parseAgentCommand(drives.agentCommand ?? 'fake-agent')!,
+      source: 'flag',
+    },
     clock: () => (tick += 1000),
     runAgentFn: async ({ prompt }) => {
       const key = prompt.replace('PROMPT ', '');
       const index = dispatched.length;
       dispatched.push(key);
       drives.onDispatch?.(key, index);
-      return drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      return { model: null, ...result };
     },
+    ownerId: drives.ownerId ?? OWNER,
   };
   const summary = await runBatch(input);
   return { summary, dispatched };
@@ -273,7 +315,7 @@ describe('classifySnapshotItem', () => {
         kind: 'subtask',
         type: 'code',
         executor: 'coding_agent',
-        sessionBranch: null,
+        inheritedSessionBranch: null,
       }),
     ).toBe('take');
     expect(classifySnapshotItem({ kind: 'bug', type: null, executor: null })).toBe('take');
@@ -287,7 +329,7 @@ describe('classifySnapshotItem', () => {
         kind: 'subtask',
         type: 'code',
         executor: 'coding_agent',
-        sessionBranch: 'motir/auto-20260729-010203',
+        inheritedSessionBranch: 'motir/auto-20260729-010203',
       }),
     ).toBe('integrated_dep');
   });
@@ -299,7 +341,7 @@ describe('classifySnapshotItem', () => {
     expect(classifySnapshotItem({ kind: 'subtask', executor: 'human' })).toBe('needs_human');
     // A container reports as needing PLANNING even when it also inherits a
     // lineage — the more actionable answer of the two.
-    expect(classifySnapshotItem({ kind: 'story', sessionBranch: 'motir/auto-x' })).toBe(
+    expect(classifySnapshotItem({ kind: 'story', inheritedSessionBranch: 'motir/auto-x' })).toBe(
       'needs_planning',
     );
   });
@@ -309,7 +351,6 @@ describe('planSnapshot', () => {
   it('splits a ready page into the frozen list and the named exclusions', () => {
     const snapshot = planSnapshot([
       {
-        id: 'i1',
         key: 'PROD-1',
         kind: 'subtask',
         title: 'A',
@@ -317,11 +358,10 @@ describe('planSnapshot', () => {
         status: { key: 'todo', category: 'todo' },
         type: 'code',
         executor: 'coding_agent',
-        targetRepo: 'motir-core',
-        sessionBranch: null,
+        assigneeId: null,
+        inheritedSessionBranch: null,
       },
       {
-        id: 'i2',
         key: 'PROD-2',
         kind: 'subtask',
         title: 'B',
@@ -329,8 +369,8 @@ describe('planSnapshot', () => {
         status: { key: 'todo', category: 'todo' },
         type: 'code',
         executor: 'coding_agent',
-        targetRepo: 'motir-core',
-        sessionBranch: 'motir/auto-x',
+        assigneeId: null,
+        inheritedSessionBranch: 'motir/auto-x',
       },
     ]);
     expect(snapshot.taken.map((e) => e.key)).toEqual(['PROD-1']);
@@ -385,12 +425,13 @@ describe('motir batch — the frozen snapshot', () => {
   it('freezes the list with ONE enumeration, then never re-reads it to pick work', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
     await drive(server);
-    // Two items + the terminating empty answer = 3 to build the snapshot; the
-    // remaining calls are the after-the-fact newly-ready count (reporting only).
-    expect(server.nextReadyCalls.length).toBeGreaterThanOrEqual(3);
-    expect(server.nextReadyCalls[0]?.excluded).toBe(0);
-    expect(server.nextReadyCalls[1]?.excluded).toBe(1);
-    expect(server.nextReadyCalls[2]?.excluded).toBe(2);
+    // ONE read builds the snapshot (MOTIR-2398). It used to take N+1 — an ask
+    // per item, each excluding the last answer — because the tool handed back
+    // one row at a time. The collection returns the ranked set, so the
+    // enumeration is a single call and the only other read is the
+    // after-the-fact newly-ready count, which is reporting rather than picking.
+    expect(server.nextReadyCalls).toHaveLength(2);
+    expect(server.nextReadyCalls.every((c) => c.excluded === 0)).toBe(true);
   });
 
   it('passes --kinds through to the enumeration', async () => {
@@ -512,8 +553,9 @@ describe('motir batch — exclusions', () => {
         clock: () => 0,
         runAgentFn: async ({ prompt }) => {
           dispatched.push(prompt);
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: null };
         },
+        ownerId: OWNER,
       }),
     ).rejects.toThrow(/FORBIDDEN/);
 
@@ -533,7 +575,7 @@ describe('motir batch — previously-failed items', () => {
     // so it is not merely skipped later — it never enters the frozen list, and
     // so can never be counted as "newly ready" either.
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
-    addExclude('https://app.motir.co', 'PROD', { id: 'idA', key: 'PROD-1' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-1' });
 
     const { dispatched, summary } = await drive(server);
 
@@ -544,8 +586,8 @@ describe('motir batch — previously-failed items', () => {
 
   it('--reset clears the list first, counting it in singular and plural', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1')]);
-    addExclude('https://app.motir.co', 'PROD', { id: 'idX', key: 'PROD-90' });
-    addExclude('https://app.motir.co', 'PROD', { id: 'idY', key: 'PROD-91' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-90' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-91' });
 
     await drive(server, { opts: { reset: true } });
     expect(printed()).toContain('Cleared 2 excluded items.');
@@ -555,7 +597,7 @@ describe('motir batch — previously-failed items', () => {
     // rather than a plural with an `s` a reader has to forgive.
     stderrSpy.mockClear();
     server.byKey('PROD-1').status = 'todo';
-    addExclude('https://app.motir.co', 'PROD', { id: 'idZ', key: 'PROD-92' });
+    addExclude('https://app.motir.co', 'PROD', { key: 'PROD-92' });
     await drive(server, { opts: { reset: true } });
     expect(printed()).toContain('Cleared 1 excluded item.');
   });
@@ -575,19 +617,21 @@ describe('motir batch — previously-failed items', () => {
 // ── the enumeration terminates, whatever the server does ────────────────────
 
 describe('motir batch — the enumeration', () => {
-  it('stops on a repeat rather than looping forever when the server ignores excludeIds', async () => {
-    // `enumerateReady` advances by EXCLUDING each answer from the next question.
-    // A server that ignored `excludeIds` would answer with the same item every
-    // time, and an unattended command would spin until it was killed. Seeing the
-    // same id twice ends the enumeration instead.
+  // ⚠️ The old guard here is GONE with the mechanism it guarded (MOTIR-2398).
+  // `enumerateReady` used to advance by excluding each answer from the next
+  // question, so a server that ignored the exclusions answered with the same
+  // row forever and the command span until killed; stopping on a repeat was the
+  // cheap defence. The collection returns the whole ranked set in one read, so
+  // there is no loop to run away — termination is a property of the client's
+  // page walk now, asserted in `clientCore.test.ts` where the paging lives.
+  it('takes the whole ready set in one read, in the server’s rank', async () => {
     const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
-    server.ignoreExcludes = true;
 
     const { dispatched, summary } = await drive(server);
 
-    expect(dispatched).toEqual(['PROD-1']);
+    expect(dispatched).toEqual(['PROD-1', 'PROD-2']);
     expect(summary.stopReason).toBe('completed');
-    expect(printed()).toContain('Snapshot: 1 work item');
+    expect(printed()).toContain('Snapshot: 2 work items');
   });
 });
 
@@ -741,6 +785,114 @@ describe('motir batch — a single item’s outcomes', () => {
     expect(printed()).toContain('motir link add motir-ai');
   });
 
+  // ── implementation provenance (MOTIR-2421) ────────────────────────────────
+  // Every card `motir batch` ever ran carried a null triple, because the only
+  // write that recorded one also asserted a session branch — and batch has
+  // none. Recording it is now its own call.
+
+  it('records WHAT BUILT each item — with no branch anywhere in the call', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, {
+      agentCommand: 'claude --dangerously-skip-permissions',
+      agentResults: () => ({ exitCode: 0, signal: null, model: 'claude-opus-5' }),
+    });
+
+    expect(server.provenance).toEqual([
+      {
+        key: 'PROD-1',
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+        implementationModel: 'claude-opus-5',
+      },
+      {
+        key: 'PROD-2',
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+        implementationModel: 'claude-opus-5',
+      },
+    ]);
+    // ⚠️ The assertion that catches the dangerous fix. `toEqual` above already
+    // fails on an extra key; naming it keeps the reason attached — a branch sent
+    // from here would make the item stop blocking its dependents with nothing
+    // merged. `markIntegrated` on this fake throws for the same reason.
+    for (const call of server.provenance) expect(call).not.toHaveProperty('sessionBranch');
+  });
+
+  it('leaves the model NULL when the agent reported none, and still names the agent', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server, { agentCommand: 'codex exec' });
+
+    expect(server.provenance).toEqual([
+      {
+        key: 'PROD-1',
+        implementationSource: 'byok',
+        implementationHarness: 'codex',
+        // Null, never defaulted: the harness is derivable and stays truthful,
+        // the model is not and stays empty. The client omits it from the wire.
+        implementationModel: null,
+      },
+    ]);
+  });
+
+  it('records provenance only for an item that actually reached In Review', async () => {
+    // A failed agent leaves the item In Progress and nothing reverted — there is
+    // no work to attribute, and claiming an agent built it would be a lie about
+    // a card nobody finished.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, {
+      opts: { keepGoing: true },
+      agentCommand: 'claude',
+      agentResults: (key) =>
+        key === 'PROD-1' ? { exitCode: 1, signal: null } : { exitCode: 0, signal: null },
+    });
+
+    expect(server.provenance.map((c) => c['key'])).toEqual(['PROD-2']);
+  });
+
+  // ── the CLAIM and the pickable snapshot (MOTIR-2427) ──────────────────────
+
+  it('CLAIMS every card it takes, for the token owner', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server);
+
+    expect(server.claims).toEqual([
+      { key: 'PROD-1', ownerId: OWNER },
+      { key: 'PROD-2', ownerId: OWNER },
+    ]);
+  });
+
+  it('a teammate’s card never ENTERS the snapshot — not skipped later', async () => {
+    // The snapshot is the frozen boundary a human reads before the first agent
+    // starts, so a card listed there and skipped afterwards would have been
+    // announced as work about to happen. Narrowing at enumeration is the
+    // difference between "not shown" and "shown, then not done".
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1', { assigneeId: 'user_them' }),
+      leaf('idB', 'PROD-2'),
+    ]);
+    const { summary, dispatched } = await drive(server);
+
+    expect(dispatched).toEqual(['PROD-2']);
+    expect(summary.records.map((r) => r.key)).toEqual(['PROD-2']);
+    // Not in the SKIPPED list either — it was never this run's to consider, so
+    // it is absent from the plan a human reads rather than listed-and-excused.
+    expect(summary.skipped.map((sk) => sk.key)).not.toContain('PROD-1');
+    expect(summary.notReached.map((e) => e.key)).not.toContain('PROD-1');
+    expect(printed()).not.toContain('PROD-1');
+  });
+
+  it('narrows the enumeration by the owner, and asks whoami’s answer once', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server);
+    expect(server.ownerIdsAsked[0]).toBe(OWNER);
+  });
+
+  it('takes a card ALREADY assigned to me', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1', { assigneeId: OWNER })]);
+    const { dispatched } = await drive(server);
+    expect(dispatched).toEqual(['PROD-1']);
+  });
+
   it('names the refusal readably when the server reports lineage without a branch name', async () => {
     // `sessionBranch` is nullable on the dispatch payload, so the refusal cannot
     // assume a name to print. It must still say what happened rather than
@@ -777,26 +929,27 @@ describe('the snapshot plan block', () => {
     const text = renderSnapshotPlan({
       taken: [
         {
-          id: 'i1',
           key: 'PROD-1',
           title: 'Add the thing',
           kind: 'subtask',
-          targetRepo: 'motir-core',
         },
       ],
       skipped: [{ key: 'PROD-2', title: 'A story', reason: 'needs_planning' }],
     });
     expect(text).toContain('Snapshot: 1 work item');
     expect(text).toContain('PROD-1');
-    expect(text).toContain('motir-core');
+    // ⚠️ No repo column (MOTIR-2398). The snapshot freezes WHICH items; where
+    // each ships is assembled per iteration from the dispatch prompt, and
+    // `dispatchOne` prints the resolved checkout on its own line there.
+    expect(text).not.toContain('REPO');
     expect(text).toContain('Not in the snapshot — needs planning (1)');
   });
 
-  it('renders an unpinned repo and an absent title as placeholders, never "null"', () => {
-    // `targetRepo` and `title` are both nullable on a work item, and this table
-    // is the first thing a human reads before deciding to let the run proceed.
+  it('renders an absent title as a placeholder, never "null"', () => {
+    // `title` is nullable on a work item, and this table is the first thing a
+    // human reads before deciding to let the run proceed.
     const text = renderSnapshotPlan({
-      taken: [{ id: 'i1', key: 'PROD-1', title: null, kind: 'subtask', targetRepo: null }],
+      taken: [{ key: 'PROD-1', title: null, kind: 'subtask' }],
       skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
     });
     expect(text).toContain('—');
@@ -840,7 +993,7 @@ describe('the end-of-run summary block', () => {
   it('names a not-reached and a newly-ready item that carry no title', () => {
     const text = renderBatchSummary(
       summary({
-        notReached: [{ id: 'i2', key: 'PROD-2', title: null, kind: 'subtask', targetRepo: null }],
+        notReached: [{ key: 'PROD-2', title: null, kind: 'subtask' }],
         newlyReady: [{ key: 'PROD-3', title: null }],
         stopReason: 'max',
       }),

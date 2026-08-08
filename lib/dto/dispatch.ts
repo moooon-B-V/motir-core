@@ -35,6 +35,22 @@ export type DispatchWorkflowMode = 'per_item_pr' | 'session_lineage';
 export interface DispatchPromptDto {
   /** The `PROD-<n>` identifier the prompt was assembled for. */
   key: string;
+  /**
+   * This item's PARENT, as its `PROD-<n>` key — or `null` for a top-level item
+   * (MOTIR-2445).
+   *
+   * ⚠️ It is already IN the prompt, as the CONTEXT section's `- Parent: …` line.
+   * This field is that same fact promoted to a structure, and the reason is a
+   * consumer: `motir auto` names the shared parent of the cards a run carried in
+   * its pull-request title (MOTIR-2422), and the alternatives were a request per
+   * carried card or a regex over prose the server is free to rewrite.
+   *
+   * It costs NOTHING to serve — `dispatchPromptService` already resolves the
+   * parent row for that line and discards the rest. Amendment 10 Q2 set the
+   * precedent in this exact place: a per-item fact belongs on the per-item read,
+   * not on a collection row.
+   */
+  parentKey: string | null;
   /** The full multi-section prompt text, ready to hand to a coding agent. */
   prompt: string;
   /**

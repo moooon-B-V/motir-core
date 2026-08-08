@@ -3,15 +3,13 @@ import { info, outVerbatim } from '../output.js';
 import { parseKinds } from './read.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { getAgentCommand } from '../config/userConfig.js';
-import { parseAgentCommand, type ParsedAgentCommand } from '../agentProfiles.js';
-import { runAgent } from '../agentRun.js';
 import {
-  addExclude,
-  clearExcludes,
-  readExcludes,
-  removeExclude,
-  removeExcludeByKey,
-} from '../sessionExcludes.js';
+  deriveAgentHarness,
+  parseAgentCommand,
+  type ParsedAgentCommand,
+} from '../agentProfiles.js';
+import { runAgent } from '../agentRun.js';
+import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import {
   checkBootstrapCheckout,
   renderAgentFailure,
@@ -22,8 +20,7 @@ import {
   resolveDispatchTarget,
   type AgentSource,
 } from '../dispatch.js';
-import { CLI_VERSION } from '../version.js';
-import type { DispatchPrompt, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir next` / `motir run <key>` / `motir done <key>` — SINGLE DISPATCH
 // (Story 7.9 · Subtask 7.9.3 · MOTIR-881). The heart of the CLI: take one work
@@ -49,9 +46,27 @@ import type { DispatchPrompt, MotirClient } from '../mcpClient.js';
 const IN_PROGRESS = 'in_progress';
 const IN_REVIEW = 'in_review';
 const DONE = 'done';
+/** The status a re-planned card sits at (MOTIR-2425) — in the in-progress
+ *  category, so a picked run never sees it; `run <key>` warns about it. */
+const PLANNING = 'planning';
 
-/** The harness string the CLI self-reports on the write tools (MOTIR-1685). */
-const HARNESS = `motir-cli/${CLI_VERSION}`;
+/**
+ * What `motir done --session` reports about how the work was implemented: the
+ * SOURCE, and nothing else (MOTIR-2447).
+ *
+ * The bulk close-out runs after a human merged the pull request — minutes or
+ * days after the agents that did the work exited. It knows the work was BYOK
+ * (that is what this CLI is), and it knows nothing whatsoever about which agent
+ * ran or on which model. It used to send `motir-cli/<version>` as the harness,
+ * which overwrote the agent name and model `mark_integrated` had recorded during
+ * the run — the fix in MOTIR-2419 undone by the very next step of the lifecycle.
+ *
+ * Reporting only this leaves those fields alone (the service treats an omitted
+ * field as "I do not know", not "there is none") while still stamping the source
+ * for the `--print` lane, whose items never reach `mark_integrated` and would
+ * otherwise carry no implementation provenance at all.
+ */
+const CLOSE_OUT_SOURCE = 'byok' as const;
 
 // ── agent resolution ────────────────────────────────────────────────────────
 
@@ -101,7 +116,19 @@ export async function ensureInProgress(
   client: MotirClient,
   key: string,
   currentStatus: string | undefined,
+  ownerId?: string,
 ): Promise<void> {
+  // THE CLAIM, and it goes FIRST (MOTIR-2427). Every dispatch path in the CLI
+  // funnels through here, which is why the claim lives here rather than being
+  // repeated in three commands that could drift. Written before the status
+  // moves and long before the agent launches: a claim recorded at the end is
+  // history, and the only version that tells a teammate anything is the one
+  // that lands while the work is happening.
+  //
+  // `ownerId` is optional so a caller that has not resolved `whoami` still
+  // dispatches — an unclaimed run is worse than no run, and on a single-operator
+  // project the claim changes nothing anyone reads.
+  if (ownerId !== undefined) await client.claimWorkItem({ key, ownerId });
   if (currentStatus === IN_PROGRESS) {
     info(`${key}: already In Progress — leaving the status as it is.`);
     return;
@@ -113,9 +140,6 @@ interface DeliverInput {
   session: ProjectSession;
   key: string;
   title: string | null;
-  /** The row id, for the exclude list. Absent on a `motir run <key>` whose
-   *  `get_work_item` read supplies it separately. */
-  id: string | null;
   dispatch: DispatchPrompt;
   opts: DeliveryOptions;
 }
@@ -126,7 +150,7 @@ interface DeliverInput {
  * never drift.
  */
 async function deliver(input: DeliverInput): Promise<void> {
-  const { session, key, title, id, dispatch, opts } = input;
+  const { session, key, title, dispatch, opts } = input;
   const { client, link, serverUrl, projectKey } = session;
 
   const agent = resolveAgent(opts);
@@ -170,7 +194,7 @@ async function deliver(input: DeliverInput): Promise<void> {
   if (result.exitCode !== 0) {
     // The item stays In Progress on purpose — work was started. Record it so
     // the next `motir next` moves past it instead of re-picking the failure.
-    if (id) addExclude(serverUrl, projectKey, { id, key });
+    addExclude(serverUrl, projectKey, { key });
     info('');
     info(renderAgentFailure(key, result.exitCode));
     // Surface the agent's own exit code as ours: a script wrapping `motir next`
@@ -187,12 +211,16 @@ async function deliver(input: DeliverInput): Promise<void> {
     await client.markIntegrated({
       key,
       sessionBranch: dispatch.sessionBranch,
-      implementationHarness: HARNESS,
+      // Same split as the loop's (MOTIR-2419): the harness names the agent this
+      // command launched — not the CLI that launched it — and the model is the
+      // agent's own report, or null.
+      implementationHarness: deriveAgentHarness(agent.parsed.binary),
+      implementationModel: result.model,
     });
   } else {
     await client.transitionStatus({ key, status: IN_REVIEW });
   }
-  if (id) removeExclude(serverUrl, projectKey, id);
+  removeExclude(serverUrl, projectKey, key);
 
   const suspect = checkBootstrapCheckout(target);
   info('');
@@ -225,11 +253,8 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       info(`Skipping ${excluded.length} previously-failed item(s): ${keyList(excluded)}.`);
     }
 
-    const { item } = await client.nextReady({
-      projectKey,
-      ...(kinds ? { kinds } : {}),
-      ...(excluded.length > 0 ? { excludeIds: excluded.map((e) => e.id) } : {}),
-    });
+    const ownerId = await resolveOwnerId(client);
+    const item = await claimNextNotExcluded(client, projectKey, kinds, excluded, ownerId);
     if (!item) {
       info(
         excluded.length > 0
@@ -239,17 +264,81 @@ export async function nextCommand(opts: NextOptions): Promise<void> {
       return;
     }
 
-    await ensureInProgress(client, item.key, item.status?.key);
+    await ensureInProgress(client, item.key, item.status?.key, ownerId);
     const dispatch = await client.dispatchPrompt(item.key);
     await deliver({
       session,
       key: item.key,
       title: item.title,
-      id: item.id,
       dispatch,
       opts,
     });
   });
+}
+
+/**
+ * The token owner's user id — who a claim assigns to (MOTIR-2427).
+ *
+ * One `whoami` per command invocation, not per item: the answer cannot change
+ * inside a run, and an unattended loop that asked per dispatch would spend a
+ * request on a constant.
+ */
+export async function resolveOwnerId(client: MotirClient): Promise<string> {
+  return (await client.whoami()).user.id;
+}
+
+/**
+ * Why a NAMED card would not have been picked — or null when it would have been.
+ *
+ * Only for `motir run <key>`, which is told which card to take. It reports the
+ * same two conditions {@link isPickable} refuses on, in the words a person needs
+ * in order to decide whether to carry on: WHOSE it is, or WHERE it is.
+ */
+export function pickWarning(
+  item: { status: string; assigneeId: string | null },
+  ownerId: string,
+): string | null {
+  if (item.assigneeId !== null && item.assigneeId !== ownerId) {
+    return 'assigned to someone else — dispatching it anyway will put two agents on one card.';
+  }
+  if (item.status === IN_REVIEW) {
+    return 'already In Review — its pull request is waiting on a human, not on an agent.';
+  }
+  if (item.status === PLANNING) {
+    return 'being re-planned — a human has not acted on the plan yet.';
+  }
+  return null;
+}
+
+/**
+ * The next ready item that is not on the persisted exclude list.
+ *
+ * The persisted list is keyed by KEY (MOTIR-2338) and so is the ready row, so
+ * there is nothing to translate: the keys go straight to the client, which
+ * skips them as it walks the ranked page (MOTIR-2398). One call, no round trip
+ * per excluded item, and no row id anywhere.
+ *
+ * The SERVER still chooses. The client skips what this run has already tried
+ * and takes the next row in the order it was given — a client that re-ranked
+ * would be re-deriving the dispatch order the ready endpoint exists to own.
+ */
+async function claimNextNotExcluded(
+  client: MotirClient,
+  projectKey: string,
+  kinds: string[] | undefined,
+  excluded: readonly { key: string }[],
+  ownerId: string,
+): Promise<DispatchItem | null> {
+  // ONE call. The hold-out is applied inside the client's page walk (MOTIR-2398),
+  // so the ask-learn-the-id-ask-again loop this used to need is gone: the
+  // exclusion list is keyed by KEY and so is the ready row.
+  const { item } = await client.nextReady({
+    projectKey,
+    ownerId,
+    ...(kinds ? { kinds } : {}),
+    ...(excluded.length > 0 ? { excludeKeys: excluded.map((e) => e.key) } : {}),
+  });
+  return item;
 }
 
 function keyList(entries: { key: string }[]): string {
@@ -303,13 +392,22 @@ export async function runCommand(key: string, opts: RunOptions): Promise<void> {
       info(`${item.identifier} is not ready — dispatching anyway (--force).`);
     }
 
-    await ensureInProgress(client, item.identifier, item.status);
+    // `run` is GIVEN a card by a person; `next` / `auto` / `batch` PICK one. So
+    // the pickable rule WARNS here instead of refusing (MOTIR-2427): a human who
+    // names a key has a reason, and refusing outright would break the documented
+    // recovery for a card an agent left in progress. The warning still has to be
+    // said — dispatching onto a teammate's live card is the failure this whole
+    // card exists to make visible, and silence is what made it invisible.
+    const ownerId = await resolveOwnerId(client);
+    const warning = pickWarning(item, ownerId);
+    if (warning) info(`${item.identifier}: ${warning}`);
+
+    await ensureInProgress(client, item.identifier, item.status, ownerId);
     const dispatch = await client.dispatchPrompt(item.identifier);
     await deliver({
       session,
       key: item.identifier,
       title: item.title,
-      id: item.id,
       dispatch,
       opts,
     });
@@ -340,7 +438,7 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
     await withProjectSession(async ({ client }) => {
       const result = await client.completeSession({
         sessionBranch: opts.session as string,
-        implementationHarness: HARNESS,
+        implementationSource: CLOSE_OUT_SOURCE,
       });
       info(renderSessionOutcomes(result.sessionBranch, result.results));
     });
@@ -372,7 +470,7 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
       }
       throw err;
     }
-    removeExcludeByKey(serverUrl, projectKey, trimmed);
+    removeExclude(serverUrl, projectKey, trimmed);
     info(`${trimmed}: done.`);
   });
 }

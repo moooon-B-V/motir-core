@@ -3,8 +3,8 @@
 # The AGENT-INDEPENDENT LOOP SMOKE TEST (Subtask 7.9.7c / MOTIR-885).
 #
 # Runs `motir auto --agent <fake-agent>` end to end INSIDE the sandbox image with
-# no LLM, no Motir deployment, no Postgres and no network: a stub MCP server
-# (stub-server.mjs) scripts the ready set, a fake agent (fake-agent.sh) does the
+# no LLM, no Motir deployment, no Postgres and no network: a stub `/api/v1`
+# server (stub-server.mjs) scripts the ready set, a fake agent (fake-agent.sh) does the
 # integration, a stub `gh` (bin/gh) stands in for the pull-request call, and the
 # whole fixture — bare origin, checkout, `.motir.json` — is built here, in
 # /workspace, by the unprivileged `node` user.
@@ -13,13 +13,16 @@
 # the prompt, believe its exit code". Validating it against a real coding agent
 # would test the agent's mood, cost money, and need a key the image deliberately
 # does not carry. Substituting a scripted agent tests the thing that is actually
-# Motir's: the SEQUENCE — next_ready → transition_status → dispatch_prompt →
-# (agent) → mark_integrated, re-queried once per iteration until the ready set
-# drains, then ONE pull request per repo.
+# Motir's: the SEQUENCE — read the ready set → fetch the item's prompt →
+# transition it to in_progress → (agent) → record the integration, re-queried
+# once per iteration until the ready set drains, then ONE pull request per repo.
 #
-# It asserts the sequence, not just the exit code: every MCP call is recorded and
-# checked by assert-run.mjs. A run that exits 0 having silently skipped
-# `mark_integrated` must fail this test.
+# (The prompt is fetched BEFORE the transition since MOTIR-2398 — it carries
+# `targetRepo`, which the run routes on. `assert-run.mjs` records why.)
+#
+# It asserts the sequence, not just the exit code: every request is recorded and
+# checked by assert-run.mjs. A run that exits 0 having silently skipped the
+# integration record must fail this test.
 #
 # Usage:  loop-smoke.sh [workspace-dir]
 # Env:    MOTIR_SMOKE_PORT (default 8787 — must match the port in the mounted
@@ -74,11 +77,11 @@ JSON
 
 # ── the stub server ─────────────────────────────────────────────────────────
 
-CALL_LOG="$RUN_DIR/mcp-calls.ndjson"
+CALL_LOG="$RUN_DIR/api-calls.ndjson"
 GH_LOG="$RUN_DIR/gh-calls.log"
 : > "$GH_LOG"
 
-say 'starting the stub MCP server'
+say 'starting the stub server'
 node "$SMOKE_DIR/stub-server.mjs" \
     --port "$PORT" --log "$CALL_LOG" --items "$ITEMS" --project SMOKE \
     > "$RUN_DIR/stub.url" 2> "$RUN_DIR/stub.err" &
@@ -115,10 +118,10 @@ else
     fail "no credential at all — neither MOTIR_TOKEN nor $CONFIG_DIR/config.json"
 fi
 
-# `motir ready` FIRST: it connects, authenticates and reads, so it is the
-# cheapest end-to-end proof that the credential actually resolved — and when it
-# does not, its one-line error says so far more clearly than a loop that dies
-# three tool calls in.
+# `motir ready` FIRST: it authenticates and reads, so it is the cheapest
+# end-to-end proof that the credential actually resolved — and when it does not,
+# its one-line error says so far more clearly than a loop that dies three
+# requests in.
 say 'reading the ready set (`motir ready`)'
 (cd "$WORKSPACE" && motir ready) > "$RUN_DIR/ready.log" 2>&1 ||
     fail "motir ready failed: $(cat "$RUN_DIR/ready.log")"
@@ -138,7 +141,7 @@ set -e
 
 # ── the assertions ──────────────────────────────────────────────────────────
 
-say 'asserting the MCP call sequence'
+say 'asserting the request sequence'
 node "$SMOKE_DIR/assert-run.mjs" \
     --calls "$CALL_LOG" --gh "$GH_LOG" --items "$ITEMS" --project SMOKE
 

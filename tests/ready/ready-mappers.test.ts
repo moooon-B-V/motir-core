@@ -72,6 +72,7 @@ describe('toReadyItemDto', () => {
     const dto = toReadyItemDto(makeWorkItem(), {
       statusCategory: 'todo',
       assignee: makeAssignee(),
+      inheritedSessionBranch: null,
     });
 
     expect(dto).toEqual({
@@ -83,6 +84,7 @@ describe('toReadyItemDto', () => {
       status: { key: 'open', category: 'todo' },
       assignee: { id: 'user_a', name: 'Ada Lovelace', avatarUrl: 'https://cdn.example/ada.png' },
       descriptionExcerpt: 'Plain description body.',
+      inheritedSessionBranch: null,
       type: null,
       executor: null,
       // Not a manual row → no inline body (lean list payload).
@@ -95,6 +97,7 @@ describe('toReadyItemDto', () => {
     const agent = toReadyItemDto(makeWorkItem({ type: 'code', executor: 'coding_agent' }), {
       statusCategory: 'todo',
       assignee: null,
+      inheritedSessionBranch: null,
     });
     expect(agent.type).toBe('code');
     expect(agent.executor).toBe('coding_agent');
@@ -107,7 +110,7 @@ describe('toReadyItemDto', () => {
         executor: 'human',
         descriptionMd: 'Do the thing **by hand**.',
       }),
-      { statusCategory: 'todo', assignee: null },
+      { statusCategory: 'todo', assignee: null, inheritedSessionBranch: null },
     );
     expect(manual.type).toBe('manual');
     expect(manual.executor).toBe('human');
@@ -116,18 +119,23 @@ describe('toReadyItemDto', () => {
     // Manual by EXECUTOR alone (human, type null) still ships the body.
     const humanNoType = toReadyItemDto(
       makeWorkItem({ type: null, executor: 'human', descriptionMd: 'Provision the store.' }),
-      { statusCategory: 'todo', assignee: null },
+      { statusCategory: 'todo', assignee: null, inheritedSessionBranch: null },
     );
     expect(humanNoType.descriptionMd).toBe('Provision the store.');
   });
 
   it('null assignee → null; image absent → avatarUrl null', () => {
-    const dto = toReadyItemDto(makeWorkItem(), { statusCategory: 'todo', assignee: null });
+    const dto = toReadyItemDto(makeWorkItem(), {
+      statusCategory: 'todo',
+      assignee: null,
+      inheritedSessionBranch: null,
+    });
     expect(dto.assignee).toBeNull();
 
     const dto2 = toReadyItemDto(makeWorkItem(), {
       statusCategory: 'in_progress',
       assignee: makeAssignee({ image: null }),
+      inheritedSessionBranch: null,
     });
     expect(dto2.assignee).toEqual({ id: 'user_a', name: 'Ada Lovelace', avatarUrl: null });
     expect(dto2.status.category).toBe('in_progress');
@@ -136,6 +144,7 @@ describe('toReadyItemDto', () => {
   it('falls back to the email localpart when the assignee has no name', () => {
     const dto = toReadyItemDto(makeWorkItem(), {
       statusCategory: 'todo',
+      inheritedSessionBranch: null,
       assignee: makeAssignee({ name: '', email: 'grace@motir.co' }),
     });
     expect(dto.assignee?.name).toBe('grace');
@@ -145,6 +154,7 @@ describe('toReadyItemDto', () => {
     const dto = toReadyItemDto(makeWorkItem({ descriptionMd: null }), {
       statusCategory: 'todo',
       assignee: null,
+      inheritedSessionBranch: null,
     });
     expect(dto.descriptionExcerpt).toBeNull();
   });
@@ -158,6 +168,7 @@ describe('toReadyItemDispatchDto', () => {
       {
         statusCategory: 'todo',
         assignee: null,
+        inheritedSessionBranch: null,
         parent: { identifier: 'PROD-1' },
         contextRefs: ['lib/dto/ready.ts', 'lib/mappers/readyMappers.ts'],
         sessionBranch: null,
@@ -189,6 +200,7 @@ describe('toReadyItemDispatchDto', () => {
     const dto = toReadyItemDispatchDto(makeWorkItem(), [], {
       statusCategory: 'todo',
       assignee: null,
+      inheritedSessionBranch: null,
       parent: null,
       contextRefs: [],
       sessionBranch: null,

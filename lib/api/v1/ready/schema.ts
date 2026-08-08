@@ -2,6 +2,7 @@ import { z } from 'zod/v4';
 import { WorkItemKind, WorkItemPriority } from '@/generated/prisma/client';
 import { InvalidRequestError } from '@/lib/api/v1/errors';
 import {
+  actorRefSchema,
   dependencyEdgesSchema,
   presentDependencyEdges,
   workItemKeySchema,
@@ -39,13 +40,23 @@ import type { ReadyListFilter } from '@/lib/workItems/readyFilter';
 //     script renders one, and neither mirror's minimal shape is needed for it.
 //     A client that wants richer user data is asking for a user resource, which
 //     v1 deliberately does not have.
-//   • `runCommand` / `contextRefs` / `sessionBranch` / `targetRepo` — those live
-//     on `ReadyItemDispatchDto`, the payload for Motir's OWN CLI dispatch path.
+//   • `runCommand` / `contextRefs` / `targetRepo` — those live on
+//     `ReadyItemDispatchDto`, the payload for Motir's OWN CLI dispatch path.
 //     They encode assumptions about a local checkout that a third-party
 //     integration does not share, and `runCommand` in particular would freeze
 //     the CLI's invocation string as public API. **Reaffirmed by Amendment 10
 //     Q2**: a client that needs `targetRepo` reads it from
 //     `GET /api/v1/work-items/{key}/dispatch-prompt`, which 11.7 ships.
+//
+// ⚠️ `sessionBranch` USED TO BE ON THIS LIST TOO, grouped with the three above,
+// and **Amendment 17 moved it onto the row as `inheritedSessionBranch`**. The
+// grouping was by proximity, not by meaning: the other three describe a local
+// checkout, while this one QUALIFIES the readiness the row already asserts —
+// ready from `main` and ready on top of unmerged work are materially different
+// answers, and a consumer acting on "ready" without knowing which it has opens a
+// pull request against a base that does not exist yet. Its CLI-shaped name is
+// what hid that, so it arrives here renamed for what it means to a reader of the
+// row rather than for what the dispatch path does with it.
 //
 // ⚠️ `assignee.name` USED TO BE ON THIS LIST, and Amendment 10 Q1 removed it.
 // The reason given was "a public API must not acquire a second, accidental user
@@ -107,23 +118,6 @@ void [_kindsTotal, _prioritiesTotal, _typesTotal, _executorsTotal];
 // that is what makes it ready — and `blocks` is the payload that matters: what
 // finishing this item unblocks, i.e. why it is worth doing first.
 
-/**
- * The MINIMAL ACTOR a v1 collection row embeds (Amendment 10 Q1).
- *
- * Two fields and no more: the id a client acts on (it is what 11.2's PATCH takes
- * back) and the name a client displays. Deliberately NOT a user resource — it
- * has no endpoint, no collection, no expansion and cannot be queried — which is
- * the distinction the pre-Amendment-8 rationale collapsed.
- *
- * Declared here because the ready row is the first collection to carry one;
- * Amendment 10 states the rule for every v1 collection row, so a second consumer
- * imports THIS rather than restating it.
- */
-export const actorRefSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-});
-
 /** The v1 ready row. */
 export const readyItemSchema = z.object({
   key: workItemKeySchema,
@@ -145,6 +139,15 @@ export const readyItemSchema = z.object({
   assignee: actorRefSchema.nullable(),
   /** ~200 chars of the description, Markdown stripped to plain text. */
   descriptionExcerpt: z.string().nullable(),
+  /**
+   * READY RELATIVE TO WHAT: the single session branch this item's dependencies
+   * are integrated on, or `null` when it is ready from the trunk (Amendment 17).
+   *
+   * `blockedBy` says why the item is ready — it is empty. This says what that
+   * readiness is measured against, and the two together are the whole answer.
+   * Non-null means starting the work means building on code that has not merged.
+   */
+  inheritedSessionBranch: z.string().nullable(),
   dependencies: dependencyEdgesSchema,
 });
 export type V1ReadyItem = z.infer<typeof readyItemSchema>;
@@ -174,6 +177,9 @@ export function presentReadyItem(
     // is dropped here rather than in the service (see the header note).
     assignee: item.assignee === null ? null : { id: item.assignee.id, name: item.assignee.name },
     descriptionExcerpt: item.descriptionExcerpt,
+    // Resolved for the WHOLE page in one query by the service (MOTIR-2400), so
+    // this is a mapper carrying a value and not a per-row readiness computation.
+    inheritedSessionBranch: item.inheritedSessionBranch,
     dependencies: presentDependencyEdges(edges),
   };
 }

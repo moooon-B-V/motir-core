@@ -1,6 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -21,8 +20,7 @@ const { db } = await import('@/lib/db');
 const { auth } = await import('@/lib/auth');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
-const { CLI_TOKEN_SCOPES, TOOL_SCOPES, isTokenScope } = await import('@/lib/mcp/scopes');
-const { MCP_TOOL_NAMES } = await import('@/lib/mcp/registry');
+const { CLI_TOKEN_SCOPES, isTokenScope } = await import('@/lib/mcp/scopes');
 const { SCOPE_NOT_GRANTED_CODE } = await import('@/lib/mcp/scopeGate');
 const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
 const route = await import('@/app/api/mcp/route');
@@ -32,7 +30,6 @@ const { truncateAuthTables } = await import('../helpers/db');
 const { startMcpHttpServer } = await import('../helpers/mcpHttpServer');
 const { makeCliWorkspace } = await import('../helpers/cliHarness');
 
-import type { McpToolName } from '@/lib/mcp/registry';
 import type { WorkItemFixture } from '../fixtures/workItemFixtures';
 import type { McpTestServer } from '../helpers/mcpHttpServer';
 import type { CliWorkspace } from '../helpers/cliHarness';
@@ -92,15 +89,12 @@ vi.setConfig({ testTimeout: 90_000, hookTimeout: 90_000 });
 const BASE_URL = 'http://localhost:3000';
 const MCP_ENDPOINT = 'http://localhost/api/mcp';
 
-const HERE = resolve(fileURLToPath(import.meta.url), '..');
-const REPO_ROOT = resolve(HERE, '..', '..');
-
 let server: McpTestServer;
 
 beforeAll(async () => {
   // The device endpoints are served too — this is the ONE suite whose subject
   // speaks them (see tests/helpers/mcpHttpServer.ts).
-  server = await startMcpHttpServer({ cliDeviceRoutes: true });
+  server = await startMcpHttpServer({ cliDeviceRoutes: true, v1Routes: true });
 });
 
 afterAll(async () => {
@@ -245,34 +239,22 @@ describe('the grant → mint → bearer seam, read back through the CONSUMER', (
 });
 
 describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
-  /**
-   * The ADR's central claim, checked against the shipped client rather than
-   * against its own prose: every MCP tool `packages/cli` calls must be gated by a
-   * scope the device grant carries. Reading the source is the point — a future
-   * command that reaches for a `sprints:write` tool would 403 on every
-   * device-minted token, and this fails the moment it is added, not in the field.
-   */
-  it('every MCP tool the shipped CLI calls is gated by a scope CLI_TOKEN_SCOPES carries', () => {
-    const clientSource = readFileSync(
-      join(REPO_ROOT, 'packages', 'cli', 'src', 'mcpClient.ts'),
-      'utf8',
-    );
-    const registry = new Set<string>(MCP_TOOL_NAMES);
-    const called = [...clientSource.matchAll(/'([a-z][a-z0-9_]+)'/g)]
-      .map((m) => m[1] as string)
-      .filter((name) => registry.has(name));
-
-    // Guard the guard: a regex that stopped matching would make this vacuous.
-    expect(new Set(called).size).toBeGreaterThanOrEqual(14);
-
-    for (const name of new Set(called)) {
-      const required = TOOL_SCOPES[name as McpToolName];
-      expect(
-        CLI_TOKEN_SCOPES.includes(required),
-        `the CLI calls ${name}, which needs "${required}" — outside CLI_TOKEN_SCOPES`,
-      ).toBe(true);
-    }
-  });
+  // ⚠️ THE SEAM GUARD RETIRED HERE (MOTIR-2214 · 11.5.6), and where it went.
+  //
+  // This described the ADR's central claim — every MCP tool `packages/cli` calls
+  // is gated by a scope the device grant carries — by reading the shipped client
+  // and checking each tool name against `CLI_TOKEN_SCOPES`, with a floor so a
+  // regex that stopped matching could not pass vacuously. The floor fell once
+  // per porting card (14, 12, 7, 6, 1) until MOTIR-2398 moved the last method
+  // and it was INVERTED to assert the absence: the client names no tool at all.
+  //
+  // 11.5.6 then removed `@modelcontextprotocol/sdk` from `packages/cli`
+  // outright, which subsumes it — a client that cannot import the SDK cannot
+  // name a tool, whatever a regex over its source says. The property now lives
+  // in `packages/cli/test/noSdk.test.ts`, next to the manifest it reads and
+  // failing in the package's own suite rather than in a repo-level one three
+  // directories away. The scope tests below stay: they are about the GRANT and
+  // the server's MCP surface, both of which are untouched.
 
   it('every scope in the grant is a real scope, and the destructive ones are withheld', () => {
     for (const scope of CLI_TOKEN_SCOPES) expect(isTokenScope(scope)).toBe(true);
@@ -489,7 +471,8 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
 
     // THE ASSERTION THE WHOLE STORY EXISTS FOR: a command that needs a bearer now
     // works, in a shell that never saw a token — with the project the login
-    // auto-linked (MOTIR-1880), against the real MCP route over the same socket.
+    // auto-linked (MOTIR-1880), against the real `/api/v1` routes over the same
+    // socket.
     const ready = await ws.run(['ready', '--json']);
     expect(ready.exitCode, ready.output).toBe(0);
     expect(JSON.parse(ready.stdout)).toBeInstanceOf(Array);
@@ -499,7 +482,11 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
     const paths = server.requests.map((r) => `${r.method} ${r.pathname}`);
     expect(paths).toContain('POST /api/cli/device/start');
     expect(paths).toContain('POST /api/cli/device/token');
-    expect(paths.some((p) => p.endsWith('/api/mcp'))).toBe(true);
+    // ⚠️ Was `/api/mcp` until 11.5.6. The device grant is unchanged — the two
+    // endpoints above are still how a token is minted — but the command the
+    // token then AUTHORIZES is an `/api/v1` request now, so this is where the
+    // bearer proves itself.
+    expect(paths.some((p) => p.startsWith('GET /api/v1/'))).toBe(true);
     // The device endpoints are reached with NO bearer — the CLI has none yet.
     const startCall = server.requests.find((r) => r.pathname === '/api/cli/device/start');
     expect(startCall?.authorization).toBeNull();

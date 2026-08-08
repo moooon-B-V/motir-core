@@ -112,6 +112,11 @@ describe('gate — the work-item route surface exists and is clean', () => {
       // guard would follow it instead of contradicting it.
       if (/\/integration\//.test(file)) return TOOL_SCOPES.mark_integrated;
       if (/\/sessions\//.test(file)) return TOOL_SCOPES.complete_session;
+      // Provenance recorded on its own (MOTIR-2421 · Amendment 18). Same actor
+      // and same row of §3 as its two neighbours — an external agent runner
+      // reporting what it ran as — so it takes the same scope, read off the
+      // same shipped map rather than re-derived from the verb.
+      if (/\/implementation\//.test(file)) return TOOL_SCOPES.mark_integrated;
       // Story 11.7's conversation MOUNT. A `read`-scoped POST, and the one place
       // on this surface where the verb and the scope deliberately disagree: it
       // is a POST because get-or-create writes a row and a GET must stay safe,

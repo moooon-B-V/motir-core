@@ -4,7 +4,7 @@ import { CliError } from './errors.js';
 import { info } from './output.js';
 import { isInteractive, promptLine } from './prompts.js';
 import { findLink, writeLink, type LinkConfig } from './config/linkConfig.js';
-import type { MotirClient, ProjectSummary } from './mcpClient.js';
+import type { MotirClient, ProjectSummary } from './client.js';
 
 // How the CLI RESOLVES a project, and the one place a link is written on the
 // user's behalf (MOTIR-1880).

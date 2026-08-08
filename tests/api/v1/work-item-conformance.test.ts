@@ -113,6 +113,15 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
       expect(extra.status).toBe(201);
     }
 
+    // 2b. COUNT — its whole promise is that it counts what the COLLECTION would
+    // page (ADR Amendment 14), so it is asserted AGAINST that page rather than
+    // against a number this test knows: a count that drifts from the collection
+    // is the only way this operation can be wrong.
+    const counted = await http(`${project}/count`, caller);
+    expect(counted.status).toBe(200);
+    const paged = await json<{ items: unknown[] }>(await http(`${project}?limit=100`, caller));
+    expect(await json(counted)).toEqual({ count: paged.items.length });
+
     // 3. FOLLOW the Location header — only what step 2 returned.
     const followed = await http(location as string, caller);
     expect(followed.status).toBe(200);
@@ -513,6 +522,7 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
   // ⚠️ A conformance suite that silently misses an endpoint proves nothing.
   it('fails loudly if an endpoint is added to this story without a conformance step', () => {
     const covered = [
+      'app/api/v1/projects/[projectKey]/work-items/count/route.ts',
       'app/api/v1/projects/[projectKey]/work-items/route.ts',
       'app/api/v1/work-items/[key]/route.ts',
       'app/api/v1/work-items/[key]/transitions/route.ts',
@@ -530,12 +540,15 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     // making it fail for another story's endpoints.
     //
     // ⚠️ Story 11.7's WORK-LOOP sub-resources are excluded for exactly the same
-    // reason: `…/dispatch-prompt`, `…/integration`, `…/expansions` and
-    // `…/activity` hang off a work item because that is what they are ABOUT, but
-    // they are work-loop operations and their journey is 11.7's own conformance
-    // suite (MOTIR-2243). Listing them here would make this guard pass by
-    // covering them in the wrong story's walk.
-    const WORK_LOOP_SUBRESOURCES = /\/(dispatch-prompt|integration|expansions|activity)\//;
+    // reason: `…/dispatch-prompt`, `…/integration`, `…/implementation`,
+    // `…/expansions` and `…/activity` hang off a work item because that is what
+    // they are ABOUT, but they are work-loop operations and their journey is
+    // 11.7's own conformance suite (MOTIR-2243). Listing them here would make
+    // this guard pass by covering them in the wrong story's walk.
+    // (`…/implementation` joined them in MOTIR-2421 — it is `…/integration`'s
+    // sibling, minus the branch.)
+    const WORK_LOOP_SUBRESOURCES =
+      /\/(dispatch-prompt|integration|implementation|expansions|activity)\//;
     const shipped = v1RouteFiles(process.cwd()).filter(
       (f) =>
         f.includes('work-items') &&

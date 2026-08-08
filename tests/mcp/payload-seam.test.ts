@@ -512,6 +512,7 @@ describe('presentMcpReadyRow / presentMcpReadyDispatch', () => {
     status: { key: 'todo', category: 'todo' },
     assignee: { id: 'user-2', name: 'Yue', avatarUrl: null },
     descriptionExcerpt: 'excerpt',
+    inheritedSessionBranch: null,
     type: 'code' as const,
     executor: 'coding_agent' as const,
     descriptionMd: 'the body',
@@ -776,6 +777,8 @@ describe('the work-loop payloads', () => {
     workflowMode: 'per_item_pr' as const,
     sessionBranch: null,
     advisories: [],
+    // MOTIR-2445 — the parent the prompt already names in prose, as a field.
+    parentKey: 'PROD-2',
   };
 
   it('the dispatch prompt IS the v1 resource — no widening, real probe', () => {

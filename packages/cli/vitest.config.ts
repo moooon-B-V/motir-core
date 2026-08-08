@@ -23,6 +23,11 @@ export default defineConfig({
       // Measure the WHOLE source tree — an ungated file still appears in the
       // report, so a regression in one is visible even where it is not fatal.
       include: ['src/**/*.ts'],
+      // …EXCEPT the generated v1 client (Subtask 11.5.2). It is machine-written
+      // from the server's own schemas and kept correct by the freshness guard +
+      // the round-trip assertions in `test/api-validators.test.ts`, not by line
+      // coverage over generated branches nobody wrote.
+      exclude: ['src/api/**'],
       reporter: ['text', 'text-summary'],
       thresholds: {
         // The client core, the command modules, and the pure decision layers.
@@ -42,6 +47,7 @@ export default defineConfig({
         'src/render.ts': { branches: 90, functions: 90, lines: 90 },
         'src/serverResolve.ts': { branches: 90, functions: 90, lines: 90 },
         'src/session.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/transport.ts': { branches: 90, functions: 90, lines: 90 },
         'src/sessionExcludes.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/auth.ts': { branches: 90, functions: 90, lines: 90 },
         'src/commands/auto.ts': { branches: 90, functions: 90, lines: 90 },
@@ -54,19 +60,37 @@ export default defineConfig({
         'src/commands/read.ts': { branches: 90, functions: 90, lines: 90 },
         'src/config/linkConfig.ts': { branches: 90, functions: 90, lines: 90 },
         'src/config/userConfig.ts': { branches: 90, functions: 90, lines: 90 },
+        // The `/api/v1` adapter boundary (Subtask 11.5.4) — wire shapes in, the
+        // CLI's view models out. Fully gated: it is pure mapping, so every
+        // branch in it is a real shape decision and none is unreachable.
+        'src/adapters/reads.ts': { branches: 90, functions: 90, lines: 90 },
+        // ⚠️ ADDED BY THE STORY GATE (11.5.7). Both shipped mid-story with no
+        // threshold entry, and both were at 100% — which is exactly why it went
+        // unnoticed: an ungated file at 100% is indistinguishable from a gated
+        // one until the day it regresses, and then it is indistinguishable from
+        // a file nobody ever gated. A module the config does not NAME is not
+        // held; that is how a floor stops being one.
+        'src/adapters/filterParam.ts': { branches: 90, functions: 90, lines: 90 },
+        'src/version.ts': { branches: 90, functions: 90, lines: 90 },
 
         // These two gate on FUNCTIONS + LINES only (both are at 100% / ~98%):
         // each carries DEFENSIVE branches that are unreachable under shipped
         // invariants, so a 90% BRANCH bar would fail on un-coverable code — the
         // same carve-out the root `vitest.config.ts` makes for `whoami` and
         // friends.
-        //   • mcpClient: the `content ?? []` arm (a tool result always carries a
-        //     content block) and the two `err instanceof Error ? … : String(err)`
-        //     fallbacks (the SDK only ever throws Errors).
+        //   • client: the OPTIONAL-PARAMETER spreads — `...(args.cursor ? {…} :
+        //     {})` and its dozen siblings, one per optional query field an
+        //     operation declares. Each is a two-armed branch that the shipped
+        //     commands only ever drive from ONE side (nothing passes `--order`
+        //     to the activity read, nothing omits `implementationHarness` on a
+        //     close-out), so covering the other arms would mean writing tests
+        //     for argument combinations no command can produce. (This carve-out
+        //     used to name the SDK's error shapes; those went with the MCP
+        //     transport in 11.5.6 and the reason is now purely the spreads.)
         //   • help: the `context.command !== program` guard in the after-help
         //     hook — commander fires that hook for the ROOT command only, so the
         //     guard states an invariant rather than handling a reachable case.
-        'src/mcpClient.ts': { functions: 90, lines: 90 },
+        'src/client.ts': { functions: 90, lines: 90 },
         'src/help.ts': { functions: 90, lines: 90 },
 
         // UNGATED, deliberately — each is proven end-to-end instead, by the

@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server as HttpServer } from 'n
 import type { AddressInfo } from 'node:net';
 
 // A REAL device-authorization server for `motir login`'s tests (Subtask
-// MOTIR-1868), mirroring what `mcpTestServer.ts` does for the MCP client.
+// MOTIR-1868), mirroring what `testServer.ts` does for the `/api/v1` client.
 //
 // The thing under test IS the transport — that the CLI sends the RFC 8628 body
 // the route requires, branches correctly on an error shape it only ever sees as

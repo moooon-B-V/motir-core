@@ -65,9 +65,9 @@ JSON
 
 # ── the stub ────────────────────────────────────────────────────────────────
 
-say 'starting the stub server (MCP + the two device routes)'
+say 'starting the stub server (/api/v1 + the two device routes)'
 node "$SMOKE_DIR/stub-server.mjs" \
-    --port "$PORT" --log "$RUN_DIR/mcp-calls.ndjson" --items 1 --project SMOKE \
+    --port "$PORT" --log "$RUN_DIR/api-calls.ndjson" --items 1 --project SMOKE \
     --device-pending 1 \
     > "$RUN_DIR/stub.url" 2> "$RUN_DIR/stub.err" &
 STUB_PID=$!

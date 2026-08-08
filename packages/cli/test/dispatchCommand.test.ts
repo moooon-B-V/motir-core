@@ -9,7 +9,7 @@ import type {
   DispatchItem,
   DispatchPrompt,
   WorkItemDetail,
-} from '../src/mcpClient.js';
+} from '../src/client.js';
 
 // `motir next` / `motir run` / `motir done` orchestration. The MCP session and
 // the agent SPAWN are stubbed (both are covered for real elsewhere:
@@ -18,7 +18,7 @@ import type {
 // stderr, and what the failure path records.
 
 const { agentResult, runAgentMock, sessionRef } = vi.hoisted(() => ({
-  agentResult: { exitCode: 0 } as { exitCode: number },
+  agentResult: { exitCode: 0, model: null } as { exitCode: number; model: string | null },
   runAgentMock: vi.fn(),
   sessionRef: { current: null as unknown },
 }));
@@ -34,12 +34,15 @@ vi.mock('../src/session.js', () => ({
 const { doneCommand, nextCommand, runCommand } = await import('../src/commands/dispatch.js');
 
 const SERVER = 'https://app.motir.co';
+/** The token owner every dispatch below claims for (MOTIR-2427). */
+const OWNER = 'user_me';
 const PROMPT_TEXT = 'CONTEXT\nWHAT TO DO\nACCEPTANCE CRITERIA\nGIT WORKFLOW\n';
 
 function dispatchPrompt(over: Partial<DispatchPrompt> = {}): DispatchPrompt {
   return {
     key: 'PROD-7',
     prompt: PROMPT_TEXT,
+    parentKey: 'PROD-2',
     targetRepo: 'motir-core',
     workflowMode: 'per_item_pr',
     sessionBranch: null,
@@ -49,16 +52,15 @@ function dispatchPrompt(over: Partial<DispatchPrompt> = {}): DispatchPrompt {
 
 function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
   return {
-    id: 'row-7',
     key: 'PROD-7',
     kind: 'subtask',
     title: 'Add the thing',
     priority: 'high',
     status: { key: 'todo', category: 'todo' },
+    assigneeId: null,
     type: 'code',
     executor: 'coding_agent',
-    targetRepo: 'motir-core',
-    sessionBranch: null,
+    inheritedSessionBranch: null,
     ...over,
   };
 }
@@ -66,7 +68,6 @@ function readyItem(over: Partial<DispatchItem> = {}): DispatchItem {
 function workItem(over: Partial<WorkItemDetail> = {}): WorkItemDetail {
   return {
     item: {
-      id: 'row-7',
       identifier: 'PROD-7',
       kind: 'subtask',
       title: 'Add the thing',
@@ -82,7 +83,6 @@ function workItem(over: Partial<WorkItemDetail> = {}): WorkItemDetail {
       descriptionMd: null,
     },
     ancestors: [],
-    parent: null,
     children: [],
     blockedBy: [],
     blocks: [],
@@ -118,6 +118,14 @@ function setup(
   for (const repo of opts.repos ?? ['motir-core']) mkdirSync(join(root, repo));
 
   const client = {
+    whoami: async () => {
+      calls.push({ tool: 'whoami', args: undefined });
+      return { user: { id: OWNER, name: 'Me', email: 'me@motir.test' }, workspace: null };
+    },
+    claimWorkItem: async (args: unknown) => {
+      calls.push({ tool: 'claim', args });
+      return {};
+    },
     nextReady: async (args: unknown) => {
       calls.push({ tool: 'next_ready', args });
       return { item: opts.item === undefined ? readyItem() : opts.item };
@@ -181,8 +189,13 @@ beforeEach(() => {
   process.env['MOTIR_CONFIG_HOME'] = home;
   delete process.env['MOTIR_AGENT'];
   agentResult.exitCode = 0;
+  agentResult.model = null;
   runAgentMock.mockReset();
-  runAgentMock.mockImplementation(async () => ({ exitCode: agentResult.exitCode, signal: null }));
+  runAgentMock.mockImplementation(async () => ({
+    exitCode: agentResult.exitCode,
+    signal: null,
+    model: agentResult.model,
+  }));
   process.exitCode = undefined;
 });
 
@@ -199,8 +212,17 @@ describe('motir next --print', () => {
     setup();
     await nextCommand({ print: true });
 
-    expect(toolNames()).toEqual(['next_ready', 'transition_status', 'dispatch_prompt']);
-    expect(harness.calls[1]?.args).toEqual({ key: 'PROD-7', status: 'in_progress' });
+    expect(toolNames()).toEqual([
+      'whoami',
+      'next_ready',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
+    // The CLAIM lands BEFORE the status moves and long before any agent
+    // launches (MOTIR-2427) — a claim written at the end is history.
+    expect(harness.calls[2]?.args).toEqual({ key: 'PROD-7', ownerId: OWNER });
+    expect(harness.calls[3]?.args).toEqual({ key: 'PROD-7', status: 'in_progress' });
     // The prompt is the ONLY thing on stdout, verbatim — nothing prepended,
     // nothing appended but the single terminating newline.
     expect(harness.stdout).toBe(PROMPT_TEXT);
@@ -218,20 +240,20 @@ describe('motir next --print', () => {
   it('reports an empty ready set without touching any status', async () => {
     setup({ item: null });
     await nextCommand({ print: true });
-    expect(toolNames()).toEqual(['next_ready']);
+    expect(toolNames()).toEqual(['whoami', 'next_ready']);
     expect(harness.stderr).toContain('No ready work items.');
   });
 
   it('passes --kinds through to next_ready', async () => {
     setup();
     await nextCommand({ print: true, kinds: 'subtask,bug' });
-    expect(harness.calls[0]?.args).toMatchObject({ kinds: ['subtask', 'bug'] });
+    expect(harness.calls[1]?.args).toMatchObject({ kinds: ['subtask', 'bug'] });
   });
 
   it('does NOT re-flip an item that is already In Progress', async () => {
     setup({ item: readyItem({ status: { key: 'in_progress', category: 'in_progress' } }) });
     await nextCommand({ print: true });
-    expect(toolNames()).toEqual(['next_ready', 'dispatch_prompt']);
+    expect(toolNames()).toEqual(['whoami', 'next_ready', 'claim', 'dispatch_prompt']);
     expect(harness.stderr).toContain('already In Progress');
   });
 });
@@ -247,12 +269,14 @@ describe('motir next --agent', () => {
     expect(call.cwd).toBe(join(harness.root, 'motir-core'));
     expect(call.command).toMatchObject({ binary: 'claude', args: ['--yolo'] });
     expect(toolNames()).toEqual([
+      'whoami',
       'next_ready',
+      'claim',
       'transition_status',
       'dispatch_prompt',
       'transition_status',
     ]);
-    expect(harness.calls[3]?.args).toEqual({ key: 'PROD-7', status: 'in_review' });
+    expect(harness.calls[5]?.args).toEqual({ key: 'PROD-7', status: 'in_review' });
     expect(harness.stderr).toContain('motir done PROD-7');
   });
 
@@ -272,6 +296,36 @@ describe('motir next --agent', () => {
     expect(harness.stderr).toContain('motir done --session story/PROD-9');
   });
 
+  it('stamps the AGENT and its self-reported model as implementation provenance', async () => {
+    // `motir run` is the other seam that launches an agent and records what
+    // built the item — it must answer the same way `motir auto` does
+    // (MOTIR-2419), or the provenance depends on which command you used.
+    agentResult.model = 'claude-opus-5';
+    setup({
+      prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
+    });
+    await nextCommand({ agent: '/usr/local/bin/cursor-agent --force' });
+
+    expect(harness.calls.find((c) => c.tool === 'mark_integrated')?.args).toMatchObject({
+      implementationHarness: 'cursor',
+      implementationModel: 'claude-opus-5',
+    });
+  });
+
+  it('omits the model — and still names the agent — when the agent reported none', async () => {
+    setup({
+      prompt: dispatchPrompt({ workflowMode: 'session_lineage', sessionBranch: 'story/PROD-9' }),
+    });
+    await nextCommand({ agent: 'claude' });
+
+    // Null, never defaulted: the harness is derivable and stays truthful, the
+    // model is not and stays empty.
+    expect(harness.calls.find((c) => c.tool === 'mark_integrated')?.args).toMatchObject({
+      implementationHarness: 'claude',
+      implementationModel: null,
+    });
+  });
+
   it('on a NON-ZERO exit: item stays In Progress, is excluded, and the exit code propagates', async () => {
     agentResult.exitCode = 2;
     setup();
@@ -281,10 +335,13 @@ describe('motir next --agent', () => {
     expect(harness.calls.filter((c) => c.tool === 'transition_status')).toHaveLength(1);
     expect(harness.stderr).toContain('stays In Progress');
     expect(process.exitCode).toBe(2);
-    expect(readExcludes(SERVER, 'PROD')).toEqual([{ id: 'row-7', key: 'PROD-7' }]);
+    expect(readExcludes(SERVER, 'PROD')).toEqual([{ key: 'PROD-7' }]);
   });
 
-  it('the NEXT next skips the excluded item, and --reset un-skips it', async () => {
+  // MOTIR-2338: the persisted list holds KEYS, and `next_ready` still narrows by
+  // row id — so the skip is now a TRANSLATION. The first ask carries no
+  // exclusions; the excluded item is skipped by key inside the client's walk.
+  it('the NEXT next skips the excluded item by KEY, in one ask, and --reset un-skips it', async () => {
     agentResult.exitCode = 1;
     setup();
     await nextCommand({ agent: 'claude' });
@@ -292,12 +349,17 @@ describe('motir next --agent', () => {
     agentResult.exitCode = 0;
     setup();
     await nextCommand({ print: true });
-    expect(harness.calls[0]?.args).toMatchObject({ excludeIds: ['row-7'] });
+    const asks = harness.calls.filter((c) => c.tool === 'next_ready');
+    // ONE ask (MOTIR-2398). The hold-out is applied inside the client's walk
+    // over the ranked page, so the ask-learn-the-id-ask-again round trip is
+    // gone and the KEY goes straight through from the persisted list.
+    expect(asks).toHaveLength(1);
+    expect(asks[0]?.args).toMatchObject({ excludeKeys: ['PROD-7'] });
     expect(harness.stderr).toContain('Skipping 1 previously-failed item(s): PROD-7');
 
     setup();
     await nextCommand({ print: true, reset: true });
-    expect(harness.calls[0]?.args).not.toHaveProperty('excludeIds');
+    expect(harness.calls[1]?.args).not.toHaveProperty('excludeKeys');
   });
 
   it('a SUCCESSFUL run clears a prior exclusion for that item', async () => {
@@ -306,9 +368,12 @@ describe('motir next --agent', () => {
     await nextCommand({ agent: 'claude' });
     expect(readExcludes(SERVER, 'PROD')).toHaveLength(1);
 
+    // Retried by KEY — the explicit path, which does not consult the exclude
+    // list. `motir next` would keep holding PROD-7 out until `--reset`, which
+    // is what the test above asserts.
     agentResult.exitCode = 0;
     setup();
-    await nextCommand({ agent: 'claude' });
+    await runCommand('PROD-7', { agent: 'claude' });
     expect(readExcludes(SERVER, 'PROD')).toEqual([]);
   });
 
@@ -357,7 +422,13 @@ describe('motir run <key>', () => {
       }),
     });
     await runCommand('PROD-7', { force: true, print: true });
-    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'get_work_item',
+      'whoami',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
     expect(harness.stderr).toContain('--force');
     expect(harness.stdout).toBe(PROMPT_TEXT);
   });
@@ -365,7 +436,13 @@ describe('motir run <key>', () => {
   it('dispatches a ready item straight through', async () => {
     setup();
     await runCommand('PROD-7', { print: true });
-    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'get_work_item',
+      'whoami',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
   });
 
   it('rejects an empty key before any network call', async () => {
@@ -403,7 +480,13 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
     expect(harness.stderr).toContain('PROD-5 (in_review)');
     expect(harness.stderr).toContain('NOT a blocker');
     // Byte-identical to the no-advisory run: same calls, same payload, same code.
-    expect(toolNames()).toEqual(['get_work_item', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'get_work_item',
+      'whoami',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
     expect(harness.stdout).toBe(PROMPT_TEXT);
     expect(process.exitCode).toBeUndefined();
   });
@@ -413,7 +496,13 @@ describe('the prose-vs-graph advisory WARNING (MOTIR-2079)', () => {
     await nextCommand({ print: true });
 
     expect(harness.stderr).toContain('PROD-5 (in_review)');
-    expect(toolNames()).toEqual(['next_ready', 'transition_status', 'dispatch_prompt']);
+    expect(toolNames()).toEqual([
+      'whoami',
+      'next_ready',
+      'claim',
+      'transition_status',
+      'dispatch_prompt',
+    ]);
     expect(harness.stdout).toBe(PROMPT_TEXT);
     expect(process.exitCode).toBeUndefined();
   });
@@ -492,6 +581,80 @@ describe('motir done', () => {
     expect(toolNames()).toEqual(['complete_session']);
     expect(harness.stderr).toContain('PROD-7: completed');
     expect(harness.stderr).toContain('PROD-8: failed — no legal path');
+  });
+
+  it('reports the SOURCE and nothing else — it knows no agent and no model', async () => {
+    // MOTIR-2447. The close-out ran after a human merged, days after the agents
+    // exited. Sending `motir-cli/<version>` as the harness here overwrote the
+    // agent name and model `mark_integrated` recorded during the run.
+    setup();
+    await doneCommand(undefined, { session: 'story/PROD-9' });
+
+    const args = harness.calls.find((c) => c.tool === 'complete_session')?.args as Record<
+      string,
+      unknown
+    >;
+    expect(args).toEqual({ sessionBranch: 'story/PROD-9', implementationSource: 'byok' });
+    // Named explicitly, because it is the whole defect: `toEqual` above already
+    // fails on it, and saying so keeps the reason attached to the assertion.
+    expect(args).not.toHaveProperty('implementationHarness');
+    expect(JSON.stringify(args)).not.toContain('motir-cli');
+  });
+
+  describe('the CLAIM — every dispatch says who took the card (MOTIR-2427)', () => {
+    it('`motir next` claims BEFORE the status moves and before any agent launches', async () => {
+      setup();
+      await nextCommand({ print: true });
+
+      const names = toolNames();
+      expect(names.indexOf('claim')).toBeLessThan(names.indexOf('transition_status'));
+      expect(names.indexOf('claim')).toBeLessThan(names.indexOf('dispatch_prompt'));
+      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({
+        key: 'PROD-7',
+        ownerId: OWNER,
+      });
+    });
+
+    it('`motir run <key>` claims a NAMED card too', async () => {
+      // Being told which card to take is not being told it is unclaimed.
+      setup();
+      await runCommand('PROD-7', { print: true });
+
+      expect(harness.calls.find((c) => c.tool === 'claim')?.args).toEqual({
+        key: 'PROD-7',
+        ownerId: OWNER,
+      });
+    });
+
+    it('asks WHOAMI once per invocation, not once per item', async () => {
+      setup();
+      await nextCommand({ print: true });
+      expect(harness.calls.filter((c) => c.tool === 'whoami')).toHaveLength(1);
+    });
+
+    it('`motir run <key>` WARNS on a card claimed by someone else — and dispatches it', async () => {
+      // `run` is GIVEN a key by a person with a reason, so the rule warns rather
+      // than refuses. Refusing would break the documented recovery for a card an
+      // agent left in progress; saying nothing is what made the collision
+      // invisible in the first place.
+      setup({
+        detail: workItem({
+          item: { ...workItem().item, assigneeId: 'user_them' },
+        }),
+      });
+      await runCommand('PROD-7', { print: true });
+
+      expect(harness.stderr).toContain('assigned to someone else');
+      expect(harness.stderr).toContain('two agents on one card');
+      // …and it still went ahead: the human asked for it.
+      expect(toolNames()).toContain('dispatch_prompt');
+    });
+
+    it('`motir run <key>` says nothing about a card that was pickable anyway', async () => {
+      setup();
+      await runCommand('PROD-7', { print: true });
+      expect(harness.stderr).not.toContain('assigned to someone else');
+    });
   });
 
   it('refuses a key AND --session together', async () => {

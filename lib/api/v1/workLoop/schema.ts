@@ -120,6 +120,14 @@ export const dispatchPromptSchema = z.object({
   key: workItemKeySchema,
   /** The full multi-section prompt text, ready to hand to a coding agent. */
   prompt: z.string(),
+  /**
+   * The item's PARENT key, or `null` for a top-level item (MOTIR-2445).
+   *
+   * The prompt already NAMES it, in the CONTEXT section's `- Parent:` line; this
+   * is that fact as a field, so a client does not have to parse prose the server
+   * may reword. Additive under §8.
+   */
+  parentKey: workItemKeySchema.nullable(),
   /** The RESOLVED bare repo name, or `null` when Motir cannot say. */
   targetRepo: z.string().nullable(),
   /** Its HTTPS clone URL, or `null` when Motir does not know one. */
@@ -144,6 +152,7 @@ export function presentDispatchPrompt(dto: DispatchPromptDto): V1DispatchPrompt 
   return {
     key: dto.key,
     prompt: dto.prompt,
+    parentKey: dto.parentKey,
     targetRepo: dto.targetRepo,
     targetRepoCloneUrl: dto.targetRepoCloneUrl,
     targetRepoDefaultBranch: dto.targetRepoDefaultBranch,
@@ -195,6 +204,26 @@ export const integrationResultSchema = z
     /** The status the workflow moved it to — `in_review` on the shipped default. */
     status: z.string(),
     /** The branch the work was integrated onto. */
+    sessionBranch: z.string().nullable(),
+    updatedAt: z.string(),
+  })
+  .extend(implementationProvenanceSchema.shape);
+
+/**
+ * What recording provenance ALONE returns (MOTIR-2421).
+ *
+ * The triple that was just written, plus the two facts a caller needs in order
+ * to see that nothing else moved: the status is echoed unchanged, and
+ * `sessionBranch` is here precisely so a client can READ that it is still null.
+ * That is the assertion the dangerous fix fails — not "provenance was recorded",
+ * which the wrong implementation also satisfies.
+ */
+export const implementationReportSchema = z
+  .object({
+    key: workItemKeySchema,
+    /** Unchanged by this operation — it moves no status. */
+    status: z.string(),
+    /** Untouched by this operation. Null for a per-item-PR run, and it stays so. */
     sessionBranch: z.string().nullable(),
     updatedAt: z.string(),
   })
@@ -488,6 +517,17 @@ export const sessionCloseOutBodySchema = z
   .strict();
 
 /**
+ * `POST /api/v1/work-items/{key}/implementation` — the SAME triple with no
+ * branch beside it (MOTIR-2421).
+ *
+ * ⚠️ `.strict()` is the guard, not a formality: it is what makes a
+ * `sessionBranch` sent to this endpoint a 422 rather than a silently ignored
+ * field. A caller that reaches for the branch here is reaching for the fix that
+ * would unblock dependents without a merge, and it must fail loudly.
+ */
+export const implementationReportBodySchema = closeOutProvenanceBodySchema.strict();
+
+/**
  * The provenance triple as the SERVICE takes it, or `undefined` when the caller
  * reported none.
  *
@@ -495,6 +535,13 @@ export const sessionCloseOutBodySchema = z
  * spread at each route: passing a half-built object would stamp `byok` over a
  * hosted run's own record. Omitted → the item's recorded provenance is left
  * exactly as it is.
+ *
+ * The SAME distinction runs per FIELD (MOTIR-2447): an absent `implementation-
+ * Harness` stays absent here rather than becoming an explicit `null`, so the
+ * service can tell "I do not know" from "there is none" and leave a field a
+ * previous report filled in. Writing `?? null` here is what let the close-out —
+ * which knows only that the work was BYOK — erase the agent and model the run
+ * had already recorded.
  */
 export function toProvenanceInput(body: {
   implementationSource?: 'byok' | 'manual';
@@ -510,12 +557,13 @@ export function toProvenanceInput(body: {
   }
   return {
     ...(body.implementationSource === undefined ? {} : { source: body.implementationSource }),
-    harness: body.implementationHarness ?? null,
-    model: body.implementationModel ?? null,
+    ...(body.implementationHarness === undefined ? {} : { harness: body.implementationHarness }),
+    ...(body.implementationModel === undefined ? {} : { model: body.implementationModel }),
   };
 }
 
 export type V1IntegrationResult = z.infer<typeof integrationResultSchema>;
+export type V1ImplementationReport = z.infer<typeof implementationReportSchema>;
 export type V1SessionCloseOut = z.infer<typeof sessionCloseOutSchema>;
 
 /** What `markIntegrated` returns, shaped for the wire — field by field. */
@@ -540,6 +588,27 @@ export function presentIntegrationResult(item: {
     implementationHarness: item.implementationHarness,
     implementationModel: item.implementationModel,
   };
+}
+
+/**
+ * What `reportImplementation` returns, shaped for the wire (MOTIR-2421).
+ *
+ * The same fields as the integration read-back and deliberately so: the two
+ * operations differ in what they ASSERT, not in what they report, and a caller
+ * that has just recorded provenance either way reads one shape. `sessionBranch`
+ * rides along unchanged, which is what lets a client see that this call left it
+ * alone.
+ */
+export function presentImplementationReport(item: {
+  identifier: string;
+  status: string;
+  sessionBranch: string | null;
+  updatedAt: string;
+  implementationSource: 'hosted' | 'byok' | 'manual' | null;
+  implementationHarness: string | null;
+  implementationModel: string | null;
+}): V1ImplementationReport {
+  return presentIntegrationResult(item);
 }
 
 /**
@@ -805,6 +874,29 @@ export const activityEntrySchema = z.union([
   z.object({ type: z.literal('change'), change: activityChangeSchema }),
 ]);
 export type V1ActivityEntry = z.infer<typeof activityEntrySchema>;
+
+/**
+ * The activity page's PER-SOURCE totals, beside the envelope's `totalCount`
+ * (ADR Amendment 15).
+ *
+ * The `all` view merges two streams, and "how many are there" has two answers
+ * for it. `totalCount` keeps meaning what it means on every other ranked page —
+ * the whole view's size, here the sum — and these two say what it is made of.
+ *
+ * ⚠️ NULLABLE, and the null is load-bearing: it means **this view did not count
+ * that source**, which is different from counting it and finding none. The
+ * single-kind views each populate the one they actually counted and null the
+ * other — `comments` knows its comment total and nothing about changes, and
+ * `history` the reverse. Reporting `0` there would state, falsely, that the
+ * item has no changes.
+ */
+export const activityTotalsSchema = z.object({
+  /** Every comment on the item, replies included — `null` on the `history` view. */
+  totalComments: z.number().int().nonnegative().nullable(),
+  /** Displayable revisions in the whole trail — `null` on the `comments` view. */
+  totalChanges: z.number().int().nonnegative().nullable(),
+});
+export type V1ActivityTotals = z.infer<typeof activityTotalsSchema>;
 
 /** Map ONE history entry to the wire — field by field, never a spread. */
 export function presentActivityChange(entry: {

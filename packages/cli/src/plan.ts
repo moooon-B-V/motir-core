@@ -1,11 +1,5 @@
 import { normalizeServerUrl } from './config/userConfig.js';
-import type {
-  PlanProposal,
-  PlanSession,
-  PlanTurn,
-  PlanWithItems,
-  PlanOutcome,
-} from './mcpClient.js';
+import type { PlanProposal, PlanSession, PlanTurn, PlanWithItems, PlanOutcome } from './client.js';
 
 // The PURE layer behind `motir plan` (Story 7.9 · Subtask 7.9.9 · MOTIR-887):
 // argument shaping, the interactive loop's input grammar, the watch decision,
@@ -27,7 +21,7 @@ import type {
 // ── The gate every renderer in this file holds ──────────────────────────────
 // A submit produces a Plan of PROPOSALS. `approvePlan` — in Motir, not here — is
 // the only path from a proposal to a `work_item` row, and an `add`'s
-// `workItemId` stays null until then. So nothing here may render "created N
+// `workItemKey` stays null until then. So nothing here may render "created N
 // items"; {@link PROPOSALS_NOT_WORK_ITEMS} is printed with every proposal tree
 // and is the same wording the `get_plan` / `expand_item` tools carry.
 
@@ -263,7 +257,7 @@ export function describeProposal(item: PlanProposal): string {
       blockers(item.blockedByRefs)
     );
   }
-  const target = item.workItemId ?? '(no target)';
+  const target = item.workItemKey ?? '(no target)';
   if (item.op === 'remove') return `${marker} remove ${target}`;
   const changed = Object.keys(item.patch ?? {}).filter(
     (key) => (item.patch as Record<string, unknown>)[key] !== undefined,

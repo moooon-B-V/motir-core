@@ -1,7 +1,7 @@
 {
   "name": "@motir/cli",
-  "version": "0.1.1",
-  "description": "Motir CLI — terminal dispatch of the work loop (an MCP client of the Motir server).",
+  "version": "0.2.0",
+  "description": "Motir CLI — terminal dispatch of the work loop, over Motir's public REST API.",
   "license": "GPL-3.0-only",
   "repository": {
     "type": "git",
@@ -31,13 +31,13 @@
   },
   "scripts": {
     "build": "tsup",
+    "generate:api": "pnpm -w run generate:cli-api",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.26.0",
     "commander": "^14.0.2"
   },
   "devDependencies": {

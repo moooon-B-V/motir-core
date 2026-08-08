@@ -4,7 +4,7 @@ import { requireLink } from '../config/linkConfig.js';
 import { collectReady, collectSprintItems, withProjectSession } from '../session.js';
 import { openUrl } from '../browser.js';
 import {
-  detailWithWaves,
+  assignChildWaves,
   inFlightFilter,
   issueUrl,
   renderActivityStream,
@@ -17,7 +17,7 @@ import {
   resolveSprintRef,
   type StatusPulse,
 } from '../render.js';
-import type { MotirClient, SprintSummary } from '../mcpClient.js';
+import type { MotirClient, SprintSummary, WorkItemDetail } from '../client.js';
 
 // `motir ready` / `motir status` / `motir open <key>` — the read surface a user
 // checks before and between dispatches (Story 7.9 · Subtask 7.9.2), joined by
@@ -55,7 +55,11 @@ async function resolveAssignee(
 ): Promise<string | null | undefined> {
   if (raw === undefined) return undefined;
   const value = raw.trim().toLowerCase();
-  if (value === 'unassigned' || value === 'none') return 'unassigned';
+  // NULL is the unassigned bucket — the tri-state `MotirClient.listReady`'s
+  // signature already declares. The wire's own literal for it (`none`) belongs
+  // to the adapter, not here: `'unassigned'` was the MCP tool's spelling
+  // leaking into the command (MOTIR-2344).
+  if (value === 'unassigned' || value === 'none') return null;
   if (value === 'me') {
     const who = await client.whoami();
     return who.user.id;
@@ -88,21 +92,18 @@ export interface StatusOptions {
 
 export async function statusCommand(opts: StatusOptions): Promise<void> {
   const pulse = await withProjectSession(async ({ client, projectKey }) => {
-    // Ready count: page the whole ready set (no count tool exists; the set is
-    // the small actionable subset). In-flight count: search_work_items returns
-    // the matching `total` directly, so one call suffices. Active sprint:
-    // list_sprints, pick the single `active` one.
+    // Ready count: page the whole ready set (it has no count operation of its
+    // own; the set is the small actionable subset). In-flight count: ONE call to
+    // the collection's count, which is what this always meant — it used to send
+    // a `limit: 1` search and throw the row away. Active sprint: list the
+    // sprints and pick the single `active` one.
     const ready = await collectReady(client, projectKey);
-    const search = await client.searchWorkItems({
-      projectKey,
-      filter: inFlightFilter(),
-      limit: 1,
-    });
+    const inFlight = await client.countWorkItems({ projectKey, filter: inFlightFilter() });
     const { sprints } = await client.listSprints({ projectKey });
     const result: StatusPulse = {
       projectKey,
       readyCount: ready.length,
-      inFlightCount: search.total,
+      inFlightCount: inFlight,
       activeSprint: sprints.find((s) => s.state === 'active') ?? null,
       totalSprints: sprints.length,
     };
@@ -253,29 +254,75 @@ export function activityView(opts: ShowOptions): 'all' | 'comments' | null {
  * or the dispatch path that leans on it — and the output with neither flag is
  * byte-identical to what it was before they existed.
  */
+/**
+ * The v1 work-item resource with its children IN BUILD ORDER, each carrying the
+ * `wave` the table computed.
+ *
+ * Both halves are the shipped `--json` contract and both are kept: a script that
+ * reads this never re-derives the graph, and never has to sort. The only thing
+ * the port changes is that the surrounding resource is the SERVER's own rather
+ * than the CLI's narrowed view of it (ADR Amendment 16).
+ *
+ * The order and the wave come from the VIEW MODEL — `assignChildWaves` is
+ * `render.ts`'s, and that file does not change — and are applied to the
+ * payload's own children matched by KEY rather than by position, so the two
+ * representations cannot silently drift out of correspondence.
+ */
+function withChildWaves(payload: unknown, detail: WorkItemDetail): Record<string, unknown> {
+  const body = payload as Record<string, unknown>;
+  const children = body['children'];
+  if (!Array.isArray(children) || !hasChildEdges(detail)) return body;
+
+  const byKey = new Map(children.map((child: unknown) => [(child as { key?: string }).key, child]));
+  const ordered = assignChildWaves(detail.children).flatMap((entry) => {
+    const child = byKey.get(entry.child.identifier);
+    return child === undefined ? [] : [{ ...(child as object), wave: entry.wave }];
+  });
+  // A child the waves do not mention keeps its place at the end rather than
+  // vanishing: the payload never carries fewer children than the server sent.
+  const placed = new Set(detail.children.map((child) => child.identifier));
+  const rest = children.filter(
+    (child: unknown) => !placed.has((child as { key?: string }).key ?? ''),
+  );
+  return { ...body, children: [...ordered, ...rest] };
+}
+
+/** Whether the server projected the child edge block this build order needs. */
+function hasChildEdges(detail: WorkItemDetail): boolean {
+  return detail.children.some((child) => child.dependencies !== undefined);
+}
+
 export async function showCommand(key: string, opts: ShowOptions): Promise<void> {
   const identifier = parseItemKey(key, 'show');
   const view = activityView(opts);
-  const { detail, activity } = await withProjectSession(async ({ client }) => {
-    const detail = await client.getWorkItem(identifier);
-    // No `cursor`, no `order`: this is a look at the newest page, not a walk.
-    const activity =
-      view === null ? null : await client.getWorkItemActivity({ key: identifier, view });
-    return { detail, activity };
-  });
+  const { detail, payload, activity, activityPayload } = await withProjectSession(
+    async ({ client }) => {
+      const { detail, payload } = await client.readWorkItem(identifier);
+      // No `cursor`, no `order`: this is a look at the newest page, not a walk.
+      const read =
+        view === null ? null : await client.readWorkItemActivity({ key: identifier, view });
+      return { detail, payload, activity: read?.page ?? null, activityPayload: read?.payload };
+    },
+  );
 
   if (opts.json) {
-    // The tool's own `structuredContent` — same contract as `ready --json` /
-    // `status --json` — with the children in build order and each carrying the
-    // `wave` the table computed, so a script never re-derives the graph. The
-    // `dependencies` block rides through in FULL: the `+n` budget is a
+    // The SERVER's own resource, not the CLI's narrowed view of it (ADR
+    // Amendment 16). The view model deliberately omits fields nothing renders —
+    // labels, components, the comment count, the provenance triple — and this
+    // flag is the escape hatch that makes that omission safe, so it must carry
+    // everything the server sent.
+    //
+    // The one thing ADDED is the `wave` per child, exactly as before: it is the
+    // build order the table computed, and a script that had to re-derive the
+    // graph to get it would be doing work the CLI already did. The
+    // `dependencies` block rides through in FULL — the `+n` budget is a
     // terminal-width concern, not a payload one.
     //
-    // A requested stream rides along under `activity`, the activity tool's page
-    // UNALTERED (its `nextCursor` and totals included, so a script can see there
-    // is more). Without a flag the payload is exactly what it always was — the
-    // key does not appear at all rather than appearing as null.
-    json(view === null ? detailWithWaves(detail) : { ...detailWithWaves(detail), activity });
+    // A requested stream rides along under `activity`, the activity page
+    // UNALTERED (its `nextCursor` and totals included). Without a flag the key
+    // does not appear at all rather than appearing as null.
+    const body = withChildWaves(payload, detail);
+    json(view === null ? body : { ...body, activity: activityPayload });
     return;
   }
   out(renderWorkItemDetail(detail));

@@ -1,25 +1,43 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import {
-  StreamableHTTPClientTransport,
-  StreamableHTTPError,
-} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { AuthError, CliError } from './errors.js';
 import { normalizeServerUrl } from './config/userConfig.js';
-import { CLI_VERSION } from './version.js';
+import { V1Transport } from './transport.js';
+import { encodeFilterParam } from './adapters/filterParam.js';
+import {
+  toActivityAllPage,
+  toDispatchItem,
+  toPlanOutcome,
+  toPlanSession,
+  toPlanWithItems,
+  toSearchPage,
+  toWorkItemCount,
+  toCompleteSessionResult,
+  toDispatchPrompt,
+  toExpandSubmitResult,
+  toActivityHistoryPage,
+  toCommentsPage,
+  toProjectList,
+  toReadyPage,
+  toSprintList,
+  toWhoami,
+  toWorkItemDetail,
+  UNASSIGNED,
+} from './adapters/reads.js';
 
-// The MCP client core — the ONE place the CLI talks to a Motir server. Every
-// command speaks to the tenant through the streamable-HTTP `/api/mcp` endpoint
-// with a PAT bearer (story-7.9 header: the CLI is an MCP client only, no
-// parallel REST path, one auth path). Typed wrappers over the tools the CLI
-// consumes live here; auth failures all funnel into a single `AuthError`.
+// The client core — the ONE place the CLI talks to a Motir server. Every command
+// speaks to the tenant over the documented public API at `/api/v1` with a PAT
+// bearer: a URL and a token are the whole client, there is no session to open,
+// and auth failures all funnel into a single `AuthError`.
 //
-// The dispatch/read tools the wrappers below call land across 7.8.5 / 7.8.6 /
-// 7.8.10; this scaffold (7.9.1) defines the typed client surface that 7.9.2
-// (read commands) and 7.9.3 (dispatch) consume. `list_ready` / `next_ready` /
-// `get_work_item` / `whoami` exist today; the rest resolve once their 7.8 tool
-// merges (the wrapper just names the tool — no client change needed then).
+// It used to be an MCP client (story 7.9) and is not one any more — story 11.5
+// moved every method onto `/api/v1` and 11.5.6 removed the tool protocol,
+// `@modelcontextprotocol/sdk` and the handshake with it. The MCP surface at
+// `/api/mcp` is untouched and still serves AGENTS; the CLI is simply no longer
+// one of its clients. A test in `test/noSdk.test.ts` keeps it that way.
+//
+// Each method below names an OPERATION on the generated `/api/v1` document and
+// hands the validated body to an adapter in `src/adapters/` — the only place a
+// wire type is allowed to be read (ADR Q4).
 
-/** The shape `whoami` returns (lib/mcp/tools/whoami.ts structuredContent). */
+/** Who a token resolves to: the caller and the workspace it is bound to. */
 export interface WhoamiResult {
   user: { id: string; name: string; email: string };
   workspace: { id: string; name: string; slug: string } | null;
@@ -105,9 +123,7 @@ export interface SprintList {
  * translation. */
 export interface ProjectSummary {
   key: string;
-  id: string;
   name: string;
-  slug: string;
   accessLevel: string;
 }
 
@@ -134,20 +150,81 @@ export interface SearchItemSummary {
   dependencies?: WorkItemDependencyEdges;
 }
 
+/**
+ * One page of search results.
+ *
+ * ⚠️ NO `total`, and its absence is a DECISION (ADR Amendment 11 Q3 · Amendment
+ * 12). A collection either promises a total or it does not; this one does not,
+ * because computing one means a `COUNT` under an arbitrary filter on every page
+ * of every list. A caller that wants the number asks {@link
+ * MotirClient.countWorkItems} for it, which is one request and says what it is.
+ */
 export interface SearchPage {
   items: SearchItemSummary[];
-  total: number;
   nextCursor: string | null;
 }
 
 /**
- * The `next_ready` dispatch payload (`ReadyItemDispatchDto`, the fields the CLI
- * actually routes on). `id` is the row id `excludeIds` takes; `key` is the
- * `PROD-<n>` identifier every other tool takes. `status.key` lets dispatch skip
- * a redundant `todo → in_progress` flip when the item is already in progress.
+ * IS THIS ROW MINE TO TAKE? — the pickable rule, as a pure function (MOTIR-2427).
+ *
+ * Two conditions, and both exist because Motir is used by TEAMS. On a
+ * single-operator project neither ever fires, which is exactly why the loop
+ * shipped without them.
+ *
+ * 1. **The TO-DO CATEGORY, never a status key.** A project defines its own
+ *    statuses, so the rule has to be expressed on the category or it would need
+ *    extending every time somebody adds a vocabulary word. Anything in the
+ *    in-progress category belongs to whoever moved it there — and that is how a
+ *    card at `Planning` leaves circulation for free (MOTIR-2425): nothing here
+ *    knows what re-planning is, the card simply left the category.
+ * 2. **Unassigned, or assigned to ME.** Someone else's claim is someone else's
+ *    work. My own is the interrupted run I am resuming.
+ *
+ * ⚠️ THE `in_progress`-ASSIGNED-TO-ME CASE IS DELIBERATE, and it is the answer to
+ * the resumption question the category rule would otherwise close. Today a
+ * killed run leaves its card in progress and the next run picks it up again;
+ * under the category rule alone that card is stranded until a human moves it.
+ * Someone else's in-progress card is theirs; my own is mine, and an unattended
+ * loop that cannot resume its own interrupted work needs a human to continue,
+ * which is the opposite of what it is for.
+ *
+ * ⚠️ THIS IS AN ADVISORY, NOT A LOCK, and the claim that follows it is a plain
+ * assignment. Two runs starting together both read the same page, both see the
+ * row unassigned, both take it. That race is ACCEPTED: closing it needs a
+ * conditional write ("assign only if unassigned") that the server does not
+ * offer, the window is one read-to-write gap, and the failure is loud — two
+ * branches for one card is noticed immediately. Do NOT add a re-read here that
+ * checks again before assigning: it closes nothing and reads like a guarantee.
+ */
+export function isPickable(
+  item: Pick<DispatchItem, 'status' | 'assigneeId'>,
+  ownerId: string,
+): boolean {
+  const mine = item.assigneeId === null || item.assigneeId === ownerId;
+  if (!mine) return false;
+  if (item.status.category === 'todo') return true;
+  // The resumption carve-out, and it is deliberately narrow: the ONE status a
+  // dispatch itself sets, on a card that is already mine. That is what makes it
+  // honest — I can only resume what I started, and what I started is in the
+  // status this CLI moved it to. Widening it to the in-progress CATEGORY would
+  // pick up `in_review` (waiting on a human) and `Planning` (waiting on a
+  // re-plan), which is precisely the circulation MOTIR-2425 removed them from.
+  return item.status.key === RESUMABLE_STATUS && item.assigneeId === ownerId;
+}
+
+/** The status a dispatch moves a card into — and therefore the only one a run
+ *  may resume. Kept beside the rule that reads it; `commands/dispatch.ts` sets
+ *  it, and a project on a custom workflow surfaces the server's own error. */
+const RESUMABLE_STATUS = 'in_progress';
+
+/**
+ * The one item a dispatch picks, projected from a ready-collection row.
+ *
+ * `key` is the `PROD-<n>` identifier — the only way the CLI addresses an item
+ * (ADR §7), and what the exclusion list holds. `status.key` lets dispatch skip a
+ * redundant `todo → in_progress` flip when the item is already in progress.
  */
 export interface DispatchItem {
-  id: string;
   key: string;
   kind: string;
   title: string;
@@ -155,8 +232,22 @@ export interface DispatchItem {
   status: { key: string; category: string };
   type: string | null;
   executor: string | null;
-  targetRepo: string | null;
-  sessionBranch: string | null;
+  /**
+   * WHO HAS IT — null when nobody has claimed it (MOTIR-2427).
+   *
+   * A run claims what it takes, so on a TEAM this is the difference between
+   * "available" and "someone else's live work". It rides the ready row already;
+   * carrying it here is what lets the pick decide without a second read.
+   */
+  assigneeId: string | null;
+  /**
+   * READY RELATIVE TO WHAT — the branch this item's dependencies are integrated
+   * on, or `null` when it is ready from the trunk (ADR Amendment 17).
+   *
+   * `motir batch` refuses a non-null row: it opens ONE pull request per item off
+   * `main`, and a lineage item's base has not merged.
+   */
+  inheritedSessionBranch: string | null;
 }
 
 /** WHICH `GIT WORKFLOW` variant the server-assembled prompt carries — chosen
@@ -262,6 +353,15 @@ export function isRepoStraddleAdvisory(a: DispatchAdvisory): a is DispatchRepoSt
 export interface DispatchPrompt {
   key: string;
   prompt: string;
+  /**
+   * The item's PARENT key, or `null` for a top-level item (MOTIR-2445).
+   *
+   * The prompt already names it in its CONTEXT prose; this is that fact as a
+   * field, so `motir auto` can title its pull request after the shared parent of
+   * the cards it carried (MOTIR-2422) without parsing text or paying a request
+   * per card.
+   */
+  parentKey: string | null;
   targetRepo: string | null;
   workflowMode: DispatchWorkflowMode;
   sessionBranch: string | null;
@@ -302,7 +402,15 @@ export interface ExpandSubmitResult {
 export interface PlanTurn {
   id: string;
   seq: number;
-  role: 'user' | 'system';
+  /**
+   * ⚠️ THREE roles, not two. `assistant` is a real turn the planner writes (the
+   * Gate-2 clarifying question, MOTIR-2222); the view model claimed two until
+   * MOTIR-2341 read the union off the wire. `renderTurn` still labels anything
+   * that is not `system` as "you", which mislabels an assistant turn — a
+   * pre-existing gap this port made VISIBLE rather than introduced, and one
+   * whose fix is a new label, so it belongs to a card that may change output.
+   */
+  role: 'user' | 'system' | 'assistant';
   body: string;
   jobId: string | null;
   authorId: string | null;
@@ -317,7 +425,6 @@ export interface PlanTurn {
  */
 export interface PlanSession {
   id: string;
-  projectId: string;
   targetKeys: string[];
   turnCount: number;
   lastJobId: string | null;
@@ -327,12 +434,18 @@ export interface PlanSession {
   turns: PlanTurn[];
 }
 
-/** What a submit returns — the job it opened, the `generating` plan bound to it,
- *  and the thread as it now stands (its new `system` marker turn included). */
+/**
+ * What a submit returns — the job it opened and the `generating` plan bound to
+ * it. The SAME handle an expansion submit answers with, and for the same
+ * reason: the job has been accepted, not run.
+ *
+ * It used to carry the thread as it then stood. Nothing read it — the command
+ * prints the two ids and either detaches or watches the plan — and the v1
+ * submit does not publish one, so it is gone rather than re-fetched.
+ */
 export interface PlanSubmitResult {
   jobId: string;
   planId: string;
-  session: PlanSession;
 }
 
 /** The motir-ai job behind a still-`generating` plan. `reachable: false` means
@@ -352,7 +465,6 @@ export interface PlanJobState {
  */
 export interface PlanOutcome {
   planId: string;
-  projectId: string;
   status: 'generating' | 'planned' | 'approved' | 'declined';
   origin: string;
   jobId: string | null;
@@ -374,15 +486,15 @@ export interface PlanProposalFields {
 }
 
 /**
- * ONE PROPOSAL — not a work item. `workItemId` stays null on an `add` until the
- * plan is approved in Motir, which is the only path from a proposal to a row.
- * `parentRef` / `blockedByRefs` carry either a real work-item id or an
+ * ONE PROPOSAL — not a work item. `workItemKey` stays null on an `add` until
+ * the plan is approved in Motir, which is the only path from a proposal to a
+ * row. `parentRef` / `blockedByRefs` carry either a real work-item ref or an
  * intra-plan `planItem:<id>` temp-ref.
  */
 export interface PlanProposal {
   id: string;
   op: 'add' | 'modify' | 'remove';
-  workItemId: string | null;
+  workItemKey: string | null;
   proposedFields: PlanProposalFields | null;
   patch: Record<string, unknown> | null;
   parentRef: string | null;
@@ -393,7 +505,6 @@ export interface PlanProposal {
  *  just how many items it produced. */
 export interface PlanWithItems {
   id: string;
-  projectId: string;
   status: 'generating' | 'planned' | 'approved' | 'declined';
   title: string | null;
   summary: string | null;
@@ -428,7 +539,6 @@ export interface WorkItemSummary {
 /** ONE dependency / relationship EDGE (`RelationshipLinkDto`): the linked item
  * plus the `work_item_link.id` of the edge itself. */
 export interface WorkItemLink {
-  linkId: string;
   item: WorkItemSummary;
 }
 
@@ -462,9 +572,15 @@ export interface WorkItemChild extends WorkItemSummary {
  * out — `--json` prints the tool payload itself, so nothing is lost by omitting
  * them here.
  */
+/** An ancestor, as the LINEAGE renders it. v1 sends the parent chain as KEYS,
+ *  and `renderLineage` reads `.identifier` and nothing else — so this is the
+ *  whole shape, rather than a summary with three invented fields. */
+export interface AncestorRef {
+  identifier: string;
+}
+
 export interface WorkItemDetail {
   item: {
-    id: string;
     identifier: string;
     kind: string;
     title: string;
@@ -480,8 +596,7 @@ export interface WorkItemDetail {
     descriptionMd: string | null;
   };
   /** The full parent chain, ordered root→self and EXCLUDING the item itself. */
-  ancestors: WorkItemSummary[];
-  parent: WorkItemSummary | null;
+  ancestors: AncestorRef[];
   children: WorkItemChild[];
   blockedBy: WorkItemLink[];
   blocks: WorkItemLink[];
@@ -490,8 +605,10 @@ export interface WorkItemDetail {
     ready: boolean;
     openBlockers: WorkItemSummary[];
     /** The nearest ancestor whose own blockers are still open — the CASCADE
-     * cause. A cascade-blocked item must never read as a bare "blocked". */
-    blockedByAncestor: WorkItemSummary | null;
+     * cause. A cascade-blocked item must never read as a bare "blocked".
+     * `renderReadinessLine` prints its key and its title, which is all v1
+     * publishes and all this needs to be. */
+    blockedByAncestor: { identifier: string; title: string } | null;
   };
 }
 
@@ -627,132 +744,76 @@ export interface MotirClientOptions {
   token: string;
 }
 
-interface ToolTextPart {
-  type: string;
-  text?: string;
-}
-
-interface ToolCallOutcome {
-  isError?: boolean;
-  content?: ToolTextPart[];
-  structuredContent?: unknown;
-}
-
-/** Join the text parts of a tool result into one string (the human block / the
- * `code: message` an error tool carries). */
-function textOf(result: ToolCallOutcome): string {
-  return (result.content ?? [])
-    .filter((p) => p.type === 'text' && typeof p.text === 'string')
-    .map((p) => p.text)
-    .join('\n')
-    .trim();
-}
-
-function isUnauthorized(err: unknown): boolean {
-  if (err instanceof StreamableHTTPError) return err.code === 401;
-  // The transport surfaces a 401 before the JSON-RPC layer; some paths wrap it
-  // in a plain Error whose message carries the status — match defensively so a
-  // revoked token always reads as an auth failure, never a generic crash.
-  const message = err instanceof Error ? err.message : String(err);
-  return /\b401\b|unauthorized/i.test(message);
-}
-
-/** The MCP `/api/mcp` URL for a server base. */
-export function mcpEndpoint(serverUrl: string): URL {
-  return new URL('/api/mcp', normalizeServerUrl(serverUrl) + '/');
-}
-
 export class MotirClient {
   private readonly serverUrl: string;
-  private readonly token: string;
-  private client: Client | null = null;
-  private transport: StreamableHTTPClientTransport | null = null;
+  /**
+   * The `/api/v1` transport EVERY method goes through.
+   *
+   * Built in the constructor and immediately usable: it holds no connection,
+   * only a base URL and a bearer. There is nothing to open and nothing to
+   * close — the client that had a `connect()` / `close()` bracket, an SDK
+   * session and a tool protocol was retired with the MCP transport (11.5.6).
+   */
+  private readonly v1: V1Transport;
 
   constructor(opts: MotirClientOptions) {
     this.serverUrl = normalizeServerUrl(opts.serverUrl);
-    this.token = opts.token;
-  }
-
-  /** Open the connection. A 401 (bad/revoked/expired PAT) → {@link AuthError}. */
-  async connect(): Promise<void> {
-    if (this.client) return;
-    const transport = new StreamableHTTPClientTransport(mcpEndpoint(this.serverUrl), {
-      requestInit: { headers: { Authorization: `Bearer ${this.token}` } },
-    });
-    const client = new Client({ name: 'motir-cli', version: CLI_VERSION });
-    try {
-      await client.connect(transport);
-    } catch (err) {
-      if (isUnauthorized(err)) throw new AuthError();
-      throw new CliError(`Could not reach the Motir server at ${this.serverUrl}: ${errMsg(err)}`);
-    }
-    this.client = client;
-    this.transport = transport;
-  }
-
-  async close(): Promise<void> {
-    await this.client?.close();
-    await this.transport?.close();
-    this.client = null;
-    this.transport = null;
-  }
-
-  private requireClient(): Client {
-    if (!this.client) throw new CliError('MCP client used before connect().');
-    return this.client;
-  }
-
-  /** The server's advertised tool names — the `auth login` validation probe. */
-  async listToolNames(): Promise<string[]> {
-    try {
-      const { tools } = await this.requireClient().listTools();
-      return tools.map((t) => t.name);
-    } catch (err) {
-      throw this.mapCallError(err);
-    }
+    this.v1 = new V1Transport({ serverUrl: this.serverUrl, token: opts.token });
   }
 
   /**
-   * Call a tool and return its `structuredContent` typed as `T`. A tool that
-   * comes back `isError` throws a {@link CliError} carrying the tool's own
-   * `code: message` text — never a swallowed JSON-RPC error. Unauthorized →
-   * {@link AuthError}.
+   * Walk a cursor-paged collection to exhaustion, returning every page.
+   *
+   * For the two reads whose VIEW MODEL is a whole list rather than a page —
+   * `listProjects` and `listSprints`, both of which the MCP tool answered in one
+   * shot. The cursor is echoed exactly as received and never inspected.
    */
-  private async callStructured<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
-    let result: ToolCallOutcome;
-    try {
-      result = (await this.requireClient().callTool({
-        name,
-        arguments: args,
-      })) as ToolCallOutcome;
-    } catch (err) {
-      throw this.mapCallError(err);
-    }
-    if (result.isError) {
-      throw new CliError(textOf(result) || `Tool ${name} failed.`);
-    }
-    return result.structuredContent as T;
+  private async walkPages<P extends { nextCursor: string | null }>(
+    fetchPage: (cursor: string | undefined) => Promise<P>,
+  ): Promise<P[]> {
+    const pages: P[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await fetchPage(cursor);
+      pages.push(page);
+      // ⚠️ Echoed, never inspected — the cursor is opaque and scoped to its own
+      // collection (ADR §5).
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    return pages;
   }
 
-  private mapCallError(err: unknown): CliError {
-    if (err instanceof CliError) return err;
-    if (isUnauthorized(err)) return new AuthError();
-    return new CliError(errMsg(err));
-  }
+  // ── The typed methods ────────────────────────────────────────────────────
+  // Each names one `/api/v1` operation (or a small fixed set of them) and hands
+  // the validated body to an adapter. Listing/auth/link commands use `whoami`;
+  // the read and dispatch commands use the rest.
 
-  // ── Typed tool wrappers ──────────────────────────────────────────────────
-  // These name the MCP tools the CLI consumes. Listing/auth/link commands use
-  // `whoami`; the read (7.9.2) and dispatch (7.9.3) commands use the rest.
-
-  whoami(): Promise<WhoamiResult> {
-    return this.callStructured<WhoamiResult>('whoami');
+  /**
+   * Who this token is, and the workspace it is bound to.
+   *
+   * TWO reads: v1 splits identity from workspace description, and the adapter
+   * matches them on `workspaceId` rather than assuming a position.
+   */
+  async whoami(): Promise<WhoamiResult> {
+    const [me, workspaces] = await Promise.all([
+      this.v1.request('getMe'),
+      this.v1.request('listWorkspaces'),
+    ]);
+    return toWhoami(me, workspaces);
   }
 
   /** The token workspace's browsable projects (MOTIR-1879). Takes no arguments:
    * the workspace is the one the PAT is bound to. An empty workspace is an
    * EMPTY LIST, not an error. */
-  listProjects(): Promise<ProjectList> {
-    return this.callStructured<ProjectList>('list_projects');
+  async listProjects(): Promise<ProjectList> {
+    // The view model has no cursor, so this walks the collection to exhaustion —
+    // the same whole-list answer the MCP tool gave. Projects are bounded by the
+    // workspace, and the alternative would be changing every caller's shape.
+    return toProjectList(
+      await this.walkPages((cursor) =>
+        this.v1.request('listProjects', { query: { ...(cursor ? { cursor } : {}) } }),
+      ),
+    );
   }
 
   listReady(args: {
@@ -763,19 +824,127 @@ export class MotirClient {
     cursor?: string;
     limit?: number;
   }): Promise<ReadyPage> {
-    return this.callStructured<ReadyPage>('list_ready', { ...args });
+    // `assigneeId` is TRI-STATE on the wire: absent means any assignee, and the
+    // literal `none` means the unassigned bucket. `null` here IS that bucket, so
+    // it must become the literal rather than being dropped as "no value" — which
+    // would silently widen the filter to every assignee.
+    return this.v1
+      .request('getProjectReadySet', {
+        path: { projectKey: args.projectKey },
+        query: {
+          ...(args.kinds ? { kind: args.kinds } : {}),
+          ...(args.priority ? { priority: args.priority } : {}),
+          ...(args.assigneeId === undefined
+            ? {}
+            : { assigneeId: args.assigneeId === null ? UNASSIGNED : args.assigneeId }),
+          ...(args.cursor ? { cursor: args.cursor } : {}),
+          ...(args.limit === undefined ? {} : { limit: args.limit }),
+        },
+      })
+      .then(toReadyPage);
   }
 
-  nextReady(args: {
+  /**
+   * The next item to dispatch — the highest-ranked ready row not held out.
+   *
+   * ⚠️ There is no `next_ready` OPERATION on `/api/v1`, and that is the right
+   * shape rather than a gap. `lib/api/v1/ready/schema.ts` states the dispatch
+   * rank as contract — `(type asc, priority desc, key asc)` — and says
+   * `items[0]` is what an agent should take next. "Next" is therefore a pick
+   * from a ranked page: the server ranks, the client skips what it has already
+   * tried, and nothing here re-sorts.
+   *
+   * Held out by KEY. The row id the MCP tool addressed by is gone from this
+   * client entirely — it was that tool's addressing scheme, and the persisted
+   * exclusion list has been key-based since MOTIR-2338, which had to translate
+   * keys back into ids on every ask. That round trip goes with it.
+   *
+   * FOLLOWS the cursor. A whole page of held-out rows is ordinary on a resumed
+   * run, and stopping at page one would report "drained" to a loop that still
+   * had work.
+   */
+  async nextReady(args: {
     projectKey: string;
     kinds?: string[];
-    excludeIds?: string[];
+    excludeKeys?: readonly string[];
+    ownerId?: string;
   }): Promise<{ item: DispatchItem | null }> {
-    return this.callStructured('next_ready', { ...args });
+    const excluded = new Set((args.excludeKeys ?? []).map((key) => key.toUpperCase()));
+    for await (const item of this.walkReady(args)) {
+      if (excluded.has(item.key.toUpperCase())) continue;
+      if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
+      return { item };
+    }
+    return { item: null };
   }
 
-  getWorkItem(key: string): Promise<WorkItemDetail> {
-    return this.callStructured<WorkItemDetail>('get_work_item', { key });
+  /**
+   * EVERY ready row a run may take, in rank order — `motir batch`'s snapshot.
+   *
+   * The whole set rather than one item, because a snapshot is a frozen
+   * BOUNDARY: what was ready when the run started. It used to be built by
+   * asking `next_ready` once per item with a growing exclusion list — N
+   * requests for N items — and is one page walk now.
+   */
+  async listReadyForDispatch(args: {
+    projectKey: string;
+    kinds?: string[];
+    ownerId?: string;
+  }): Promise<DispatchItem[]> {
+    const items: DispatchItem[] = [];
+    for await (const item of this.walkReady(args)) {
+      if (args.ownerId !== undefined && !isPickable(item, args.ownerId)) continue;
+      items.push(item);
+    }
+    return items;
+  }
+
+  /**
+   * The ready collection, page by page, in the server's rank — ADAPTED.
+   *
+   * ⚠️ It yields the VIEW MODEL, not the wire row, and that is the Q4 boundary
+   * rather than a preference. Yielding `SuccessBody<'getProjectReadySet'>
+   * ['items'][number]` would put a generated type on a signature in this file,
+   * where the ADR allows one only inside `src/transport.ts` and `src/adapters/`
+   * — and a derived type reads as innocuous precisely because it does not look
+   * like an import. `test/architecture.test.ts` fails on either form.
+   */
+  private async *walkReady(args: {
+    projectKey: string;
+    kinds?: string[];
+  }): AsyncGenerator<DispatchItem> {
+    let cursor: string | undefined;
+    do {
+      const body = await this.v1.request('getProjectReadySet', {
+        path: { projectKey: args.projectKey },
+        query: {
+          ...(args.kinds ? { kind: args.kinds } : {}),
+          ...(cursor ? { cursor } : {}),
+        },
+      });
+      for (const row of body.items) yield toDispatchItem(row);
+      cursor = body.nextCursor ?? undefined;
+    } while (cursor);
+  }
+
+  async getWorkItem(key: string): Promise<WorkItemDetail> {
+    return (await this.readWorkItem(key)).detail;
+  }
+
+  /**
+   * The detail read, returning BOTH the view model and the payload it was
+   * mapped from.
+   *
+   * `--json` emits the server's own resource rather than the CLI's narrowed
+   * view of it (ADR Amendment 16): the view model deliberately omits fields
+   * nothing renders, and `--json` is the escape hatch that makes that omission
+   * safe. The payload is typed `unknown` on purpose — a command needs BYTES
+   * here, not a shape, and typing it would put a generated wire type outside
+   * the adapter boundary that Q4 draws.
+   */
+  async readWorkItem(key: string): Promise<{ detail: WorkItemDetail; payload: unknown }> {
+    const body = await this.v1.request('getWorkItem', { path: { key } });
+    return { detail: toWorkItemDetail(body), payload: body };
   }
 
   /**
@@ -790,17 +959,61 @@ export class MotirClient {
    * never construct, parse or merge one. Omitting `order` leaves each view on
    * its own shipped default rather than the client inventing one.
    */
-  getWorkItemActivity(args: {
+  async getWorkItemActivity(args: {
     key: string;
     view?: ActivityView;
     cursor?: string;
     order?: 'asc' | 'desc';
   }): Promise<ActivityPage> {
-    return this.callStructured<ActivityPage>('get_work_item_activity', { ...args });
+    return (await this.readWorkItemActivity(args)).page;
   }
 
-  transitionStatus(args: { key: string; status: string }): Promise<unknown> {
-    return this.callStructured('transition_status', { ...args });
+  /** The activity read, returning both the page and its payload — see
+   *  {@link readWorkItem} for why `--json` needs the second. */
+  async readWorkItemActivity(args: {
+    key: string;
+    view?: ActivityView;
+    cursor?: string;
+    order?: 'asc' | 'desc';
+  }): Promise<{ page: ActivityPage; payload: unknown }> {
+    const view = args.view ?? 'all';
+    // ONE operation serves all three views, so a cursor stays scoped to the view
+    // that issued it and the two per-source totals arrive from the same place.
+    const body = await this.v1.request('getWorkItemActivity', {
+      path: { key: args.key },
+      query: {
+        view,
+        ...(args.cursor ? { cursor: args.cursor } : {}),
+        ...(args.order ? { order: args.order } : {}),
+      },
+    });
+    const page =
+      view === 'comments'
+        ? toCommentsPage(body, args.order ?? 'asc')
+        : view === 'history'
+          ? toActivityHistoryPage(body)
+          : toActivityAllPage(body);
+    return { page, payload: body };
+  }
+
+  /**
+   * Move one item to a status.
+   *
+   * Returns nothing, where the MCP wrapper returned `unknown`. The v1 operation
+   * answers with the item at its new status, and no caller reads it — all four
+   * call sites `await` the promise for its EFFECT. Handing back a body nothing
+   * consumes would put a wire shape in reach of a renderer without a mapper
+   * between them, which is the boundary this port exists to establish.
+   *
+   * An ILLEGAL transition is still fully diagnosable: it comes back as a 422
+   * whose envelope carries the allowed targets, and the transport raises it
+   * before this method returns.
+   */
+  async transitionStatus(args: { key: string; status: string }): Promise<void> {
+    await this.v1.request('transitionWorkItem', {
+      path: { key: args.key },
+      body: { status: args.status },
+    });
   }
 
   /**
@@ -815,49 +1028,139 @@ export class MotirClient {
    * CLI can start a run's first item on the run's branch without ever being able
    * to redirect an existing chain.
    */
-  dispatchPrompt(
+  async dispatchPrompt(
     key: string,
     opts: { sessionBranch?: string | null } = {},
   ): Promise<DispatchPrompt> {
-    return this.callStructured<DispatchPrompt>('dispatch_prompt', {
-      key,
-      ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}),
+    // A GET, which is what a pure read should have looked like all along: the
+    // MCP tool took a POST-shaped call because that is the only shape MCP has.
+    const body = await this.v1.request('getWorkItemDispatchPrompt', {
+      path: { key },
+      query: { ...(opts.sessionBranch ? { sessionBranch: opts.sessionBranch } : {}) },
     });
+    return toDispatchPrompt(body);
   }
 
   /** Record an item's work as integrated on a session branch (7.8.11): moves it
    * to `in_review` AND stamps `session_branch` in one transaction. */
-  markIntegrated(args: {
+  async markIntegrated(args: {
     key: string;
     sessionBranch: string;
     implementationHarness?: string;
-  }): Promise<unknown> {
-    return this.callStructured('mark_integrated', { ...args });
+    /** The model the agent SELF-REPORTED (MOTIR-2419). Omitted when it reported
+     *  none — the field is left null rather than filled with a guess. */
+    implementationModel?: string | null;
+  }): Promise<void> {
+    await this.v1.request('recordWorkItemIntegration', {
+      path: { key: args.key },
+      body: {
+        sessionBranch: args.sessionBranch,
+        ...(args.implementationHarness === undefined
+          ? {}
+          : { implementationHarness: args.implementationHarness }),
+        ...(args.implementationModel === undefined || args.implementationModel === null
+          ? {}
+          : { implementationModel: args.implementationModel }),
+      },
+    });
+  }
+
+  /**
+   * Record WHAT BUILT an item, with no branch beside it (MOTIR-2421).
+   *
+   * The per-item-PR path's counterpart to {@link markIntegrated}: `motir batch`
+   * opens one pull request per item off `main`, so it has no session branch to
+   * report — and the integration endpoint requires one, which is why every card
+   * it ever ran carries a null provenance triple.
+   *
+   * ⚠️ It records provenance and NOTHING else. No status moves, and the item's
+   * session branch is untouched — a branch stamped here would make the item stop
+   * blocking its dependents with nothing merged. There is deliberately no
+   * parameter for one, and the server refuses the field outright.
+   */
+  async reportImplementation(args: {
+    key: string;
+    implementationSource?: 'byok' | 'manual';
+    implementationHarness?: string;
+    implementationModel?: string | null;
+  }): Promise<void> {
+    await this.v1.request('reportWorkItemImplementation', {
+      path: { key: args.key },
+      body: {
+        ...(args.implementationSource === undefined
+          ? {}
+          : { implementationSource: args.implementationSource }),
+        ...(args.implementationHarness === undefined
+          ? {}
+          : { implementationHarness: args.implementationHarness }),
+        ...(args.implementationModel === undefined || args.implementationModel === null
+          ? {}
+          : { implementationModel: args.implementationModel }),
+      },
+    });
+  }
+
+  /**
+   * CLAIM a work item for the token owner (MOTIR-2427) — a plain assignment.
+   *
+   * Written BEFORE the agent is launched, never after: a claim recorded at the
+   * end is history, and the only version that tells a teammate anything is the
+   * one that lands while the work is happening. Assignment already exists and
+   * the board already renders it, so this turns an invisible act into a visible
+   * one with machinery that is entirely built.
+   *
+   * ⚠️ Idempotent and unconditional. Re-claiming a card already mine is a no-op
+   * write, and there is deliberately no "only if unassigned" — see
+   * {@link isPickable} for why that race is accepted rather than simulated.
+   */
+  async claimWorkItem(args: { key: string; ownerId: string }): Promise<void> {
+    await this.v1.request('updateWorkItem', {
+      path: { key: args.key },
+      body: { assigneeId: args.ownerId },
+    });
   }
 
   /** Bulk close-out for a merged session PR (7.8.11): every item recorded on
    * the branch → done, `session_branch` cleared, with per-item outcomes. */
-  completeSession(args: {
+  async completeSession(args: {
     sessionBranch: string;
     implementationHarness?: string;
+    /** The one axis the close-out actually knows (MOTIR-2447). Sent alone, it
+     *  stamps a lane that never reported provenance without disturbing the
+     *  harness and model an integration already recorded. */
+    implementationSource?: 'byok' | 'manual';
   }): Promise<CompleteSessionResult> {
-    return this.callStructured<CompleteSessionResult>('complete_session', { ...args });
+    const body = await this.v1.request('completeSession', {
+      body: {
+        sessionBranch: args.sessionBranch,
+        ...(args.implementationHarness === undefined
+          ? {}
+          : { implementationHarness: args.implementationHarness }),
+        ...(args.implementationSource === undefined
+          ? {}
+          : { implementationSource: args.implementationSource }),
+      },
+    });
+    return toCompleteSessionResult(body);
   }
 
   /**
    * Submit an AI expansion of one CONTAINER item (MOTIR-1825) and return the
    * moment the job is accepted — `{ jobId, planId }`, no streaming, no poll.
    *
-   * There is deliberately no REST fallback here: expansion also has a
-   * cookie-authed `POST /api/ai/expand`, but the CLI is an MCP client only (the
-   * Story 7.9 header — one auth path), so the tool IS the mechanism.
+   * The one operation on this client that answers 202 rather than 200, and the
+   * distinction is load-bearing: the body describes a job that has been QUEUED,
+   * not work that has been done. Nothing here waits for the planner.
    *
    * Firing this does NOT grow the tree. `motir auto --include-planning` calls it
    * for an unexpanded epic/story and moves on; what comes back is a plan awaiting
-   * a human's approval in Motir.
+   * a human's approval in Motir. And because a submit SPENDS the token owner's
+   * AI credits, it is never retried blindly — a timeout here is not a licence to
+   * send it twice.
    */
-  expandItem(key: string): Promise<ExpandSubmitResult> {
-    return this.callStructured<ExpandSubmitResult>('expand_item', { key });
+  async expandItem(key: string): Promise<ExpandSubmitResult> {
+    const body = await this.v1.request('submitWorkItemExpansion', { path: { key } });
+    return toExpandSubmitResult(body);
   }
 
   /**
@@ -869,8 +1172,13 @@ export class MotirClient {
    * panel is looking at, so the CLI cannot fork a second conversation about the
    * same items. Opening submits nothing and costs nothing.
    */
-  openPlanSession(args: { projectKey: string; targetKeys?: string[] }): Promise<PlanSession> {
-    return this.callStructured<PlanSession>('open_plan_session', { ...args });
+  async openPlanSession(args: { projectKey: string; targetKeys?: string[] }): Promise<PlanSession> {
+    return toPlanSession(
+      await this.v1.request('openPlanSession', {
+        path: { projectKey: args.projectKey },
+        body: { ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+      }),
+    );
   }
 
   /**
@@ -878,12 +1186,17 @@ export class MotirClient {
    * server-side the moment this returns (so quitting can never lose it) and no
    * job starts, no credits are spent, and no work item changes.
    */
-  appendPlanTurn(args: {
+  async appendPlanTurn(args: {
     projectKey: string;
     targetKeys?: string[];
     body: string;
   }): Promise<PlanSession> {
-    return this.callStructured<PlanSession>('append_plan_turn', { ...args });
+    return toPlanSession(
+      await this.v1.request('appendPlanTurn', {
+        path: { projectKey: args.projectKey },
+        body: { body: args.body, ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+      }),
+    );
   }
 
   /**
@@ -895,40 +1208,90 @@ export class MotirClient {
    * item. A thread with no turns is refused by the server; a failed submit
    * leaves the thread intact.
    */
-  submitPlanSession(args: {
+  async submitPlanSession(args: {
     projectKey: string;
     targetKeys?: string[];
   }): Promise<PlanSubmitResult> {
-    return this.callStructured<PlanSubmitResult>('submit_plan_session', { ...args });
+    // A 202. The handle comes back the moment the job is ACCEPTED; nothing here
+    // waits for the planner, which is what keeps `--detach` honest and the
+    // watched path a poll the command owns rather than a hang inside the client.
+    const handle = await this.v1.request('submitPlanSession', {
+      path: { projectKey: args.projectKey },
+      body: { ...(args.targetKeys ? { targetKeys: args.targetKeys } : {}) },
+    });
+    return { jobId: handle.jobId, planId: handle.planId };
   }
 
   /** What became of a submitted planning job (MOTIR-1825) — the plan's status
    *  AND, while it is still generating, whether the job is alive or already
    *  dead (a failed job leaves the plan generating forever). */
-  getPlanStatus(args: { planId: string }): Promise<PlanOutcome> {
-    return this.callStructured<PlanOutcome>('get_plan_status', { ...args });
+  async getPlanStatus(args: { planId: string }): Promise<PlanOutcome> {
+    return toPlanOutcome(await this.v1.request('getPlanStatus', { path: { planId: args.planId } }));
   }
 
   /** Read a plan WITH its proposals (MOTIR-1837) — what was proposed, not just
    *  how many. Still PROPOSALS: nothing here exists in the tree. */
-  getPlan(args: { planId: string }): Promise<PlanWithItems> {
-    return this.callStructured<PlanWithItems>('get_plan', { ...args });
+  async getPlan(args: { planId: string }): Promise<PlanWithItems> {
+    return toPlanWithItems(await this.v1.request('getPlan', { path: { planId: args.planId } }));
   }
 
-  listSprints(args: { projectKey: string }): Promise<SprintList> {
-    return this.callStructured<SprintList>('list_sprints', { ...args });
+  async listSprints(args: { projectKey: string }): Promise<SprintList> {
+    // Walked to exhaustion for the reason `listProjects` gives: the view model
+    // is a whole list, and a sprint set is bounded by its project.
+    return toSprintList(
+      await this.walkPages((cursor) =>
+        this.v1.request('listProjectSprints', {
+          path: { projectKey: args.projectKey },
+          query: { ...(cursor ? { cursor } : {}) },
+        }),
+      ),
+    );
   }
 
-  searchWorkItems(args: {
+  /**
+   * One page of a project's work items, narrowed by a filter.
+   *
+   * The filter rides as `?filter=`, the SAME carrier the product's own list
+   * views and saved filters use, so `motir sprint` and the web app cannot
+   * disagree about what is in a sprint — they run the same expression through
+   * the same registry.
+   */
+  async searchWorkItems(args: {
     projectKey: string;
     filter?: SearchFilterEnvelope;
     cursor?: string;
     limit?: number;
   }): Promise<SearchPage> {
-    return this.callStructured<SearchPage>('search_work_items', { ...args });
+    return toSearchPage(
+      await this.v1.request('listProjectWorkItems', {
+        path: { projectKey: args.projectKey },
+        query: {
+          ...(args.filter ? { filter: encodeFilterParam(args.filter) } : {}),
+          ...(args.cursor ? { cursor: args.cursor } : {}),
+          ...(args.limit === undefined ? {} : { limit: args.limit }),
+        },
+      }),
+    );
   }
-}
 
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  /**
+   * How many work items match — the ONLY way this client learns a count.
+   *
+   * It replaces a pattern that had accumulated rather than been designed: three
+   * call sites ran a `limit: 1` SEARCH, threw the row away, and read the total,
+   * because the MCP tool's offset paging made a count free. None of them was a
+   * search. Each is one request now, and a project with ten thousand items
+   * costs the same as one with ten.
+   */
+  async countWorkItems(args: {
+    projectKey: string;
+    filter?: SearchFilterEnvelope;
+  }): Promise<number> {
+    return toWorkItemCount(
+      await this.v1.request('countProjectWorkItems', {
+        path: { projectKey: args.projectKey },
+        query: { ...(args.filter ? { filter: encodeFilterParam(args.filter) } : {}) },
+      }),
+    );
+  }
 }

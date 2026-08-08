@@ -3634,3 +3634,456 @@ their case is the exception.
   trigger** — see Q1's consequence. Nothing in this amendment decides it.
 - **Amendment 11's second open item** gains a `⚠️ Amended` pointer to Q1 above;
   its body is not rewritten, which is the shape every amendment here keeps.
+
+---
+
+### Amendment 14 (2026-08-06) — COUNTING a filtered set is its OWN operation, not a field on the page
+
+**Status:** accepted. Raised by **11.5.16** (MOTIR-2318), which is where **11.5.4**
+stopped: `MotirClient.searchWorkItems` returns a `total` that
+`GET /api/v1/projects/{projectKey}/work-items` has no way to supply.
+
+#### The problem
+
+`SearchPage.total` is load-bearing at four CLI call sites, and two of them exist
+_only_ to read it:
+
+- `packages/cli/src/commands/read.ts:96` asks for `limit: 1` under the in-flight
+  filter and uses `search.total` as `motir status`'s in-flight count. The file's
+  own comment states the bargain: _"search_work_items returns the matching
+  `total` directly, so one call suffices."_
+- `packages/cli/src/commands/doctor.ts:79` does the same to prove a project is
+  reachable and report its size.
+
+Neither can be served by paging: counting that way turns one request into as
+many as the match set is wide, on the two commands most likely to be run against
+a large project. And the collection genuinely has no count to give —
+`listProjectWorkItemsPage` is a KEYSET read over `(createdAt, id)`, unlike the
+MCP tool, whose `total` falls out of offset paging for free
+(`lib/mcp/tools/searchWorkItems.ts:207`).
+
+#### Q1 — does the collection become RANKED? **No. The count is a separate operation.**
+
+`GET /api/v1/projects/{projectKey}/work-items/count`, taking the same `?filter=`
+and answering `{ count }`.
+
+Amendment 3 Q2 drew the two-envelope line deliberately — a collection either
+promises a total or it does not — and `lib/api/v1/openapi/envelopes.ts` records
+why an optional `totalCount` was rejected: it makes the wire type stop saying
+which collections can answer the question. The ranked collections that exist
+(the backlog, a sprint's members) are ranked because _their own read already
+computes the number_, which `planning/operations.ts:37–45` states outright. This
+read does not, and making it ranked would put a `COUNT` under an arbitrary
+filter on the hot path of **every page of every caller** — including the paging
+walks that want no count at all, and including page 7 of 9, where the answer has
+already been sent six times.
+
+A separate operation inverts that: the count is paid for by the caller who wants
+it, exactly once, and the page envelope keeps meaning what Amendment 3 says it
+means. It is also purely ADDITIVE under §8 — a new operation, no existing shape
+touched — where making the collection ranked would change a declared response.
+
+Three alternatives were considered and rejected:
+
+- **`?count=true` on the collection.** Makes the response shape conditional on a
+  query parameter, which is the optional-`totalCount` problem wearing a
+  different hat: the generated type would have to admit an absent field on every
+  read, and a client could no longer tell from the type whether it had a count.
+- **`HEAD` with the count in a header.** Puts data in a header, needs a header
+  the emitter would have to declare per-operation, and is awkward for the exact
+  clients that want it (a browser fetch, a generated client) — all to avoid a
+  body of `{ count }`.
+- **A `?limit=0` special case.** Overloads a paging parameter with a second
+  meaning, and still has to answer where the number goes.
+
+#### Q2 — is the count EXACT, and what does it cost? **Exact. One indexed count.**
+
+It is `COUNT(*)` over the same predicate the list read already builds, in the
+same tenancy scope, against the same indexes — the shape
+`countArchivedWorkItems` and `countReady` already use in this service. The
+FilterAST carries a size cap, so the predicate cannot grow unboundedly, and the
+row set is bounded by one project.
+
+No cap, no "999+", no estimate. A capped count would make the two call sites
+that motivated this amendment _worse_ than what they have today: `motir status`
+would print a number that stops being true above the cap, which is precisely
+when the number starts to matter. If a project ever gets large enough for this
+to hurt, the fix is an index, not a lie.
+
+#### Q3 — does the CLI keep `SearchPage.total`? **No — the count-only sites get a count method.**
+
+`total` on `SearchPage` is an artifact of the MCP tool's offset paging, and it is
+what makes `read.ts` and `doctor.ts` ask for a row they immediately discard.
+Those two are not searches; they are counts spelled as searches. **11.5.4**
+therefore drops `total` from `SearchPage` and gives the CLI a `countWorkItems`
+method over this operation — one request, no wasted row, and a name that says
+what the caller wanted.
+
+The other two sites follow the same reading: `commands/plan.ts:163` tests
+`page.total > 0`, which is a count question, and `session.ts:128` walks the whole
+page set already and can use `items.length`, which is the number it actually
+has.
+
+#### Q4 — the version step. **MINOR — `1.4.0`.**
+
+A new operation is additive under §8. Nothing declared changes shape, so no
+client generated against `1.3.1` is affected; a client that wants the count
+regenerates.
+
+#### Consequences of this amendment
+
+- **11.5.16** adds the operation, the service count, and the route, and moves
+  `V1_CONTRACT_VERSION` to `1.4.0`.
+- **11.5.4** consumes it: `searchWorkItems` loses `total`, `countWorkItems`
+  arrives, and the four call sites split between them per Q3.
+- **A future collection asked for a count** gets the same treatment — a sibling
+  `/count` operation — rather than being promoted to the ranked envelope. The
+  ranked envelope stays reserved for reads that compute the number anyway, which
+  is the property Amendment 3 Q2 gave it.
+
+---
+
+### Amendment 15 (2026-08-06) — a merged page reports what it is made of; the ranked envelope is EXTENDED, not reshaped
+
+**Status:** accepted. Raised by **11.5.18** (MOTIR-2320), the fourth wire gap
+Story 11.5's port surfaced.
+
+#### The problem
+
+`GET /api/v1/work-items/{key}/activity` returns the ranked envelope, so it
+answers one `totalCount`. Its `all` view merges TWO streams, and the CLI's
+footer reports them separately — `render.ts:1025` prints "3 of 47 comments, 2 of
+18 changes", and when a next page exists, "…and 44 more comments, 16 more
+changes". Both are `total − shown`.
+
+A client cannot derive them. They are whole-STREAM totals, so counting a page's
+own items yields "3 of 3" on every page but the last.
+
+#### Q1 — reshape the envelope, or extend the response? **Extend.**
+
+The ranked envelope is not wrong. For `comments` and `history` the stream is one
+kind, and one total is the complete answer. Only `all` is a merge, and a merge
+wanting a breakdown is a property of THAT READ, not a defect in how pages are
+counted — so the fix belongs on the response, not on the envelope every ranked
+collection shares.
+
+`V1ResponseBody`'s `rankedPage` therefore gains an optional `extend`, emitted as
+its own `allOf` member beside the envelope's. Reader-visible separation is the
+point: the envelope's contribution and the operation's stay distinguishable in
+the document, so "which of these fields are paging?" has an answer you can see.
+
+**Reaching for `extend` is a signal, not a convenience.** It is right when the
+extra field is a property of the read; it is wrong when it is a property of
+paging, which is what the two envelopes already model (Amendment 3 Q2). A third
+envelope was rejected for the reason the second one exists: envelopes describe
+how a collection is WALKED, and there is no third way to walk one.
+
+#### Q2 — what do the single-kind views report? **The one they counted; `null` for the other.**
+
+`totalComments` and `totalChanges` are **nullable, and the null is
+load-bearing**: it means _this view did not count that source_, which is not the
+same as counting it and finding none.
+
+- `comments` → `totalComments = totalCount`, `totalChanges = null`
+- `history` → `totalChanges = totalCount`, `totalComments = null`
+- `all` → both, and `totalCount` is their sum
+
+Reporting `0` on the view that did not look would state that the item has no
+history, which is usually false and always unfounded. Making the fields OPTIONAL
+instead was rejected on the rule this API already follows for edge groups: to a
+typed client an absent key and a null value are different things, and "the
+server cannot tell you" is a value, not an absence.
+
+#### Q3 — does `totalCount` change meaning? **No, on any view.**
+
+It remains the number of entries in the view that was asked for. On `all` that
+is the sum of the two, which the route already computed before this amendment —
+so no read changes, no aggregate is paid for twice, and nothing generated
+against `1.4.0` reads differently. A test asserts the sum rather than assuming
+it.
+
+#### Q4 — the version step. **MINOR — `1.5.0`.** Two new fields, additive under §8.
+
+#### Consequences of this amendment
+
+- **11.5.18** ships the two fields, the `extend` mechanism, and the ADR text.
+- **11.5.4** consumes them: `ActivityAllPage`'s `totalComments` / `totalChanges`
+  map straight across, and the adapter is what turns the nullable wire fields
+  into the numbers the `all` page's view model declares.
+- **A future page whose read answers something the envelope cannot express**
+  uses `extend`, having first checked that the field is not really about paging.
+
+> **⚠️ CORRECTION (2026-08-07, MOTIR-2345) — EVERY member of an `allOf` must be a
+> COMPOSITION BASE.** As first shipped, this amendment emitted the envelope and
+> the extension as ordinary schema objects, and both carried
+> `additionalProperties: false` (the envelope is `.strict()`; zod emits the flag
+> for any object). **A validator applies that flag to the WHOLE instance, not to
+> its own branch** — so the strict envelope rejected `totalComments`, and the
+> strict extension rejected `items`. Every extended ranked-page response failed.
+>
+> It was invisible to the drift guard and to the work-loop conformance suite
+> because both validate with ZOD, where `responseSchemaFor` builds ONE object via
+> `.extend()`. Only the CLI compiles the emitted document into an **Ajv**
+> validator, so the defect surfaced the first time a real read ran through the
+> transport. The emitter now strips the flag from both members
+> (`compositionBase`); the zod schemas keep `.strict()`, so drift detection is
+> unaffected.
+
+---
+
+### Amendment 16 (2026-08-07) — `motir show --json` emits the v1 RESOURCE; a client's machine-readable output is the API's own
+
+**Status:** accepted. Forced by **11.5.22** (MOTIR-2345), the last of Story 11.5's
+read slices.
+
+#### The problem, and why there was no do-nothing option
+
+`@motir/cli`'s `--json` flags printed the MCP tool's payload. The CLI's view
+models were a structural MIRROR of those payloads, so _"`--json` is unchanged"_
+was free — the two were the same object.
+
+`/api/v1` returns a different shape, so **`--json` changes whichever way it
+goes.** The card's original acceptance criterion, _"output identical to the
+MCP-era implementation"_, was unsatisfiable for this flag the day it was
+written.
+
+#### Q1 — the RESOURCE or the VIEW MODEL? **The resource.**
+
+The view model is deliberately LOSSY, and `packages/cli/src/client.ts` says
+why in as many words: heavier fields are left off _"because `--json` prints the
+tool payload itself, so nothing is lost by omitting them here."_
+
+**`--json` is the escape hatch that makes that narrowing safe.** Pointing it at
+the narrowed thing removes `labels`, `components`, `commentCount`, `createdAt`,
+`reporterId`, `dueDate` and the provenance triple from every script that reads
+it — a capability removal wearing a shape change, and one no test would have
+caught because the remaining fields would all still be correct.
+
+Two further reasons, both about what a promise can be made ABOUT:
+
+- **It is documentable.** _"`motir show --json` returns the `/api/v1` work-item
+  resource"_ has an OpenAPI document behind it, versioned, additive-only under
+  §8. _"…returns the CLI's internal view model"_ is a promise about a type that
+  changes whenever a renderer does.
+- **It makes the story's claim observable.** `motir show KEY --json` and a direct
+  request to `/api/v1/work-items/KEY` now return the same fields. The CLI being
+  a client of the public API stops being an architecture statement.
+
+#### Q2 — does this break the adapter boundary? **No, and the reason is worth stating.**
+
+Amendment 4 Q4 / the CLI ADR's Q4 exist so **RENDERERS** do not become a second
+consumer of the wire contract — that is what protects `render.ts` from every
+future shape change. `--json` is a PASS-THROUGH, not a renderer, and it needs
+BYTES rather than a type.
+
+So the client exposes the raw body typed **`unknown`** (`readWorkItem` /
+`readWorkItemActivity` return `{ view, payload }`), the command `JSON.stringify`s
+it, and **no generated type is IMPORTED outside `src/adapters/` and
+`src/transport.ts`**. The freshness guard's import rule is untouched, and the
+renderers still see only view models.
+
+#### Q3 — what does the CLI still ADD? **The build order, exactly as before.**
+
+`--json` has always emitted children sorted into build order, each carrying the
+`wave` the table computed, _"so a script never re-derives the graph."_ That is a
+real capability and it is KEPT: the order and the wave are derived from the view
+model and applied to the payload's own children, **matched by key rather than by
+position** so the two representations cannot drift.
+
+So the payload is the resource plus one documented addition, not a verbatim
+echo. A script that wanted the untouched resource always had `curl`.
+
+#### Q4 — what is LOST, named rather than discovered
+
+`--json` no longer carries the work item's internal row `id`. §7 keeps the cuid
+off the wire, and this is the same deliberate loss Amendment 10 Q3 recorded when
+the CLI's exclusion list moved to keys — a client that keyed on it migrates to
+the `MOTIR-<n>` key, which is the only identifier v1 publishes.
+
+#### Consequences of this amendment
+
+- **11.5.22** ships it, and asserts the payload against the exact body the
+  server returned rather than a hand-written expectation.
+- **A future `--json` on any other command** emits that command's v1 resource by
+  the same rule. `ready --json` and `sprint --json` already emit collections of
+  view models; aligning them is a follow-on, not this amendment's scope.
+- **Amendment 13's `extend` needed a fix to make any of this work** — see the
+  note recorded there: every member of an `allOf` must be a composition base,
+  because a validator applies one branch's `additionalProperties: false` to the
+  whole instance.
+
+### Amendment 17 (2026-08-07) — a collection row that asserts a DERIVED state must carry what QUALIFIES it: the ready row's inherited lineage
+
+> **Written by Story 11.5 · Subtask 11.5.24 (MOTIR-2400), from a consumer the port could not migrate.**
+
+Amendment 10 called Story 11.5 "the first case where that consumer contradicted a
+decision recorded here." This is the second, and it is the same mistake with a
+different surface — which is what makes it worth a rule rather than a patch.
+
+#### The conflict
+
+`lib/api/v1/ready/schema.ts` excluded four fields in one bullet:
+
+> `runCommand` / `contextRefs` / `sessionBranch` / `targetRepo` — those live on
+> `ReadyItemDispatchDto`, the payload for Motir's OWN CLI dispatch path. They
+> encode assumptions about a local checkout that a third-party integration does
+> not share.
+
+`motir batch` opens ONE pull request per item, off `main`, and its snapshot
+refuses an item whose dependencies are integrated on a session branch —
+`classifySnapshotItem` → `integrated_dep`. That refusal is printed in the plan a
+human reads BEFORE the run. Moving the snapshot onto `/api/v1` leaves it unable
+to make the distinction at all.
+
+#### Why the recorded reason does not hold — for one of the four
+
+Three of the four exclusions are right and stay. `runCommand` would freeze the
+CLI's invocation string as public API. `contextRefs` and `targetRepo` describe a
+local checkout, and Amendment 10 Q2 already named the dispatch prompt as where a
+client reads the last of them.
+
+The fourth was grouped by PROXIMITY, not by meaning. It sat on the same DTO and
+had a CLI-shaped name, so it read as another checkout concept — and
+`sessionBranch` genuinely does read that way. What it actually carries is a
+**qualifier on the readiness the row is already asserting**:
+
+- **ready from `main`** — every dependency is merged; the work starts from the trunk.
+- **ready on an inherited LINEAGE** — the dependencies are integrated onto a
+  branch that has not merged; starting the work means building on unmerged code.
+
+Both are "ready", and any consumer that acts on the word wants to know which one
+it has. An agent loop that takes a lineage item without knowing opens a pull
+request against a base that does not exist yet — a failure it cannot diagnose,
+because everything it was told was true.
+
+#### Why the two available workarounds were rejected
+
+- **Read `GET …/dispatch-prompt` per candidate.** N requests to build a snapshot
+  of N rows, and it moves a classification the PLAN prints into the drain that
+  happens after the plan is printed. Amendment 12 rejected a per-page `COUNT` for
+  the same reason it is rejected here: work proportional to rows, to answer a
+  question the collection should have answered once.
+- **Drop the refusal.** `motir batch` would take lineage items. That is not a
+  smaller API, it is a broken command.
+
+#### The decision
+
+**A `/api/v1` collection row that asserts a DERIVED state carries what qualifies
+that state.** A derived claim is only actionable with its qualifiers; without
+them a consumer must either re-derive the state itself — which is what the field
+existed to save — or act on a word whose meaning it cannot pin down.
+
+The ready row already carried one qualifier: `blockedBy`, empty for a ready item,
+present so a consumer can see WHY it is ready. `inheritedSessionBranch` is the
+other half of the same question and belongs beside it.
+
+**It arrives RENAMED**, and the rename is part of the decision. On the dispatch
+payload `sessionBranch` means "the branch to work on" — an instruction. On the
+row the fact is "this item's dependencies are integrated somewhere that is not
+`main` yet". Shipping the CLI's name would leave the next reader of the omission
+list regrouping it with the checkout fields, for exactly the reason it was
+grouped there the first time.
+
+#### The general lesson, which is about NAMES
+
+**A field's name is evidence about what it is, and grouping fields by where they
+currently live is not the same as grouping them by what they mean.** Four fields
+were removed together because they shared a DTO; three deserved it and the fourth
+was carried along by its neighbours and its own misleading name.
+
+Amendment 10 Q1 made the identical correction for `assignee.name` — removed for
+fear of an accidental user resource, restored once it was clear that an embedded
+read-only field is a field, not a resource. Twice now, a v1 row has been narrowed
+by a category error about what a field IS. When excluding a field from a public
+shape, state what the field MEANS in the exclusion, not which internal type it
+happens to sit on.
+
+#### What this amendment does NOT reopen
+
+`runCommand`, `contextRefs` and `targetRepo` stay off the ready row. Amendment 10
+Q2's answer for `targetRepo` — read the dispatch prompt — is unchanged and is
+what MOTIR-2398 uses. This amendment moves ONE field, on the argument that it was
+never a checkout concept; it is not a general reopening of the dispatch payload.
+
+#### Consequences of this amendment
+
+- **The contract MINOR moves to `1.6.0`.** A new field on a shipped response is
+  additive under §8; no declared shape changed meaning.
+- **The value must ride a BATCHED read.** `getReadiness` computes it per item —
+  correct for the one item a dispatch decorates, a per-row query storm for a
+  50-row page. `workItemsService.getInheritedSessionBranches` resolves a whole
+  page in one query, and the ready list calls it beside the edge projection it
+  already batches.
+- **It reaches the MCP ready row too**, because that payload DERIVES from the v1
+  row (Amendment 7). The dispatch superset keeps `sessionBranch` — the same value
+  addressed as an instruction — and the two coexist deliberately.
+- **MOTIR-2398 consumes it**, which is what lets `nextReady` leave MCP and
+  11.5.6 delete the SDK.
+
+### Amendment 18 (2026-08-08) — an optional field on an ASSERTING operation is a precondition nobody chose: provenance gets its own endpoint
+
+> **Written by Story 11.5 (MOTIR-2421), from a command that could not report at all.**
+
+#### The conflict
+
+`POST /api/v1/work-items/{key}/integration` records that work is integrated onto
+a session branch, and carries the implementation provenance triple as three
+optional body fields. That looked like a free addition: integration is exactly
+the moment an external agent's work arrives, and exactly the moment it knows what
+it ran as.
+
+But the operation's SUBJECT is the branch. `sessionBranch` is required in the
+body, so the three optional fields inherited a precondition that has nothing to
+do with them: there is no way to say _"this was built by X on model Y"_ without
+also saying _"and it is integrated on branch Z"_.
+
+For `motir batch` — one pull request per item, off `main` — the second half is
+false. So it recorded nothing, and every card it ever ran carries a null triple.
+Not a wrong value; an absent one, for an entire command's output, silently.
+
+#### The rule
+
+**An optional field on an operation that ASSERTS something inherits that
+assertion as a precondition.** "Optional" reads as _you may also supply this_.
+What it actually means on an asserting operation is _you may supply this, but
+only while asserting the thing this operation is about_. That coupling is
+invisible in the schema, invisible in the generated client, and shows up only as
+a caller that cannot use the field at all.
+
+When a fact is independent of what an operation asserts, it needs its own
+operation — not an optional field on the nearest one that happens to be writing
+the same row.
+
+#### Why the obvious alternatives were rejected
+
+- **Make `sessionBranch` optional on `…/integration`.** It would turn one
+  operation into two behaviours behind one name, and the response — whose
+  `status: in_review` is part of what integration MEANS — would become
+  conditional on a field. A client reading the operation could no longer tell
+  what it had asserted.
+- **Send a synthetic branch so the existing call works.** ⚠️ This is the
+  dangerous one, and it is what anybody reaches for first. A recorded branch is
+  not an annotation: `isOpenBlocker` reads one as evidence that a blocker is
+  satisfied, which is how a run cascades through a dependency chain with nothing
+  merged. Inventing a branch would make batch-run items **stop blocking their
+  dependents without a merge**, and enrol them in a `motir done --session`
+  close-out they were never part of. A null column is a gap; that is corruption
+  wearing a fix's clothes.
+
+#### Consequences of this amendment
+
+- **`POST /api/v1/work-items/{key}/implementation`** records the triple alone. It
+  moves no status and touches no branch, and echoes both back so a client can SEE
+  that it did not.
+- **Its body is `.strict()` with no `sessionBranch`.** A branch sent there is a
+  422, not a silently dropped field — the rejected fix must fail loudly rather
+  than half-work.
+- **The contract MINOR moves to `1.8.0`.** A new endpoint is additive under §8;
+  `…/integration` is unchanged in shape and behaviour.
+- **It shares the `integration` scope** with its two siblings, which
+  `lib/mcp/scopes.ts` defines as "external-agent integration writes" — exactly
+  the actor here.
+- **The tests assert the NEGATIVE.** "Provenance was recorded" is satisfied by
+  the rejected fix too. What that fix breaks is `sessionBranch` and readiness, so
+  those are what the suite reads: the branch still null, dependents still
+  blocked, and the close-out still not finding the item.

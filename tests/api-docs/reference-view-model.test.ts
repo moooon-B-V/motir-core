@@ -291,4 +291,16 @@ describe('describeParameterType', () => {
   it('says `unknown` rather than throwing on a shape it cannot name', () => {
     expect(describeParameterType(z.unknown())).toBe('unknown');
   });
+
+  // MOTIR-2317 made the ready set's `kind` / `priority` arrays. A bare `array`
+  // in the cell would tell a reader the one thing they already knew and none of
+  // what they came for — which values it holds.
+  it('names an array by its ELEMENT type, not as a bare `array`', () => {
+    expect(describeParameterType(z.array(z.string().min(1)))).toBe('string[]');
+    expect(describeParameterType(z.array(z.number().int()))).toBe('integer[]');
+  });
+
+  it('falls back to `unknown[]` for an array whose element has no nameable type', () => {
+    expect(describeParameterType(z.array(z.unknown()))).toBe('unknown[]');
+  });
 });

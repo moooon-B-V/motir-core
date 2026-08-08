@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST as INTEGRATE } from '@/app/api/v1/work-items/[key]/integration/route';
+import { POST as REPORT_IMPL } from '@/app/api/v1/work-items/[key]/implementation/route';
 import { POST as COMPLETE } from '@/app/api/v1/sessions/complete/route';
 import {
+  implementationReportSchema,
   integrationResultSchema,
   sessionCloseOutSchema,
   toProvenanceInput,
+  type V1ImplementationReport,
   type V1IntegrationResult,
   type V1SessionCloseOut,
 } from '@/lib/api/v1/workLoop/schema';
@@ -45,6 +48,16 @@ function post(caller: V1ProjectCaller, path: string, body: unknown): Request {
 
 function integrate(caller: V1ProjectCaller, key: string, body: unknown): Promise<Response> {
   return INTEGRATE(post(caller, `/work-items/${key}/integration`, body), {
+    params: Promise.resolve({ key }),
+  });
+}
+
+function reportImplementation(
+  caller: V1ProjectCaller,
+  key: string,
+  body: unknown,
+): Promise<Response> {
+  return REPORT_IMPL(post(caller, `/work-items/${key}/implementation`, body), {
     params: Promise.resolve({ key }),
   });
 }
@@ -222,6 +235,145 @@ describe('POST /api/v1/work-items/{key}/integration', () => {
   });
 });
 
+// PROVENANCE WITHOUT A BRANCH (MOTIR-2421). The per-item-PR path — `motir
+// batch` opens one pull request per item off `main` — had no way to say what
+// built an item, because the only write that recorded the triple also asserted
+// a session branch.
+//
+// ⚠️ Every assertion here is a NEGATIVE one, deliberately. "Provenance was
+// recorded" is satisfied by the dangerous fix too: inventing a branch so the
+// existing call could be reused. What that fix breaks is `sessionBranch` and
+// readiness, so those are what these tests read.
+describe('POST /api/v1/work-items/{key}/implementation', () => {
+  beforeEach(async () => {
+    await truncateAuthTables();
+    vi.restoreAllMocks();
+  });
+
+  it('records the triple and leaves the STATUS and the BRANCH alone', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+    const item = await readyToIntegrate(caller, 'built by an agent');
+    await workItemsService.updateStatus(item.id, 'in_review', caller.ctx);
+
+    const res = await reportImplementation(caller, item.identifier, {
+      implementationSource: 'byok',
+      implementationHarness: 'claude',
+      implementationModel: 'claude-opus-5',
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as V1ImplementationReport;
+    expect(() => implementationReportSchema.parse(body)).not.toThrow();
+    expect(body.implementationHarness).toBe('claude');
+    expect(body.implementationModel).toBe('claude-opus-5');
+    expect(body.implementationSource).toBe('byok');
+    // The two facts the wrong implementation would change.
+    expect(body.status).toBe('in_review');
+    expect(body.sessionBranch).toBeNull();
+    expect(await stateOf(caller, item.id)).toEqual({ status: 'in_review', sessionBranch: null });
+  });
+
+  it('leaves the item BLOCKING its dependents exactly as before', async () => {
+    // The consequence that makes the short road dangerous rather than untidy: a
+    // recorded branch reads as evidence a blocker is satisfied, so a dependent
+    // would go ready with nothing merged.
+    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+    const blocker = await readyToIntegrate(caller, 'the blocker');
+    const dependent = await makeItem(caller, 'the dependent');
+    await workItemsService.linkWorkItems(
+      { fromId: dependent.id, toId: blocker.id, kind: 'is_blocked_by' },
+      caller.ctx,
+    );
+
+    const before = await workItemsService.getReadiness(dependent.id, caller.ctx);
+    expect(before.ready).toBe(false);
+
+    await reportImplementation(caller, blocker.identifier, {
+      implementationSource: 'byok',
+      implementationHarness: 'claude',
+    });
+
+    const after = await workItemsService.getReadiness(dependent.id, caller.ctx);
+    expect(after.ready).toBe(false);
+    expect([...after.openBlockerIds]).toEqual([blocker.id]);
+    // …and it inherits no lineage from an item that never had one.
+    expect(after.inheritedSessionBranch).toBeNull();
+  });
+
+  it('a batch-run item is NOT found by the session close-out', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+    const item = await readyToIntegrate(caller, 'own pull request');
+    await workItemsService.updateStatus(item.id, 'in_review', caller.ctx);
+    await reportImplementation(caller, item.identifier, { implementationSource: 'byok' });
+
+    // Any branch a close-out might sweep: the item belongs to none of them.
+    const res = await complete(caller, { sessionBranch: 'motir/auto-1' });
+    const body = (await res.json()) as V1SessionCloseOut;
+    expect(body.results).toEqual([]);
+    expect(await stateOf(caller, item.id)).toEqual({ status: 'in_review', sessionBranch: null });
+  });
+
+  it('422s a body carrying a sessionBranch — the field is refused, not ignored', async () => {
+    // A caller reaching for the branch here is reaching for the fix that would
+    // unblock dependents without a merge. `.strict()` makes that a loud failure
+    // instead of a silently dropped field that looks like it worked.
+    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+    const item = await readyToIntegrate(caller, 'no branches here');
+
+    const res = await reportImplementation(caller, item.identifier, {
+      sessionBranch: 'session/nope',
+      implementationHarness: 'claude',
+    });
+
+    expect(res.status).toBe(422);
+    expect(await stateOf(caller, item.id)).toEqual({ status: 'in_progress', sessionBranch: null });
+  });
+
+  it('an OMITTED field leaves what an earlier report recorded', async () => {
+    // Shares `toProvenanceInput` with its siblings, so it inherits MOTIR-2447's
+    // partial-report rule rather than restating it.
+    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+    const item = await readyToIntegrate(caller, 'partial report');
+    await reportImplementation(caller, item.identifier, {
+      implementationHarness: 'codex',
+      implementationModel: 'gpt-5-codex',
+    });
+
+    const res = await reportImplementation(caller, item.identifier, {
+      implementationSource: 'byok',
+    });
+
+    const body = (await res.json()) as V1ImplementationReport;
+    expect(body.implementationHarness).toBe('codex');
+    expect(body.implementationModel).toBe('gpt-5-codex');
+  });
+
+  it('refuses a token with `work_items:write` but not `integration` — 403', async () => {
+    const caller = await createV1ProjectCaller({ scopes: ['work_items:write'] });
+    const item = await readyToIntegrate(caller, 'wrong scope');
+
+    const res = await reportImplementation(caller, item.identifier, {
+      implementationSource: 'byok',
+    });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('answers 404 for a key in another workspace — never 403', async () => {
+    const mine = await createV1ProjectCaller({ scopes: ['integration'] });
+    const theirs = await createV1ProjectCaller({ scopes: ['integration'] });
+    const hidden = await readyToIntegrate(theirs, 'not yours');
+
+    const res = await reportImplementation(mine, hidden.identifier, {
+      implementationSource: 'byok',
+    });
+
+    expect(res.status).toBe(404);
+    const still = await workItemsService.getWorkItem(hidden.id, theirs.ctx);
+    expect(still.implementationSource).toBeNull();
+  });
+});
+
 describe('POST /api/v1/sessions/complete', () => {
   beforeEach(async () => {
     await truncateAuthTables();
@@ -372,14 +524,28 @@ describe('the close-out contract', () => {
     // The `undefined` is what leaves a hosted run's own record alone; a
     // half-built object would stamp `byok` over it.
     expect(toProvenanceInput({})).toBeUndefined();
+  });
+
+  it('carries a PARTIAL report as partial — an absent field never becomes null', () => {
+    // MOTIR-2447: `?? null` here turned "I do not know" into "there is none",
+    // which is how `motir done --session` — a caller that knows only the source
+    // — erased the agent and model the run had already recorded. Asserted with
+    // `toEqual`, which fails on an extra key, so a reintroduced default cannot
+    // pass.
     expect(toProvenanceInput({ implementationHarness: 'Claude Code' })).toEqual({
       harness: 'Claude Code',
-      model: null,
     });
-    expect(toProvenanceInput({ implementationSource: 'manual' })).toEqual({
-      source: 'manual',
-      harness: null,
-      model: null,
+    expect(toProvenanceInput({ implementationSource: 'manual' })).toEqual({ source: 'manual' });
+    expect(toProvenanceInput({ implementationModel: 'claude-opus-5' })).toEqual({
+      model: 'claude-opus-5',
     });
+    // A full report still carries all three.
+    expect(
+      toProvenanceInput({
+        implementationSource: 'byok',
+        implementationHarness: 'claude',
+        implementationModel: 'claude-opus-5',
+      }),
+    ).toEqual({ source: 'byok', harness: 'claude', model: 'claude-opus-5' });
   });
 });

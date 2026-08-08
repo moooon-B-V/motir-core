@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
-import { InvalidRequestError } from '@/lib/api/v1/errors';
 import { encodePageCursor, parsePageRequest } from '@/lib/api/v1/pagination';
 import {
   createWorkItemBodySchema,
@@ -9,8 +8,7 @@ import {
   presentWorkItemDetail,
   presentWorkItemSummary,
 } from '@/lib/api/v1/workItems/schema';
-import { FILTER_PARAM, decodeFilterParam } from '@/lib/filters/ast';
-import type { FilterAst } from '@/lib/filters/ast';
+import { parseFilterParam } from '@/lib/api/v1/workItems/filterParam';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 
@@ -171,44 +169,4 @@ function pick<T extends object, K extends keyof T>(source: T, keys: readonly K[]
 /** The keyset position a validated cursor names, in the shape the service takes. */
 function toAfter(cursor: { createdAt: string; id: string }): { createdAt: Date; id: string } {
   return { createdAt: new Date(cursor.createdAt), id: cursor.id };
-}
-
-/**
- * Decode `?filter=` into the AST the service takes, or `{}` when absent.
- *
- * A decode failure is a **422 with a stable code**, distinguishing the two
- * causes a client can actually act on differently: a param that is not a filter
- * at all (`INVALID_FILTER`) versus one written against a version this API does
- * not speak (`UNSUPPORTED_FILTER_VERSION` — the signal to upgrade, not to
- * re-encode). Deeper failures (unknown field, unknown operator, bad value, over
- * the row cap) are raised by `validateFilterAst` beneath the service and carry
- * their own codes into `DOMAIN_ERROR_STATUS`.
- */
-function parseFilterParam(req: Request): { filter?: { ast: FilterAst } } {
-  const raw = new URL(req.url).searchParams.get(FILTER_PARAM);
-  if (raw === null || raw === '') return {};
-
-  const decoded = decodeFilterParam(raw);
-  if (!decoded.ok) {
-    if (decoded.reason === 'unsupported-version') {
-      throw new InvalidRequestError(
-        'UNSUPPORTED_FILTER_VERSION',
-        `The \`filter\` parameter uses an unsupported version: ${decoded.detail}.`,
-      );
-    }
-    if (decoded.reason === 'too-large') {
-      // The SAME code the registry's `FilterTooLargeError` maps to, so an
-      // over-cap filter reports identically whether the codec catches it (the
-      // URL carrier) or `validateFilterAst` does (any other path).
-      throw new InvalidRequestError(
-        'FILTER_TOO_LARGE',
-        `The \`filter\` parameter is ${decoded.detail}.`,
-      );
-    }
-    throw new InvalidRequestError(
-      'INVALID_FILTER',
-      'The `filter` parameter is not a valid encoded filter.',
-    );
-  }
-  return { filter: { ast: decoded.ast } };
 }

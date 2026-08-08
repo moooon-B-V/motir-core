@@ -253,14 +253,24 @@ describe('the sandbox smoke harness', () => {
     expect(runSh).toContain('smoke-not-a-real-token');
   });
 
-  it('asserts the CALL SEQUENCE, not just the exit code', () => {
-    // A loop that skipped mark_integrated, or read the ready set ahead in a
-    // batch, would still exit 0.
+  it('asserts the REQUEST SEQUENCE, not just the exit code', () => {
+    // A loop that skipped the integration record, or read the ready set ahead in
+    // a batch, would still exit 0.
+    //
+    // ⚠️ RE-POINTED, not lowered (MOTIR-2436). This named the four MCP TOOLS the
+    // loop used to call; the CLI is an `/api/v1` client since 11.5.6, so it names
+    // the four ENDPOINTS instead. Deleting the check would have been the easy
+    // fix and the wrong one — what it guards is that `assert-run.mjs` still
+    // covers every step of the loop, and that claim survived the protocol
+    // change unchanged.
     expect(loopSh).toContain('assert-run.mjs');
     const assertRun = read(join(SMOKE_DIR, 'assert-run.mjs'));
-    for (const tool of ['next_ready', 'transition_status', 'dispatch_prompt', 'mark_integrated']) {
-      expect(assertRun, `assertion covering ${tool}`).toContain(tool);
+    for (const endpoint of ['/ready', '/dispatch-prompt', '/transitions', '/integration']) {
+      expect(assertRun, `assertion covering ${endpoint}`).toContain(endpoint);
     }
+    // …and it must not have quietly gone back to asserting a protocol nothing
+    // speaks: a `tools/call` here would mean the stub and the CLI disagree again.
+    expect(assertRun).not.toContain('tools/call: ');
   });
 
   it('makes the fake agent verify BOTH prompt delivery channels', () => {

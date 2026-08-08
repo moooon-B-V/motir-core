@@ -10,10 +10,22 @@ import {
   showCommand,
   sprintCommand,
 } from '../src/commands/read.js';
+import { renderReadyTable } from '../src/render.js';
 import { openUrl } from '../src/browser.js';
 import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
-import { DEFAULT_TOOLS, startTestMcpServer, type TestMcpServer } from './helpers/mcpTestServer.js';
+import {
+  startTestServer,
+  v1Activity,
+  v1Detail,
+  v1Edges,
+  v1Page,
+  v1Ref,
+  v1ReadyRow,
+  v1WorkItem,
+  v1Sprint,
+  type TestServer,
+} from './helpers/testServer.js';
 
 describe('parseKinds', () => {
   it('returns undefined for an absent / empty list (any kind)', () => {
@@ -118,42 +130,30 @@ describe('parseItemKey', () => {
 });
 
 describe('motir show', () => {
-  let server: TestMcpServer;
+  let server: TestServer;
   let cwd: string;
   let root: string;
   const TOKEN = 'pat_show_token';
 
-  /** One `get_work_item` aggregate, as the tool returns it. */
-  const detail = {
-    item: {
-      id: 'row-7',
-      identifier: 'PROD-7',
-      kind: 'subtask',
-      title: 'Read commands',
-      status: 'in_progress',
-      priority: 'high',
-      assigneeId: null,
-      type: 'code',
-      executor: 'coding_agent',
-      storyPoints: 3,
-      estimateMinutes: 40,
-      targetRepo: null,
-      sprintId: null,
-      descriptionMd: '## Why\n\nBecause the CLI cannot show you a work item.',
+  /** One work-item DETAIL, as `GET /api/v1/work-items/{key}` returns it. */
+  const detail = v1Detail('PROD-7', {
+    title: 'Read commands',
+    status: 'in_progress',
+    priority: 'high',
+    storyPoints: 3,
+    estimateMinutes: 40,
+    descriptionMd: '## Why\n\nBecause the CLI cannot show you a work item.',
+    parentKey: 'PROD-1',
+    ancestorKeys: ['PROD-1'],
+    children: [{ ...v1Ref('PROD-8', { title: 'A child' }), dependencies: v1Edges() }],
+    links: {
+      blockedBy: [v1Ref('PROD-2', { title: 'A blocker' })],
+      blocks: [],
+      relatesTo: [],
+      duplicates: [],
+      clones: [],
     },
-    ancestors: [{ identifier: 'PROD-1', kind: 'epic', title: 'Epic 7', status: 'in_progress' }],
-    parent: { identifier: 'PROD-1', kind: 'epic', title: 'Epic 7', status: 'in_progress' },
-    children: [{ identifier: 'PROD-8', kind: 'subtask', title: 'A child', status: 'todo' }],
-    blockedBy: [
-      {
-        linkId: 'l1',
-        item: { identifier: 'PROD-2', kind: 'subtask', title: 'A blocker', status: 'todo' },
-      },
-    ],
-    blocks: [],
-    relatesTo: [],
-    readiness: { ready: true, openBlockers: [], blockedByAncestor: null },
-  };
+  });
 
   function capture(): () => string {
     const chunks: string[] = [];
@@ -167,9 +167,9 @@ describe('motir show', () => {
 
   beforeAll(async () => {
     cwd = process.cwd();
-    server = await startTestMcpServer({
+    server = await startTestServer({
       token: TOKEN,
-      tools: { ...DEFAULT_TOOLS, get_work_item: { structured: detail } },
+      v1: { 'GET /api/v1/work-items/{key}': { body: detail } },
     });
   });
 
@@ -191,8 +191,9 @@ describe('motir show', () => {
       join(root, '.motir.json'),
       JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }) + '\n',
     );
-    server.calls.length = 0;
-    server.script({ get_work_item: { structured: detail } });
+    server.v1Calls.length = 0;
+    server.resetV1();
+    server.scriptV1({ 'GET /api/v1/work-items/{key}': { body: detail } });
   });
 
   afterEach(() => {
@@ -227,7 +228,7 @@ describe('motir show', () => {
 
     await showCommand(' prod-7 ', {});
 
-    expect(server.calls).toEqual([{ name: 'get_work_item', args: { key: 'PROD-7' } }]);
+    expect(server.v1Calls.map((c) => c.path)).toEqual(['/api/v1/work-items/PROD-7']);
   });
 
   // ── the build-order WAVE view (7.9.16b · MOTIR-1848) ──────────────────────
@@ -242,20 +243,14 @@ describe('motir show', () => {
     ...detail,
     children: [
       {
-        identifier: 'PROD-9',
-        kind: 'subtask',
-        title: 'The dependent',
-        status: 'blocked',
+        ...v1Ref('PROD-9', { title: 'The dependent', status: 'blocked' }),
         dependencies: {
           blockedBy: [{ key: 'PROD-8', title: 'The blocker', status: 'todo' }],
           blocks: [],
         },
       },
       {
-        identifier: 'PROD-8',
-        kind: 'subtask',
-        title: 'The blocker',
-        status: 'todo',
+        ...v1Ref('PROD-8', { title: 'The blocker' }),
         dependencies: {
           blockedBy: [],
           blocks: [{ key: 'PROD-9', title: 'The dependent', status: 'todo' }],
@@ -264,17 +259,34 @@ describe('motir show', () => {
     ],
   };
 
-  it('--json emits the tool payload UNCHANGED against a server with no child edges', async () => {
+  // MOTIR-2345 / ADR Amendment 16: `--json` emits the SERVER's resource, not the
+  // CLI's narrowed view of it. The view model omits `labels`, `components`,
+  // `commentCount` and the provenance triple because nothing renders them — and
+  // this flag is the escape hatch that makes those omissions safe.
+  it('--json emits the v1 RESOURCE, with the wave the table computed', async () => {
     const stdout = capture();
 
     await showCommand('PROD-7', { json: true });
 
-    expect(JSON.parse(stdout())).toEqual(detail);
+    const printed = JSON.parse(stdout()) as Record<string, unknown>;
+    // Every field the server sent, including the ones no renderer reads.
+    expect(printed).toMatchObject({
+      key: 'PROD-7',
+      labels: [],
+      components: [],
+      commentCount: 0,
+      reporterId: 'user-1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    // …plus the one thing the CLI adds, which is the build order it computed.
+    expect(printed['children']).toEqual([expect.objectContaining({ key: 'PROD-8', wave: 1 })]);
+    // It is the RESOURCE, so the internal row id is not in it (§7).
+    expect(printed).not.toHaveProperty('id');
   });
 
   it('orders the children into build WAVES when the server projects their edges', async () => {
     const stdout = capture();
-    server.script({ get_work_item: { structured: graphed } });
+    server.scriptV1({ 'GET /api/v1/work-items/{key}': { body: graphed } });
 
     await showCommand('PROD-7', {});
     const printed = stdout();
@@ -292,14 +304,16 @@ describe('motir show', () => {
 
   it('--json carries the full dependencies block AND the wave, in build order', async () => {
     const stdout = capture();
-    server.script({ get_work_item: { structured: graphed } });
+    server.scriptV1({ 'GET /api/v1/work-items/{key}': { body: graphed } });
 
     await showCommand('PROD-7', { json: true });
     const payload = JSON.parse(stdout()) as {
-      children: { identifier: string; wave: number; dependencies: { blockedBy: unknown[] } }[];
+      children: { key: string; wave: number; dependencies: { blockedBy: unknown[] } }[];
     };
 
-    expect(payload.children.map((c) => [c.identifier, c.wave])).toEqual([
+    // A child is named by its KEY on the resource — §7 keeps the internal id off
+    // the wire, so the payload's own identifier is what a script reads.
+    expect(payload.children.map((c) => [c.key, c.wave])).toEqual([
       ['PROD-8', 1],
       ['PROD-9', 2],
     ]);
@@ -313,19 +327,68 @@ describe('motir show', () => {
     capture();
     // What the tool returns for a key in a project the caller cannot browse:
     // 404-not-403, so the CLI leaks nothing the server would not.
-    server.script({ get_work_item: { error: 'NOT_FOUND: Work item PROD-999 not found.' } });
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        status: 404,
+        body: { code: 'NOT_FOUND', error: 'Work item PROD-999 not found.' },
+      },
+    });
 
     await expect(showCommand('PROD-999', {})).rejects.toMatchObject({
-      message: expect.stringContaining('NOT_FOUND: Work item PROD-999 not found.'),
+      // v1 carries the code as a FIELD, so the message is the server's own
+      // sentence rather than a `CODE: sentence` string the client parses.
+      message: expect.stringContaining('Work item PROD-999 not found.'),
       exitCode: 1,
     });
+  });
+
+  // The blocked-by-an-ANCESTOR readiness line: an item whose own blockers are
+  // clear but whose parent is not. The two fields arrive separately on the wire
+  // (`blockedByAncestorKey` / `…Title`) and the adapter pairs them, so a server
+  // that sends the key with no title must still produce a printable line rather
+  // than the word `undefined` in the middle of a readiness sentence.
+  it('reports an ancestor blocker, titled or not', async () => {
+    const read = capture();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        body: v1Detail('PROD-7', {
+          readiness: {
+            ready: false,
+            openBlockers: [],
+            blockedByAncestorKey: 'PROD-1',
+            blockedByAncestorTitle: 'The parent story',
+          },
+        }),
+      },
+    });
+    await showCommand('PROD-7', {});
+    expect(read()).toContain('PROD-1');
+    expect(read()).toContain('The parent story');
+
+    vi.restoreAllMocks();
+    const untitled = capture();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}': {
+        body: v1Detail('PROD-7', {
+          readiness: {
+            ready: false,
+            openBlockers: [],
+            blockedByAncestorKey: 'PROD-1',
+            blockedByAncestorTitle: null,
+          },
+        }),
+      },
+    });
+    await showCommand('PROD-7', {});
+    expect(untitled()).toContain('PROD-1');
+    expect(untitled()).not.toContain('undefined');
   });
 
   it('rejects a malformed key BEFORE it opens a session', async () => {
     capture();
 
     await expect(showCommand('not-a-key!', {})).rejects.toThrow(CliError);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   // ── the discussion: --activity / --comments (MOTIR-2000) ──────────────────
@@ -335,59 +398,59 @@ describe('motir show', () => {
   // byte of new output), and each flag costs exactly one extra call naming the
   // view it stands for.
 
-  /** One comment thread, exactly as `CommentThreadDTO` crosses the wire. */
+  /** One comment thread, as the v1 activity stream carries it. */
   const thread = {
     id: 'c1',
-    workItemId: 'row-7',
     parentCommentId: null,
-    author: { id: 'u1', name: 'Zhu Yue', image: null },
+    authorId: 'u1',
+    author: { id: 'u1', name: 'Zhu Yue' },
     bodyMd: 'The rationale, in full.\n\nSecond paragraph.',
-    editedAt: null,
     createdAt: '2026-07-30T12:00:00.000Z',
+    editedAt: null,
     mentionedUserIds: [],
     replies: [],
   };
 
-  /** One page of the merged stream, as `get_work_item_activity` returns it. */
-  const activityPage = {
-    entries: [
-      { type: 'comment', thread },
+  /** One CHANGE entry, as the v1 activity stream carries it. */
+  const change = {
+    id: 'r1',
+    changeKind: 'updated',
+    changedAt: '2026-08-01T12:00:00.000Z',
+    actor: { userId: 'u2', name: 'Mo' },
+    parts: [
       {
-        type: 'history',
-        entry: {
-          id: 'r1',
-          workItemId: 'row-7',
-          changeKind: 'updated',
-          changedAt: '2026-08-01T12:00:00.000Z',
-          actor: { userId: 'u2', name: 'Mo', image: null },
-          parts: [
-            {
-              kind: 'field',
-              field: 'status',
-              from: { type: 'status', key: 'todo', label: 'To Do' },
-              to: { type: 'status', key: 'in_progress', label: 'In Progress' },
-            },
-          ],
-        },
+        kind: 'field',
+        field: 'status',
+        from: { type: 'status', key: 'todo', label: 'To Do' },
+        to: { type: 'status', key: 'in_progress', label: 'In Progress' },
       },
     ],
-    nextCursor: null,
-    totalComments: 1,
-    totalChanges: 1,
-    workItemRefs: {},
   };
 
-  /** One page of the comments-only view. */
-  const commentsPage = { threads: [thread], totalCount: 1, nextCursor: null, order: 'asc' };
+  /** One page of the merged `all` view. */
+  const activityPage = v1Activity(
+    [
+      { type: 'comment', comment: thread },
+      { type: 'change', change },
+    ],
+    { totalCount: 2, totalComments: 1, totalChanges: 1 },
+  );
+
+  /** One page of the comments-only view — the same operation, `?view=comments`. */
+  const commentsPage = v1Activity([{ type: 'comment', comment: thread }], {
+    totalCount: 1,
+    totalComments: 1,
+    totalChanges: null,
+  });
 
   it('makes ONE tool call and prints no stream at all without a flag', async () => {
     const stdout = capture();
-    server.script({ get_work_item_activity: { structured: activityPage } });
+    server.scriptV1({ 'GET /api/v1/work-items/{key}/activity': { body: activityPage } });
 
     await showCommand('PROD-7', {});
     const printed = stdout();
 
-    expect(server.calls.map((c) => c.name)).toEqual(['get_work_item']);
+    expect(server.v1Calls.map((c) => c.path)).toEqual(['/api/v1/work-items/PROD-7']);
     expect(printed).not.toContain('ACTIVITY');
     expect(printed).not.toContain('COMMENTS');
   });
@@ -399,16 +462,18 @@ describe('motir show', () => {
     vi.restoreAllMocks();
 
     const stdout = capture();
-    server.calls.length = 0;
-    server.script({ get_work_item_activity: { structured: activityPage } });
+    server.v1Calls.length = 0;
+    server.resetV1();
+    server.scriptV1({ 'GET /api/v1/work-items/{key}/activity': { body: activityPage } });
 
     await showCommand('PROD-7', { activity: true });
     const printed = stdout();
 
-    expect(server.calls).toEqual([
-      { name: 'get_work_item', args: { key: 'PROD-7' } },
-      { name: 'get_work_item_activity', args: { key: 'PROD-7', view: 'all' } },
-    ]);
+    expect(
+      server.v1Calls.map(
+        (c) => `${c.path}${c.query.get('view') ? `?view=${c.query.get('view')}` : ''}`,
+      ),
+    ).toEqual(['/api/v1/work-items/PROD-7', '/api/v1/work-items/PROD-7/activity?view=all']);
     // Byte-identical to the flagless read, then the stream — the default output
     // cannot regress behind a flag that only ever adds.
     expect(printed.startsWith(before)).toBe(true);
@@ -421,15 +486,16 @@ describe('motir show', () => {
 
   it('--comments adds ONE call for view "comments" and prints only the threads', async () => {
     const stdout = capture();
-    server.script({ get_work_item_activity: { structured: commentsPage } });
+    server.scriptV1({ 'GET /api/v1/work-items/{key}/activity': { body: commentsPage } });
 
     await showCommand('PROD-7', { comments: true });
     const printed = stdout();
 
-    expect(server.calls).toEqual([
-      { name: 'get_work_item', args: { key: 'PROD-7' } },
-      { name: 'get_work_item_activity', args: { key: 'PROD-7', view: 'comments' } },
-    ]);
+    expect(
+      server.v1Calls.map(
+        (c) => `${c.path}${c.query.get('view') ? `?view=${c.query.get('view')}` : ''}`,
+      ),
+    ).toEqual(['/api/v1/work-items/PROD-7', '/api/v1/work-items/PROD-7/activity?view=comments']);
     expect(printed).toContain('COMMENTS\n1 comment, oldest first');
     expect(printed).not.toContain('changed status');
   });
@@ -440,21 +506,71 @@ describe('motir show', () => {
     await expect(showCommand('PROD-7', { activity: true, comments: true })).rejects.toMatchObject({
       message: expect.stringContaining('cannot be combined'),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
+  });
+
+  // ⚠️ A FORWARD-COMPATIBILITY PROPERTY CHANGED HERE, and it is worth pinning.
+  //
+  // Under MCP nothing validated the payload, so an unfamiliar part kind reached
+  // `activityValueText`'s default branch and rendered generically — the CLI
+  // ships on its own release train and meets newer servers, so that mattered.
+  //
+  // Under `/api/v1` the transport validates against the generated document, and
+  // `activityPartSchema` is a CLOSED union. A new kind is therefore not an
+  // additive change the CLI can absorb — ADR §8 permits a new enum value only on
+  // a field "documented as open-ended", which this one is not — so the honest
+  // behaviour is a REFUSAL that names the field, not a silent generic render.
+  //
+  // The mapper's default branches stay (they are correct if the union is ever
+  // opened, as `advisorySeveritySchema` was), but they are belt-and-braces now
+  // rather than the load-bearing path.
+  it('REFUSES an off-contract activity part, naming the field', async () => {
+    const stdout = capture();
+    server.scriptV1({
+      'GET /api/v1/work-items/{key}/activity': {
+        body: v1Activity(
+          [
+            {
+              type: 'change',
+              change: {
+                id: 'r2',
+                changeKind: 'updated',
+                changedAt: '2026-08-01T12:00:00.000Z',
+                actor: { userId: 'u2', name: 'Mo' },
+                parts: [{ kind: 'teleported', field: 'somewhere' }],
+              },
+            },
+          ],
+          { totalCount: 1, totalComments: 0, totalChanges: 1 },
+        ),
+      },
+    });
+
+    await expect(showCommand('PROD-7', { activity: true })).rejects.toThrow(
+      /Unexpected response .* for getWorkItemActivity/,
+    );
+    // Nothing was printed: the refusal happens at the boundary, before a
+    // renderer is handed a shape it cannot account for.
+    expect(stdout()).not.toContain('ACTIVITY');
   });
 
   it('--json carries the activity page UNALTERED, and omits the key without a flag', async () => {
     const stdout = capture();
-    server.script({ get_work_item_activity: { structured: activityPage } });
+    server.scriptV1({ 'GET /api/v1/work-items/{key}/activity': { body: activityPage } });
 
     await showCommand('PROD-7', { activity: true, json: true });
     const payload = JSON.parse(stdout()) as Record<string, unknown>;
 
-    // The tool's own page, byte for byte — including the cursor and the totals a
-    // script needs in order to know there is more.
+    // The SERVER's own page, byte for byte — including the cursor and the two
+    // per-source totals a script needs in order to know there is more.
     expect(payload['activity']).toEqual(activityPage);
-    // …riding ALONGSIDE the aggregate, which is unchanged.
-    expect({ ...payload, activity: undefined }).toEqual({ ...detail, activity: undefined });
+    // …riding ALONGSIDE the resource, which is the same body `--json` emits
+    // without the flag: the server's own, with the build order applied.
+    expect({ ...payload, activity: undefined }).toEqual({
+      ...detail,
+      children: (detail.children as object[]).map((child) => ({ ...child, wave: 1 })),
+      activity: undefined,
+    });
 
     vi.restoreAllMocks();
     const plain = capture();
@@ -470,7 +586,7 @@ describe('motir show', () => {
 // is the payload a script actually receives — not a renderer's return value.
 
 describe('motir ready / sprint — the edge columns and their --json fidelity', () => {
-  let server: TestMcpServer;
+  let server: TestServer;
   let cwd: string;
   let root: string;
   const TOKEN = 'pat_edge_token';
@@ -485,51 +601,20 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     })),
   };
 
-  const readyPage = {
-    items: [
-      {
-        key: 'PROD-7',
-        kind: 'subtask',
-        title: 'The unblocker',
-        priority: 'high',
-        assignee: null,
-        dependencies: fanOut,
-      },
-    ],
-    nextCursor: null,
-  };
+  const readyPage = v1Page([
+    v1ReadyRow('PROD-7', { title: 'The unblocker', priority: 'high', dependencies: fanOut }),
+  ]);
 
-  const sprintPage = {
-    items: [
-      {
-        identifier: 'PROD-7',
-        kind: 'subtask',
-        title: 'The gated one',
-        status: 'blocked',
-        priority: 'high',
-        dependencies: fanOut,
-      },
-    ],
-    total: 1,
-    nextCursor: null,
-  };
+  const sprintPage = v1Page([
+    v1WorkItem('PROD-7', {
+      title: 'The gated one',
+      status: 'blocked',
+      priority: 'high',
+      dependencies: fanOut,
+    }),
+  ]);
 
-  const sprints = {
-    sprints: [
-      {
-        id: 'sp-1',
-        name: 'Journey D',
-        state: 'active',
-        goal: null,
-        startDate: null,
-        endDate: null,
-        sequence: 1,
-        issueCount: 1,
-        committedPoints: null,
-        committedIssueCount: null,
-      },
-    ],
-  };
+  const sprints = v1Page([v1Sprint('sp-1', { name: 'Journey D', state: 'active', issueCount: 1 })]);
 
   function capture(): () => string {
     const chunks: string[] = [];
@@ -543,7 +628,7 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
 
   beforeAll(async () => {
     cwd = process.cwd();
-    server = await startTestMcpServer({ token: TOKEN, tools: { ...DEFAULT_TOOLS } });
+    server = await startTestServer({ token: TOKEN });
   });
 
   afterAll(async () => {
@@ -564,11 +649,12 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
       join(root, '.motir.json'),
       JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }) + '\n',
     );
-    server.calls.length = 0;
-    server.script({
-      list_ready: { structured: readyPage },
-      list_sprints: { structured: sprints },
-      search_work_items: { structured: sprintPage },
+    server.v1Calls.length = 0;
+    server.resetV1();
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/ready': { body: readyPage },
+      'GET /api/v1/projects/{projectKey}/sprints': { body: sprints },
+      'GET /api/v1/projects/{projectKey}/work-items': { body: sprintPage },
     });
   });
 
@@ -624,19 +710,19 @@ describe('motir ready / sprint — the edge columns and their --json fidelity', 
     expect(payload.items[0]?.dependencies.blocks).toHaveLength(5);
   });
 
-  it('degrades to the pre-7.9.16 tables against a server with no edge projection', async () => {
-    const stdout = capture();
-    server.script({
-      list_ready: {
-        structured: {
-          items: [{ key: 'PROD-7', kind: 'subtask', title: 'Older server', priority: 'high' }],
-          nextCursor: null,
-        },
-      },
-    });
-
-    await readyCommand({});
-    const printed = stdout();
+  // MOTIR-2344. This used to be driven through `readyCommand` against a server
+  // that omitted the edge block. `/api/v1` REQUIRES `dependencies` on a ready
+  // row, so the transport's validator rejects that body before a renderer ever
+  // sees it — the degradation is no longer reachable through the client.
+  //
+  // It is still reachable, and still worth pinning, one layer down: the view
+  // model keeps `dependencies` OPTIONAL because the CLI ships on its own
+  // release train, and the renderer must draw a column it has no data for as
+  // no column rather than as an empty one.
+  it('renderReadyTable degrades to the pre-7.9.16 table for a row with no edge block', () => {
+    const printed = renderReadyTable([
+      { key: 'PROD-7', kind: 'subtask', title: 'Older server', priority: 'high' },
+    ]);
 
     expect(printed).toContain('1 ready work item:');
     expect(printed).toContain('Older server');

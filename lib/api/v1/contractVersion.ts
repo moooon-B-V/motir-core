@@ -32,5 +32,36 @@
  * - `1.1.0` — MOTIR-2275 adds the `X-Motir-Api-Version` response header.
  * - `1.2.0` — MOTIR-2279 adds the minimal ACTOR object to a collection row
  *   (`ReadyItem.assignee`), the rule Amendment 10 Q1 states for every one.
+ * - `1.3.0` — MOTIR-2283 applies that rule to `Comment.author`, the one shape
+ *   that had kept the rationale Amendment 10 overturned.
+ * - `1.3.1` — MOTIR-2317 declares the ready set's `kind` / `priority` as the
+ *   ARRAYS the route has always read them as. A PATCH, not a minor: the set of
+ *   requests the server accepts is unchanged — `parseReadyFilters` has read
+ *   both with `getAll` since they shipped — and only the document, which
+ *   described them as scalars while its own prose said "Repeatable", moves.
+ * - `1.4.0` — MOTIR-2318 adds `GET …/work-items/count`, the operation
+ *   Amendment 14 decided on so a client can learn how many items match a filter
+ *   without paging the match set. Additive: a new operation, no declared shape
+ *   changed.
+ * - `1.5.0` — MOTIR-2320 adds `totalComments` / `totalChanges` to the activity
+ *   page (Amendment 15). The merged `all` view reports two streams, and one
+ *   `totalCount` cannot say what it is made of. Additive: two new fields,
+ *   `totalCount` unchanged in meaning on every view.
+ * - `1.6.0` — MOTIR-2400 adds `inheritedSessionBranch` to the READY row
+ *   (Amendment 17). The row asserted that an item is ready without saying what
+ *   that readiness is measured against — from the trunk, or on top of unmerged
+ *   work. Additive: one new field, and the `blockedBy` it sits beside is
+ *   unchanged.
+ * - `1.7.0` — MOTIR-2445 adds `parentKey` to the DISPATCH PROMPT. The prompt
+ *   already named the parent in its CONTEXT prose; the field lets a client read
+ *   it without parsing text the server may reword — and costs no query, since
+ *   the parent row is already read to render that line. Additive: one new
+ *   field, the prompt text byte-identical.
+ * - `1.8.0` — MOTIR-2421 adds `POST /api/v1/work-items/{key}/implementation`.
+ *   Recording WHAT BUILT an item was only reachable through the integration
+ *   endpoint, which requires a session branch — so the per-item-PR path could
+ *   not record provenance at all without also asserting a lineage that does not
+ *   exist. Additive: one new endpoint, on the existing `integration` scope, with
+ *   `POST …/integration` unchanged in shape and behaviour.
  */
-export const V1_CONTRACT_VERSION = '1.2.0';
+export const V1_CONTRACT_VERSION = '1.8.0';

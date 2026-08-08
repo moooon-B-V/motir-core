@@ -139,10 +139,16 @@ export function describeParameterType(schema: z.ZodType): string {
     type?: string;
     enum?: unknown[];
     anyOf?: { type?: string }[];
+    items?: { type?: string; enum?: unknown[] };
   };
   if (Array.isArray(json.enum)) {
     return json.enum.map((value) => JSON.stringify(value)).join(' | ');
   }
+  // A repeatable parameter reads as `string[]`, not as a bare `array` — the
+  // element type is the whole point of the cell, and the ready set's `kind` /
+  // `priority` became arrays in MOTIR-2317 with nothing else to say what they
+  // hold.
+  if (json.type === 'array') return `${json.items?.type ?? 'unknown'}[]`;
   if (typeof json.type === 'string') return json.type;
   if (Array.isArray(json.anyOf)) {
     return json.anyOf.map((branch) => branch.type ?? 'unknown').join(' | ');

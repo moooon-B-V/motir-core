@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   AGENT_PROFILES,
   agentProfileIds,
+  deriveAgentHarness,
   findAgentProfile,
   parseAgentCommand,
 } from '../src/agentProfiles.js';
+import { CLI_VERSION } from '../src/version.js';
 
 describe('parseAgentCommand', () => {
   it('returns null for an absent or blank command', () => {
@@ -69,6 +71,42 @@ describe('findAgentProfile', () => {
 
   it('returns null for an unlisted agent (the tier-3 escape hatch)', () => {
     expect(findAgentProfile('my-own-agent')).toBeNull();
+  });
+});
+
+// The harness half of the implementation provenance triple (MOTIR-2419). The
+// value recorded on every item a run integrates, so what matters is that it
+// DISTINGUISHES: a harness that reads the same for every agent is the bug.
+describe('deriveAgentHarness', () => {
+  it('names the AGENT, never the CLI that launched it', () => {
+    expect(deriveAgentHarness('claude')).toBe('claude');
+    expect(deriveAgentHarness('codex')).toBe('codex');
+    // The regression this card exists for: every BYOK card recorded this.
+    for (const binary of ['claude', 'codex', 'opencode', 'my-own-agent']) {
+      expect(deriveAgentHarness(binary)).not.toBe(`motir-cli/${CLI_VERSION}`);
+      expect(deriveAgentHarness(binary)).not.toContain('motir-cli');
+    }
+  });
+
+  it('collapses a profile’s aliases onto ONE id, so one agent is one value', () => {
+    expect(deriveAgentHarness('agent')).toBe('cursor');
+    expect(deriveAgentHarness('cursor-agent')).toBe('cursor');
+    expect(deriveAgentHarness('/usr/local/bin/agent')).toBe('cursor');
+    expect(deriveAgentHarness('CLAUDE.EXE')).toBe('claude');
+  });
+
+  it('still answers truthfully for an UNLISTED agent (tier 3)', () => {
+    // Motir is agent-agnostic: falling back to something generic here would put
+    // every tier-3 run straight back into the undistinguishable state.
+    expect(deriveAgentHarness('/opt/bin/My-Own-Agent.exe')).toBe('my-own-agent');
+  });
+
+  it('is derived from the command alone — no I/O, no agent cooperation', () => {
+    // Load-bearing: the loop must be able to record a harness for an agent that
+    // reported nothing and for one that died. It never fails to produce a value.
+    for (const binary of ['claude', 'x', '/a/b/c']) {
+      expect(deriveAgentHarness(binary).length).toBeGreaterThan(0);
+    }
   });
 });
 

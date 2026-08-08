@@ -653,13 +653,21 @@ LAUNCHED, not something a script can simulate from inside one.
 
 - **`loop-smoke.sh`** — runs `motir auto --agent <fake-agent>` end to end with
   **no LLM, no Motir deployment, no Postgres and no network**: a zero-dependency
-  stub MCP server scripts the ready set, a fake agent does the integration, and
-  every MCP call is recorded so `assert-run.mjs` can check the SEQUENCE — one
-  `next_ready` per iteration (never a batch read-ahead), each item flipped to In
-  Progress before its prompt is fetched, each dispatched with the run's session
-  branch as the seed, each recorded through `mark_integrated` on that branch, and
-  exactly ONE pull request at the end. A run that exited 0 having skipped
-  `mark_integrated` fails this test.
+  stub `/api/v1` server scripts the ready set, a fake agent does the integration,
+  and every request is recorded so `assert-run.mjs` can check the SEQUENCE — one
+  read of the ready set per iteration (never a batch read-ahead), each item's
+  prompt fetched with the run's session branch as the seed, each flipped to In
+  Progress before its agent is launched, each integration recorded on that same
+  branch, and exactly ONE pull request at the end. A run that exited 0 having
+  skipped the integration record fails this test.
+
+  > **⚠️ The stub spoke MCP until 11.5.6 and answered every `GET` with a 405, so
+  > from the moment the CLI moved to `/api/v1` the first request of every smoke
+  > run failed (MOTIR-2436). It serves the real endpoints now, and its bodies are
+  > checked against the CLI's own generated validators by
+  > `packages/cli/test/sandboxStub.test.ts` — the v1 client rejects a response
+  > that is only nearly right, so an approximate body would fail here in a Docker
+  > matrix twenty minutes into CI rather than in the unit lane in milliseconds.**
 
 - **`failure-smoke.sh`** — the same loop with an agent that **fails** partway
   through, which the happy path structurally cannot cover: the exclude store is
@@ -810,10 +818,10 @@ and the **hosted** run image, which is 9.1.3 / 9.1.4's separate registry.
 | `smoke/env-credential-smoke.sh`  | The mount-free environment tier: proves the bind is absent, then runs the whole loop on `MOTIR_TOKEN` alone.                                                                                                                                                                                                                 |
 | `smoke/login-smoke.sh`           | `motir login` performed INSIDE the container — device grant, approval, a credential written to its own config dir, and a read that uses it.                                                                                                                                                                                  |
 | `smoke/readonly-login-smoke.sh`  | The same login under the `:ro` mount: it must refuse in one sentence naming the fix, write nothing, and never leak an `EROFS`.                                                                                                                                                                                               |
-| `smoke/stub-server.mjs`          | A zero-dependency streamable-HTTP MCP server scripting the ready set, recording every call — plus the two device-grant routes `motir login` speaks.                                                                                                                                                                          |
+| `smoke/stub-server.mjs`          | A zero-dependency `/api/v1` server scripting the ready set, recording every request — plus the two device-grant routes `motir login` speaks. Its bodies are validated against the generated client by `packages/cli/test/sandboxStub.test.ts`.                                                                               |
 | `smoke/fake-agent.sh`            | The scripted agent: verifies the prompt arrived on BOTH delivery channels, integrates onto the session branch, exits 0.                                                                                                                                                                                                      |
 | `smoke/failing-agent.sh`         | The scripted agent that refuses ONE named item and delegates the rest — so the run has real integrated work behind it when the failure lands.                                                                                                                                                                                |
-| `smoke/assert-run.mjs`           | Asserts the recorded MCP call SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                                                                             |
+| `smoke/assert-run.mjs`           | Asserts the recorded request SEQUENCE — the thing an exit code cannot tell you.                                                                                                                                                                                                                                              |
 | `smoke/assert-public.mjs`        | Asks whether a STRANGER can pull what the release just pushed — a manifest probe that sends no `Authorization` header and checks a known-public control first. Three-valued: public / private-or-absent / could not tell.                                                                                                    |
 | `smoke/assert-current.mjs`       | Asks whether the published image is still what `main` says it is — compares the newest `cli-v*` tag against a checkout and fails once unreleased work has SAT past its window. Needs no Docker, network or credential.                                                                                                       |
 | `smoke/profiles.json`            | The CI build/liveness matrix: one entry per profile, read by the workflow so adding an agent extends CI on its own.                                                                                                                                                                                                          |

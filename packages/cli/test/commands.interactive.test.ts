@@ -2,12 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  DEFAULT_TOOLS,
-  projectRow,
-  startTestMcpServer,
-  type TestMcpServer,
-} from './helpers/mcpTestServer.js';
+import { startTestServer, v1Page, v1Project, type TestServer } from './helpers/testServer.js';
 
 // The INTERACTIVE branches of `auth login` and `link` (Subtask 7.9.5 ·
 // MOTIR-883).
@@ -32,14 +27,14 @@ const { linkCommand } = await import('../src/commands/link.js');
 const { getCredential, setCredential } = await import('../src/config/userConfig.js');
 const { DEFAULT_SERVER_URL } = await import('../src/serverResolve.js');
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let cwd: string;
 
 const TOKEN = 'pat_interactive_token';
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN, tools: DEFAULT_TOOLS });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -55,7 +50,6 @@ beforeEach(() => {
   vi.stubEnv('MOTIR_CONFIG_HOME', join(base, 'config'));
   vi.stubEnv('MOTIR_TOKEN', '');
   process.chdir(root);
-  server.script(DEFAULT_TOOLS);
   prompts.isInteractive.mockReturnValue(true);
   vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
@@ -112,9 +106,9 @@ describe('motir link, interactively', () => {
 
   it('shows a picker when there are several, and links what was picked', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      list_projects: {
-        structured: { projects: [projectRow('PROD', 'Prodect'), projectRow('ACME', 'Acme')] },
+    server.scriptV1({
+      'GET /api/v1/projects': {
+        body: v1Page([v1Project('PROD', 'Prodect'), v1Project('ACME', 'Acme')]),
       },
     });
     prompts.promptLine.mockResolvedValue('2');
@@ -129,9 +123,9 @@ describe('motir link, interactively', () => {
 
   it('refuses an empty answer rather than writing a link with no project', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      list_projects: {
-        structured: { projects: [projectRow('PROD', 'Prodect'), projectRow('ACME', 'Acme')] },
+    server.scriptV1({
+      'GET /api/v1/projects': {
+        body: v1Page([v1Project('PROD', 'Prodect'), v1Project('ACME', 'Acme')]),
       },
     });
     prompts.promptLine.mockResolvedValue('');
@@ -142,14 +136,11 @@ describe('motir link, interactively', () => {
 
   it('refuses when the token resolves no workspace and none was named', async () => {
     setCredential(server.url, { token: TOKEN });
-    server.script({
-      whoami: {
-        structured: {
-          user: { id: 'u', name: 'Y', email: 'y@motir.test' },
-          workspace: null,
-        },
-      },
-    });
+    // `whoami` is TWO v1 reads: `/me` names the bound workspace by id, and
+    // `/workspaces` describes it. A token whose workspace the caller cannot see
+    // is an EMPTY list — the adapter then resolves `workspace: null`, which is
+    // the state this test is about.
+    server.scriptV1({ 'GET /api/v1/workspaces': { body: v1Page([]) } });
 
     await expect(linkCommand({ server: server.url, project: 'PROD' })).rejects.toMatchObject({
       hint: expect.stringContaining('--workspace'),

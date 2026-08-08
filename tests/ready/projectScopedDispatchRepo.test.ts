@@ -536,6 +536,11 @@ describe('contract discipline — additive only', () => {
         'descriptionMd',
         'executor',
         'id',
+        // Amendment 17 (MOTIR-2400) put the readiness qualifier on the ready
+        // ROW, so the dispatch superset inherits it. `sessionBranch` below is
+        // the SAME value addressed as an instruction, and both stay: this
+        // payload tells an agent what to do, the row states a fact.
+        'inheritedSessionBranch',
         'key',
         'kind',
         'parentKey',

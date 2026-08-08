@@ -244,15 +244,24 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
         name: 'kind',
         in: 'query',
         required: false,
-        description: 'Narrow to one or more work-item kinds. Repeatable. An unknown kind is a 422.',
-        schema: z.string().min(1),
+        description:
+          'Narrow to one or more work-item kinds, as `?kind=epic&kind=story`. An unknown kind is a 422.',
+        // An ARRAY, matching `parseReadyFilters`' `params.getAll('kind')`. It
+        // was declared as a scalar until MOTIR-2317 while the description said
+        // "Repeatable" — a document that under-described its own route, which
+        // went unnoticed until a client was GENERATED from it and inherited a
+        // type that cannot express two kinds.
+        schema: z.array(z.string().min(1)),
+        explode: true,
       },
       {
         name: 'priority',
         in: 'query',
         required: false,
-        description: 'Narrow to one or more priorities. Repeatable. An unknown priority is a 422.',
-        schema: z.string().min(1),
+        description:
+          'Narrow to one or more priorities, as `?priority=high&priority=urgent`. An unknown priority is a 422.',
+        schema: z.array(z.string().min(1)),
+        explode: true,
       },
       {
         name: 'assigneeId',

@@ -20,7 +20,7 @@ import * as route from '@/app/api/mcp/route';
 // depends on some other route honest instead of silently passing against a
 // hand-built fake. By default that is exactly ONE path — the MCP endpoint —
 // because that is the entire surface the CLI talks to once it holds a credential
-// (mcpClient.ts: "the ONE place the CLI talks to a Motir server").
+// (packages/cli/src/client.ts: "the ONE place the CLI talks to a Motir server").
 //
 // `cliDeviceRoutes: true` adds the second surface, and the ONLY other one: the
 // two `/api/cli/device/*` endpoints `motir login` speaks BEFORE a credential

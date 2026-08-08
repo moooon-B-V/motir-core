@@ -1,4 +1,5 @@
 import { formatTable, truncate } from './render.js';
+import type { SessionCommit } from './git.js';
 
 // The PURE half of `motir auto` (Story 7.9 · Subtask 7.9.4 · MOTIR-882): what
 // the loop DECIDES and what it REPORTS, with no MCP call, no spawn, no git and
@@ -66,6 +67,14 @@ export interface DispatchRecord {
   /** The branch the work was integrated onto, when it was. */
   sessionBranch: string | null;
   repo: string | null;
+  /**
+   * The card's PARENT key, or `null` for a top-level item (MOTIR-2422).
+   *
+   * Carried on the record because the TITLE is decided at close-out, from the
+   * whole set — and it costs nothing: it rides the dispatch prompt the loop
+   * already fetches per item (MOTIR-2445).
+   */
+  parentKey: string | null;
   /** Extra detail for the summary (an exit code, a lineage note). */
   detail?: string;
 }
@@ -178,20 +187,74 @@ const SKIP_LABEL: Record<SkipRecord['reason'], string> = {
 /** The PR title for a session branch. Carries NO `MOTIR-<n>`: see
  *  {@link import('./git.js').sessionBranchName} for why a session PR must not
  *  name one item. */
-export function sessionPrTitle(runId: string, itemCount: number): string {
-  return `Motir auto run ${runId} — ${itemCount} work item${itemCount === 1 ? '' : 's'}`;
+export function sessionPrTitle(
+  runId: string,
+  carried: readonly Pick<DispatchRecord, 'key' | 'title' | 'parentKey'>[],
+): string {
+  const count = carried.length;
+  const fallback = `Motir auto run ${runId} — ${count} work item${count === 1 ? '' : 's'}`;
+
+  // ⚠️ ONE card: the CARD is the deliverable, and its parent describes something
+  // much larger than what shipped. Naming the story here would overstate a
+  // single subtask as its whole feature.
+  const only = count === 1 ? carried[0] : undefined;
+  if (only) return fitTitle(`${only.key}${only.title ? ` ${only.title}` : ''}`);
+
+  // ⚠️ SHARED means EVERY card, and a `null` counts as a distinct answer. A set
+  // containing a top-level card does not share a parent, so it falls back rather
+  // than naming the story the OTHERS happen to sit under — a title that says
+  // less beats one that says something untrue.
+  const parents = new Set(carried.map((r) => r.parentKey));
+  const shared = parents.size === 1 ? [...parents][0] : null;
+  if (!shared) return fallback;
+
+  return fitTitle(`${shared} — ${count} work items`);
 }
 
 /**
- * The PR body: every item this branch carries, plus the close-out instruction.
- * The keys live HERE rather than in the title precisely because the status sync
- * does not parse a body — so a reviewer gets full traceability while the run's
- * many items stay un-linked to this one PR.
+ * GitHub renders a pull-request title in a list at roughly this width before it
+ * elides; stating the budget here beats discovering it in the UI. Titles are
+ * built to fit rather than trimmed after the fact, so the elision — when it
+ * happens — falls at the end of a card title, never mid-key.
+ */
+const TITLE_BUDGET = 72;
+
+function fitTitle(title: string): string {
+  return title.length <= TITLE_BUDGET ? title : `${title.slice(0, TITLE_BUDGET - 1).trimEnd()}…`;
+}
+
+/**
+ * The PR body: the LOOP's frame around the AGENTS' own commit messages
+ * (MOTIR-2411).
+ *
+ * ── Who writes what, and why neither can do the other's job ────────────────
+ * The body used to be a MANIFEST — one `- KEY — title` line per card. Fully
+ * traceable, and it said nothing about what the branch DOES. A card title is
+ * what was PLANNED; the commit is what was DONE, including everything that only
+ * surfaced while doing it, and those diverge.
+ *
+ * So: **the AGENT writes the substance** — one card, one commit, composed at the
+ * moment it had the most context it will ever have (11.5.25 tells it that this
+ * message becomes this body). **The loop writes the frame** — which run, which
+ * branch, what failed, how to close out. An agent saw one card and can know none
+ * of that; the loop knows the run and nothing about what the change means.
+ *
+ * ⚠️ It reads the COMMITS, it does not reconstruct them from `records`. An
+ * implementation that kept building from `DispatchRecord[]` and merely appended
+ * a subject would look right in a single-repo test and silently drop any commit
+ * the loop did not record — which is exactly the commit a reviewer most needs
+ * told about.
+ *
+ * ⚠️ KNOWN LIMIT, not papered over: concatenated commits do not SYNTHESISE.
+ * Four commits that together deliver one capability read as four changes. Saying
+ * "these four do X" needs something that read the whole diff — a close-out agent
+ * call, which is MOTIR-2423. This gets most of the value for none of that cost.
  */
 export function renderSessionPrBody(
   runId: string,
   branch: string,
   records: DispatchRecord[],
+  commits: SessionCommit[] = [],
 ): string {
   const carried = records.filter((r) => r.outcome !== 'failed');
   const failed = records.filter((r) => r.outcome === 'failed');
@@ -202,6 +265,21 @@ export function renderSessionPrBody(
     '',
     ...carried.map((r) => `- ${r.key} — ${r.title ?? '(untitled)'}`),
   ];
+
+  if (commits.length > 0) {
+    lines.push('', `## What the commits say (${commits.length})`, '');
+    for (const [index, commit] of commits.entries()) {
+      if (index > 0) lines.push('');
+      lines.push(`### ${commit.subject}`);
+      // A THIN commit degrades to the card's title rather than to a bare
+      // subject with nothing under it — today's output, not worse than it. The
+      // pairing is positional because one card is one commit, in dispatch order.
+      const fallback = carried[index]?.title;
+      const beneath = commit.body || (fallback ? `_${fallback}_` : '');
+      if (beneath) lines.push('', beneath);
+    }
+  }
+
   if (failed.length > 0) {
     lines.push(
       '',

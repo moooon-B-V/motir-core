@@ -1,7 +1,12 @@
 import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
-import { ensureInProgress, resolveAgent, type DeliveryOptions } from './dispatch.js';
+import {
+  ensureInProgress,
+  resolveAgent,
+  resolveOwnerId,
+  type DeliveryOptions,
+} from './dispatch.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
@@ -34,12 +39,13 @@ import {
   openSessionPr,
   pushSessionBranchIfAhead,
   runIdFromDate,
+  sessionBranchCommits,
   sessionBranchHasCommits,
   sessionBranchName,
   type CommandRunner,
 } from '../git.js';
-import { CLI_VERSION } from '../version.js';
-import type { DispatchItem, MotirClient } from '../mcpClient.js';
+import { deriveAgentHarness } from '../agentProfiles.js';
+import type { DispatchItem, DispatchPrompt, MotirClient } from '../client.js';
 
 // `motir auto` — THE SEQUENTIAL WHILE LOOP (Story 7.9 · Subtask 7.9.4 ·
 // MOTIR-882). Drain the ready set unattended: one item per iteration, strictly
@@ -86,9 +92,6 @@ export interface AutoDeps {
    *  scripted agent — the fixture the acceptance criteria are written against. */
   runAgentFn?: typeof runAgent;
 }
-
-/** The harness string the CLI self-reports on the write tools (MOTIR-1685). */
-const HARNESS = `motir-cli/${CLI_VERSION}`;
 
 /** A resolved agent — `motir auto` refuses to start without one, so every
  *  downstream signature takes the non-null form. */
@@ -210,6 +213,9 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
   const branch = sessionBranchName(runId);
 
   await withProjectSession(async (session) => {
+    // ONE `whoami` for the whole run: the owner cannot change mid-loop, and an
+    // unattended drain that asked per item would spend a request on a constant.
+    const ownerId = await resolveOwnerId(session.client);
     const summary = await runAutoLoop({
       session,
       opts,
@@ -221,6 +227,7 @@ export async function autoCommand(opts: AutoOptions, deps: AutoDeps = {}): Promi
       run,
       clock,
       runAgentFn: deps.runAgentFn ?? runAgent,
+      ownerId,
     });
     closeOutRepos(summary, run);
     info('');
@@ -240,13 +247,17 @@ export interface LoopInput {
   run: CommandRunner;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** The token owner — every card this run takes is CLAIMED for them, and rows
+   *  claimed by anyone else are not taken at all (MOTIR-2427). */
+  ownerId: string;
 }
 
 /** The WHILE loop itself. Exported so it can be driven end-to-end against a
  *  scripted client + agent, which is the only way the "re-queries every
  *  iteration" property can actually be asserted. */
 export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
-  const { session, opts, kinds, max, agent, runId, branch, run, clock, runAgentFn } = input;
+  const { session, opts, kinds, max, agent, runId, branch, run, clock, runAgentFn, ownerId } =
+    input;
   const { client, serverUrl, projectKey } = session;
 
   if (opts.reset) {
@@ -257,7 +268,13 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
   // Seeded from the PERSISTED list (items a previous session's agent failed on),
   // then grown in-process: an item skipped or failed this run must not be handed
   // straight back by the very next `next_ready`, or the loop would spin on it.
-  const excludeIds = new Set(readExcludes(serverUrl, projectKey).map((e) => e.id));
+  // The PERSISTED list is keyed by KEY (MOTIR-2338); `next_ready` still narrows
+  // by row ID. So the id set starts EMPTY and absorbs each excluded item's id
+  // the first time the server hands it back — one extra round trip per
+  // persisted exclusion, once, and the server keeps choosing.
+  const excludedKeys = new Set(readExcludes(serverUrl, projectKey).map((e) => e.key.toUpperCase()));
+  /** Every key this run has been handed — the termination guard below. */
+  const seenKeys = new Set<string>();
   const records: DispatchRecord[] = [];
   const skipped: SkipRecord[] = [];
   const planning: PlanningRecord[] = [];
@@ -286,15 +303,41 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
       }
 
       // ONE item, asked for fresh. Never a list — see the module header.
+      // Held out by KEY: the client skips excluded rows inside the page walk,
+      // so a previous run's failures cost no extra round trip (MOTIR-2398).
+      // `ownerId` narrows the pick to what this run may take: unassigned rows,
+      // and its own interrupted work. Both filters are CLIENT-SIDE — the ready
+      // set has no status facet, and its `assigneeId` is single-valued, so
+      // "unassigned OR mine" has no wire form — which is why the page walk that
+      // backs this must follow the cursor rather than stop at a page it cannot
+      // use (MOTIR-2427).
       const { item } = await client.nextReady({
         projectKey,
+        ownerId,
         ...(kinds ? { kinds } : {}),
-        ...(excludeIds.size > 0 ? { excludeIds: [...excludeIds] } : {}),
+        ...(excludedKeys.size > 0 ? { excludeKeys: [...excludedKeys] } : {}),
       });
       if (!item) {
         stopReason = 'drained';
         break;
       }
+      // ⚠️ TERMINATION. The loop asks again after every item, so a key it has
+      // already taken coming back a second time means the ready set is not
+      // shrinking — a status that did not move, or a server that disagrees with
+      // this client about what is ready. Left alone the run spins forever
+      // making requests, which is how an unattended command burns a night and a
+      // quota. The old MCP enumeration had this guard for the same reason;
+      // moving the pick client-side (MOTIR-2398) does not remove the need.
+      if (seenKeys.has(item.key.toUpperCase())) {
+        stopReason = 'halted';
+        info('');
+        info(
+          `${item.key} was offered twice — the ready set is not advancing. Stopping rather than ` +
+            "looping; check the item's status.",
+        );
+        break;
+      }
+      seenKeys.add(item.key.toUpperCase());
 
       const disposition = classifyReadyItem(item);
       if (disposition === 'needs_planning' && opts.includePlanning) {
@@ -304,14 +347,14 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         // goes on the exclude list because it stays childless and would
         // otherwise be handed straight back on the very next iteration.
         planning.push(await triggerExpansion(client, serverUrl, item));
-        excludeIds.add(item.id);
+        excludedKeys.add(item.key.toUpperCase());
         continue;
       }
       if (disposition !== 'dispatch') {
         // Not dispatched, so NOT transitioned: a planning item and a human item
         // are both left exactly as the loop found them.
         skipped.push({ key: item.key, title: item.title, reason: disposition });
-        excludeIds.add(item.id);
+        excludedKeys.add(item.key.toUpperCase());
         info(
           `${item.key}: skipped — ${
             disposition === 'needs_planning'
@@ -322,7 +365,19 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         continue;
       }
 
-      const target = resolveDispatchTarget(session.link.dir, session.link.config, item.targetRepo);
+      // ⚠️ SEED FIRST, THEN RESOLVE (MOTIR-2398). The loop cannot resolve the
+      // checkout before this read — `targetRepo` lives on the PROMPT, not on the
+      // ready row (Amendment 10 Q2) — and cannot seed after it, because
+      // `repos.ensure` creates the branch the seed names. So the seed goes out
+      // first: the prompt is a pure READ that neither claims the item nor moves
+      // its status, so asking before knowing whether a checkout exists costs
+      // nothing and keeps the common path at ONE request.
+      let dispatch = await client.dispatchPrompt(item.key, { sessionBranch: branch });
+      const target = resolveDispatchTarget(
+        session.link.dir,
+        session.link.config,
+        dispatch.targetRepo,
+      );
       let repo: RepoSession | null;
       try {
         repo = repos.ensure(target);
@@ -336,27 +391,37 @@ export async function runAutoLoop(input: LoopInput): Promise<AutoSummary> {
         break;
       }
 
+      if (!repo) {
+        // No checkout to branch in, so the seeded prompt's lineage instruction
+        // names a branch that does not exist here. Re-read WITHOUT the seed and
+        // hand the agent the per-item-pull-request text instead. The extra
+        // request buys correctness on a path that was already the exception.
+        dispatch = await client.dispatchPrompt(item.key);
+      }
+
       const record = await dispatchOne({
         client,
         item,
+        dispatch,
         target,
-        repo,
         agent,
         clock,
         runAgentFn,
+        ownerId,
         onIntegrated: (key) => repo?.keys.push(key),
       });
       records.push(record);
 
       if (record.outcome === 'failed') {
-        addExclude(serverUrl, projectKey, { id: item.id, key: item.key });
-        excludeIds.add(item.id);
+        addExclude(serverUrl, projectKey, { key: item.key });
+        excludedKeys.add(item.key.toUpperCase());
         if (!opts.keepGoing) {
           stopReason = interrupted ? 'interrupted' : 'halted';
           break;
         }
       } else {
-        removeExclude(serverUrl, projectKey, item.id);
+        removeExclude(serverUrl, projectKey, item.key);
+        excludedKeys.delete(item.key.toUpperCase());
       }
     }
   } finally {
@@ -399,24 +464,23 @@ async function triggerExpansion(
 interface DispatchOneInput {
   client: MotirClient;
   item: DispatchItem;
+  /** Read by the CALLER, before the checkout was resolved — see the seed-first
+   *  note there. Passed in so this function makes no second prompt request. */
+  dispatch: DispatchPrompt;
   target: DispatchTarget;
-  repo: RepoSession | null;
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
   onIntegrated: (key: string) => void;
+  /** Claimed for this owner before the agent launches (MOTIR-2427). */
+  ownerId: string;
 }
 
 /** Run ONE item through the single-dispatch pipeline and record how it ended. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
-  const { client, item, target, repo, agent, clock, runAgentFn, onIntegrated } = input;
+  const { client, item, dispatch, target, agent, clock, runAgentFn, onIntegrated, ownerId } = input;
 
-  await ensureInProgress(client, item.key, item.status?.key);
-  // The seed applies only if the item has no lineage of its own; an item whose
-  // dependency this run already integrated arrives with that branch inherited,
-  // which is how the loop CASCADES through the dependency graph rather than
-  // stopping at the initially-ready set.
-  const dispatch = await client.dispatchPrompt(item.key, { sessionBranch: repo?.branch ?? null });
+  await ensureInProgress(client, item.key, item.status?.key, ownerId);
 
   info('');
   info(`── ${item.key} — ${item.title}`);
@@ -440,6 +504,8 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     title: item.title,
     durationMs,
     repo: dispatch.targetRepo,
+    // Off the prompt the loop already fetched — no extra request (MOTIR-2445).
+    parentKey: dispatch.parentKey,
   };
 
   if (result.exitCode !== 0) {
@@ -471,7 +537,11 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchRecord> {
     await client.markIntegrated({
       key: item.key,
       sessionBranch: dispatch.sessionBranch,
-      implementationHarness: HARNESS,
+      // The provenance triple, split by WHO KNOWS (MOTIR-2419): the harness is
+      // derived from the command this loop launched, the model comes from the
+      // agent's own report and is null when it made none.
+      implementationHarness: deriveAgentHarness(agent.parsed.binary),
+      implementationModel: result.model,
     });
     onIntegrated(item.key);
     info(`${item.key}: integrated on ${dispatch.sessionBranch} in ${formatDuration(durationMs)}.`);
@@ -526,8 +596,16 @@ function closeOutRepo(summary: AutoSummary, repo: RepoSession, run: CommandRunne
       repo.cwd,
       {
         branch: repo.branch,
-        title: sessionPrTitle(summary.runId, carried.length),
-        body: renderSessionPrBody(summary.runId, repo.branch, mine),
+        title: sessionPrTitle(summary.runId, carried),
+        // The agents' own commit messages, read from THIS repo's checkout
+        // against THIS repo's branch — a multi-repo run must not put another
+        // repo's commits in this body (MOTIR-2411).
+        body: renderSessionPrBody(
+          summary.runId,
+          repo.branch,
+          mine,
+          sessionBranchCommits(repo.cwd, repo.branch, run),
+        ),
       },
       run,
     );

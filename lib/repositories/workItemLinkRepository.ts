@@ -298,6 +298,56 @@ export const workItemLinkRepository = {
   },
 
   /**
+   * For a set of items, each one's blockers' recorded `sessionBranch` — the raw
+   * material for "is this item ready from `main`, or on an inherited lineage?"
+   * (Story 11.5 · Subtask 11.5.24 — MOTIR-2400).
+   *
+   * ⚠️ ONE query for a page of any size, and that is the whole reason this
+   * method exists rather than the caller reaching for `getReadiness`. The
+   * inherited branch is per-ITEM state a list read needs for every row, and
+   * `getReadiness` computes it one item at a time — correct for the single item
+   * a dispatch decorates, a per-row query storm for a 50-row page.
+   *
+   * Deliberately NOT a widening of {@link findBlockerEdgesForItems}. That
+   * projection feeds the shared `WorkItemDependencyEdgesDto` carried by the
+   * ready list, the issues list, two MCP tools and the v1 detail's children; a
+   * field added there to serve ONE row type ripples through four surfaces and
+   * their exact-shape tests. A second narrow read is cheaper than a shared shape
+   * that grew a field most of its consumers ignore.
+   *
+   * Returns one row per (item, blocker-with-a-branch) pair — the caller
+   * collapses. Blockers with no branch produce no row at all, so an item ready
+   * from `main` is simply absent from the result.
+   *
+   * ⚠️ The branch filter lives in the MAPPER, not in the `where`. Having both —
+   * `sessionBranch: { not: null }` in the query AND a null check on the way out
+   * — is not defence in depth: it makes the mapper's null arm UNREACHABLE, so
+   * it can never be exercised and the file's branch coverage can never be
+   * complete. One filter, in the place that can be tested with an ordinary
+   * blocker that has no branch, which is the common case.
+   */
+  async findBlockerSessionBranchesForItems(
+    fromIds: string[],
+    workspaceId?: string,
+  ): Promise<Array<{ fromId: string; sessionBranch: string }>> {
+    if (fromIds.length === 0) return [];
+    const rows = await db.workItemLink.findMany({
+      where: {
+        fromId: { in: fromIds },
+        kind: 'is_blocked_by',
+        toItem: { archivedAt: null },
+        ...(workspaceId ? { workspaceId } : {}),
+      },
+      select: { fromId: true, toItem: { select: { sessionBranch: true } } },
+    });
+    return rows.flatMap((r) =>
+      r.toItem.sessionBranch === null
+        ? []
+        : [{ fromId: r.fromId, sessionBranch: r.toItem.sessionBranch }],
+    );
+  },
+
+  /**
    * The REVERSE-direction sibling of {@link findBlockerEdgesForItems} (MOTIR-1842):
    * for a set of items, the `is_blocked_by` edges that point AT them — i.e. what
    * each item BLOCKS. Same shape, mirrored: keyed by `toId` (the item in the

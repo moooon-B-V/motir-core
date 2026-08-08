@@ -17,7 +17,15 @@ import { truncateAuthTables } from '../helpers/db';
 // cascades to project → board / board_column / board_column_status, so no
 // dedicated board truncate is needed.
 
-const WORKFLOW_ORDER = ['To Do', 'Blocked', 'In Progress', 'In Review', 'Done', 'Cancelled'];
+const WORKFLOW_ORDER = [
+  'To Do',
+  'Blocked',
+  'In Progress',
+  'Planning',
+  'In Review',
+  'Done',
+  'Cancelled',
+];
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -58,7 +66,7 @@ describe('createProject seeds the default board (same transaction)', () => {
     expect(boards[0]?.workspaceId).toBe(workspaceId);
   });
 
-  it('seeds six columns in workflow order, each mapped 1:1 to its status', async () => {
+  it('seeds seven columns in workflow order, each mapped 1:1 to its status', async () => {
     const { userId, workspaceId } = await makeWorkspaceAndUser();
     const project = await projectsService.createProject({
       workspaceId,
@@ -82,7 +90,9 @@ describe('createProject seeds the default board (same transaction)', () => {
 
     // Exactly one mapping per column, pointing at the same-labelled status.
     const mappings = await db.boardColumnStatus.findMany({ where: { boardId: board.id } });
-    expect(mappings).toHaveLength(6);
+    // Seven since MOTIR-2425 added `planning`. The count is stated rather than
+    // derived so adding a status is a deliberate edit here.
+    expect(mappings).toHaveLength(7);
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const columnById = new Map(columns.map((c) => [c.id, c]));
@@ -92,8 +102,8 @@ describe('createProject seeds the default board (same transaction)', () => {
       expect(statusById.get(m.statusId)?.label).toBe(columnById.get(m.columnId)?.name);
     }
     // Every status is mapped exactly once (no unmapped status in the default).
-    expect(new Set(mappings.map((m) => m.statusId)).size).toBe(6);
-    expect(new Set(mappings.map((m) => m.columnId)).size).toBe(6);
+    expect(new Set(mappings.map((m) => m.statusId)).size).toBe(7);
+    expect(new Set(mappings.map((m) => m.columnId)).size).toBe(7);
   });
 
   it('does not leak the board into another project in the same workspace', async () => {
@@ -134,15 +144,15 @@ describe('boardsService.backfillDefaultBoard (one-off, idempotent)', () => {
     const seeded = await boardsService.backfillDefaultBoard(project.id, userId);
     expect(seeded).toBe(true);
     expect(await db.board.count({ where: { projectId: project.id } })).toBe(1);
-    expect(await db.boardColumn.count({ where: { projectId: project.id } })).toBe(6);
-    expect(await db.boardColumnStatus.count({ where: { projectId: project.id } })).toBe(6);
+    expect(await db.boardColumn.count({ where: { projectId: project.id } })).toBe(7);
+    expect(await db.boardColumnStatus.count({ where: { projectId: project.id } })).toBe(7);
 
     // Idempotent — already has a board, so the second call is a no-op and adds
     // no duplicate board/columns.
     const again = await boardsService.backfillDefaultBoard(project.id, userId);
     expect(again).toBe(false);
     expect(await db.board.count({ where: { projectId: project.id } })).toBe(1);
-    expect(await db.boardColumn.count({ where: { projectId: project.id } })).toBe(6);
+    expect(await db.boardColumn.count({ where: { projectId: project.id } })).toBe(7);
   });
 
   it('leaves an already-boarded project untouched (no second board)', async () => {

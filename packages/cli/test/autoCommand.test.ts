@@ -9,10 +9,16 @@ import { setCredential } from '../src/config/userConfig.js';
 import { CliError } from '../src/errors.js';
 import type { CommandResult, CommandRunner } from '../src/git.js';
 import {
-  startTestMcpServer,
-  type TestMcpServer,
-  type ToolScript,
-} from './helpers/mcpTestServer.js';
+  startTestServer,
+  v1Detail,
+  v1Page,
+  v1ReadyRow,
+  v1DispatchPrompt,
+  v1Integration,
+  type TestServer,
+  type V1Request,
+  type V1Script,
+} from './helpers/testServer.js';
 
 // `motir auto` as the COMMAND (Subtask 7.9.5 · MOTIR-883).
 //
@@ -27,7 +33,7 @@ import {
 // which commands the CLI issues — not git's own behaviour, which
 // `tests/cli/cli-story.test.ts` proves against real repositories.
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let configHome: string;
 let cwd: string;
@@ -36,7 +42,7 @@ let exitCode: typeof process.exitCode;
 const TOKEN = 'pat_auto_token';
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -58,7 +64,8 @@ beforeEach(() => {
     JSON.stringify({ serverUrl: server.url, workspace: 'acme', project: 'PROD' }),
   );
   vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-  server.calls.length = 0;
+  server.v1Calls.length = 0;
+  server.resetV1();
   // `autoCommand` reports the run through `process.exitCode`; restoring it in
   // afterEach keeps a failing scripted run from failing the test PROCESS.
   exitCode = process.exitCode;
@@ -73,60 +80,79 @@ afterEach(() => {
 
 const AGENT = { agent: `${process.execPath} -e ""` };
 
-/** A two-item plan where the second only becomes ready once the first is
- *  integrated — the cascade, served over the real protocol. */
-function planTools(): ToolScript {
+/**
+ * A two-item plan where the second only becomes ready once the first is
+ * integrated — the cascade, served over the real protocol.
+ *
+ * ⚠️ ONE state machine, ONE transport now (MOTIR-2398). Every call the loop
+ * makes speaks `/api/v1`, and the cascade only works if they read the same
+ * `integrated` set — so they share this closure rather than being scripted
+ * independently. Splitting them would let the run "drain a chain" that no
+ * longer exists.
+ *
+ * The READY SET is the cascade's source: PROD-2 appears in it only once PROD-1
+ * has been integrated, which is what the real server's edge-derived readiness
+ * does. The loop picks `items[0]`; nothing here decides what is "next".
+ */
+function planScripts(): { v1: V1Script } {
   const integrated = new Set<string>();
   const statuses = new Map<string, string>();
-  const dispatched = new Set<string>();
-  return {
-    next_ready: () => {
-      const key = !dispatched.has('PROD-1')
-        ? 'PROD-1'
-        : integrated.has('PROD-1') && !dispatched.has('PROD-2')
-          ? 'PROD-2'
-          : null;
-      if (!key) return { structured: { item: null } };
-      dispatched.add(key);
+  const v1: V1Script = {
+    // Ready = not yet integrated, and (for PROD-2) its dependency integrated.
+    'GET /api/v1/projects/{projectKey}/ready': () => {
+      const ready = ['PROD-1', 'PROD-2'].filter(
+        (key) =>
+          !integrated.has(key) &&
+          statuses.get(key) !== 'in_review' &&
+          (key === 'PROD-1' || integrated.has('PROD-1')),
+      );
       return {
-        structured: {
-          item: {
-            id: `row-${key}`,
-            key,
-            kind: 'subtask',
-            title: `Item ${key}`,
-            priority: 'medium',
-            status: { key: statuses.get(key) ?? 'todo', category: 'todo' },
-            type: 'code',
-            executor: 'coding_agent',
-            targetRepo: 'motir-core',
-            sessionBranch: null,
-          },
-        },
+        body: v1Page(
+          ready.map((key) =>
+            v1ReadyRow(key, {
+              title: `Item ${key}`,
+              status: { key: statuses.get(key) ?? 'todo', category: 'todo' },
+            }),
+          ),
+        ),
       };
     },
-    dispatch_prompt: (args) => {
-      const key = String(args['key']);
-      const seed = (args['sessionBranch'] as string | undefined) ?? null;
+    'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => {
+      const key = String(req.params['key']);
+      const seed = req.query.get('sessionBranch');
       return {
-        structured: {
-          key,
+        body: v1DispatchPrompt(key, {
           prompt: `PROMPT ${key}`,
           targetRepo: 'motir-core',
           workflowMode: seed ? 'session_lineage' : 'per_item_pr',
           sessionBranch: seed,
-        },
+        }),
       };
     },
-    transition_status: (args) => {
-      statuses.set(String(args['key']), String(args['status']));
-      return { structured: { ok: true } };
+    'POST /api/v1/work-items/{key}/transitions': (req) => {
+      const key = String(req.params['key']);
+      const status = String((req.body as { status: string }).status);
+      statuses.set(key, status);
+      return { body: v1Detail(key, { status }) };
     },
-    mark_integrated: (args) => {
-      integrated.add(String(args['key']));
-      return { structured: { ok: true } };
+    'POST /api/v1/work-items/{key}/integration': (req) => {
+      const key = String(req.params['key']);
+      integrated.add(key);
+      const sent = req.body as { sessionBranch: string };
+      return { body: v1Integration(key, { sessionBranch: sent.sessionBranch }) };
     },
   };
+  return { v1 };
+}
+
+/** Script both halves of the plan onto the server. */
+function scriptPlan(): void {
+  server.scriptV1(planScripts().v1);
+}
+
+/** Every `/api/v1` request to one operation, in order. */
+function v1CallsTo(method: string, suffix: string): V1Request[] {
+  return server.v1Calls.filter((c) => c.method === method && c.path.endsWith(suffix));
 }
 
 /** A git runner that answers like a healthy repo, recording every command. */
@@ -158,7 +184,7 @@ describe('motir auto refuses to start without an agent', () => {
       hint: expect.stringContaining('motir next --print'),
     });
     // It failed BEFORE opening a session — nothing was claimed.
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   // The guard above is only worth anything if the flag actually REACHES it.
@@ -185,7 +211,7 @@ describe('motir auto refuses to start without an agent', () => {
       message: expect.stringContaining('cannot run in --print mode'),
       hint: expect.stringContaining('motir next --print'),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a run with no agent configured anywhere, naming the three sources', async () => {
@@ -193,18 +219,18 @@ describe('motir auto refuses to start without an agent', () => {
     await expect(autoCommand({})).rejects.toMatchObject({
       hint: expect.stringMatching(/MOTIR_AGENT.*agentCommand|--agent/),
     });
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('rejects a malformed --max before any work is dispatched', async () => {
     await expect(autoCommand({ ...AGENT, max: '0' })).rejects.toThrow(CliError);
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 });
 
 describe('motir auto — a whole run through the real session', () => {
   it('drains the chain onto one branch, opens one pull request, and exits 0', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
     const prompts: string[] = [];
 
@@ -216,7 +242,7 @@ describe('motir auto — a whole run through the real session', () => {
         clock: () => 0,
         runAgentFn: async ({ prompt }) => {
           prompts.push(prompt);
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: 'claude-opus-5' };
         },
       },
     );
@@ -224,11 +250,20 @@ describe('motir auto — a whole run through the real session', () => {
     expect(prompts).toEqual(['PROMPT PROD-1', 'PROMPT PROD-2']);
     // Both items were reported as integrated on the run's ONE branch…
     const branch = 'motir/auto-20260729-010203';
-    const integrated = server.calls.filter((c) => c.name === 'mark_integrated');
-    expect(integrated.map((c) => c.args['key'])).toEqual(['PROD-1', 'PROD-2']);
-    expect(new Set(integrated.map((c) => c.args['sessionBranch']))).toEqual(new Set([branch]));
-    // …the harness identified itself (MOTIR-1685 provenance)…
-    expect(String(integrated[0]?.args['implementationHarness'])).toMatch(/^motir-cli\//);
+    const integrated = v1CallsTo('POST', '/integration');
+    expect(integrated.map((c) => c.params['key'])).toEqual(['PROD-1', 'PROD-2']);
+    const bodies = integrated.map((c) => c.body as Record<string, unknown>);
+    expect(new Set(bodies.map((b) => b['sessionBranch']))).toEqual(new Set([branch]));
+    // …the provenance names the AGENT and its model, on the wire (MOTIR-1685
+    // provenance, corrected by MOTIR-2419). The fixture's agent command is
+    // `node -e ""`, so `node` IS the honest answer here — what matters is that
+    // it is derived from the command the loop launched, and that the CLI never
+    // reports itself as the thing that built the work.
+    expect(bodies[0]?.['implementationHarness']).toBe('node');
+    expect(bodies[0]?.['implementationModel']).toBe('claude-opus-5');
+    for (const body of bodies) {
+      expect(String(body['implementationHarness'])).not.toMatch(/^motir-cli\//);
+    }
     // …and the close-out opened exactly one pull request, never a merge.
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     expect(git.log.some((cmd) => cmd.includes('pr merge'))).toBe(false);
@@ -236,7 +271,7 @@ describe('motir auto — a whole run through the real session', () => {
   });
 
   it('runs on its OWN clock and its OWN agent launcher when nothing is injected', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
 
     // Only git is injected: the run id comes from the real clock, and the agent
@@ -247,11 +282,10 @@ describe('motir auto — a whole run through the real session', () => {
       { run: git.run },
     );
 
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(true);
-    // `--kinds` reached the server's own filter rather than being dropped.
-    expect(server.calls.find((c) => c.name === 'next_ready')?.args).toMatchObject({
-      kinds: ['subtask'],
-    });
+    expect(v1CallsTo('POST', '/integration')).toHaveLength(1);
+    // `--kinds` reached the server's own filter rather than being dropped —
+    // as the ready collection's own REPEATED `kind` parameter (MOTIR-2398).
+    expect(v1CallsTo('GET', '/ready')[0]?.query.getAll('kind')).toEqual(['subtask']);
     expect(
       git.log.some((cmd) =>
         /push origin refs\/remotes\/origin\/main:refs\/heads\/motir\/auto-\d{8}-\d{6}/.test(cmd),
@@ -260,9 +294,9 @@ describe('motir auto — a whole run through the real session', () => {
   });
 
   it('--reset clears the persisted exclude list before the run starts', async () => {
-    server.script(planTools());
+    scriptPlan();
     const { addExclude, readExcludes } = await import('../src/sessionExcludes.js');
-    addExclude(server.url, 'PROD', { id: 'row-old', key: 'PROD-99' });
+    addExclude(server.url, 'PROD', { key: 'PROD-99' });
 
     await autoCommand(
       { ...AGENT, reset: true, max: '1' },
@@ -270,15 +304,67 @@ describe('motir auto — a whole run through the real session', () => {
         run: gitRunner().run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       },
     );
 
     expect(readExcludes(server.url, 'PROD')).toEqual([]);
   });
 
+  // MOTIR-2338 made the persisted list key-based; MOTIR-2398 made the PICK
+  // key-based too, so the hold-out is applied inside the client's page walk and
+  // the learn-the-id round trip is gone. ONE ask, and the excluded row is
+  // skipped without the server ever being told about it.
+  it('holds out an item a PREVIOUS run failed on, in ONE ask', async () => {
+    scriptPlan();
+    const { addExclude } = await import('../src/sessionExcludes.js');
+    addExclude(server.url, 'PROD', { key: 'PROD-1' });
+
+    await autoCommand(
+      { ...AGENT, max: '1' },
+      {
+        run: gitRunner().run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    // ONE ready read: the exclusion is applied client-side over the ranked page,
+    // so there is no second ask and no row id anywhere on the wire.
+    const asks = v1CallsTo('GET', '/ready');
+    expect(asks).toHaveLength(1);
+    expect(JSON.stringify(asks[0]?.query ? [...asks[0].query] : [])).not.toContain('row-');
+    // And PROD-1 was never dispatched.
+    expect(v1CallsTo('GET', '/dispatch-prompt')).toEqual([]);
+  });
+
+  // ⚠️ SEED FIRST (MOTIR-2398). `targetRepo` lives on the PROMPT, and the seed
+  // names a branch `repos.ensure` has not created yet — so the prompt is read
+  // WITH the seed before the checkout is resolved. Asserted on the request
+  // COUNT, because a seedless-then-seeded implementation produces identical
+  // output and doubles the calls.
+  it('reads the prompt ONCE per item when the repo has a checkout', async () => {
+    scriptPlan();
+
+    await autoCommand(
+      { ...AGENT, max: '1' },
+      {
+        run: gitRunner().run,
+        now: () => new Date(2026, 6, 29, 1, 2, 3),
+        clock: () => 0,
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      },
+    );
+
+    const prompts = v1CallsTo('GET', '/dispatch-prompt');
+    expect(prompts).toHaveLength(1);
+    // And it carried the run's branch as the seed, before any checkout existed.
+    expect(prompts[0]?.query.get('sessionBranch')).toBe('motir/auto-20260729-010203');
+  });
+
   it('exits non-zero when an agent failed, and still opens the pull request', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
 
     await autoCommand(
@@ -287,14 +373,14 @@ describe('motir auto — a whole run through the real session', () => {
         run: git.run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: 7, signal: null }),
+        runAgentFn: async () => ({ exitCode: 7, signal: null, model: null }),
       },
     );
 
     expect(process.exitCode).toBe(1);
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     // The failed item was NOT reported as integrated.
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(false);
+    expect(v1CallsTo('POST', '/integration')).toEqual([]);
   });
 
   // MOTIR-1836. The exclude store used to live in the credential dir, which the
@@ -304,7 +390,7 @@ describe('motir auto — a whole run through the real session', () => {
   // and opened NO pull request: the exact case `closeOutRepos` exists to prevent.
   // The item that failed is a footnote; the run's whole output was the damage.
   it('closes out even when the store is UNWRITABLE and an agent fails (MOTIR-1836)', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner();
 
     // The sandbox's own shape — an exclude store that cannot be written while
@@ -326,7 +412,11 @@ describe('motir auto — a whole run through the real session', () => {
         run: git.run,
         now: () => new Date(2026, 6, 29, 1, 2, 3),
         clock: () => 0,
-        runAgentFn: async () => ({ exitCode: (runs += 1) === 1 ? 0 : 9, signal: null }),
+        runAgentFn: async () => ({
+          exitCode: (runs += 1) === 1 ? 0 : 9,
+          signal: null,
+          model: null,
+        }),
       },
     );
 
@@ -335,13 +425,11 @@ describe('motir auto — a whole run through the real session', () => {
     // THE regression assertion: the pull request still opened.
     expect(git.log.filter((cmd) => cmd.includes('pr create'))).toHaveLength(1);
     // …carrying the work that landed before the failure, and only that.
-    expect(
-      server.calls.filter((c) => c.name === 'mark_integrated').map((c) => c.args['key']),
-    ).toEqual(['PROD-1']);
+    expect(v1CallsTo('POST', '/integration').map((c) => c.params['key'])).toEqual(['PROD-1']);
   });
 
   it('halts when git fails in a REAL checkout — before the item is touched', async () => {
-    server.script(planTools());
+    scriptPlan();
     const git = gitRunner((bin, args) =>
       bin === 'git' && args[0] === 'fetch'
         ? { exitCode: 1, stdout: '', stderr: 'origin unreachable' }
@@ -357,45 +445,38 @@ describe('motir auto — a whole run through the real session', () => {
         clock: () => 0,
         runAgentFn: async () => {
           dispatches += 1;
-          return { exitCode: 0, signal: null };
+          return { exitCode: 0, signal: null, model: null };
         },
       },
     );
 
     expect(dispatches).toBe(0);
     // Nothing was claimed or transitioned — the failure precedes the status flip.
-    expect(server.calls.some((c) => c.name === 'transition_status')).toBe(false);
+    expect(v1CallsTo('POST', '/transitions')).toEqual([]);
     expect(git.log.some((cmd) => cmd.includes('pr create'))).toBe(false);
   });
 
   it('runs an item whose repo has NO checkout with no lineage rather than failing the run', async () => {
     // `motir-ai` has no checkout under the root, so there is no repository to
     // open a session branch in: the item ships as its own pull request instead.
-    server.script({
-      ...planTools(),
-      next_ready: (() => {
-        let served = false;
-        return () => {
-          if (served) return { structured: { item: null } };
-          served = true;
-          return {
-            structured: {
-              item: {
-                id: 'row-9',
-                key: 'PROD-9',
-                kind: 'subtask',
-                title: 'An item for an unchecked-out repo',
-                priority: 'medium',
-                status: { key: 'todo', category: 'todo' },
-                type: 'code',
-                executor: 'coding_agent',
-                targetRepo: 'motir-ai',
-                sessionBranch: null,
-              },
-            },
-          };
+    let served = false;
+    server.scriptV1({
+      ...planScripts().v1,
+      'GET /api/v1/projects/{projectKey}/ready': () => {
+        if (served) return { body: v1Page([]) };
+        served = true;
+        return {
+          body: v1Page([v1ReadyRow('PROD-9', { title: 'An item for an unchecked-out repo' })]),
         };
-      })(),
+      },
+      // The prompt is what says WHERE it ships — `motir-ai`, which has no
+      // checkout under the root (MOTIR-2398: the repo comes from the prompt).
+      'GET /api/v1/work-items/{key}/dispatch-prompt': (req) => ({
+        body: v1DispatchPrompt(String(req.params['key']), {
+          prompt: `PROMPT ${String(req.params['key'])}`,
+          targetRepo: 'motir-ai',
+        }),
+      }),
     });
     const git = gitRunner((bin) =>
       // The root is not a git repository at all.
@@ -410,12 +491,12 @@ describe('motir auto — a whole run through the real session', () => {
         clock: () => 0,
         // The agent "creates" nothing, so the bootstrap post-condition fails —
         // which is a FAILED dispatch, and the run still completes cleanly.
-        runAgentFn: async () => ({ exitCode: 0, signal: null }),
+        runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
       },
     );
 
-    expect(server.calls.some((c) => c.name === 'transition_status')).toBe(true);
-    expect(server.calls.some((c) => c.name === 'mark_integrated')).toBe(false);
+    expect(v1CallsTo('POST', '/transitions').length).toBeGreaterThan(0);
+    expect(v1CallsTo('POST', '/integration')).toEqual([]);
     expect(process.exitCode).toBe(1);
   });
 });

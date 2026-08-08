@@ -18,7 +18,7 @@ import type {
   WorkItemEdgeSummary,
   WorkItemLink,
   WorkItemSummary,
-} from './mcpClient.js';
+} from './client.js';
 
 // Pure rendering + query-shaping helpers for the read commands (7.9.2). Kept
 // free of I/O (no MCP, no stdout) so they are directly unit-testable and the
@@ -826,7 +826,7 @@ export function relativeTime(iso: string, now: Date): string {
  * sprint), never dropping both.
  *
  * The `default` branch is NOT dead code: `ActivityValue` mirrors an open union
- * on purpose (mcpClient.ts), because a newer server can send a value type this
+ * on purpose (client.ts), because a newer server can send a value type this
  * published CLI has never seen. It prints whatever resolved label the value
  * carries instead of failing on a shape it cannot name.
  */

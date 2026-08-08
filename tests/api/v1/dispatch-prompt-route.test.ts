@@ -227,6 +227,7 @@ describe('the dispatch-prompt schema', () => {
     const withFutureSeverity = {
       key: 'PROD-1',
       prompt: 'text',
+      parentKey: 'PROD-9',
       targetRepo: null,
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,
@@ -250,6 +251,7 @@ describe('the dispatch-prompt schema', () => {
     const mapped = presentDispatchPrompt({
       key: 'PROD-1',
       prompt: 'text',
+      parentKey: 'PROD-9',
       targetRepo: null,
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,
@@ -279,6 +281,7 @@ describe('the dispatch-prompt schema', () => {
     const mapped = presentDispatchPrompt({
       key: 'PROD-1',
       prompt: 'text',
+      parentKey: 'PROD-9',
       targetRepo: null,
       targetRepoCloneUrl: null,
       targetRepoDefaultBranch: null,

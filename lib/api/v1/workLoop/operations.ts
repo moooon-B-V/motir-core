@@ -3,6 +3,8 @@ import type { ZodType } from 'zod/v4';
 import { defineOperation, type V1Operation } from '@/lib/api/v1/openapi/operation';
 import {
   dispatchPromptSchema,
+  implementationReportBodySchema,
+  implementationReportSchema,
   integrationBodySchema,
   integrationResultSchema,
   planJobHandleSchema,
@@ -13,6 +15,7 @@ import {
   planTurnBodySchema,
   ACTIVITY_VIEWS,
   activityEntrySchema,
+  activityTotalsSchema,
   sessionCloseOutBodySchema,
   sessionCloseOutSchema,
 } from '@/lib/api/v1/workLoop/schema';
@@ -115,6 +118,43 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     },
     // 422 covers a malformed key, a failed body validation, and the workflow's
     // own refusal (`ILLEGAL_TRANSITION`).
+    errorStatuses: [404, 422],
+  }),
+
+  defineOperation({
+    method: 'POST',
+    path: '/api/v1/work-items/{key}/implementation',
+    operationId: 'reportWorkItemImplementation',
+    summary: 'Record what BUILT a work item',
+    description:
+      'Record implementation provenance — the harness and model an agent ran as, and whether ' +
+      'the run was `byok` or `manual` — WITHOUT asserting anything about where the work is ' +
+      'integrated. Use this on the per-item pull-request path, where there is no session ' +
+      'branch to report; use `POST …/integration` when there is one. It moves NO status and ' +
+      'leaves the item’s session branch untouched, both of which are echoed back so a client ' +
+      'can see it. A field you omit is left exactly as it is — omitting all of them changes ' +
+      'nothing.',
+    scope: 'integration',
+    parameters: [
+      {
+        name: 'key',
+        in: 'path',
+        required: true,
+        description: 'The work item’s `MOTIR-<n>` key (case-insensitive).',
+        schema: z.string(),
+      },
+    ],
+    requestBody: {
+      schema: implementationReportBodySchema,
+      description:
+        'The provenance to record. `sessionBranch` is NOT accepted here — send it to ' +
+        '`POST …/integration`, which is the operation that asserts integration.',
+    },
+    response: {
+      status: 200,
+      body: { kind: 'object', schema: implementationReportSchema },
+      description: 'The item’s recorded provenance, with its unchanged status and branch.',
+    },
     errorStatuses: [404, 422],
   }),
 
@@ -408,9 +448,11 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
     ],
     response: {
       status: 200,
-      body: { kind: 'rankedPage', item: activityEntrySchema },
+      body: { kind: 'rankedPage', item: activityEntrySchema, extend: activityTotalsSchema },
       description:
-        'One page of activity entries, with `totalCount` the number of entries in this view.',
+        'One page of activity entries. `totalCount` is the number of entries in this view; ' +
+        '`totalComments` / `totalChanges` break that down for the merged `all` view, and each ' +
+        'is null on a view that did not count that source.',
     },
     errorStatuses: [404, 422],
   }),

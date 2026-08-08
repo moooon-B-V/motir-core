@@ -80,6 +80,7 @@ import {
   dragIntoCellUntil,
   setGroupBy,
   setColumnWip,
+  boardViewportWidth,
 } from './_helpers/board';
 import { createItem, transition } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
@@ -216,11 +217,12 @@ async function seedScrumAtScale(
   };
 }
 
-// Open /boards at a viewport wide enough for all six default columns and wait
+// Open /boards at a viewport wide enough for EVERY default column — derived
+// from the shipped workflow (`boardViewportWidth`), not pinned — and wait
 // past the loading skeleton for the SPRINT-SCOPED board (the scrum seed flips
 // the board type, so the 4.5.3 sprint header is the scrum tell).
 async function openScrumBoard(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize(boardViewportWidth());
   await page.goto('/boards');
   await expect(page.getByTestId('board')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('sprint-header')).toBeVisible();

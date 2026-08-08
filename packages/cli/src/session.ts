@@ -1,4 +1,4 @@
-import { MotirClient, type ReadyItemSummary, type SearchItemSummary } from './mcpClient.js';
+import { MotirClient, type ReadyItemSummary, type SearchItemSummary } from './client.js';
 import { sprintFilter } from './render.js';
 import { CliError } from './errors.js';
 import { requireLink, type FoundLink } from './config/linkConfig.js';
@@ -23,9 +23,14 @@ export interface ProjectSession {
   client: MotirClient;
 }
 
-/** Resolve the linked project + token and open a connected MCP client. Throws
- * {@link CliError} (NotLinked / not-logged-in) before any network call. The
- * caller MUST close the client — prefer {@link withProjectSession}. */
+/** Resolve the linked project + token and build a client for it. Throws
+ * {@link CliError} (NotLinked / not-logged-in) before any network call.
+ *
+ * ⚠️ NOTHING IS OPENED. A client is a base URL and a bearer, so there is no
+ * handshake to perform here and nothing for the caller to close — the MCP
+ * session this function used to open went with the SDK (11.5.6). It stays
+ * `async` because every caller awaits it and the signature is not this card's
+ * to change. */
 export async function openProjectSession(): Promise<ProjectSession> {
   const link = requireLink();
   const serverUrl = resolveServerUrl();
@@ -36,20 +41,16 @@ export async function openProjectSession(): Promise<ProjectSession> {
     });
   }
   const client = new MotirClient({ serverUrl, token: cred.token });
-  await client.connect();
   return { link, serverUrl, projectKey: link.config.project, client };
 }
 
-/** Run `fn` with an open project session, always closing the client after. */
+/** Run `fn` against the linked project's session — the entry point every
+ *  project-scoped command goes through, so the link/credential resolution and
+ *  its error wording live in exactly one place. */
 export async function withProjectSession<T>(
   fn: (session: ProjectSession) => Promise<T>,
 ): Promise<T> {
-  const session = await openProjectSession();
-  try {
-    return await fn(session);
-  } finally {
-    await session.client.close();
-  }
+  return fn(await openProjectSession());
 }
 
 /** The list_ready page size cap (server clamps `limit` to 200). We page at the
@@ -94,8 +95,16 @@ export const SEARCH_PAGE_SIZE = 50;
 
 export interface SprintItemsResult {
   items: SearchItemSummary[];
-  /** The server's total for the query — what the collected count is checked
-   * against, so an early stop is visible rather than silent. */
+  /**
+   * How many were collected.
+   *
+   * It used to be the SERVER's total for the query, checked against the rows in
+   * hand so an early stop was visible rather than silent. The v1 collection
+   * publishes no total (ADR Amendment 11 Q3), and there is nothing left to
+   * check: this walk runs until `nextCursor` is null, so every matching row IS
+   * in `items`. Asking `…/work-items/count` for a second opinion would be one
+   * more request answering a question the page walk has already answered.
+   */
   total: number;
 }
 
@@ -116,7 +125,6 @@ export async function collectSprintItems(
 ): Promise<SprintItemsResult> {
   const items: SearchItemSummary[] = [];
   let cursor: string | undefined;
-  let total = 0;
   do {
     const page = await client.searchWorkItems({
       projectKey,
@@ -125,8 +133,7 @@ export async function collectSprintItems(
       limit: SEARCH_PAGE_SIZE,
     });
     items.push(...page.items);
-    total = page.total;
     cursor = page.nextCursor ?? undefined;
   } while (cursor);
-  return { items, total };
+  return { items, total: items.length };
 }

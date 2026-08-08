@@ -116,6 +116,125 @@ describe('runAgent', () => {
   });
 });
 
+// ── the agent's SELF-REPORT (MOTIR-2419) ────────────────────────────────────
+// The model is the one thing about a BYOK run nothing outside the agent process
+// can observe, so it arrives at $MOTIR_AGENT_REPORT or not at all. Driven with a
+// REAL child process for the same reason the prompt channel is: the contract
+// that matters is the one a foreign binary can actually satisfy.
+
+/** A fake agent that writes `body` verbatim to $MOTIR_AGENT_REPORT. */
+function reportingAgent(body: string) {
+  return fakeAgent(
+    `require('fs').writeFileSync(process.env.MOTIR_AGENT_REPORT, ${JSON.stringify(body)});`,
+  );
+}
+
+describe('the model self-report', () => {
+  it('reports the model the agent named', async () => {
+    const result = await runAgent({
+      command: reportingAgent('{"model":"claude-opus-5"}'),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.exitCode).toBe(0);
+    expect(result.model).toBe('claude-opus-5');
+  });
+
+  it('reports NULL when the agent writes nothing — never a default', async () => {
+    // The whole point of the field: a guessed model is a wrong answer wearing
+    // the shape of a right one, and this is the run that would produce it.
+    const result = await runAgent({
+      command: fakeAgent('process.exit(0)'),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.model).toBeNull();
+  });
+
+  it('reports NULL rather than throwing on a report it cannot trust', async () => {
+    for (const body of [
+      'not json at all',
+      '[]',
+      'null',
+      '{}',
+      '{"model":null}',
+      '{"model":42}',
+      '{"model":"   "}',
+      // An agent that dumped its context into the field. This is untrusted
+      // input on its way to a database column — rejected, never truncated,
+      // because half an identifier is a wrong answer rather than a partial one.
+      `{"model":"${'m'.repeat(201)}"}`,
+    ]) {
+      const result = await runAgent({ command: reportingAgent(body), prompt: PROMPT, cwd: work });
+      expect(result.exitCode, body).toBe(0);
+      expect(result.model, body).toBeNull();
+    }
+  });
+
+  it('trims the reported model', async () => {
+    const result = await runAgent({
+      command: reportingAgent('{"model":"  gpt-5-codex \\n"}'),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.model).toBe('gpt-5-codex');
+  });
+
+  it('keeps the report of an agent that FAILED — it still ran on that model', async () => {
+    const result = await runAgent({
+      command: fakeAgent(
+        `require('fs').writeFileSync(process.env.MOTIR_AGENT_REPORT,'{"model":"m-1"}');` +
+          `process.exit(7);`,
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(result.exitCode).toBe(7);
+    expect(result.model).toBe('m-1');
+  });
+
+  it('puts the report in the PER-RUN temp dir, and takes it away with the dir', async () => {
+    // Load-bearing against the staleness failure: a fixed path in the checkout
+    // would carry item N's model onto item N+1 whenever the agent wrote nothing.
+    const out = join(work, 'report-path.txt');
+    const first = await runAgent({
+      command: fakeAgent(
+        `const fs=require('fs');const p=process.env.MOTIR_AGENT_REPORT;` +
+          `fs.writeFileSync(${JSON.stringify(out)},p);fs.writeFileSync(p,'{"model":"m-1"}');`,
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(first.model).toBe('m-1');
+    const path = readFileSync(out, 'utf8');
+    expect(existsSync(path)).toBe(false);
+
+    // A SECOND run that reports nothing cannot inherit the first one's answer.
+    const second = await runAgent({
+      command: fakeAgent('process.exit(0)'),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    expect(second.model).toBeNull();
+  });
+
+  it('sits beside the prompt file, so an agent gets both channels or neither', async () => {
+    const out = join(work, 'both.txt');
+    await runAgent({
+      command: fakeAgent(
+        `require('fs').writeFileSync(${JSON.stringify(out)},` +
+          `JSON.stringify([process.env.MOTIR_PROMPT_FILE,process.env.MOTIR_AGENT_REPORT]));`,
+      ),
+      prompt: PROMPT,
+      cwd: work,
+    });
+    const [promptFile, reportFile] = JSON.parse(readFileSync(out, 'utf8')) as string[];
+    expect(promptFile).toBeTruthy();
+    expect(reportFile).toBeTruthy();
+    expect(join(reportFile as string, '..')).toBe(join(promptFile as string, '..'));
+  });
+});
+
 // ── coverage gaps closed by 7.9.5 (MOTIR-883) ───────────────────────────────
 // The launch-failure and death-by-signal edges. A BYOK agent is somebody else's
 // binary, so "it wasn't there" and "it was killed" are ordinary outcomes the CLI
@@ -201,6 +320,6 @@ describe('the injected spawn seam covers what a real child cannot show', () => {
     });
     child.emit('close', null, null);
 
-    expect(await result).toEqual({ exitCode: 1, signal: null });
+    expect(await result).toEqual({ exitCode: 1, signal: null, model: null });
   });
 });

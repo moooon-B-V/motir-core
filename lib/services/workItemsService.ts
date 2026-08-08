@@ -1789,6 +1789,22 @@ export const workItemsService = {
    * the item (the session flows lock + tenant/access-check it via
    * `applyStatusTransition` in the same `tx`). `harness`/`model` are recorded
    * as-is (self-reported; no verification implied for byok/manual). Required `tx`.
+   *
+   * ⚠️ A PARTIAL REPORT UPDATES ONLY WHAT IT REPORTS (MOTIR-2447). `harness` and
+   * `model` distinguish three states, and all three are load-bearing:
+   *
+   *   • OMITTED (`undefined`) — the caller does not know. The stored value is
+   *     left exactly as it is.
+   *   • `null` — the caller knows there is none, and clears it.
+   *   • a string — the caller's report, recorded verbatim.
+   *
+   * Collapsing the first two (`harness ?? null`) is what made the close-out
+   * erase the run's own record: `motir auto` stamped the agent and its model at
+   * integration, and `motir done --session` — which knows only that the work was
+   * BYOK — overwrote both with what it happened to hold. Every caller here holds
+   * a DIFFERENT subset (the loop: harness + model; the close-out: source alone;
+   * a hosted runner: all three), so a report has to be able to say nothing about
+   * a field without that meaning "there is nothing".
    */
   async recordImplementationProvenance(
     workItemId: string,
@@ -1799,8 +1815,8 @@ export const workItemsService = {
       workItemId,
       {
         implementationSource: provenance.source,
-        implementationHarness: provenance.harness ?? null,
-        implementationModel: provenance.model ?? null,
+        ...(provenance.harness === undefined ? {} : { implementationHarness: provenance.harness }),
+        ...(provenance.model === undefined ? {} : { implementationModel: provenance.model }),
       },
       tx,
     );
@@ -1940,6 +1956,51 @@ export const workItemsService = {
     );
 
     return report;
+  },
+
+  /**
+   * Record implementation provenance WITHOUT asserting integration (MOTIR-2421)
+   * — what built a work item, said on its own.
+   *
+   * `markIntegrated` was the only path that wrote the triple, and its subject is
+   * the session branch: the branch is a required positional there, and the v1
+   * endpoint behind it requires it in the body. So provenance inherited a
+   * precondition it has nothing to do with, and `motir batch` — which opens ONE
+   * pull request per item off `main` and therefore has no branch — could not
+   * record any. Every card it ever ran carries a null triple.
+   *
+   * ⚠️ THIS METHOD MUST NEVER TOUCH `session_branch`, AND THAT IS THE POINT. A
+   * recorded branch is not an annotation: `isOpenBlocker` reads one as evidence
+   * that a blocker is satisfied, which is how a run cascades through a
+   * dependency chain with nothing merged. Inventing a branch here so the
+   * existing call could be reused — the short road, and the one anybody reaches
+   * for first — would make batch-run items stop blocking their dependents
+   * without a merge, and would enrol them in a `motir done --session` close-out
+   * they were never part of. A null column is a gap; that would be corruption
+   * wearing a fix's clothes.
+   *
+   * It moves no status either. The caller has already put the item wherever it
+   * belongs (`motir batch` transitions to In Review when the agent opens its own
+   * pull request); this says only what built the work. "What built this" and
+   * "where is it integrated" are independent facts that used to share one write.
+   *
+   * Gated exactly like the mutation routes: tenant check + browse gate through
+   * `getWorkItem`, so a cross-tenant key 404s before anything is written.
+   */
+  async reportImplementation(
+    workItemId: string,
+    ctx: ServiceContext,
+    implementation: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
+  ): Promise<WorkItemDto> {
+    await workItemsService.getWorkItem(workItemId, ctx);
+    const row = await db.$transaction((tx) =>
+      workItemsService.recordImplementationProvenance(
+        workItemId,
+        { source: implementation.source ?? 'byok', ...implementation },
+        tx,
+      ),
+    );
+    return toWorkItemDto(row);
   },
 
   async markIntegrated(
@@ -2746,6 +2807,42 @@ export const workItemsService = {
       })),
       hasMore,
     };
+  },
+
+  /**
+   * COUNT the work items {@link listProjectWorkItemsPage} would page (ADR
+   * Amendment 14) — the read behind `GET …/work-items/count`.
+   *
+   * Deliberately a MIRROR of that method and not a variation on it: the same
+   * project + workspace gate, the same `assertCanBrowse`, the same referent
+   * resolution, and the same `buildRepoFilter`. A count that disagreed with the
+   * page it claims to count would be worse than no count at all, and the only
+   * way to keep them agreeing is for both to build their predicate the same way
+   * from the same input. What it drops is the keyset position and the limit —
+   * a count has neither.
+   *
+   * `countProjectIssues` carries one term the keyset scope does not, an
+   * `excludeIds` exclusion; it is a no-op here because this path never sets one,
+   * and a test pins the two reads as agreeing rather than leaving that resting
+   * on inspection.
+   */
+  async countProjectWorkItems(
+    projectId: string,
+    params: { filter?: ProjectTreeFilter },
+    ctx: ServiceContext,
+  ): Promise<number> {
+    const project = await projectRepository.findById(projectId);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(projectId);
+    }
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    const referents = params.filter?.ast
+      ? await loadFilterReferents(projectId, project.workspaceId, params.filter.ast)
+      : undefined;
+    const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
+
+    return workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter);
   },
 
   /**
@@ -3865,7 +3962,61 @@ export const workItemsService = {
       more && last
         ? encodeReadyCursor({ kind: last.kind, priority: last.priority, key: last.key })
         : null;
-    return { items: window.map((r) => toReadyItemDto(r, rowReadyContext(r))), nextCursor };
+    // The inherited lineage, for the WHOLE window in one query (MOTIR-2400).
+    // `getReadiness` computes the same value per item; calling it here would be
+    // one readiness computation per row of every page.
+    const lineages = await workItemsService.getInheritedSessionBranches(
+      window.map((r) => r.id),
+      ctx,
+    );
+    return {
+      items: window.map((r) =>
+        toReadyItemDto(r, {
+          ...rowReadyContext(r),
+          inheritedSessionBranch: lineages[r.id] ?? null,
+        }),
+      ),
+      nextCursor,
+    };
+  },
+
+  /**
+   * The INHERITED SESSION BRANCH for a page of items — for each id, the single
+   * branch its blockers are integrated on, or `null` when it is ready from the
+   * trunk (Story 11.5 · Subtask 11.5.24 — MOTIR-2400).
+   *
+   * ⚠️ A ready item can never span more than one branch — that is what makes a
+   * single value the right answer, and it is the same collapse `getReadiness`
+   * performs. An item whose blockers name TWO branches is therefore not ready,
+   * and this returns `null` for it rather than picking one: reporting a lineage
+   * for an item that has no single lineage would be a confident wrong answer,
+   * where `null` is the same thing the row says for "ready from `main`" — and a
+   * not-ready item never reaches a ready page anyway.
+   *
+   * ONE query for a page of any size. Empty input short-circuits.
+   */
+  async getInheritedSessionBranches(
+    itemIds: string[],
+    ctx: ServiceContext,
+  ): Promise<Record<string, string | null>> {
+    const byItem: Record<string, string | null> = {};
+    for (const id of itemIds) byItem[id] = null;
+    if (itemIds.length === 0) return byItem;
+
+    const rows = await workItemLinkRepository.findBlockerSessionBranchesForItems(
+      itemIds,
+      ctx.workspaceId,
+    );
+    const branches = new Map<string, Set<string>>();
+    for (const row of rows) {
+      const seen = branches.get(row.fromId) ?? new Set<string>();
+      seen.add(row.sessionBranch);
+      branches.set(row.fromId, seen);
+    }
+    for (const [itemId, seen] of branches) {
+      if (seen.size === 1) byItem[itemId] = [...seen][0] ?? null;
+    }
+    return byItem;
   },
 
   /**
@@ -4277,10 +4428,18 @@ function isAfterReadyCursor(
   return compareReadyRows(row, cursor) > 0;
 }
 
-/** The resolved status-category + assignee bits the 7.0.3 mapper needs beyond
- *  the `WorkItem` row — both already carried on the candidate row (joined in the
- *  single read), so this is a pure projection, no DB call. */
-function rowReadyContext(row: ReadyCandidateRow): ReadyItemContext {
+/**
+ * The resolved status-category + assignee bits the 7.0.3 mapper needs beyond
+ * the `WorkItem` row — both already carried on the candidate row (joined in the
+ * single read), so this is a pure projection, no DB call.
+ *
+ * `inheritedSessionBranch` is deliberately NOT part of it and is why the return
+ * type is an `Omit`: it is a fact about the item's DEPENDENCIES, not a column on
+ * the row, so a pure row projection cannot supply it. Each caller adds it from
+ * wherever it can afford to — the list read in batch for a whole page, a
+ * dispatch from the `getReadiness` it already paid for.
+ */
+function rowReadyContext(row: ReadyCandidateRow): Omit<ReadyItemContext, 'inheritedSessionBranch'> {
   return {
     statusCategory: row.statusCategory,
     assignee: row.assigneeId
@@ -4333,6 +4492,12 @@ async function buildReadyDispatchDto(
     parent: parentRow ? { identifier: parentRow.identifier } : null,
     contextRefs: extractContextRefs(row.descriptionMd),
     sessionBranch: readiness.inheritedSessionBranch,
+    // The SAME value the list read resolves in batch (MOTIR-2400). Taken from
+    // `getReadiness` here because a dispatch decorates ONE item and has already
+    // paid for it; `sessionBranch` above is this fact addressed as an
+    // instruction, and both names are kept so neither surface has to explain
+    // itself in terms of the other.
+    inheritedSessionBranch: readiness.inheritedSessionBranch,
     // WHICH repo to run this in (Story 7.9 · MOTIR-1804 · MOTIR-1783): the
     // item's explicit pin, else the project's SINGLE repo, else null — never a
     // guess across an ambiguous set. The CLI maps this name to a checkout path;

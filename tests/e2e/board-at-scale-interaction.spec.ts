@@ -61,6 +61,7 @@ import {
   dragIntoCellUntil,
   setGroupBy,
   setColumnWip,
+  boardViewportWidth,
 } from './_helpers/board';
 import { createItem, transition } from './_helpers/workflow';
 import { projectsService } from '@/lib/services/projectsService';
@@ -159,11 +160,13 @@ async function seedBoardAtScale(
   };
 }
 
-// Open /boards at a viewport wide enough for all six default columns (6 × 18rem ≈
-// 1728px) so a cross-column pointer drag never has to chase a horizontally-
-// scrolling target. Waits past the loading skeleton (the at-scale set is heavy).
+// Open /boards at a viewport wide enough for EVERY default column, so a
+// cross-column pointer drag never has to chase a horizontally-scrolling target.
+// The width is DERIVED from the shipped workflow (`boardViewportWidth`) rather
+// than pinned — a seventh status made the old 1920 too narrow and the drags
+// began missing. Waits past the loading skeleton (the at-scale set is heavy).
 async function openBoard(page: Page): Promise<void> {
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  await page.setViewportSize(boardViewportWidth());
   await page.goto('/boards');
   await expect(page.getByTestId('board')).toBeVisible({ timeout: 30_000 });
 }

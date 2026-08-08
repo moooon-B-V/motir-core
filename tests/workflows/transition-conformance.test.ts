@@ -107,18 +107,22 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
   // This is the guard the card's "delete one edge → suite fails" step exercises:
   // the seed and the behavioral sweep both read DEFAULT_TRANSITIONS, so only a
   // pin against literals catches an edit to the constant itself.
-  it('declares exactly the six default statuses', () => {
+  it('declares exactly the seven default statuses', () => {
     expect(STATUS_KEYS).toEqual([
       'todo',
       'blocked',
       'in_progress',
+      // MOTIR-2425 — the in_progress-category state a card sits in while its
+      // plan is reconsidered. It is in this literal pin for the same reason
+      // every other key is: adding a status has to be a deliberate edit here.
+      'planning',
       'in_review',
       'done',
       'cancelled',
     ]);
   });
 
-  it('declares exactly the seventeen default transition edges (finding #45 + 7.8.11 + MOTIR-1625)', () => {
+  it('declares exactly the twenty-two default transition edges (finding #45 + 7.8.11 + MOTIR-1625 + MOTIR-2425)', () => {
     expect(new Set(EDGES.map(([from, to]) => edgeKey(from, to)))).toEqual(
       new Set([
         'todo>in_progress',
@@ -141,20 +145,30 @@ describe('default workflow — graph shape is locked (literal pin, constant-deri
         'in_progress>cancelled',
         'in_review>cancelled',
         'blocked>cancelled',
+        // MOTIR-2425: a card whose plan is being reconsidered. IN from the two
+        // states it can be in when that is discovered; OUT to the three a human
+        // can send it to once the plan is approved. Deliberately NOT from
+        // `in_review` — that path goes back through `in_progress`, which
+        // already exists.
+        'todo>planning',
+        'in_progress>planning',
+        'planning>todo',
+        'planning>in_progress',
+        'planning>cancelled',
       ]),
     );
-    expect(EDGES).toHaveLength(17);
+    expect(EDGES).toHaveLength(22);
   });
 
-  it('partitions the 6×6 grid into 17 edges + 6 self-loops + 13 non-edges', () => {
+  it('partitions the 7×7 grid into 22 edges + 7 self-loops + 20 non-edges', () => {
     expect(NON_EDGES).toHaveLength(
       STATUS_KEYS.length * STATUS_KEYS.length - EDGES.length - STATUS_KEYS.length,
     );
-    expect(NON_EDGES).toHaveLength(13);
+    expect(NON_EDGES).toHaveLength(20);
   });
 });
 
-describe('restricted mode — every default edge is accepted (the full 17-edge sweep)', () => {
+describe('restricted mode — every default edge is accepted (the full 22-edge sweep)', () => {
   it.each(EDGES)(
     '%s → %s transitions and records exactly one "updated" revision',
     async (from, to) => {

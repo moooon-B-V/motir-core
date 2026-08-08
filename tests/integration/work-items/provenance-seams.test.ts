@@ -105,6 +105,97 @@ describe('provenance write → read-DTO seams (all sources through the detail re
     expect(dto.planningSource).toBeNull();
   });
 
+  // ── THE FULL CYCLE (MOTIR-2447) ───────────────────────────────────────────
+  // The bug this replaces was invisible to a test of either write: both did
+  // exactly what their caller asked. It only existed in the SEQUENCE — and the
+  // sequence spans a human merging a pull request, which is why nothing crossed
+  // it. These drive both writes in order, against the DTO the UI reads.
+
+  it('a run then its CLOSE-OUT: the agent and model survive `complete_session`', async () => {
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'full cycle' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(created.id, 'in_progress', fx.ctx);
+    // 1. `motir auto` integrates: it knows the harness and the model.
+    await workItemsService.markIntegrated(created.id, 'motir/auto-1', fx.ctx, {
+      source: 'byok',
+      harness: 'claude',
+      model: 'claude-opus-5',
+    });
+    // 2. a human merges. 3. `motir done --session` closes out knowing ONLY that
+    //    the work was BYOK — it ran days after the agent exited.
+    await workItemsService.completeSession('motir/auto-1', fx.ctx, { source: 'byok' });
+
+    const dto = await readDto(fx, created.identifier);
+    expect(dto.status).toBe('done');
+    expect(dto.implementationSource).toBe('byok');
+    // Previously `motir-cli/<version>` / null — the close-out overwrote the run's
+    // own record with what it happened to hold.
+    expect(dto.implementationHarness).toBe('claude');
+    expect(dto.implementationModel).toBe('claude-opus-5');
+  });
+
+  it('the close-out still STAMPS an item that never reported provenance', async () => {
+    // The `--print` lane: a human pastes the prompt into their own agent, so
+    // nothing ever calls `mark_integrated`. The close-out is the only thing that
+    // knows the work was BYOK, and it must keep saying so.
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'print lane' },
+      fx.ctx,
+    );
+    await workItemsService.updateStatus(created.id, 'in_progress', fx.ctx);
+    await workItemsService.updateStatus(created.id, 'in_review', fx.ctx);
+    await db.workItem.update({
+      where: { id: created.id },
+      data: { sessionBranch: 'motir/auto-2' },
+    });
+    await workItemsService.completeSession('motir/auto-2', fx.ctx, { source: 'byok' });
+
+    const dto = await readDto(fx, created.identifier);
+    expect(dto.implementationSource).toBe('byok');
+    // Honestly empty, not filled with the tool that happened to close it out.
+    expect(dto.implementationHarness).toBeNull();
+    expect(dto.implementationModel).toBeNull();
+  });
+
+  it('an OMITTED field is left alone; an explicit null CLEARS it', async () => {
+    // The distinction the whole fix rests on, asserted directly at the write.
+    // Without it every caller must either overwrite all three or say nothing,
+    // and each of them holds a different subset of the answer.
+    const fx = await makeFixture();
+    const created = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'partial' },
+      fx.ctx,
+    );
+    await db.$transaction(async (tx) => {
+      await workItemsService.recordImplementationProvenance(
+        created.id,
+        { source: 'byok', harness: 'codex', model: 'gpt-5-codex' },
+        tx,
+      );
+      // Reports the source alone — knows nothing about the other two.
+      await workItemsService.recordImplementationProvenance(created.id, { source: 'byok' }, tx);
+    });
+    let dto = await readDto(fx, created.identifier);
+    expect(dto.implementationHarness).toBe('codex');
+    expect(dto.implementationModel).toBe('gpt-5-codex');
+
+    // An explicit null is a REPORT — "there is none" — and does clear it.
+    await db.$transaction(async (tx) => {
+      await workItemsService.recordImplementationProvenance(
+        created.id,
+        { source: 'byok', harness: null, model: null },
+        tx,
+      );
+    });
+    dto = await readDto(fx, created.identifier);
+    expect(dto.implementationHarness).toBeNull();
+    expect(dto.implementationModel).toBeNull();
+  });
+
   it('the unknown state: an unstamped item reads all-null on both triples', async () => {
     const fx = await makeFixture();
     const created = await workItemsService.createWorkItem(

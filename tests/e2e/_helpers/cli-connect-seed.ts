@@ -251,7 +251,7 @@ export async function expireGrant(userCode: string): Promise<void> {
  * Does this bearer actually work against the shipped MCP endpoint?
  *
  * Driven through the SAME SDK client + streamable-HTTP transport `packages/cli`
- * uses (`mcpClient.ts`), against the real `/api/mcp` — so a `true` here means
+ * uses (`client.ts`), against the real `/api/v1` — so a `true` here means
  * the token passed `withMcpAuth`'s gate and the server completed a real MCP
  * handshake, not that some hand-rolled JSON-RPC body happened to 200.
  *
@@ -280,7 +280,7 @@ export async function mcpBearerWorks(accessToken: string): Promise<boolean> {
 }
 
 /** The transport surfaces the gate's 401 as an error carrying that code — the
- *  same test `packages/cli/src/mcpClient.ts` makes to detect a dead credential. */
+ *  same test `packages/cli/src/client.ts` makes to detect a dead credential. */
 function isUnauthorized(err: unknown): boolean {
   const code = (err as { code?: unknown })?.code;
   if (code === 401) return true;

@@ -22,7 +22,9 @@ import {
 import { runIdFromDate, sessionBranchName, type CommandResult } from '../src/git.js';
 import { CliError } from '../src/errors.js';
 import type { AgentRunResult } from '../src/agentRun.js';
-import type { DispatchPrompt, MotirClient } from '../src/mcpClient.js';
+import { parseAgentCommand } from '../src/agentProfiles.js';
+import { CLI_VERSION } from '../src/version.js';
+import type { DispatchPrompt, MotirClient } from '../src/client.js';
 import type { ProjectSession } from '../src/session.js';
 
 // `motir auto` — the sequential WHILE loop (Subtask 7.9.4 · MOTIR-882).
@@ -49,6 +51,8 @@ interface FakeItem {
   deps: string[];
   status: string;
   sessionBranch: string | null;
+  /** Who holds it — null is unclaimed (MOTIR-2427). */
+  assigneeId: string | null;
   /** When set, this item only ENTERS the plan once `appearsAfter` is integrated
    *  — it is absent from every listing before that, which is what makes "the
    *  ready set changes underneath the loop" real rather than rearranged. */
@@ -67,6 +71,7 @@ function leaf(id: string, key: string, over: Partial<FakeItem> = {}): FakeItem {
     deps: [],
     status: 'todo',
     sessionBranch: null,
+    assigneeId: null,
     ...over,
   };
 }
@@ -78,6 +83,12 @@ function story(id: string, key: string): FakeItem {
 class FakeServer {
   readonly transitions: { key: string; status: string }[] = [];
   readonly integrated: { key: string; sessionBranch: string }[] = [];
+  /** The implementation provenance each integration carried (MOTIR-2419). */
+  readonly provenance: { key: string; harness: string | null; model: string | null }[] = [];
+  /** Every claim the run wrote, in order (MOTIR-2427). */
+  readonly claims: { key: string; ownerId: string }[] = [];
+  /** The `ownerId` each pick was narrowed by — undefined means UNNARROWED. */
+  readonly ownerIdsAsked: (string | undefined)[] = [];
   readonly promptCalls: { key: string; sessionBranch: string | null }[] = [];
   readonly nextReadyCalls: number[] = [];
   readonly expandCalls: string[] = [];
@@ -138,20 +149,29 @@ class FakeServer {
         // materializes them.
         return { jobId: `job-${n}`, planId: `plan-${n}` };
       },
-      nextReady: async (args: { excludeIds?: string[] }) => {
-        this.nextReadyCalls.push(args.excludeIds?.length ?? 0);
-        const excluded = new Set(args.excludeIds ?? []);
+      // The pick is client-side over the ranked ready set now (MOTIR-2398), and
+      // the hold-out is by KEY. The fake honours `excludeKeys` for the same
+      // reason the real client does: without it the loop would be handed the
+      // same row forever.
+      nextReady: async (args: { excludeKeys?: readonly string[]; ownerId?: string }) => {
+        this.nextReadyCalls.push(args.excludeKeys?.length ?? 0);
+        this.ownerIdsAsked.push(args.ownerId);
+        const excluded = new Set((args.excludeKeys ?? []).map((k) => k.toUpperCase()));
         const item = this.items.find(
           (i) =>
             this.present(i) &&
             i.status === 'todo' &&
-            !excluded.has(i.id) &&
+            !excluded.has(i.key.toUpperCase()) &&
+            // The pickable rule, as the real client applies it inside its page
+            // walk: unassigned, or already mine (MOTIR-2427).
+            (args.ownerId === undefined ||
+              i.assigneeId === null ||
+              i.assigneeId === args.ownerId) &&
             i.deps.every((d) => this.satisfied(d)),
         );
         if (!item) return { item: null };
         return {
           item: {
-            id: item.id,
             key: item.key,
             kind: item.kind,
             title: item.title,
@@ -159,8 +179,8 @@ class FakeServer {
             status: { key: item.status, category: 'todo' },
             type: item.type,
             executor: item.executor,
-            targetRepo: item.targetRepo,
-            sessionBranch: item.sessionBranch,
+            assigneeId: item.assigneeId,
+            inheritedSessionBranch: this.inherited(item) ?? item.sessionBranch,
           },
         };
       },
@@ -175,6 +195,7 @@ class FakeServer {
         return {
           key,
           prompt: `PROMPT ${key}`,
+          parentKey: 'PROD-1',
           targetRepo: item.targetRepo,
           workflowMode: branch ? 'session_lineage' : 'per_item_pr',
           sessionBranch: branch,
@@ -185,8 +206,26 @@ class FakeServer {
         this.byKey(args.key).status = args.status;
         return {};
       },
-      markIntegrated: async (args: { key: string; sessionBranch: string }) => {
+      claimWorkItem: async (args: { key: string; ownerId: string }) => {
+        this.claims.push(args);
+        this.byKey(args.key).assigneeId = args.ownerId;
+        return {};
+      },
+      markIntegrated: async (args: {
+        key: string;
+        sessionBranch: string;
+        implementationHarness?: string;
+        implementationModel?: string | null;
+      }) => {
         this.integrated.push({ key: args.key, sessionBranch: args.sessionBranch });
+        // Recorded SEPARATELY from `integrated` so the provenance assertions
+        // read the triple as the server would receive it — including a field
+        // the CLI omitted (MOTIR-2419).
+        this.provenance.push({
+          key: args.key,
+          harness: args.implementationHarness ?? null,
+          model: args.implementationModel ?? null,
+        });
         const item = this.byKey(args.key);
         item.status = 'in_review';
         item.sessionBranch = args.sessionBranch;
@@ -248,6 +287,9 @@ let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 const BRANCH = sessionBranchName('20260729-010203');
 
+/** The token owner every run below claims for (MOTIR-2427). */
+const OWNER = 'user_me';
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'motir-auto-'));
   mkdirSync(join(root, 'motir-core'), { recursive: true });
@@ -278,8 +320,16 @@ function session(server: FakeServer): ProjectSession {
 
 interface DriveOptions {
   opts?: AutoOptions;
-  agentResults?: (key: string, index: number) => AgentRunResult;
+  /** `model` defaults to null — an agent that self-reported nothing. */
+  agentResults?: (
+    key: string,
+    index: number,
+  ) => Omit<AgentRunResult, 'model'> & { model?: string | null };
   onDispatch?: (key: string, index: number) => void;
+  /** The agent command the loop launched — what the harness is derived FROM. */
+  agentCommand?: string;
+  /** The token owner this run claims for (MOTIR-2427). */
+  ownerId?: string;
 }
 
 async function drive(
@@ -294,7 +344,10 @@ async function drive(
     opts: drives.opts ?? {},
     kinds: undefined,
     max: drives.opts?.max ? parseMax(drives.opts.max) : null,
-    agent: { parsed: { command: 'fake-agent', binary: 'fake-agent', args: [] }, source: 'flag' },
+    agent: {
+      parsed: parseAgentCommand(drives.agentCommand ?? 'fake-agent')!,
+      source: 'flag',
+    },
     runId: '20260729-010203',
     branch: BRANCH,
     run: git.runner,
@@ -304,8 +357,10 @@ async function drive(
       const index = dispatched.length;
       dispatched.push(key);
       drives.onDispatch?.(key, index);
-      return drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      const result = drives.agentResults?.(key, index) ?? { exitCode: 0, signal: null };
+      return { model: null, ...result };
     },
+    ownerId: drives.ownerId ?? OWNER,
   };
   const summary = await runAutoLoop(input);
   closeOutRepos(summary, git.runner);
@@ -640,6 +695,111 @@ describe('motir auto — failure policy', () => {
     expect(renderAutoSummary(summary)).toContain('motir run PROD-2');
   });
 
+  // ── implementation provenance (MOTIR-2419) ────────────────────────────────
+  // Split by WHO KNOWS: the loop derives the harness from the command it
+  // launched, the agent self-reports the model. The bug being fixed is a field
+  // that read `motir-cli/<version>` on every card ever integrated — true of all
+  // of them, and therefore an answer to nothing.
+
+  it('records the AGENT as the harness, and the model the agent reported', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    const git = new FakeGit();
+    await drive(server, git, {
+      agentCommand: 'claude --dangerously-skip-permissions',
+      agentResults: () => ({ exitCode: 0, signal: null, model: 'claude-opus-5' }),
+    });
+
+    expect(server.provenance).toEqual([
+      { key: 'PROD-1', harness: 'claude', model: 'claude-opus-5' },
+      { key: 'PROD-2', harness: 'claude', model: 'claude-opus-5' },
+    ]);
+  });
+
+  it('leaves the model NULL when the agent reports none — and still names the agent', async () => {
+    // The version of this bug that would survive the fix: a defaulted model is
+    // a wrong answer wearing the shape of a right one. The harness does not
+    // degrade with it — it never needed the agent's cooperation.
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    const git = new FakeGit();
+    await drive(server, git, { agentCommand: 'codex exec' });
+
+    expect(server.provenance).toEqual([{ key: 'PROD-1', harness: 'codex', model: null }]);
+  });
+
+  it('never records the LAUNCHER, whatever the agent is', async () => {
+    for (const [command, harness] of [
+      ['claude', 'claude'],
+      ['/usr/local/bin/cursor-agent --force', 'cursor'],
+      ['my-own-agent --go', 'my-own-agent'],
+    ] as const) {
+      const server = new FakeServer([leaf('idA', 'PROD-1')]);
+      await drive(server, new FakeGit(), { agentCommand: command });
+      expect(server.provenance).toEqual([{ key: 'PROD-1', harness, model: null }]);
+      expect(server.provenance[0]!.harness).not.toBe(`motir-cli/${CLI_VERSION}`);
+    }
+  });
+
+  // ── the CLAIM and the pickable set (MOTIR-2427) ───────────────────────────
+  // Motir is used by TEAMS. The loop used to take the top of a shared ranked
+  // queue and record nothing, so two people's runs competed for one queue and
+  // neither could tell.
+
+  it('CLAIMS every card it takes, for the token owner', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, new FakeGit());
+
+    expect(server.claims).toEqual([
+      { key: 'PROD-1', ownerId: OWNER },
+      { key: 'PROD-2', ownerId: OWNER },
+    ]);
+  });
+
+  it('narrows every pick by the owner — not just the first', async () => {
+    // A run that narrowed only its opening ask would take a teammate's card the
+    // moment one appeared mid-run, which is exactly when the ready set changes.
+    const server = new FakeServer([leaf('idA', 'PROD-1'), leaf('idB', 'PROD-2')]);
+    await drive(server, new FakeGit());
+
+    expect(server.ownerIdsAsked.length).toBeGreaterThan(1);
+    expect(new Set(server.ownerIdsAsked)).toEqual(new Set([OWNER]));
+  });
+
+  it('never takes a card claimed by someone ELSE', async () => {
+    const server = new FakeServer([
+      leaf('idA', 'PROD-1', { assigneeId: 'user_them' }),
+      leaf('idB', 'PROD-2'),
+    ]);
+    const { dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-2']);
+    expect(server.claims.map((c) => c.key)).toEqual(['PROD-2']);
+    // Their card was not touched in any way — not claimed, not transitioned.
+    expect(server.byKey('PROD-1').status).toBe('todo');
+    expect(server.byKey('PROD-1').assigneeId).toBe('user_them');
+  });
+
+  it('takes a card ALREADY assigned to me — the claim is idempotent', async () => {
+    const server = new FakeServer([leaf('idA', 'PROD-1', { assigneeId: OWNER })]);
+    const { dispatched } = await drive(server, new FakeGit());
+
+    expect(dispatched).toEqual(['PROD-1']);
+    expect(server.claims).toEqual([{ key: 'PROD-1', ownerId: OWNER }]);
+  });
+
+  it('claims BEFORE the status moves — a claim written at the end is history', async () => {
+    // The ordering is the point: a teammate reads the board WHILE the work is
+    // happening, and a claim recorded afterwards tells them nothing in time.
+    const server = new FakeServer([leaf('idA', 'PROD-1')]);
+    await drive(server, new FakeGit(), {
+      onDispatch: () => {
+        // By the time the agent runs, both writes have landed in order.
+        expect(server.claims).toEqual([{ key: 'PROD-1', ownerId: OWNER }]);
+      },
+    });
+
+    expect(server.transitions[0]).toEqual({ key: 'PROD-1', status: 'in_progress' });
+  });
+
   it('--keep-going finishes the remainder and never re-dispatches the failure', async () => {
     const server = chain();
     const git = new FakeGit();
@@ -716,7 +876,13 @@ describe('motir auto — the close-out', () => {
 
 describe('the session pull request', () => {
   it('titles without a key and bodies with every key plus the close-out', () => {
-    const title = sessionPrTitle('20260729-010203', 3);
+    // Three cards under THREE different parents — the mixed case, which falls
+    // back to the run form (MOTIR-2422).
+    const title = sessionPrTitle('20260729-010203', [
+      { key: 'PROD-1', title: 'A', parentKey: 'PROD-90' },
+      { key: 'PROD-2', title: 'B', parentKey: 'PROD-91' },
+      { key: 'PROD-3', title: 'C', parentKey: null },
+    ]);
     expect(title).toBe('Motir auto run 20260729-010203 — 3 work items');
     expect(title).not.toMatch(/[A-Z]+-\d+/);
 
@@ -728,6 +894,7 @@ describe('the session pull request', () => {
         durationMs: 1,
         sessionBranch: BRANCH,
         repo: 'motir-core',
+        parentKey: null,
       },
       {
         key: 'PROD-2',
@@ -736,6 +903,7 @@ describe('the session pull request', () => {
         durationMs: 1,
         sessionBranch: null,
         repo: 'motir-core',
+        parentKey: null,
       },
     ]);
     expect(body).toContain('## Work items carried (1)');
@@ -822,7 +990,8 @@ describe('an item with no lineage ships as its own pull request', () => {
       branch: BRANCH,
       run: rootIsNotARepo,
       clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
     });
 
     expect(summary.records[0]?.outcome).toBe('in_review');
@@ -860,7 +1029,8 @@ describe('the close-out survives a git failure', () => {
       branch: BRANCH,
       run: pushRejected,
       clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
     });
     closeOutRepos(summary, pushRejected);
 
@@ -883,6 +1053,7 @@ describe('records with missing pieces still render honestly', () => {
           durationMs: 1000,
           sessionBranch: null,
           repo: null,
+          parentKey: null,
         },
       ],
       skipped: [{ key: 'PROD-2', title: null, reason: 'needs_human' }],
@@ -914,6 +1085,7 @@ describe('records with missing pieces still render honestly', () => {
         durationMs: 0,
         sessionBranch: BRANCH,
         repo: null,
+        parentKey: null,
       },
       {
         key: 'PROD-2',
@@ -922,6 +1094,7 @@ describe('records with missing pieces still render honestly', () => {
         durationMs: 0,
         sessionBranch: null,
         repo: null,
+        parentKey: null,
       },
     ]);
     expect(body).toContain('- PROD-1 — (untitled)');
@@ -990,11 +1163,173 @@ describe('more of the run’s edges', () => {
       branch: BRANCH,
       run: localBranchAhead,
       clock: () => 0,
-      runAgentFn: async () => ({ exitCode: 0, signal: null }),
+      runAgentFn: async () => ({ exitCode: 0, signal: null, model: null }),
+      ownerId: OWNER,
     });
     closeOutRepos(summary, localBranchAhead);
 
     expect(git.log).toContain(`git push origin ${BRANCH} @${join(root, 'motir-core')}`);
     expect(summary.prs[0]?.outcome).toBe('opened');
+  });
+});
+
+// THE TITLE NAMES WHAT THE RUN DELIVERED (MOTIR-2422).
+//
+// A title is read in a LIST — the repo's open pull requests, a notification, a
+// review queue — where it is the only thing shown and its job is to help someone
+// decide whether to open it. `Motir auto run 20260807-141522 — 4 work items`
+// says a machine did something, four times.
+//
+// The parent rides the dispatch prompt the loop already fetches (MOTIR-2445), so
+// none of this costs a request.
+describe('sessionPrTitle — the shared parent, when there is one', () => {
+  const card = (key: string, parentKey: string | null, title = `Card ${key}`) => ({
+    key,
+    title,
+    parentKey,
+  });
+
+  it('names the SHARED parent when every card has it', () => {
+    const title = sessionPrTitle('20260807-141522', [
+      card('PROD-10', 'PROD-2'),
+      card('PROD-11', 'PROD-2'),
+      card('PROD-12', 'PROD-2'),
+    ]);
+    expect(title).toBe('PROD-2 — 3 work items');
+  });
+
+  it('falls back when the cards span SEVERAL parents', () => {
+    // The case a naive implementation gets wrong by naming the first card's
+    // parent — and nothing about that result looks incorrect. It is a real
+    // story, genuinely in the pull request. It is just not what the branch is.
+    const title = sessionPrTitle('20260807-141522', [
+      card('PROD-10', 'PROD-2'),
+      card('PROD-11', 'PROD-3'),
+    ]);
+    expect(title).toBe('Motir auto run 20260807-141522 — 2 work items');
+  });
+
+  it('a NULL parent in the set is a distinct answer, not an absence', () => {
+    // A set containing a top-level card does not share a parent. Ignoring the
+    // null would name the story the OTHERS sit under and quietly overstate it.
+    const title = sessionPrTitle('20260807-141522', [
+      card('PROD-10', 'PROD-2'),
+      card('PROD-11', null),
+    ]);
+    expect(title).toBe('Motir auto run 20260807-141522 — 2 work items');
+  });
+
+  it('a run of ONE names the CARD, not its parent', () => {
+    // For one item the card IS the deliverable; its story describes something
+    // much larger than what shipped.
+    expect(sessionPrTitle('20260807-141522', [card('PROD-10', 'PROD-2', 'Wire the seam')])).toBe(
+      'PROD-10 Wire the seam',
+    );
+  });
+
+  it('a run of one TOP-LEVEL card still names the card', () => {
+    expect(sessionPrTitle('20260807-141522', [card('PROD-10', null, 'Standalone')])).toBe(
+      'PROD-10 Standalone',
+    );
+  });
+
+  it('fits the list-render budget rather than discovering it in GitHub', () => {
+    const long = sessionPrTitle('20260807-141522', [
+      card('PROD-10', null, 'A card whose title runs on and on and on well past what a list shows'),
+    ]);
+    expect(long.length).toBeLessThanOrEqual(72);
+    expect(long.endsWith('…')).toBe(true);
+    // The key survives the trim — an elided title still says WHICH card.
+    expect(long.startsWith('PROD-10 ')).toBe(true);
+  });
+
+  it('an EMPTY carried set falls back rather than naming nothing', () => {
+    // Reachable: a run whose every item failed pushes a branch with no carried
+    // cards, and the close-out still opens the pull request.
+    expect(sessionPrTitle('20260807-141522', [])).toBe(
+      'Motir auto run 20260807-141522 — 0 work items',
+    );
+  });
+});
+
+// THE BODY IS THE AGENTS' COMMITS, FRAMED BY THE LOOP (MOTIR-2411).
+//
+// A card title is what was PLANNED. The commit is what was DONE, including what
+// only surfaced while doing it. The body used to be a manifest of the former.
+describe('renderSessionPrBody — the commits, not the card titles', () => {
+  const record = (key: string, title: string, outcome: 'integrated' | 'failed' = 'integrated') => ({
+    key,
+    title,
+    outcome,
+    durationMs: 1,
+    sessionBranch: outcome === 'failed' ? null : BRANCH,
+    repo: 'motir-core',
+    parentKey: null,
+  });
+
+  const commit = (subject: string, body = '') => ({ subject, body });
+
+  it('carries every commit — subject AND body — in branch order', () => {
+    // Order is asserted by INDEX, not by presence: a set-shaped implementation
+    // passes a contains-check and still scrambles the narrative.
+    const out = renderSessionPrBody(
+      '20260729-010203',
+      BRANCH,
+      [record('PROD-1', 'A'), record('PROD-2', 'B')],
+      [
+        commit('feat(a): the first thing', 'Because the old path was wrong.'),
+        commit('fix(b): the second thing', 'And it turned out B depended on it.'),
+      ],
+    );
+
+    expect(out).toContain('## What the commits say (2)');
+    expect(out).toContain('### feat(a): the first thing');
+    expect(out).toContain('Because the old path was wrong.');
+    expect(out).toContain('### fix(b): the second thing');
+    expect(out).toContain('And it turned out B depended on it.');
+    expect(out.indexOf('feat(a)')).toBeLessThan(out.indexOf('fix(b)'));
+  });
+
+  it('a commit with an EMPTY body falls back to the card title, never a bare subject', () => {
+    const out = renderSessionPrBody(
+      '20260729-010203',
+      BRANCH,
+      [record('PROD-1', 'Wire the seam')],
+      [commit('feat(seam): wire it')],
+    );
+
+    expect(out).toContain('### feat(seam): wire it');
+    // Degrades to TODAY's output — the title — rather than to a heading with
+    // nothing under it.
+    expect(out).toContain('_Wire the seam_');
+  });
+
+  it('the FRAME is unchanged — run id, branch, carried, failed, close-out', () => {
+    // This card trades nothing for what it adds: every string the manifest body
+    // carried is still here, asserted verbatim.
+    const out = renderSessionPrBody(
+      '20260729-010203',
+      BRANCH,
+      [record('PROD-1', 'A'), record('PROD-9', 'Broke', 'failed')],
+      [commit('feat(a): a', 'why')],
+    );
+
+    expect(out).toContain('Unattended `motir auto` run `20260729-010203`');
+    expect(out).toContain(`integrated on \`${BRANCH}\``);
+    expect(out).toContain('## Work items carried (1)');
+    expect(out).toContain('- PROD-1 — A');
+    expect(out).toContain('## Attempted and failed (1)');
+    expect(out).toContain('- PROD-9 — Broke');
+    expect(out).toContain(`motir done --session ${BRANCH}`);
+    expect(out).toContain('Review this pull request as ONE unit.');
+  });
+
+  it('renders the manifest ALONE when no commits could be read', () => {
+    // `sessionBranchCommits` yields `[]` on a failed git read rather than
+    // throwing: by then the work is integrated and pushed, so a git hiccup must
+    // degrade the body, never abandon the pull request.
+    const out = renderSessionPrBody('20260729-010203', BRANCH, [record('PROD-1', 'A')], []);
+    expect(out).not.toContain('## What the commits say');
+    expect(out).toContain('- PROD-1 — A');
   });
 });

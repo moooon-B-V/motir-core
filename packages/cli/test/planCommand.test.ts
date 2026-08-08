@@ -18,13 +18,19 @@ vi.mock('../src/prompts.js', () => prompts);
 
 import { delay, planCommand, type PlanDeps } from '../src/commands/plan.js';
 import { setCredential } from '../src/config/userConfig.js';
-import { CliError } from '../src/errors.js';
+import { CliError, ScopeError } from '../src/errors.js';
 import { WATCH_TIMEOUT_MS } from '../src/plan.js';
 import {
-  startTestMcpServer,
-  type TestMcpServer,
-  type ToolScript,
-} from './helpers/mcpTestServer.js';
+  startTestServer,
+  v1JobHandle,
+  v1Plan,
+  v1PlanOutcome,
+  v1PlanSession,
+  v1PlanTurn,
+  v1Proposal,
+  type TestServer,
+  type V1Script,
+} from './helpers/testServer.js';
 
 // `motir plan` as the COMMAND (Subtask 7.9.9 · MOTIR-887).
 //
@@ -36,14 +42,14 @@ import {
 // nothing, and that the un-onboarded guard fires BEFORE a single turn is
 // appended. The reader and the watch clock are injected; nothing else is.
 
-let server: TestMcpServer;
+let server: TestServer;
 let root: string;
 let cwd: string;
 
 const TOKEN = 'pat_plan_token';
 
 beforeAll(async () => {
-  server = await startTestMcpServer({ token: TOKEN });
+  server = await startTestServer({ token: TOKEN });
   cwd = process.cwd();
 });
 
@@ -76,7 +82,13 @@ beforeEach(() => {
     stderr.push(String(chunk));
     return true;
   });
-  server.calls.length = 0;
+  server.v1Calls.length = 0;
+  server.resetV1();
+  // Every test but the un-onboarded guard needs a non-empty tree: the guard
+  // asks the COUNT whether there is a plan here to change.
+  server.scriptV1({
+    'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 12 } },
+  });
 });
 
 afterEach(() => {
@@ -88,101 +100,126 @@ afterEach(() => {
 const OUT = (): string => stdout.join('');
 const ERR = (): string => stderr.join('');
 
-/** Calls the server received for one tool, in order. */
+/**
+ * WHICH `/api/v1` request each planning call is, by verb and path.
+ *
+ * The five methods moved off MCP in MOTIR-2341, so what the assertions below
+ * name is an operation rather than a tool. Kept as a map so a test still reads
+ * `callsTo('append_plan_turn')` — the question a test asks ("was the turn
+ * appended, and with what?") did not change when the transport did.
+ */
+const V1_ROUTE: Record<string, { method: string; matches: (path: string) => boolean }> = {
+  open_plan_session: { method: 'POST', matches: (p) => p.endsWith('/plan-session') },
+  append_plan_turn: { method: 'POST', matches: (p) => p.endsWith('/plan-session/turns') },
+  submit_plan_session: {
+    method: 'POST',
+    matches: (p) => p.endsWith('/plan-session/submissions'),
+  },
+  get_plan_status: { method: 'GET', matches: (p) => p.endsWith('/status') },
+  get_plan: { method: 'GET', matches: (p) => /^\/api\/v1\/plans\/[^/]+$/.test(p) },
+};
+
+/**
+ * The arguments one operation received, in order.
+ *
+ * Path parameters and request body MERGED, because that is where the MCP tool's
+ * one `arguments` object went: `projectKey` became a path segment and
+ * `body` / `targetKeys` became a JSON body. Merging keeps every assertion below
+ * asking about the ARGUMENT rather than about where v1 chose to carry it.
+ */
 function callsTo(name: string): Record<string, unknown>[] {
-  return server.calls.filter((c) => c.name === name).map((c) => c.args);
+  const route = V1_ROUTE[name];
+  if (!route) throw new Error(`no v1 route mapped for ${name}`);
+  return server.v1Calls
+    .filter((c) => c.method === route.method && route.matches(c.path))
+    .map((c) => ({ ...c.params, ...((c.body ?? {}) as Record<string, unknown>) }));
 }
 
-function sessionPayload(turns: { body: string; role?: 'user' | 'system'; jobId?: string }[] = []) {
-  return {
-    id: 's1',
-    projectId: 'p1',
-    targetKeys: [] as string[],
-    turnCount: turns.length,
-    lastJobId: null,
-    lastSubmittedAt: null,
-    createdAt: '2026-07-29T10:00:00.000Z',
-    updatedAt: '2026-07-29T10:00:00.000Z',
-    turns: turns.map((t, i) => ({
-      id: `t${i}`,
-      seq: i,
-      role: t.role ?? 'user',
-      body: t.body,
-      jobId: t.jobId ?? null,
-      authorId: 'u1',
+function sessionPayload(
+  turns: { body: string; role?: 'user' | 'system'; jobId?: string }[] = [],
+  over: Record<string, unknown> = {},
+) {
+  return v1PlanSession(
+    turns.map((t, i) =>
+      v1PlanTurn(i, {
+        id: `t${i}`,
+        role: t.role ?? 'user',
+        body: t.body,
+        jobId: t.jobId ?? null,
+        authorId: 'u1',
+        createdAt: '2026-07-29T10:00:00.000Z',
+      }),
+    ),
+    {
+      id: 's1',
       createdAt: '2026-07-29T10:00:00.000Z',
-    })),
-  };
+      updatedAt: '2026-07-29T10:00:00.000Z',
+      ...over,
+    },
+  );
 }
 
 /**
  * A project with a plan, an accumulating thread, and a planner that lands.
- * `overrides` replaces individual tools per test.
+ * `overrides` replaces individual routes per test.
+ *
+ * ⚠️ The thread ACCUMULATES in a closure shared by open / append / submit,
+ * because that is the property the command's whole grammar rests on: appending
+ * is not submitting, and a `/submit` sends every turn typed so far as one
+ * change. Three independent fixtures could not express it.
  */
-function tools(overrides: ToolScript = {}): ToolScript {
+function planScript(overrides: V1Script = {}): V1Script {
   const appended: string[] = [];
   return {
-    // A non-empty tree: the un-onboarded guard's happy path.
-    search_work_items: { structured: { items: [], total: 12, nextCursor: null } },
-    open_plan_session: () => ({ structured: sessionPayload(appended.map((body) => ({ body }))) }),
-    append_plan_turn: (args) => {
-      appended.push(String(args.body));
-      return { structured: sessionPayload(appended.map((body) => ({ body }))) };
-    },
-    submit_plan_session: () => ({
-      structured: {
-        jobId: 'job_1',
-        planId: 'plan_1',
-        session: sessionPayload(appended.map((body) => ({ body }))),
-      },
+    'POST /api/v1/projects/{projectKey}/plan-session': () => ({
+      body: sessionPayload(appended.map((body) => ({ body }))),
     }),
-    get_plan_status: {
-      structured: {
-        planId: 'plan_1',
-        projectId: 'p1',
-        status: 'planned',
-        origin: 'user',
-        jobId: 'job_1',
-        itemCount: 2,
-        job: null,
-      },
+    'POST /api/v1/projects/{projectKey}/plan-session/turns': (req) => {
+      appended.push(String((req.body as { body: string }).body));
+      return { body: sessionPayload(appended.map((body) => ({ body }))) };
     },
-    get_plan: {
-      structured: {
-        id: 'plan_1',
-        projectId: 'p1',
-        status: 'planned',
-        title: 'Billing split',
-        summary: null,
-        sourceJobId: 'job_1',
-        origin: 'user',
-        itemCount: 2,
-        items: [
-          {
-            id: 'a',
-            op: 'add',
-            workItemId: null,
-            proposedFields: { title: 'Billing epic', kind: 'story' },
-            patch: null,
-            parentRef: null,
-            blockedByRefs: [],
-          },
-          {
-            id: 'b',
-            op: 'add',
-            workItemId: null,
+    // 202: the job is ACCEPTED, and the handle is all that comes back — the
+    // thread is not re-sent, because nothing reads it after a submit.
+    'POST /api/v1/projects/{projectKey}/plan-session/submissions': {
+      status: 202,
+      body: v1JobHandle({ jobId: 'job_1', planId: 'plan_1' }),
+    },
+    'GET /api/v1/plans/{planId}/status': {
+      body: v1PlanOutcome({ planId: 'plan_1', jobId: 'job_1', proposalCount: 2 }),
+    },
+    'GET /api/v1/plans/{planId}': {
+      body: v1Plan(
+        [
+          v1Proposal('a', {
+            proposedFields: {
+              title: 'Billing epic',
+              kind: 'story',
+              type: null,
+              priority: null,
+              executor: null,
+              storyPoints: null,
+              estimateMinutes: null,
+              descriptionMd: null,
+              targetRepo: null,
+            },
+          }),
+          v1Proposal('b', {
             proposedFields: {
               title: 'Invoice list',
               kind: 'subtask',
               type: 'code',
+              priority: null,
+              executor: null,
               storyPoints: 3,
+              estimateMinutes: null,
+              descriptionMd: null,
+              targetRepo: null,
             },
-            patch: null,
             parentRef: 'planItem:a',
-            blockedByRefs: [],
-          },
+          }),
         ],
-      },
+        { id: 'plan_1', title: 'Billing split', sourceJobId: 'job_1' },
+      ),
     },
     ...overrides,
   };
@@ -200,17 +237,16 @@ function reader(lines: (string | null)[]): PlanDeps {
 
 describe('motir plan — the interactive conversation', () => {
   it('RESUMES the thread and renders its existing turns before prompting', async () => {
-    server.script(
-      tools({
-        open_plan_session: {
-          structured: {
-            ...sessionPayload([
+    server.scriptV1(
+      planScript({
+        'POST /api/v1/projects/{projectKey}/plan-session': {
+          body: sessionPayload(
+            [
               { body: 'add auth to billing' },
               { body: 'Submitted.', role: 'system', jobId: 'job_0' },
-            ]),
-            lastJobId: 'job_0',
-            lastSubmittedAt: '2026-07-29T11:00:00.000Z',
-          },
+            ],
+            { lastJobId: 'job_0', lastSubmittedAt: '2026-07-29T11:00:00.000Z' },
+          ),
         },
       }),
     );
@@ -224,7 +260,7 @@ describe('motir plan — the interactive conversation', () => {
   });
 
   it('ACCUMULATES turns and sends them as ONE job on /submit', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand(
       [],
@@ -244,7 +280,7 @@ describe('motir plan — the interactive conversation', () => {
   });
 
   it('leaves the thread intact on /exit — appended, never submitted', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand([], {}, reader(['add auth', '/exit']));
 
@@ -254,7 +290,7 @@ describe('motir plan — the interactive conversation', () => {
   });
 
   it('reads end of input (Ctrl-D) as leaving, never as submitting', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand([], {}, reader([]));
 
@@ -263,7 +299,7 @@ describe('motir plan — the interactive conversation', () => {
   });
 
   it('ignores an empty line, prints /help, and refuses an unknown command without appending', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand([], {}, reader(['   ', '/help', '/sumbit', '/exit']));
 
@@ -272,7 +308,7 @@ describe('motir plan — the interactive conversation', () => {
   });
 
   it('opens the ANCHORED thread when leading keys are given', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand(['motir-42', 'MOTIR-9'], {}, reader(['/exit']));
 
@@ -283,7 +319,7 @@ describe('motir plan — the interactive conversation', () => {
   });
 
   it('omits targetKeys entirely for the project-wide thread', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand([], {}, reader(['/exit']));
 
@@ -293,7 +329,7 @@ describe('motir plan — the interactive conversation', () => {
 
 describe('motir plan "<text>" — the non-interactive shorthand', () => {
   it('appends ONE turn, submits it, and prints the proposals it got back', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand(
       ['split', 'the', 'billing', 'epic'],
@@ -313,7 +349,7 @@ describe('motir plan "<text>" — the non-interactive shorthand', () => {
   });
 
   it('anchors the shorthand when it is given a key too', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand(['MOTIR-42', 'size', 'these'], {}, reader([]));
 
@@ -325,18 +361,18 @@ describe('motir plan "<text>" — the non-interactive shorthand', () => {
   });
 
   it('ERRORS with guidance — never hangs — on a non-TTY invocation with no text', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await expect(planCommand([], {}, { interactive: () => false })).rejects.toMatchObject({
       message: expect.stringContaining('needs a terminal'),
       hint: expect.stringContaining('motir plan "<what to change>"'),
     });
     // Refused BEFORE anything was opened or appended.
-    expect(server.calls).toHaveLength(0);
+    expect(server.v1Calls).toHaveLength(0);
   });
 
   it('--detach returns the ids + review URL without watching', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand(['split the epic'], { detach: true }, reader([]));
 
@@ -351,9 +387,12 @@ describe('motir plan "<text>" — the non-interactive shorthand', () => {
 
 describe('motir plan — the un-onboarded guard', () => {
   it('refuses an EMPTY project with the onboarding URL, appending and submitting nothing', async () => {
-    server.script(
-      tools({ search_work_items: { structured: { items: [], total: 0, nextCursor: null } } }),
-    );
+    server.scriptV1(planScript());
+    // A tree with NOTHING in it — the count is what the guard asks for now
+    // (MOTIR-2319); it used to run a `limit: 1` search and read its total.
+    server.scriptV1({
+      'GET /api/v1/projects/{projectKey}/work-items/count': { body: { count: 0 } },
+    });
 
     await expect(planCommand(['plan my thing'], {}, reader([]))).rejects.toMatchObject({
       message: expect.stringContaining('PROD has no work items yet'),
@@ -371,20 +410,18 @@ describe('motir plan — the un-onboarded guard', () => {
 describe('motir plan — the watch', () => {
   it('polls while the plan is generating, then prints the proposals', async () => {
     let reads = 0;
-    server.script(
-      tools({
-        get_plan_status: () => {
+    server.scriptV1(
+      planScript({
+        'GET /api/v1/plans/{planId}/status': () => {
           reads += 1;
           return {
-            structured: {
+            body: v1PlanOutcome({
               planId: 'plan_1',
-              projectId: 'p1',
               status: reads < 3 ? 'generating' : 'planned',
-              origin: 'user',
               jobId: 'job_1',
-              itemCount: 2,
+              proposalCount: 2,
               job: reads < 3 ? { status: 'running', reachable: true, failure: null } : null,
-            },
+            }),
           };
         },
       }),
@@ -397,22 +434,19 @@ describe('motir plan — the watch', () => {
   });
 
   it('surfaces a FAILED job with the server’s own code + message, and fails', async () => {
-    server.script(
-      tools({
-        get_plan_status: {
-          structured: {
+    server.scriptV1(
+      planScript({
+        'GET /api/v1/plans/{planId}/status': {
+          body: v1PlanOutcome({
             planId: 'plan_1',
-            projectId: 'p1',
             status: 'generating',
-            origin: 'user',
             jobId: 'job_1',
-            itemCount: 0,
             job: {
               status: 'failed',
               reachable: true,
               failure: { code: 'AI_TIMEOUT', message: 'upstream model timed out' },
             },
-          },
+          }),
         },
       }),
     );
@@ -426,22 +460,19 @@ describe('motir plan — the watch', () => {
   });
 
   it('reports an UNREACHABLE planner as such, not as a job failure', async () => {
-    server.script(
-      tools({
-        get_plan_status: {
-          structured: {
+    server.scriptV1(
+      planScript({
+        'GET /api/v1/plans/{planId}/status': {
+          body: v1PlanOutcome({
             planId: 'plan_1',
-            projectId: 'p1',
             status: 'generating',
-            origin: 'user',
             jobId: 'job_1',
-            itemCount: 0,
             job: {
               status: null,
               reachable: false,
               failure: { code: 'AI_DOWN', message: 'no route' },
             },
-          },
+          }),
         },
       }),
     );
@@ -452,18 +483,15 @@ describe('motir plan — the watch', () => {
   });
 
   it('gives up on the WAIT, not on the plan, when the bounded watch times out', async () => {
-    server.script(
-      tools({
-        get_plan_status: {
-          structured: {
+    server.scriptV1(
+      planScript({
+        'GET /api/v1/plans/{planId}/status': {
+          body: v1PlanOutcome({
             planId: 'plan_1',
-            projectId: 'p1',
             status: 'generating',
-            origin: 'user',
             jobId: 'job_1',
-            itemCount: 0,
             job: { status: 'running', reachable: true, failure: null },
-          },
+          }),
         },
       }),
     );
@@ -488,7 +516,7 @@ describe('motir plan — the watch', () => {
 
 describe('motir plan — the production seams', () => {
   it('reads the terminal through the real prompt path when nothing is injected', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
     prompts.isInteractive.mockReturnValue(true);
     prompts.promptLineOrNull.mockResolvedValueOnce('add auth').mockResolvedValueOnce('/exit');
 
@@ -502,7 +530,7 @@ describe('motir plan — the production seams', () => {
   });
 
   it('watches on the real clock when no clock is injected', async () => {
-    server.script(tools());
+    server.scriptV1(planScript());
 
     await planCommand(['do it'], {}, { interactive: () => false });
 
@@ -516,23 +544,41 @@ describe('motir plan — the production seams', () => {
 });
 
 describe('motir plan — server refusals are reported verbatim', () => {
-  it('surfaces an append refusal (a read-only token) as the server worded it', async () => {
-    server.script(
-      tools({ append_plan_turn: { error: 'FORBIDDEN: this token cannot change the plan.' } }),
+  // ⚠️ A read-only token now gets a ScopeError NAMING the scope it lacks, where
+  // the MCP tool sent back a sentence. That is the v1 error model rather than a
+  // rewording: 403 means "valid token, wrong scope" by contract, so the client
+  // can say WHICH scope and what to do about it — which "FORBIDDEN: this token
+  // cannot change the plan" never could.
+  it('names the SCOPE a read-only token is missing when an append is refused', async () => {
+    server.scriptV1(
+      planScript({
+        'POST /api/v1/projects/{projectKey}/plan-session/turns': {
+          status: 403,
+          body: { code: 'FORBIDDEN', error: 'This token cannot change the plan.' },
+        },
+      }),
     );
 
-    await expect(planCommand([], {}, reader(['add auth', '/exit']))).rejects.toMatchObject({
-      message: expect.stringContaining('FORBIDDEN: this token cannot change the plan.'),
-    });
-    // The thread still OPENED — a read-only token can read the conversation.
+    const failure = await planCommand([], {}, reader(['add auth', '/exit'])).catch(
+      (err: unknown) => err,
+    );
+    expect(failure).toBeInstanceOf(ScopeError);
+    expect((failure as ScopeError).message).toContain('work_items:write');
+
+    // The thread still OPENED — reading the conversation needs `read` alone,
+    // which is why the two operations declare different scopes.
     expect(callsTo('open_plan_session')).toHaveLength(1);
   });
 
   it('surfaces the typed refusal of an EMPTY-thread submit', async () => {
-    server.script(
-      tools({
-        submit_plan_session: {
-          error: 'PLAN_CHANGE_SESSION_EMPTY: add a turn before submitting.',
+    server.scriptV1(
+      planScript({
+        'POST /api/v1/projects/{projectKey}/plan-session/submissions': {
+          status: 422,
+          body: {
+            code: 'PLAN_CHANGE_SESSION_EMPTY',
+            error: 'PLAN_CHANGE_SESSION_EMPTY: add a turn before submitting.',
+          },
         },
       }),
     );

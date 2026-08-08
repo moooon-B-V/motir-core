@@ -11,6 +11,7 @@ import { SEED_LARGE_OWNER_EMAIL, SEED_LARGE_OWNER_PASSWORD } from '../../../scri
 import type { StatusCategoryDto } from '@/lib/dto/workflows';
 import type { BoardColumnDto, BoardProjectionDto, MoveCardTarget } from '@/lib/dto/boards';
 import type { TestUser } from './work-item-setup';
+import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 
 // Board-API helpers for the Story-3.1 closing E2E (Subtask 3.1.7), lifted into
 // their own module so the Story-3.2 (Kanban UI) and 3.5 (Epic-3 test) specs can
@@ -357,15 +358,38 @@ export async function dragCardOntoCell(
 ): Promise<void> {
   const card = page.getByTestId(cardTestId);
   // Settle BOTH into view BEFORE measuring — capturing the source box and THEN
-  // scrolling the target would invalidate the source coords (the target scroll
-  // shifts the page), so the pickup would grab whatever now sits at the stale
-  // point. Source + target lanes are adjacent + short here, so both fit on screen.
-  await card.scrollIntoViewIfNeeded();
+  // scrolling the target would invalidate the source coords. Source + target
+  // lanes are adjacent + short here, so both fit on screen.
+  //
+  // ⚠️ THE SOURCE IS SCROLLED LAST, AND THE ORDER IS THE FIX (MOTIR-2427).
+  // Scrolling the source first and the target second left the source under the
+  // STICKY HEADER: its box was still accurate, so nothing looked wrong, but the
+  // centre landed on the app chrome and `mouse.down()` grabbed the header
+  // instead of the card. Every retry recomputed the identical bad point, so a
+  // 4× retry loop failed 4× the same way — a silent mis-press, never a missed
+  // drop. (Read off the trace: pickup y = 24 under a ~64px header, four
+  // byte-identical attempts.) Pressing the wrong element is the failure that
+  // cannot recover, so the PICKUP gets the last scroll and the drop tolerates
+  // the drift.
   await target.scrollIntoViewIfNeeded();
+  await card.scrollIntoViewIfNeeded();
   const from = (await card.boundingBox())!;
   const to = (await target.boundingBox())!;
   const fx = from.x + from.width / 2;
   const fy = from.y + from.height / 2;
+  // Fail LOUDLY rather than pressing chrome. The premise of this helper is that
+  // both cells fit on screen at once; when a layout change breaks it, the test
+  // that says so is worth more than a drag that silently does nothing.
+  const viewport = page.viewportSize();
+  if (viewport) {
+    const header = 64;
+    if (fy < header || fy > viewport.height) {
+      throw new Error(
+        `drag pickup (${fx}, ${fy}) is outside the usable viewport (header ${header}, height ${viewport.height}) — ` +
+          'the source card is not fully on screen, so the press would land on the app chrome',
+      );
+    }
+  }
   const tx = to.x + to.width / 2;
   const ty = to.y + to.height / 2;
   await page.mouse.move(fx, fy);
@@ -432,4 +456,28 @@ export async function setColumnWip(page: Page, columnId: string, value: string):
   // matches a bare "Save", so a non-exact match resolves 2 elements.
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   expect((await patch).ok(), `set WIP ${value} on ${columnId} persisted`).toBeTruthy();
+}
+
+/**
+ * A viewport wide enough that EVERY default column fits with no horizontal
+ * scrolling — DERIVED from the shipped workflow, never pinned (MOTIR-2427).
+ *
+ * ⚠️ Why this is not a number. The at-scale drag specs pinned 1920 with the
+ * comment "wide enough for all six default columns (6 × 18rem ≈ 1728px) so a
+ * cross-column pointer drag never has to chase a horizontally-scrolling
+ * target". `Planning` (MOTIR-2425) made it SEVEN — 7 × 18rem = 2016px — so the
+ * board began scrolling horizontally and the pointer drags started missing, in
+ * exactly the way that comment said the width existed to prevent. The invariant
+ * was written down and the number quietly stopped satisfying it.
+ *
+ * Expressed as the arithmetic instead, so the next status to arrive widens the
+ * viewport rather than breaking a drag.
+ */
+export function boardViewportWidth(columns: number = DEFAULT_STATUSES.length): {
+  width: number;
+  height: number;
+} {
+  const COLUMN_PX = 288; // 18rem at the 16px root the app ships
+  const CHROME_PX = 280; // sidebar + page gutters, with slack
+  return { width: Math.max(1920, columns * COLUMN_PX + CHROME_PX), height: 1080 };
 }

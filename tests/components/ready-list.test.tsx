@@ -36,6 +36,7 @@ function item(over: Partial<ReadyItemDto> & { key: string; kind: WorkItemKindDto
     status: { key: 'todo', category: 'todo' },
     assignee: null,
     descriptionExcerpt: null,
+    inheritedSessionBranch: null,
     type: null,
     executor: null,
     descriptionMd: null,

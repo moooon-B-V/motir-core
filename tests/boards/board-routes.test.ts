@@ -131,6 +131,7 @@ describe('board API routes', () => {
       'todo',
       'blocked',
       'in_progress',
+      'planning',
       'in_review',
       'done',
       'cancelled',

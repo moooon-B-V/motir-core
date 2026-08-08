@@ -1,10 +1,16 @@
 import { CliError } from '../errors.js';
 import { info } from '../output.js';
 import { parseKinds } from './read.js';
-import { ensureInProgress, resolveAgent, type DeliveryOptions } from './dispatch.js';
+import {
+  ensureInProgress,
+  resolveAgent,
+  resolveOwnerId,
+  type DeliveryOptions,
+} from './dispatch.js';
 import { parseMax } from './auto.js';
 import { withProjectSession, type ProjectSession } from '../session.js';
 import { runAgent } from '../agentRun.js';
+import { deriveAgentHarness } from '../agentProfiles.js';
 import { addExclude, clearExcludes, readExcludes, removeExclude } from '../sessionExcludes.js';
 import { checkBootstrapCheckout, cwdReasonLabel, resolveDispatchTarget } from '../dispatch.js';
 import {
@@ -19,7 +25,7 @@ import {
   type SnapshotEntry,
   type SnapshotSkip,
 } from '../batchPlan.js';
-import type { DispatchItem, MotirClient } from '../mcpClient.js';
+import type { DispatchItem, MotirClient } from '../client.js';
 
 // `motir batch` — THE FROZEN SNAPSHOT (Story 7.9 · Subtask 7.9.10 · MOTIR-888).
 // Take the ready set ONCE, print it, then implement exactly those items one at a
@@ -28,7 +34,7 @@ import type { DispatchItem, MotirClient } from '../mcpClient.js';
 //
 // ── the two rules that shape this file ──────────────────────────────────────
 //  1. **The list is frozen before the first agent starts.** Every item is read
-//     up front (`enumerateReady` → `planSnapshot`) and nothing re-reads the
+//     up front (`listReadyForDispatch` → `planSnapshot`) and nothing re-reads the
 //     ready set to pick work afterwards. The only later read is the newly-ready
 //     COUNT, which is reporting — it can never add an item to the run.
 //  2. **No git, no lineage.** This module deliberately imports nothing from
@@ -81,42 +87,31 @@ function requireAgent(opts: BatchOptions): ResolvedAgent {
 // ── the snapshot ────────────────────────────────────────────────────────────
 
 /**
- * Enumerate the ready set as DISPATCH payloads, in the server's dispatch order.
+ * The whole ready set, in the server's rank — the snapshot's raw material.
  *
- * `next_ready` is the source rather than `list_ready` because only the dispatch
- * payload carries the four facts the snapshot must classify on: `type` and
- * `executor` (the human/planning split), `targetRepo` (which checkout each item
- * routes into), and above all the inherited `sessionBranch` — the one signal
- * that separates "ready from main" from "ready only via an integrated
- * dependency". Both tools read the SAME ready set through the same service, so
- * the enumeration is the list `motir ready` shows, decorated.
- *
- * Advancing via `excludeIds` is what makes it an enumeration rather than a
- * repeated pick: each answer is excluded from the next question, so the loop
- * walks the whole set exactly once and terminates when the server has nothing
- * left to offer.
+ * ONE page walk (MOTIR-2398). It used to ask `next_ready` once per item with a
+ * growing exclusion list — N requests to enumerate N items, plus a
+ * stop-on-repeat guard against a server that ignored the exclusions. The
+ * collection returns the same ranked set in pages, so neither is needed.
  */
-async function enumerateReady(
-  client: MotirClient,
-  projectKey: string,
-  kinds: string[] | undefined,
-  seedExcludeIds: Set<string>,
-): Promise<DispatchItem[]> {
-  const seen = new Set(seedExcludeIds);
-  const items: DispatchItem[] = [];
-  for (;;) {
-    const { item } = await client.nextReady({
-      projectKey,
-      ...(kinds ? { kinds } : {}),
-      ...(seen.size > 0 ? { excludeIds: [...seen] } : {}),
-    });
-    if (!item) return items;
-    // A server that ignored `excludeIds` would loop forever; stopping on a
-    // repeat is the cheap guard that keeps an unattended command terminating.
-    if (seen.has(item.id)) return items;
-    seen.add(item.id);
-    items.push(item);
+/**
+ * Split an enumerated ready set into what this run may take and what a previous
+ * run's failure holds out, matching on KEY (MOTIR-2338).
+ *
+ * Both halves are returned because the held-out items are still part of the
+ * snapshot BOUNDARY: they were ready when the run started, so an item that is
+ * ready at the end and was held out did not "arrive during the run".
+ */
+function partitionByExclusion(
+  items: readonly DispatchItem[],
+  excludedKeys: ReadonlySet<string>,
+): [DispatchItem[], DispatchItem[]] {
+  const eligible: DispatchItem[] = [];
+  const heldOut: DispatchItem[] = [];
+  for (const item of items) {
+    (excludedKeys.has(item.key.toUpperCase()) ? heldOut : eligible).push(item);
   }
+  return [eligible, heldOut];
 }
 
 /** Freeze the ready set into the run's plan: what will be implemented, and
@@ -128,11 +123,9 @@ export function planSnapshot(items: DispatchItem[]): Snapshot {
     const disposition = classifySnapshotItem(item);
     if (disposition === 'take') {
       taken.push({
-        id: item.id,
         key: item.key,
         title: item.title,
         kind: item.kind,
-        targetRepo: item.targetRepo,
         statusKey: item.status?.key,
       });
     } else {
@@ -150,6 +143,8 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
   const agent = requireAgent(opts);
 
   await withProjectSession(async (session) => {
+    // ONE `whoami` for the whole run — see the note on `motir auto`'s.
+    const ownerId = await resolveOwnerId(session.client);
     const summary = await runBatch({
       session,
       opts,
@@ -158,6 +153,7 @@ export async function batchCommand(opts: BatchOptions, deps: BatchDeps = {}): Pr
       agent,
       clock: deps.clock ?? Date.now,
       runAgentFn: deps.runAgentFn ?? runAgent,
+      ownerId,
     });
     info('');
     info(renderBatchSummary(summary));
@@ -173,13 +169,16 @@ export interface BatchInput {
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** The token owner — every card this run takes is CLAIMED for them, and rows
+   *  claimed by anyone else never enter the snapshot (MOTIR-2427). */
+  ownerId: string;
 }
 
 /** Snapshot, print, drain. Exported so the whole command can be driven against
  *  a scripted client + agent, which is the only way the "never picks up an item
  *  that became ready mid-run" property can actually be asserted. */
 export async function runBatch(input: BatchInput): Promise<BatchSummary> {
-  const { session, opts, kinds, max, agent, clock, runAgentFn } = input;
+  const { session, opts, kinds, max, agent, clock, runAgentFn, ownerId } = input;
   const { client, serverUrl, projectKey } = session;
 
   if (opts.reset) {
@@ -188,18 +187,39 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
   }
   // Items a previous run's agent failed on are held out of the snapshot, exactly
   // as `motir next` / `motir auto` hold them out of a pick.
-  const persistedExcludes = new Set(readExcludes(serverUrl, projectKey).map((e) => e.id));
+  // The PERSISTED list is keyed by KEY (MOTIR-2338). The page walk enumerates the
+  // WHOLE ready set, so no id translation is needed here — the excluded items
+  // are simply filtered out of what it returns, which is the same set as before.
+  const persistedExcludes = new Set(
+    readExcludes(serverUrl, projectKey).map((e) => e.key.toUpperCase()),
+  );
   if (persistedExcludes.size > 0) {
     info(
       `Skipping ${persistedExcludes.size} previously-failed item(s) — \`--reset\` retries them.`,
     );
   }
 
-  const snapshot = planSnapshot(await enumerateReady(client, projectKey, kinds, persistedExcludes));
+  // The snapshot only ever contains rows this run may take (MOTIR-2427):
+  // unassigned, or its own interrupted work, and in the to-do category. Applied
+  // at ENUMERATION rather than at dispatch, because the snapshot is the frozen
+  // boundary a human reads before the first agent starts — a teammate's card
+  // listed there and skipped later would have been printed as work about to
+  // happen.
+  const enumerated = await client.listReadyForDispatch({
+    projectKey,
+    ownerId,
+    ...(kinds ? { kinds } : {}),
+  });
+  const [eligible, heldOut] = partitionByExclusion(enumerated, persistedExcludes);
+  const snapshot = planSnapshot(eligible);
   // Everything the snapshot saw — the frozen boundary. An item outside this set
-  // at the end of the run became ready DURING it.
-  const snapshotIds = new Set([...snapshot.taken.map((e) => e.id), ...persistedExcludes]);
-  const skippedIds = new Set<string>();
+  // at the end of the run became ready DURING it. The held-out items were seen,
+  // so they belong to the boundary too.
+  const snapshotKeys = new Set([
+    ...snapshot.taken.map((e) => e.key.toUpperCase()),
+    ...heldOut.map((item) => item.key.toUpperCase()),
+  ]);
+  const skippedKeys = new Set<string>();
 
   info(renderSnapshotPlan(snapshot));
 
@@ -237,23 +257,24 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
         agent,
         clock,
         runAgentFn,
+        ownerId,
       });
       if (outcome.kind === 'skipped') {
         skipped.push(outcome.skip);
-        skippedIds.add(entry.id);
+        skippedKeys.add(entry.key.toUpperCase());
         continue;
       }
 
       records.push(outcome.record);
       if (outcome.record.outcome === 'failed') {
-        addExclude(serverUrl, projectKey, { id: entry.id, key: entry.key });
+        addExclude(serverUrl, projectKey, { key: entry.key });
         if (!opts.keepGoing) {
           stopReason = interrupted ? 'interrupted' : 'halted';
           stopIndex = index + 1;
           break;
         }
       } else {
-        removeExclude(serverUrl, projectKey, entry.id);
+        removeExclude(serverUrl, projectKey, entry.key);
       }
     }
   } finally {
@@ -262,14 +283,14 @@ export async function runBatch(input: BatchInput): Promise<BatchSummary> {
 
   const notReached = snapshot.taken
     .slice(stopIndex)
-    .filter((e) => !skippedIds.has(e.id) && !records.some((r) => r.key === e.key));
+    .filter((e) => !skippedKeys.has(e.key.toUpperCase()) && !records.some((r) => r.key === e.key));
 
   return {
     records,
     skipped,
     notReached,
     // Reporting only — read AFTER the drain, and never fed back into it.
-    newlyReady: await countNewlyReady(client, projectKey, kinds, snapshotIds, snapshot.skipped),
+    newlyReady: await countNewlyReady(client, projectKey, kinds, snapshotKeys, snapshot.skipped),
     stopReason,
   };
 }
@@ -287,13 +308,13 @@ async function countNewlyReady(
   client: MotirClient,
   projectKey: string,
   kinds: string[] | undefined,
-  snapshotIds: Set<string>,
+  snapshotKeys: Set<string>,
   snapshotSkips: SnapshotSkip[],
 ): Promise<{ key: string; title: string | null }[]> {
   const skippedKeys = new Set(snapshotSkips.map((s) => s.key));
-  const after = await enumerateReady(client, projectKey, kinds, new Set());
+  const after = await client.listReadyForDispatch({ projectKey, ...(kinds ? { kinds } : {}) });
   return after
-    .filter((item) => !snapshotIds.has(item.id) && !skippedKeys.has(item.key))
+    .filter((item) => !snapshotKeys.has(item.key.toUpperCase()) && !skippedKeys.has(item.key))
     .map((item) => ({ key: item.key, title: item.title }));
 }
 
@@ -303,6 +324,8 @@ interface DispatchOneInput {
   agent: ResolvedAgent;
   clock: () => number;
   runAgentFn: typeof runAgent;
+  /** Claimed for this owner before the agent launches (MOTIR-2427). */
+  ownerId: string;
 }
 
 type DispatchOneResult =
@@ -311,7 +334,7 @@ type DispatchOneResult =
 
 /** Run ONE snapshot item through the single-dispatch pipeline. */
 async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> {
-  const { session, entry, agent, clock, runAgentFn } = input;
+  const { session, entry, agent, clock, runAgentFn, ownerId } = input;
   const { client, link } = session;
 
   // The prompt is fetched BEFORE the status flip, which is the opposite order to
@@ -339,7 +362,7 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
     };
   }
 
-  await ensureInProgress(client, entry.key, entry.statusKey);
+  await ensureInProgress(client, entry.key, entry.statusKey, ownerId);
   const target = resolveDispatchTarget(link.dir, link.config, dispatch.targetRepo);
 
   info('');
@@ -384,6 +407,18 @@ async function dispatchOne(input: DispatchOneInput): Promise<DispatchOneResult> 
   // is opening the pull request — so In Review is the truthful status, and the
   // per-item close-out is `motir done <key>` after the human merges it.
   await client.transitionStatus({ key: entry.key, status: 'in_review' });
+  // What BUILT it, recorded as its own fact (MOTIR-2421). Two calls rather than
+  // one because they assert different things: the transition says where the item
+  // is, this says what ran. `motir auto` gets both from `mark_integrated`, which
+  // can only speak while also claiming a session branch — and batch has none.
+  // Same split by who-knows as the loop's (MOTIR-2419): the harness comes off
+  // the command this run launched, the model off the agent's own report.
+  await client.reportImplementation({
+    key: entry.key,
+    implementationSource: 'byok',
+    implementationHarness: deriveAgentHarness(agent.parsed.binary),
+    implementationModel: result.model,
+  });
   info(`${entry.key}: In Review via its own pull request.`);
   return { kind: 'record', record: { ...base, outcome: 'in_review' } };
 }
