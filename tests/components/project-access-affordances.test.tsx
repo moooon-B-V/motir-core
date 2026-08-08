@@ -37,7 +37,11 @@ import { ContentSectionCard } from '@/app/(authed)/items/[key]/_components/Conte
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
 function withAccess(ui: ReactElement, canEdit: boolean) {
-  return renderWithIntl(<ProjectAccessProvider canEdit={canEdit}>{ui}</ProjectAccessProvider>);
+  return renderWithIntl(
+    <ProjectAccessProvider permissions={canEdit ? ['work_item:edit'] : []}>
+      {ui}
+    </ProjectAccessProvider>,
+  );
 }
 
 afterEach(() => {

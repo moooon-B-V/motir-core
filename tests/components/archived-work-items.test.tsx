@@ -32,7 +32,9 @@ vi.mock('next/navigation', () => ({
 function render(ui: ReactElement, { canManage = false }: { canManage?: boolean } = {}) {
   return renderWithIntl(
     <ToastProvider>
-      <ProjectAccessProvider canEdit canManage={canManage}>
+      <ProjectAccessProvider
+        permissions={canManage ? ['work_item:edit', 'project:administer'] : ['work_item:edit']}
+      >
         {ui}
       </ProjectAccessProvider>
     </ToastProvider>,
