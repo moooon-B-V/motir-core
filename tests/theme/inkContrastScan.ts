@@ -28,6 +28,31 @@ import ts from 'typescript';
 // file", and the muted rule abstains. The faint rule has no such hole — it is a
 // property of the element itself — which is why that one is the enforced sweep
 // and the muted one is scoped to what a single file can prove.
+//
+// ── The class and the element can come apart (MOTIR-2489) ───────────────────
+// The premise above — the verdict is a property of the ELEMENT — survives, but
+// its first implementation assumed the element the class is WRITTEN on is the
+// element the ink LANDS on. Tailwind lets those differ three ways, and all
+// three were mis-ruled in the tree the faint sweep went through:
+//
+//   1. a descendant variant (`[&_svg]:text-…`) addresses a CHILD, so the
+//      verdict belongs to that child; where the selector names something this
+//      file cannot show, the honest answer is `unattributable`, not the
+//      carrier's verdict;
+//   2. `disabled={a || b}` describes the element only SOMETIMES, so it cannot
+//      carry 1.4.3's unconditional exemption — only a literal `disabled`, and
+//      the disabled branch of a ternary, can;
+//   3. a `placeholder:` prefix paints a pseudo-element that IS text, even on a
+//      self-closing control whose own content is glyphs.
+//
+// Two of the three failed QUIETLY, which is why they are worth code: a false
+// positive gets argued with, a false negative reads as coverage. Where the
+// scanner still cannot tell, it says `unattributable` — which fails loudly and
+// asks a person — rather than `decorative`, which asks nobody.
+//
+// Still invisible, and knowingly so: a STATE variant that is itself the
+// exemption (`disabled:text-(--el-text-faint)` paints only while disabled).
+// One site carries it today, and it clears on the decorative arm anyway.
 
 /** The two inks under measurement, as they appear in an arbitrary-value class. */
 export const FAINT_CLASS = 'text-(--el-text-faint)';
@@ -72,8 +97,8 @@ export interface InkFinding {
 }
 
 /** Every string-ish node whose text contains `needle`, with its position. */
-function classLiterals(source: ts.SourceFile, needle: string): ts.Node[] {
-  const hits: ts.Node[] = [];
+function classLiterals(source: ts.SourceFile, needle: string): ts.LiteralLikeNode[] {
+  const hits: ts.LiteralLikeNode[] = [];
   const visit = (node: ts.Node) => {
     if (
       (ts.isStringLiteral(node) ||
@@ -90,6 +115,80 @@ function classLiterals(source: ts.SourceFile, needle: string): ts.Node[] {
   };
   ts.forEachChild(source, visit);
   return hits;
+}
+
+/**
+ * One OCCURRENCE of the ink: the whole whitespace-separated Tailwind class that
+ * carries it, with its variant prefixes split off. The occurrence rather than
+ * the literal is the unit of judgement, because the prefixes are what decide
+ * WHICH element the ink lands on (MOTIR-2489).
+ */
+interface InkToken {
+  /** The string-ish node the class was written in — the reporting anchor. */
+  node: ts.Node;
+  /** The variant prefixes, outermost first: `[&_svg]`, `placeholder`, `hover`. */
+  variants: string[];
+  /** Absolute position of the token, for the reported line. */
+  start: number;
+}
+
+/**
+ * Split a Tailwind class into its variant prefixes and its utility. Bracket-
+ * and paren-aware, so `text-(--el-text-faint)` is one utility and
+ * `[&_[data-x]]:text-(…)` is one variant plus one utility.
+ */
+function splitVariants(token: string): string[] {
+  const variants: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < token.length; i += 1) {
+    const char = token[i];
+    if (char === '[' || char === '(') depth += 1;
+    else if (char === ']' || char === ')') depth -= 1;
+    else if (char === ':' && depth === 0) {
+      variants.push(token.slice(start, i));
+      start = i + 1;
+    }
+  }
+  return variants;
+}
+
+/** Every occurrence of `needle`, one per class token rather than one per literal. */
+function inkTokens(source: ts.SourceFile, needle: string): InkToken[] {
+  const tokens: InkToken[] = [];
+  for (const node of classLiterals(source, needle)) {
+    const raw = node.getText(source);
+    let searchFrom = 0;
+    for (const token of node.text.split(/\s+/)) {
+      if (!token.includes(needle)) continue;
+      const at = raw.indexOf(token, searchFrom);
+      if (at >= 0) searchFrom = at + token.length;
+      tokens.push({
+        node,
+        variants: splitVariants(token),
+        start: node.getStart(source) + Math.max(at, 0),
+      });
+    }
+  }
+  return tokens;
+}
+
+/**
+ * The descendant selector a variant retargets to, e.g. `[&_svg]` → `_svg`.
+ * Only a variant whose `&` is followed by a combinator moves the ink OFF the
+ * carrier: `[&:hover]` and `[.dark_&]` still paint the element itself.
+ */
+function retargetSelector(variants: string[]): string | null {
+  for (const variant of variants) {
+    const match = /^\[&([_>].+)\]$/.exec(variant);
+    if (match) return match[1]!;
+  }
+  return null;
+}
+
+/** Does any variant paint the `::placeholder` pseudo-element — which is text? */
+function paintsPlaceholder(variants: string[]): boolean {
+  return variants.includes('placeholder');
 }
 
 /** The JSX element a node sits inside an ATTRIBUTE of, if any. */
@@ -173,7 +272,17 @@ function accessibleName(element: ts.JsxOpeningLikeElement): boolean {
  * defect in its own right, so "make it legibly decorative" is the fix rather
  * than an exemption.
  */
-function isDecorative(element: ts.JsxOpeningLikeElement): string | null {
+function isDecorative(
+  element: ts.JsxOpeningLikeElement,
+  /**
+   * Whether the ink paints characters here, when the caller knows better than
+   * `rendersText` can. A `placeholder:` class puts text on a self-closing
+   * `<textarea aria-label … />` whose CONTENT is nothing at all, so the
+   * glyphs-only arm below would otherwise clear the one thing a person reads
+   * (MOTIR-2489 shape 3).
+   */
+  paintsText = rendersText(element),
+): string | null {
   const attrs = attributesOf(element);
   const hidden = attrs.get('aria-hidden');
   if (hidden !== undefined && hidden !== 'false' && hidden !== '{false}') {
@@ -183,18 +292,28 @@ function isDecorative(element: ts.JsxOpeningLikeElement): string | null {
     // An UNLABELLED role="img" carries meaning nothing else states.
     return accessibleName(element) ? `<${tagNameOf(element)}> is a labelled role="img"` : null;
   }
-  if (accessibleName(element) && !rendersText(element)) {
+  if (accessibleName(element) && !paintsText) {
     return `<${tagNameOf(element)}> is a labelled control whose content is glyphs only`;
   }
   return null;
 }
 
-/** `true` when the element itself declares the disabled state 1.4.3 exempts. */
+/**
+ * `true` when the element itself declares the disabled state 1.4.3 exempts —
+ * UNCONDITIONALLY. `disabled={a || b}` is not that: the control is inactive
+ * only sometimes, and the render where it is not still paints text a person has
+ * to read, so the exemption cannot be taken from an expression the scanner
+ * cannot evaluate (MOTIR-2489 shape 2). A genuinely conditional style has a
+ * shape that DOES say which branch is which — `disabled ? faint : ink` — and
+ * `inDisabledBranch` reads it.
+ */
 function isDisabledElement(element: ts.JsxOpeningLikeElement): string | null {
   const attrs = attributesOf(element);
   for (const key of ['disabled', 'aria-disabled']) {
     const value = attrs.get(key);
-    if (value !== undefined && value !== 'false' && value !== '{false}') {
+    // `true` covers the bare attribute and `aria-disabled="true"`; `{true}` the
+    // explicit literal. Every other initializer is an expression.
+    if (value === 'true' || value === '{true}') {
       return `<${tagNameOf(element)}> carries ${key}`;
     }
   }
@@ -202,16 +321,56 @@ function isDisabledElement(element: ts.JsxOpeningLikeElement): string | null {
 }
 
 /**
+ * The expression an element's `disabled` / `aria-disabled` is computed from,
+ * when it is an expression rather than a constant. This is the OTHER half of
+ * `isDisabledElement`: that one refuses the exemption to a conditional
+ * attribute, and this one is how a conditional attribute can still earn it.
+ */
+function disabledPredicate(element: ts.JsxOpeningLikeElement): string | null {
+  for (const key of ['disabled', 'aria-disabled']) {
+    const value = attributesOf(element).get(key);
+    if (value === undefined) continue;
+    const expression = /^\{([\s\S]*)\}$/.exec(value);
+    if (expression) return expression[1]!.trim();
+  }
+  return null;
+}
+
+const withoutSpace = (source: string) => source.replace(/\s+/g, '');
+
+/**
  * `true` when the class sits in the disabled branch of a ternary — the shape
  * `disabled ? faint : ink`, which is the 1.4.3 exemption written as a style.
+ *
+ * Two things can make a branch the disabled one. The predicate can SAY so
+ * (`disabled`, `isLocked`, `seatOff`), which is the vocabulary below — or, and
+ * this is the exact case rather than the readable one, the ternary can ask the
+ * very question the element's own `disabled` attribute is computed from. A
+ * `<button disabled={atCap} className={atCap ? faint : link}>` paints the faint
+ * ink in precisely the render where the control is inactive, whatever the
+ * predicate happens to be called; that is a proof, not a guess, and without it
+ * MOTIR-2489's refusal to trust `disabled={expression}` would report three
+ * cap-limited buttons that are behaving correctly.
  */
-function inDisabledBranch(node: ts.Node): string | null {
+function inDisabledBranch(node: ts.Node, element?: ts.JsxOpeningLikeElement): string | null {
+  const predicate = element ? disabledPredicate(element) : null;
   for (let cursor: ts.Node | undefined = node; cursor; cursor = cursor.parent) {
     const parent = cursor.parent;
     if (parent && ts.isConditionalExpression(parent)) {
       const test = parent.condition.getText();
       const inTrue = parent.whenTrue === cursor || contains(parent.whenTrue, cursor);
       const inFalse = parent.whenFalse === cursor || contains(parent.whenFalse, cursor);
+      if (predicate !== null) {
+        // `disabled={p}` + `p ? faint : ink`, and its negated mirror
+        // `disabled={!p}` + `p ? ink : faint`: the ink paints exactly when the
+        // control is inactive.
+        if (inTrue && withoutSpace(predicate) === withoutSpace(test)) {
+          return `the branch where \`${test}\` holds — the same expression \`disabled\` is computed from`;
+        }
+        if (inFalse && withoutSpace(predicate) === `!${withoutSpace(test)}`) {
+          return `the branch where \`${test}\` fails — the negation \`disabled\` is computed from`;
+        }
+      }
       if (inTrue && DISABLED_TEST.test(test)) return `disabled branch of \`${test}\``;
       if (inFalse && ENABLED_TEST.test(test)) return `inactive branch of \`${test}\``;
     }
@@ -256,8 +415,96 @@ function nearestSurface(node: ts.Node): { className: string; tinted: boolean } |
   return null;
 }
 
-function lineOf(source: ts.SourceFile, node: ts.Node): number {
-  return source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+/**
+ * A predicate for ONE simple selector, or `null` when the selector is past what
+ * this resolver reads. `null` is not "no match" — it is "I cannot tell", and it
+ * has to stay distinct from an empty match set, because both end in
+ * `unattributable` for different reasons and only one of them is worth
+ * teaching the scanner later.
+ */
+function selectorMatcher(
+  selector: string,
+): ((element: ts.JsxOpeningLikeElement) => boolean) | null {
+  // A lowercase tag — `svg`, `span`. A capitalised one is a component, whose
+  // rendered tag this file does not know, so it is deliberately not matched:
+  // `[&_svg]:` over a `<ChevronRight />` really is unresolvable here.
+  if (/^[a-z][a-z0-9]*$/.test(selector)) {
+    return (element) => tagNameOf(element) === selector;
+  }
+  if (/^\.[A-Za-z0-9_-]+$/.test(selector)) {
+    const className = selector.slice(1);
+    const pattern = new RegExp(`(^|[\\s"'\`{])${className}([\\s"'\`}]|$)`);
+    return (element) => pattern.test(classBlob(element));
+  }
+  const attribute = /^\[([A-Za-z][A-Za-z0-9-]*)(?:[~^$*|]?=.*)?\]$/.exec(selector);
+  if (attribute) {
+    return (element) => attributesOf(element).has(attribute[1]!);
+  }
+  return null;
+}
+
+/** Every JSX element under `element`, in source order. `direct` stops at one level. */
+function descendantsOf(
+  element: ts.JsxOpeningLikeElement,
+  direct: boolean,
+): ts.JsxOpeningLikeElement[] {
+  const found: ts.JsxOpeningLikeElement[] = [];
+  const parent = element.parent;
+  if (!ts.isJsxElement(parent)) return found; // self-closing: no children at all
+  const collect = (children: readonly ts.JsxChild[]) => {
+    for (const child of children) {
+      if (ts.isJsxSelfClosingElement(child)) {
+        found.push(child);
+      } else if (ts.isJsxElement(child)) {
+        found.push(child.openingElement);
+        if (!direct) collect(child.children);
+      } else if (!direct && ts.isJsxExpression(child) && child.expression) {
+        // `{items.map(i => <li …/>)}` — the elements are real and in this file.
+        const visit = (node: ts.Node) => {
+          if (ts.isJsxSelfClosingElement(node)) found.push(node);
+          else if (ts.isJsxElement(node)) found.push(node.openingElement);
+          ts.forEachChild(node, visit);
+        };
+        visit(child.expression);
+      }
+    }
+  };
+  collect(parent.children);
+  return found;
+}
+
+/**
+ * The elements a descendant variant's ink actually lands on, or a reason the
+ * selector could not be resolved in this file. Everything an ancestor's class
+ * says about ITSELF — that it is aria-hidden, that it renders a label — is
+ * irrelevant once the ink is painted on a child, which is the whole of
+ * MOTIR-2489 shape 1.
+ */
+function retargeted(
+  carrier: ts.JsxOpeningLikeElement,
+  selector: string,
+): { elements: ts.JsxOpeningLikeElement[] } | { unresolved: string } {
+  const direct = selector.startsWith('>');
+  const simple = selector.slice(1).trim();
+  const matches = selectorMatcher(simple);
+  if (!matches) {
+    return { unresolved: `the descendant selector \`${simple}\` is past what this scanner reads` };
+  }
+  const elements = descendantsOf(carrier, direct).filter(matches);
+  if (elements.length === 0) {
+    return {
+      unresolved: `\`${simple}\` matches no element inside <${tagNameOf(carrier)}> in this file, so the ink's target cannot be judged here`,
+    };
+  }
+  return { elements };
+}
+
+/**
+ * The reported line. Taken from the TOKEN's own position rather than the
+ * literal's, so a class list spread over several lines points at the class.
+ */
+function lineAt(source: ts.SourceFile, position: number): number {
+  return source.getLineAndCharacterOfPosition(position).line + 1;
 }
 
 /**
@@ -266,8 +513,17 @@ function lineOf(source: ts.SourceFile, node: ts.Node): number {
  * and hides the thing the verdict is about — whether this element paints real
  * copy — which is exactly the judgement the reader is being asked to check.
  */
-function snippetOf(source: ts.SourceFile, node: ts.Node): string {
-  const element = owningElement(node);
+function snippetOf(
+  source: ts.SourceFile,
+  node: ts.Node,
+  /**
+   * The element to show instead of the carrier — used when a descendant variant
+   * moved the ink, where showing the carrier would hide the element the verdict
+   * is actually about.
+   */
+  override?: ts.JsxOpeningLikeElement,
+): string {
+  const element = override ?? owningElement(node);
   const subject =
     element && ts.isJsxOpeningElement(element) && ts.isJsxElement(element.parent)
       ? element.parent
@@ -290,56 +546,114 @@ export function scanSource(fileName: string, text: string): InkFinding[] {
   );
   const findings: InkFinding[] = [];
 
-  for (const node of classLiterals(source, FAINT_CLASS)) {
-    const element = owningElement(node);
-    const line = lineOf(source, node);
-    const snippet = snippetOf(source, node);
-    const base = { file: fileName, line, ink: 'faint' as const, snippet };
+  for (const token of inkTokens(source, FAINT_CLASS)) {
+    const { node } = token;
+    const line = lineAt(source, token.start);
+    const carrier = owningElement(node);
 
-    if (!element) {
+    if (!carrier) {
       findings.push({
-        ...base,
+        file: fileName,
+        line,
+        ink: 'faint',
         verdict: 'unattributable',
         reason:
           'the class is not attached to a JSX element here, so nothing can show it is decorative or disabled',
         element: null,
+        snippet: snippetOf(source, node),
       });
       continue;
     }
 
-    const decorative = isDecorative(element);
-    const disabled = isDisabledElement(element) ?? inDisabledBranch(node);
-    findings.push({
-      ...base,
-      element: tagNameOf(element),
-      verdict: decorative ? 'decorative' : disabled ? 'disabled' : 'violation',
-      reason:
-        decorative ??
-        disabled ??
-        `<${tagNameOf(element)}> paints active informational text with an ink that clears AA on no surface`,
-    });
+    const painted = paintedElements(carrier, token);
+    if ('unresolved' in painted) {
+      findings.push({
+        file: fileName,
+        line,
+        ink: 'faint',
+        verdict: 'unattributable',
+        reason: painted.unresolved,
+        element: null,
+        snippet: snippetOf(source, node),
+      });
+      continue;
+    }
+
+    for (const element of painted.elements) {
+      const decorative = isDecorative(element, paintsText(element, token));
+      const disabled = isDisabledElement(element) ?? inDisabledBranch(node, element);
+      findings.push({
+        file: fileName,
+        line,
+        ink: 'faint',
+        element: tagNameOf(element),
+        verdict: decorative ? 'decorative' : disabled ? 'disabled' : 'violation',
+        reason:
+          decorative ??
+          disabled ??
+          `<${tagNameOf(element)}> paints active informational text with an ink that clears AA on no surface`,
+        snippet: snippetOf(source, node, element === carrier ? undefined : element),
+      });
+    }
   }
 
-  for (const node of classLiterals(source, MUTED_CLASS)) {
-    const element = owningElement(node);
-    if (!element) continue; // the muted rule needs an element to find a surface for
-    // 1.4.3 measures TEXT. A glyph or a disabled control is out of its scope
-    // whichever ink it takes, so those are filtered before the surface lookup.
-    if (isDecorative(element) || isDisabledElement(element) || inDisabledBranch(node)) continue;
-    const surface = nearestSurface(element);
-    if (!surface?.tinted) continue;
-    findings.push({
-      file: fileName,
-      line: lineOf(source, node),
-      ink: 'muted',
-      verdict: 'violation',
-      element: tagNameOf(element),
-      reason: `--el-text-muted is 4.12–4.34:1 on ${surface.className}; it clears AA only on the white page/card`,
-      snippet: snippetOf(source, node),
-    });
+  for (const token of inkTokens(source, MUTED_CLASS)) {
+    const { node } = token;
+    const line = lineAt(source, token.start);
+    const carrier = owningElement(node);
+    if (!carrier) continue; // the muted rule needs an element to find a surface for
+
+    const painted = paintedElements(carrier, token);
+    if ('unresolved' in painted) {
+      findings.push({
+        file: fileName,
+        line,
+        ink: 'muted',
+        verdict: 'unattributable',
+        reason: painted.unresolved,
+        element: null,
+        snippet: snippetOf(source, node),
+      });
+      continue;
+    }
+
+    for (const element of painted.elements) {
+      // 1.4.3 measures TEXT. A glyph or a disabled control is out of its scope
+      // whichever ink it takes, so those are filtered before the surface lookup.
+      if (isDecorative(element, paintsText(element, token))) continue;
+      if (isDisabledElement(element) || inDisabledBranch(node, element)) continue;
+      const surface = nearestSurface(element);
+      if (!surface?.tinted) continue;
+      findings.push({
+        file: fileName,
+        line,
+        ink: 'muted',
+        verdict: 'violation',
+        element: tagNameOf(element),
+        reason: `--el-text-muted is 4.12–4.34:1 on ${surface.className}; it clears AA only on the white page/card`,
+        snippet: snippetOf(source, node, element === carrier ? undefined : element),
+      });
+    }
   }
 
   return findings;
+}
+
+/**
+ * The element(s) this occurrence of the ink paints — the carrier itself, or
+ * whatever a descendant variant retargets it to.
+ */
+function paintedElements(
+  carrier: ts.JsxOpeningLikeElement,
+  token: InkToken,
+): { elements: ts.JsxOpeningLikeElement[] } | { unresolved: string } {
+  const selector = retargetSelector(token.variants);
+  return selector === null ? { elements: [carrier] } : retargeted(carrier, selector);
+}
+
+/** Whether this occurrence puts characters on the element it lands on. */
+function paintsText(element: ts.JsxOpeningLikeElement, token: InkToken): boolean {
+  return paintsPlaceholder(token.variants) || rendersText(element);
 }
 
 /** The findings that FAIL the guard — everything the two legitimate jobs do not cover. */
