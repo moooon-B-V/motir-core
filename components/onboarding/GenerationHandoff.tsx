@@ -99,7 +99,7 @@ export function GenerationHandoff({
           {/* The frozen baseline — what generation runs against (a revisable
               snapshot, captured at tiers-complete). */}
           <div className="mt-6 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-5">
-            <p className="text-xs font-medium tracking-wide text-(--el-text-muted) uppercase">
+            <p className="text-xs font-medium tracking-wide text-(--el-text-secondary) uppercase">
               {t('baselineTitle')}
             </p>
             <ul className="mt-3 flex flex-col gap-2">
@@ -129,7 +129,7 @@ export function GenerationHandoff({
             {t('generateCta')}
           </Button>
 
-          <p className="mt-5 text-sm text-(--el-text-muted)">{t('revisableNote')}</p>
+          <p className="mt-5 text-sm text-(--el-text-secondary)">{t('revisableNote')}</p>
         </div>
       </div>
     </section>

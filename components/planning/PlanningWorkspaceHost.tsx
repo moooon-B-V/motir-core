@@ -191,7 +191,7 @@ export function PlanningWorkspaceHost({
             >
               <X className="h-4 w-4 shrink-0" aria-hidden />
               {backLabel}
-              <kbd className="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-muted)">
+              <kbd className="ml-1 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[0.6875rem] text-(--el-text-secondary)">
                 {t('escKey')}
               </kbd>
             </Link>

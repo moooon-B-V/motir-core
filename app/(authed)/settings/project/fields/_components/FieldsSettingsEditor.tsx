@@ -346,7 +346,7 @@ function QuietNote({ children }: { children: React.ReactNode }) {
   return (
     <div className="mb-3 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-control-y) px-(--spacing-control-x)">
       <Info className="text-(--el-text-muted) size-4 shrink-0" aria-hidden />
-      <p className="text-(--el-text-muted) font-sans text-xs">{children}</p>
+      <p className="text-(--el-text-secondary) font-sans text-xs">{children}</p>
     </div>
   );
 }

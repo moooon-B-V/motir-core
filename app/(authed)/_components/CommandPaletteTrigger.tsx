@@ -36,7 +36,7 @@ export function CommandPaletteTrigger() {
       // accessible name is stable across the breakpoint instead of appearing
       // only where the text does.
       aria-label={t('commandPalette.search')}
-      className="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+      className="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
     >
       <Search className="h-4 w-4" aria-hidden />
       <span className="hidden lg:inline">{t('commandPalette.search')}</span>

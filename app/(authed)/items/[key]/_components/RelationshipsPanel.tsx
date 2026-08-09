@@ -87,7 +87,7 @@ function LinkRow({
         ) : null}
         <IssueTypeIcon type={item.kind} className="h-4 w-4 shrink-0" />
         <span className="min-w-0 flex-1 truncate">
-          <span className="text-(--el-text-muted) font-mono text-xs">{item.identifier}</span>
+          <span className="text-(--el-text-secondary) font-mono text-xs">{item.identifier}</span>
           <span className="text-(--el-text) ml-2 font-sans text-sm group-hover:underline">
             {item.title}
           </span>

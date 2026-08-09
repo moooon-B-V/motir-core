@@ -384,7 +384,7 @@ function SplitStat({
         )}
         {label}
       </span>
-      <span className="text-xs text-(--el-text-muted)">{sub}</span>
+      <span className="text-xs text-(--el-text-secondary)">{sub}</span>
     </div>
   );
 }

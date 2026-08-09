@@ -48,7 +48,7 @@ export function SnoozePopover({ busy, onSnooze }: SnoozePopoverProps) {
         className="flex w-full items-center justify-between gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-left transition-colors hover:bg-(--el-surface) disabled:opacity-50"
       >
         <span className="text-sm font-medium text-(--el-text)">{label}</span>
-        <span className="text-xs text-(--el-text-muted)">
+        <span className="text-xs text-(--el-text-secondary)">
           {format.dateTime(when, { weekday: 'short', month: 'short', day: 'numeric' })}
         </span>
       </button>

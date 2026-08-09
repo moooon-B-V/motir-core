@@ -143,7 +143,9 @@ export function PlanEditsReviewDock({
       ) : null}
 
       <footer className="flex shrink-0 items-center justify-between gap-2 border-t border-(--el-border) px-5 py-3">
-        <p className="text-xs text-(--el-text-muted)">{t('itemCount', { count: items.length })}</p>
+        <p className="text-xs text-(--el-text-secondary)">
+          {t('itemCount', { count: items.length })}
+        </p>
         <div className="flex items-center gap-2">
           <Button variant="ghost" onClick={onDiscard}>
             {t('declineCta')}

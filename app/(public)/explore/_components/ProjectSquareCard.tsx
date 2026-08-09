@@ -45,7 +45,7 @@ export async function ProjectSquareCard({ card }: { card: ProjectSquareCardDto }
         aria-label={t('cardViewAria', { name: card.name })}
         className="group flex h-full min-w-0 flex-col rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) p-(--spacing-card-padding) shadow-(--shadow-card) transition-shadow hover:border-(--el-border-strong) hover:shadow-(--shadow-elevated)"
       >
-        <div className="flex items-center gap-1.5 text-xs font-medium text-(--el-text-muted)">
+        <div className="flex items-center gap-1.5 text-xs font-medium text-(--el-text-secondary)">
           <Building2 className="h-3.5 w-3.5 flex-none" aria-hidden />
           <span className="truncate" title={card.org.name}>
             {card.org.name}
@@ -69,7 +69,7 @@ export async function ProjectSquareCard({ card }: { card: ProjectSquareCardDto }
             {card.stats.upvotes}
           </span>
           <span
-            className="inline-flex items-center gap-1 text-(--el-text-muted)"
+            className="inline-flex items-center gap-1 text-(--el-text-secondary)"
             aria-label={age ? t('statActivityAria', { time: age }) : t('statActivityNone')}
           >
             <Activity className="h-4 w-4 text-(--el-success)" aria-hidden />

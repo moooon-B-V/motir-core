@@ -1,5 +1,5 @@
 import { MotirClient } from '../client.js';
-import { CliError } from '../errors.js';
+import { CliError, NotFoundError } from '../errors.js';
 import { info, out } from '../output.js';
 import { describeProject, resolveProject } from '../projectLink.js';
 import { resolveServerUrl } from '../serverResolve.js';
@@ -39,16 +39,46 @@ function tokenFor(serverUrl: string): string {
   return cred.token;
 }
 
-/** Confirm a project exists / is accessible under the token's workspace by
+/** What the access probe needs of a client — structural, so a test can drive
+ *  the catch below with a stub that throws exactly one error. */
+export type ProjectProbeClient = Pick<MotirClient, 'listReady'>;
+
+/**
+ * Confirm a project exists / is accessible under the token's workspace by
  * probing `list_ready` (an empty result is a valid empty project; a not-found
- * surfaces as the tool error). */
-async function assertProjectAccessible(client: MotirClient, projectKey: string): Promise<void> {
+ * surfaces as the read's error).
+ *
+ * ⚠️ The catch NARROWS the reported failure to the ONE error that actually
+ * means "inaccessible", and lets every other one through UNTOUCHED. It used to
+ * rewrite every `CliError` — the whole class — into the accessibility sentence,
+ * and that is destructive in exact proportion to how good the underlying
+ * diagnosis was (MOTIR-2492). The instance that cost a session: a server behind
+ * this CLI's contract floor raises `IncompatibleServerError`, which names the
+ * server, the version it serves, the version required and the remedy — and
+ * `motir link` replaced all of it with "check the project key, or your token's
+ * workspace", none of which was the cause, on a token that could read the
+ * project perfectly well. Every sibling error is likewise MORE specific than
+ * the sentence that was overwriting it: `AuthError` says re-login, `ScopeError`
+ * names the missing scope AND where to create a token with it, and a transport
+ * failure names the host it could not reach.
+ *
+ * So only `NotFoundError` — a 404 carrying the v1 `{ code, error }` envelope,
+ * i.e. the server saying this key resolves to nothing the token can see — earns
+ * the rewrite, and even there the server's own sentence is chained as `cause`
+ * rather than discarded. (A 404 with NO envelope is an unrouted path, which the
+ * transport already reports as skew; it never reaches here as `NotFoundError`.)
+ */
+export async function assertProjectAccessible(
+  client: ProjectProbeClient,
+  projectKey: string,
+): Promise<void> {
   try {
     await client.listReady({ projectKey, limit: 1 });
   } catch (err) {
-    if (err instanceof CliError) {
+    if (err instanceof NotFoundError) {
       throw new CliError(`Project "${projectKey}" is not accessible with this token.`, {
         hint: 'Check the project key, or your token’s workspace.',
+        cause: err,
       });
     }
     throw err;

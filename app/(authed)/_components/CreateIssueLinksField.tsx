@@ -118,7 +118,7 @@ export function CreateIssueLinksField({
               </Pill>
               <IssueTypeIcon type={l.item.kind as IssueType} className="h-4 w-4 shrink-0" />
               <span className="min-w-0 flex-1 truncate">
-                <span className="text-(--el-text-muted) font-mono text-xs">
+                <span className="text-(--el-text-secondary) font-mono text-xs">
                   {l.item.identifier}
                 </span>
                 <span className="text-(--el-text) ml-2 text-sm">{l.item.title}</span>

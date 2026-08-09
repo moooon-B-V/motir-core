@@ -110,7 +110,9 @@ export function PlanReviewRail({
         {review.summary ? (
           <p className="text-sm text-(--el-text-secondary)">{review.summary}</p>
         ) : null}
-        <p className="text-xs text-(--el-text-muted)">{t('itemCount', { n: review.itemCount })}</p>
+        <p className="text-xs text-(--el-text-secondary)">
+          {t('itemCount', { n: review.itemCount })}
+        </p>
       </header>
 
       {/* HISTORY timeline */}
@@ -123,7 +125,7 @@ export function PlanReviewRail({
             <HistoryRow key={ev.kind} ev={ev} t={t} />
           ))}
           {!decided ? (
-            <li className="flex items-center gap-2 text-sm text-(--el-text-muted)">
+            <li className="flex items-center gap-2 text-sm text-(--el-text-secondary)">
               <span
                 className="size-1.5 shrink-0 rounded-full bg-(--el-border-strong)"
                 aria-hidden
@@ -184,7 +186,7 @@ export function PlanReviewRail({
             >
               {t('declineCta')}
             </Button>
-            <p className="text-center text-xs text-(--el-text-muted)">
+            <p className="text-center text-xs text-(--el-text-secondary)">
               {planned
                 ? review.stale
                   ? t('approveHintStale', { n: review.staleCount })

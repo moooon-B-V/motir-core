@@ -63,7 +63,7 @@ function PointStat({
       <span className="text-lg leading-none font-bold tabular-nums text-(--el-text-strong)">
         {value}
       </span>
-      <span className="text-[10.5px] font-semibold tracking-wide text-(--el-text-muted) uppercase">
+      <span className="text-[10.5px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {label}
       </span>
     </div>

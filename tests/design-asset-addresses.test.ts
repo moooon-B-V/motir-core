@@ -868,10 +868,15 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
   },
 
-  // (The `components/ui/Checkbox.tsx` row that sat here was deleted by
-  //  MOTIR-2465, exactly as its own `why` instructed — "whichever card creates
-  //  it deletes this row with the file". The primitive now ships, so the path
-  //  is a real citation again and is guarded like any other.)
+  // (Three rows sat here and all three deleted themselves with this branch,
+  //  exactly as their own `why` instructed:
+  //    * `components/ui/Checkbox.tsx`  — created by MOTIR-2465;
+  //    * `lib/permissions/limits.ts` x2 — created by MOTIR-2472, exempted while
+  //      the DESIGN STOPPER merged ahead of this code branch.
+  //  All three paths now resolve, so each is a real citation again and is
+  //  guarded like any other. An exemption cannot outlive its reason — and the
+  //  `carries no KNOWN_PATHS entry that has stopped applying` test below is
+  //  what made sure nobody had to remember.)
 ];
 
 describe('a design asset cites source paths that still exist', () => {

@@ -99,7 +99,11 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
             </Pill>
           )}
         </span>
-        <span className="text-(--el-text-muted) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
+        {/* BOTH sides of the merge: MOTIR-2477 swept this ink off the tinted
+            row (`--el-text-muted` -> `--el-text-secondary`), and MOTIR-2478
+            widened the DTO so a CUSTOM role's description is a literal rather
+            than an i18n key. Taking either alone regresses the other. */}
+        <span className="text-(--el-text-secondary) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
           {roleDescription(role, tRoles)}
         </span>
       </span>

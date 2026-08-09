@@ -97,7 +97,7 @@ export function OrDivider() {
 export function IdeaCarried({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface-soft) px-(--spacing-input-x) py-(--spacing-sm)">
-      <span className="text-(--el-text-muted) font-sans text-xs font-medium uppercase tracking-wider">
+      <span className="text-(--el-text-secondary) font-sans text-xs font-medium uppercase tracking-wider">
         {label}
       </span>
       <p className="line-clamp-4 font-sans text-sm text-(--el-text)">{children}</p>

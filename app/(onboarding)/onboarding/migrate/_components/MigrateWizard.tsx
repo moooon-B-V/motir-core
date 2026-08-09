@@ -270,9 +270,11 @@ function RailStep({
         'flex items-center gap-2.5 rounded-(--radius-control) px-(--spacing-control-x) py-2 text-sm',
         state === 'current' &&
           'bg-(--el-surface) text-(--el-text) ring-1 ring-(--el-accent-on-surface)',
-        state === 'done' && 'text-(--el-text-secondary)',
-        state === 'upcoming' && 'text-(--el-text-muted)',
-        state === 'optional' && 'text-(--el-text-muted)',
+        // Every non-current step takes the same ink: the CURRENT step is the
+        // one that paints `--el-surface` under itself, and `--el-text-muted`
+        // is 4.17:1 there (MOTIR-2477). The state is carried by the ring and
+        // the numeral chip below, not by three shades of grey.
+        state !== 'current' && 'text-(--el-text-secondary)',
       )}
       aria-current={state === 'current' ? 'step' : undefined}
     >
