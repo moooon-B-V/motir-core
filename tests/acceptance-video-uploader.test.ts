@@ -1112,10 +1112,15 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       expect(logged).toContain('rehearsed');
     });
 
-    it('still FAILS on an unwatchable clip it does not own — the floor is a PR-time check', async () => {
-      // Why the gate is applied AFTER the watchability assessment: pacing is a
-      // defect whoever is looking at this run can fix, and deferring the check to
-      // the owning run is the MOTIR-1905 blind spot.
+    it('REPORTS an unwatchable clip it does not own, and does NOT fail on it (MOTIR-2499)', async () => {
+      // The verdict MOTIR-1905 got right and MOTIR-2499 had to re-scope. Failing
+      // on ANY unwatchable clip cost nothing while the step ran under
+      // `continue-on-error` and could not go red whatever it returned. Now that
+      // it can, the same rule would red-light every acceptance PR over a spec it
+      // never touched — MOTIR-2268's 14.5s clip sat in the lane's recordings for
+      // days. A run answers for the specs it CHANGED; the rest it rehearses.
+      //
+      // Still assessed, still annotated, still counted — just not fatal here.
       const dir = tmpDir();
       writeRecording(dir, 'acceptance-raced-chromium', {
         storyKey: 'MOTIR-811',
@@ -1134,11 +1139,62 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
 
       await main();
 
+      expect(exit).not.toHaveBeenCalled();
+      // A `warning`, not an `error`: the annotation's level now tracks whether
+      // the run fails on it, so an `::error::` beside a green step cannot recur.
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.stringContaining('::warning::Unwatchable acceptance video for MOTIR-811'),
+      );
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('FAILS on an unwatchable clip it DOES own — its own story lost its receipt', async () => {
+      // The other arm of the same rule: this PR changed the spec, so this PR's
+      // author is the one who can pace it, and this PR's lane is where it bites.
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-raced-chromium', {
+        storyKey: 'MOTIR-811',
+        chapters: JSON.stringify([{ label: 'one', tSeconds: 0.5 }]),
+        totalSeconds: 9.5,
+      });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      process.env['GITHUB_ACTIONS'] = 'true';
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch();
+
+      await main();
+
       expect(exit).toHaveBeenCalledWith(1);
       expect(logSpy).toHaveBeenCalledWith(
         expect.stringContaining('::error::Unwatchable acceptance video for MOTIR-811'),
       );
-      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('counts a rehearsed unpublishable recording SEPARATELY from a failure (MOTIR-2499)', async () => {
+      // "2 publish failure(s) and 1 unpublishable recording(s)" pooled the two
+      // verdicts into one number, so the log could not say whose defect either
+      // was. They are now counted apart, and the rehearsed count is stated as
+      // not fatal.
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-mine-chromium', { storyKey: 'MOTIR-2258' });
+      writeRecording(dir, 'acceptance-theirs-chromium', {
+        storyKey: 'MOTIR-2268',
+        owned: false,
+        totalSeconds: 14.5, // the real clip, under the 15s floor
+      });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      const fetchMock = stubFetch();
+
+      await main();
+
+      expect(publishedStories(fetchMock)).toEqual(['MOTIR-2258']);
+      expect(exit).not.toHaveBeenCalled();
+      expect(logSpy.mock.calls.flat().join('\n')).toContain(
+        '1 unpublishable recording(s) belong to specs this run does not own',
+      );
     });
 
     it('needs no credential when it owns nothing', async () => {
@@ -1151,6 +1207,125 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       await main();
 
       expect(exit).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── THE STEP CANNOT GO GREEN ON A LOST RECEIPT (MOTIR-2499) ────────────────
+  //
+  // The fail-open this card exists to close had two halves. The workflow half is
+  // asserted in `tests/ci-acceptance-lane.test.ts` (the step no longer runs under
+  // `continue-on-error`); this is the script half — the exit code that is now
+  // the signal.
+
+  describe('the exit verdict', () => {
+    it('THE GUARD CAN ACTUALLY FAIL — one owned recording that fails to publish exits non-zero', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch(() => ({ ok: false, status: 500 }));
+
+      await main();
+
+      expect(exit).toHaveBeenCalledWith(1);
+      // The exact line the broken lane printed under a `pass` check.
+      expect(logSpy.mock.calls.flat().join('\n')).toContain(
+        'Published 0 of 1 owned acceptance recording(s)',
+      );
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('1 publish failure(s) and 0 unpublishable owned recording(s)'),
+      );
+    });
+
+    it('…and the SAME run exits ZERO when every owned recording publishes', async () => {
+      // The control arm: the assertion above is only evidence if the guard is
+      // capable of passing on the good case.
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      stubFetch();
+
+      await main();
+
+      expect(exit).not.toHaveBeenCalled();
+    });
+
+    // ── The mint CONTRACT check (MOTIR-2499) ────────────────────────────────
+    //
+    // The actual breakage of 2026-08-07: MOTIR-2389 moved `/upload-token`'s
+    // `token` from a client upload token to an S3 presigned PUT URL, and the CI
+    // script — which always calls the DEPLOYED production endpoint — shipped
+    // ahead of the deployment. `fetch(token)` then failed with "Failed to parse
+    // URL from vercel_blob_client_…", which names neither side.
+    it('names the DEPLOYMENT when the mint returns the pre-MOTIR-2389 token shape', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const legacyToken = `vercel_blob_client_Wv5V9fWWFsXURacA_${'x'.repeat(600)}`;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: { method?: string }) => {
+          if (init?.method === 'PUT') return { ok: true, status: 200, text: async () => '' };
+          if (url.endsWith('/upload-token')) {
+            return {
+              ok: true,
+              json: async () => ({
+                video: {
+                  pathname: 'acceptance/v.webm',
+                  token: legacyToken,
+                  contentType: 'video/webm',
+                },
+                trace: {
+                  pathname: 'acceptance/t.zip',
+                  token: legacyToken,
+                  contentType: 'application/zip',
+                },
+              }),
+            };
+          }
+          return { ok: true, json: async () => ({ evidence: { id: 'ev' } }) };
+        }),
+      );
+
+      await main();
+
+      expect(exit).toHaveBeenCalledWith(1);
+      const reported = (console.error as unknown as { mock: { calls: unknown[][] } }).mock.calls
+        .flat()
+        .join('\n');
+      expect(reported).toContain('is not a presigned URL');
+      expect(reported).toContain('https://app.motir.co');
+      expect(reported).toContain('OLDER than this script');
+      // The credential is DESCRIBED, never echoed — the old failure printed all
+      // ~700 characters of a live upload grant into a public job log, twice.
+      expect(reported).not.toContain(legacyToken);
+      expect(reported).toMatch(/\d+-character string starting "vercel_blob_client_W…"/);
+    });
+
+    it('says so when the mint returns no target at all, instead of PUTting to `undefined`', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string, init?: { method?: string }) => {
+          if (init?.method === 'PUT') return { ok: true, status: 200, text: async () => '' };
+          if (url.endsWith('/upload-token')) return { ok: true, json: async () => ({}) };
+          return { ok: true, json: async () => ({ evidence: { id: 'ev' } }) };
+        }),
+      );
+
+      await main();
+
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(console.error).toHaveBeenCalledWith(
+        expect.stringContaining('the video upload target minted by https://app.motir.co'),
+      );
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('got nothing'));
     });
   });
 });
