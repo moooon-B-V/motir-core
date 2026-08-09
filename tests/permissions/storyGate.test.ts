@@ -164,15 +164,25 @@ const DERIVATION_PATTERNS: { label: string; re: RegExp }[] = [
  * quietly; a pin makes it a worklist.
  */
 const UI_AFFORDANCE_DERIVATIONS = [
-  'app/(authed)/items/[key]/page.tsx',
-  'app/(authed)/settings/project/board/page.tsx',
-  'app/(authed)/settings/project/components/page.tsx',
-  'app/(authed)/settings/project/estimation/page.tsx',
-  'app/(authed)/settings/project/fields/page.tsx',
-  'app/(authed)/settings/project/members/page.tsx',
-  'app/(authed)/settings/project/workflow/page.tsx',
+  // ⚠️ MOTIR-2258 EMPTIED THE PROJECT HALF, which is what this pin was written
+  // to be a worklist for. Seven entries left in one story: the six project-
+  // settings pages and the work-item detail page each derived `canManage` /
+  // `isAdmin` for themselves, and each is now reached only by an actor who holds
+  // the key its own registry entry names (MOTIR-2469's destination guard), so the
+  // affordance question the derivation answered has already been answered by the
+  // gate above it.
+  //
+  // Worth recording that the pin found MORE than the cards did. MOTIR-2469 named
+  // three pages, grepped on the membership-comparison shape; `board`,
+  // `estimation` and `workflow` used `isOwnerRole` instead — a WORKSPACE-owner
+  // check standing in for "may configure this", both a second policy and a
+  // tighter one than the key their services assert. This guard is the reason
+  // they were found, and it is exactly the worklist behaviour its author
+  // intended.
+  //
   // Workspace-level, so no project permission could govern it either way — the
-  // same argument MOTIR-2294 made about `repository:connect`.
+  // same argument MOTIR-2294 made about `repository:connect`. It is the only
+  // survivor, and it is not MOTIR-2258's to remove.
   'app/(authed)/settings/workspace/jobs/page.tsx',
 ];
 

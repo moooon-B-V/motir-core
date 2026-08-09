@@ -68,7 +68,7 @@ function selectField(overrides: Partial<CustomFieldWithValueDto> = {}): CustomFi
 
 function renderSection(fields: CustomFieldWithValueDto[], { canEdit = true } = {}) {
   return render(
-    <ProjectAccessProvider canEdit={canEdit}>
+    <ProjectAccessProvider permissions={canEdit ? ['work_item:edit'] : []}>
       <CustomFieldsSection workItemId="wi_1" fields={fields} members={members} />
     </ProjectAccessProvider>,
   );

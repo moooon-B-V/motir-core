@@ -197,26 +197,32 @@ test.describe('settings-area — the project-settings area journey', () => {
     await ctx.close();
   });
 
-  test('a non-admin member sees Details read-only WITHOUT the danger zone, with the full nav', async ({
-    page,
-  }) => {
+  // ⚠️ INVERTED BY MOTIR-2258 (`design-notes.md` § *Amendment 2026-08-08*). This
+  // asserted the SHARPEST form of the superseded rule — "the member sees the FULL
+  // nav (no nav leak in either direction)" — where "leak" meant a MISSING row.
+  // The amendment reverses which direction leaks: an entry offering a room the
+  // actor cannot enter is the leak, and the rail is now empty for this actor, so
+  // the area door is gone with it.
+  test('a non-admin member is REFUSED the settings area entirely', async ({ page }) => {
     const tenant = await seedTenant('sa-owner-3@example.com');
     // A plain workspace member (no project admin role) on the open project: can
-    // browse every settings section (members VIEW all), but cannot manage — so
-    // the Details danger zone is hidden.
+    // browse the project, holds no administrative key, so the area has nothing
+    // in it for them.
     const member = await makeUser('sa-member@example.com', 'Mary Member');
     await workspacesService.addMember({ userId: member.id, workspaceId: tenant.workspaceId });
     await pinActiveProject(member.id, tenant);
 
     await signIn(page, member.email, PWD);
+
+    // The bottom-nav door is not offered at all — the area has nothing behind it.
+    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
+    // …and it is not merely unmentioned: typing the URL meets the refusal.
     await page.goto('/settings/project');
-    await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
-    // The member sees the full nav (no nav leak in either direction).
-    await expect(settingsNav(page)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+    // No rail row survives for them, and the danger zone is gone with the page.
     await expect(
       settingsNav(page).getByRole('link', { name: 'Workflow', exact: true }),
-    ).toBeVisible();
-    // …but NOT the admin-only danger zone.
+    ).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Danger zone' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Archive', exact: true })).toHaveCount(0);
   });

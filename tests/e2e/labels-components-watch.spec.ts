@@ -438,7 +438,13 @@ test('@smoke watching: auto-watch on create, the W shortcut + typing guard, the 
 
 // ── the role pass: viewer (chips + watch) + non-admin member (settings) ──────
 
-test('a viewer gets read-only chips but CAN watch; a non-admin member gets the read-only Components settings', async ({
+// ⚠️ THE SETTINGS HALF WAS INVERTED BY MOTIR-2258 (`design-notes.md` §
+// *Amendment 2026-08-08*): a settings page the actor cannot use is hidden and
+// refuses, rather than rendering read-only. The VIEWER half is untouched and is
+// the more important half — read-only chips and a working Watch control are
+// in-place affordances on a surface the viewer CAN see, which the amendment
+// explicitly did not reopen.
+test('a viewer gets read-only chips but CAN watch; a non-admin member is REFUSED the Components settings', async ({
   browser,
 }) => {
   const tenant = await seedTenant('lcw-roles-owner@example.com');
@@ -484,14 +490,19 @@ test('a viewer gets read-only chips but CAN watch; a non-admin member gets the r
   );
   await viewerCtx.close();
 
-  // Non-admin member: the Components settings page renders read-only.
+  // Non-admin member: the Components settings page REFUSES.
   const memberCtx = await browser.newContext();
   const memberPage = await memberCtx.newPage();
   await signIn(memberPage, member.email, PWD);
   await memberPage.goto('/settings/project/components');
-  await expect(memberPage.getByRole('heading', { name: 'Components', level: 1 })).toBeVisible();
-  await expect(memberPage.getByText('Only project admins can manage components.')).toBeVisible();
-  await expect(memberPage.locator('[data-testid^="component-row-"]')).toContainText('Web');
+  await expect(memberPage.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+  await expect(
+    memberPage
+      .getByRole('paragraph')
+      .filter({ hasText: /components are managed by project admins/i }),
+  ).toBeVisible();
+  // …and the list it used to render read-only is gone with it.
+  await expect(memberPage.locator('[data-testid^="component-row-"]')).toHaveCount(0);
   await expect(memberPage.getByRole('button', { name: 'Add component' })).toHaveCount(0);
   await expect(memberPage.getByRole('button', { name: 'Edit Web', exact: true })).toHaveCount(0);
   await expect(memberPage.getByRole('button', { name: 'Delete Web', exact: true })).toHaveCount(0);

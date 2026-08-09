@@ -8,6 +8,7 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { notificationsService } from '@/lib/services/notificationsService';
 import { isMotirAiConfigured } from '@/lib/ai/availability';
 import { resumeGateEnabled } from '@/lib/onboarding/resumeVisibility';
@@ -101,30 +102,50 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     ? await projectsService.getActiveProject(session.user.id, ctx.workspaceId)
     : null;
 
-  // The actor's settings-area capabilities on the active project — ONE round-trip
-  // (Subtask 6.5.2 `getSettingsCapabilities`) feeding two consumers:
-  //   * `canEdit` → ProjectAccessProvider (Story 6.4.6): role-gated affordances
-  //     (create buttons, board drag, the issue-detail field pickers) render
-  //     disabled with a tooltip for a viewer / a member on a limited project.
-  //   * `{ canBrowse, canManage }` → SidebarNav's settings-nav registry filter
-  //     when the rail is in the project-settings area (a non-browser sees no nav
-  //     entry; admin-only entries — Story 6.6 — gate on canManage).
+  // The actor's PERMISSION SET on the active project — ONE round-trip
+  // (`getPermissionsDTO`, Story MOTIR-2255) feeding three consumers:
+  //   * the whole set → ProjectAccessProvider (Subtask MOTIR-2466): every
+  //     role-gated affordance can ask the permission its action needs by name.
+  //   * `canEdit` → the create-issue / report providers (Story 6.4.6):
+  //     the affordances render disabled with a tooltip for a viewer / a member
+  //     on a limited project.
+  //   * the keys → SidebarNav's settings-nav registry filter (Subtask
+  //     MOTIR-2468): which rail entries render inside the project-settings area,
+  //     whether the bottom nav offers the AREA DOOR at all, and which ⌘K deep
+  //     links the palette offers. Each registry entry names the key its own
+  //     destination's server gate asserts.
   // No active project → there's nothing to edit (the affordances are hidden) and
   // no settings area to enter.
-  const settingsCaps =
+  //
+  // ⚠️ This REPLACED the three-boolean settings-capabilities read (Subtask
+  // 6.5.2) rather than joining it — two calls would double the round trip for
+  // no gain, and MOTIR-2466's gate asserts this file names no other
+  // `projectAccessService` method. The substitution is provably
+  // behaviour-neutral, not merely believed to be: `lib/projects/access.ts`
+  // defines each of the three booleans as `hasPermission(i, <key>)`, and
+  // `hasPermission` is `resolvePermissions(i).has(key)` over the very set
+  // resolved here. `tests/components/project-access-provider.test.tsx` asserts
+  // the equivalence across every access level × workspace role × project role.
+  const actorPermissions =
     ctx && activeProject
-      ? await projectAccessService.getSettingsCapabilities(activeProject.id, {
+      ? await projectAccessService.getPermissionsDTO(activeProject.id, {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
         })
       : null;
-  const canEdit = settingsCaps?.canEdit ?? false;
+  // An empty set for "no active project" — the same direction the removed
+  // `?? false` defaults had: nothing resolved grants nothing.
+  const permissions = actorPermissions?.permissions ?? [];
+  const held = new Set<PermissionKey>(permissions);
+  const canEdit = held.has('work_item:edit');
   // The project-admin MANAGE gate — the work-item ⋯ menu's Delete action (2.8.4)
   // consumes it via ProjectAccessProvider, mirroring deleteWorkItem's assertCanManage.
-  const canManage = settingsCaps?.canManage ?? false;
-  const settingsAccess = settingsCaps
-    ? { canBrowse: settingsCaps.canBrowse, canManage: settingsCaps.canManage }
-    : undefined;
+  const canManage = held.has('project:administer');
+  // The keys the shell's registry-driven surfaces filter on (Subtask
+  // MOTIR-2468): the settings rail, its area door, and the ⌘K deep links. The
+  // ARRAY crosses to the client islands (a Set cannot); they rebuild the Set.
+  // `undefined` with no active project — there is no area to enter.
+  const settingsPermissions = actorPermissions?.permissions;
 
   // The single stateful build-in-public header slot (Story 6.17 · design
   // §6.17.6 · Panel 12), resolved server-side here so TopNav needs no client
@@ -196,7 +217,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
           canEdit={canEdit}
           aiConfigured={isMotirAiConfigured()}
         >
-          <ProjectAccessProvider canEdit={canEdit} canManage={canManage}>
+          <ProjectAccessProvider permissions={permissions}>
             {/* ReportProvider (Subtask 6.11.7) owns the in-app report-widget
                 modal + open state, mounted once so the top-nav and inbox-header
                 "Report" triggers drive the same dialog. The widget posts to the
@@ -230,7 +251,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       activeProject={activeProject}
                       projects={projects}
                       variant="rail"
-                      settingsAccess={settingsAccess}
+                      settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
                       aiConfigured={aiPlanningConfigured}
                     />
@@ -281,7 +302,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     activeProject={activeProject}
                     projects={projects}
                     variant="drawer"
-                    settingsAccess={settingsAccess}
+                    settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
                     aiConfigured={aiPlanningConfigured}
                   />
@@ -296,7 +317,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   projects={projects}
                   activeProjectId={activeProject?.id ?? null}
                   hasProject={Boolean(activeProject)}
-                  settingsAccess={settingsAccess}
+                  settingsPermissions={settingsPermissions}
                   aiPlanningConfigured={aiPlanningConfigured}
                 />
 

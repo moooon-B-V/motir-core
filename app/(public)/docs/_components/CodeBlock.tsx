@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
+import { ScrollableRegion, SCROLLABLE_REGION_FOCUS } from './ScrollableRegion';
 
 // A code block with a copy affordance (Story 11.4 · Subtask 11.4.7 — MOTIR-2188;
 // design `design/api-docs/` Panels 1–2, 9).
@@ -13,6 +14,13 @@ import { Button } from '@/components/ui/Button';
 // (`overflow-hidden`), so the PAGE never scrolls sideways. `min-w-0` on the
 // wrapper is what stops a flex parent from being widened by the content instead
 // (`notes.html`'s min-w-0 overflow class).
+//
+// ⚠️ AND THE PANE IS A KEYBOARD-REACHABLE SCROLL REGION (MOTIR-2494). The
+// corollary of the rule above: a box that scrolls its own content is a box a
+// keyboard user must be able to focus, or the content below the fold is
+// mouse-only. `ScrollableRegion` owns that — here rather than at the ~20 call
+// sites, because the reference is GENERATED from the API's own scope map and
+// grows a pane every time an endpoint is added.
 //
 // The only client component on the surface — everything else renders on the
 // server, because a reference is text.
@@ -29,6 +37,7 @@ export function CodeBlock({
   copyable?: boolean;
 }) {
   const t = useTranslations('apiDocs');
+  const captionId = useId();
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -42,7 +51,10 @@ export function CodeBlock({
 
   return (
     <div className="relative min-w-0 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-code-bg)">
-      <div className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2 font-mono text-[11px] text-(--el-text-secondary)">
+      <div
+        id={captionId}
+        className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2 font-mono text-[11px] text-(--el-text-secondary)"
+      >
         {caption}
       </div>
       {copyable && (
@@ -56,9 +68,14 @@ export function CodeBlock({
           {copied ? t('codeCopied') : t('codeCopy')}
         </Button>
       )}
-      <pre className="m-0 overflow-x-auto px-4 py-3.5 font-mono text-[12.5px] leading-relaxed whitespace-pre text-(--el-code-text)">
+      <ScrollableRegion
+        as="pre"
+        labelledBy={captionId}
+        remeasureOn={code}
+        className={`m-0 overflow-x-auto px-4 py-3.5 font-mono text-[12.5px] leading-relaxed whitespace-pre text-(--el-code-text) ${SCROLLABLE_REGION_FOCUS}`}
+      >
         {code}
-      </pre>
+      </ScrollableRegion>
     </div>
   );
 }

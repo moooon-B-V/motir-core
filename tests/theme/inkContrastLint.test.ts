@@ -2,7 +2,14 @@ import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FAINT_CLASS, MUTED_CLASS, formatFinding, scanSource, violations } from './inkContrastScan';
+import {
+  FAINT_CLASS,
+  MUTED_CLASS,
+  SAFE_SURFACE_TOKENS,
+  formatFinding,
+  scanSource,
+  violations,
+} from './inkContrastScan';
 
 // MOTIR-2475 / MOTIR-2477 — the repo-wide INK-CONTRAST guard, pointed at the
 // tree by the two sweeps that made it passable: the faint arm below is
@@ -50,6 +57,12 @@ import { FAINT_CLASS, MUTED_CLASS, formatFinding, scanSource, violations } from 
 //     sites rather than teaching the walk to correlate.
 //   • The walk stops at the first ancestor that paints ANY background, so a
 //     white `--el-card` nested inside a tinted panel correctly ends the search.
+//   • The SAFE half of that walk is deliberately stricter than the tinted half:
+//     it matches only an UNPREFIXED `bg-(--el-card|--el-page-bg)`, because a
+//     `hover:` white paints the element in one render and the tint in every
+//     other, and clearing the ink on that basis would be a false NEGATIVE
+//     (MOTIR-2497). Over-reporting a conditional TINT stays the safe way to be
+//     wrong; under-reporting a conditional WHITE is not.
 // Widening the surface resolution across module boundaries needs the import
 // graph, not this walk. (MOTIR-2489 is the open card on the scanner's element
 // resolution; it is a different axis from this one.)
@@ -134,6 +147,73 @@ describe('ink-contrast lint — the scanned set is the set that was searched', (
     // INK, because the muted arm survives a sweep that empties the tree of the
     // faint one and would otherwise inherit its proof.
     expect(carriers.length).toBeGreaterThan(0);
+  });
+});
+
+describe('ink-contrast lint — the SAFE surface set is derived from the token table', () => {
+  // MOTIR-2497. The muted arm's verdict is "is this background the white
+  // page/card?", and the scanner answers it from a LIST OF TOKEN NAMES. That
+  // list started as one name while the colour had two — `--el-page-bg` and
+  // `--el-card` are both `var(--color-background)` — so an element painting the
+  // second spelling was walked past and its ink attributed to a tint further up.
+  //
+  // The list is only as good as the fact underneath it, which lives in
+  // `theme.css`, so this check reads it back from there in BOTH directions: no
+  // white background may be missing from the safe set, and nothing in the safe
+  // set may have stopped being white. A third alias then cannot reopen the hole
+  // by being added quietly — it fails here, on the day it is first used.
+  //
+  // What this cannot reach, for whoever widens it: a background painted from a
+  // stylesheet rather than a `bg-(--el-…)` class. The scanner never opens a
+  // `.css` file (see the JSX-only premise at the top of `inkContrastScan.ts`),
+  // so a token used only there is outside both the guard and this derivation.
+  const THEME_CSS = readFileSync(join(REPO, 'packages/design-system/theme.css'), 'utf8');
+
+  /** Every `--el-*: <value>;` declaration in the token layer, name → values. */
+  const DECLARED = new Map<string, Set<string>>();
+  for (const [, name, value] of THEME_CSS.matchAll(/(--el-[a-z0-9-]+)\s*:\s*([^;]+);/g)) {
+    const values = DECLARED.get(name!) ?? new Set<string>();
+    values.add(value!.trim());
+    DECLARED.set(name!, values);
+  }
+
+  /** The `--el-*` names that resolve to the untinted page white. */
+  const WHITE_TOKENS = [...DECLARED]
+    .filter(([, values]) => values.size === 1 && values.has('var(--color-background)'))
+    .map(([name]) => name);
+
+  /** …of those, the ones the tree actually uses AS A BACKGROUND. */
+  const WHITE_BACKGROUNDS = WHITE_TOKENS.filter((token) =>
+    SOURCES.some((file) => TEXT_BY_FILE.get(file)!.includes(`bg-(${token})`)),
+  );
+
+  it('reads a real token table — the declarations are there to be checked', () => {
+    // The counterpart to notes.html #195 one layer down: a regex that matched
+    // nothing would make every assertion below vacuously true.
+    expect(DECLARED.size).toBeGreaterThan(100);
+    expect(WHITE_BACKGROUNDS.length).toBeGreaterThan(1);
+  });
+
+  it('names every --el-* background that resolves to --color-background', () => {
+    expect(
+      WHITE_BACKGROUNDS.filter((token) => !SAFE_SURFACE_TOKENS.includes(token)).join(', '),
+      'These `--el-*` tokens are `var(--color-background)` — the same white as ' +
+        `${SAFE_SURFACE_TOKENS.join(' and ')} — and the tree paints backgrounds with them. ` +
+        'Add each to `SAFE_SURFACE_TOKENS` in `inkContrastScan.ts`, or the surface walk will ' +
+        'sail past an element that already paints white and attribute its ink to a tint ' +
+        'further up (MOTIR-2497).',
+    ).toBe('');
+  });
+
+  it('holds nothing in the safe set that has stopped being that white', () => {
+    // The other direction. A token retargeted to a tint would otherwise keep
+    // clearing muted ink that now genuinely fails on it.
+    expect(
+      SAFE_SURFACE_TOKENS.filter((token) => !WHITE_TOKENS.includes(token)).join(', '),
+      'These are treated as the safe white surface by `inkContrastScan.ts` but are no longer ' +
+        'declared `var(--color-background)` in `theme.css`. Re-measure the pair before ' +
+        'deciding which side to change.',
+    ).toBe('');
   });
 });
 

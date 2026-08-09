@@ -36,12 +36,12 @@ import type { ArchivedRowData } from './archivedRows';
 // The actions cell is TOTAL over the two independent capabilities (Subtask
 // 2.9.5, design-notes §2.9.7), each affordance HIDDEN — never shown-disabled —
 // when its gate is unmet (the WorkItemActionsMenu pattern):
-//   • Restore — the prominent inline `[Restore]` button, gated `canEdit`.
+//   • Restore — the prominent inline `[Restore]` button, gated `work_item:delete`.
 //   • Delete  — a danger `Delete…` row inside a per-row `⋯` overflow menu, gated
-//     `canManage` (read from `useProjectAccess()`, not a server prop — the
+//     `canDelete` (read from `useProjectAccess()`, not a server prop — the
 //     `WorkItemRowActions` pattern). The `⋯` is PURELY the Delete affordance.
 // When NEITHER gate is met the whole actions column is dropped (the view-only
-// state). `canManage` comes from the provider mounted in the authed layout.
+// state). `canDelete` comes from the provider mounted in the authed layout.
 //
 // Pagination is URL-driven (?page=) so the Server Component re-reads each page;
 // the parent keys this island by page, so the optimistic-removed set resets on
@@ -57,29 +57,29 @@ export interface ArchivedWorkItemsListProps {
   /** The fixed page size. */
   pageSize: number;
   /** Whether the viewer may restore — drops the action column when false. */
-  canEdit: boolean;
 }
 
 const COL_HEADER =
   'flex min-w-0 items-center text-[11px] font-semibold tracking-wider text-(--el-text-secondary) uppercase';
 
-export function ArchivedWorkItemsList({
-  rows,
-  total,
-  page,
-  pageSize,
-  canEdit,
-}: ArchivedWorkItemsListProps) {
+export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedWorkItemsListProps) {
   const t = useTranslations('issueViews');
   const ta = useTranslations('workItemActions');
   const { toast } = useToast();
   const router = useRouter();
   const pathname = usePathname();
-  // Delete is project-admin (canManage) — the same gate the server enforces
+  // Delete is project-admin (canDelete) — the same gate the server enforces
   // (`deleteWorkItem`/`getDeletePreview` → `assertCanManage`). Read from the
   // provider mounted in the authed layout (the WorkItemRowActions pattern), so
   // no new server prop has to thread through the page.
-  const { canManage } = useProjectAccess();
+  // MOTIR-2473 — Delete AND Restore both go through `work_item:delete`, so this
+  // island reads ONE key where it used to take two answers: `unarchiveWorkItem`
+  // (`:2208`) asserts exactly what `deleteWorkItem` (`:2267`) does. Restore was
+  // gated on the `canDelete` prop, which a MEMBER holds and `work_item:delete` is
+  // not — so the product offered a member a Restore button that 403'd. The prop
+  // is gone; the affordance now tells the truth.
+  const { can } = useProjectAccess();
+  const canDelete = can('work_item:delete');
 
   // Optimistic removal: the ids removed (restored OR deleted) this page + the
   // ids whose unarchive POST is in flight (the row fades + locks). Adding to a
@@ -153,7 +153,7 @@ export function ArchivedWorkItemsList({
   const effectiveTotal = Math.max(0, total - removedIds.size);
   // The actions column shows when EITHER capability is present; it's dropped only
   // when neither Restore nor Delete is available (the view-only state).
-  const showActions = canEdit || canManage;
+  const showActions = canDelete;
   // Grid: Title · Status · Archived by · Archived (· actions when showActions).
   // The actions track is 150px (was 120px) to seat `[Restore]` + `⋯` together.
   const gridTemplate = showActions
@@ -250,7 +250,7 @@ export function ArchivedWorkItemsList({
 
                   {showActions ? (
                     <div role="cell" className="relative z-10 flex items-center justify-end gap-1">
-                      {canEdit ? (
+                      {canDelete ? (
                         <Button
                           variant="secondary"
                           size="sm"
@@ -266,7 +266,7 @@ export function ArchivedWorkItemsList({
                           {restoring ? t('archivedRestoring') : t('archivedRestore')}
                         </Button>
                       ) : null}
-                      {canManage ? (
+                      {canDelete ? (
                         <ArchivedRowDeleteMenu
                           itemId={row.id}
                           identifier={row.identifier}
