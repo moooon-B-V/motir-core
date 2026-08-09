@@ -52,6 +52,23 @@
             project's board/issues (ErrorState-family panel, not a crash)
         (4) ROLE AFFORDANCES — a viewer sees create/edit disabled WITH a tooltip
             (not absent); a non-admin sees Members/Access read-only
+        (5) the ROLE SELECT once the project has CUSTOM roles of its own [2463]
+
+      REVISION 2026-08-09 (MOTIR-2463) — MOTIR-2257 lets a project author roles
+      of its own, and this surface is where a person is put ON one. Three
+      additions, no re-draw:
+        * PANEL 5 — the per-member role select with the project's custom roles
+          BENEATH the three built-ins, under headings that name the kind, each
+          custom option carrying its "Custom" kind in words. Drawn beside the
+          no-custom-roles case so the shape is visibly the same either way.
+        * A CUSTOM-ROLE CHIP (.pill-custom) in panels 0 and 4. This surface had
+          already spent lavender / sky / mint on the three built-in roles, so
+          roles-permissions.mock.html's built-in-lavender vs custom-sky pairing
+          CANNOT transfer here — a custom chip in sky is a Member chip. The next
+          free tint slot (--el-tint-peach) takes it, and the KIND is carried in
+          words (the picker headings, each option's line, the chip's accessible
+          name), never by the hue.
+        * The member COUNT on panel 0 grows 4 -> 5 with the row added.
       Toggle dark mode to confirm token parity. See design-notes.md
       "Roles & permissions (Story 6.4)" for the spec.
     -->
@@ -365,6 +382,35 @@
       .pill-viewer {
         background: var(--el-tint-mint);
         color: var(--el-text-strong);
+      }
+      /* ── MOTIR-2463 — a CUSTOM role's chip ────────────────────────────────
+         roles-permissions.mock.html pairs BUILT-IN = --el-tint-lavender with
+         CUSTOM = --el-tint-sky, and that pairing does NOT transfer here: on
+         THIS surface the three tint slots are already spent on role IDENTITY
+         (admin lavender / member sky / viewer mint), so a custom chip in sky
+         would be a Member chip. So a custom role takes the next FREE slot,
+         --el-tint-peach, with --el-text-strong ink — the same rule (hue in the
+         tint background, AA-safe) applied to a slot this surface had not used.
+         The kind is stated in WORDS at the point of choice (the picker's
+         "Custom roles" heading and each option's "Custom" line)
+         and on the chip itself via its accessible name, so nothing about
+         built-in-versus-custom rests on the hue. */
+      .pill-custom {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+      /* A group heading inside the role picker — the SectionLabel grammar. */
+      .menu-group {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+      }
+      .opt + .menu-group {
+        border-top: 1px solid var(--el-border);
+        margin-top: 4px;
       }
 
       /* ── Member rows (extends workspace MembersCard grammar) ─────────────── */
@@ -882,7 +928,7 @@
                 <div class="ttl">
                   <h3>Members</h3>
                   <span class="pill pill-neutral"
-                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>4</span
+                    ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>5</span
                   >
                 </div>
                 <div class="cbx" style="min-width: 230px">
@@ -935,6 +981,20 @@
                   </span>
                   <span class="cbx role"
                     >Viewer <svg viewBox="0 0 24 24" class="chev"><use href="#i-updown" /></svg
+                  ></span>
+                  <button class="btn btn-ghost btn-sm">Remove</button>
+                </div>
+                <!-- MOTIR-2463 — a member on a CUSTOM role. The row is
+                     unchanged; only the chip differs, and the select trigger
+                     shows the role's own name. -->
+                <div class="mrow">
+                  <span class="avatar">I</span>
+                  <span class="minfo">
+                    <span class="mname">Ines Rocha</span>
+                    <span class="memail">ines@motir.co</span>
+                  </span>
+                  <span class="cbx role"
+                    >Contractor <svg viewBox="0 0 24 24" class="chev"><use href="#i-updown" /></svg
                   ></span>
                   <button class="btn btn-ghost btn-sm">Remove</button>
                 </div>
@@ -1159,8 +1219,105 @@
                   </span>
                   <span class="pill pill-member">Member</span>
                 </div>
+                <!-- MOTIR-2463 — the CUSTOM-role chip. It names the ROLE, in
+                     the peach slot no built-in uses, with the custom glyph
+                     roles-permissions.mock.html gives the same role's tile. Its
+                     accessible name states the kind in words, so "built-in or
+                     custom" never rests on the hue alone. -->
+                <div class="mrow">
+                  <span class="avatar">I</span>
+                  <span class="minfo">
+                    <span class="mname">Ines Rocha</span>
+                    <span class="memail">ines@motir.co</span>
+                  </span>
+                  <span class="pill pill-custom" role="img" aria-label="Contractor — a custom role"
+                    ><svg viewBox="0 0 24 24" aria-hidden="true">
+                      <use href="#i-user-round" /></svg
+                    >Contractor</span
+                  >
+                </div>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 5 (MOTIR-2463) — the role picker WITH custom roles ════════════════ -->
+    <div class="panel-label">
+      5 · THE PER-MEMBER ROLE SELECT, once the project has roles of its own — panel 1’s picker with
+      the project’s <strong>custom roles listed BENEATH the three built-ins</strong>, under a
+      heading that says which is which. The order is deliberate: the built-ins are the same three in
+      every project and are what an admin reaches for by reflex, so they stay where they have always
+      been and the project’s own roles are appended rather than interleaved. Each custom option is
+      labelled <strong>Custom</strong> in words, so the kind is read at the moment the choice is
+      made rather than inferred from a tint. (No “based on …” — nothing records which built-in
+      seeded a role; Yue, 2026-08-09.) <strong>MOTIR-2485 builds this.</strong>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="page" style="display: grid; grid-template-columns: 1fr 1fr; gap: 28px">
+          <div>
+            <p class="crumb">Trigger → the member’s CURRENT role, built-in or custom</p>
+            <span class="cbx role"
+              >Contractor <svg viewBox="0 0 24 24" class="chev"><use href="#i-updown" /></svg
+            ></span>
+            <div class="menu role" style="width: 260px">
+              <div class="menu-group">Built-in</div>
+              <div class="opt">
+                <span class="ot"
+                  ><span>Admin</span><span class="od">Manage members + access</span></span
+                >
+              </div>
+              <div class="opt">
+                <span class="ot"
+                  ><span>Member</span><span class="od">View + edit issues</span></span
+                >
+              </div>
+              <div class="opt">
+                <span class="ot"
+                  ><span>Viewer</span><span class="od">View only, cannot edit</span></span
+                >
+              </div>
+              <div class="menu-group">Custom roles</div>
+              <div class="opt sel">
+                <span class="ot"><span>Contractor</span><span class="od">Custom role</span></span>
+                <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+              </div>
+              <div class="opt">
+                <span class="ot"><span>Reporter</span><span class="od">Custom role</span></span>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <p class="crumb">A project with NO custom roles yet — panel 1’s picker, unchanged</p>
+            <span class="cbx role"
+              >Member <svg viewBox="0 0 24 24" class="chev"><use href="#i-updown" /></svg
+            ></span>
+            <div class="menu role" style="width: 260px">
+              <div class="menu-group">Built-in</div>
+              <div class="opt">
+                <span class="ot"
+                  ><span>Admin</span><span class="od">Manage members + access</span></span
+                >
+              </div>
+              <div class="opt sel">
+                <span class="ot"
+                  ><span>Member</span><span class="od">View + edit issues</span></span
+                >
+                <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
+              </div>
+              <div class="opt">
+                <span class="ot"
+                  ><span>Viewer</span><span class="od">View only, cannot edit</span></span
+                >
+              </div>
+            </div>
+            <p class="crumb" style="margin-top: 14px">
+              The <strong>Built-in</strong> heading is drawn either way, so the list does not change
+              SHAPE the first time somebody creates a role — only grow.
+            </p>
           </div>
         </div>
       </div>
@@ -1284,6 +1441,20 @@
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4" />
           <path d="M12 8h.01" />
+        </g>
+        <!-- MOTIR-2463 — the glyph roles-permissions.mock.html already gives a
+             CUSTOM role's tile, reused here so one role reads the same on both
+             surfaces. -->
+        <g
+          id="i-user-round"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="8" r="5" />
+          <path d="M20 21a8 8 0 0 0-16 0" />
         </g>
       </defs>
     </svg>
