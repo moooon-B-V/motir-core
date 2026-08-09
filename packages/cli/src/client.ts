@@ -44,7 +44,7 @@ export interface WhoamiResult {
 }
 
 /** The far end of ONE per-row dependency edge (`WorkItemEdgeSummaryDto`), as the
- * MCP reads project it: `key` is the `PROD-<n>` identifier, `status` the raw
+ * MCP reads project it: `key` is the `<KEY>-<n>` identifier, `status` the raw
  * workflow status key. */
 export interface WorkItemEdgeSummary {
   key: string;
@@ -74,7 +74,7 @@ export interface WorkItemDependencyEdges {
 
 /** A ready-set row (the `list_ready` `ReadyItemDto`, terminal-relevant fields).
  * Kept loose — the CLI renders, it does not re-validate the server. `key` is the
- * `PROD-<n>` identifier; the ready row carries no `type`/`estimate` column (the
+ * `<KEY>-<n>` identifier; the ready row carries no `type`/`estimate` column (the
  * /ready row is kind · key · title · priority · assignee).
  *
  * `dependencies` is the per-row edge block 7.9.0f / MOTIR-1842 attaches, which
@@ -137,7 +137,7 @@ export interface ProjectList {
  * `dependencies` is the SAME block `list_ready` attaches — one seam, two tools
  * (lib/mcp/dependencyEdges.ts) — which `motir sprint` renders as its `BLOCKED BY`
  * / `BLOCKS` columns (MOTIR-1845). Note the key names do NOT follow this row's
- * own vocabulary: an edge's far end is `key` (the `PROD-<n>` identifier) even
+ * own vocabulary: an edge's far end is `key` (the `<KEY>-<n>` identifier) even
  * though the row identifies ITSELF as `identifier`. That is the producer's shape
  * (`WorkItemEdgeSummaryDto`), pinned deliberately — a renderer shared with
  * `list_ready`'s rows can only work if both carry the edge block identically. */
@@ -220,7 +220,7 @@ const RESUMABLE_STATUS = 'in_progress';
 /**
  * The one item a dispatch picks, projected from a ready-collection row.
  *
- * `key` is the `PROD-<n>` identifier — the only way the CLI addresses an item
+ * `key` is the `<KEY>-<n>` identifier — the only way the CLI addresses an item
  * (ADR §7), and what the exclusion list holds. `status.key` lets dispatch skip a
  * redundant `todo → in_progress` flip when the item is already in progress.
  */

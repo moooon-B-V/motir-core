@@ -124,15 +124,15 @@ describe('the curated overview', () => {
                                   points, window.
         sprint [options] [ref]    List ONE sprint’s work items (defaults to the active
                                   sprint).
-        show [options] <key>      Read one work item (e.g. PROD-7): fields, readiness,
+        show [options] <key>      Read one work item (e.g. ACME-7): fields, readiness,
                                   children, edges, body.
-        open [options] <key>      Open a work item (e.g. PROD-7) in the browser;
+        open [options] <key>      Open a work item (e.g. ACME-7) in the browser;
                                   prints the URL.
 
       WORK LOOP COMMANDS:
         next [options]            Dispatch the next ready work item: claim it and
                                   deliver its prompt.
-        run [options] <key>       Dispatch a SPECIFIC work item (e.g. PROD-7), ready
+        run [options] <key>       Dispatch a SPECIFIC work item (e.g. ACME-7), ready
                                   or forced.
         auto [options]            Drain the ready set unattended: one item at a time
                                   onto a session branch.

@@ -369,7 +369,7 @@ describe('GUARD 3 — the wire-facing layer casts only where it says it does', (
  * update this constant — which is the point. `render.ts` changing is exactly the
  * event that deserves a deliberate line in a diff and a sentence in a review.
  */
-const RENDER_TS_SHA256 = '0e427121c212ac096643ff5aa09bb4dfc533cd8d742c67c93c1ec73d057d38e5';
+const RENDER_TS_SHA256 = '01dfe48e3ab71766434704f064e5191d4706902fc6da8219680f753a5320dd12';
 
 describe('GUARD 4 — render.ts is pinned', () => {
   it('matches the recorded hash', () => {

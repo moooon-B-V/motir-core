@@ -31,7 +31,7 @@ export const EXCLUDES_FILENAME = 'session-excludes.json';
 
 export interface ExcludeEntry {
   /**
-   * The `PROD-<n>` identifier — the ONLY thing this list stores (MOTIR-2338,
+   * The `<KEY>-<n>` identifier — the ONLY thing this list stores (MOTIR-2338,
    * ADR Amendment 10 Q3).
    *
    * It used to carry the internal row `id` as well, because that is what
