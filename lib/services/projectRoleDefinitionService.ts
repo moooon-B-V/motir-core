@@ -7,12 +7,11 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import { isEnforced, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
-import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { CUSTOM_ROLE_TIER, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { asProjectRole, type ProjectRole } from '@/lib/projects/roles';
 import { MAX_CUSTOM_ROLES_PER_PROJECT, MAX_ROLE_NAME_LENGTH } from '@/lib/permissions/limits';
 import {
   BuiltInRoleImmutableError,
-  InvalidRoleBaseError,
   InvalidRoleNameError,
   InvalidRoleReassignTargetError,
   RoleDefinitionNotFoundError,
@@ -89,13 +88,6 @@ function normalizePermissions(raw: unknown): PermissionKey[] {
   return [...out];
 }
 
-/** Narrow a `basedOn` to one of the three project-assignable built-ins, or throw. */
-function normalizeBase(raw: unknown): ProjectRole {
-  const base = asProjectRole(raw);
-  if (!base) throw new InvalidRoleBaseError(String(raw));
-  return base;
-}
-
 /**
  * Refuse an operation aimed at a built-in. Runs on the UNTRUSTED identifier
  * string before anything else touches it, so `PATCH /roles/admin` is a refusal
@@ -132,7 +124,12 @@ export interface CreateRoleInput {
   projectId: string;
   ctx: AccessActorContext;
   name: unknown;
-  basedOn: unknown;
+  /**
+   * The permission set the role holds. The editor SEEDS this grid from a
+   * built-in the author picks ("Start from"), but that pick is an authoring
+   * convenience and is NOT sent, NOT stored and NOT rendered — what arrives here
+   * is the set the author actually composed.
+   */
   permissions: unknown;
 }
 
@@ -190,7 +187,7 @@ export const projectRoleDefinitionService = {
   },
 
   /**
-   * Author a new role from a built-in base.
+   * Author a new role.
    *
    * ⚠️ THE CAP IS A COUNT-THEN-CREATE, SO IT LOCKS. A plain read-then-write
    * races: two admins clicking `Create role` at the same moment both read `n`
@@ -206,7 +203,6 @@ export const projectRoleDefinitionService = {
       'project:manage_access',
     );
     const name = normalizeName(input.name);
-    const basedOn = normalizeBase(input.basedOn);
     const permissions = normalizePermissions(input.permissions);
 
     return withWorkspaceContext(input.ctx, async (tx) => {
@@ -226,7 +222,6 @@ export const projectRoleDefinitionService = {
               workspaceId: input.ctx.workspaceId,
               projectId: input.projectId,
               name,
-              basedOn,
               permissions,
             },
             tx,
@@ -240,10 +235,8 @@ export const projectRoleDefinitionService = {
 
   /**
    * Rename a role and/or replace its permission set — one call, because the
-   * editor saves both at once. `basedOn` is deliberately NOT patchable:
-   * provenance is a snapshot taken at creation, and re-writing it would turn the
-   * `Based on Viewer · +2` chip into a claim about a comparison that never
-   * happened.
+   * editor saves both at once. There is nothing else to patch: a role IS its
+   * name and its set.
    */
   async update(input: UpdateRoleInput): Promise<RoleDefinitionDTO> {
     assertNotBuiltIn(input.roleId);
@@ -358,8 +351,8 @@ async function resolveDestination(
   if (!destination || destination.projectId !== input.projectId) {
     throw new InvalidRoleReassignTargetError();
   }
-  const destinationBase = asProjectRole(destination.basedOn);
-  /* istanbul ignore next -- unreachable: `basedOn` is written only through normalizeBase */
-  if (!destinationBase) throw new InvalidRoleReassignTargetError();
-  return { roleDefinitionId: destination.id, role: destinationBase };
+  // Every custom role sits at the same tier, so moving between two of them
+  // never changes `role` — the pair is still written together so the invariant
+  // holds through one writer.
+  return { roleDefinitionId: destination.id, role: CUSTOM_ROLE_TIER };
 }

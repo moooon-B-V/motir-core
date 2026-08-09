@@ -204,20 +204,20 @@ export const projectMembershipRepository = {
   //     a `limited` / `private` project;
   //   * `roleDefinitionId` decides WHAT that tier grants.
   //
-  // So a membership on a custom role carries `role = definition.basedOn`, never
-  // a stale leftover value, and a custom role is subtracted by the access level
-  // at exactly the tier its base sits at — which is why `resolve.ts` needs no
-  // custom-role branch in `levelGrants` at all. Writing one column without the
-  // other is what would break that parity, and the only way to do it is to add
-  // a third writer. Don't.
+  // So a membership on a custom role carries `role = CUSTOM_ROLE_TIER`
+  // (`member`), never a stale leftover value — which is why `resolve.ts` needs
+  // no custom-role branch in `levelGrants` at all, and why the access level
+  // takes NOTHING away from a custom role: it grants exactly what it lists.
+  // Writing one column without the other is what would break that, and the only
+  // way to do it is to add a third writer. Don't.
   // ─────────────────────────────────────────────────────────────────────────
 
   /**
    * Put one membership on a role — custom or built-in — writing BOTH columns in
    * the SAME statement.
    *
-   *   * a CUSTOM role: pass its id and its `basedOn`; the pointer is set and
-   *     `role` becomes that base;
+   *   * a CUSTOM role: pass its id and `CUSTOM_ROLE_TIER`; the pointer is set
+   *     and `role` becomes that tier;
    *   * a BUILT-IN role: pass `roleDefinitionId: null` and the built-in; the
    *     pointer is cleared and `role` becomes it.
    *
@@ -243,8 +243,9 @@ export const projectMembershipRepository = {
    * the delete-with-reassign, run inside the service's one transaction so the
    * move and the delete can never half-happen.
    *
-   * The destination is another custom role (`{ roleDefinitionId, role: its
-   * basedOn }`) or a built-in (`{ roleDefinitionId: null, role: the built-in }`).
+   * The destination is another custom role (`{ roleDefinitionId, role:
+   * CUSTOM_ROLE_TIER }`) or a built-in (`{ roleDefinitionId: null, role: the
+   * built-in }`).
    * Returns the number of memberships moved.
    */
   async reassignRoleDefinition(

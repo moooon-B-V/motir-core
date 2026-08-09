@@ -5,6 +5,7 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
 import { truncateAuthTables } from './helpers/db';
 
 // Schema + tenancy + repository proof for Story MOTIR-2257 · Subtask MOTIR-2467
@@ -20,7 +21,7 @@ import { truncateAuthTables } from './helpers/db';
 //     whole point of the column);
 //   * the repository leaves, including the PAIRED-COLUMN invariant: a
 //     membership with a non-null `role_definition_id` always carries
-//     `role = definition.basedOn`.
+//     `role = CUSTOM_ROLE_TIER`.
 //
 // The permission-set validity, the cap, the name rules and the reassign
 // transaction are the SERVICE's (MOTIR-2472) — deliberately not under test
@@ -85,7 +86,6 @@ async function makeRoleTenants(): Promise<RoleTenantFixture> {
       workspaceId: w1.workspace.id,
       projectId: p1.id,
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: ['project:browse', 'comment:add'],
     },
   });
@@ -94,7 +94,6 @@ async function makeRoleTenants(): Promise<RoleTenantFixture> {
       workspaceId: w2.workspace.id,
       projectId: p2.id,
       name: 'Contractor',
-      basedOn: 'member',
       permissions: ['project:browse'],
     },
   });
@@ -134,7 +133,6 @@ describe('project_role_definition — round-trip + constraints', () => {
     const fx = await makeRoleTenants();
     const read = await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
     expect(read?.name).toBe('Contractor');
-    expect(read?.basedOn).toBe('viewer');
     expect(read?.permissions).toEqual(['project:browse', 'comment:add']);
     expect(read?.workspaceId).toBe(fx.workspaceW1Id);
     expect(read?.projectId).toBe(fx.projectP1Id);
@@ -152,7 +150,6 @@ describe('project_role_definition — round-trip + constraints', () => {
             workspaceId: fx.workspaceW1Id,
             projectId: fx.projectP1Id,
             name: 'Contractor',
-            basedOn: 'member',
             permissions: [],
           },
           tx,
@@ -183,7 +180,6 @@ describe('project_role_definition — round-trip + constraints', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: sibling.id,
         name: 'Contractor',
-        basedOn: 'viewer',
         permissions: [],
       },
     });
@@ -232,7 +228,6 @@ describe('project_role_definition — RLS isolation', () => {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           name: 'Reporter',
-          basedOn: 'viewer',
           permissions: ['project:browse'],
         },
         tx,
@@ -250,7 +245,6 @@ describe('project_role_definition — RLS isolation', () => {
             workspaceId: fx.workspaceW2Id,
             projectId: fx.projectP2Id,
             name: 'Smuggled',
-            basedOn: 'admin',
             permissions: [],
           },
           tx,
@@ -292,7 +286,7 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        role: 'viewer',
+        role: CUSTOM_ROLE_TIER,
         roleDefinitionId: fx.roleW1Id,
       },
     });
@@ -310,7 +304,7 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
       where: { userId_projectId: { userId: fx.userA1Id, projectId: fx.projectP1Id } },
     });
     expect(survivor?.roleDefinitionId).toBe(fx.roleW1Id);
-    expect(survivor?.role).toBe('viewer');
+    expect(survivor?.role).toBe(CUSTOM_ROLE_TIER);
   });
 
   it('a role definition nobody holds deletes cleanly', async () => {
@@ -329,14 +323,12 @@ describe('projectRoleDefinitionRepository — the leaves', () => {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           name: 'Auditor',
-          basedOn: 'viewer',
           permissions: [],
         },
         {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           name: 'Reporter',
-          basedOn: 'viewer',
           permissions: [],
         },
       ],
@@ -362,7 +354,7 @@ describe('projectRoleDefinitionRepository — the leaves', () => {
     expect(count).toBe(1);
   });
 
-  it('update patches name + permissions and never touches basedOn', async () => {
+  it('update patches name + permissions, and there is nothing else to patch', async () => {
     const fx = await makeRoleTenants();
     const updated = await db.$transaction((tx) =>
       projectRoleDefinitionRepository.update(
@@ -373,7 +365,7 @@ describe('projectRoleDefinitionRepository — the leaves', () => {
     );
     expect(updated.name).toBe('External');
     expect(updated.permissions).toEqual(['project:browse']);
-    expect(updated.basedOn).toBe('viewer'); // provenance, recorded once
+    expect('basedOn' in updated).toBe(false); // nothing records the seed
   });
 });
 
@@ -381,9 +373,10 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
   /**
    * Read every membership back with the role it points at, and assert the
    * invariant the whole model rests on: a non-null `role_definition_id` always
-   * comes with `role = definition.basedOn`. This is the check that keeps
-   * `levelGrants` in `lib/permissions/resolve.ts` correct for a custom role
-   * WITHOUT a custom-role branch.
+   * comes with `role = CUSTOM_ROLE_TIER` (`member`). This is the check that
+   * keeps `levelGrants` in `lib/permissions/resolve.ts` correct for a custom
+   * role WITHOUT a custom-role branch — at that tier the access level subtracts
+   * nothing, so a custom role grants exactly what it lists.
    */
   async function assertPairedColumns(projectId: string): Promise<number> {
     const memberships = await db.projectMembership.findMany({
@@ -397,13 +390,13 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         continue;
       }
       expect(m.roleDefinition).not.toBeNull();
-      expect(m.role).toBe(m.roleDefinition?.basedOn);
+      expect(m.role).toBe(CUSTOM_ROLE_TIER);
       paired += 1;
     }
     return paired;
   }
 
-  it('setRoleDefinition onto a CUSTOM role writes the pointer AND `role = basedOn` in one statement', async () => {
+  it('setRoleDefinition onto a CUSTOM role writes the pointer AND the tier in one statement', async () => {
     const fx = await makeRoleTenants();
     await db.projectMembership.create({
       data: {
@@ -418,12 +411,12 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       projectMembershipRepository.setRoleDefinition(
         fx.userA1Id,
         fx.projectP1Id,
-        { roleDefinitionId: fx.roleW1Id, role: 'viewer' }, // roleW1.basedOn === 'viewer'
+        { roleDefinitionId: fx.roleW1Id, role: CUSTOM_ROLE_TIER },
         tx,
       ),
     );
     expect(updated.roleDefinitionId).toBe(fx.roleW1Id);
-    expect(updated.role).toBe('viewer'); // NOT the stale 'admin'
+    expect(updated.role).toBe(CUSTOM_ROLE_TIER); // NOT the stale 'admin'
     expect(await assertPairedColumns(fx.projectP1Id)).toBe(1);
   });
 
@@ -434,7 +427,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        role: 'viewer',
+        role: CUSTOM_ROLE_TIER,
         roleDefinitionId: fx.roleW1Id,
       },
     });
@@ -459,11 +452,10 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         name: 'Reporter',
-        basedOn: 'member',
         permissions: ['project:browse'],
       },
     });
-    // Two holders of roleW1 (basedOn viewer) plus one member on a built-in that
+    // Two holders of roleW1 plus one member on a built-in that
     // must NOT move.
     const other = await usersService.createUser({
       email: 'prd-holder-2@example.com',
@@ -481,14 +473,14 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           userId: fx.userA1Id,
-          role: 'viewer',
+          role: CUSTOM_ROLE_TIER,
           roleDefinitionId: fx.roleW1Id,
         },
         {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           userId: other.id,
-          role: 'viewer',
+          role: CUSTOM_ROLE_TIER,
           roleDefinitionId: fx.roleW1Id,
         },
         {
@@ -503,7 +495,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
     const moved = await db.$transaction((tx) =>
       projectMembershipRepository.reassignRoleDefinition(
         fx.roleW1Id,
-        { roleDefinitionId: destination.id, role: 'member' }, // destination.basedOn
+        { roleDefinitionId: destination.id, role: CUSTOM_ROLE_TIER },
         tx,
       ),
     );
@@ -530,7 +522,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         userId: fx.userA1Id,
-        role: 'viewer',
+        role: CUSTOM_ROLE_TIER,
         roleDefinitionId: fx.roleW1Id,
       },
     });
@@ -556,7 +548,6 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         name: 'Reporter',
-        basedOn: 'member',
         permissions: [],
       },
     });
@@ -576,14 +567,14 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           userId: fx.userA1Id,
-          role: 'viewer',
+          role: CUSTOM_ROLE_TIER,
           roleDefinitionId: fx.roleW1Id,
         },
         {
           workspaceId: fx.workspaceW1Id,
           projectId: fx.projectP1Id,
           userId: u2.id,
-          role: 'viewer',
+          role: CUSTOM_ROLE_TIER,
           roleDefinitionId: fx.roleW1Id,
         },
         {
@@ -619,7 +610,6 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
         name: 'Unheld',
-        basedOn: 'viewer',
         permissions: [],
       },
     });

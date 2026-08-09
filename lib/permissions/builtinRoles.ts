@@ -48,6 +48,30 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  * proves that equivalence over the whole 64-row input space rather than asserting
  * it here.
  */
+/**
+ * The TIER a membership on a CUSTOM role sits at (Story MOTIR-2257; Yue,
+ * 2026-08-09).
+ *
+ * `ProjectMembership.role` and `.roleDefinitionId` move together, and this is
+ * the value the first takes whenever the second is set. It exists because the
+ * model still needs a tier for two things a permission set cannot answer:
+ * `private` gates on holding a membership at all, and `levelGrants` reads the
+ * column.
+ *
+ * ⚠️ IT IS `member`, AND THAT MEANS THE ACCESS LEVEL SUBTRACTS NOTHING FROM A
+ * CUSTOM ROLE — a custom role grants EXACTLY WHAT IT LISTS, on every access
+ * level. That is deliberate: the level's tier subtraction exists to narrow the
+ * COARSE built-in roles, and a permission set an admin enumerated by hand is not
+ * coarse. Second-guessing it would mean a role could list `work_item:edit` and
+ * silently not have it.
+ *
+ * (An earlier revision derived this per-role from a stored `based_on` column.
+ * That column recorded PROVENANCE which never re-flowed, so it was a claim about
+ * how the role was once authored rather than a fact about it — removed, and this
+ * one constant replaces the whole mechanism.)
+ */
+export const CUSTOM_ROLE_TIER: ProjectRole = 'member';
+
 export const ROLE_GATED_PERMISSIONS: readonly PermissionKey[] = [
   'project:browse',
   'project:administer',

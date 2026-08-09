@@ -142,11 +142,15 @@ export function resolvePermissions(i: ProjectPermissionInputs): ReadonlySet<Perm
   // workspace; and `levelGrants` below is not touched at all.
   //
   // `levelGrants` needs no custom-role branch because `projectRole` already
-  // carries the custom role's `basedOn` — the paired-column invariant the
-  // repository enforces (MOTIR-2467). So a role based on `viewer` is subtracted
-  // by `limited` / `private` exactly as `viewer` is, and one based on `member`
-  // exactly as `member` is. ADDING a branch there would break that parity, which
-  // is the whole reason the two columns move together. Don't.
+  // carries `CUSTOM_ROLE_TIER` (`member`) — the paired-column invariant the
+  // repository enforces (MOTIR-2467). At that tier the level's subtraction takes
+  // NOTHING away, so A CUSTOM ROLE GRANTS EXACTLY WHAT IT LISTS, on every access
+  // level. That is the point: the tier subtraction narrows the COARSE built-in
+  // roles, and a set an admin enumerated by hand is not coarse — a role that
+  // lists `work_item:edit` and silently does not have it would be the bug.
+  // (`private` still requires a membership to see the project at all, and both
+  // rails above are untouched.) ADDING a branch here would re-introduce exactly
+  // the second-guessing this removes. Don't.
   const projectRole = i.projectRole;
   const base =
     customRoleBase(i.customRolePermissions) ??

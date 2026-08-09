@@ -7,7 +7,7 @@ import {
   type PermissionKey,
 } from '@/lib/permissions/catalog';
 import { BUILTIN_ROLE_PERMISSIONS, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import { asProjectRole, PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
+import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
 import type {
   ActorPermissionsDTO,
   PermissionDomainDTO,
@@ -28,7 +28,6 @@ export type RoleMemberCounts = Partial<Record<ProjectRole, number>>;
 export interface CustomRoleRow {
   id: string;
   name: string;
-  basedOn: string;
   permissions: string[];
 }
 
@@ -90,8 +89,6 @@ export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDT
     descriptionKey: `settings.roles.${role}.description`,
     name: null,
     description: null,
-    basedOn: null,
-    basedOnDelta: null,
     builtIn: true,
     permissions: sortByCatalogOrder(BUILTIN_ROLE_PERMISSIONS[role]),
     memberCount,
@@ -112,22 +109,20 @@ export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDT
  * role's `key` is a cuid, so a component that reached for `ROLE_ICON[role.key]`
  * would be indexing a total record with a string that is not in its domain.
  *
+ * ⚠️ NOTHING RECORDS WHICH BUILT-IN THE AUTHOR STARTED FROM (Yue, 2026-08-09).
+ * A role IS its name and its set; which built-in seeded the grid is an authoring
+ * detail that went stale the moment either side was edited.
+ *
  * The stored `permissions` array is intersected with the ROLE-GATED set and
  * re-sorted into catalog order — the same posture `resolvePermissions` takes
  * (MOTIR-2470), so a key retired from the catalog after the role was authored is
  * neither counted nor shown.
  */
-export function toCustomRoleDTO(
-  row: { id: string; name: string; basedOn: string; permissions: string[] },
-  memberCount: number,
-): RoleDTO {
+export function toCustomRoleDTO(row: CustomRoleRow, memberCount: number): RoleDTO {
   const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
   const held = sortByCatalogOrder(
     row.permissions.filter((key): key is PermissionKey => roleGated.has(key)),
   );
-  const basedOn = asProjectRole(row.basedOn);
-  /* istanbul ignore next -- unreachable: `basedOn` is NOT NULL in the schema and the service refuses any value outside PROJECT_ASSIGNABLE_ROLES */
-  if (!basedOn) throw new Error(`Role definition ${row.id} carries a non-assignable base.`);
   return {
     key: row.id,
     builtInRole: null,
@@ -135,9 +130,6 @@ export function toCustomRoleDTO(
     descriptionKey: null,
     name: row.name,
     description: null,
-    basedOn,
-    // The chip's ±N, computed HERE so a component never re-derives it.
-    basedOnDelta: held.length - BUILTIN_ROLE_PERMISSIONS[basedOn].size,
     builtIn: false,
     permissions: held,
     memberCount,
@@ -205,22 +197,16 @@ export function toActorPermissionsDTO(
 export function toRoleDefinitionDTO(row: {
   id: string;
   name: string;
-  basedOn: string;
   permissions: string[];
   createdAt: Date;
   updatedAt: Date;
 }): RoleDefinitionDTO {
   const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
   const held = row.permissions.filter((key): key is PermissionKey => roleGated.has(key));
-  const base = asProjectRole(row.basedOn);
-  /* istanbul ignore next -- unreachable: `basedOn` is NOT NULL and the service refuses any value outside PROJECT_ASSIGNABLE_ROLES, so a row can only carry a valid base */
-  if (!base) throw new Error(`Role definition ${row.id} carries a non-assignable base.`);
   return {
     id: row.id,
     name: row.name,
-    basedOn: base,
     permissions: sortByCatalogOrder(held),
-    basedOnPermissionCount: BUILTIN_ROLE_PERMISSIONS[base].size,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };

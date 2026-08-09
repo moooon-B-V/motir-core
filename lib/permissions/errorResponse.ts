@@ -7,7 +7,6 @@ import {
 } from '@/lib/projects/errors';
 import {
   BuiltInRoleImmutableError,
-  InvalidRoleBaseError,
   InvalidRoleNameError,
   InvalidRoleReassignTargetError,
   RoleDefinitionNotFoundError,
@@ -32,7 +31,7 @@ import {
 //   BuiltInRoleImmutableError                              → 403
 //   RoleNameTakenError / RoleLimitReachedError /
 //     RoleInUseError                                       → 409
-//   InvalidRoleNameError / InvalidRoleBaseError /
+//   InvalidRoleNameError /
 //     UngrantablePermissionError /
 //     InvalidRoleReassignTargetError                       → 400
 export function roleDefinitionErrorResponse(err: unknown): NextResponse | null {
@@ -99,7 +98,6 @@ export function roleDefinitionErrorResponse(err: unknown): NextResponse | null {
 
   if (
     err instanceof InvalidRoleNameError ||
-    err instanceof InvalidRoleBaseError ||
     err instanceof UngrantablePermissionError ||
     err instanceof InvalidRoleReassignTargetError
   ) {

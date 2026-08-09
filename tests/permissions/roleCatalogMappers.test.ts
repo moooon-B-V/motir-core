@@ -155,7 +155,6 @@ describe('toCustomRoleDTO', () => {
   const ROW = {
     id: 'role_contractor',
     name: 'Contractor',
-    basedOn: 'viewer',
     permissions: ['comment:add', 'project:browse', 'attachment:create'],
   };
 
@@ -173,6 +172,14 @@ describe('toCustomRoleDTO', () => {
     expect(toCustomRoleDTO(ROW, 0).builtInRole).toBeNull();
   });
 
+  it('records NOTHING about which built-in seeded it (Yue, 2026-08-09)', () => {
+    // The editor still offers a "Start from" pick; it seeds the grid in the
+    // browser and never reaches the DTO. A role IS its name and its set.
+    const dto = toCustomRoleDTO(ROW, 0);
+    expect('basedOn' in dto).toBe(false);
+    expect('basedOnDelta' in dto).toBe(false);
+  });
+
   it('emits its permissions in CATALOG order, whatever order they were stored in', () => {
     const dto = toCustomRoleDTO(ROW, 0);
     const positions = dto.permissions.map((k) => PERMISSIONS.indexOf(k));
@@ -182,35 +189,19 @@ describe('toCustomRoleDTO', () => {
     );
   });
 
-  it('computes the chip`s ±N against its BASE, in the mapper', () => {
-    // Viewer holds 2; this role holds 3 → +1.
-    expect(toCustomRoleDTO(ROW, 0).basedOn).toBe('viewer');
-    expect(toCustomRoleDTO(ROW, 0).basedOnDelta).toBe(3 - BUILTIN_ROLE_PERMISSIONS.viewer.size);
-    // A role that holds exactly its base's set is ±0, not null.
-    const same = toCustomRoleDTO(
-      { ...ROW, basedOn: 'viewer', permissions: [...BUILTIN_ROLE_PERMISSIONS.viewer] },
-      0,
-    );
-    expect(same.basedOnDelta).toBe(0);
-    // And one that took things away is negative.
-    const fewer = toCustomRoleDTO({ ...ROW, basedOn: 'admin', permissions: ['project:browse'] }, 0);
-    expect(fewer.basedOnDelta).toBe(1 - BUILTIN_ROLE_PERMISSIONS.admin.size);
-  });
-
   it('a key retired from the catalog is neither counted nor shown', () => {
     const stale = toCustomRoleDTO(
       { ...ROW, permissions: ['project:browse', 'repository:connect', 'not:a:permission'] },
       0,
     );
     expect(stale.permissions).toEqual(['project:browse']);
-    expect(stale.basedOnDelta).toBe(1 - BUILTIN_ROLE_PERMISSIONS.viewer.size);
   });
 });
 
 describe('toRoleCatalogDTO with a project`s own roles', () => {
   const rows = [
-    { id: 'r_reporter', name: 'Reporter', basedOn: 'viewer', permissions: ['project:browse'] },
-    { id: 'r_contractor', name: 'Contractor', basedOn: 'viewer', permissions: ['project:browse'] },
+    { id: 'r_reporter', name: 'Reporter', permissions: ['project:browse'] },
+    { id: 'r_contractor', name: 'Contractor', permissions: ['project:browse'] },
   ];
 
   it('puts the three built-ins FIRST, then the custom roles BY NAME — deterministically', () => {

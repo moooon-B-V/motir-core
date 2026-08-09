@@ -9,7 +9,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { ENFORCED_PERMISSIONS, PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
-import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
+import { CUSTOM_ROLE_TIER, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from '../helpers/db';
 
@@ -493,14 +493,13 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
   /**
    * Put `ctx`'s user on a brand-new custom role in `projectId`, writing BOTH
    * columns through the repository — the only sanctioned write path, and the
-   * one that holds `role = definition.basedOn`. Returns the role's id.
+   * one that holds `role = CUSTOM_ROLE_TIER`. Returns the role's id.
    */
   async function putOnCustomRole(args: {
     workspaceId: string;
     projectId: string;
     userId: string;
     name: string;
-    basedOn: 'admin' | 'member' | 'viewer';
     permissions: string[];
   }): Promise<string> {
     const definition = await db.projectRoleDefinition.create({
@@ -508,7 +507,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
         workspaceId: args.workspaceId,
         projectId: args.projectId,
         name: args.name,
-        basedOn: args.basedOn,
         permissions: args.permissions,
       },
     });
@@ -516,7 +514,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectMembershipRepository.setRoleDefinition(
         args.userId,
         args.projectId,
-        { roleDefinitionId: definition.id, role: args.basedOn },
+        { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER },
         tx,
       ),
     );
@@ -532,7 +530,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: ['project:browse', 'comment:add', 'attachment:create'],
     });
 
@@ -554,7 +551,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectId: s.projectId,
       userId: s.ctxs.owner.userId,
       name: 'Nearly nothing',
-      basedOn: 'viewer',
       permissions: [], // grants absolutely nothing
     });
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.owner);
@@ -563,34 +559,42 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     }
   });
 
-  it('the access LEVEL subtracts from a custom role at its base`s tier', async () => {
-    // Two roles holding the SAME set, differing only in `basedOn`. On a
-    // `limited` project the viewer-based one loses `work_item:edit` and the
-    // member-based one keeps it — the parity `levelGrants` needed no branch for.
-    const s = await buildScenario('limited', 'custom-level');
-    const permissions = ['project:browse', 'work_item:edit', 'comment:add'];
-    await putOnCustomRole({
-      workspaceId: s.workspaceId,
-      projectId: s.projectId,
-      userId: s.ctxs.viewer.userId,
-      name: 'From viewer',
-      basedOn: 'viewer',
-      permissions,
-    });
-    await putOnCustomRole({
-      workspaceId: s.workspaceId,
-      projectId: s.projectId,
-      userId: s.ctxs.member.userId,
-      name: 'From member',
-      basedOn: 'member',
-      permissions,
-    });
+  it('the access LEVEL subtracts NOTHING — a custom role grants exactly what it lists', async () => {
+    // Yue, 2026-08-09, and it is the behaviour change the decision to drop
+    // `based_on` produced. Before, a role's tier was its seed built-in, so two
+    // roles holding the SAME set resolved differently on a `limited` project.
+    // Now every custom-role membership sits at `CUSTOM_ROLE_TIER`, and the
+    // level's subtraction — which exists to narrow the COARSE built-ins — takes
+    // nothing from a set an admin enumerated by hand.
+    const permissions = ['project:browse', 'work_item:edit', 'comment:add', 'attachment:create'];
+    for (const level of ['open', 'limited', 'private', 'public'] as const) {
+      const s = await buildScenario(level, `custom-level-${level}`);
+      await putOnCustomRole({
+        workspaceId: s.workspaceId,
+        projectId: s.projectId,
+        userId: s.ctxs.viewer.userId,
+        name: 'Contractor',
+        permissions,
+      });
+      const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.viewer);
+      for (const key of permissions) {
+        expect(held.has(key as PermissionKey), `${level} · ${key}`).toBe(true);
+      }
+      // …and it gains nothing either: the set is the whole answer.
+      expect([...held].sort()).toEqual(
+        level === 'public' ? [...permissions, ...PUBLIC_KEYS()].sort() : [...permissions].sort(),
+      );
+      await truncateAuthTables();
+    }
+  });
 
-    const fromViewer = await projectAccessService.getPermissions(s.projectId, s.ctxs.viewer);
-    const fromMember = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
-    expect(fromViewer.has('work_item:edit')).toBe(false);
-    expect(fromViewer.has('comment:add')).toBe(true);
-    expect(fromMember.has('work_item:edit')).toBe(true);
+  it('a BUILT-IN role is still narrowed by the level — the change is custom-only', async () => {
+    // The other half, and the one that proves nothing leaked: an ordinary
+    // `viewer` on a `limited` project still cannot edit.
+    const s = await buildScenario('limited', 'builtin-still-narrowed');
+    const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.plainMember);
+    expect(held.has('project:browse')).toBe(true);
+    expect(held.has('work_item:edit')).toBe(false);
   });
 
   it('a stored key that is no longer in the catalog is ignored, not granted', async () => {
@@ -600,7 +604,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Stale',
-      basedOn: 'viewer',
       // `repository:connect` is the real shape: MOTIR-2294 retired it. A row
       // authored before that is exactly this.
       permissions: ['project:browse', 'repository:connect', 'not:a:permission'],
@@ -617,7 +620,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: ['project:browse', 'comment:add'],
     });
 
@@ -649,7 +651,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: ['project:browse', 'comment:add'],
     });
 
@@ -687,7 +688,6 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       projectId: s.projectId,
       userId: s.ctxs.member.userId,
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: ['project:browse'],
     });
     expect([...(await projectAccessService.getPermissions(s.projectId, s.ctxs.member))]).toEqual([
@@ -709,21 +709,16 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
 });
 
 describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
-  async function seedRole(
-    fx: Scenario,
-    name: string,
-    basedOn: 'admin' | 'member' | 'viewer',
-    permissions: string[],
-  ) {
+  async function seedRole(fx: Scenario, name: string, permissions: string[]) {
     return db.projectRoleDefinition.create({
-      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, basedOn, permissions },
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, permissions },
     });
   }
 
   it('appends them AFTER the three built-ins, by name, with their provenance', async () => {
     const s = await buildScenario('open', 'cat-custom');
-    await seedRole(s, 'Reporter', 'viewer', ['project:browse', 'work_item:triage']);
-    await seedRole(s, 'Contractor', 'viewer', ['project:browse', 'comment:add']);
+    await seedRole(s, 'Reporter', ['project:browse', 'work_item:triage']);
+    await seedRole(s, 'Contractor', ['project:browse', 'comment:add']);
 
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
     expect(catalog.roles.map((r) => r.name)).toEqual([null, null, null, 'Contractor', 'Reporter']);
@@ -733,8 +728,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     expect(contractor.builtIn).toBe(false);
     expect(contractor.builtInRole).toBeNull();
     expect(contractor.labelKey).toBeNull();
-    expect(contractor.basedOn).toBe('viewer');
-    expect(contractor.basedOnDelta).toBe(0); // viewer holds 2; so does this
+    expect('basedOn' in contractor).toBe(false); // nothing records the seed
     expect(contractor.permissions).toEqual(['project:browse', 'comment:add']);
   });
 
@@ -749,9 +743,9 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
 
   it('every count is real, from TWO grouped reads — the query count does not scale with the roles', async () => {
     const s = await buildScenario('open', 'cat-counts');
-    const a = await seedRole(s, 'A role', 'viewer', ['project:browse']);
-    const b = await seedRole(s, 'B role', 'viewer', ['project:browse']);
-    const c = await seedRole(s, 'C role', 'viewer', ['project:browse']);
+    const a = await seedRole(s, 'A role', ['project:browse']);
+    const b = await seedRole(s, 'B role', ['project:browse']);
+    const c = await seedRole(s, 'C role', ['project:browse']);
     await db.$transaction(async (tx) => {
       await projectMembershipRepository.setRoleDefinition(
         s.ctxs.member.userId,
@@ -798,8 +792,8 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     expect(catalog.roles.find((r) => r.key === 'admin')?.memberCount).toBe(0);
 
     const withThree = await countReads();
-    await seedRole(s, 'D role', 'viewer', ['project:browse']);
-    await seedRole(s, 'E role', 'viewer', ['project:browse']);
+    await seedRole(s, 'D role', ['project:browse']);
+    await seedRole(s, 'E role', ['project:browse']);
     expect(await countReads()).toBe(withThree);
     expect(
       (await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner)).roles,
@@ -810,7 +804,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
   it('the GATE runs before the read — a foreign project`s roles are never returned OR counted', async () => {
     const mine = await buildScenario('open', 'cat-gate-mine');
     const theirs = await buildScenario('open', 'cat-gate-theirs');
-    await seedRole(theirs, 'Theirs', 'viewer', ['project:browse']);
+    await seedRole(theirs, 'Theirs', ['project:browse']);
     // It really is there for its own workspace…
     expect(
       (await projectAccessService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)).roles.some(
@@ -826,7 +820,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
   it('is INVISIBLE under a foreign workspace GUC, as the non-bypass app role', async () => {
     const mine = await buildScenario('open', 'cat-rls-mine');
     const other = await buildScenario('open', 'cat-rls-other');
-    const role = await seedRole(mine, 'Contractor', 'viewer', ['project:browse']);
+    const role = await seedRole(mine, 'Contractor', ['project:browse']);
     const leaked = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
       await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
@@ -837,7 +831,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
 
   it('a stale stored key is dropped from the DTO too, so `N of M` never over-counts', async () => {
     const s = await buildScenario('open', 'cat-stale');
-    await seedRole(s, 'Stale', 'viewer', [
+    await seedRole(s, 'Stale', [
       'project:browse',
       'repository:connect', // retired by MOTIR-2294
     ]);

@@ -13,7 +13,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   BuiltInRoleImmutableError,
-  InvalidRoleBaseError,
   InvalidRoleNameError,
   InvalidRoleReassignTargetError,
   RoleDefinitionNotFoundError,
@@ -117,13 +116,11 @@ async function createRole(
   fx: Fixture,
   name: string,
   permissions: PermissionKey[] = ['project:browse'],
-  basedOn: 'admin' | 'member' | 'viewer' = 'viewer',
 ) {
   return projectRoleDefinitionService.create({
     projectId: fx.projectId,
     ctx: fx.adminCtx,
     name,
-    basedOn,
     permissions,
   });
 }
@@ -133,7 +130,6 @@ describe('the gate — `project:manage_access`, and 404 before 403', () => {
     const fx = await build('gate-ok');
     const role = await createRole(fx, 'Contractor', ['project:browse', 'comment:add']);
     expect(role.name).toBe('Contractor');
-    expect(role.basedOn).toBe('viewer');
     expect(role.permissions).toEqual(['project:browse', 'comment:add']);
   });
 
@@ -144,7 +140,6 @@ describe('the gate — `project:manage_access`, and 404 before 403', () => {
         projectId: fx.projectId,
         ctx: fx.memberCtx,
         name: 'Nope',
-        basedOn: 'viewer',
         permissions: [],
       }),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
@@ -158,7 +153,6 @@ describe('the gate — `project:manage_access`, and 404 before 403', () => {
         projectId: theirs.projectId,
         ctx: mine.adminCtx,
         name: 'Smuggled',
-        basedOn: 'viewer',
         permissions: [],
       }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
@@ -211,7 +205,6 @@ describe('a permission no gate consults can never be granted', () => {
         projectId: fx.projectId,
         ctx: fx.adminCtx,
         name: 'Bad3',
-        basedOn: 'viewer',
         permissions: 'project:browse',
       }),
     ).rejects.toBeInstanceOf(UngrantablePermissionError);
@@ -240,7 +233,7 @@ describe('a permission no gate consults can never be granted', () => {
 
   it('every role-gated key IS accepted, so the guard is not over-broad', async () => {
     const fx = await build('perm-all');
-    const role = await createRole(fx, 'Everything', [...ROLE_GATED_PERMISSIONS], 'admin');
+    const role = await createRole(fx, 'Everything', [...ROLE_GATED_PERMISSIONS]);
     expect(role.permissions.sort()).toEqual([...ROLE_GATED_PERMISSIONS].sort());
   });
 
@@ -265,7 +258,6 @@ describe('names — trimmed, bounded, unique WITHIN a project', () => {
         projectId: fx.projectId,
         ctx: fx.adminCtx,
         name: 42,
-        basedOn: 'viewer',
         permissions: [],
       }),
     ).rejects.toBeInstanceOf(InvalidRoleNameError);
@@ -321,25 +313,44 @@ describe('names — trimmed, bounded, unique WITHIN a project', () => {
   });
 });
 
-describe('the base is one of the three built-ins, and it is PROVENANCE', () => {
-  it('refuses a base that is not project-assignable', async () => {
-    const fx = await build('base-bad');
-    for (const bad of ['owner', 'Contractor', '', null, 7]) {
-      await expect(
-        projectRoleDefinitionService.create({
-          projectId: fx.projectId,
-          ctx: fx.adminCtx,
-          name: `Bad-${String(bad)}`,
-          basedOn: bad,
-          permissions: [],
-        }),
-      ).rejects.toBeInstanceOf(InvalidRoleBaseError);
-    }
+describe('a role is its NAME and its SET — nothing else is recorded', () => {
+  // Yue, 2026-08-09. The editor still lets an author START FROM a built-in, but
+  // that pick seeds the grid in the browser and is never sent. These assertions
+  // are the guard against it creeping back: a role that carries provenance is a
+  // role making a claim about its own history, which goes stale the moment
+  // either side is edited.
+  it('the DTO carries no `basedOn` and no derived delta', async () => {
+    const fx = await build('no-base-dto');
+    const role = await createRole(fx, 'Contractor', ['project:browse']);
+    expect(role).toEqual({
+      id: role.id,
+      name: 'Contractor',
+      permissions: ['project:browse'],
+      createdAt: role.createdAt,
+      updatedAt: role.updatedAt,
+    });
+    expect('basedOn' in role).toBe(false);
   });
 
-  it('`basedOn` survives a rename and a re-permission untouched', async () => {
-    const fx = await build('base-stable');
-    const role = await createRole(fx, 'Contractor', ['project:browse'], 'member');
+  it('a `basedOn` in the request is IGNORED, not stored and not echoed', async () => {
+    // An old client (or a hand-rolled curl) can still send it. It must not
+    // resurrect the column by the back door.
+    const fx = await build('no-base-ignored');
+    const role = await projectRoleDefinitionService.create({
+      projectId: fx.projectId,
+      ctx: fx.adminCtx,
+      name: 'Contractor',
+      permissions: ['project:browse'],
+      ...({ basedOn: 'admin' } as Record<string, unknown>),
+    });
+    expect('basedOn' in role).toBe(false);
+    const stored = await db.projectRoleDefinition.findUniqueOrThrow({ where: { id: role.id } });
+    expect('basedOn' in stored).toBe(false);
+  });
+
+  it('a rename and a re-permission change exactly those two things', async () => {
+    const fx = await build('no-base-stable');
+    const role = await createRole(fx, 'Contractor', ['project:browse']);
     const renamed = await projectRoleDefinitionService.update({
       projectId: fx.projectId,
       roleId: role.id,
@@ -347,15 +358,10 @@ describe('the base is one of the three built-ins, and it is PROVENANCE', () => {
       name: 'External',
       permissions: ['project:browse', 'comment:add'],
     });
-    expect(renamed.basedOn).toBe('member');
     expect(renamed.name).toBe('External');
     expect(renamed.permissions).toEqual(['project:browse', 'comment:add']);
-  });
-
-  it('the DTO carries the base`s size so a client can render the ±N chip', async () => {
-    const fx = await build('base-count');
-    const role = await createRole(fx, 'Contractor', ['project:browse'], 'admin');
-    expect(role.basedOnPermissionCount).toBe(ROLE_GATED_PERMISSIONS.length);
+    expect(renamed.id).toBe(role.id);
+    expect(renamed.createdAt).toBe(role.createdAt);
   });
 });
 
@@ -497,8 +503,8 @@ describe('DELETE refuses to strip anybody', () => {
 
   it('with a destination: every holder MOVES and the role is removed, in one transaction', async () => {
     const fx = await build('del-reassign');
-    const role = await createRole(fx, 'Contractor', ['project:browse'], 'viewer');
-    const destination = await createRole(fx, 'Reporter', ['project:browse'], 'member');
+    const role = await createRole(fx, 'Contractor', ['project:browse']);
+    const destination = await createRole(fx, 'Reporter', ['project:browse']);
     await hold(fx, fx.memberUserId, role.id, 'viewer');
     await hold(fx, fx.otherUserId, role.id, 'viewer');
 
@@ -544,7 +550,7 @@ describe('DELETE refuses to strip anybody', () => {
     // still exists but no longer describes them.
     const fx = await build('del-atomic');
     const role = await createRole(fx, 'Contractor');
-    const destination = await createRole(fx, 'Reporter', ['project:browse'], 'member');
+    const destination = await createRole(fx, 'Reporter', ['project:browse']);
     await hold(fx, fx.memberUserId, role.id, 'viewer');
 
     const boom = new Error('injected after the reassign');

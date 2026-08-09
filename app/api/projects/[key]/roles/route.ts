@@ -4,7 +4,12 @@ import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefiniti
 import { roleDefinitionErrorResponse } from '@/lib/permissions/errorResponse';
 
 // /api/projects/[key]/roles (Story MOTIR-2257 · Subtask MOTIR-2474)
-//   POST — author a custom role. Body: { name, basedOn, permissions[] }.
+//   POST — author a custom role. Body: { name, permissions[] }.
+//
+// ⚠️ NO `basedOn`. The editor lets an author START FROM a built-in, but that
+// pick only SEEDS the grid — it is an authoring convenience, not a property of
+// the role, so it is never sent and never stored (Yue, 2026-08-09). What arrives
+// is the set the author actually composed.
 //
 // Thin HTTP transport, per the 4-layer rule: read the workspace context, parse
 // the body's SHAPE, call the service, map its typed refusal to a status. No
@@ -42,33 +47,20 @@ export async function POST(req: Request, { params }: RouteParams): Promise<Respo
       { status: 400 },
     );
   }
-  // SHAPE only — that `name` is a string, `basedOn` is present and
-  // `permissions` is an array. WHICH values are legal is the service's, and it
-  // answers with a typed refusal the map below turns into a 400.
-  const { name, basedOn, permissions } = body as {
-    name?: unknown;
-    basedOn?: unknown;
-    permissions?: unknown;
-  };
-  if (typeof name !== 'string' || typeof basedOn !== 'string' || !Array.isArray(permissions)) {
+  // SHAPE only — that `name` is a string and `permissions` is an array. WHICH
+  // values are legal is the service's, and it answers with a typed refusal the
+  // map below turns into a 400.
+  const { name, permissions } = body as { name?: unknown; permissions?: unknown };
+  if (typeof name !== 'string' || !Array.isArray(permissions)) {
     return NextResponse.json(
-      {
-        error: '"name" and "basedOn" must be strings and "permissions" an array.',
-        code: 'BAD_REQUEST',
-      },
+      { error: '"name" must be a string and "permissions" an array.', code: 'BAD_REQUEST' },
       { status: 400 },
     );
   }
 
   try {
     const projectId = await projectRoleDefinitionService.resolveProjectIdByKey(key, ctx);
-    const role = await projectRoleDefinitionService.create({
-      projectId,
-      ctx,
-      name,
-      basedOn,
-      permissions,
-    });
+    const role = await projectRoleDefinitionService.create({ projectId, ctx, name, permissions });
     return NextResponse.json({ role }, { status: 201 });
   } catch (err) {
     const mapped = roleDefinitionErrorResponse(err);

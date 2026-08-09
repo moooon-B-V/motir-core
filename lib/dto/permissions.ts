@@ -37,15 +37,8 @@ export interface PermissionDescriptorDTO {
 export interface RoleDefinitionDTO {
   id: string;
   name: string;
-  /** The BUILT-IN this role was cloned from — provenance, never inheritance. */
-  basedOn: ProjectRole;
   /** The permissions it holds, in CATALOG order (never insertion order). */
   permissions: PermissionKey[];
-  /**
-   * How many permissions `basedOn` holds — so a client can render the
-   * `Based on Viewer · +2` chip's delta without importing the role sets.
-   */
-  basedOnPermissionCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,20 +77,6 @@ export interface RoleDTO {
   name: string | null;
   /** A CUSTOM role's literal description. Null for a built-in — and today always null. */
   description: string | null;
-  /**
-   * The BUILT-IN a custom role was cloned from — provenance, never inheritance.
-   * Null for a built-in, which was cloned from nothing.
-   */
-  basedOn: ProjectRole | null;
-  /**
-   * The `±N` in the `Based on Member · −2` chip: this role's permission count
-   * minus its base's. Null for a built-in.
-   *
-   * Computed in the MAPPER against `BUILTIN_ROLE_PERMISSIONS`, so the number is a
-   * property of the read rather than arithmetic a component re-does — the same
-   * argument `roleGatedPermissionCount` already makes.
-   */
-  basedOnDelta: number | null;
   /**
    * True for a role the code owns and a user cannot edit — the three built-ins.
    * A custom role is `false`.

@@ -6,70 +6,51 @@ import { Checkbox, checkboxStateLabel } from '@/components/ui/Checkbox';
 // The `Checkbox` primitive (Story MOTIR-2257 · Subtask MOTIR-2465) — the one new
 // design-system component the role editor needs.
 //
-// The claim worth testing hardest is the a11y one: a permission can be ticked
-// for two different reasons, and the design is explicit that *"who granted this"
-// is never carried by fill colour alone*. So every assertion below about the
-// three states goes through the ACCESSIBLE NAME — which is what survives with
-// colour off, in a screen reader, and in a monochrome print. A test that read
-// the class list would pass on a component that says nothing.
+// The claim worth testing hardest is the a11y one: the state must not rest on
+// the fill colour. So every assertion below about held/not-held goes through the
+// ACCESSIBLE NAME — which is what survives with colour off, in a screen reader,
+// and in a monochrome print. A test that read the class list would pass on a
+// component that says nothing.
 
 afterEach(() => cleanup());
 
 const noop = () => {};
 
-describe('the three states each render their stated accessible name', () => {
+describe('the two states each render their stated accessible name', () => {
   it('NOT HELD — an empty box that says so', () => {
     render(<Checkbox checked={false} onChange={noop} label="Add comments" />);
     const box = screen.getByRole('checkbox', { name: 'Add comments, Not held' });
     expect(box.getAttribute('aria-checked')).toBe('false');
   });
 
-  it('HELD — FROM THE BASE, naming the base in words', () => {
-    render(
-      <Checkbox
-        checked
-        onChange={noop}
-        label="View project"
-        provenance="base"
-        baseLabel="Viewer"
-      />,
-    );
-    const box = screen.getByRole('checkbox', { name: 'View project, Held — from Viewer' });
+  it('HELD — and the state is in the NAME, not only in the fill', () => {
+    render(<Checkbox checked onChange={noop} label="Add comments" />);
+    const box = screen.getByRole('checkbox', { name: 'Add comments, Held' });
     expect(box.getAttribute('aria-checked')).toBe('true');
+    expect(checkboxStateLabel(true)).toBe('Held');
+    expect(checkboxStateLabel(false)).toBe('Not held');
   });
 
-  it('HELD — ADDED, distinguishable from the base grant WITHOUT reading a colour', () => {
-    render(<Checkbox checked onChange={noop} label="Add comments" provenance="added" />);
-    expect(screen.getByRole('checkbox', { name: 'Add comments, Held — added' })).toBeTruthy();
-
-    // The point, stated directly: the two HELD states differ in their NAME, not
-    // only in their fill. Render both and compare the names.
-    cleanup();
-    render(
-      <>
-        <Checkbox checked onChange={noop} label="A" provenance="base" baseLabel="Viewer" />
-        <Checkbox checked onChange={noop} label="A" provenance="added" />
-      </>,
-    );
-    const names = screen
-      .getAllByRole('checkbox')
-      .map((el) => el.getAttribute('aria-label'))
-      .sort();
-    expect(names).toEqual(['A, Held — added', 'A, Held — from Viewer']);
-    expect(new Set(names).size).toBe(2);
-  });
-
-  it('falls back to a base-less sentence when no base name is supplied — still words, never a colour', () => {
-    render(<Checkbox checked onChange={noop} label="View project" provenance="base" />);
-    expect(
-      screen.getByRole('checkbox', { name: 'View project, Held — from the base' }),
-    ).toBeTruthy();
-  });
-
-  it('defaults the provenance so a plain two-state checkbox needs no extra prop', () => {
-    expect(checkboxStateLabel(false, 'none')).toBe('Not held');
-    render(<Checkbox checked onChange={noop} label="Make initial" />);
-    expect(screen.getByRole('checkbox', { name: 'Make initial, Held — added' })).toBeTruthy();
+  it('takes NO provenance discriminator — a permission is held or it is not', () => {
+    // Yue, 2026-08-09. An earlier revision had a third state: a grey fill for a
+    // permission that came WITH the author's chosen base, distinct from the
+    // accent fill of one they added. It died with the stored `based_on` column —
+    // with nothing recorded, a re-edit has no base for anything to have come
+    // from, so the two fills could not be told apart honestly.
+    const props = Object.keys({
+      checked: true,
+      onChange: noop,
+      label: 'A',
+      disabled: false,
+      labelVisible: false,
+      id: '',
+      className: '',
+    });
+    expect(props).not.toContain('provenance');
+    expect(props).not.toContain('baseLabel');
+    // And the name carries no "from …" clause in either state.
+    render(<Checkbox checked onChange={noop} label="View project" />);
+    expect(screen.queryByRole('checkbox', { name: /from/i })).toBeNull();
   });
 });
 
@@ -123,7 +104,7 @@ describe('token discipline', () => {
   it('renders no Tier-0 utility and no raw shape value on the box', () => {
     // The colour + shape rules apply to a primitive as much as to a page. This
     // reads the rendered class list because that IS the deliverable here.
-    const { container } = render(<Checkbox checked onChange={noop} label="A" provenance="added" />);
+    const { container } = render(<Checkbox checked onChange={noop} label="A" />);
     const classes = [...container.querySelectorAll('*')]
       .map((el) => el.getAttribute('class') ?? '')
       .join(' ');

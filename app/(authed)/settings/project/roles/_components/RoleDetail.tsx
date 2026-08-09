@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, GitBranch, Lock, Users } from 'lucide-react';
+import { ArrowLeft, Lock, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Pill } from '@/components/ui/Pill';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
@@ -27,10 +27,12 @@ import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdenti
 // delete-with-reassign dialog are MOTIR-2480's, drawn in panels 2 and 5 of
 // `design/projects/roles-permissions.mock.html`.
 //
-// ⚠️ THE PROVENANCE CHIP IS WHERE THE SIDE-BY-SIDE COMPARISON WENT. The design
-// gave up a matrix's four-columns-at-once and bought back something exact:
-// "Contractor is Viewer plus two". `basedOnDelta` is computed in the mapper, so
-// nothing here does arithmetic over a role set.
+// ⚠️ NO PROVENANCE CHIP (Yue, 2026-08-09). An earlier revision drew
+// `Based on Viewer · +2` from a stored `based_on`. It recorded which built-in
+// SEEDED the role, which is a fact about how it was once authored rather than
+// about what it is — and stale the moment either side was edited. A role's own
+// `N of M` says everything true about it. The editor still offers a built-in to
+// start from; nothing is stored and nothing is drawn.
 
 export function RoleDetail({
   role,
@@ -83,15 +85,6 @@ export function RoleDetail({
                   {t('custom')}
                 </Pill>
               )}
-              {role.basedOn ? (
-                <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-5 items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) font-sans text-[11.5px] whitespace-nowrap">
-                  <GitBranch aria-hidden="true" className="h-3 w-3" />
-                  {t('basedOn', {
-                    base: tCatalog(`settings.roles.${role.basedOn}.name`),
-                    delta: formatDelta(role.basedOnDelta ?? 0),
-                  })}
-                </span>
-              ) : null}
               <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-5 items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) font-sans text-[11.5px] whitespace-nowrap">
                 <Users aria-hidden="true" className="h-3 w-3" />
                 {t('memberCount', { count: role.memberCount })}
@@ -113,15 +106,4 @@ export function RoleDetail({
       </div>
     </div>
   );
-}
-
-/**
- * The provenance chip's `±N`, signed and with a MINUS SIGN rather than a hyphen
- * — `Based on Member · −2` is the design's exact string. `0` renders as `±0`,
- * which is the honest reading of a role that holds precisely its base's set.
- */
-function formatDelta(delta: number): string {
-  if (delta > 0) return `+${delta}`;
-  if (delta < 0) return `\u2212${Math.abs(delta)}`;
-  return '\u00b10';
 }

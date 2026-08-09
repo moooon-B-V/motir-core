@@ -25,7 +25,6 @@ CREATE TABLE "project_role_definition" (
     "workspace_id" TEXT NOT NULL,
     "project_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
-    "based_on" "member_role" NOT NULL,
     "permissions" TEXT[],
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updated_at" TIMESTAMP(3) NOT NULL,
@@ -98,6 +97,15 @@ CREATE POLICY "project_role_definition_active_workspace" ON "project_role_defini
 -- refuse, so the only route to deleting a role is the service's
 -- reassign-then-delete path (MOTIR-2472) — the guarantee is enforced by the
 -- storage rather than remembered by the code above it.
+--
+-- ⚠️ NO `based_on` COLUMN (Yue, 2026-08-09). An earlier revision of this
+-- migration recorded which built-in the author started from. It was PROVENANCE
+-- that never re-flowed — a claim about how the role was once authored rather
+-- than a fact about what it is — and it went stale the moment either side was
+-- edited. The editor still offers a built-in to START FROM, but that seeds the
+-- grid and is not stored. A membership on a custom role sits at the `member`
+-- tier (`CUSTOM_ROLE_TIER`), so the access level subtracts nothing and the
+-- role grants exactly what it lists.
 --
 -- The FK is modelled as a Prisma `@relation` on BOTH sides
 -- (ProjectMembership.roleDefinition ↔ ProjectRoleDefinition.memberships) with

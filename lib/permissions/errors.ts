@@ -112,12 +112,3 @@ export class InvalidRoleReassignTargetError extends Error {
     this.name = 'InvalidRoleReassignTargetError';
   }
 }
-
-/** A `basedOn` that is not one of the three project-assignable built-ins. */
-export class InvalidRoleBaseError extends Error {
-  readonly code = 'INVALID_ROLE_BASE' as const;
-  constructor(readonly base: string) {
-    super(`"${base}" is not a base a role can start from (use admin, member or viewer).`);
-    this.name = 'InvalidRoleBaseError';
-  }
-}

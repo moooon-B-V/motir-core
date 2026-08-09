@@ -139,7 +139,6 @@ async function seedRole(fx: Fixture, name: string, permissions: string[] = ['pro
     projectId: fx.projectId,
     ctx: fx.adminCtx,
     name,
-    basedOn: 'viewer',
     permissions,
   });
 }
@@ -150,7 +149,6 @@ describe('POST /api/projects/[key]/roles', () => {
     ctxRef.current = fx.adminCtx;
     const res = await post(fx.projectKey, {
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: ['comment:add', 'project:browse'],
     });
     expect(res.status).toBe(201);
@@ -170,7 +168,7 @@ describe('POST /api/projects/[key]/roles', () => {
   it('401s when there is no session', async () => {
     const fx = await build('post-401');
     ctxRef.current = null;
-    const res = await post(fx.projectKey, { name: 'X', basedOn: 'viewer', permissions: [] });
+    const res = await post(fx.projectKey, { name: 'X', permissions: [] });
     expect(res.status).toBe(401);
     expect((await res.json()).code).toBe('UNAUTHENTICATED');
   });
@@ -180,10 +178,9 @@ describe('POST /api/projects/[key]/roles', () => {
     ctxRef.current = fx.adminCtx;
     const cases: unknown[] = [
       'not json at all',
-      { basedOn: 'viewer', permissions: [] }, // missing name
-      { name: 'X', permissions: [] }, // missing basedOn
-      { name: 'X', basedOn: 'viewer', permissions: 'project:browse' }, // not an array
-      { name: 7, basedOn: 'viewer', permissions: [] }, // wrong type
+      { permissions: [] }, // missing name
+      { name: 'X', permissions: 'project:browse' }, // not an array
+      { name: 7, permissions: [] }, // wrong type
     ];
     for (const body of cases) {
       const res = await post(fx.projectKey, body);
@@ -198,25 +195,36 @@ describe('POST /api/projects/[key]/roles', () => {
     ctxRef.current = fx.adminCtx;
     const res = await post(fx.projectKey, {
       name: 'Bad',
-      basedOn: 'viewer',
       permissions: ['public_request:submit'],
     });
     expect(res.status).toBe(400);
     expect((await res.json()).code).toBe('UNGRANTABLE_PERMISSION');
   });
 
-  it('400s a base that is not project-assignable', async () => {
-    const fx = await build('post-base');
+  it('IGNORES an extraneous `basedOn` — an old client cannot resurrect the column', async () => {
+    // Yue, 2026-08-09: nothing records which built-in seeded the grid. A body
+    // that still sends one is accepted and the field is dropped, rather than
+    // 400'd (it is not a shape error) or stored.
+    const fx = await build('post-extraneous-base');
     ctxRef.current = fx.adminCtx;
-    const res = await post(fx.projectKey, { name: 'Bad', basedOn: 'owner', permissions: [] });
-    expect(res.status).toBe(400);
-    expect((await res.json()).code).toBe('INVALID_ROLE_BASE');
+    const res = await post(fx.projectKey, {
+      name: 'Contractor',
+      basedOn: 'admin',
+      permissions: ['project:browse'],
+    });
+    expect(res.status).toBe(201);
+    const { role } = (await res.json()) as { role: Record<string, unknown> };
+    expect('basedOn' in role).toBe(false);
+    const stored = await db.projectRoleDefinition.findUniqueOrThrow({
+      where: { id: role['id'] as string },
+    });
+    expect('basedOn' in stored).toBe(false);
   });
 
   it('403s a non-admin, naming the permission that was missing', async () => {
     const fx = await build('post-403');
     ctxRef.current = fx.memberCtx;
-    const res = await post(fx.projectKey, { name: 'X', basedOn: 'viewer', permissions: [] });
+    const res = await post(fx.projectKey, { name: 'X', permissions: [] });
     expect(res.status).toBe(403);
     const body = (await res.json()) as { code: string; permission: string };
     expect(body.code).toBe('PERMISSION_DENIED');
@@ -229,7 +237,6 @@ describe('POST /api/projects/[key]/roles', () => {
     await seedRole(fx, 'Contractor');
     const res = await post(fx.projectKey, {
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: [],
     });
     expect(res.status).toBe(409);
@@ -242,7 +249,7 @@ describe('POST /api/projects/[key]/roles', () => {
     const fx = await build('post-409-cap');
     ctxRef.current = fx.adminCtx;
     for (let i = 0; i < MAX_CUSTOM_ROLES_PER_PROJECT; i += 1) await seedRole(fx, `Role ${i}`);
-    const res = await post(fx.projectKey, { name: 'Extra', basedOn: 'viewer', permissions: [] });
+    const res = await post(fx.projectKey, { name: 'Extra', permissions: [] });
     expect(res.status).toBe(409);
     const body = (await res.json()) as { code: string; limit: number };
     expect(body.code).toBe('ROLE_LIMIT_REACHED');
@@ -259,7 +266,6 @@ describe('the 404-BEFORE-403 ordering — a settings surface cannot confirm a fo
     ctxRef.current = mine.adminCtx;
     const res = await post(theirs.projectKey, {
       name: 'X',
-      basedOn: 'viewer',
       permissions: [],
     });
     expect(res.status).toBe(404);
@@ -283,7 +289,6 @@ describe('the 404-BEFORE-403 ordering — a settings surface cannot confirm a fo
     ctxRef.current = mine.adminCtx;
     const res = await post(theirs.projectKey, {
       name: 'Contractor',
-      basedOn: 'viewer',
       permissions: [],
     });
     expect(res.status).toBe(201);
@@ -313,14 +318,14 @@ describe('the 404-BEFORE-403 ordering — a settings surface cannot confirm a fo
     await workspacesService.addMember({ userId: outsider.id, workspaceId: fx.workspaceId });
     ctxRef.current = { userId: outsider.id, workspaceId: fx.workspaceId };
 
-    const res = await post(fx.projectKey, { name: 'X', basedOn: 'viewer', permissions: [] });
+    const res = await post(fx.projectKey, { name: 'X', permissions: [] });
     expect(res.status).toBe(404);
   });
 
   it('a project key that never existed is 404', async () => {
     const fx = await build('order-nokey');
     ctxRef.current = fx.adminCtx;
-    const res = await post('NOSUCH', { name: 'X', basedOn: 'viewer', permissions: [] });
+    const res = await post('NOSUCH', { name: 'X', permissions: [] });
     expect(res.status).toBe(404);
   });
 });
@@ -512,9 +517,7 @@ describe('the map`s edges, and what it deliberately does NOT swallow', () => {
     const boom = new Error('something genuinely unexpected');
 
     vi.spyOn(projectRoleDefinitionService, 'create').mockRejectedValueOnce(boom);
-    await expect(
-      post(fx.projectKey, { name: 'X', basedOn: 'viewer', permissions: [] }),
-    ).rejects.toBe(boom);
+    await expect(post(fx.projectKey, { name: 'X', permissions: [] })).rejects.toBe(boom);
 
     vi.spyOn(projectRoleDefinitionService, 'update').mockRejectedValueOnce(boom);
     await expect(patch(fx.projectKey, role.id, { name: 'X' })).rejects.toBe(boom);

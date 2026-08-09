@@ -250,7 +250,6 @@ describe('a project`s OWN roles on the two screens', () => {
       {
         id: 'r_contractor',
         name: 'Contractor',
-        basedOn: 'viewer',
         permissions: ['project:browse', 'comment:add', 'attachment:create'],
       },
     ],
@@ -283,49 +282,23 @@ describe('a project`s OWN roles on the two screens', () => {
     expect(screen.getAllByText('Built-in')).toHaveLength(3);
   });
 
-  it('the DETAIL renders the `Based on … · ±N` provenance chip', () => {
+  it('the DETAIL renders its literal name, its set, and NO provenance chip', () => {
     renderWith(<RoleDetail role={contractor} catalog={CUSTOM} projectName="motir" />);
     expect(screen.getByText('Contractor')).toBeTruthy();
-    // Contractor holds 3; Viewer holds 2 → +1.
-    expect(screen.getByText('Based on Viewer · +1')).toBeTruthy();
+    expect(screen.queryByText(/^Based on /)).toBeNull();
     expect(screen.queryByText('Built-in · can’t be changed')).toBeNull();
     expect(document.querySelector('[data-permission]')).toBeTruthy();
   });
 
-  it('the chip signs the delta — `+N`, a real MINUS for `−N`, and `±0` for a role that matches its base', () => {
-    // The design's exact string is `Based on Member · −2`: a U+2212 MINUS SIGN,
-    // not a hyphen. And a role holding precisely its base's set is `±0` rather
-    // than a bare `0`, which would read as "holds nothing".
-    const cases: Array<{ basedOn: 'admin' | 'member' | 'viewer'; held: string[]; text: string }> = [
-      { basedOn: 'viewer', held: ['project:browse'], text: 'Based on Viewer · \u22121' },
-      {
-        basedOn: 'viewer',
-        held: ['project:browse', 'report:view'],
-        text: 'Based on Viewer · \u00b10',
-      },
-    ];
-    for (const { basedOn, held, text } of cases) {
-      const catalog = toRoleCatalogDTO(
-        {},
-        [{ id: 'r_x', name: 'Narrowed', basedOn, permissions: held }],
-        {},
-      );
-      renderWith(
-        <RoleDetail
-          role={catalog.roles.find((r) => r.key === 'r_x')!}
-          catalog={catalog}
-          projectName="motir"
-        />,
-      );
-      expect(screen.getByText(text), text).toBeTruthy();
+  it('NO role carries a provenance chip — nothing records which built-in seeded it', () => {
+    // Yue, 2026-08-09: an earlier revision drew `Based on Viewer · +1` from a
+    // stored `based_on`. It described how the role was once authored rather than
+    // what it is, and went stale the moment either side was edited.
+    for (const role of CUSTOM.roles) {
+      renderWith(<RoleDetail role={role} catalog={CUSTOM} projectName="motir" />);
+      expect(screen.queryByText(/^Based on /), role.key).toBeNull();
       cleanup();
     }
-  });
-
-  it('a built-in`s detail carries NO provenance chip — it was cloned from nothing', () => {
-    const member = CUSTOM.roles.find((role) => role.key === 'member')!;
-    renderWith(<RoleDetail role={member} catalog={CUSTOM} projectName="motir" />);
-    expect(screen.queryByText(/^Based on /)).toBeNull();
   });
 
   it('BOTH screens stay READ-ONLY for every actor, a project admin included', () => {
@@ -359,7 +332,6 @@ describe('a project`s OWN roles on the two screens', () => {
     renderWith(<RoleList catalog={CUSTOM} />, zhMessages as unknown as Record<string, unknown>);
     const zhRoles = zhMessages.settings.rolesPage;
     expect(zhRoles.custom).toBeTruthy();
-    expect(zhRoles.basedOn).toBeTruthy();
     expect(screen.getByText(zhRoles.custom)).toBeTruthy();
     // The author's own name is NOT translated in any locale.
     expect(screen.getByText('Contractor')).toBeTruthy();

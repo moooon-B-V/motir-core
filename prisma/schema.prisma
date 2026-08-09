@@ -1099,9 +1099,11 @@ model ProjectMembership {
   /// ⚠️ This column and `role` MOVE TOGETHER, and
   /// `projectMembershipRepository.setRoleDefinition` / `.reassignRoleDefinition`
   /// are the only writers. A membership on a custom role carries
-  /// `role = definition.basedOn`, which is what keeps the access-LEVEL
-  /// subtraction in `lib/permissions/resolve.ts` (`levelGrants`) applying to a
-  /// custom role at exactly the tier its base sits at — no new branch there.
+  /// `role = CUSTOM_ROLE_TIER` (`member`, `lib/permissions/builtinRoles.ts`) —
+  /// so the access-LEVEL subtraction in `lib/permissions/resolve.ts`
+  /// (`levelGrants`) takes nothing away from it, and A CUSTOM ROLE GRANTS
+  /// EXACTLY WHAT IT LISTS. `role` still has to be written, because `private`
+  /// gates on having a membership at all and the whole model reads that column.
   roleDefinitionId String?    @map("role_definition_id")
   createdAt        DateTime   @default(now()) @map("created_at")
   updatedAt        DateTime   @updatedAt @map("updated_at")
@@ -1134,13 +1136,14 @@ model ProjectMembership {
 /// intersects them with the catalog so a key retired after the role was authored
 /// is ignored rather than granted.
 ///
-/// `basedOn` is PROVENANCE, not inheritance: a snapshot of which built-in the
-/// author started from, recorded once at creation. Later edits to that built-in
-/// never re-flow into the role, and a role can never point at another role — so
-/// no self-relation, and the `Based on Viewer · +2` chip is a comparison rather
-/// than a chain. (`MemberRole` also carries `owner`, which is workspace-only and
-/// not project-assignable; the service refuses it — see
-/// `PROJECT_ASSIGNABLE_ROLES` in `lib/projects/roles.ts`.)
+/// ⚠️ NOTHING RECORDS WHICH BUILT-IN THE AUTHOR STARTED FROM (Yue, 2026-08-09).
+/// An earlier revision carried a `based_on` column and drew a `Based on Viewer ·
+/// +2` chip from it. It was PROVENANCE that never re-flowed — a claim about how
+/// the role was once authored, not a fact about what it is, and stale the moment
+/// either side was edited. A role that lists its permissions already says
+/// everything true about itself. The editor still OFFERS a built-in to start
+/// from, but that is an authoring convenience that seeds the grid and is not
+/// stored.
 ///
 /// It carries its OWN `workspace_id` column with the same
 /// `FOR ALL USING (workspace_id = current_setting('app.workspace_id', true))`
@@ -1148,14 +1151,13 @@ model ProjectMembership {
 /// `project`. A role is a description of who may do what, so leaking one across
 /// tenants would leak the shape of somebody's organisation.
 model ProjectRoleDefinition {
-  id          String     @id @default(cuid())
-  workspaceId String     @map("workspace_id")
-  projectId   String     @map("project_id")
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  projectId   String   @map("project_id")
   name        String
-  basedOn     MemberRole @map("based_on")
   permissions String[]
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   workspace   Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project     Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
