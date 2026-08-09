@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import type { ReferenceOperation } from '@/lib/apiDocs/reference';
 import { CodeBlock } from './CodeBlock';
 import { MethodPill, ScopePill, StatusPill } from './MethodPill';
+import { ScrollableRegion, SCROLLABLE_REGION_FOCUS } from './ScrollableRegion';
 
 // One operation, as the reference renders it (Story 11.4 · Subtask 11.4.7 —
 // MOTIR-2188; design Panels 1–2).
@@ -10,6 +11,13 @@ import { MethodPill, ScopePill, StatusPill } from './MethodPill';
 // The design says so and the reason is the whole point of a reference: a reader
 // who has read one operation must be able to SKIM the next, which only works if
 // the next one is laid out identically.
+//
+// ⚠️ THE TWO SPEC TABLES SCROLL IN THEIR OWN BOXES, so they are the same
+// keyboard-reachability case as the code panes and go through the same
+// `ScrollableRegion` (MOTIR-2494). They are wider than a phone, not wider than
+// the E2E sweep's viewport, so axe only ever reported the panes — fixing the
+// panes alone would have left the identical defect one element over, on the
+// same component, waiting for the first narrow measurement.
 //
 // ── English, deliberately ───────────────────────────────────────────────────
 // The operation's own text — summary, description, parameter descriptions,
@@ -46,12 +54,19 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
 
       {operation.parameters.length > 0 && (
         <>
-          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+          <h3
+            id={`${operation.id}-request`}
+            className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+          >
             {t('sectionRequest')}
           </h3>
           {/* The table scrolls in its own container for the same reason the code
-              blocks do — three columns of prose do not fit a phone. */}
-          <div className="mb-4 min-w-0 overflow-x-auto">
+              blocks do — three columns of prose do not fit a phone. The heading
+              above it is what NAMES the region when it becomes a focus stop. */}
+          <ScrollableRegion
+            labelledBy={`${operation.id}-request`}
+            className={`mb-4 min-w-0 overflow-x-auto ${SCROLLABLE_REGION_FOCUS}`}
+          >
             <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr>
@@ -87,7 +102,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
                 ))}
               </tbody>
             </table>
-          </div>
+          </ScrollableRegion>
         </>
       )}
 
@@ -109,10 +124,16 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
         <CodeBlock caption="curl" code={operation.example} copyable />
       </div>
 
-      <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+      <h3
+        id={`${operation.id}-responses`}
+        className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
+      >
         {t('sectionResponses')}
       </h3>
-      <div className="mb-4 min-w-0 overflow-x-auto">
+      <ScrollableRegion
+        labelledBy={`${operation.id}-responses`}
+        className={`mb-4 min-w-0 overflow-x-auto ${SCROLLABLE_REGION_FOCUS}`}
+      >
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
@@ -137,7 +158,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
             ))}
           </tbody>
         </table>
-      </div>
+      </ScrollableRegion>
 
       {operation.responseBody && (
         <>
