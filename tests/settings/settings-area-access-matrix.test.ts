@@ -8,8 +8,8 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import {
   PROJECT_SETTINGS_NAV,
+  hasVisibleSettingsArea,
   visibleSettingsNav,
-  type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
 import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
@@ -21,9 +21,14 @@ import { truncateAuthTables } from '../helpers/db';
 // (`tests/settings/projectSettingsNav.test.ts`) pins the registry's pure
 // predicates in isolation; this suite proves the chain the area actually runs:
 //
-//     seeded 6.4 role  →  projectAccessService.getSettingsCapabilities  →
-//     the registry's per-entry `access` predicate  →  the visible nav + the
+//     seeded 6.4 role  →  projectAccessService.getPermissions  →
+//     the registry's per-entry `permission` key  →  the visible nav + the
 //     page-level gate
+//
+// ⚠️ RE-POINTED BY MOTIR-2468. The chain used to run through
+// `getSettingsCapabilities` and a two-boolean predicate; it now runs through the
+// actor's resolved PERMISSION SET, because two bits cannot express a role that
+// holds one administrative domain and not another.
 //
 // agree end-to-end with the 6.4.3 policy, for every (access level × role). It is
 // DRIVEN from the registry — it asserts each `PROJECT_SETTINGS_NAV` entry's
@@ -225,52 +230,44 @@ describe('settings-area role-gating matrix — nav visibility (driven from the r
       });
 
       for (const role of ROLES) {
-        it(`${role} — every registry entry's visibility equals its predicate on the real caps`, async () => {
-          const caps = await projectAccessService.getSettingsCapabilities(
+        it(`${role} — every registry entry's visibility equals its key on the real resolved set`, async () => {
+          const held = await projectAccessService.getPermissions(
             scenario.projectId,
             scenario.ctxs[role],
           );
-          const navCaps: SettingsNavCapabilities = {
-            canBrowse: caps.canBrowse,
-            canManage: caps.canManage,
-          };
-          const visible = visibleSettingsNav(navCaps);
+          const visible = visibleSettingsNav(held);
           const visibleIds = new Set(visible.map((e) => e.id));
 
-          // Drift-proof: assert PER entry that visibility === the entry's own
-          // predicate applied to the actor's real, seeded capabilities. A new
-          // entry — or one with a new predicate (a `canManage` Story-6.6 row) —
-          // is covered automatically, with no matrix edit.
+          // Drift-proof: assert PER entry that visibility === whether the actor
+          // really holds that entry's declared key, over the REAL seeded role.
+          // A new entry is covered the moment it lands, with no matrix edit.
           for (const entry of PROJECT_SETTINGS_NAV) {
-            expect(visibleIds.has(entry.id)).toBe(entry.access(navCaps));
+            expect(visibleIds.has(entry.id)).toBe(held.has(entry.permission));
           }
         });
 
-        it(`${role} — no nav leak / no orphan page (visible nav ⟺ browsable)`, async () => {
-          const caps = await projectAccessService.getSettingsCapabilities(
+        it(`${role} — no nav leak / no orphan page, and the AREA DOOR follows the rows`, async () => {
+          const held = await projectAccessService.getPermissions(
             scenario.projectId,
             scenario.ctxs[role],
           );
-          const visible = visibleSettingsNav({
-            canBrowse: caps.canBrowse,
-            canManage: caps.canManage,
-          });
-          // The whole area gates on browse: a non-browser sees NOTHING (no nav
-          // leak). A browser sees every entry whose own access predicate it
-          // satisfies — the full nav for an admin, but minus the ADMIN-ONLY
-          // entries for a browse-only member/viewer. Story 6.6's Automation
-          // entry is the first admin-gated one (`access: manage`), so pin the
-          // split explicitly: an admin sees all; a non-admin browser sees all
-          // EXCEPT Automation — neither a leak nor an orphan can slip past.
-          if (!caps.canBrowse) {
-            expect(visible).toEqual([]);
-          } else if (caps.canManage) {
+          const visible = visibleSettingsNav(held);
+
+          // ⚠️ THE SPLIT MOVED (MOTIR-2468). It used to be browse-vs-manage: a
+          // non-admin browser saw every entry except Automation. Every entry now
+          // gates on an administrative key its destination actually asserts, so
+          // the split is administer-vs-not: an actor holding `project:administer`
+          // (a project admin, or the workspace owner/admin always-pass tier) sees
+          // the whole rail; everyone else sees NOTHING.
+          if (held.has('project:administer')) {
             expect(visible).toEqual(PROJECT_SETTINGS_NAV);
           } else {
-            expect(visible).toEqual(
-              PROJECT_SETTINGS_NAV.filter((entry) => entry.id !== 'automation'),
-            );
+            expect(visible).toEqual([]);
           }
+
+          // And the DOOR agrees with the ROWS — an actor is never handed a link
+          // into an area that renders an empty rail (design panel 1).
+          expect(hasVisibleSettingsArea(held)).toBe(visible.length > 0);
         });
       }
     });

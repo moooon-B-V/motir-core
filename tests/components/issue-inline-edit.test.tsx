@@ -261,7 +261,7 @@ describe('Inline row edits (Subtask 2.5.5)', () => {
 describe('read-only inline cells (Story 6.4.6)', () => {
   function renderGated(canEdit: boolean) {
     return render(
-      <ProjectAccessProvider canEdit={canEdit}>
+      <ProjectAccessProvider permissions={canEdit ? ['work_item:edit'] : []}>
         <IssueListTable
           rows={[row({ identifier: 'PROD-1', id: 'wi_1', status: 'todo', statusLabel: 'To Do' })]}
           sort={{ column: 'key', direction: 'asc' }}

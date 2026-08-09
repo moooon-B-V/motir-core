@@ -32,7 +32,7 @@ import {
 // detail header, list rows, and board cards. The shipped `Popover` (no
 // hand-rolled menu), keyboard-operable. Order: `Edit details` · `Copy link` · —
 // · `Archive` · `Delete…`. Permission-gated, Jira-faithfully: `Edit`/`Archive`
-// need `canEdit`; `Delete` needs `canManage` (project admin). A user without a
+// need `canEdit`; `Delete` needs `canDelete`. A user without a
 // capability does NOT see that row (hidden, never shown-disabled); a viewer with
 // neither collapses to just `Copy link`. Delete is the only danger-coloured row
 // and opens the 2.8.4 confirm dialog; Archive (reversible) runs inline with an
@@ -63,7 +63,7 @@ export function WorkItemActionsMenu({
   identifier,
   title,
   canEdit,
-  canManage,
+  canDelete,
   archived = false,
   onDeleted,
   onArchived,
@@ -83,7 +83,19 @@ export function WorkItemActionsMenu({
   /** Edit + Archive/Restore gate (the project EDIT capability). */
   canEdit: boolean;
   /** Delete gate (the project-admin MANAGE capability). */
-  canManage: boolean;
+  /**
+   * Whether the actor may DELETE a work item — `work_item:delete`, the key
+   * `workItemsService.deleteWorkItem` (`:2267`) actually asserts.
+   *
+   * ⚠️ RENAMED FROM `canManage` BY MOTIR-2473, and the rename is the finding.
+   * It used to carry *administers the project* (`project:administer`), because
+   * when this menu was built there was no permission for deleting a work item.
+   * There has been one since MOTIR-2291, and it does not belong to the same
+   * people — the three built-in roles merely happen to make the two answers
+   * agree, which is the shape of a defect waiting for the feature that separates
+   * them.
+   */
+  canDelete: boolean;
   /**
    * ARCHIVED-item mode (Story 2.9 · Subtask 2.9.11). When true the `canEdit`
    * row is **Restore** (not Archive) and `Delete…` opens the archived confirm
@@ -357,7 +369,7 @@ export function WorkItemActionsMenu({
               {t('copyLink')}
             </button>
 
-            {canEdit || canManage ? (
+            {canEdit || canDelete ? (
               <div className="mx-1 my-1 h-px bg-(--el-border)" role="separator" />
             ) : null}
 
@@ -390,7 +402,7 @@ export function WorkItemActionsMenu({
               )
             ) : null}
 
-            {canManage ? (
+            {canDelete ? (
               <button
                 type="button"
                 role="menuitem"

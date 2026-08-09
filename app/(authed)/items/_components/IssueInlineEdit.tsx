@@ -112,7 +112,10 @@ export function IssueInlineEditProvider({
   // `if (!ctx) return <…Value/>` branch below). The whole inline-edit surface
   // goes read-only without touching the three mount sites. Defaults to editable
   // when there's no ProjectAccessProvider (non-shell / test mounts).
-  const { canEdit } = useProjectAccess();
+  // MOTIR-2473 — the key this control's own write asserts:
+  // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
   const acknowledgedRef = useRef<Map<string, string>>(new Map());
   const confirmedFieldsRef = useRef<Map<string, ConfirmedFieldEntry>>(new Map());
   const value = useMemo(() => {

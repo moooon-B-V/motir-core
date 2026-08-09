@@ -7,6 +7,7 @@ import { projectAccessService } from '@/lib/services/projectAccessService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectDetailsCard } from './_components/ProjectDetailsCard';
 import { BuildInPublicPromoCard } from './_components/BuildInPublicPromoCard';
+import { guardSettingsPage } from './_guard';
 
 // Project-settings AREA landing — the registry's `details` entry. Story 6.5 ·
 // 6.5.3 shipped this read-only; Story 6.8 · 6.8.4 grows it into the EDITABLE
@@ -37,6 +38,12 @@ export default async function ProjectSettingsPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `details`, never re-declared here.
+  const refused = await guardSettingsPage('details', ctx);
+  if (refused) return refused;
 
   const actorCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const [details, caps] = await Promise.all([

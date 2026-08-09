@@ -2283,10 +2283,6 @@
         "title": "No rules yet",
         "description": "Automate repetitive work — transition items, set fields, add watchers or comments when something happens. Rules run as their owner."
       },
-      "noAccess": {
-        "title": "Admins only",
-        "description": "Project automation is managed by project admins. Ask an admin if you need a rule changed."
-      },
       "row": {
         "enabledAria": "Enabled — {name}",
         "neverRun": "Never run",
@@ -2641,6 +2637,23 @@
         "title": "Public requests",
         "description": "Granted by the project’s access level, not by a role — which is why they are not a role in the list above. Every visitor of a public project holds all three, signed in or not; nobody holds them on an open, limited or private project, a workspace owner included.",
         "chip": "Access level"
+      }
+    },
+    "noAccess": {
+      "title": "Admins only",
+      "section": {
+        "details": "Project details, and the acts that change them — the name, the key, the avatar, archiving — are managed by project admins. Ask an admin if something here needs to change.",
+        "repositories": "Where this project's code lives, and who takes it over, is managed by project admins. Ask an admin if a repository needs connecting or moving.",
+        "members": "Who is on this project, and what each of them can do, is managed by project admins. Ask an admin if you need someone added or a role changed.",
+        "roles": "What each role in this project can do is managed by project admins. Ask an admin if a role needs changing.",
+        "code-access": "Who on this team can clone and push this project's code is managed by project admins. You can still connect your own GitHub account from Git settings.",
+        "workflow": "Statuses and the transitions between them are managed by project admins. Ask an admin if the workflow needs changing.",
+        "board": "Board configuration — columns, limits and swimlanes — is managed by project admins. Ask an admin if a column or a limit needs changing.",
+        "estimation": "How this project estimates work is managed by project admins. Ask an admin if the scale needs changing.",
+        "fields": "Custom fields are managed by project admins. Ask an admin if a field needs adding or changing.",
+        "components": "Components are managed by project admins. Ask an admin if one needs adding or changing.",
+        "ai-planning": "AI planning for this project — its cadence and its planner model — is configured by project admins. Ask an admin if it needs changing.",
+        "automation": "Project automation is managed by project admins. Ask an admin if you need a rule changed."
       }
     }
   },
