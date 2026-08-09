@@ -109,9 +109,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   //   * `canEdit` → the create-issue / report providers (Story 6.4.6):
   //     the affordances render disabled with a tooltip for a viewer / a member
   //     on a limited project.
-  //   * `{ canBrowse, canManage }` → SidebarNav's settings-nav registry filter
-  //     when the rail is in the project-settings area (a non-browser sees no nav
-  //     entry; admin-only entries — Story 6.6 — gate on canManage).
+  //   * the keys → SidebarNav's settings-nav registry filter (Subtask
+  //     MOTIR-2468): which rail entries render inside the project-settings area,
+  //     whether the bottom nav offers the AREA DOOR at all, and which ⌘K deep
+  //     links the palette offers. Each registry entry names the key its own
+  //     destination's server gate asserts.
   // No active project → there's nothing to edit (the affordances are hidden) and
   // no settings area to enter.
   //
@@ -139,9 +141,11 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
   // The project-admin MANAGE gate — the work-item ⋯ menu's Delete action (2.8.4)
   // consumes it via ProjectAccessProvider, mirroring deleteWorkItem's assertCanManage.
   const canManage = held.has('project:administer');
-  const settingsAccess = actorPermissions
-    ? { canBrowse: held.has('project:browse'), canManage }
-    : undefined;
+  // The keys the shell's registry-driven surfaces filter on (Subtask
+  // MOTIR-2468): the settings rail, its area door, and the ⌘K deep links. The
+  // ARRAY crosses to the client islands (a Set cannot); they rebuild the Set.
+  // `undefined` with no active project — there is no area to enter.
+  const settingsPermissions = actorPermissions?.permissions;
 
   // The single stateful build-in-public header slot (Story 6.17 · design
   // §6.17.6 · Panel 12), resolved server-side here so TopNav needs no client
@@ -247,7 +251,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       activeProject={activeProject}
                       projects={projects}
                       variant="rail"
-                      settingsAccess={settingsAccess}
+                      settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
                       aiConfigured={aiPlanningConfigured}
                     />
@@ -298,7 +302,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                     activeProject={activeProject}
                     projects={projects}
                     variant="drawer"
-                    settingsAccess={settingsAccess}
+                    settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
                     aiConfigured={aiPlanningConfigured}
                   />
@@ -313,7 +317,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   projects={projects}
                   activeProjectId={activeProject?.id ?? null}
                   hasProject={Boolean(activeProject)}
-                  settingsAccess={settingsAccess}
+                  settingsPermissions={settingsPermissions}
                   aiPlanningConfigured={aiPlanningConfigured}
                 />
 

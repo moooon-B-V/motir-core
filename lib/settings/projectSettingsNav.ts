@@ -13,6 +13,7 @@ import {
   Workflow,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // The project-settings navigation REGISTRY (Story 6.5 · Subtask 6.5.2) — ONE
 // typed entry per project-settings page. It is the single source that drives
@@ -45,15 +46,18 @@ export const SETTINGS_NAV_GROUP_ORDER: SettingsNavGroup[] = [
 ];
 
 /**
- * The actor capabilities a registry entry's `access` predicate decides over — a
- * subset of the shipped 6.4.3 policy (`projectAccessService.getSettingsCapabilities`).
- * Every current entry gates on `canBrowse` (a member VIEWS every section — the
- * design's role-states rule); `canManage` is threaded for the admin-only entries
- * a later story (6.6 Automation) will add, so the predicate shape never changes.
+ * The actor's resolved permission set, as the registry reads it (Story
+ * MOTIR-2258 · Subtask MOTIR-2468). `ProjectAccessProvider` carries the array
+ * across the server/client boundary; every consumer here wants membership tests,
+ * so it is a Set by the time it reaches `visibleSettingsNav`.
  */
-export interface SettingsNavCapabilities {
-  canBrowse: boolean;
-  canManage: boolean;
+export type SettingsNavPermissions = ReadonlySet<PermissionKey>;
+
+/** Build the membership-test form from the DTO's array (or any key list). */
+export function toSettingsNavPermissions(
+  keys: Iterable<PermissionKey> = [],
+): SettingsNavPermissions {
+  return new Set<PermissionKey>(keys);
 }
 
 export interface SettingsNavEntry {
@@ -66,8 +70,17 @@ export interface SettingsNavEntry {
   icon: LucideIcon;
   /** i18n key under the `settings` namespace (e.g. `nav.details`). */
   labelKey: string;
-  /** Visibility predicate over the actor's capabilities. */
-  access: (caps: SettingsNavCapabilities) => boolean;
+  /**
+   * The catalog permission this entry's DESTINATION requires — READ OFF that
+   * destination's own server gate, never inferred from the entry's name. A rail
+   * row that hides on a key the page does not check is a new bug wearing the
+   * shape of a fix, and it fails in the worst direction: it hides a room the
+   * actor could have used. Every pairing's evidence is in the table above.
+   *
+   * REQUIRED, so a settings page added later cannot ship an ungated door — the
+   * omission is a compile error, not a silently-visible entry.
+   */
+  permission: PermissionKey;
   /**
    * Active ONLY on an exact pathname match. Set for Details, whose href
    * (`/settings/project`) is a prefix of every sub-route — without this it would
@@ -105,9 +118,6 @@ export interface SettingsNavEntry {
 /** The project-settings root — the Details landing route. */
 export const PROJECT_SETTINGS_ROOT = '/settings/project';
 
-const browse = (caps: SettingsNavCapabilities): boolean => caps.canBrowse;
-const manage = (caps: SettingsNavCapabilities): boolean => caps.canManage;
-
 /**
  * The registry. Order within a group is the rail order. Routes are PRESERVED
  * (every existing settings URL resolves unchanged inside the area chrome); only
@@ -122,7 +132,14 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: PROJECT_SETTINGS_ROOT,
     icon: SlidersHorizontal,
     labelKey: 'nav.details',
-    access: browse,
+    // VERIFIED: the page resolves `projectAccessService.getManageCapabilities`,
+    // whose predicate is `project:administer`, and gates every editable
+    // affordance plus the danger zone on it. Details IS the project-level
+    // administration that belongs to no domain — rename, key, avatar, archive —
+    // so the key its own gate asserts is the right door key. A read-only Details
+    // for someone who can change nothing on it is exactly the treatment the
+    // 2026-08-08 amendment supersedes.
+    permission: 'project:administer',
     exact: true,
   },
   {
@@ -136,10 +153,14 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // it works` link, the billing panel's `Move repositories` button) are both
     // moments the user passes through; a `transfer_pending` that sits for days
     // has to be reachable from somewhere that is always there, which is what
-    // this row is (design/repository-set §14.4, door 3). Browse-gated like every
-    // General entry — a member SEES where the code lives; `projectAccessService`
-    // re-gates the takeover write itself.
-    access: browse,
+    // this row is (design/repository-set §14.4, door 3).
+    //
+    // VERIFIED: `projectRepoSetService` and `projectRepoTakeoverService` both
+    // assert `repository:manage`; the room's whole purpose is establishing and
+    // taking over the set. (Was browse-gated so "a member SEES where the code
+    // lives" — retired by the 2026-08-08 amendment, which supersedes read-only
+    // views of an administrative surface.)
+    permission: 'repository:manage',
   },
   {
     id: 'members',
@@ -147,7 +168,11 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/members',
     icon: Users,
     labelKey: 'nav.members',
-    access: browse,
+    // VERIFIED: `projectMembersService` asserts `member:manage` for the roster
+    // writes (and `project:manage_access` for the access level). `member:manage`
+    // is the one that makes the page useful at all — the access control is a
+    // single card on it.
+    permission: 'member:manage',
   },
   {
     id: 'roles',
@@ -164,10 +189,18 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // by activating a row — hence `nestedRoutes` rather than a second entry. The
     // rail keeps this row active on the detail screen (non-`exact` matching).
     //
-    // BROWSE-gated like every other Access entry: a member reads what the roles
-    // mean, they just cannot author one. Turning that into a permission
-    // predicate is MOTIR-2258's job, not this card's.
-    access: browse,
+    // A JUDGEMENT, not a lookup — the page has no write, so it asserts no key of
+    // its own (MOTIR-2468 owed this decision; the note that deferred it here is
+    // the paragraph this replaces). `member:manage`, for three reasons: the
+    // screen is the reference behind the Members screen's role picker; the
+    // catalog files `member:manage` and `project:manage_access` under the SAME
+    // `member` domain, which is the domain a role IS; and MOTIR-2257 adds role
+    // AUTHORING to this very screen, which is member-domain administration.
+    // The alternative considered and rejected: keeping it `project:browse`, so a
+    // member could read what their own role can do. Rejected because the parent
+    // story's own recipe requires a member to see no settings entries, and
+    // because "what may I do here" is a question the affordances answer in place.
+    permission: 'member:manage',
     nestedRoutes: ['/settings/project/roles/[roleKey]'],
   },
   {
@@ -183,10 +216,22 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // is what gives it a door that cannot silently disappear (the totality
     // test). BROWSE-gated on purpose — unlike the members pane, this one has
     // something a NON-admin can do: connect their own GitHub, which is the one
-    // action nobody can take on their behalf (ADR §3 Q3). The write is re-gated
-    // in projectRepoAccessService (edit), so the gate stays legible rather than
-    // the page vanishing.
-    access: browse,
+    // action nobody can take on their behalf (ADR §3 Q3).
+    //
+    // ⚠️ THAT COMMENT IS RETIRED, DELIBERATELY, AND IT IS THE CLOSEST CALL IN
+    // THIS FILE. VERIFIED: `projectRepoAccessService` asserts
+    // `repository:manage_access`, and the page's own source says a non-admin
+    // "sees the same data, plus the one action that is theirs alone: connecting
+    // their own GitHub". But that action does not live here — the page links out
+    // to `GITHUB_SETTINGS_PATH` (`/settings/workspace/github`), reached from the
+    // bottom nav's own `Git` row, which this story does not touch. So gating the
+    // row takes NOTHING a member could do; it takes a read-only view of who else
+    // has been invited, which is precisely what the 2026-08-08 amendment
+    // supersedes. Keeping it browse-gated would also make the story's headline
+    // unreachable: every actor who reaches this shell holds `project:browse`, so
+    // one browse-gated entry means the settings AREA door never disappears for
+    // anyone. Reversible in one line if the read-only matrix is judged worth it.
+    permission: 'repository:manage_access',
   },
   {
     id: 'workflow',
@@ -194,7 +239,10 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/workflow',
     icon: Workflow,
     labelKey: 'nav.workflow',
-    access: browse,
+    // VERIFIED: `workflowsService`'s module-private `assertProjectAdmin` asserts
+    // `workflow:manage` (the helper's NAME predates MOTIR-2256's split — reading
+    // the body rather than the name is the point, `notes.html` #231).
+    permission: 'workflow:manage',
   },
   {
     id: 'board',
@@ -202,7 +250,9 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/board',
     icon: Columns3,
     labelKey: 'nav.board',
-    access: browse,
+    // VERIFIED: `boardsService`'s module-private `assertBoardConfigAdmin` asserts
+    // `board:configure` — again a name that predates the split.
+    permission: 'board:configure',
   },
   {
     id: 'estimation',
@@ -210,7 +260,9 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/estimation',
     icon: Gauge,
     labelKey: 'nav.estimation',
-    access: browse,
+    // VERIFIED: `estimationService.assertEstimationAdmin` asserts
+    // `estimation:manage`.
+    permission: 'estimation:manage',
   },
   {
     id: 'fields',
@@ -218,7 +270,9 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/fields',
     icon: Tag,
     labelKey: 'nav.fields',
-    access: browse,
+    // VERIFIED: `customFieldsService`'s module-private `assertCanManage` asserts
+    // `field:manage`.
+    permission: 'field:manage',
   },
   {
     id: 'components',
@@ -226,7 +280,9 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     href: '/settings/project/components',
     icon: Box,
     labelKey: 'nav.components',
-    access: browse,
+    // VERIFIED: `componentsService`'s module-private `assertCanManage` asserts
+    // `component:manage`.
+    permission: 'component:manage',
   },
   {
     id: 'ai-planning',
@@ -243,7 +299,12 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // The entry lights BOTH doors at once — the settings rail row AND the ⌘K
     // deep link (`settings-ai-planning`) — and keeps the route↔registry
     // totality test green.
-    access: browse,
+    //
+    // VERIFIED: `projectAiSettingsService.updateAiSettings` asserts
+    // `ai:configure`. (Was browse-gated so "a non-admin reads it read-only" —
+    // retired by the 2026-08-08 amendment. `ai:plan`, which a member DOES hold,
+    // gates running the planner, not configuring it.)
+    permission: 'ai:configure',
   },
   {
     id: 'automation',
@@ -255,7 +316,12 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // (the verified Jira scope — no member/viewer read-only variant). The entry,
     // the page, and every route gate on the shipped 6.4.3 manage-project
     // predicate, so a non-admin never sees the nav row.
-    access: manage,
+    //
+    // VERIFIED, and the only entry already correct before this card: the PAGE
+    // itself reads `getPermissions` and returns the no-access state unless
+    // `held.has('automation:manage')`, and `automationRulesService` asserts the
+    // same key. The row now names what the page already checks.
+    permission: 'automation:manage',
   },
 ];
 
@@ -295,15 +361,34 @@ export function isSettingsEntryActive(entry: SettingsNavEntry, pathname: string)
 }
 
 /**
- * The entries visible to an actor with the given capabilities. Placeholders and
- * real entries alike gate on their `access` predicate, so a role without browse
- * access sees NOTHING (the whole area filters away — no nav leak).
+ * The entries visible to an actor holding `held`. Placeholders and real entries
+ * alike gate on their declared `permission`, so an actor holding no
+ * administrative key sees NOTHING — the whole area filters away, no nav leak.
+ *
+ * ⚠️ HIDING IS PRESENTATION, NEVER ENFORCEMENT. A row this drops is still
+ * reachable by URL; what refuses it is the destination's own guard (MOTIR-2469)
+ * and, behind that, the service gate whose key the entry names. Do not read a
+ * filtered rail as a security boundary.
  */
 export function visibleSettingsNav(
-  caps: SettingsNavCapabilities,
+  held: SettingsNavPermissions,
   entries: SettingsNavEntry[] = PROJECT_SETTINGS_NAV,
 ): SettingsNavEntry[] {
-  return entries.filter((entry) => entry.access(caps));
+  return entries.filter((entry) => held.has(entry.permission));
+}
+
+/**
+ * Whether the project-settings AREA has anything behind it for this actor — the
+ * predicate the shell's **Project settings** door gates on (design panel 1).
+ *
+ * A per-entry filter does not cover this on its own: filtering all twelve
+ * entries away leaves a perfectly valid EMPTY rail behind a perfectly valid
+ * link, which is a door onto a corridor. Expressed here, beside the filter it
+ * quantifies over, so the door and the rows can never disagree about what the
+ * area contains.
+ */
+export function hasVisibleSettingsArea(held: SettingsNavPermissions): boolean {
+  return PROJECT_SETTINGS_NAV.some((entry) => held.has(entry.permission));
 }
 
 /**

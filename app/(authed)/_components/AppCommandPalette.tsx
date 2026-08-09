@@ -27,9 +27,10 @@ import { useTheme } from '@/lib/contexts/theme-context';
 import { signOut } from '@/lib/auth/client';
 import {
   PROJECT_SETTINGS_ROUTES,
+  toSettingsNavPermissions,
   visibleSettingsNav,
-  type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/accountSettingsNav';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
@@ -70,11 +71,12 @@ export interface AppCommandPaletteProps {
    *  (MOTIR-1299). */
   aiPlanningConfigured?: boolean;
   /**
-   * The actor's settings-area capabilities (Subtask 6.5.2) — filters the
+   * The actor's resolved permission keys (Subtask MOTIR-2468) — filters the
    * per-section project-settings deep links to the ones they can open. Omitted
-   * when there's no active project (no settings sections are shown).
+   * when there's no active project (no settings sections are shown); an absent
+   * value defaults CLOSED, so a missing prop never leaks a deep link.
    */
-  settingsAccess?: SettingsNavCapabilities;
+  settingsPermissions?: readonly PermissionKey[];
 }
 
 export function AppCommandPalette({
@@ -83,7 +85,7 @@ export function AppCommandPalette({
   projects,
   activeProjectId,
   hasProject,
-  settingsAccess,
+  settingsPermissions,
   aiPlanningConfigured = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
@@ -278,8 +280,8 @@ export function AppCommandPalette({
   // registry (Subtask 6.5.2), filtered by the actor's access. A new settings page
   // appears here automatically by adding a registry entry (no hand-kept list).
   if (hasProject) {
-    const caps: SettingsNavCapabilities = settingsAccess ?? { canBrowse: false, canManage: false };
-    const settingsEntries = visibleSettingsNav(caps, PROJECT_SETTINGS_ROUTES);
+    const held = toSettingsNavPermissions(settingsPermissions);
+    const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES);
     if (settingsEntries.length > 0) {
       groups.push({
         heading: ts('nav.eyebrow'),
