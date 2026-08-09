@@ -262,8 +262,7 @@ export default defineConfig({
         MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
         MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
         MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.blob.vercel-storage.com',
-        BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
+        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
         // PRODECT_FINDINGS #8: hand the dev server the same origin Playwright
         // drives. lib/baseUrl.ts resolves MOTIR_BASE_URL, and lib/auth/index.ts
         // uses that as both its baseURL and a trustedOrigins entry, so this is

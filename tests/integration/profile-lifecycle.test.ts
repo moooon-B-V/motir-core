@@ -1,4 +1,4 @@
-import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { InvalidEmailChangeTokenError } from '@/lib/users/errors';
@@ -31,20 +31,26 @@ import { captureEmailEvents } from '../helpers/jobs';
 
 const PASSWORD = 'lifecycle-pass-1';
 const NEW_PASSWORD = 'lifecycle-pass-2';
-// Our public blob host — the own-avatar gate accepts `/avatars/<userId>/…` here
-// (the URL `profile-service.test.ts` proves passes `updateProfile`'s gate). A
-// FIRST set (no prior avatar) triggers no blob GC, so no blob adapter is needed.
-const BLOB_HOST = 'teststore.public.blob.vercel-storage.com';
-const ownAvatar = (userId: string, name: string) =>
-  `https://${BLOB_HOST}/avatars/${userId}/${name}`;
+const PUBLIC_BASE = 'https://s3.test.invalid/motir-public';
+// What `User.image` holds for our own avatars since MOTIR-2404: a bare object
+// KEY under the owning user's prefix, which is the form `updateProfile`'s gate
+// accepts (proved per-arm in `profile-service.test.ts`). A FIRST set (no prior
+// avatar) triggers no blob GC, so no blob adapter is needed.
+const ownAvatar = (userId: string, name: string) => `avatars/${userId}/${name}`;
+/** What the consumer DTO carries for that key: resolved against the public base. */
+const resolvedAvatar = (key: string) => `${PUBLIC_BASE}/${key}`;
 
 let emailEvents: ReturnType<typeof captureEmailEvents>;
 
 beforeEach(async () => {
+  vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', PUBLIC_BASE);
   await truncateAuthTables();
   emailEvents = captureEmailEvents();
 });
-afterEach(() => emailEvents.restore());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  emailEvents.restore();
+});
 afterAll(async () => {
   await db.$disconnect();
 });
@@ -77,7 +83,7 @@ describe('profile feature — story-level integration (8.8.25)', () => {
       id: user.id,
       name: 'Ada Lovelace',
       email: 'old@example.com',
-      image: avatar,
+      image: resolvedAvatar(avatar),
     });
 
     // (2) EMAIL (8.8.22): request → the confirm email is enqueued AFTER commit
@@ -95,7 +101,7 @@ describe('profile feature — story-level integration (8.8.25)', () => {
       id: user.id,
       name: 'Ada Lovelace',
       email: 'new@example.com',
-      image: avatar,
+      image: resolvedAvatar(avatar),
     });
 
     // (3) PASSWORD (8.8.23) on the RE-KEYED credential: email-change re-keyed the

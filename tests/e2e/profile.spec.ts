@@ -108,7 +108,7 @@ test.describe('profile — the Account › Profile pane journey', () => {
     // Fulfil the browser-side read of the returned blob URL (the server-side
     // put is mocked by E2E_TEST_BLOB; this is the attachments-spec seam so the
     // <img> actually paints rather than rendering broken).
-    await page.route(/\.public\.blob\.vercel-storage\.com\//, (route) =>
+    await page.route(/\.public\.store\.invalid\//, (route) =>
       route.fulfill({ status: 200, contentType: 'image/png', body: PNG_1x1 }),
     );
 
@@ -128,7 +128,7 @@ test.describe('profile — the Account › Profile pane journey', () => {
 
     const avatar = main(page).getByRole('img', { name: 'Your avatar' });
     await expect(avatar).toBeVisible();
-    await expect(avatar).toHaveAttribute('src', /\.public\.blob\.vercel-storage\.com\/avatars\//);
+    await expect(avatar).toHaveAttribute('src', /\.public\.store\.invalid\/avatars\//);
     await expect(page.getByText('Photo updated', { exact: true })).toBeVisible();
 
     // Persisted across reload (the user row's `image` column).

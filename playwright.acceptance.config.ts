@@ -190,8 +190,7 @@ export default defineConfig({
         MOTIR_S3_SECRET_ACCESS_KEY: 'e2e-playwright-only-placeholder-secret',
         MOTIR_S3_PRIVATE_BUCKET: 'motir-e2e-private',
         MOTIR_S3_PUBLIC_BUCKET: 'motir-e2e-public',
-        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.blob.vercel-storage.com',
-        BLOB_READ_WRITE_TOKEN: 'vercel_blob_rw_e2etest_playwright_only_placeholder',
+        MOTIR_S3_PUBLIC_BASE_URL: 'https://e2etest.public.store.invalid',
         // Cloud billing + the motir-ai boundary mock (the billing-lane vocabulary).
         MOTIR_CLOUD: 'true',
         E2E_TEST_BILLING: '1',

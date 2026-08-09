@@ -481,15 +481,24 @@ here).
   `machine_count` **from the platform** (Q5, Q6). It also takes the first memory
   reading that §10's VM-size trigger depends on.
 - **MOTIR-2393 (deleting the abandoned path)** — deletes `@vercel/blob`, the
-  `VERCEL_*` and `BLOB_*` reads, `vercel.json` and
-  `cleanup-preview-deployments.yml`. Q4 is why the preview-cleanup workflow goes:
-  it reaps something that no longer exists.
+  `VERCEL_*` and `BLOB_*` reads and `cleanup-preview-deployments.yml`. Q4 is why
+  the preview-cleanup workflow goes: it reaps something that no longer exists.
+  **`vercel.json` is NOT in that set, and the exception is load-bearing:** it is
+  not a client of the old platform but the MUZZLE on it — its
+  `git.deploymentEnabled: false` plus the `ignoreCommand` are the only things
+  stopping the still-connected Vercel Git integration from building every branch.
+  Deleting it while the project lives re-enables a caller instead of removing
+  one (measured on motir-core#1983: with the file gone, Vercel built the branch
+  and the deploy failed on the 250 MB function-size limit — the same packaging
+  wall §"What is lost" describes). So it goes with the project, in MOTIR-2508,
+  which is `blocked_by` MOTIR-2396.
 - **MOTIR-2394 / MOTIR-2395 (the Story's tests)** — the no-Vercel-import guard is
   an exact set because Q1 leaves no legitimate Vercel import; the blob seam is
   exercised through its real consumers because Q2 changes semantics behind an
   unchanged signature.
 - **MOTIR-2396 (retirement)** — ends the rollback. Q4 is the reason there is no
-  preview workload left on Vercel to strand.
+  preview workload left on Vercel to strand. **MOTIR-2508** follows it and
+  deletes `vercel.json`, which cannot go before the project it silences.
 
 ---
 
