@@ -1095,9 +1095,20 @@ describe('system.code-graph-refresh runs on the INDEX FLEET', () => {
 
     expect(indexRun.result).toEqual({ indexed: true, repoRef: REPO_REF, projectsIndexed: 2 });
     expect(refreshRun.result).toEqual(indexRun.result);
+    // ⚠️ THE PARITY IS OVER THE FLEET PATH, and `derive-first-audit` is the ONE
+    // step deliberately outside it (MOTIR-2266). It hangs off
+    // `system.code-graph-index` alone because `docs/decisions/audit-on-first-index.md`
+    // §4 decides the FIRST audit and leaves "refresh the audit on a re-index"
+    // open — a step in the SHARED `runIndexFleetSteps` would have answered that
+    // by accident. Filtering it by NAME keeps the guard's whole point intact: any
+    // OTHER step added to one job and not the other still fails here.
+    const FIRST_AUDIT_STEP = 'derive-first-audit';
     const shapeOf = (ctx: Parameters<typeof stepIds>[0]) =>
-      stepIds(ctx).filter((id) => !id.startsWith('job-run:'));
+      stepIds(ctx).filter((id) => !id.startsWith('job-run:') && id !== FIRST_AUDIT_STEP);
     expect(shapeOf(refreshRun.ctx)).toEqual(shapeOf(indexRun.ctx));
+    // …and the divergence is real and one-directional: only the index job fires it.
+    expect(stepIds(indexRun.ctx)).toContain(FIRST_AUDIT_STEP);
+    expect(stepIds(refreshRun.ctx)).not.toContain(FIRST_AUDIT_STEP);
 
     // And the difference between them stays exactly one thing: the first index
     // must run PROMPTLY on install, so it must never grow a debounce window.

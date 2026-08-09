@@ -16,14 +16,6 @@ export type PermissionMarkKind = 'held' | 'withheld' | 'level';
 
 const GLYPH = { held: Check, withheld: Minus, level: Eye } as const;
 
-// The mark's ink. `--el-success` for held; `--el-text-faint` for the two that
-// are not a grant this role carries — quiet, but never invisible.
-const INK = {
-  held: 'text-(--el-success)',
-  withheld: 'text-(--el-text-faint)',
-  level: 'text-(--el-text-faint)',
-} as const;
-
 export function PermissionMark({ kind, label }: { kind: PermissionMarkKind; label: string }) {
   const Glyph = GLYPH[kind];
   return (
@@ -31,7 +23,14 @@ export function PermissionMark({ kind, label }: { kind: PermissionMarkKind; labe
       role="img"
       aria-label={label}
       data-mark={kind}
-      className={`flex items-center justify-center self-center ${INK[kind]}`}
+      // The mark's ink: `--el-success` for held; `--el-text-faint` for the two
+      // that are not a grant this role carries — quiet, but never invisible.
+      // It is written HERE rather than in a lookup table so the ink guard can
+      // see it lands on a labelled `role="img"`, which is what makes a faint
+      // glyph legitimate (MOTIR-2475).
+      className={`flex items-center justify-center self-center ${
+        kind === 'held' ? 'text-(--el-success)' : 'text-(--el-text-faint)'
+      }`}
     >
       <Glyph aria-hidden="true" className="h-[15px] w-[15px]" />
     </span>

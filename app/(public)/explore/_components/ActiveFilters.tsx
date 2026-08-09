@@ -38,7 +38,7 @@ export async function ActiveFilters({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-semibold text-(--el-text-faint)">{t('activeLabel')}</span>
+      <span className="text-xs font-semibold text-(--el-text-secondary)">{t('activeLabel')}</span>
       {query.search ? (
         <span className={`${PILL} bg-(--el-tint-sky)`}>
           <Search className="h-3 w-3" aria-hidden />

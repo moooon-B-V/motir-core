@@ -100,7 +100,7 @@ export default async function McpGuidePage() {
                 {client.label}
               </h3>
               <CodeBlock caption={client.file} code={client.config} copyable />
-              <p className="mt-1.5 max-w-[68ch] text-[12px] leading-relaxed text-(--el-text-faint)">
+              <p className="mt-1.5 max-w-[68ch] text-[12px] leading-relaxed text-(--el-text-secondary)">
                 <DocInline text={client.note} /> ·{' '}
                 <a
                   className="text-(--el-link) underline"
@@ -168,7 +168,7 @@ export default async function McpGuidePage() {
 function StepHeading({ index, title }: { index: number; title: string }) {
   return (
     <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-      <span className="mr-2 font-mono text-(--el-text-faint)">{index}</span>
+      <span className="mr-2 font-mono text-(--el-text-secondary)">{index}</span>
       {title}
     </h2>
   );

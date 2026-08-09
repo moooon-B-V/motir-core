@@ -42,7 +42,9 @@ export async function PublicWorkItemCard({
     >
       <div className="mb-1.5 flex items-center gap-2">
         <IssueTypeIcon type={item.kind} className="h-4 w-4" />
-        <span className="font-mono text-[11.5px] text-(--el-text-faint)">{item.identifier}</span>
+        <span className="font-mono text-[11.5px] text-(--el-text-secondary)">
+          {item.identifier}
+        </span>
       </div>
       <div className="text-[13.5px] font-semibold leading-snug text-(--el-text)">{item.title}</div>
       <div className="mt-2 flex items-center gap-2">

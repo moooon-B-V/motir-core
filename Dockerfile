@@ -62,9 +62,33 @@ RUN pnpm prisma generate \
 # set at build time, by design) or, worse, migrate whatever database the builder
 # could reach. `prisma generate` is already done, one step up.
 #
-# The build needs OAuth/auth values only to satisfy module-load `requiredEnv`
-# checks during page-data collection; next.config.ts seeds placeholders for
-# non-prod. DATABASE_URL is read at RUNTIME.
+# ⚠️ DATABASE_URL IS READ AT BUILD TIME TOO — not only at runtime, which is what
+# this comment used to claim and what cost the first deploy (MOTIR-2490). Next's
+# page-data collection EVALUATES each route's module graph, so a route that
+# imports `@/lib/auth` or a service reaches `lib/db.ts` and its module-load
+# `requiredEnv('DATABASE_URL')`, which throws before any request exists.
+# `app/(public)/p/[identifier]/opengraph-image.tsx` is one such route, and the
+# build died on it with "Failed to collect page data".
+#
+# It never surfaced on Vercel because every build there ran with the project's
+# real environment. This image is the first build in the repo's history that
+# runs without one — and NOTHING in PR CI builds it, so the post-merge deploy is
+# where a regression here shows up.
+#
+# The placeholders below exist ONLY to satisfy those module-load checks. Nothing
+# connects to them: the routes collected here are dynamic (no
+# generateStaticParams), so no query runs at build time. `runner` is a separate
+# FROM, so none of this reaches the running image — the real values arrive as Fly
+# secrets at runtime.
+#
+# They are set HERE rather than left to next.config.ts's seeding, which is
+# guarded by `NODE_ENV !== 'production'` — a condition an image build does not
+# reliably satisfy. Depending on that guard is what produced MOTIR-2490.
+ENV DATABASE_URL="postgresql://build:build@127.0.0.1:5432/build" \
+    DATABASE_URL_UNPOOLED="postgresql://build:build@127.0.0.1:5432/build" \
+    GOOGLE_CLIENT_ID="build-time-placeholder-client-id" \
+    GOOGLE_CLIENT_SECRET="build-time-placeholder-client-secret" \
+    BETTER_AUTH_SECRET="build-time-placeholder-secret-32-bytes-minimum"
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN pnpm exec next build
 

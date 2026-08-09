@@ -47,7 +47,9 @@ export function PlanPreview({ epics }: { epics: RoadmapLevelItem[] }) {
                 className="size-2 shrink-0 rounded-full bg-(--el-type-epic)"
                 aria-hidden="true"
               />
-              <span className="font-mono text-[10px] text-(--el-text-faint)">{e.identifier}</span>
+              <span className="font-mono text-[10px] text-(--el-text-secondary)">
+                {e.identifier}
+              </span>
             </div>
             <span className="mt-1 line-clamp-2 block text-xs font-semibold text-(--el-text)">
               {e.title}

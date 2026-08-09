@@ -44,7 +44,7 @@ export async function ExploreFooter({
       </div>
 
       <div className="min-w-0">
-        <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+        <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('footExploreByTopic')}
         </h2>
         <ul className="flex flex-col gap-1.5">
@@ -73,7 +73,7 @@ export async function ExploreFooter({
       </div>
 
       <div className="min-w-0">
-        <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+        <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('footProduct')}
         </h2>
         <ul className="flex flex-col gap-1.5 text-[13px] text-(--el-text-muted)">
@@ -90,7 +90,7 @@ export async function ExploreFooter({
       </div>
 
       <div className="min-w-0">
-        <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+        <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('footCompany')}
         </h2>
         <ul className="flex flex-col gap-1.5 text-[13px] text-(--el-text-muted)">

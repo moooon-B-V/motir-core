@@ -1,0 +1,2188 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>
+      Design mock · The permission-gated shell — the door that is not there (Story MOTIR-2258 ·
+      MOTIR-2464)
+    </title>
+    <!--
+      DESIGN ASSET (HTML mockup) for the PERMISSION-GATED SHELL — Story MOTIR-2258,
+      subtask MOTIR-2464.
+
+      WHAT THIS DRAWS: absence. Six sibling cards in this story each REMOVE something
+      from the shell, and removing a row is harder to specify than adding one — every
+      hole has to be decided (does the gap close up, does anything acknowledge it, does
+      the group heading above it survive). Drawn once here so six cards do not each
+      answer those questions differently.
+
+      THE RULE IS NOT THIS ASSET'S. Every treatment below traces to a row of the
+      treatment table in `design/projects/design-notes.md` §
+      "Amendment 2026-08-08 — hide the entry point, disable the in-place control, guard
+      the destination" (subtask MOTIR-2462). This asset draws that table; it does not
+      restate it and it must not invent a treatment the table does not carry. A
+      treatment this asset needs and the table lacks is a gap in the DECISION.
+
+      COMPOSES, DOES NOT REDRAW:
+        • `design/projects/settings-area.mock.html` (Subtask 6.5.1) — the settings rail,
+          its groups, its rows, the back-to-project head. The token block below and the
+          `.rail` / `.grp` / `.nav-row` rules are copied from it 1:1 so this asset shows
+          THE SAME rail with entries removed, in the same chrome. A second rail
+          specification would be built twice and drift.
+        • `design/shell/desktop.pen` + `design/shell/desktop-collapsed.pen` — the app
+          shell and its project nav; `design/shell/cmd-k.pen` — the palette.
+      Neither is redesigned here.
+
+      BUILT FROM THE REAL DESIGN SYSTEM: the token block is copied 1:1 from
+      `app/globals.css` (Tier-0 --color-* + Tier-3 --el-* + the shape tokens incl. the
+      --el-sidebar-* shell tokens) by way of the 6.5.1 asset, and the markup composes
+      ONLY shipped primitives — Sidebar / SidebarNav (components/ui/Sidebar.tsx),
+      EmptyState (components/ui/EmptyState.tsx) via `NoAccessState`
+      (components/projects/NoAccessState.tsx), Card, Button, Pill, Tooltip.
+
+      ⚠️ INK: `--el-text-faint` measures 2.39:1 on white and FAILS AA (MOTIR-2455,
+      confirmed by the MOTIR-2459 scanner). It appears in this file ONLY on the mock's
+      own review chrome (the panel labels, which are not product surface) and never on
+      product text. Every secondary string inside a stage is `--el-text-secondary`
+      (6.80:1) — never `--el-text-muted` on a tinted surface, which is 4.12–4.34:1.
+
+      Toggle `data-theme="dark"` on <html> (the button, top right) to confirm token
+      parity — there is no hardcoded colour in any product element below.
+    -->
+    <style>
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fbf0c4;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-info: #0075de;
+        --color-link: #0075de;
+        --el-sidebar-item-bg-hover: #eeede9;
+
+        /* Shape tokens — the [data-display-style] swap layer (default / 'default' values) */
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-control: 6px;
+        --radius-badge: 9999px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.06);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px rgba(15, 15, 15, 0.18);
+        --spacing-card-padding: 24px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 12px;
+        --spacing-input-y: 8px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-input: 44px;
+        --height-control: 36px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        /* Tier 3 — semantic element tokens (the layer components consume) */
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-hairline);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-stone);
+        --el-link: var(--color-link);
+        --el-accent: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-highlight: var(--color-accent);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive);
+        --el-info: var(--color-info);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-epic: var(--color-accent);
+        --el-type-story: var(--color-accent-green);
+        --el-type-task: var(--color-info);
+        --el-type-bug: var(--color-destructive);
+        --el-type-subtask: var(--color-accent-teal);
+
+        /* Shell — sidebar tokens (app/globals.css §App shell, Subtask 1.5.2) */
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-active: var(--color-background);
+
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #1f1f1f;
+        --color-hairline-strong: #3a3a3a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #332d12;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+        --shadow-subtle: 0 1px 2px rgba(0, 0, 0, 0.4);
+        --shadow-card: 0 2px 8px rgba(15, 15, 15, 0.06);
+        --shadow-elevated: 0 6px 20px rgba(15, 15, 15, 0.1);
+        --shadow-modal: 0 16px 48px rgba(0, 0, 0, 0.6);
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 6px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+        max-width: 860px;
+        line-height: 1.55;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+        flex: none;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      /* The review page's own label ink. NOT product surface — `--el-text-faint`
+         is legal here and nowhere inside a `.stage`. */
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 46px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label span {
+        color: var(--el-text-secondary);
+        text-transform: none;
+        letter-spacing: 0;
+        font-weight: 500;
+      }
+      .stage {
+        position: relative;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .legend {
+        max-width: 1180px;
+        margin: 10px auto 0;
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .legend code,
+      .review-head code {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        background: var(--el-muted);
+        padding: 1px 5px;
+        border-radius: var(--radius-control);
+      }
+      .legend b {
+        color: var(--el-text);
+      }
+      .duo {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+      }
+      .duo > * + * {
+        border-left: 1px solid var(--el-border);
+      }
+      .state-cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .state-cap .who {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--el-text-strong);
+        background: var(--el-tint-lavender);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        border-radius: var(--radius-badge);
+      }
+      .state-cap .who.viewer {
+        background: var(--el-tint-mint);
+      }
+      .state-cap .who.member {
+        background: var(--el-tint-sky);
+      }
+      .state-cap .who.custom {
+        background: var(--el-tint-peach);
+      }
+
+      /* ── The rail (COPIED from design/projects/settings-area.mock.html) ──── */
+      .rail {
+        flex: none;
+        width: 248px;
+        background: var(--el-sidebar-bg);
+        border-right: 1px solid var(--el-sidebar-border);
+        padding: 14px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-height: 430px;
+      }
+      .rail.bare {
+        border-right: 0;
+      }
+      .rail-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .back {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+      }
+      .back svg {
+        width: 16px;
+        height: 16px;
+      }
+      .proj {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px var(--spacing-control-x) 2px;
+      }
+      .proj .pav {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: var(--radius-control);
+        background: var(--el-type-task);
+        color: var(--el-accent-text);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .proj .pname {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .proj .pkey {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+      }
+      .grp {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .grp + .grp {
+        margin-top: 12px;
+      }
+      .grp-label {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        color: var(--el-text-secondary);
+        padding: 0 var(--spacing-control-x);
+        margin-bottom: 2px;
+      }
+      .nav-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+      .nav-row .ni {
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-secondary);
+      }
+      .nav-row .ni svg {
+        width: 18px;
+        height: 18px;
+      }
+      .nav-row .nl {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .nav-row.active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 500;
+        border-color: var(--el-sidebar-border);
+        box-shadow: var(--shadow-subtle);
+      }
+      .nav-row.active .ni {
+        color: var(--el-accent);
+      }
+      .rail-foot {
+        margin-top: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding-top: 12px;
+        border-top: 1px solid var(--el-border-soft);
+      }
+
+      /* The GAP marker — review annotation only, never shipped chrome. It is how
+         a reader sees WHERE a row is missing; the product renders nothing. */
+      .gap {
+        position: relative;
+        height: var(--height-control);
+        border-radius: var(--radius-control);
+        border: 1px dashed var(--el-border-strong);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        background: repeating-linear-gradient(
+          135deg,
+          transparent,
+          transparent 6px,
+          var(--el-muted) 6px,
+          var(--el-muted) 12px
+        );
+      }
+      .gap.tall {
+        height: auto;
+        padding: 10px 8px;
+        text-align: center;
+        line-height: 1.5;
+      }
+      .annot {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-strong);
+        background: var(--el-tint-yellow);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        display: inline-block;
+      }
+
+      /* ── Content area + page grammar ─────────────────────────────────────── */
+      .shell {
+        display: flex;
+      }
+      .content {
+        flex: 1;
+        min-width: 0;
+        background: var(--el-page-bg);
+        padding: 28px 30px 34px;
+        overflow: hidden;
+      }
+      .page-head h2 {
+        font-family: var(--font-serif);
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .page-head .sub {
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        margin-top: 5px;
+        max-width: 62ch;
+        line-height: 1.5;
+      }
+
+      /* ── EmptyState family (components/ui/EmptyState) — the refused state ─── */
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 12px;
+        padding: 52px 24px 56px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        box-shadow: var(--shadow-card);
+        max-width: 46rem;
+        margin: 0 auto;
+      }
+      .empty .glyph {
+        color: var(--el-text-secondary);
+      }
+      .empty .glyph svg {
+        width: 48px;
+        height: 48px;
+      }
+      .empty h3 {
+        font-family: var(--font-serif);
+        font-size: 20px;
+        font-weight: 600;
+        margin: 0;
+      }
+      .empty p {
+        margin: 0;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-secondary);
+        max-width: 46ch;
+      }
+
+      /* ── Button primitive (components/ui/Button) ─────────────────────────── */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x);
+        border-radius: var(--radius-btn);
+        font-size: 13px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        cursor: pointer;
+      }
+      .btn.primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn.ghost {
+        background: transparent;
+        border-color: var(--el-border);
+        color: var(--el-text-secondary);
+      }
+      .btn.disabled {
+        color: var(--el-text-faint);
+        border-color: var(--el-border);
+        background: transparent;
+        cursor: not-allowed;
+        opacity: 0.6;
+      }
+
+      /* ── Top bar (the Create control + palette trigger) ───────────────────── */
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-page-bg);
+      }
+      .ctl {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        background: var(--el-page-bg);
+      }
+      .ctl.off {
+        color: var(--el-text-faint);
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      .ctl svg {
+        width: 15px;
+        height: 15px;
+      }
+      kbd {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        color: var(--el-text-secondary);
+      }
+      .tip {
+        position: relative;
+        display: inline-flex;
+      }
+      .tip .bubble {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        white-space: nowrap;
+        background: var(--el-text);
+        color: var(--el-text-inverted);
+        font-size: 11.5px;
+        padding: var(--spacing-tooltip-y) var(--spacing-tooltip-x);
+        border-radius: var(--radius-control);
+        box-shadow: var(--shadow-elevated);
+        z-index: 3;
+      }
+
+      /* ── Board / banner / inline pickers (panel 5, UNCHANGED treatments) ──── */
+      .notice {
+        border: 1px solid var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-radius: var(--radius-card);
+        padding: var(--spacing-control-y) var(--spacing-card-padding);
+        font-size: 13px;
+      }
+      .cols {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 12px;
+      }
+      .col {
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px;
+      }
+      .col .ch {
+        font-size: 11.5px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+        margin-bottom: 8px;
+      }
+      .tile {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        padding: 10px;
+        font-size: 12.5px;
+        margin-bottom: 8px;
+        box-shadow: var(--shadow-subtle);
+      }
+      .tile .k {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        color: var(--el-text-secondary);
+      }
+      .fields {
+        display: grid;
+        grid-template-columns: 116px 1fr;
+        gap: 8px 12px;
+        align-items: center;
+        font-size: 13px;
+      }
+      .fields .fl {
+        color: var(--el-text-secondary);
+        font-size: 12.5px;
+      }
+      .picker {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-width: 172px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        font-size: 13px;
+        color: var(--el-text);
+        background: var(--el-page-bg);
+      }
+      .picker.off {
+        color: var(--el-text-faint);
+        background: var(--el-muted);
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+      .picker svg {
+        width: 14px;
+        height: 14px;
+      }
+      .hdr-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        margin-bottom: 14px;
+      }
+      .hdr-row .ttl {
+        font-family: var(--font-serif);
+        font-size: 18px;
+        font-weight: 600;
+      }
+      .sub-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+        padding: 20px;
+      }
+      .sub {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        overflow: hidden;
+      }
+      .sub > .sub-head svg {
+        width: 15px;
+        height: 15px;
+        flex: none;
+        color: var(--el-text-secondary);
+      }
+      .sub > .sub-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 14px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+      }
+      .sub > .sub-body {
+        padding: 14px;
+      }
+      .tbl {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12.5px;
+      }
+      .tbl th,
+      .tbl td {
+        text-align: left;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        vertical-align: top;
+      }
+      .tbl th {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--el-text-secondary);
+      }
+      .tag {
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        color: var(--el-text-strong);
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        display: inline-block;
+      }
+      .tag.hide {
+        background: var(--el-tint-rose);
+      }
+      .tag.dis {
+        background: var(--el-tint-sky);
+      }
+      .tag.same {
+        background: var(--el-tint-mint);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The permission-gated shell — the door that is not there</h1>
+        <p>
+          Story <b>MOTIR-2258</b> · Subtask <b>MOTIR-2464</b>. Five panels of ABSENCE: what the
+          shell looks like when an actor's role does not hold what a destination needs. Every
+          treatment below traces to a row of the treatment table in
+          <code>design/projects/design-notes.md</code> § <em>Amendment 2026-08-08</em> (MOTIR-2462)
+          — this asset draws that table, it does not author a rule of its own. It <b>composes</b>
+          <code>design/projects/settings-area.mock.html</code> and the
+          <code>design/shell</code> assets and redraws neither.
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle theme
+      </button>
+    </div>
+    <!-- ══ PANEL 1 ═══════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 1 — <span>The bottom nav: the Project settings door, present and absent</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap">
+              <span class="who">project admin</span> holds the settings domains — the door is there
+            </div>
+            <div class="rail bare">
+              <div class="grp">
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="7" height="9" />
+                      <rect x="14" y="3" width="7" height="5" />
+                      <rect x="14" y="12" width="7" height="9" />
+                      <rect x="3" y="16" width="7" height="5" /></svg></span
+                  ><span class="nl">Dashboard</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <circle cx="12" cy="12" r="2.5" /></svg></span
+                  ><span class="nl">Work items</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="4" width="5" height="16" />
+                      <rect x="10" y="4" width="5" height="16" />
+                      <rect x="17" y="4" width="4" height="16" /></svg></span
+                  ><span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 20V10" />
+                      <path d="M10 20V4" />
+                      <path d="M16 20v-7" />
+                      <path d="M22 20H2" /></svg></span
+                  ><span class="nl">Reports</span>
+                </div>
+              </div>
+              <div class="rail-foot">
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path
+                        d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7"
+                      /></svg></span
+                  ><span class="nl">Project settings</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 6h13" />
+                      <path d="M8 12h13" />
+                      <path d="M8 18h13" />
+                      <path d="M3 6h.01" />
+                      <path d="M3 12h.01" />
+                      <path d="M3 18h.01" /></svg></span
+                  ><span class="nl">Job runs</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="6" cy="6" r="2.5" />
+                      <circle cx="6" cy="18" r="2.5" />
+                      <circle cx="18" cy="8" r="2.5" />
+                      <path d="M6 8.5v7" />
+                      <path d="M18 10.5c0 4-4 3.5-6.5 5.5" /></svg></span
+                  ><span class="nl">Git</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"
+                      /></svg></span
+                  ><span class="nl">Docs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who member">project member</span> holds none of them — the door is not
+              there
+            </div>
+            <div class="rail bare">
+              <div class="grp">
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="7" height="9" />
+                      <rect x="14" y="3" width="7" height="5" />
+                      <rect x="14" y="12" width="7" height="9" />
+                      <rect x="3" y="16" width="7" height="5" /></svg></span
+                  ><span class="nl">Dashboard</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <circle cx="12" cy="12" r="2.5" /></svg></span
+                  ><span class="nl">Work items</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="4" width="5" height="16" />
+                      <rect x="10" y="4" width="5" height="16" />
+                      <rect x="17" y="4" width="4" height="16" /></svg></span
+                  ><span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 20V10" />
+                      <path d="M10 20V4" />
+                      <path d="M16 20v-7" />
+                      <path d="M22 20H2" /></svg></span
+                  ><span class="nl">Reports</span>
+                </div>
+              </div>
+              <div class="rail-foot">
+                <div class="gap">nothing renders here</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 6h13" />
+                      <path d="M8 12h13" />
+                      <path d="M8 18h13" />
+                      <path d="M3 6h.01" />
+                      <path d="M3 12h.01" />
+                      <path d="M3 18h.01" /></svg></span
+                  ><span class="nl">Job runs</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="6" cy="6" r="2.5" />
+                      <circle cx="6" cy="18" r="2.5" />
+                      <circle cx="18" cy="8" r="2.5" />
+                      <path d="M6 8.5v7" />
+                      <path d="M18 10.5c0 4-4 3.5-6.5 5.5" /></svg></span
+                  ><span class="nl">Git</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22z"
+                      /></svg></span
+                  ><span class="nl">Docs</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>Decided here: the gap is not marked.</b> No disabled row, no tooltip, no "ask an admin"
+        line. The rows below simply close up and the footer is one row shorter — the dashed block on
+        the right is this REVIEW PAGE's annotation showing you where the row was, and is not product
+        chrome. Treatment-table row&nbsp;2 (<span class="tag hide">HIDE</span> the settings AREA
+        door). Reason: an entry point is a promise about a room; a disabled row is a promise the
+        product then refuses, and it is the exact treatment <em>Amendment 2026-08-08</em> supersedes
+        for entry points.
+        <br />
+        <b>The area door hides only when every entry INSIDE it filters away</b> — an actor holding
+        one settings domain still gets the door, and lands on a rail with one group (panel 2). The
+        two workspace-scoped rows below it (<code>Job runs</code>, <code>Git</code>) are not this
+        story's and are drawn unchanged.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 2 ═══════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 2 —
+      <span
+        >The settings rail for a partial role: a group with nothing left renders NO heading</span
+      >
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap">
+              <span class="who">project admin</span> — every group, every entry
+            </div>
+            <div class="rail bare">
+              <div class="rail-head">
+                <div class="back">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M19 12H5" />
+                    <path d="m12 19-7-7 7-7" /></svg
+                  ><span>Back to Motir</span>
+                </div>
+                <div class="proj">
+                  <span class="pav">M</span
+                  ><span
+                    ><span class="pname">Motir</span><br /><span class="pkey">MOTIR</span></span
+                  >
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">General</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 21v-7" />
+                      <path d="M4 10V3" />
+                      <path d="M12 21v-9" />
+                      <path d="M12 8V3" />
+                      <path d="M20 21v-5" />
+                      <path d="M20 12V3" />
+                      <path d="M1 14h6" />
+                      <path d="M9 8h6" />
+                      <path d="M17 16h6" /></svg></span
+                  ><span class="nl">Details</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 20V6a2 2 0 0 1 2-2h5l2 2h5a2 2 0 0 1 2 2v12z" />
+                      <path d="M9 13h6" /></svg></span
+                  ><span class="nl">Repositories</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Access</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.9" /></svg></span
+                  ><span class="nl">Members &amp; access</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" /></svg></span
+                  ><span class="nl">Roles &amp; permissions</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="7.5" cy="15.5" r="4" />
+                      <path d="m10.5 12.5 9-9" />
+                      <path d="m17 6 2.5 2.5" /></svg></span
+                  ><span class="nl">Code access</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="6" height="6" />
+                      <rect x="15" y="15" width="6" height="6" />
+                      <path d="M9 6h4a2 2 0 0 1 2 2v10" /></svg></span
+                  ><span class="nl">Workflow</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="4" width="5" height="16" />
+                      <rect x="10" y="4" width="5" height="16" />
+                      <rect x="17" y="4" width="4" height="16" /></svg></span
+                  ><span class="nl">Board</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 14 16 9" />
+                      <path d="M3.5 18a9 9 0 1 1 17 0" /></svg></span
+                  ><span class="nl">Estimation</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M20.6 13.4 12 22l-9-9V4a1 1 0 0 1 1-1h9z" />
+                      <path d="M7.5 7.5h.01" /></svg></span
+                  ><span class="nl">Fields</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M21 8 12 3 3 8v8l9 5 9-5z" />
+                      <path d="m3 8 9 5 9-5" />
+                      <path d="M12 21v-8" /></svg></span
+                  ><span class="nl">Components</span>
+                </div>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Automation</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+                      <path
+                        d="M19 17.5 19.8 19.7 22 20.5 19.8 21.3 19 23.5 18.2 21.3 16 20.5 18.2 19.7z"
+                      /></svg></span
+                  ><span class="nl">AI planning</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="4" y="8" width="16" height="12" rx="2" />
+                      <path d="M12 8V4" />
+                      <circle cx="9" cy="14" r="1" />
+                      <circle cx="15" cy="14" r="1" /></svg></span
+                  ><span class="nl">Rules</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap">
+              <span class="who custom">a custom role</span> holding two work domains and nothing
+              else
+            </div>
+            <div class="rail bare">
+              <div class="rail-head">
+                <div class="back">
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M19 12H5" />
+                    <path d="m12 19-7-7 7-7" /></svg
+                  ><span>Back to Motir</span>
+                </div>
+                <div class="proj">
+                  <span class="pav">M</span
+                  ><span
+                    ><span class="pname">Motir</span><br /><span class="pkey">MOTIR</span></span
+                  >
+                </div>
+              </div>
+              <div class="gap tall">
+                General · Access · Automation<br />no entry survives ⇒ <b>no heading at all</b>
+              </div>
+              <div class="grp">
+                <div class="grp-label">Work</div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="4" width="5" height="16" />
+                      <rect x="10" y="4" width="5" height="16" />
+                      <rect x="17" y="4" width="4" height="16" /></svg></span
+                  ><span class="nl">Board</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 14 16 9" />
+                      <path d="M3.5 18a9 9 0 1 1 17 0" /></svg></span
+                  ><span class="nl">Estimation</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>The failure this panel exists to prevent:</b> a group heading rendered above zero rows.
+        It is what a naive filter produces, and it reads as a loading failure rather than as policy.
+        The rail renders a heading only for a group that has at least one visible entry — the rule
+        the shipped <code>groupSettingsNav()</code> already applies (<code
+          >.filter((section) =&gt; section.entries.length &gt; 0)</code
+        >), drawn here so the gating card keeps it.
+        <br />
+        <b>The dashed block is annotation, not chrome.</b> In the product the surviving group sits
+        directly under the rail head, with no gap and no placeholder. Treatment-table row&nbsp;1
+        (<span class="tag hide">HIDE</span> the settings rail entry).
+        <br />
+        <b>Which entries survive for which role is NOT drawn here — deliberately.</b> The permission
+        key each destination gates on is <b>MOTIR-2468</b>'s to name, against that surface's own
+        server guard. What this panel fixes is the SHAPE of a partly-filtered rail, which is the
+        same for any key map.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 3 ═══════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 3 —
+      <span>The refused destination: <code>/settings/project/members</code> reached directly</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="state-cap">
+          <span class="who member">project member</span> types the URL, or follows an old link —
+          hiding is presentation, so the page is still reachable
+        </div>
+        <div class="shell">
+          <div class="rail">
+            <div class="rail-head">
+              <div class="back">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M19 12H5" />
+                  <path d="m12 19-7-7 7-7" /></svg
+                ><span>Back to Motir</span>
+              </div>
+              <div class="proj">
+                <span class="pav">M</span
+                ><span><span class="pname">Motir</span><br /><span class="pkey">MOTIR</span></span>
+              </div>
+            </div>
+            <div class="grp">
+              <div class="grp-label">General</div>
+              <div class="nav-row active">
+                <span class="ni"
+                  ><svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 21v-7" />
+                    <path d="M4 10V3" />
+                    <path d="M12 21v-9" />
+                    <path d="M12 8V3" />
+                    <path d="M20 21v-5" />
+                    <path d="M20 12V3" />
+                    <path d="M1 14h6" />
+                    <path d="M9 8h6" />
+                    <path d="M17 16h6" /></svg></span
+                ><span class="nl">Details</span>
+              </div>
+            </div>
+          </div>
+          <div class="content">
+            <div class="empty">
+              <span class="glyph"
+                ><svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="4" y="10" width="16" height="11" rx="2" />
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg
+              ></span>
+              <h3>Admins only</h3>
+              <p>
+                Who is on this project, and what each of them can do, is managed by project admins.
+                Ask an admin if you need someone added or a role changed.
+              </p>
+              <a class="btn primary">Details</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>The shipped component, unchanged:</b>
+        <code>components/projects/NoAccessState.tsx</code> — the <code>EmptyState</code> family with
+        a lock glyph, a serif title, a muted description and ONE action. Not a new screen; the
+        shipped <code>/settings/project/automation</code> page already renders exactly this shape
+        for a non-admin, and this asset extends that precedent to every destination the story hides.
+        Treatment-table row&nbsp;3 (<span class="tag same">GUARD</span> — hiding is presentation and
+        never enforcement).
+        <br />
+        <b>The copy is per destination, not one apology reused eleven times</b>, and the back action
+        goes to the nearest settings page the actor CAN see — <code>Details</code> when they hold
+        anything at all in the area, and <code>Back to projects</code> →
+        <code>/dashboard</code> when the whole area filtered away (panel 1's actor), because a back
+        button that lands on another refusal is worse than no back button. The full title /
+        description / back-label / back-href table is in the design notes.
+      </div>
+    </div>
+
+    <!-- ══ PANEL 4 ═══════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 4 —
+      <span>The project nav for a viewer: the rows whose destinations refuse them close up</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="duo">
+          <div>
+            <div class="state-cap"><span class="who member">project member</span> — before</div>
+            <div class="rail bare">
+              <div class="grp">
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="7" height="9" />
+                      <rect x="14" y="3" width="7" height="5" />
+                      <rect x="14" y="12" width="7" height="9" />
+                      <rect x="3" y="16" width="7" height="5" /></svg></span
+                  ><span class="nl">Dashboard</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <circle cx="12" cy="12" r="2.5" /></svg></span
+                  ><span class="nl">Work items</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <path d="m10 8.5 6 3.5-6 3.5z" /></svg></span
+                  ><span class="nl">Ready</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="4" width="5" height="16" />
+                      <rect x="10" y="4" width="5" height="16" />
+                      <rect x="17" y="4" width="4" height="16" /></svg></span
+                  ><span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
+                      <path d="M9 3v15" />
+                      <path d="M15 6v15" /></svg></span
+                  ><span class="nl">Roadmap</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z" />
+                      <path
+                        d="M19 17.5 19.8 19.7 22 20.5 19.8 21.3 19 23.5 18.2 21.3 16 20.5 18.2 19.7z"
+                      /></svg></span
+                  ><span class="nl">Plans</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 6h13" />
+                      <path d="M8 12h13" />
+                      <path d="M8 18h13" />
+                      <path d="M3 6h.01" />
+                      <path d="M3 12h.01" />
+                      <path d="M3 18h.01" /></svg></span
+                  ><span class="nl">Backlog</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+                      <path
+                        d="M5.4 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.4-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.8 1.1"
+                      /></svg></span
+                  ><span class="nl">Triage</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 20V10" />
+                      <path d="M10 20V4" />
+                      <path d="M16 20v-7" />
+                      <path d="M22 20H2" /></svg></span
+                  ><span class="nl">Reports</span>
+                </div>
+              </div>
+              <div class="rail-foot">
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="3" />
+                      <path
+                        d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1A1.7 1.7 0 0 0 7 19.4a1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.9H1a2 2 0 1 1 0-4h.1A1.7 1.7 0 0 0 2.6 7"
+                      /></svg></span
+                  ><span class="nl">Project settings</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div>
+            <div class="state-cap"><span class="who viewer">project viewer</span> — after</div>
+            <div class="rail bare">
+              <div class="grp">
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="7" height="9" />
+                      <rect x="14" y="3" width="7" height="5" />
+                      <rect x="14" y="12" width="7" height="9" />
+                      <rect x="3" y="16" width="7" height="5" /></svg></span
+                  ><span class="nl">Dashboard</span>
+                </div>
+                <div class="nav-row active">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <circle cx="12" cy="12" r="9" />
+                      <circle cx="12" cy="12" r="2.5" /></svg></span
+                  ><span class="nl">Work items</span>
+                </div>
+                <div class="gap">row closes up</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="4" width="5" height="16" />
+                      <rect x="10" y="4" width="5" height="16" />
+                      <rect x="17" y="4" width="4" height="16" /></svg></span
+                  ><span class="nl">Boards</span>
+                </div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3z" />
+                      <path d="M9 3v15" />
+                      <path d="M15 6v15" /></svg></span
+                  ><span class="nl">Roadmap</span>
+                </div>
+                <div class="gap">row closes up</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M8 6h13" />
+                      <path d="M8 12h13" />
+                      <path d="M8 18h13" />
+                      <path d="M3 6h.01" />
+                      <path d="M3 12h.01" />
+                      <path d="M3 18h.01" /></svg></span
+                  ><span class="nl">Backlog</span>
+                </div>
+                <div class="gap">row closes up</div>
+                <div class="nav-row">
+                  <span class="ni"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M4 20V10" />
+                      <path d="M10 20V4" />
+                      <path d="M16 20v-7" />
+                      <path d="M22 20H2" /></svg></span
+                  ><span class="nl">Reports</span>
+                </div>
+              </div>
+              <div class="rail-foot">
+                <div class="gap">nothing renders here</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>What this panel decides — and it is only about SHAPE:</b> a removed row leaves no
+        placeholder and no disabled stand-in; the rows below move up.
+        <b>The primary section keeps its single separator from the footer</b> even when the footer
+        has nothing in it, because the separator belongs to the section boundary, not to the rows —
+        a viewer whose settings door is also gone sees the nav simply end, never a hairline floating
+        under nothing. And the primary section can never render empty: Dashboard, Work items,
+        Boards, Roadmap, Backlog and Reports are reads that survive for any actor who can browse the
+        project at all — an actor who cannot browse never reaches this shell, they get panel 3's
+        state on the project itself.
+        <br />
+        <b>WHICH rows leave is NOT decided here.</b> The three drawn as closing up are illustrative.
+        <b>MOTIR-2471</b> names the permission each destination needs, read off that destination's
+        own server guard — an entry stays unless its page refuses the actor outright, and a row that
+        merely renders fewer actions is a page-level concern, not a nav one. Treatment-table
+        row&nbsp;4 (<span class="tag hide">HIDE</span> the project-nav entry).
+      </div>
+    </div>
+
+    <!-- ══ PANEL 5 ═══════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Panel 5 — <span>UNCHANGED: the in-place treatments this story must NOT touch</span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="state-cap">
+          <span class="who viewer">project viewer</span> — every control below ships exactly like
+          this today and is <b>&nbsp;out of scope for every card in MOTIR-2258</b>
+        </div>
+        <div class="sub-grid">
+          <div class="sub">
+            <div class="sub-head">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5v14" />
+                <path d="M5 12h14" />
+              </svg>
+              The Create control — visible, disabled, tooltip
+            </div>
+            <div class="sub-body">
+              <div class="topbar" style="border: 0; padding: 0 0 26px">
+                <span class="ctl"><span>Search</span><kbd>⌘K</kbd></span>
+                <span class="tip">
+                  <span class="ctl off"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" /></svg
+                    ><span>Create</span><kbd>C</kbd></span
+                  >
+                  <span class="bubble">You have read-only access to this project</span>
+                </span>
+              </div>
+              <div style="font-size: 12.5px; color: var(--el-text-secondary); line-height: 1.6">
+                Treatment-table row&nbsp;8 — <span class="tag dis">DISABLE</span>. The control is
+                what teaches a viewer the action exists; removing it would leave them unable to tell
+                whether they lack the right or the product lacks the feature.
+              </div>
+            </div>
+          </div>
+
+          <div class="sub">
+            <div class="sub-head">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="5" height="16" />
+                <rect x="10" y="4" width="5" height="16" />
+                <rect x="17" y="4" width="4" height="16" />
+              </svg>
+              The board — drag off, banner on
+            </div>
+            <div class="sub-body">
+              <div class="notice">You have read-only access to this project.</div>
+              <div class="cols">
+                <div class="col">
+                  <div class="ch">To do</div>
+                  <div class="tile">
+                    <span class="k">MOTIR-2466</span><br />The permission set reaches the client
+                  </div>
+                </div>
+                <div class="col">
+                  <div class="ch">In progress</div>
+                  <div class="tile">
+                    <span class="k">MOTIR-2464</span><br />The permission-gated shell
+                  </div>
+                </div>
+                <div class="col">
+                  <div class="ch">Done</div>
+                  <div class="tile"><span class="k">MOTIR-2462</span><br />Hide versus disable</div>
+                </div>
+              </div>
+              <div
+                style="
+                  margin-top: 12px;
+                  font-size: 12.5px;
+                  color: var(--el-text-secondary);
+                  line-height: 1.6;
+                "
+              >
+                Treatment-table row&nbsp;7 — <span class="tag dis">DISABLE</span>. Cards do not
+                drag; the <code>role="status"</code> banner is what says so.
+              </div>
+            </div>
+          </div>
+
+          <div class="sub">
+            <div class="sub-head">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M4 21v-7" />
+                <path d="M4 10V3" />
+                <path d="M12 21v-9" />
+                <path d="M12 8V3" />
+                <path d="M20 21v-5" />
+                <path d="M20 12V3" />
+                <path d="M1 14h6" />
+                <path d="M9 8h6" />
+                <path d="M17 16h6" />
+              </svg>
+              The issue-detail inline pickers — disabled in place
+            </div>
+            <div class="sub-body">
+              <div class="fields">
+                <span class="fl">Status</span
+                ><span class="picker off"
+                  >In Progress
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" /></svg
+                ></span>
+                <span class="fl">Assignee</span
+                ><span class="picker off"
+                  >Zhu Yue
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" /></svg
+                ></span>
+                <span class="fl">Priority</span
+                ><span class="picker off"
+                  >High
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" /></svg
+                ></span>
+              </div>
+              <div
+                style="
+                  margin-top: 14px;
+                  font-size: 12.5px;
+                  color: var(--el-text-secondary);
+                  line-height: 1.6;
+                "
+              >
+                Treatment-table row&nbsp;6 — <span class="tag dis">DISABLE</span>. The shipped
+                comment says it best: disabling "makes the affordance honest rather than letting a
+                viewer edit then bounce off a 403".
+              </div>
+            </div>
+          </div>
+
+          <div class="sub">
+            <div class="sub-head">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" />
+              </svg>
+              The Edit link — absent, and the route guarded
+            </div>
+            <div class="sub-body">
+              <div class="hdr-row">
+                <span class="ttl">Hide what the actor cannot reach</span>
+                <span><a class="btn ghost">Watch</a></span>
+              </div>
+              <div style="font-size: 12.5px; color: var(--el-text-secondary); line-height: 1.6">
+                No <b>Edit</b> door in the header, no per-section edit links, and
+                <code>/items/[key]/edit</code> redirects back to the read-only detail view.
+                Treatment-table row&nbsp;9 — <span class="tag hide">HIDE</span>, because it
+                navigates to an edit SURFACE: an entry point, not an in-place control. This one
+                already shipped correctly in 2026-06 and is drawn only so nobody "fixes" it.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <b>Why a whole panel says "do not touch":</b> a story about hiding things is precisely the
+        context in which someone helpfully hides these too. Rows 6–9 of the treatment table are
+        recorded as UNCHANGED by the 2026-08-08 amendment — it widened the hidden set for ENTRY
+        POINTS and did not re-open the disabled set for IN-PLACE CONTROLS.
+      </div>
+    </div>
+
+    <!-- ══ TRACE ═════════════════════════════════════════════════════════ -->
+    <div class="panel-label">
+      Trace — <span>every treatment drawn above, back to its table row</span>
+    </div>
+    <div class="panel">
+      <div class="stage" style="padding: 6px 18px 14px">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th style="width: 74px">Panel</th>
+              <th style="width: 92px">Table row</th>
+              <th style="width: 96px">Treatment</th>
+              <th>What this asset adds that the table does not carry</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>1</td>
+              <td>2 — settings AREA door</td>
+              <td><span class="tag hide">HIDE</span></td>
+              <td>
+                The gap is <b>unmarked</b>: no disabled row, no tooltip. The footer is one row
+                shorter.
+              </td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>1 — settings rail entry</td>
+              <td><span class="tag hide">HIDE</span></td>
+              <td>
+                A group with zero visible entries renders <b>no heading</b>, and the surviving group
+                sits directly under the rail head.
+              </td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>3 — the GUARD limb</td>
+              <td><span class="tag same">GUARD</span></td>
+              <td>
+                Per-destination copy, and a back action that resolves to the nearest page the actor
+                can actually reach.
+              </td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>4 — project-nav entry</td>
+              <td><span class="tag hide">HIDE</span></td>
+              <td>
+                Rows close up; the section separator survives an empty footer; the primary section
+                can never render empty.
+              </td>
+            </tr>
+            <tr>
+              <td>5</td>
+              <td>6, 7, 8 (and 9)</td>
+              <td><span class="tag dis">DISABLE</span> / <span class="tag hide">HIDE</span></td>
+              <td>
+                Nothing — drawn verbatim from what ships, so the sibling cards can see there is
+                nothing to do.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="legend">
+        Treatment-table row&nbsp;5 (the work-item ⋯ menu) has no panel: it already hides rows the
+        actor lacks the capability for, its own source calls that "the permission law", and it is
+        reached only from a surface the actor is already standing on — there is no absence to draw.
+      </div>
+    </div>
+  </body>
+</html>

@@ -32,11 +32,14 @@ export interface BuildInPublicDialogProps {
 // The "What becomes public" rows carry distinct semantic glyphs (design Panel
 // 11): a success check for what's shared, an info lock for the sign-in-to-act
 // gate, and a faint eye-off for what stays stripped.
+// A `null` tone is the QUIET one — its faint ink is written at the element
+// below, the only place the ink guard can see the glyph is `aria-hidden`
+// (MOTIR-2475).
 const VIS_ROWS = [
   { key: 'bulletBoard', Icon: CheckCheck, tone: 'text-(--el-success)' },
   { key: 'bulletItems', Icon: CheckCheck, tone: 'text-(--el-success)' },
   { key: 'bulletSignIn', Icon: Lock, tone: 'text-(--el-info)' },
-  { key: 'bulletPrivate', Icon: EyeOff, tone: 'text-(--el-text-faint)' },
+  { key: 'bulletPrivate', Icon: EyeOff, tone: null },
 ] as const;
 
 export function BuildInPublicDialog({
@@ -74,7 +77,10 @@ export function BuildInPublicDialog({
           <ul role="list" className="flex flex-col gap-2">
             {VIS_ROWS.map(({ key, Icon, tone }) => (
               <li key={key} className="flex items-start gap-2">
-                <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} aria-hidden />
+                <Icon
+                  className={`mt-0.5 size-4 shrink-0 ${tone ?? 'text-(--el-text-faint)'}`}
+                  aria-hidden
+                />
                 <span className="text-(--el-text) font-sans text-sm">
                   {t.rich(key, { b: (chunks) => <strong>{chunks}</strong> })}
                 </span>

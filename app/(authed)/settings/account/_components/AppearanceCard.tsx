@@ -153,7 +153,7 @@ export function AppearanceCard() {
 
       {/* The example column sticks in view (desktop) while the controls scroll. */}
       <section className="flex min-w-0 flex-col gap-2.5 lg:sticky lg:top-6">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-faint)">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-secondary)">
           {t('showcase.eyebrow')}
         </p>
         {/* LIVE mode (no axis props) → inherits the active <html> selection, so the

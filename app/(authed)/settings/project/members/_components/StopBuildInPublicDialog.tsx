@@ -22,9 +22,12 @@ import { Button } from '@/components/ui/Button';
 // The "what happens when you stop" rows carry distinct semantic glyphs (design
 // Panel 12): a faint eye-off for the page going offline, a faint x for the link
 // breaking, and a success check for what's KEPT (nothing is deleted).
+// A `null` tone is the QUIET one — its faint ink is written at the element
+// below, the only place the ink guard can see the glyph is `aria-hidden`
+// (MOTIR-2475).
 const STOP_ROWS = [
-  { key: 'stopBulletOffline', Icon: EyeOff, tone: 'text-(--el-text-faint)' },
-  { key: 'stopBulletLink', Icon: X, tone: 'text-(--el-text-faint)' },
+  { key: 'stopBulletOffline', Icon: EyeOff, tone: null },
+  { key: 'stopBulletLink', Icon: X, tone: null },
   { key: 'stopBulletKept', Icon: CheckCheck, tone: 'text-(--el-success)' },
 ] as const;
 
@@ -72,7 +75,10 @@ export function StopBuildInPublicDialog({
         <ul role="list" className="flex flex-col gap-2">
           {STOP_ROWS.map(({ key, Icon, tone }) => (
             <li key={key} className="flex items-start gap-2">
-              <Icon className={`mt-0.5 size-4 shrink-0 ${tone}`} aria-hidden />
+              <Icon
+                className={`mt-0.5 size-4 shrink-0 ${tone ?? 'text-(--el-text-faint)'}`}
+                aria-hidden
+              />
               <span className="text-(--el-text) font-sans text-sm">
                 {t.rich(key, { b: (chunks) => <strong>{chunks}</strong> })}
               </span>

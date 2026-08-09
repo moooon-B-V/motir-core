@@ -94,8 +94,12 @@ export function ParentRollupBadge({
 
   const base =
     'inline-flex items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) py-(--spacing-chip-y) text-xs font-medium whitespace-nowrap';
+  // The empty badge paints a real figure (the "—" and its label), so its ink is
+  // `--el-text-secondary` — the only grey that clears AA on `--el-surface`
+  // (6.24:1) as well as on the page. It was `--el-text-faint` at 2.39:1
+  // (MOTIR-2475).
   const tone = empty
-    ? 'border border-(--el-border) bg-(--el-surface) text-(--el-text-faint)'
+    ? 'border border-(--el-border) bg-(--el-surface) text-(--el-text-secondary)'
     : 'bg-(--el-tint-lavender) text-(--el-text-strong)';
 
   return (

@@ -113,7 +113,7 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
               <div
                 className={
                   'mb-2 flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider ' +
-                  (carried ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-faint)')
+                  (carried ? 'text-(--el-accent-on-surface)' : 'text-(--el-text-secondary)')
                 }
               >
                 {carried ? (
@@ -138,7 +138,10 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
                 autoFocus
                 aria-label={t('ideaLabel')}
                 placeholder={t('placeholder')}
-                className="min-h-[10.75rem] w-full resize-none border-0 bg-transparent text-(--el-text) outline-none placeholder:text-(--el-text-faint)"
+                // The PLACEHOLDER is text a reader reads before they type, so it
+                // takes `--el-text-secondary`; `--el-text-faint` put it at
+                // 2.61:1 (MOTIR-2475).
+                className="min-h-[10.75rem] w-full resize-none border-0 bg-transparent text-(--el-text) outline-none placeholder:text-(--el-text-secondary)"
               />
               <div className="border-(--el-border-soft) mt-3 flex justify-end border-t pt-3">
                 <Button
@@ -161,7 +164,7 @@ export function OnboardingEntrance({ carriedIdea }: OnboardingEntranceProps) {
             reaches the issue importer (7.17 / MOTIR-942) at /onboarding/import. */}
           {!carried && (
             <>
-              <div className="mx-0.5 my-5 flex items-center gap-3 font-mono text-[11px] font-semibold tracking-wide text-(--el-text-faint) before:h-px before:flex-1 before:bg-(--el-border) before:content-[''] after:h-px after:flex-1 after:bg-(--el-border) after:content-['']">
+              <div className="mx-0.5 my-5 flex items-center gap-3 font-mono text-[11px] font-semibold tracking-wide text-(--el-text-secondary) before:h-px before:flex-1 before:bg-(--el-border) before:content-[''] after:h-px after:flex-1 after:bg-(--el-border) after:content-['']">
                 {t('or')}
               </div>
               <Link

@@ -113,7 +113,7 @@ export function ActivityEntryRow({
 
   /** "None" — the changelog null (italic faint, never struck). */
   function noneSpan(): ReactNode {
-    return <span className="text-(--el-text-faint) font-sans italic">{t('none')}</span>;
+    return <span className="text-(--el-text-secondary) font-sans italic">{t('none')}</span>;
   }
 
   /** Status side — the workflow LABEL as a Pill (tint by category; the

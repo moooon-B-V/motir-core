@@ -10,6 +10,8 @@
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
+import { organizationsService } from '@/lib/services/organizationsService';
+import { workspacesService } from '@/lib/services/workspacesService';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -225,4 +227,82 @@ test('create a default token → "Standard", and delete is off', async ({ page }
   await row.getByRole('button', { name: 'Show scopes for scoped-default' }).click();
   await expect(page.getByText('Read everything', { exact: true })).toBeVisible();
   await expect(page.getByText('Delete work items', { exact: true })).toHaveCount(0);
+});
+
+// MOTIR-2488 — the create modal's footer must stay INSIDE the dialog panel.
+//
+// The panel is `max-h-[90vh] overflow-hidden`, so its child has to own the
+// scroll (`Modal.Body`) or the overflow is clipped with no scrollbar anywhere:
+// Cancel and Create token get painted outside the panel and become unreachable
+// by any means. The regression is invisible to the rest of this file because
+// every other test signs up fresh — ONE org, ONE workspace — which renders the
+// SHORTEST variant of the form at Playwright's default 1280x720. Two things
+// have to be wrong at once to see it, so the test breaks both:
+//
+//   * a ≥2-org account, which reveals the extra Organization row (the binding
+//     picker is progressively disclosed), and
+//   * a SHORT viewport, the axis no other spec varies.
+//
+// Asserted with `toBeInViewport`, not `toBeVisible`: a clipped element still
+// has a bounding box and still passes every role/visibility query, which is
+// precisely why unit and E2E coverage both stayed green while the surface was
+// unusable. Then the token is actually created, so the fix is proven to keep
+// the submit path working rather than merely to put pixels on screen.
+test('the Create button stays reachable on a multi-org account in a short viewport', async ({
+  page,
+}) => {
+  const email = 'tokens-tall-modal-e2e@example.com';
+  await signUp(page, email);
+
+  // A second org, server-side — a single-org account has no UI path to org #2.
+  // It needs a workspace of its own: the binding picker reads ORGS THAT HAVE a
+  // workspace the user belongs to, so a bare org never reaches `scopeOrgs` and
+  // the Organization row stays hidden.
+  const user = await db.user.findFirstOrThrow({ where: { email } });
+  const beacon = await organizationsService.createOrganization({
+    name: 'Beacon',
+    actorUserId: user.id,
+  });
+  await workspacesService.createWorkspace({
+    name: 'Crew',
+    ownerUserId: user.id,
+    organizationId: beacon.id,
+  });
+
+  // Shorter than the 720 default and than any laptop the suite has run on.
+  await page.setViewportSize({ width: 1280, height: 700 });
+
+  await page.goto('/settings/account/api-tokens');
+  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: 'Create token' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+
+  // The tall variant: the Organization picker only renders at ≥2 orgs.
+  await expect(dialog.getByRole('combobox', { name: 'Organization' })).toBeVisible();
+
+  // The panel obeys its own cap — it grows no further than 90vh (630px here).
+  const panel = await dialog.boundingBox();
+  expect(panel).not.toBeNull();
+  expect(panel!.height).toBeLessThanOrEqual(700 * 0.9 + 1);
+
+  // THE REGRESSION: both footer buttons are inside the viewport, not clipped
+  // outside the panel. Fails before MOTIR-2488's fix; passes after.
+  const submit = dialog.getByRole('button', { name: 'Create token', exact: true });
+  await expect(submit).toBeInViewport();
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
+
+  // And it still submits — the footer stayed inside the <form>.
+  await dialog.getByLabel('Label').fill('short-viewport');
+  const createResp = page.waitForResponse(
+    (r) => r.url().endsWith('/api/me/api-tokens') && r.request().method() === 'POST',
+  );
+  await submit.click();
+  expect((await createResp).status()).toBe(201);
+
+  await expect(dialog.getByRole('heading', { name: 'Token created' })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Done' }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('row', { name: /short-viewport/ })).toBeVisible();
 });

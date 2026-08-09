@@ -42,7 +42,7 @@ export function CodeBlock({
 
   return (
     <div className="relative min-w-0 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-code-bg)">
-      <div className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2 font-mono text-[11px] text-(--el-text-faint)">
+      <div className="flex items-center gap-2 border-b border-(--el-border-soft) bg-(--el-surface-soft) px-3 py-2 font-mono text-[11px] text-(--el-text-secondary)">
         {caption}
       </div>
       {copyable && (

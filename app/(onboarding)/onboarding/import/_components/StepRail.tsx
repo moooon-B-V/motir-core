@@ -76,14 +76,14 @@ export function StepRail({
                     'text-sm',
                     state === 'done' && 'text-(--el-text-strong)',
                     state === 'current' && 'font-medium text-(--el-text)',
-                    (state === 'todo' || state === 'locked') && 'text-(--el-text-faint)',
+                    (state === 'todo' || state === 'locked') && 'text-(--el-text-secondary)',
                   )}
                   aria-current={state === 'current' ? 'step' : undefined}
                 >
                   {t(`steps.${LABEL_KEY[step]}`)}
                 </span>
                 {step === 'run' && state === 'locked' ? (
-                  <span className="text-xs text-(--el-text-faint)">
+                  <span className="text-xs text-(--el-text-secondary)">
                     {t('steps.lockedUntilPreview')}
                   </span>
                 ) : null}

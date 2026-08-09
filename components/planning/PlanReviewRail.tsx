@@ -115,7 +115,7 @@ export function PlanReviewRail({
 
       {/* HISTORY timeline */}
       <section className="flex flex-col gap-2">
-        <h3 className="text-[11px] font-bold tracking-[0.05em] text-(--el-text-faint) uppercase">
+        <h3 className="text-[11px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
           {t('history')}
         </h3>
         <ol className="flex flex-col gap-2">
@@ -207,7 +207,7 @@ function HistoryRow({ ev, t }: { ev: PlanHistoryEventDto; t: ReturnType<typeof u
           {t(`event_${ev.kind}`)}
           {ev.byName ? <span className="text-(--el-text-muted)"> · {ev.byName}</span> : null}
         </span>
-        <span className="text-xs text-(--el-text-faint)">{formatAt(ev.at)}</span>
+        <span className="text-xs text-(--el-text-secondary)">{formatAt(ev.at)}</span>
       </div>
     </li>
   );
