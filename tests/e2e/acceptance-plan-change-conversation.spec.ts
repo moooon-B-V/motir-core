@@ -41,7 +41,7 @@
 // SSE. The streaming state is observed by HOLDING the plan-review read until the
 // assertion has run — an authoritative gate, never a timeout.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
 import type { Page, Route } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -240,7 +240,13 @@ test('plan change is a conversation — open, describe, refine, approve', async 
     // Two panes: the project's existing plan on the canvas, the conversation on
     // the right. The EMPTY state — a thread with no turns yet — is not a blank
     // screen: the canvas already shows the plan, and the rail opens the topic.
-    await expect(canvas(page)).toBeVisible();
+    // ⚠️ THE FIRST LANDMARK AFTER LANDING ON `/planning` CARRIES THE FIRST-PAINT
+    // BUDGET (MOTIR-2506). `waitForURL` resolves when the URL commits, which is
+    // not when the workspace has rendered — and this lane stalls transiently,
+    // so the default 20 s expect timeout has failed here on a runner where the
+    // very same test passes in 26.9 s end to end. The rail below keeps the
+    // default: once the canvas is up the page has rendered.
+    await expect(canvas(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
     await expect(rail(page)).toBeVisible();
     await expect(rail(page).getByText('What should change?')).toBeVisible();
     await expect(rail(page).getByRole('button', { name: 'Add work to an epic' })).toBeVisible();
