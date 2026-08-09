@@ -92,6 +92,11 @@
           that never re-flows is a claim about history, not a property of the
           role, so nothing stores it and nothing draws it. `Start from` survives
           on panel 3 as a pure authoring SEED.
+        * PANEL 3 DRAWS ONE CHECKED STATE (MOTIR-2498). The no-base sweep
+          corrected the notes, the field hint, panel 2's chip and the Members
+          picker but left two greyed "from Viewer" ticks in the permission grid
+          — so the markup asked for a control the shipped `Checkbox` does not
+          have. A permission is held or it is not.
         * THE BULK GRANT-ALL / CLEAR-ALL TOGGLE IS REJECTED, not omitted. The
           measurement and the reasoning are in design-notes; the short form is
           that 28 rows over 15 headings is a median of TWO rows per heading, and
@@ -1304,13 +1309,6 @@
         line-height: 1.45;
         margin-left: 8px;
       }
-      .permrow .from {
-        font-family: var(--font-mono);
-        font-size: 10.5px;
-        color: var(--el-text-secondary);
-        margin-left: 6px;
-      }
-
       /* ── The CREATE page's PINNED action bar ──────────────────────────────
          The create surface is a whole PAGE (MOTIR-2257 · /settings/project/
          roles/new), so the permission list has full width and every description
@@ -1491,11 +1489,6 @@
       /* A permission the BASE already grants: checked, but visually distinct so
          the author can see at a glance what came from the base and what they
          added on top of it. */
-      .cbox.frombase {
-        background: var(--el-muted);
-        border-color: var(--el-border-strong);
-        color: var(--el-text-secondary);
-      }
       .count-note {
         font-size: 12px;
         color: var(--el-text-secondary);
@@ -2887,12 +2880,12 @@
                     class="pmark"
                     role="checkbox"
                     aria-checked="true"
-                    aria-label="Held — from Viewer"
+                    aria-label="Held"
                     tabindex="0"
-                    ><span class="cbox frombase"
+                    ><span class="cbox on"
                       ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span></span
                   ><span
-                    ><span class="plabel">View project</span> <span class="from">from Viewer</span>
+                    ><span class="plabel">View project</span>
                     <span class="pdesc"
                       >Open the project and read its work items, boards and reports.</span
                     ></span
@@ -3176,12 +3169,12 @@
                     class="pmark"
                     role="checkbox"
                     aria-checked="true"
-                    aria-label="Held — from Viewer"
+                    aria-label="Held"
                     tabindex="0"
-                    ><span class="cbox frombase"
+                    ><span class="cbox on"
                       ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg></span></span
                   ><span
-                    ><span class="plabel">View reports</span> <span class="from">from Viewer</span>
+                    ><span class="plabel">View reports</span>
                     <span class="pdesc"
                       >Open the project’s reports — distribution, workload, velocity, roadmap.</span
                     ></span
