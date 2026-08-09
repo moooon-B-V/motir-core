@@ -23,6 +23,16 @@ import {
 //
 // DETERMINISM (`motir-core/CLAUDE.md` § E2E): every wait is a role/text landmark
 // or a settled navigation. There is no bare timeout in this file.
+//
+// ⚠️ THIS FILE IS MOTIR-2282'S RECEIPT, AND ONLY A PULL REQUEST TOUCHING IT CAN
+// RE-PUBLISH ONE. `acceptance-video.yml` triggers on `pull_request` + a `paths:`
+// filter over `tests/e2e/acceptance*.spec.ts` and has no `push:` trigger, so
+// `main` never runs the lane (MOTIR-1949, deliberate); the uploader then narrows
+// again to the specs the PR actually CHANGED (MOTIR-1937), so a run that merely
+// re-records this spec publishes nothing. Both gates are correct and neither is
+// reachable after the story's own PR merges — which is why a lost receipt costs a
+// throwaway PR against this file to restore (MOTIR-2502). Nothing in the workflow
+// notices the loss on its own.
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -125,9 +135,29 @@ test('a project admin reads the role list, drills into a role, and comes back', 
     // THE HEADCOUNTS, tied to the memberships the seed created — and the three
     // are deliberately distinct, so a placeholder or the wrong role's count
     // cannot pass.
-    await expect(admin).toContainText(`${ROLE_HEADCOUNT.admin} member`);
-    await expect(roleRow(page, 'member')).toContainText(`${ROLE_HEADCOUNT.member} members`);
-    await expect(roleRow(page, 'viewer')).toContainText(`${ROLE_HEADCOUNT.viewer} members`);
+    //
+    // ⚠️ ANCHORED, because `settings.rolesPage.memberCount` is an ICU plural
+    // (`one {# member} other {# members}`) and a bare substring cannot see which
+    // arm it selected: "1 member" is contained in "1 members" and in "21 members"
+    // alike, so the admin row — the only SINGULAR one, and so the only place the
+    // `one` arm is exercised at all — passed whether the plural resolved or not.
+    // The arm does get dropped in practice: `zh.json`'s same key is
+    // `other {# 位成员}` with no `one` branch.
+    //
+    // The trailing `\b` rejects the wrong arm; the leading guard is a negative
+    // LOOKBEHIND rather than a `\b` on purpose. `toContainText` reads
+    // `textContent`, which concatenates the row's sibling spans with no
+    // separator — the string under test is "…28 of 28 permissions1 member", so a
+    // `\b` before the digit would be asserting against the seam between the two
+    // spans and would never match. `(?<!\d)` rejects the case that actually
+    // matters (a wider number) and is indifferent to the seam.
+    await expect(admin).toContainText(new RegExp(`(?<!\\d)${ROLE_HEADCOUNT.admin} member\\b`));
+    await expect(roleRow(page, 'member')).toContainText(
+      new RegExp(`(?<!\\d)${ROLE_HEADCOUNT.member} members\\b`),
+    );
+    await expect(roleRow(page, 'viewer')).toContainText(
+      new RegExp(`(?<!\\d)${ROLE_HEADCOUNT.viewer} members\\b`),
+    );
     await beat();
 
     // The level-gated grants are explained rather than hidden — they are not a
