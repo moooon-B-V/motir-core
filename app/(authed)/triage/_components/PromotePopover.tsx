@@ -137,7 +137,7 @@ export function PromotePopover({ busy, onPromote }: PromotePopoverProps) {
       <Popover.Content align="start" width={320} className="p-2" overflowVisible>
         {step === 'targets' ? (
           <div className="flex flex-col gap-1">
-            <p className="px-(--spacing-control-x) pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-faint)">
+            <p className="px-(--spacing-control-x) pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-secondary)">
               {t('promote.heading')}
             </p>
             {targetRow(

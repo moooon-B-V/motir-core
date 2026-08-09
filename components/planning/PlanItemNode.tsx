@@ -144,7 +144,7 @@ export function PlanItemNode({
           <IssueTypeIcon type={kind} className="size-4" />
         </span>
         <div className="min-w-0 flex-1">
-          <span className="block font-mono text-xs text-(--el-text-faint)">
+          <span className="block font-mono text-xs text-(--el-text-secondary)">
             {item.identifier ?? t('newItem')}
           </span>
           <span
@@ -219,7 +219,7 @@ function DiffLine({
       <ChevronRight className="size-3 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
       <span className="truncate font-medium text-(--el-text)">{first.to ?? '—'}</span>
       {more > 0 ? (
-        <span className="ml-auto shrink-0 text-(--el-text-faint)">
+        <span className="ml-auto shrink-0 text-(--el-text-secondary)">
           {t('moreChanges', { n: more })}
         </span>
       ) : null}

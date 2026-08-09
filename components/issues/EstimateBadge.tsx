@@ -43,9 +43,11 @@ const DECK_LABEL_KEY: Record<PointScaleDto, 'deckFibonacci' | 'deckLinear' | 'de
 const BASE_CLASS =
   'inline-flex items-center gap-1 font-mono text-xs font-semibold whitespace-nowrap';
 
-function valueClassFor(valueText: string | null): string {
-  return valueText == null ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)';
-}
+// The badge's value ink. The unestimated arm used to be `--el-text-faint`,
+// which clears AA on no surface in either theme; the "—" it painted is a figure
+// a reader reads, not a glyph, so it takes `--el-text-secondary` like every
+// other value and the two arms collapse to one (MOTIR-2475).
+const VALUE_CLASS = 'text-(--el-text-secondary)';
 
 function Glyph() {
   return <Hash className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />;
@@ -129,7 +131,7 @@ export function EstimateBadge({
       : null;
   const aria = valueText != null ? t('valueAria', { value: valueText }) : t('emptyAria');
   return (
-    <span className={cn(BASE_CLASS, valueClassFor(valueText), className)} aria-label={aria}>
+    <span className={cn(BASE_CLASS, VALUE_CLASS, className)} aria-label={aria}>
       <Glyph />
       {valueText ?? '—'}
     </span>
@@ -230,7 +232,7 @@ function EstimateBadgeEditor({
           disabled={isPending}
           className={cn(
             BASE_CLASS,
-            valueClassFor(valueText),
+            VALUE_CLASS,
             'cursor-pointer rounded-(--radius-badge) border border-transparent px-(--spacing-chip-x) py-(--spacing-chip-y)',
             'hover:border-(--el-border) hover:bg-(--el-surface) hover:text-(--el-text-strong)',
             'focus-visible:border-(--el-border) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
@@ -251,7 +253,7 @@ function EstimateBadgeEditor({
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-[10.5px] font-bold tracking-wider text-(--el-text-faint) uppercase">
+          <span className="text-[10.5px] font-bold tracking-wider text-(--el-text-secondary) uppercase">
             {t('header')}
           </span>
           <span className="text-xs font-semibold text-(--el-text-muted)">
@@ -303,7 +305,7 @@ function EstimateBadgeEditor({
             }}
             className="h-(--height-control) flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) font-mono text-[13px] text-(--el-text) outline-none focus-visible:border-(--el-accent) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
-          <kbd className="rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-1.5 py-0.5 font-mono text-[10.5px] text-(--el-text-faint)">
+          <kbd className="rounded-(--radius-control) border border-(--el-border) bg-(--el-surface-soft) px-1.5 py-0.5 font-mono text-[10.5px] text-(--el-text-secondary)">
             ↵
           </kbd>
         </div>
@@ -317,7 +319,9 @@ function EstimateBadgeEditor({
             <X className="h-3 w-3" aria-hidden />
             {t('clear')}
           </button>
-          <span className="font-mono text-[10.5px] text-(--el-text-faint)">{t('cancelHint')}</span>
+          <span className="font-mono text-[10.5px] text-(--el-text-secondary)">
+            {t('cancelHint')}
+          </span>
         </div>
       </Popover.Content>
     </Popover>

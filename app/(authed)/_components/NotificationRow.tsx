@@ -144,19 +144,19 @@ export function NotificationRow({
             {summary}
           </span>
           <span
-            className="shrink-0 text-[11px] whitespace-nowrap text-(--el-text-faint)"
+            className="shrink-0 text-[11px] whitespace-nowrap text-(--el-text-secondary)"
             title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
           >
             {format.relativeTime(createdAt)}
           </span>
         </span>
+        {/* The excerpt takes `--el-text-secondary` on BOTH arms (MOTIR-2475):
+            the read arm was `--el-text-faint`, which clears AA on no surface,
+            and re-inking it alone would have made a READ excerpt darker than an
+            unread one. The read/unread hierarchy still reads on the summary
+            line above, which keeps its muted/ink split. */}
         {excerpt ? (
-          <span
-            className={cn(
-              'truncate text-xs leading-[1.4]',
-              read ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)',
-            )}
-          >
+          <span className="truncate text-xs leading-[1.4] text-(--el-text-secondary)">
             {excerpt}
           </span>
         ) : null}

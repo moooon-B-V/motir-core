@@ -46,7 +46,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
 
       {operation.parameters.length > 0 && (
         <>
-          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {t('sectionRequest')}
           </h3>
           {/* The table scrolls in its own container for the same reason the code
@@ -55,13 +55,13 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
             <table className="w-full border-collapse text-[13px]">
               <thead>
                 <tr>
-                  <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+                  <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                     {t('thParameter')}
                   </th>
-                  <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+                  <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                     {t('thIn')}
                   </th>
-                  <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+                  <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                     {t('thDescription')}
                   </th>
                 </tr>
@@ -72,7 +72,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
                     <td className="border-b border-(--el-border-soft) px-2.5 py-2 align-top">
                       <span className="font-mono text-xs text-(--el-text)">{parameter.name}</span>
                       <br />
-                      <span className="font-mono text-[11.5px] text-(--el-text-faint)">
+                      <span className="font-mono text-[11.5px] text-(--el-text-secondary)">
                         {parameter.type}
                         {parameter.required ? ` · ${t('required')}` : ` · ${t('optional')}`}
                       </span>
@@ -93,7 +93,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
 
       {operation.requestBody && (
         <>
-          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {t('sectionBody')}
           </h3>
           <div className="mb-4">
@@ -102,24 +102,24 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
         </>
       )}
 
-      <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {t('sectionExample')}
       </h3>
       <div className="mb-4">
         <CodeBlock caption="curl" code={operation.example} copyable />
       </div>
 
-      <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {t('sectionResponses')}
       </h3>
       <div className="mb-4 min-w-0 overflow-x-auto">
         <table className="w-full border-collapse text-[13px]">
           <thead>
             <tr>
-              <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+              <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                 {t('thStatus')}
               </th>
-              <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+              <th className="border-b border-(--el-border) px-2.5 py-1.5 text-left text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                 {t('thCondition')}
               </th>
             </tr>
@@ -141,7 +141,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
 
       {operation.responseBody && (
         <>
-          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase">
+          <h3 className="mt-5 mb-1.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {operation.envelope === 'rankedPage'
               ? t('sectionRowSchemaRanked')
               : operation.envelope === 'page'

@@ -326,11 +326,11 @@ export function PublicOverviewEditor({
                 ) : null}
 
                 {tags.length > 0 ? (
-                  <span className="text-[11px] text-(--el-text-faint)">
+                  <span className="text-[11px] text-(--el-text-secondary)">
                     {t('editTagCount', { count: tags.length, max: PUBLIC_TAGS_MAX_COUNT })}
                   </span>
                 ) : !addingTag ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] text-(--el-text-faint)">
+                  <span className="inline-flex items-center gap-1 text-[11px] text-(--el-text-secondary)">
                     <Minus className="size-3" aria-hidden />
                     {t('editTagsEmpty')}
                   </span>

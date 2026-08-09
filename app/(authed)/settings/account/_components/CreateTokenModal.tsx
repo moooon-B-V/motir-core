@@ -248,7 +248,7 @@ export function CreateTokenModal({
     const danger = metas.filter((m) => m.danger);
     return (
       <div key={group} className="flex flex-col gap-2">
-        <div className="font-mono text-[0.625rem] tracking-wide text-(--el-text-faint) uppercase">
+        <div className="font-mono text-[0.625rem] tracking-wide text-(--el-text-secondary) uppercase">
           {t(`scopes.groupLabels.${group}`)}
         </div>
         {safe.length > 0 ? (

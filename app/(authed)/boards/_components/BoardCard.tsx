@@ -113,6 +113,10 @@ export function BoardCardView({
           <span
             className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-dashed border-(--el-border-strong) bg-(--el-muted) text-[10px] font-semibold text-(--el-text-faint)"
             title={t('unassigned')}
+            // A GLYPH avatar stand-in: the dash carries no meaning the label
+            // does not already state, so the faint ink is one of the token's
+            // two legitimate jobs (MOTIR-2475).
+            role="img"
             aria-label={t('unassigned')}
           >
             –

@@ -78,7 +78,7 @@ export function RowActionsMenu({
       <Popover.Content width={232} align="end" className="p-0">
         {view === 'root' ? (
           <div className="p-1" role="menu" aria-label={t('rowActions')}>
-            <div className="px-(--spacing-control-x) py-1 text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+            <div className="px-(--spacing-control-x) py-1 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
               {identifier}
             </div>
             <button

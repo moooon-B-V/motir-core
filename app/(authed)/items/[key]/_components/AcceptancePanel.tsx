@@ -210,7 +210,7 @@ export function AcceptancePanel({
           />
         ) : null}
         <div className="flex items-center gap-1.5 px-3.5 pt-3">
-          <span className="mr-0.5 text-[11px] leading-none text-(--el-text-faint)">
+          <span className="mr-0.5 text-[11px] leading-none text-(--el-text-secondary)">
             {t('player.speed')}
           </span>
           {PLAYBACK_SPEEDS.map((rate) => (

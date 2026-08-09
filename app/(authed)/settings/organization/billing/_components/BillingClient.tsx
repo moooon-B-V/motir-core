@@ -1406,7 +1406,7 @@ function PlanCard({
           </li>
         ))}
         {featuresOff.map((f, i) => (
-          <li key={`off-${i}`} className="flex items-start gap-1.5 text-(--el-text-faint)">
+          <li key={`off-${i}`} className="flex items-start gap-1.5 text-(--el-text-secondary)">
             <X className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
             <span>{f}</span>
           </li>

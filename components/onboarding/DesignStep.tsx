@@ -178,7 +178,7 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
             product surface (the 7.3.37 specimen) framed as an app window, in the
             chosen design (inherits the section's scoped axes). */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-(--el-surface-soft) px-6 py-6">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-faint)">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-(--el-text-secondary)">
             {t('example.eyebrow')}
           </p>
           <div className="mt-2.5 overflow-hidden rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg)">

@@ -63,7 +63,7 @@ export function SprintHeaderBurndown({ sprintId }: { sprintId: string }) {
           {t('burndownTitle')}
         </span>
         {cycle ? (
-          <span className="text-[10.5px] text-(--el-text-faint)">
+          <span className="text-[10.5px] text-(--el-text-secondary)">
             {t('burndownDayOf', { day, total })}
           </span>
         ) : null}

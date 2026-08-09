@@ -43,7 +43,7 @@ export default async function McpToolsPage() {
             {t('mcpToolsLede')}
           </p>
           {total > 0 && (
-            <p className="mt-2 font-mono text-[12px] text-(--el-text-faint)">
+            <p className="mt-2 font-mono text-[12px] text-(--el-text-secondary)">
               {t('mcpToolsMeta', { tools: total, scopes: TOKEN_SCOPES.length })}
             </p>
           )}
@@ -100,7 +100,7 @@ export default async function McpToolsPage() {
                     {group.scope}
                   </span>
                   {!group.grantedByDefault && (
-                    <span className="text-[11.5px] text-(--el-text-faint)">
+                    <span className="text-[11.5px] text-(--el-text-secondary)">
                       {t('mcpScopeDefaultOff')}
                     </span>
                   )}

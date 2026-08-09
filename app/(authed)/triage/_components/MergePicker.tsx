@@ -77,7 +77,7 @@ export function MergePicker({ excludeId, busy, onMerge }: MergePickerProps) {
         className="flex flex-col gap-2 p-3"
         overflowVisible
       >
-        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-faint)">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-secondary)">
           {t('merge.heading')}
         </p>
         <Combobox

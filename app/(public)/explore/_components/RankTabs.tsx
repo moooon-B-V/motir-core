@@ -90,7 +90,7 @@ export async function RankTabs({ basePath, query }: { basePath: string; query: E
 
       {query.rank === 'trending' ? (
         <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-(--el-text-faint)">{t('windowLabel')}</span>
+          <span className="text-xs font-medium text-(--el-text-secondary)">{t('windowLabel')}</span>
           <SegTrack label={t('windowAria')}>
             {TRENDING_WINDOWS.map((window) => (
               <SegLink

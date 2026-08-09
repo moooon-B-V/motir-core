@@ -42,7 +42,7 @@ export function VelocityChart({ velocity }: { velocity: VelocityDto }) {
         <span className="text-sm text-(--el-text-muted)">
           {t('sprintReport.velocityLowHistoryTitle')}
         </span>
-        <span className="text-xs text-(--el-text-faint)">
+        <span className="text-xs text-(--el-text-secondary)">
           {t('sprintReport.velocityLowHistoryBody')}
         </span>
       </div>

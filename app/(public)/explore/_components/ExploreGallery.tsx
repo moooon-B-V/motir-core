@@ -89,7 +89,7 @@ export async function ExploreGallery({
             <Plus className="mr-1.5 h-4 w-4" aria-hidden />
             {t('loadMore')}
           </Link>
-          <p className="text-center font-mono text-xs text-(--el-text-faint)">
+          <p className="text-center font-mono text-xs text-(--el-text-secondary)">
             {t('paginationNote')}
           </p>
         </div>
