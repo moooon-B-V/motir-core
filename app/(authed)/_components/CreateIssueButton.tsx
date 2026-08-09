@@ -60,7 +60,7 @@ export function CreateIssueButton() {
       onClick={openCreateIssue}
       aria-keyshortcuts="C"
       aria-label={t('createIssue.title')}
-      className={`${base} text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)`}
+      className={`${base} text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)`}
     >
       <Plus className="h-4 w-4" aria-hidden />
       <span className="hidden lg:inline">{t('createIssue.create')}</span>

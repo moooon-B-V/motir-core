@@ -920,7 +920,9 @@ function MotirCiLine({
         {ci.balanceUnavailable && !paused ? (
           <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-            <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.balanceUnavailable')}</p>
+            <p className="font-sans text-xs text-(--el-text-secondary)">
+              {t('ci.balanceUnavailable')}
+            </p>
           </div>
         ) : null}
 
@@ -934,7 +936,9 @@ function MotirCiLine({
             // paywall variant routes the same way).
             <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
               <Lock className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-              <p className="font-sans text-xs text-(--el-text-muted)">{t('ci.memberLockNote')}</p>
+              <p className="font-sans text-xs text-(--el-text-secondary)">
+                {t('ci.memberLockNote')}
+              </p>
             </div>
           )
         ) : null}
@@ -1067,7 +1071,7 @@ function PaymentCard({
         ) : null}
         <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
           <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-          <p className="font-sans text-xs text-(--el-text-muted)">{t('payment.note')}</p>
+          <p className="font-sans text-xs text-(--el-text-secondary)">{t('payment.note')}</p>
         </div>
       </div>
     </Card>
@@ -1505,7 +1509,7 @@ function TopupCard({
         {!paidActive ? (
           <div className="flex items-start gap-2 rounded-(--radius-card) border border-dashed border-(--el-border-strong) bg-(--el-surface-soft) p-(--spacing-card-padding)">
             <Lock className="mt-0.5 h-4 w-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-            <p className="font-sans text-xs text-(--el-text-muted)">{t('topup.gate')}</p>
+            <p className="font-sans text-xs text-(--el-text-secondary)">{t('topup.gate')}</p>
           </div>
         ) : null}
       </div>

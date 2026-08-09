@@ -103,7 +103,7 @@ function OptionRow({
       <span className="flex w-[22px] shrink-0 items-center justify-center">{glyph}</span>
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {secondary ? (
-        <span className="max-w-[130px] shrink-0 truncate text-xs text-(--el-text-muted)">
+        <span className="max-w-[130px] shrink-0 truncate text-xs text-(--el-text-secondary)">
           {secondary}
         </span>
       ) : null}
@@ -282,7 +282,7 @@ export function IssueFilterBar({
       aria-label={active ? t('filterActiveAria', { count }) : t('filter')}
       className={cn(
         'inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-btn) border px-3 font-sans text-sm hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
-        superseded ? 'text-(--el-text-muted)' : 'text-(--el-text)',
+        superseded ? 'text-(--el-text-secondary)' : 'text-(--el-text)',
         active ? 'border-(--el-accent) bg-(--el-tint-lavender)' : 'border-(--el-border)',
       )}
     >

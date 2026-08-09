@@ -30,7 +30,7 @@ export function PlanPreview({ epics }: { epics: RoadmapLevelItem[] }) {
         </span>
         <div className="min-w-0">
           <span className="block text-sm font-semibold text-(--el-text)">Your plan</span>
-          <span className="block text-xs text-(--el-text-muted)">
+          <span className="block text-xs text-(--el-text-secondary)">
             {total} {total === 1 ? 'epic' : 'epics'} · {done} done
           </span>
         </div>

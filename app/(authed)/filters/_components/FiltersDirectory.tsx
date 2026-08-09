@@ -515,11 +515,11 @@ function BuiltinFilterRow({
           onApply={onApply}
         />
       </td>
-      <td className="px-3 py-2.5 align-middle text-(--el-text-muted)">{t('builtinOwner')}</td>
+      <td className="px-3 py-2.5 align-middle text-(--el-text-secondary)">{t('builtinOwner')}</td>
       <td className="px-3 py-2.5 align-middle">
         <Pill tone="neutral">{t('visibility.builtin')}</Pill>
       </td>
-      <td className="px-3 py-2.5 align-middle text-(--el-text-muted)">{t('ownerNone')}</td>
+      <td className="px-3 py-2.5 align-middle text-(--el-text-secondary)">{t('ownerNone')}</td>
       <td className="px-3 py-2.5" />
     </tr>
   );

@@ -106,7 +106,7 @@ export function AutomationRuleList({
         {atCap ? (
           <div className="mb-3 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface) px-(--spacing-control-x) py-(--spacing-control-y)">
             <CircleAlert className="size-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-            <p className="font-sans text-xs text-(--el-text-muted)">
+            <p className="font-sans text-xs text-(--el-text-secondary)">
               {t('capReached', { max: AUTOMATION_RULES_PER_PROJECT_CAP })}
             </p>
           </div>

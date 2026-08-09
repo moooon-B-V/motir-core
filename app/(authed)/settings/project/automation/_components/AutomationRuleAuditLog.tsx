@@ -237,7 +237,7 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
               aria-expanded={expanded}
               aria-label={t('expandFailureAria')}
               onClick={() => setExpanded((v) => !v)}
-              className="inline-flex size-6 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="inline-flex size-6 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               {expanded ? (
                 <ChevronUp className="size-4" aria-hidden />
@@ -320,7 +320,12 @@ function PagerButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex size-7 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-default disabled:opacity-40"
+      // The ink pairs with this button's OWN hover fill, `--el-muted`, where
+      // muted-on-muted is 4.12:1 — so the control drops below AA exactly when
+      // the pointer is on it. `disabled` here is an EXPRESSION, so the 1.4.3
+      // exemption does not cover the enabled render (MOTIR-2489). Secondary is
+      // 6.18:1 on `--el-muted`.
+      className="inline-flex size-7 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:cursor-default disabled:opacity-40"
     >
       {children}
     </button>

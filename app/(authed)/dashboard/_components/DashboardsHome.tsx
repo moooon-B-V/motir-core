@@ -130,7 +130,7 @@ function Row({ dashboard, onDelete }: { dashboard: DashboardSummaryDto; onDelete
         <span className="block truncate text-sm font-semibold text-(--el-text) hover:underline">
           {dashboard.name}
         </span>
-        <span className="block truncate text-xs text-(--el-text-muted)">
+        <span className="block truncate text-xs text-(--el-text-secondary)">
           {dashboard.isOwner ? t('ownedByYou') : dashboard.owner.name} ·{' '}
           {t('widgetCount', { count: dashboard.widgetCount })}
         </span>

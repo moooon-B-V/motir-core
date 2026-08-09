@@ -129,8 +129,8 @@ export function StyleVignette({ styleId, palette, type, label, className }: Styl
           <span className="ml-2 rounded-(--radius-control) bg-(--el-accent) px-2 py-[3px] text-[10px] font-medium text-(--el-accent-text)">
             Board
           </span>
-          <span className="text-[10px] text-(--el-text-muted)">Backlog</span>
-          <span className="text-[10px] text-(--el-text-muted)">Reports</span>
+          <span className="text-[10px] text-(--el-text-secondary)">Backlog</span>
+          <span className="text-[10px] text-(--el-text-secondary)">Reports</span>
           <span className="ml-auto size-5 rounded-full bg-(--el-muted)" aria-hidden />
         </div>
 
@@ -201,7 +201,7 @@ export function StyleVignette({ styleId, palette, type, label, className }: Styl
         {/* INPUT — a search field; data-surface lets a material style fill it. */}
         <div
           data-surface="input"
-          className="flex h-(--height-input) items-center gap-2 rounded-(--radius-input) border border-(--el-border-strong) bg-(--el-page-bg) px-(--spacing-input-x) text-[11px] text-(--el-text-muted)"
+          className="flex h-(--height-input) items-center gap-2 rounded-(--radius-input) border border-(--el-border-strong) bg-(--el-page-bg) px-(--spacing-input-x) text-[11px] text-(--el-text-secondary)"
         >
           <Search className="size-3.5" aria-hidden />
           <span>Search work items…</span>

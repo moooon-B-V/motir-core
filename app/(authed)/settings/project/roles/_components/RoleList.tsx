@@ -100,7 +100,7 @@ function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
             </span>
           ) : null}
         </span>
-        <span className="text-(--el-text-muted) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
+        <span className="text-(--el-text-secondary) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
           {tRoles(role.descriptionKey)}
         </span>
       </span>

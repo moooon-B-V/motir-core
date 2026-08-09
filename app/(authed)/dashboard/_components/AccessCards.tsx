@@ -45,7 +45,7 @@ export function AccessCards({
               <span className="block text-sm font-semibold text-(--el-text-strong)">
                 {card.title}
               </span>
-              <span className="block text-xs leading-relaxed text-(--el-text-muted)">
+              <span className="block text-xs leading-relaxed text-(--el-text-secondary)">
                 {card.desc}
               </span>
             </span>

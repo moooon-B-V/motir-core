@@ -868,6 +868,31 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
   },
 
+  // ── Forward-looking WITHIN one story: a sibling card creates the file ─────
+  //  MOTIR-2463 (this design amendment) is the DESIGN STOPPER of MOTIR-2257 and
+  //  merges BEFORE the story's code branch, so for the window between the two
+  //  merges these two assets name a module that is written but not yet on
+  //  `main`. `MOTIR-2472` creates `lib/permissions/limits.ts` as the pure
+  //  constants module the cap lives in — deliberately importable from a client
+  //  component, which is the whole reason the asset can promise the button and
+  //  the server refusal read the SAME number.
+  //
+  //  ⚠️ BOTH ROWS DELETE THEMSELVES WITH THE PARENT PR. The moment
+  //  `parent/MOTIR-2257-custom-project-roles` lands, the file exists and these
+  //  stop applying — at which point the sibling `carries no KNOWN_PATHS entry
+  //  that has stopped applying` test goes red until they are removed. That is
+  //  the mechanism working, not a trap: the exemption cannot outlive its reason.
+  {
+    file: 'design/projects/design-notes.md',
+    path: 'lib/permissions/limits.ts',
+    why: 'Forward-looking within MOTIR-2257: the cap section names the constants module MOTIR-2472 creates (`MAX_CUSTOM_ROLES_PER_PROJECT`), pairing it with the shipped `lib/customFields/limits.ts` it copies. The design stopper merges before the code branch; delete this row with the parent PR.',
+  },
+  {
+    file: 'design/projects/roles-permissions.mock.html',
+    path: 'lib/permissions/limits.ts',
+    why: "The same module, named in panel 6's note — the point being that the disabled `Create role` reads the constant the server enforces rather than restating it. Delete this row with the parent PR.",
+  },
+
   // ── An instruction to BUILD a primitive, not a citation of one ────────────
   {
     file: 'design/projects/roles-permissions.mock.html',

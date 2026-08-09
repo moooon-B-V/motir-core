@@ -277,7 +277,7 @@ export function BoardSwitcher({
           setLoadError(false);
           setReloadKey((k) => k + 1);
         }}
-        className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) text-sm text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+        className="inline-flex h-(--height-control) items-center gap-2 rounded-(--radius-input) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) text-sm text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
       >
         {t('boardListErrorRetry')}
       </button>
@@ -437,7 +437,7 @@ export function BoardSwitcher({
                       {isLastBoard ? (
                         <p
                           data-testid="board-switcher-lastboard-note"
-                          className="px-2 pt-1 pb-0.5 text-[11.5px] leading-snug text-(--el-text-muted)"
+                          className="px-2 pt-1 pb-0.5 text-[11.5px] leading-snug text-(--el-text-secondary)"
                         >
                           {t('lastBoardNote')}
                         </p>

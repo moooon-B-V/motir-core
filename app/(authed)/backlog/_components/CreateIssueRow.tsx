@@ -116,7 +116,18 @@ export function CreateIssueRow({ sprintId = null }: { sprintId?: string | null }
             reset();
           }
         }}
-        className="h-(--height-control) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border-strong) bg-(--el-page-bg) px-(--spacing-control-x) font-sans text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+        // ⚠️ Unlike the three sibling composers, this input paints its OWN
+        // `--el-page-bg` (white) fill, where muted measures 4.54:1 — it PASSES,
+        // by 0.04. It moves anyway, for reasons that are about the reader and
+        // not the guard: 0.04 is not headroom on placeholder text, and the
+        // other three composer placeholders land on secondary in this same
+        // change, so leaving this one lighter would be an inconsistency with
+        // nothing behind it. (The guard reports this site because
+        // `nearestSurface` walks PAST `--el-page-bg` to the row's tinted
+        // ancestor while terminating on `--el-card` — the two resolve to the
+        // same `--color-background`. That misattribution is MOTIR-2497, not
+        // something this ink change papers over.)
+        className="h-(--height-control) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border-strong) bg-(--el-page-bg) px-(--spacing-control-x) font-sans text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
       />
 
       <Button size="sm" variant="primary" loading={busy} onClick={() => void submit()}>

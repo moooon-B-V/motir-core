@@ -280,7 +280,7 @@ export function ApiTokensManager({
                         <tr className="border-b border-(--el-border-soft) last:border-0">
                           <td colSpan={8} className="pr-4 pb-3.5 align-top">
                             <div className="flex flex-wrap items-center gap-1.5 rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-surface-soft) px-(--spacing-control-x) py-(--spacing-control-y)">
-                              <span className="mr-1 font-sans text-xs text-(--el-text-muted)">
+                              <span className="mr-1 font-sans text-xs text-(--el-text-secondary)">
                                 {t('scopes.detailLead')}
                               </span>
                               {grantedScopeMeta(token.scopes).map((m) => {

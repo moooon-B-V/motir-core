@@ -217,7 +217,7 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
                       className="absolute inset-0 z-0 focus:outline-none"
                     />
                     <IssueTypeIcon type={row.kind} className="h-4 w-4 shrink-0" />
-                    <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">
+                    <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
                       {row.identifier}
                     </span>
                     <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
@@ -238,7 +238,7 @@ export function ArchivedWorkItemsList({ rows, total, page, pageSize }: ArchivedW
                         </span>
                       </span>
                     ) : (
-                      <span className="text-(--el-text-muted)">—</span>
+                      <span className="text-(--el-text-secondary)">—</span>
                     )}
                   </div>
 

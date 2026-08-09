@@ -27,6 +27,17 @@ import { loadSquare, categoryLabel } from './_lib/loadSquare';
 
 const BASE = '/explore';
 
+// ⚠️ DYNAMIC, and it must stay that way — MOTIR-2490. Same reasoning as
+// `app/sitemap.ts`: this page reads the database through `loadSquare`, and —
+// unlike every other public page here — it has NO `getSession()` call, so
+// nothing opts it out of build-time prerendering implicitly. Prerendering it
+// against the image build's placeholder credentials fails the whole build.
+//
+// It is also correct on the merits: the square ranks projects by recent
+// activity, so a copy frozen at image-build time would serve a stale leaderboard
+// until the next deploy.
+export const dynamic = 'force-dynamic';
+
 /** The absolute canonical URL for a square view (cursor dropped — page 2+
  * consolidates onto its filter/rank set so deep keyset pages don't fragment
  * the index). */

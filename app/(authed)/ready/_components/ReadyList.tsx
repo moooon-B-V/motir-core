@@ -155,7 +155,7 @@ function ReadyRow({ item }: { item: ReadyItemDto }) {
       className="group relative flex min-h-(--height-control) items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) px-(--spacing-control-x) py-(--spacing-control-y) shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong) hover:bg-(--el-surface-soft)"
     >
       <IssueTypeIcon type={item.kind} className="h-[18px] w-[18px] shrink-0" />
-      <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.key}</span>
+      <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">{item.key}</span>
       {/* Stretched-`::after` button: the whole card opens the peek (notes.html #7). */}
       <button
         type="button"

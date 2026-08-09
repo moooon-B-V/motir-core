@@ -219,11 +219,13 @@ function RepoRow({
         {row.state === 'audited' ? (
           <Pill tone="neutral">{t('findingCount', { count: row.findingCount })}</Pill>
         ) : null}
-        {/* `--el-text-muted` is 4.34:1 on `--el-surface-soft` (below AA), so the
-            timestamp on the SELECTED row steps up a level (§6). */}
-        <span
-          className={`text-xs ${selected ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)'}`}
-        >
+        {/* `--el-text-muted` is 4.34:1 on `--el-surface-soft` (below AA), which
+            is why the SELECTED row's timestamp used to step up a level (§6).
+            MOTIR-2477 dropped the split: the selected row is the only tinted
+            one, but the scanner cannot correlate a conditional background with
+            the branch that paints it, and `--el-text-secondary` is AA on both,
+            so the whole column takes it. */}
+        <span className="text-xs text-(--el-text-secondary)">
           {row.state === 'deriving'
             ? when === null
               ? t('startedRecently')

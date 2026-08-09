@@ -95,7 +95,7 @@ export function DiscoveryChatRail({
         {working && (
           <div className="flex items-start gap-2">
             <Avatar role="assistant" initial={t('assistantInitial')} />
-            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-muted)">
+            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
               <Spinner size="sm" aria-hidden="true" />
               {working.phase === 'drafting' ? t('drafting') : t('working')}
             </div>
@@ -139,7 +139,7 @@ export function DiscoveryChatRail({
           <Button variant="secondary" size="sm" onClick={() => onSend(t('replies.buildItAll'))}>
             {t('buildItAllLabel')}
           </Button>
-          <p className="flex items-start gap-1.5 text-xs text-(--el-text-muted)">
+          <p className="flex items-start gap-1.5 text-xs text-(--el-text-secondary)">
             <Lock className="mt-0.5 size-3.5 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
             {t('validateLockNote')}
           </p>
@@ -157,7 +157,7 @@ export function DiscoveryChatRail({
           >
             {t('skipLabel')}
           </Button>
-          <p className="text-xs text-(--el-text-muted)">{t('skipHint')}</p>
+          <p className="text-xs text-(--el-text-secondary)">{t('skipHint')}</p>
         </div>
       )}
 
@@ -172,7 +172,10 @@ export function DiscoveryChatRail({
           disabled={isStreaming || showPaywall}
           placeholder={t('composerPlaceholder')}
           aria-label={t('composerPlaceholder')}
-          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-60"
+          // The placeholder paints on this input's OWN `--el-surface` fill,
+          // where `--el-text-muted` measures 4.17:1 — it clears AA on the white
+          // page/card only (MOTIR-2477's table). Secondary is 6.24:1 there.
+          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-60"
         />
         <Button
           type="submit"

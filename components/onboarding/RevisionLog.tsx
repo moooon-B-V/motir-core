@@ -44,7 +44,7 @@ export function RevisionLog({ versions, currentVersion }: RevisionLogProps) {
         <h2 className="text-sm font-semibold text-(--el-text)">{t('historyTitle')}</h2>
       </header>
       {/* Forward-only assurance — there is deliberately no restore/undo control. */}
-      <p className="mt-1 flex items-start gap-1.5 text-xs text-(--el-text-muted)">
+      <p className="mt-1 flex items-start gap-1.5 text-xs text-(--el-text-secondary)">
         <MoveRight className="mt-0.5 size-3.5 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
         {t('historyHint')}
       </p>
@@ -101,7 +101,7 @@ function RevisionEntry({ rev, isCurrent }: { rev: PreplanRevisionDTO; isCurrent:
             {t('currentTag')}
           </span>
         )}
-        <span className="text-xs text-(--el-text-muted)">{when}</span>
+        <span className="text-xs text-(--el-text-secondary)">{when}</span>
         {expandable && (
           <button
             type="button"
@@ -121,7 +121,7 @@ function RevisionEntry({ rev, isCurrent }: { rev: PreplanRevisionDTO; isCurrent:
 
       {rev.changeReason && (
         <p className="px-(--spacing-control-x) pb-2 text-sm text-(--el-text-secondary)">
-          <span className="font-medium text-(--el-text-muted)">{t('whyLabel')}: </span>
+          <span className="font-medium text-(--el-text-secondary)">{t('whyLabel')}: </span>
           {rev.changeReason}
         </p>
       )}

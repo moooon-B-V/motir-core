@@ -43,7 +43,7 @@ export function ShortcutsCheatsheet({
                   {i > 0 ? (
                     <span className="text-(--el-text-muted) font-mono text-xs">+</span>
                   ) : null}
-                  <kbd className="text-(--el-text-muted) rounded-(--radius-kbd) border border-(--el-border) bg-(--el-surface) px-1.5 py-0.5 font-mono text-xs">
+                  <kbd className="text-(--el-text-secondary) rounded-(--radius-kbd) border border-(--el-border) bg-(--el-surface) px-1.5 py-0.5 font-mono text-xs">
                     {displayKey(key)}
                   </kbd>
                 </Fragment>

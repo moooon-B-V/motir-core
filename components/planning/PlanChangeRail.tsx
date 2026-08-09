@@ -253,7 +253,7 @@ export function PlanChangeRail({
             by the job's real progress frames. */}
         <div aria-live="polite" data-testid="plan-change-progress">
           {state.progress ? (
-            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-muted)">
+            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
               <Spinner size="sm" aria-hidden="true" />
               {tc(`progress.${state.progress.kind}`, {
                 count: state.progress.kind === 'proposed' ? state.progress.count : 0,

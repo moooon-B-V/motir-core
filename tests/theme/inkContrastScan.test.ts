@@ -179,6 +179,211 @@ describe('ink-contrast scanner — `--el-text-faint` on active text', () => {
   });
 });
 
+describe('ink-contrast scanner — the class and the element can come apart (MOTIR-2489)', () => {
+  // Three constructs let a Tailwind class describe an element it is not written
+  // on. Each was mis-ruled in the tree the faint sweep went through, and two of
+  // the three failed SILENTLY — a green run over a defect. Every case below is
+  // the shape of a real site, reduced; the comment names the file it came from.
+
+  describe('a descendant variant addresses a CHILD', () => {
+    it('judges the glyph the ink lands on, not the label-rendering ancestor', () => {
+      // PublicTabNav.tsx — a false POSITIVE: the `<Link>` renders "Docs", so the
+      // carrier read as active text, while the ink only ever painted the glyph.
+      expect(
+        verdictsFor(
+          `<a className="inline-flex gap-2 [&_svg]:text-(--el-text-faint)">
+             <svg aria-hidden viewBox="0 0 16 16" />
+             Docs
+           </a>`,
+          'faint',
+        ),
+      ).toEqual(['decorative']);
+    });
+
+    it('refuses the same variant once its target is the thing rendering text', () => {
+      const finding = only(
+        scan(
+          `<div className="[&_.seg-trail]:text-(--el-text-faint)">
+             <span className="seg-trail">12</span>
+           </div>`,
+        ),
+      );
+      expect(finding).toMatchObject({ verdict: 'violation', element: 'span' });
+      // The snippet shows the TARGET, not the carrier: the reader is being asked
+      // to check a judgement about the span, so the span is what they must see.
+      expect(finding.snippet).toContain('12');
+    });
+
+    it('rules the variant unattributable when its selector names nothing in this file', () => {
+      // The same PublicTabNav shape with the icon left as a component: `svg` is
+      // what the browser sees, not what this file says. Silently judging the
+      // carrier here is what produced the false positive above, so the honest
+      // answer is that the target is unknown — which FAILS, and asks a person.
+      const findings = scan(
+        `<Link href="/docs" className="[&_svg]:text-(--el-text-faint)">
+           <ChevronRight aria-hidden />
+           <span>Docs</span>
+         </Link>`,
+      );
+      const finding = only(findings);
+      expect(finding).toMatchObject({ verdict: 'unattributable', element: null });
+      expect(finding.reason).toContain('matches no element');
+      expect(violations(findings)).toHaveLength(1);
+    });
+
+    it('rules a selector past its reading unattributable too, and says which', () => {
+      const finding = only(
+        scan(`<div className="[&_ul>li:first-child]:text-(--el-text-faint)" />`),
+      );
+      expect(finding).toMatchObject({ verdict: 'unattributable', element: null });
+      expect(finding.reason).toContain('past what this scanner reads');
+    });
+
+    it('resolves a CHILD combinator against direct children only', () => {
+      expect(
+        verdictsFor(
+          `<div className="[&>svg]:text-(--el-text-faint)">
+             <span><svg aria-hidden /></span>
+           </div>`,
+          'faint',
+        ),
+      ).toEqual(['unattributable']);
+    });
+
+    it('leaves a STATE variant on the carrier — `hover:` retargets nothing', () => {
+      // Only a variant whose `&` is followed by a combinator moves the ink off
+      // the element. `hover:` / `[&:hover]` still paint the carrier itself.
+      expect(
+        verdictsFor(
+          `<p className="hover:text-(--el-text-faint)">Updated 3 minutes ago</p>`,
+          'faint',
+        ),
+      ).toEqual(['violation']);
+      expect(
+        verdictsFor(`<p className="[&:hover]:text-(--el-text-faint)">Updated</p>`, 'faint'),
+      ).toEqual(['violation']);
+    });
+  });
+
+  describe('a conditional `disabled` describes the element only SOMETIMES', () => {
+    it('refuses the 1.4.3 exemption for `disabled={a || b}`', () => {
+      // Segmented.tsx — a false NEGATIVE: an INACTIVE segment's trailing count
+      // painted at ~2.4:1 on the render where the control was not disabled, and
+      // the scanner never reported it because the attribute was merely present.
+      expect(
+        verdictsFor(
+          `<button disabled={disabled || opt.disabled} className="text-(--el-text-faint)">{opt.trailing}</button>`,
+          'faint',
+        ),
+      ).toEqual(['violation']);
+      expect(
+        verdictsFor(
+          `<span aria-disabled={isLocked} className="text-(--el-text-faint)">{count}</span>`,
+          'faint',
+        ),
+      ).toEqual(['violation']);
+    });
+
+    it('exempts a conditional attribute when the STYLE asks the same question', () => {
+      // The counterpart the refusal above needs. `atCap` says nothing to the
+      // predicate vocabulary, but the ternary is computed from the very
+      // expression `disabled` is, so the ink paints exactly in the inactive
+      // render. Three cap-limited buttons in the tree are this shape, and
+      // without this arm the widening would report all three as defects.
+      const finding = only(
+        scan(
+          `<button disabled={atCap} className={cn('gap-1.5', atCap ? 'text-(--el-text-faint)' : 'text-(--el-link)')}>{t('add')}</button>`,
+        ),
+      );
+      expect(finding.verdict).toBe('disabled');
+      expect(finding.reason).toContain('the same expression `disabled` is computed from');
+
+      // …and its negated mirror, where the ink is in the FALSE branch.
+      expect(
+        verdictsFor(
+          `<button disabled={!hasRows} className={hasRows ? 'text-(--el-link)' : 'text-(--el-text-faint)'}>{t('clear')}</button>`,
+          'faint',
+        ),
+      ).toEqual(['disabled']);
+    });
+
+    it('refuses the branch that paints while the control is ENABLED', () => {
+      // Same two expressions, opposite branch: this ink is on screen precisely
+      // when the button is live. An equality check that ignored which branch
+      // the class sits in would clear it.
+      expect(
+        verdictsFor(
+          `<button disabled={atCap} className={atCap ? 'text-(--el-link)' : 'text-(--el-text-faint)'}>{t('add')}</button>`,
+          'faint',
+        ),
+      ).toEqual(['violation']);
+    });
+
+    it('still exempts the UNCONDITIONAL forms — the exemption is real where it is stated', () => {
+      // The bare attribute and the string form are already covered above; these
+      // are the two an expression-blind reading would have swept up with them.
+      expect(
+        verdictsFor(
+          `<button disabled={true} className="text-(--el-text-faint)">Save</button>`,
+          'faint',
+        ),
+      ).toEqual(['disabled']);
+      expect(
+        verdictsFor(
+          `<span aria-disabled={false} className={locked ? 'text-(--el-text-faint)' : 'text-(--el-text)'}>{label}</span>`,
+          'faint',
+        ),
+      ).toEqual(['disabled']); // via the ternary, which says which branch is which
+    });
+  });
+
+  describe('a `placeholder:` prefix paints a pseudo-element that IS text', () => {
+    it('refuses faint placeholder ink on a labelled self-closing control', () => {
+      // OnboardingEntrance.tsx — a false NEGATIVE: `rendersText` is false for a
+      // self-closing element, so the glyphs-only arm cleared the one string on
+      // the surface a person actually reads, at 2.61:1.
+      const finding = only(
+        scan(
+          `<textarea aria-label="Describe your project" className="placeholder:text-(--el-text-faint)" />`,
+        ),
+      );
+      expect(finding).toMatchObject({ verdict: 'violation', element: 'textarea' });
+    });
+
+    it('keeps the exemptions that are still true of a placeholder', () => {
+      // Disabled is a property of the CONTROL, so it covers the placeholder too.
+      expect(
+        verdictsFor(
+          `<input disabled aria-label="Search" className="placeholder:text-(--el-text-faint)" />`,
+          'faint',
+        ),
+      ).toEqual(['disabled']);
+    });
+
+    it('does not let the placeholder rule leak onto the glyphs-only arm', () => {
+      // The same control WITHOUT a placeholder variant is still a labelled
+      // glyph holder, and still clears — the fix is scoped to the occurrence.
+      expect(
+        verdictsFor(`<input aria-label="Search" className="text-(--el-text-faint)" />`, 'faint'),
+      ).toEqual(['decorative']);
+    });
+  });
+
+  it('judges each class OCCURRENCE, so two inks in one attribute get two verdicts', () => {
+    // The unit of judgement is the token, not the literal: the variants that
+    // decide which element the ink lands on live on the token.
+    expect(
+      verdictsFor(
+        `<p className="text-(--el-text-faint) [&_svg]:text-(--el-text-faint)">
+           <svg aria-hidden />
+           Updated 3 minutes ago
+         </p>`,
+        'faint',
+      ),
+    ).toEqual(['violation', 'decorative']);
+  });
+});
+
 describe('ink-contrast scanner — `--el-text-muted` and the surface under it', () => {
   it('flags muted text over each tinted surface it fails on', () => {
     for (const surface of ['bg-(--el-surface)', 'bg-(--el-surface-soft)', 'bg-(--el-muted)']) {

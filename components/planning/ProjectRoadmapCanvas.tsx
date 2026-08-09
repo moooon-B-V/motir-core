@@ -872,7 +872,7 @@ export function ProjectRoadmapCanvas({
                 />
               </svg>
               {label}
-              <span className="text-(--el-text-muted)">· {meaning}</span>
+              <span className="text-(--el-text-secondary)">· {meaning}</span>
             </span>
           ))}
         </div>

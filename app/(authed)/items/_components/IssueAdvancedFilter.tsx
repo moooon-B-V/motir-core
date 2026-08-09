@@ -205,9 +205,12 @@ export function IssueAdvancedFilter({
             onClick={() => apply({ combinator: 'and', rows: [] })}
             className={cn(
               'inline-flex items-center gap-1.5 rounded-(--radius-control) px-1 py-0.5 text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
-              working.rows.length > 0
-                ? 'text-(--el-link) hover:underline'
-                : 'cursor-default text-(--el-text-faint)',
+              // Asked the same way `disabled` above is, so the faint ink is
+              // visibly the inactive state rather than a second, independent
+              // statement of it (MOTIR-2489).
+              working.rows.length === 0
+                ? 'cursor-default text-(--el-text-faint)'
+                : 'text-(--el-link) hover:underline',
             )}
           >
             <X className="h-3.5 w-3.5" aria-hidden />

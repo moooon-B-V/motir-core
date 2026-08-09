@@ -38,7 +38,7 @@ export async function ExploreFooter({
           </span>
           <span className="text-sm font-bold text-(--el-text)">{t('brand')}</span>
         </div>
-        <p className="mt-2 max-w-[22rem] text-[13px] leading-relaxed text-(--el-text-muted)">
+        <p className="mt-2 max-w-[22rem] text-[13px] leading-relaxed text-(--el-text-secondary)">
           {t('footerTagline')}
         </p>
       </div>
@@ -76,7 +76,7 @@ export async function ExploreFooter({
         <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('footProduct')}
         </h2>
-        <ul className="flex flex-col gap-1.5 text-[13px] text-(--el-text-muted)">
+        <ul className="flex flex-col gap-1.5 text-[13px] text-(--el-text-secondary)">
           <li>{t('footProductOverview')}</li>
           <li>{t('footProductPlanning')}</li>
           <li>{t('footProductBoards')}</li>
@@ -93,7 +93,7 @@ export async function ExploreFooter({
         <h2 className="mb-2.5 text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase">
           {t('footCompany')}
         </h2>
-        <ul className="flex flex-col gap-1.5 text-[13px] text-(--el-text-muted)">
+        <ul className="flex flex-col gap-1.5 text-[13px] text-(--el-text-secondary)">
           <li>{t('footCompanyAbout')}</li>
           <li>{t('footCompanyBlog')}</li>
           <li>{t('footCompanyOpenSource')}</li>

@@ -398,7 +398,7 @@ export function AiPlanningSettingsEditor({
           isAdmin ? (
             <div className="bg-(--el-surface-soft) border-(--el-border-soft) flex items-center justify-end gap-2.5 border-t px-(--spacing-card-padding) py-3.5">
               <span
-                className="text-(--el-text-muted) mr-auto text-xs"
+                className="text-(--el-text-secondary) mr-auto text-xs"
                 data-testid="ai-planning-footer-hint"
               >
                 {!valid

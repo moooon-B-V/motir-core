@@ -93,7 +93,7 @@ export function ProjectSwitcher({
             className={cn(
               'w-full',
               open && 'bg-(--el-surface) border border-(--el-accent)',
-              !active && 'text-(--el-text-muted)',
+              !active && 'text-(--el-text-secondary)',
             )}
           >
             <span className="flex w-full items-center gap-2">
