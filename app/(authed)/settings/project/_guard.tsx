@@ -83,6 +83,50 @@ export function resolveSettingsRefusal(
  * settings area chrome (the rail stays, the reader keeps their bearings) rather
  * than replacing the shell.
  */
+/**
+ * The refusal, as a pure presentational component over already-translated copy.
+ *
+ * Split out of {@link guardSettingsPage} so the thing a person actually READS is
+ * testable without a database: the wrapper below is IO plus two translation
+ * lookups, and everything with a decision in it lives either here or in
+ * {@link resolveSettingsRefusal}.
+ */
+export function SettingsRefusalState({
+  title,
+  description,
+  backHref,
+  backLabel,
+}: {
+  title: string;
+  description: string;
+  backHref: string;
+  backLabel: string;
+}) {
+  return (
+    <div className="mx-auto max-w-[46rem]">
+      <NoAccessState
+        title={title}
+        description={description}
+        backHref={backHref}
+        backLabel={backLabel}
+      />
+    </div>
+  );
+}
+
+/**
+ * Ask whether `entryId`'s destination is open to this actor.
+ *
+ * Returns `null` when it is — the page proceeds unchanged. Returns the refusal
+ * NODE when it is not, which the caller returns as its whole body:
+ *
+ *     const refused = await guardSettingsPage('members', ctx);
+ *     if (refused) return refused;
+ *
+ * Written as a node rather than a thrown error so the refusal renders INSIDE the
+ * settings area chrome (the rail stays, the reader keeps their bearings) rather
+ * than replacing the shell.
+ */
 export async function guardSettingsPage(
   entryId: SettingsEntryId,
   ctx: { projectId: string; userId: string; workspaceId: string },
@@ -96,15 +140,12 @@ export async function guardSettingsPage(
 
   const t = await getTranslations('settings');
   const ta = await getTranslations('projectAccess');
-
   return (
-    <div className="mx-auto max-w-[46rem]">
-      <NoAccessState
-        title={t('noAccess.title')}
-        description={t(refusal.descriptionKey)}
-        backHref={refusal.backHref}
-        backLabel={refusal.backLabelKey ? t(refusal.backLabelKey) : ta('backToProjects')}
-      />
-    </div>
+    <SettingsRefusalState
+      title={t('noAccess.title')}
+      description={t(refusal.descriptionKey)}
+      backHref={refusal.backHref}
+      backLabel={refusal.backLabelKey ? t(refusal.backLabelKey) : ta('backToProjects')}
+    />
   );
 }

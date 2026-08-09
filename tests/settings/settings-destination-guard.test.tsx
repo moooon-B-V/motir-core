@@ -1,6 +1,9 @@
+// @vitest-environment happy-dom
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, screen } from '@testing-library/react';
+import { renderWithIntl } from '../helpers/renderWithIntl';
 import {
   PROJECT_SETTINGS_NAV,
   PROJECT_SETTINGS_ROOT,
@@ -9,7 +12,10 @@ import {
 } from '@/lib/settings/projectSettingsNav';
 import { PERMISSIONS } from '@/lib/permissions/catalog';
 import { BUILTIN_ROLE_PERMISSIONS } from '@/lib/permissions/builtinRoles';
-import { resolveSettingsRefusal } from '@/app/(authed)/settings/project/_guard';
+import {
+  SettingsRefusalState,
+  resolveSettingsRefusal,
+} from '@/app/(authed)/settings/project/_guard';
 
 // Subtask MOTIR-2469 — HIDING IS PRESENTATION AND NEVER PROTECTION.
 //
@@ -236,5 +242,40 @@ describe('the 404-vs-403 posture is NOT flattened (MOTIR-2469)', () => {
     );
     expect(guard).not.toContain('canBrowse');
     expect(guard).not.toContain('ProjectNotFoundError');
+  });
+});
+
+afterEach(cleanup);
+
+describe('the refusal a person actually reads (MOTIR-2476)', () => {
+  // `guardSettingsPage` is IO plus two translation lookups; everything with a
+  // decision in it is either `resolveSettingsRefusal` above or this component.
+  it('renders the shipped no-access shape, with the copy it was handed', () => {
+    renderWithIntl(
+      <SettingsRefusalState
+        title="Admins only"
+        description="Who is on this project is managed by project admins."
+        backHref="/settings/project/board"
+        backLabel="Boards"
+      />,
+    );
+    expect(screen.getByText('Admins only')).toBeTruthy();
+    expect(screen.getByText('Who is on this project is managed by project admins.')).toBeTruthy();
+    const back = screen.getByRole('link', { name: 'Boards' });
+    expect(back.getAttribute('href')).toBe('/settings/project/board');
+  });
+
+  it('offers exactly ONE action — no dead "Request access" button', () => {
+    // `NoAccessState`'s own note: notifying an admin needs a backend flow this
+    // story does not ship, and a dead button is worse than its honest absence.
+    renderWithIntl(
+      <SettingsRefusalState
+        title="Admins only"
+        description="Board configuration is managed by project admins."
+        backHref="/dashboard"
+        backLabel="Back to projects"
+      />,
+    );
+    expect(screen.getAllByRole('link')).toHaveLength(1);
   });
 });

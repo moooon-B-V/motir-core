@@ -30,6 +30,7 @@ import {
   hasVisibleSettingsArea,
   isProjectSettingsPath,
   isSettingsEntryActive,
+  PROJECT_SETTINGS_ROOT,
   toSettingsNavPermissions,
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
@@ -354,7 +355,7 @@ export function SidebarNav({
               // Deep-link to project settings when a project is active;
               // otherwise there's nothing project-scoped to configure, so go to
               // workspace.
-              href: hasProject ? '/settings/project' : '/settings/workspace',
+              href: hasProject ? PROJECT_SETTINGS_ROOT : '/settings/workspace',
               // Stay un-highlighted when a more-specific workspace-settings
               // sub-link (Job runs / GitHub) is the active route, so only one
               // row reads current.
