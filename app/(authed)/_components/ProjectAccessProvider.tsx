@@ -21,18 +21,18 @@ import type { PermissionKey } from '@/lib/permissions/catalog';
  * afterwards) and hands it here as the serialisable `ActorPermissionsDTO`
  * array, in catalog order.
  *
- * ## `canEdit` / `canManage` are DERIVED, not passed
+ * ## `canEdit` / `canManage` are GONE (MOTIR-2473)
  *
- * They remain on the context value, so not one of the ~15 components reading
- * `useProjectAccess()` changed in MOTIR-2466 — but they are now computed from
- * the set rather than supplied beside it. That is provably the same answer, not
- * merely believed to be: `lib/projects/access.ts` defines `canEdit(i)` as
- * `hasPermission(i, 'work_item:edit')` and `canManageProject(i)` as
- * `hasPermission(i, 'project:administer')`, and `hasPermission` is literally
- * `resolvePermissions(i).has(key)` — the same set, asked the same question.
- * Retiring the two booleans from the call sites is the affordance sweep's job
- * (MOTIR-2473), deliberately separated so this seam stays reviewable as a pure
- * substitution.
+ * MOTIR-2466 kept them alive, derived, so nothing had to change at once. The
+ * affordance sweep spent that: every consumer now names the key its own
+ * control's server gate asserts, and the two booleans came off this type.
+ *
+ * They are deleted rather than left derived on purpose. A convenience field that
+ * still compiles is a field the next component will use, and it will be used
+ * correctly right up until someone composes a role that distinguishes the two —
+ * which is the entire point of the epic. `canManage` was the worse of the pair:
+ * it meant *administers the project*, and it was gating **Delete**, which has
+ * had its own permission (`work_item:delete`) since MOTIR-2291.
  *
  * The BROWSE gate is enforced separately (the switcher only lists browsable
  * projects; a non-browsable active project renders the no-access state on the
@@ -46,15 +46,6 @@ interface ProjectAccessContextValue {
    * on whichever of the two legacy booleans is closest.
    */
   can: (key: PermissionKey) => boolean;
-  /** Whether the actor may edit the active project (create / move / assign / update). */
-  canEdit: boolean;
-  /**
-   * Whether the actor may MANAGE the active project (project admin / workspace
-   * owner-admin) — the gate for the work-item ⋯ menu's **Delete** action (Story
-   * 2.8 · Subtask 2.8.4), mirroring `deleteWorkItem`'s `assertCanManage`.
-   * Distinct from `canEdit` (Archive / inline edits).
-   */
-  canManage: boolean;
 }
 
 const ProjectAccessContext = createContext<ProjectAccessContextValue | null>(null);
@@ -77,8 +68,7 @@ export function ProjectAccessProvider({
 }) {
   const value = useMemo<ProjectAccessContextValue>(() => {
     const held = new Set<PermissionKey>(permissions);
-    const can = (key: PermissionKey) => held.has(key);
-    return { can, canEdit: can('work_item:edit'), canManage: can('project:administer') };
+    return { can: (key: PermissionKey) => held.has(key) };
   }, [permissions]);
   return <ProjectAccessContext.Provider value={value}>{children}</ProjectAccessContext.Provider>;
 }
@@ -91,11 +81,7 @@ export function ProjectAccessProvider({
  * what the actor holds. Inverting this would silently hide UI in every test
  * that does not know this context exists.
  */
-const NO_PROVIDER_ACCESS: ProjectAccessContextValue = {
-  can: () => true,
-  canEdit: true,
-  canManage: true,
-};
+const NO_PROVIDER_ACCESS: ProjectAccessContextValue = { can: () => true };
 
 /**
  * Read the active project's access. See {@link NO_PROVIDER_ACCESS} for the

@@ -86,11 +86,11 @@ describe('the layout substitution is behaviour-neutral', () => {
 });
 
 function Probe({ keys }: { keys: PermissionKey[] }) {
-  const { can, canEdit: edit, canManage: manage } = useProjectAccess();
+  const { can } = useProjectAccess();
   return (
     <ul>
-      <li data-testid="canEdit">{String(edit)}</li>
-      <li data-testid="canManage">{String(manage)}</li>
+      <li data-testid="canEdit">{String(can('work_item:edit'))}</li>
+      <li data-testid="canManage">{String(can('project:administer'))}</li>
       {keys.map((key) => (
         <li key={key} data-testid={`can:${key}`}>
           {String(can(key))}
@@ -118,7 +118,9 @@ describe('ProjectAccessProvider', () => {
     expect(read('can:member:manage')).toBe('false');
   });
 
-  it('DERIVES canEdit and canManage from the set rather than taking them as props', () => {
+  // MOTIR-2473 retired the two convenience booleans from the context type; these
+  // now read the KEYS directly, which is what every consumer does today.
+  it('answers the two keys the retired booleans used to summarise', () => {
     render(
       <ProjectAccessProvider permissions={['work_item:edit']}>
         <Probe keys={[]} />

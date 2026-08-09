@@ -13,9 +13,6 @@ import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceServ
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { isWorkspaceManager } from '@/lib/projects/roles';
 import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { ParentRollupBadge } from '@/components/issues/ParentRollupBadge';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -118,14 +115,23 @@ export default async function IssueDetailPage({
 
   const { item } = detail;
 
-  // The actor's EDIT capability (6.4.6) — a read-only actor (viewer / member on
-  // a limited project) sees NO edit affordances: the "Edit" link to the form is
-  // hidden and the edit route itself is blocked (see edit/page.tsx). Inline field
-  // controls render disabled (CoreFieldsPanel, via ProjectAccessProvider).
-  const { canEdit } = await projectAccessService.getCapabilities(ctx.projectId, {
+  // The actor's PERMISSION SET (MOTIR-2473) — ONE round trip feeding three
+  // affordance decisions that used to be two booleans and a private admin check:
+  //
+  //   * `canEdit` (`work_item:edit`) — a read-only actor sees NO edit
+  //     affordances: the "Edit" link is hidden and the edit route is blocked
+  //     (edit/page.tsx). Inline field controls render disabled (6.4.6).
+  //   * `canDelete` (`work_item:delete`) — the ⋯ menu's Archive and Delete rows.
+  //     NOT the same people as `canEdit`: a member holds edit and not delete, so
+  //     the Archive row it used to offer them was an affordance that 403'd.
+  //   * `canManageProject` (`project:administer`) — the epic-privacy control.
+  const held = await projectAccessService.getPermissions(ctx.projectId, {
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
   });
+  const canEdit = held.has('work_item:edit');
+  const canDelete = held.has('work_item:delete');
+  const canManageProject = held.has('project:administer');
 
   // The Development section's linked PRs (MOTIR-1579) — the same display-ready
   // read the peek payload uses; item.id came from the access-gated detail read.
@@ -239,22 +245,14 @@ export default async function IssueDetailPage({
   // project taxonomy (browse-gated, name-ordered, admin-bounded — finding #57),
   // and the empty-taxonomy "Manage components" link is admin-only — resolved
   // like the settings pages do (workspace manager OR project-role admin).
-  const [projectComponents, wsRole, projectMembers] = await Promise.all([
+  // The project-members read that used to ride this batch went with the private
+  // admin check MOTIR-2473 retired — one fewer round trip on every detail page.
+  const [projectComponents] = await Promise.all([
     componentsService.listComponents(ctx.project.identifier, {
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
     }),
-    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
-    projectMembersService.listMembers({
-      key: ctx.project.identifier,
-      actorUserId: ctx.userId,
-      ctx: { userId: ctx.userId, workspaceId: ctx.workspaceId },
-    }),
   ]);
-  const canManageProject =
-    isWorkspaceManager(wsRole) ||
-    projectMembers.find((m) => m.userId === ctx.userId)?.role === 'admin';
-
   // The project estimation config (Subtask 4.3.4) — the rail's inline
   // story-points EstimateBadge reads the scale deck from it via context.
   const estimationConfig = await estimationService.getEstimationConfig(ctx.projectId, {
@@ -391,7 +389,7 @@ export default async function IssueDetailPage({
               />
               {/* 2.8.4: the ⋯ actions menu — Edit details · Copy link · Archive
                 · Delete… (Edit folded in here). Permission-gated: Edit/Archive
-                on canEdit, Delete on canManageProject. 2.9.11: on an archived
+                on canEdit, Archive + Delete on canDelete. 2.9.11: on an archived
                 item the menu swaps Archive→Restore and Delete… opens the
                 archived confirm. */}
               <WorkItemDetailActions
@@ -399,7 +397,7 @@ export default async function IssueDetailPage({
                 identifier={item.identifier}
                 title={item.title}
                 canEdit={canEdit}
-                canManage={canManageProject}
+                canDelete={canDelete}
                 archived={isArchived}
                 activeSprintId={activeSprint?.id ?? null}
                 activeSprintName={activeSprint?.name ?? null}

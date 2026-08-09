@@ -155,7 +155,10 @@ export function CoreFieldsPanel({
   // sees every field control disabled. The server (6.4.3) rejects the write
   // regardless; disabling here makes the affordance honest rather than letting
   // a viewer edit then bounce off a 403.
-  const { canEdit } = useProjectAccess();
+  // MOTIR-2473 — the key this control's own write asserts:
+  // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
   const readOnly = !canEdit;
   const [editing, setEditing] = useState<EditableKey | null>(null);
   const [updatedAt, setUpdatedAt] = useState(item.updatedAt);

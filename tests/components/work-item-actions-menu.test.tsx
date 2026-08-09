@@ -8,7 +8,7 @@ import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActions
 import { DeleteWorkItemDialog } from '@/components/issues/actions/DeleteWorkItemDialog';
 
 // WorkItemActionsMenu + DeleteWorkItemDialog (Story 2.8 · Subtask 2.8.4): the
-// permission-gated ⋯ menu (Edit/Archive on canEdit, Delete on canManage) and the
+// permission-gated ⋯ menu (Edit/Archive on canEdit, Delete on canDelete) and the
 // cascade-count confirm dialog (the count read from 2.8.7's delete-preview is
 // NAMED in the dialog + on the "Delete N items" button). E2E coverage of the
 // full delete/archive round-trip is Subtask 2.8.6; this pins the gating + the
@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe('WorkItemActionsMenu — permission gating', () => {
-  function openMenu(props: { canEdit: boolean; canManage: boolean }) {
+  function openMenu(props: { canEdit: boolean; canDelete: boolean }) {
     render(
       <WorkItemActionsMenu
         itemId="wi-1"
@@ -38,22 +38,22 @@ describe('WorkItemActionsMenu — permission gating', () => {
     fireEvent.click(screen.getByRole('button', { name: /Actions for PROD-1/ }));
   }
 
-  it('shows the full menu — Edit details · Copy link · Archive · Delete — for an admin (canEdit + canManage)', () => {
-    openMenu({ canEdit: true, canManage: true });
+  it('shows the full menu — Edit details · Copy link · Archive · Delete — for an admin (canEdit + canDelete)', () => {
+    openMenu({ canEdit: true, canDelete: true });
     expect(screen.getByRole('menuitem', { name: 'Edit details' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Archive' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Delete…' })).toBeTruthy();
   });
 
-  it('hides Delete for an editor who cannot manage (canManage false)', () => {
-    openMenu({ canEdit: true, canManage: false });
+  it('hides Delete for an editor who cannot manage (canDelete false)', () => {
+    openMenu({ canEdit: true, canDelete: false });
     expect(screen.getByRole('menuitem', { name: 'Archive' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
   });
 
-  it('collapses to just Copy link for a viewer (no canEdit, no canManage)', () => {
-    openMenu({ canEdit: false, canManage: false });
+  it('collapses to just Copy link for a viewer (no canEdit, no canDelete)', () => {
+    openMenu({ canEdit: false, canDelete: false });
     expect(screen.getByRole('menuitem', { name: 'Copy link' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Edit details' })).toBeNull();
     expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
@@ -62,7 +62,7 @@ describe('WorkItemActionsMenu — permission gating', () => {
 });
 
 describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
-  function openArchivedMenu(props: { canEdit: boolean; canManage: boolean }) {
+  function openArchivedMenu(props: { canEdit: boolean; canDelete: boolean }) {
     render(
       <WorkItemActionsMenu
         itemId="wi-1"
@@ -78,7 +78,7 @@ describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
   }
 
   it('swaps Archive→Restore for the canEdit row, and keeps Delete… for a manager', () => {
-    openArchivedMenu({ canEdit: true, canManage: true });
+    openArchivedMenu({ canEdit: true, canDelete: true });
     expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
     // The active Archive row is gone — it is the Restore row in archived mode.
     expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
@@ -86,7 +86,7 @@ describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
   });
 
   it('hides Delete for a non-manager (Restore still shown for an editor)', () => {
-    openArchivedMenu({ canEdit: true, canManage: false });
+    openArchivedMenu({ canEdit: true, canDelete: false });
     expect(screen.getByRole('menuitem', { name: 'Restore' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Delete…' })).toBeNull();
   });
@@ -105,7 +105,7 @@ describe('WorkItemActionsMenu — archived mode (Subtask 2.9.11)', () => {
       ),
     );
 
-    openArchivedMenu({ canEdit: true, canManage: true });
+    openArchivedMenu({ canEdit: true, canDelete: true });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Delete…' }));
 
     // The confirm dialog opens; the archived variant omits the active variant's
@@ -196,7 +196,7 @@ describe('WorkItemActionsMenu — Add to active sprint (Subtask 2.4.14)', () => 
         identifier="PROD-1"
         title="A bug"
         canEdit={canEdit}
-        canManage={false}
+        canDelete={false}
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
         activeSprintId={activeSprintId}
@@ -270,7 +270,7 @@ describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () =
         identifier="PROD-1"
         title="An epic"
         canEdit={canEdit}
-        canManage={false}
+        canDelete={false}
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
         planEdits={{
@@ -359,7 +359,7 @@ describe('WorkItemActionsMenu — the Plan / Re-plan rule on the row menu', () =
         identifier="PROD-1"
         title="An epic"
         canEdit
-        canManage={false}
+        canDelete={false}
         onDeleted={vi.fn()}
         onArchived={vi.fn()}
       />,

@@ -40,7 +40,10 @@ export function LabelsCard({
   initialLabels: LabelDto[];
 }) {
   const t = useTranslations('issueViews');
-  const { canEdit } = useProjectAccess();
+  // MOTIR-2473 — the key this control's own write asserts:
+  // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
   const [isPending, startTransition] = useTransition();
   const [labels, setLabels] = useState<LabelDto[]>(initialLabels);
   const [editing, setEditing] = useState(false);

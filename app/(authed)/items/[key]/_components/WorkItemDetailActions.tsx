@@ -20,7 +20,7 @@ export function WorkItemDetailActions({
   identifier,
   title,
   canEdit,
-  canManage,
+  canDelete,
   archived = false,
   activeSprintId = null,
   activeSprintName = null,
@@ -30,7 +30,9 @@ export function WorkItemDetailActions({
   identifier: string;
   title: string;
   canEdit: boolean;
-  canManage: boolean;
+  /** `work_item:delete` — Archive and Delete (MOTIR-2473 renamed this from
+   *  `canManage`, which carried `project:administer`). */
+  canDelete: boolean;
   /** The item is archived — put the menu in Restore/archived-delete mode. */
   archived?: boolean;
   /** The project's active sprint (the "Add to active sprint" target — 2.4.14). */
@@ -53,7 +55,7 @@ export function WorkItemDetailActions({
       identifier={identifier}
       title={title}
       canEdit={canEdit}
-      canManage={canManage}
+      canDelete={canDelete}
       archived={archived}
       activeSprintId={activeSprintId}
       activeSprintName={activeSprintName}
