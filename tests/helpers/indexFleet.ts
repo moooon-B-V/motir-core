@@ -95,6 +95,32 @@ export function stubIndexFleet(): void {
       // a HIGH CodeQL alert in this repo, test fixtures included.
       const parsed = new URL(String(url));
       if (parsed.host === new URL(INDEX_AI_URL).host) {
+        // ⚠️ THE CODE-AUDIT READ ANSWERS "ALREADY AUDITED", AND THAT IS THE
+        // NEUTRAL STATE FOR THESE SUITES (MOTIR-2266). A successful index now
+        // ends in a `derive-first-audit` step whose gate asks motir-ai whether
+        // this repo has a derived audit. Left to the credential-mint branch
+        // below, that read would answer with a body carrying no `audit`, the
+        // gate would read "not audited", and every index test would submit a
+        // real derivation — costing a logged, failed `refreshCodeAudit` per
+        // project per test in suites that are about the INDEX shape, not the
+        // trigger. Answering `audited` makes the trigger a clean no-op here.
+        // The trigger's OWN suite
+        // (`tests/jobs/code-graph-index-first-audit.test.ts`) mocks these two
+        // calls directly and drives both answers.
+        if (parsed.pathname.endsWith('/v1/code-audit')) {
+          return json(200, {
+            audit: {
+              id: 'audit_fixture',
+              healthSummary: {},
+              codeGraphRef: 'cg_fixture',
+              repoKey: INDEX_REPO_REF,
+              createdAt: new Date(0).toISOString(),
+            },
+            findings: [],
+            total: 0,
+            nextOffset: null,
+          });
+        }
         return json(201, {
           credential: INDEX_RUN_CREDENTIAL,
           expiresAt: new Date(Date.now() + 900_000).toISOString(),
