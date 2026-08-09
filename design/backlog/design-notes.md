@@ -149,8 +149,10 @@ loaded-row tally), the ranked rows, and the inline **+ Create issue** row
 
 ## Issue row (panel 2) — reuses the work-items list-row vocabulary
 
-A `role="row"` div with **sibling** controls (no nested interactive elements —
-the 2.5.19 stretched-link contract / finding #35). **Slot order, left → right:**
+A `role="listitem"` div with **sibling** controls (no nested interactive elements —
+the 2.5.19 stretched-link contract / finding #35), sitting inside the region's
+`role="list"` scroll viewport (`aria-label` `Backlog work items` /
+`<sprint> work items`). **Slot order, left → right:**
 
 `grip · checkbox · type icon · key · summary (flex, truncate) · epic chip ·
 estimate SEAM · assignee · status Pill · ⋯`
@@ -174,6 +176,47 @@ estimate SEAM · assignee · status Pill · ⋯`
 
 The row is **identical in the backlog and inside sprint containers** — one
 global `backlog_rank`, so a row drags between regions unchanged.
+
+### Row semantics — `list` / `listitem`, and why not `grid` (MOTIR-2493)
+
+The **scroll viewport** of each region is the `role="list"` (`aria-label`
+`Backlog work items` / `<sprint> work items`); the rows inside it are
+`role="listitem"`. Everything between them — the sortable container, the
+per-row absolute-position wrappers virtualization needs — carries **no role**,
+which is what lets list→listitem ownership resolve through them.
+
+- **`aria-posinset` / `aria-setsize` on every row**, against the **aggregate**
+  count — the same bounded `N issues` the count header shows, never the number
+  of rows currently mounted. The list is virtualized and lazy-loaded, so without
+  them a reader counts the mounted window and announces "3 of 12" on a
+  400-issue backlog, losing the ranked order the backlog exists to convey.
+  Panel 0 of `backlog-scale.mock.html` draws this literally: rows 215–220 of
+  1,284, with rows 1–214 unmounted.
+- **No `aria-selected`.** It is not an allowed attribute on `listitem` (only on
+  `row` / `option` / `tab` / …), so carrying it would trade a role violation for
+  an `aria-allowed-attr` one. Selection is announced by the **sibling
+  checkbox** — `role="checkbox" aria-checked` with a `Select` / `Deselect <key>`
+  label — and shown by the tint **and** the check, never colour-alone
+  (finding #35).
+- **The `DragOverlay` clone is `aria-hidden`** and holds nothing focusable: it
+  is a visual duplicate of a row still present as a dashed ghost, portalled
+  outside the viewport, so left in the tree it would double-announce and claim
+  `listitem` with no `list` ancestor.
+
+**Why `list` and not `grid`.** The rows are visually a table of aligned columns,
+so `role="row"` reads like the natural annotation — and this asset specified it
+until MOTIR-2493. It cannot work here: a `row` requires a
+`rowgroup`/`grid`/`table`/`treegrid` parent and this surface has none, so the
+annotation was two CRITICAL axe violations (`aria-required-parent` +
+`aria-required-children`) on every populated backlog. The fix is the list arm,
+not a promotion to `grid`, because **`grid` obliges the arrow-key cell keyboard
+model and a `gridcell` per slot**, neither of which this surface implements or
+should — the backlog's keyboard model is drag-to-rank, which is what a `list`
+already is. Promoting the container would have swapped one false promise for
+another. **This is settled; do not re-open it because the rows look like a
+table.** What was always right, and is unchanged, is the **sibling-controls /
+no-nested-interactive** contract above — that is about NESTING, not about the
+role token, and it survives verbatim.
 
 ## Drag states (panel 3) — reuse the 3.2 board drag contract
 
@@ -472,8 +515,11 @@ backlog inherits it); the **4.5 Scrum** sprint-scope filter (the backlog filter
 - **No nested buttons** (axe `nested-interactive`) — the `[Saved]` option row is
   a `role="option"` div whose star toggle is a SIBLING `<button>`; the applied
   name-chip / Clear / Clear-filter CTAs are standalone `<button>`s; the issue rows
-  stay `role="row"` with sibling controls (the 4.2 contract). Every icon `<svg>`
-  carries a 24×24 `viewBox`.
+  keep their sibling controls (the 4.2 contract) as `role="listitem"` inside the
+  region's `role="list"` viewport, carrying `aria-posinset`/`aria-setsize` against
+  the aggregate match count — the `N matching issues` the filtered count header
+  shows, not the rows currently mounted (see _Row semantics_ above; a filtered
+  region is still virtualized). Every icon `<svg>` carries a 24×24 `viewBox`.
 - **Listbox a11y** — the quick-filter facets are `role="listbox"
 aria-multiselectable="true"` with `role="option" aria-selected`; the filtered-
   empty backlog uses `EmptyState`/`role="status"`, not an empty listbox
