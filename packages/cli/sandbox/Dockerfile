@@ -39,10 +39,13 @@ ARG NODE_TAG=24-bookworm-slim
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage 1 — build the `motir` binary from this checkout and pack it as a tarball
 # ─────────────────────────────────────────────────────────────────────────────
-# `@motir/cli` is not published to npm yet (that is Epic-8 work), so the image
-# builds it from source. `npm pack` produces the same artifact a published
-# release would, which keeps the runtime stage's install path identical to the
-# one 7.9.7e will use against GHCR/npm.
+# `@motir/cli` IS on npm now (0.0.1 since MOTIR-1890, 0.2.0 as of MOTIR-2219),
+# but the image still builds it from source ON PURPOSE: a `cli-v*` tag lane
+# replays that tag's tree, so packing from the checkout makes the `motir` inside
+# the image the same commit as the tag — where `npm install @motir/cli@<version>`
+# would fetch whatever the registry holds under that version and reintroduce the
+# gap the tag exists to close. `npm pack` produces the same artifact a published
+# release would, so the runtime stage's install path is identical either way.
 FROM node:${NODE_TAG} AS builder
 
 WORKDIR /src
