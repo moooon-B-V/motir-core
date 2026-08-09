@@ -27,11 +27,15 @@ import { useSidebarCollapsed } from '@/lib/hooks/useSidebarCollapsed';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import {
   groupSettingsNav,
+  hasVisibleSettingsArea,
   isProjectSettingsPath,
   isSettingsEntryActive,
+  PROJECT_SETTINGS_ROOT,
+  toSettingsNavPermissions,
   visibleSettingsNav,
-  type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+import { canOfferNavDestination } from '@/lib/settings/projectNavAccess';
 import {
   ACCOUNT_SETTINGS_NAV,
   groupAccountSettingsNav,
@@ -59,7 +63,7 @@ import { AccountSidebarHeader } from './AccountSidebarHeader';
 // Settings AREA swap (Story 6.5 · Subtask 6.5.2): when the route is inside the
 // project-settings area (`/settings/project*`) and a project is active, the rail
 // REPLACES the project nav with the grouped settings nav rendered FROM the
-// `projectSettingsNav` registry (filtered by the actor's `settingsAccess`) and
+// `projectSettingsNav` registry (filtered by the actor's permission set) and
 // swaps the header for the SettingsSidebarHeader (back-to-project + identity).
 // This is the design's "same rail" decision — one rail, no double chrome — which
 // the App Router forces into THIS component (the rail lives here, not in a
@@ -81,13 +85,14 @@ export interface SidebarNavProps {
    * ProjectSwitcher's "Plan a new project with AI" door gate. */
   aiConfigured?: boolean;
   /**
-   * The actor's settings-area capabilities (Subtask 6.5.2), resolved once in the
-   * (authed) layout via `projectAccessService.getSettingsCapabilities`. Drives
-   * the settings-nav registry's per-entry `access` filter when the rail is in the
-   * project-settings area. Omitted off the settings routes (the project nav never
-   * reads it); defaults closed so a missing value never leaks an entry.
+   * The actor's resolved permission keys for the active project (Subtask
+   * MOTIR-2468), resolved once in the (authed) layout. Drives BOTH the
+   * settings-nav registry's per-entry filter when the rail is in the
+   * project-settings area AND whether the bottom nav renders the Project
+   * settings door at all. Omitted when there is no active project; an absent
+   * value defaults CLOSED, so a missing prop never leaks an entry or a door.
    */
-  settingsAccess?: SettingsNavCapabilities;
+  settingsPermissions?: readonly PermissionKey[];
   /**
    * The signed-in user's identity (Subtask 7.8.12) — drives the account-settings
    * area rail header (initial avatar + name + email) when the rail is inside the
@@ -129,7 +134,7 @@ export function SidebarNav({
   activeProject,
   projects,
   variant = 'rail',
-  settingsAccess,
+  settingsPermissions,
   user,
   aiConfigured = false,
 }: SidebarNavProps) {
@@ -145,6 +150,11 @@ export function SidebarNav({
   const collapsed = isDrawer ? false : storeCollapsed;
 
   const hasProject = Boolean(activeProject);
+  // The actor's keys in membership-test form, used by BOTH the settings-area
+  // rail below and the bottom nav's Project settings door. Built once, before
+  // the two early returns, so the door and the rows it opens onto can never
+  // disagree about what the area contains.
+  const held = toSettingsNavPermissions(settingsPermissions);
 
   // Account-settings AREA (Subtask 7.8.12): swap the project nav for the
   // registry-driven account-settings nav. Unlike the project area this does NOT
@@ -181,8 +191,7 @@ export function SidebarNav({
 
   // Settings AREA: swap the project nav for the registry-driven settings nav.
   if (activeProject && isProjectSettingsPath(pathname)) {
-    const caps = settingsAccess ?? { canBrowse: false, canManage: false };
-    const settingsSections: SidebarSection[] = groupSettingsNav(visibleSettingsNav(caps)).map(
+    const settingsSections: SidebarSection[] = groupSettingsNav(visibleSettingsNav(held)).map(
       ({ group, entries }) => ({
         id: `settings-${group}`,
         label: ts(`nav.group.${group}`),
@@ -309,26 +318,55 @@ export function SidebarNav({
         badge: <ResumeInProgressBadge label={t('nav.resumeOnboardingInProgress')} />,
       });
     }
-    sections.push({ id: 'primary', items: primaryItems });
+    // MOTIR-2471 — the same gate the ⌘K navigations use, from the same map, so
+    // the two surfaces cannot drift. A row whose destination refuses the actor
+    // outright is not rendered and the rows below close up; nothing marks the
+    // gap (design panel 4). The Resume-onboarding row above carries its own
+    // `canResume` gate and is deliberately not in the map — it is a state, not a
+    // permission.
+    const offered = primaryItems.filter(
+      (item) => item.href === ONBOARDING_RESUME_PATH || canOfferNavDestination(item.href, held),
+    );
+    sections.push({ id: 'primary', items: offered });
   }
+
+  // THE AREA DOOR (Subtask MOTIR-2468, design panel 1). With an active project
+  // the Settings row deep-links into the project-settings area — so it renders
+  // only when that area has something behind it for this actor. An actor whose
+  // every entry filters away gets NO row: the rows below simply close up and the
+  // footer is one shorter, with nothing marking the gap (no disabled row, no
+  // tooltip — an entry point is a promise about a room, and a disabled row is a
+  // promise the product then refuses).
+  //
+  // With NO active project the row still targets workspace settings and is
+  // ALWAYS rendered: workspace settings are governed by the workspace role,
+  // which this epic does not change, and `held` is empty in that state anyway —
+  // gating on it would hide a door this story has no business touching.
+  const showSettingsDoor = hasProject ? hasVisibleSettingsArea(held) : true;
 
   sections.push({
     id: 'bottom',
     items: [
-      {
-        icon: <Settings />,
-        label: t('nav.settings'),
-        // Deep-link to project settings when a project is active; otherwise
-        // there's nothing project-scoped to configure, so go to workspace.
-        href: hasProject ? '/settings/project' : '/settings/workspace',
-        // Stay un-highlighted when a more-specific workspace-settings sub-link
-        // (Job runs / GitHub) is the active route, so only one row reads current.
-        active:
-          isActive(pathname, '/settings') &&
-          !isActive(pathname, '/settings/workspace/jobs') &&
-          !isActive(pathname, '/settings/workspace/github') &&
-          !isActive(pathname, '/settings/workspace/gitlab'),
-      },
+      ...(showSettingsDoor
+        ? [
+            {
+              icon: <Settings />,
+              label: t('nav.settings'),
+              // Deep-link to project settings when a project is active;
+              // otherwise there's nothing project-scoped to configure, so go to
+              // workspace.
+              href: hasProject ? PROJECT_SETTINGS_ROOT : '/settings/workspace',
+              // Stay un-highlighted when a more-specific workspace-settings
+              // sub-link (Job runs / GitHub) is the active route, so only one
+              // row reads current.
+              active:
+                isActive(pathname, '/settings') &&
+                !isActive(pathname, '/settings/workspace/jobs') &&
+                !isActive(pathname, '/settings/workspace/github') &&
+                !isActive(pathname, '/settings/workspace/gitlab'),
+            },
+          ]
+        : []),
       {
         // Operator surface (Subtask 1.6.5) — the workspace's background-job runs
         // + dead-letter queue. A workspace-scoped settings sub-page.

@@ -97,7 +97,7 @@ async function renderBar(overrides: Partial<TopNavProps> = {}): Promise<RenderRe
     <ThemeProvider>
       <CommandPaletteProvider>
         <CreateIssueProvider hasProject>
-          <ProjectAccessProvider canEdit canManage>
+          <ProjectAccessProvider permissions={['work_item:edit', 'project:administer']}>
             <ReportProvider projectKey="ACME">{bar}</ReportProvider>
           </ProjectAccessProvider>
         </CreateIssueProvider>

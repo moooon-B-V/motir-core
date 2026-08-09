@@ -59,7 +59,10 @@ function ErrorBox({ children }: { children: string }) {
 export function CustomFieldsSection({ workItemId, fields, members }: CustomFieldsSectionProps) {
   const t = useTranslations('issueViews');
   const locale = useLocale() as Locale;
-  const { canEdit } = useProjectAccess();
+  // MOTIR-2473 — the key this control's own write asserts:
+  // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
   const readOnly = !canEdit;
   const [isPending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);

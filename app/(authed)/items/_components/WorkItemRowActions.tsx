@@ -8,7 +8,12 @@ import { useNotifyIssuesChanged } from '../../_components/CreateIssueProvider';
 import type { IssueRowData } from './issueRows';
 
 export function WorkItemRowActions({ row }: { row: IssueRowData }) {
-  const { canEdit, canManage } = useProjectAccess();
+  // MOTIR-2473 — the ⋯ menu's rows split across two keys, not one boolean:
+  // Edit / Expand / Re-plan / Add-to-sprint are `work_item:edit`; Archive and
+  // Delete are `work_item:delete` (`workItemsService` :2179 / :2267).
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
+  const canDelete = can('work_item:delete');
   const notifyIssuesChanged = useNotifyIssuesChanged();
   const [edits, setEdits] = useState<{ kind: 'expand' | 'replan'; itemKey: string } | null>(null);
 
@@ -30,7 +35,7 @@ export function WorkItemRowActions({ row }: { row: IssueRowData }) {
           identifier={row.identifier}
           title={row.title}
           canEdit={canEdit}
-          canManage={canManage}
+          canDelete={canDelete}
           planEdits={{
             kind: row.kind,
             hasChildren: row.hasChildren,

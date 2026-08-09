@@ -140,7 +140,13 @@ export function BoardCard({
   onOpenQuickView: (identifier: string) => void;
 }) {
   const t = useTranslations('boards');
-  const { canEdit, canManage } = useProjectAccess();
+  // MOTIR-2473 — each key read off the write it guards: a board MOVE goes
+  // through `boardsService`'s `assertCanEdit` (`work_item:edit`), and the ⋯
+  // menu's Delete row through `workItemsService.deleteWorkItem`
+  // (`work_item:delete`). They were one boolean apart and are two permissions.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
+  const canDelete = can('work_item:delete');
   const notifyIssuesChanged = useNotifyIssuesChanged();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: card.id,
@@ -189,7 +195,7 @@ export function BoardCard({
           identifier={card.identifier}
           title={card.title}
           canEdit={canEdit}
-          canManage={canManage}
+          canDelete={canDelete}
           onDeleted={notifyIssuesChanged}
           onArchived={notifyIssuesChanged}
           triggerClassName="inline-flex h-(--height-control) w-(--height-control) shrink-0 items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-page-bg) text-(--el-text-muted) shadow-(--shadow-subtle) hover:bg-(--el-surface) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"

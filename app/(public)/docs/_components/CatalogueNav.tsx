@@ -5,6 +5,17 @@ import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
 import { SectionLabel } from '@/components/ui/SectionLabel';
+
+// The rail's eyebrow ink. `SectionLabel`'s default is `--el-text-eyebrow`,
+// which maps to the SAME Tier-0 base as `--el-text-muted`
+// (`tests/theme/iconTextSurfaceTokens.test.ts` pins that deliberately) — so it
+// inherits muted's ceiling: AA on the white page/card only, failing on any
+// tint. This rail is `--el-sidebar-bg` (= `--color-surface`), where muted
+// measures 4.17:1, and the widened /docs sweep measured all nine of these
+// labels failing (MOTIR-2482). `components/ui/Sidebar.tsx` already overrides
+// the same way for the same reason; the token itself is not retargeted here
+// because that mapping is a pinned, deliberate decision of its own.
+const RAIL_EYEBROW = 'text-(--el-text-secondary)';
 import type { ReferenceGroup } from '@/lib/apiDocs/reference';
 import { MethodPill } from './MethodPill';
 
@@ -247,7 +258,7 @@ export function CatalogueNav({
           in the area learns what else the area holds, and on a guide page it is
           the whole rail. */}
       <div className="mt-4" data-testid="catalogue-surfaces">
-        <SectionLabel>{t('navDocumentation')}</SectionLabel>
+        <SectionLabel className={RAIL_EYEBROW}>{t('navDocumentation')}</SectionLabel>
         <div className="mt-1.5 flex flex-col">{surfaces.map(renderRow)}</div>
       </div>
 
@@ -259,14 +270,14 @@ export function CatalogueNav({
           className="mt-4"
           data-testid={`catalogue-subarea-${subArea.prefix.replace('/docs/', '')}`}
         >
-          <SectionLabel>{t(subArea.headingKey)}</SectionLabel>
+          <SectionLabel className={RAIL_EYEBROW}>{t(subArea.headingKey)}</SectionLabel>
           <div className="mt-1.5 flex flex-col">{subAreaPages.map(renderRow)}</div>
         </div>
       )}
 
       {filtered.map((group) => (
         <div key={group.key} className="mt-4" data-testid={`catalogue-group-${group.key}`}>
-          <SectionLabel>{group.label}</SectionLabel>
+          <SectionLabel className={RAIL_EYEBROW}>{group.label}</SectionLabel>
           <div className="mt-1.5 flex flex-col">
             {group.operations.map((operation) => (
               <a

@@ -139,6 +139,34 @@ export default defineConfig({
         'lib/permissions/**',
         'lib/services/projectAccessService.ts',
 
+        // Story MOTIR-2258 · Subtask MOTIR-2476 — the permission-gated shell.
+        // The two registries are the load-bearing new code (one decides which
+        // settings rooms exist for an actor, the other which nav destinations
+        // do), and the guard that refuses a hidden destination is the file that
+        // keeps hiding from becoming the whole story. GATED, not report-only:
+        // all three are new in this story, so there is no pre-existing number to
+        // pin blind.
+        //
+        // ⚠️ WRITTEN WITH `app/**/`, NOT `app/(authed)/` — a route group's
+        // parentheses are extglob syntax to the matcher v8 globs with, so a
+        // literal path matches nothing and the file silently never enters the
+        // report (MOTIR-2449; `tests/coverage-gate-globs.test.ts` fails the build
+        // on any pattern that reaches nothing).
+        'lib/settings/projectSettingsNav.ts',
+        'lib/settings/projectNavAccess.ts',
+        'app/**/_components/ProjectAccessProvider.tsx',
+        // ⚠️ `_guard.tsx` is REPORT-ONLY (below `thresholds`), and the reason is
+        // worth stating rather than quietly omitting: MOTIR-2476 measured it at
+        // 50% lines, and the uncovered half is `guardSettingsPage`'s body — one
+        // service round trip and two translation lookups, reachable only with a
+        // database. Its DECISION (`resolveSettingsRefusal`) and its RENDER
+        // (`SettingsRefusalState`) were split out for exactly this reason and are
+        // both fully covered. Pinning 90 here would either gate on a number the
+        // unit suite cannot reach, or invite mocking the access service in a
+        // component test — and the repo's rule is one mock, `getSession`. The
+        // honest sequence is the one this file already follows twice above:
+        // measure first, publish the number, pin it when the DB-backed arm lands.
+
         // Story MOTIR-2282 · Subtask MOTIR-2264 — the Roles & permissions
         // screens and the read behind them. The two files above were already
         // report-only; these are the surface THIS story added or widened, and
@@ -844,6 +872,15 @@ export default defineConfig({
         // matches no reported file, so the threshold would pass vacuously.
         'lib/mappers/permissionMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/settings/projectSettingsNav.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2258 · Subtask MOTIR-2476 — both MEASURED before being
+        // pinned, on this branch, with the story's own suites: the nav map at
+        // 100/100/100 and the provider at 100/100/100.
+        'lib/settings/projectNavAccess.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/_components/ProjectAccessProvider.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'app/**/settings/project/roles/_components/*.tsx': {
           branches: 90,
           functions: 90,

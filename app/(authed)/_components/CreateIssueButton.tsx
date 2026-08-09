@@ -27,7 +27,10 @@ export function CreateIssueButton() {
   const t = useTranslations('shell');
   const ta = useTranslations('projectAccess');
   const { openCreateIssue, canCreate } = useCreateIssue();
-  const { canEdit } = useProjectAccess();
+  // MOTIR-2473 — the key this control's own write asserts:
+  // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
   if (!canCreate) return null;
 
   const base =

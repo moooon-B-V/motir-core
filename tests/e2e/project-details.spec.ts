@@ -211,9 +211,12 @@ test.describe('project-details — the editable Details + change-key journey', (
     await expect(nifPrevRow).not.toContainText('PROD');
   });
 
-  test('a non-admin member sees the Details values but NONE of the editing controls', async ({
-    page,
-  }) => {
+  // ⚠️ INVERTED BY MOTIR-2258 (`design-notes.md` § *Amendment 2026-08-08*).
+  // Details is the project-level administration that belongs to no domain —
+  // rename, key, avatar, archive — and its own gate asserts `project:administer`.
+  // A read-only Details for someone who can change nothing on it is exactly the
+  // 2026-06-09 treatment the amendment supersedes.
+  test('a non-admin member is REFUSED the Details page', async ({ page }) => {
     const tenant = await seedTenant('pd-owner-2@example.com');
     const member = await makeUser('pd-member@example.com', 'Mary Member');
     await workspacesService.addMember({ userId: member.id, workspaceId: tenant.workspaceId });
@@ -221,14 +224,12 @@ test.describe('project-details — the editable Details + change-key journey', (
 
     await signIn(page, member.email, PWD);
     await page.goto('/settings/project');
-    await expect(page.getByRole('heading', { name: 'Details', exact: true })).toBeVisible();
 
-    // The values are visible… (scope the name to the main pane — it also appears
-    // in the settings rail header, which would make a bare match ambiguous).
-    await expect(page.getByText('Read-only', { exact: true })).toBeVisible();
-    await expect(page.locator('#main').getByText(PROJECT_NAME, { exact: true })).toBeVisible();
-    // …but every editing affordance is absent (the hide is presentation; the
-    // PATCH/DELETE reject server-side too — proven at the service tier).
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+    await expect(page.getByRole('paragraph').filter({ hasText: /project details/i })).toBeVisible();
+    // Every editing affordance is absent, as before — and now so is the form the
+    // values sat in (the hide is presentation; the PATCH/DELETE reject
+    // server-side too, proven at the service tier).
     await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Change key', exact: false })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Change avatar' })).toHaveCount(0);

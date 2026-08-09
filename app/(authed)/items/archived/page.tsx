@@ -24,7 +24,8 @@ import { ArchivedWorkItemsList } from './_components/ArchivedWorkItemsList';
 // 2.9.1 access decision — a non-browsable project renders the no-access state,
 // the same as /items), reads `?page` + the archived page (LIMIT/OFFSET, never
 // load-all), and shapes rows against the project workflow before handing them to
-// the client island. RESTORE is `canEdit`-gated — passed to the island, which
+// the client island. RESTORE is `work_item:delete`-gated (MOTIR-2473) and the
+// island reads that key itself, so nothing is passed for it —
 // drops the action column for a browse-only viewer. 4-layer: the page calls
 // services only (never Prisma).
 
@@ -108,7 +109,6 @@ export default async function ArchivedIssuesPage({
         total={archived.total}
         page={archived.page}
         pageSize={archived.pageSize}
-        canEdit={caps.canEdit}
       />
     </div>
   );

@@ -12,13 +12,17 @@ import type { ArchivedWorkItemDto } from '@/lib/dto/workItems';
 import type { WorkflowDto } from '@/lib/dto/workflows';
 
 // The archived work items view + Restore + Delete (Story 2.9 · Subtasks 2.9.3 /
-// 2.9.5) under happy-dom — the client island's render, the canEdit (Restore) /
-// canManage (Delete) gate matrix, and the page-state-after-mutation contract
+// 2.9.5) under happy-dom — the client island's render, the (Restore) /
+// canDelete (Restore + Delete) gate matrix, and the page-state-after-mutation contract
 // (both Restore and Delete remove the row on the authoritative 200/204). The
 // route is URL-driven, so we stub next/navigation; the actions POST/DELETE via
 // fetch, so we stub fetch and assert the row leaves the DOM only AFTER the
-// authoritative response, never on the optimistic click alone. `canManage` comes
-// from `useProjectAccess()`, so we wrap renders in a ProjectAccessProvider.
+// authoritative response, never on the optimistic click alone.
+//
+// ⚠️ MOTIR-2473 re-keyed BOTH affordances onto `work_item:delete`. Restore used
+// to be gated on `canEdit` and Delete on `canDelete` (`project:administer`) —
+// but `unarchiveWorkItem` (`:2208`) and `deleteWorkItem` (`:2267`) assert the
+// SAME key, so a member was offered a Restore button that 403'd. One key now.
 
 const push = vi.fn();
 vi.mock('next/navigation', () => ({
@@ -26,13 +30,15 @@ vi.mock('next/navigation', () => ({
   usePathname: () => '/items/archived',
 }));
 
-// `canManage` is read from the provider (the WorkItemRowActions pattern), so
+// `canDelete` is read from the provider (the WorkItemRowActions pattern), so
 // every render wraps one — defaulting to NOT manageable, so the 2.9.3 tests keep
 // their pre-Delete behaviour (the actions column is then canEdit-only).
-function render(ui: ReactElement, { canManage = false }: { canManage?: boolean } = {}) {
+function render(ui: ReactElement, { canDelete = false }: { canDelete?: boolean } = {}) {
   return renderWithIntl(
     <ToastProvider>
-      <ProjectAccessProvider canEdit canManage={canManage}>
+      <ProjectAccessProvider
+        permissions={canDelete ? ['work_item:edit', 'work_item:delete'] : ['work_item:edit']}
+      >
         {ui}
       </ProjectAccessProvider>
     </ToastProvider>,
@@ -70,7 +76,7 @@ afterEach(() => {
 
 describe('ArchivedWorkItemsList', () => {
   it('renders archived rows with identity + archive provenance', () => {
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />);
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />);
 
     const first = screen.getByTestId('archived-row-PROD-49');
     expect(within(first).getByText('PROD-49')).toBeTruthy();
@@ -94,7 +100,9 @@ describe('ArchivedWorkItemsList', () => {
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />);
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canDelete: true,
+    });
 
     fireEvent.click(screen.getByRole('button', { name: 'Restore PROD-49' }));
 
@@ -121,7 +129,9 @@ describe('ArchivedWorkItemsList', () => {
       vi.fn(async () => ({ ok: false, json: async () => ({ code: 'BOOM' }) })),
     );
 
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />);
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canDelete: true,
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Restore PROD-49' }));
 
     await waitFor(() => {
@@ -131,28 +141,31 @@ describe('ArchivedWorkItemsList', () => {
     expect(screen.getByTestId('archived-row-PROD-49')).toBeTruthy();
   });
 
-  it('view-only (not canEdit): the list renders but no Restore action exists', () => {
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit={false} />);
+  it('view-only (no `work_item:delete`): the list renders but no Restore action exists', () => {
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />);
     expect(screen.getByTestId('archived-row-PROD-49')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Restore/ })).toBeNull();
     expect(screen.queryByText('Actions')).toBeNull();
   });
 
   it('empty archive renders the EmptyState, not a table', () => {
-    render(<ArchivedWorkItemsList rows={[]} total={0} page={1} pageSize={50} canEdit />);
+    render(<ArchivedWorkItemsList rows={[]} total={0} page={1} pageSize={50} />);
     expect(screen.getByText('Nothing archived')).toBeTruthy();
     expect(screen.queryByRole('table')).toBeNull();
   });
 
-  // The gate matrix (2.9.5 / design-notes §2.9.7): Restore = canEdit, Delete (the
-  // `⋯` menu) = canManage, independent — each affordance HIDDEN when its gate is
-  // unmet, the column dropped only when neither is present.
-  it('canManage gates the row `⋯` Delete affordance independently of Restore', () => {
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />, {
-      canManage: true,
+  // ⚠️ THE GATE MATRIX COLLAPSED (MOTIR-2473), and that IS the finding. 2.9.5
+  // gated Restore on `canEdit` and Delete on `canManage`, independently — but
+  // `unarchiveWorkItem` (`workItemsService:2208`) and `deleteWorkItem` (`:2267`)
+  // assert the SAME key, `work_item:delete`. So the two-gate matrix described a
+  // product that could not exist: an actor with edit-and-not-delete was offered
+  // a Restore button whose POST returned 403. One key, one column, both rows.
+  it('canDelete gates the row `⋯` Delete affordance independently of Restore', () => {
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canDelete: true,
     });
     const first = screen.getByTestId('archived-row-PROD-49');
-    // canEdit → inline Restore; canManage → the `⋯` menu beside it.
+    // → inline Restore; canDelete → the `⋯` menu beside it.
     expect(within(first).getByRole('button', { name: 'Restore PROD-49' })).toBeTruthy();
     expect(within(first).getByRole('button', { name: 'Actions for PROD-49' })).toBeTruthy();
     // The `⋯` is PURELY the Delete affordance — opening it shows only Delete….
@@ -162,21 +175,26 @@ describe('ArchivedWorkItemsList', () => {
     expect(screen.queryByRole('menuitem', { name: 'Archive' })).toBeNull();
   });
 
-  it('canManage WITHOUT canEdit: the `⋯` Delete shows but no inline Restore', () => {
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit={false} />, {
-      canManage: true,
+  it('the two affordances now rise and fall TOGETHER — one key, not two', () => {
+    // The replacement for the old "delete without edit" case. `work_item:edit`
+    // alone buys neither affordance, which is the honest answer: it never bought
+    // a working Restore, it only ever bought the button.
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canDelete: false,
     });
-    // The actions column stays (Delete is available), but Restore is gone.
-    expect(screen.getByText('Actions')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Restore/ })).toBeNull();
-    expect(
-      within(screen.getByTestId('archived-row-PROD-49')).getByRole('button', {
-        name: 'Actions for PROD-49',
-      }),
-    ).toBeTruthy();
+    expect(screen.queryByText('Actions')).toBeNull();
+
+    cleanup();
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canDelete: true,
+    });
+    const row = screen.getByTestId('archived-row-PROD-49');
+    expect(within(row).getByRole('button', { name: 'Restore PROD-49' })).toBeTruthy();
+    expect(within(row).getByRole('button', { name: 'Actions for PROD-49' })).toBeTruthy();
   });
 
-  it('canManage: Delete… removes the row only after the delete 204 (page-state)', async () => {
+  it('canDelete: Delete… removes the row only after the delete 204 (page-state)', async () => {
     let resolveDelete: (v: Response) => void = () => {};
     const fetchMock = vi.fn((...args: unknown[]) => {
       const [url] = args;
@@ -202,8 +220,8 @@ describe('ArchivedWorkItemsList', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
 
-    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} canEdit />, {
-      canManage: true,
+    render(<ArchivedWorkItemsList rows={ROWS} total={2} page={1} pageSize={50} />, {
+      canDelete: true,
     });
 
     fireEvent.click(

@@ -441,17 +441,20 @@ jobs:
     #     sweeps out into their own leg (below) already removed the worst long
     #     pole, so 5 is the balance — each leg re-pays the install + dual-webServer
     #     boot, and more legs past this give diminishing returns for the cost.
-    #   • 1 "a11y" leg — every `@a11y` axe sweep, pulled into its own leg via
-    #     `--grep "@a11y"` (and `--grep-invert`-ed OUT of the bulk legs). WHY a
-    #     dedicated leg and not just more bulk shards: Playwright's count-based
-    #     sharding keeps whole files together in DISCOVERY ORDER and slices
-    #     contiguously, so the (alphabetically adjacent) shell-a11y* files always
-    #     cluster into ONE bulk shard no matter the shard count — that shard was
-    #     the bulk-3 long-pole (16 slow axe sweeps in one leg). Selecting by the
-    #     @a11y TAG instead spreads nothing back into the bulks and lets the axe
-    #     suite run as its own parallel leg. The shell-a11y file is also split
-    #     three ways (shell-a11y / -tokens / -detail) so this leg can itself be
-    #     sharded later if it becomes the long pole.
+    #   • 2 "a11y" legs — every `@a11y` axe sweep, pulled out of the bulk legs
+    #     via `--grep "@a11y"` (and `--grep-invert`-ed OUT of them), then split
+    #     `--shard=i/2`. WHY a dedicated selection and not just more bulk shards:
+    #     Playwright's count-based sharding keeps whole files together in
+    #     DISCOVERY ORDER and slices contiguously, so the (alphabetically
+    #     adjacent) shell-a11y* files always cluster into ONE bulk shard no
+    #     matter the shard count — that shard was the bulk-3 long-pole (16 slow
+    #     axe sweeps in one leg). Selecting by the @a11y TAG instead spreads
+    #     nothing back into the bulks and lets the axe suite run as its own
+    #     parallel legs. It was ONE leg until MOTIR-2482 added the widened-route
+    #     sweeps and MEASURED the leg past double; the split, its numbers, and
+    #     why the knob is legs rather than `workers` are in the matrix entry.
+    #     The shell-a11y file is also split four ways (shell-a11y / -tokens /
+    #     -detail / -wide) so the shard boundary has files to fall between.
     #   • 2 "at-scale" legs — board(-scrum)-at-scale and collab-at-scale, which
     #     need distinct env overrides (issue-cap / seed knobs) and so can't share
     #     a shard. They run IN PARALLEL with the bulk legs.
@@ -505,10 +508,29 @@ jobs:
           # Every @a11y axe sweep (the shell-a11y* files + the per-feature a11y
           # closers), pulled into one parallel leg so the slow sweeps stop
           # clustering into a single bulk shard. Standard board/collab defaults
-          # apply (no override env). Split the shell-a11y file further or shard
-          # this leg (`--grep "@a11y" --shard=i/2`) if it becomes the long pole.
-          - id: a11y
-            args: '--grep "@a11y"'
+          # apply (no override env).
+          #
+          # SPLIT 1 leg -> 2 (MOTIR-2482) — the contingency the previous version
+          # of this comment named ("shard this leg if it becomes the long pole"),
+          # taken on a measurement rather than a feeling. MOTIR-2482 adds
+          # shell-a11y-wide.spec.ts: eight previously-unswept routes, each on a
+          # POPULATED fixture. Measured locally on one worker it costs 2.2 min
+          # against a ~1.4 min pre-existing @a11y leg — it more than doubles the
+          # suite. Against run 31286985817 (a11y `Run E2E` step 3.6 min / job 5.2
+          # min; slowest bulk leg step 6.3 min / job 8.0 min) a single leg would
+          # land near 7.4 min: under the long pole, but holding none of the
+          # headroom the NEXT a11y card needs. `--shard=i/2` partitions by test
+          # COUNT (26 today) AFTER the `--grep`, so the two run in parallel and
+          # the leg returns to ~4 min with room to grow.
+          #
+          # Per `notes.html` #38 the parallelism knob is the CI job matrix, never
+          # in-process `workers`: each leg gets its OWN Postgres service
+          # container, which is exactly what makes adding a leg safe and raising
+          # `workers: 1` unsafe (the suite shares one DB + a global truncate).
+          - id: a11y-1
+            args: '--grep "@a11y" --shard=1/2'
+          - id: a11y-2
+            args: '--grep "@a11y" --shard=2/2'
           # Stories 3.5 + 4.7 — board journeys AT SCALE (Kanban + Scrum). The
           # specs self-seed; these overrides lower the issue cap + Done-age
           # window so the over-cap banner + Done-age trim are reachable with tens

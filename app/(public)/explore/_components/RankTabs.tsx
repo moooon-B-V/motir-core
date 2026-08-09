@@ -56,7 +56,11 @@ function SegLink({
         'inline-flex items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) text-[13px] font-medium transition-colors',
         active
           ? 'bg-(--el-page-bg) text-(--el-text) shadow-(--shadow-subtle)'
-          : 'text-(--el-text-muted) hover:text-(--el-text)',
+          : // An INACTIVE segment sits on the track's `--el-surface` fill, not
+            // on the raised white pill the active one gets — and
+            // `--el-text-muted` measures 4.17:1 on `--el-surface` (AA only on
+            // white, MOTIR-2477). Secondary clears AA on every surface.
+            'text-(--el-text-secondary) hover:text-(--el-text)',
       )}
     >
       {children}

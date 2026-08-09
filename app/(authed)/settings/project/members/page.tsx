@@ -7,11 +7,11 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { isWorkspaceManager } from '@/lib/projects/roles';
 import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ProjectMembersSettings } from './_components/ProjectMembersSettings';
 import { CodeAccessDoorCard } from './_components/CodeAccessDoorCard';
+import { guardSettingsPage } from '../_guard';
 
 // Project Members + Access settings — server component (Subtask 6.4.5). Reads
 // the active project, the project's members + access level (through the 6.4.4
@@ -40,9 +40,17 @@ export default async function ProjectMembersPage() {
     );
   }
 
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `members`, never re-declared here.
+  const refused = await guardSettingsPage('members', ctx);
+  if (refused) return refused;
+
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
-  const [members, access, roleCatalog, workspaceMembers, workspace, wsRole, codeAccess, repos] =
+  // The workspace-role read that used to ride this batch went with the private
+  // admin check (MOTIR-2469) — one fewer round trip on every load of this page.
+  const [members, access, roleCatalog, workspaceMembers, workspace, codeAccess, repos] =
     await Promise.all([
       projectMembersService.listMembers(actor),
       projectMembersService.getAccess(actor),
@@ -53,7 +61,6 @@ export default async function ProjectMembersPage() {
       projectAccessService.getRoleCatalog(ctx.projectId, ctx),
       workspacesService.listMembers(ctx.workspaceId, ctx.userId),
       workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
-      workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
       // Door 2's count (MOTIR-1945) — read here rather than inside the card so
       // the card stays a pure presentational leaf and the reads still go out in
       // one parallel batch.
@@ -62,8 +69,12 @@ export default async function ProjectMembersPage() {
     ]);
   const codeAccessCounts = teamAccessSummary(codeAccess, repos);
 
-  const myMembership = members.find((m) => m.userId === ctx.userId);
-  const canManage = isWorkspaceManager(wsRole) || myMembership?.role === 'admin';
+  // MOTIR-2469 retired the private admin check that used to sit here — a role
+  // comparison against the workspace and project membership rows, written before
+  // there was a permission model to ask, and a SECOND policy answering a question
+  // the catalog already answers. The page is reached only by an actor who holds
+  // its registry key (the guard above), so the manage affordances are simply on.
+  const canManage = true;
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">

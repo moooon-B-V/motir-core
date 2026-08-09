@@ -32,7 +32,11 @@ export async function ExploreHero({ basePath, query }: { basePath: string; query
         <div className="mt-6 w-full max-w-[34rem]">
           <ExploreSearchForm basePath={basePath} query={query} />
         </div>
-        <ul className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[13px] text-(--el-text-muted)">
+        {/* Secondary, not muted: this list sits ON `--el-tint-lavender` (the
+            hero fill), and `--el-text-muted` is AA only on the white page/card
+            — it fails on every tint (MOTIR-2477). Measured by the widened
+            /explore sweep (MOTIR-2482). */}
+        <ul className="mt-4 flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 text-[13px] text-(--el-text-secondary)">
           {[t('trustCrawlable'), t('trustNoSignup'), t('trustUpdated')].map((label) => (
             <li key={label} className="inline-flex items-center gap-1.5">
               <CheckCheck className="h-3.5 w-3.5 text-(--el-success)" aria-hidden />

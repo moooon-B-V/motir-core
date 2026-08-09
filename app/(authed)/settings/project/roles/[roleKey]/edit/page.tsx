@@ -5,6 +5,7 @@ import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RoleEditor } from '../../_components/RoleEditor';
+import { guardSettingsPage } from '../../../_guard';
 
 // Project settings → Access → Roles & permissions → EDIT (Story MOTIR-2257 ·
 // Subtask MOTIR-2483). *"Editing a custom role is this same page with the values
@@ -39,10 +40,15 @@ export default async function EditProjectRolePage({
     );
   }
 
-  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
-  const held = await projectAccessService.getPermissions(ctx.projectId, actor);
-  if (!held.has('project:manage_access')) notFound();
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this door is still one typed URL away once its rail row is gone.
+  // The key comes from the registry entry `roles`, never re-declared here — it
+  // replaced the bare `notFound()` MOTIR-2483 shipped, so every settings
+  // destination refuses the same way (see the sibling `new` route's note).
+  const refused = await guardSettingsPage('roles', ctx);
+  if (refused) return refused;
 
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const { roleKey } = await params;
   const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
   const role = catalog.roles.find((candidate) => candidate.key === roleKey);

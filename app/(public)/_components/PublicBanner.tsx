@@ -18,7 +18,11 @@ export async function PublicBanner() {
       <span aria-hidden className="text-(--el-text-faint)">
         ·
       </span>
-      <span className="inline-flex items-center gap-1.5 text-(--el-text-muted)">
+      {/* The view-only note is ON the sky tint like the lead beside it, so it
+          takes the banner's own AA ink — `--el-text-muted` clears AA on the
+          white card by 0.04 and fails on every tint (MOTIR-2477), which is
+          what the widened /p/[identifier] sweep measured here (MOTIR-2482). */}
+      <span className="inline-flex items-center gap-1.5 text-(--el-public-banner-text)">
         <Lock className="h-[14px] w-[14px] text-(--el-text-faint)" aria-hidden />
         {t('viewOnly')}
       </span>

@@ -157,7 +157,7 @@ describe('LabelsCard', () => {
   it('read-only (viewer): chips only, NO chevron — affordances absent', () => {
     stubLabelSearch([]);
     render(
-      <ProjectAccessProvider canEdit={false}>
+      <ProjectAccessProvider permissions={[]}>
         <LabelsCard workItemId="wi_1" projectKey="PROD" initialLabels={[apiLabel]} />
       </ProjectAccessProvider>,
     );
@@ -249,7 +249,7 @@ describe('ComponentsCard', () => {
 
   it('read-only (viewer): neutral glyph chips, no chevron', () => {
     render(
-      <ProjectAccessProvider canEdit={false}>
+      <ProjectAccessProvider permissions={[]}>
         <ComponentsCard
           workItemId="wi_1"
           initialComponents={[apiComponent]}
