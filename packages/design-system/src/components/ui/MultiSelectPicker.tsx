@@ -397,7 +397,10 @@ export function MultiSelectPicker({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          className="min-w-[60px] flex-1 border-0 bg-transparent py-0.5 text-sm text-(--el-text) outline-none placeholder:text-(--el-text-muted) disabled:cursor-not-allowed"
+          // `bg-transparent`, so the placeholder paints on the WRAPPER's fill —
+          // `--el-surface-soft` once the picker is disabled, where muted is
+          // 4.34:1. Secondary is 6.51:1 there and 6.80:1 on the enabled white.
+          className="min-w-[60px] flex-1 border-0 bg-transparent py-0.5 text-sm text-(--el-text) outline-none placeholder:text-(--el-text-secondary) disabled:cursor-not-allowed"
         />
       </div>
 

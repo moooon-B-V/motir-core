@@ -325,7 +325,11 @@ export function PlanChangeComposer({
             // The accessible name TRACKS the prompt (MOTIR-910's contract): a
             // screen reader must hear the same ask the placeholder shows.
             aria-label={resolvedPlaceholder}
-            className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
+            // The placeholder paints on this input's OWN `--el-surface` fill
+            // (4.17:1 for muted), and it is load-bearing here — the prompt IS
+            // the placeholder, and the accessible name tracks it. Secondary is
+            // 6.24:1 on that surface.
+            className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) pr-(--spacing-input-x) pl-8 text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none disabled:opacity-60"
           />
         </div>
         {/* Send gains the WORD "Answer" while a question is pending — the third
