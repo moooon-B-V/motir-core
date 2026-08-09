@@ -35,16 +35,17 @@ ledger: defineJob writes a job_run row: running ─▶ succeeded | failed (+ DLQ
 
 ## Environment
 
-| Var                   | Where          | Notes                                                                                                       |
-| --------------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
-| `INNGEST_DEV=1`       | local dev only | Forces dev mode; without it the serve route 500s locally. Set by `pnpm dev:inngest`. UNSET in preview/prod. |
-| `INNGEST_EVENT_KEY`   | preview + prod | Authenticates `sendEvent`. Blank locally / in tests.                                                        |
-| `INNGEST_SIGNING_KEY` | preview + prod | Verifies control-plane requests. Read automatically by the SDK. Blank locally.                              |
+| Var                   | Where          | Notes                                                                                               |
+| --------------------- | -------------- | --------------------------------------------------------------------------------------------------- |
+| `INNGEST_DEV=1`       | local dev only | Forces dev mode; without it the serve route 500s locally. Set by `pnpm dev:inngest`. UNSET in prod. |
+| `INNGEST_EVENT_KEY`   | prod           | Authenticates `sendEvent`. Blank locally / in tests.                                                |
+| `INNGEST_SIGNING_KEY` | prod           | Verifies control-plane requests. Read automatically by the SDK. Blank locally.                      |
 
-In preview/prod both keys come from the **official Inngest↔Vercel
-integration**, which also configures the Vercel Deployment-Protection bypass
-the control plane needs to reach protected previews. See "Cloud + Vercel
-wiring" below.
+In production both keys are **Fly secrets on the `motir-core` app**, set with
+`fly secrets set` and readable back only as digests (`fly secrets list`). Their
+values come from the Inngest dashboard. There is no preview scope any more: the
+only deploy this repository makes is the production release in `ci.yml`'s
+`deploy` job. See "Cloud wiring" below.
 
 ## Local development
 
@@ -540,19 +541,30 @@ and are **not** emitted via `sendEvent`. The cron syntax is standard 5-field
 (`min hour day month weekday`); see the
 [Inngest cron docs](https://www.inngest.com/docs/features/inngest-functions/cron).
 
-## Cloud + Vercel wiring (human-gated)
+## Cloud wiring (human-gated)
 
-Going live in preview/prod requires steps a coding agent can't do (dashboard
+Going live in production requires steps a coding agent can't do (dashboard
 access, secrets, an Inngest account). Tracked in PRODECT_FINDINGS #30 and as a
 dedicated manual Subtask:
 
-1. Install the **official Inngest↔Vercel integration** — provisions the keys
-   into Preview + Production and configures the Deployment-Protection bypass so
-   the control plane can reach protected `/api/inngest` previews (without it,
-   the endpoint 401s and the keys are inert — finding #30 sharp edge #8).
-2. Confirm `INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` in both Vercel scopes.
-3. Sync the preview `/api/inngest` URL and trigger a run from the Inngest
-   dashboard to confirm end-to-end.
+1. Take `INNGEST_SIGNING_KEY` and `INNGEST_EVENT_KEY` from the Inngest
+   dashboard and set them as Fly secrets on the app:
+   `fly secrets set INNGEST_SIGNING_KEY=… INNGEST_EVENT_KEY=… -a motir-core`.
+   Setting a secret triggers a release, so the app restarts holding them.
+2. Confirm both are present — `fly secrets list -a motir-core` shows names and
+   digests, never values.
+3. Register the functions and then **watch a real run**: the deploy does this
+   itself (step 1 of "Registration" below), and
+   `gh workflow run inngest-sync.yml` is the manual lane. A green sync only
+   proves the registration was accepted; only a `job_run` row proves invocation.
+
+⚠️ **Do NOT install the official Inngest↔Vercel integration.** It was installed
+by MOTIR-66 and **removed by MOTIR-2503** when the app moved to Fly, and it must
+not come back: it holds `read-write:deployment` on the Vercel account and
+rewrites the Inngest app's registered URL to whatever Vercel deployment it last
+probed. That is the direct cause of the month-long silent outage described
+below. Registration belongs to `.github/actions/inngest-sync` and to the custom
+domain, which is the only URL Inngest can actually reach.
 
 ## Registration — the failure mode to know about (MOTIR-1970)
 
@@ -568,12 +580,16 @@ That happened. Production ran from 2026-07-02 to 2026-08-01 with five jobs
 consuming nothing — `system.code-graph-index`, `system.code-graph-refresh`,
 `system.auto-plan-cadence-tick`, `system.ci-minutes-reconcile`,
 `system.ci-actions-gate-sweep`. **Root cause:** the Inngest↔Vercel integration
-probes the per-deployment `motir-core-<hash>.vercel.app` URL, and the Vercel
-project runs Deployment Protection at `all_except_custom_domains`, so that URL
-answers with a 302 into Vercel's SSO login. The probe never reached the app. Only
-the custom domain `app.motir.co` is exempt. (This is MOTIR-66 recurring — that
-card fixed the PREVIEW probe with a protection-bypass secret; production
+probed the per-deployment `motir-core-<hash>.vercel.app` URL, and the Vercel
+project ran Deployment Protection at `all_except_custom_domains`, so that URL
+answered with a 302 into Vercel's SSO login. The probe never reached the app.
+Only the custom domain `app.motir.co` was exempt. (This was MOTIR-66 recurring —
+that card fixed the PREVIEW probe with a protection-bypass secret; production
 deployment URLs were never covered.)
+
+That integration is **gone** — uninstalled by MOTIR-2503 after the move to Fly,
+which is why the section above tells you not to reinstall it. The two mechanisms
+below are what replaced it, and they are what this repository relies on now.
 
 Two mechanisms now close it, and they are deliberately independent:
 
