@@ -105,17 +105,14 @@ export function OrgGeneralCard({
         <Input
           label={t('settings.urlLabel')}
           value={slug}
+          // READ-ONLY, not disabled (MOTIR-2495). The org URL is a value people
+          // read and copy; a disabled input is not focusable, so the only way to
+          // get the string was to select it with a mouse. `readOnly` keeps it out
+          // of edit while leaving it in the tab order and selectable, and the
+          // shared Input draws that state with a fill rather than an opacity
+          // filter — which is what put this field's `motir.co/` affix below AA.
           readOnly
-          disabled
-          // The testid is the anchor for the a11y sweep's named carve-out
-          // (MOTIR-2482 → MOTIR-2495): the disabled Input's `opacity-50`
-          // composites this affix below AA, and no ink fixes it. MOTIR-2495
-          // decides the disabled treatment and removes both.
-          addonStart={
-            <span data-testid="org-url-affix" className="text-(--el-text-secondary)">
-              motir.co/
-            </span>
-          }
+          addonStart={<span>motir.co/</span>}
           helperText={t('settings.urlHint')}
         />
       </div>

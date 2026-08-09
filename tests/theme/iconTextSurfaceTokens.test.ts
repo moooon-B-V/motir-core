@@ -68,6 +68,12 @@ describe('icon/text-role + surface-primitive tokens map to their Tier-0 --color-
     '--el-chip-border': '--color-border',
     '--el-card': '--color-background',
     '--el-input-border': '--color-hairline-strong',
+    // MOTIR-2495 — the non-editable field states, expressed as colour rather
+    // than as an opacity filter over the whole subtree.
+    '--el-input-disabled-bg': '--color-muted',
+    '--el-input-disabled-border': '--color-hairline',
+    '--el-input-disabled-text': '--color-slate',
+    '--el-input-readonly-bg': '--color-surface',
     '--el-button-border': '--color-hairline-strong',
     '--el-count-text': '--color-slate',
     // count-bg is the documented rung-2 deviation (--color-muted, not the spec's
@@ -166,6 +172,22 @@ describe('every cited consumer is migrated onto its dedicated token', () => {
     const input = read('packages/design-system/src/components/ui/Input.tsx');
     expect(input).toContain('border-(--el-input-border)');
     expect(input).toContain('text-(--el-icon-field)');
+  });
+
+  it('Input draws its non-editable states with --el-input-* colour, never opacity (MOTIR-2495)', () => {
+    // The regression this pins: `opacity-50` on the wrapper composited the
+    // affixes below AA, and no ink could fix it — so the token layer, not the
+    // call site, has to carry the state. A re-introduced opacity filter would
+    // re-open the defect on every disabled field with a prefix or suffix.
+    const input = read('packages/design-system/src/components/ui/Input.tsx');
+    // Comments stripped first — the doc comment NAMES `opacity-50` to explain
+    // why it is gone, and that sentence is the point, not a violation.
+    const code = input.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+    expect(code).not.toMatch(/opacity-\d/);
+    expect(input).toContain('bg-(--el-input-disabled-bg)');
+    expect(input).toContain('border-(--el-input-disabled-border)');
+    expect(input).toContain('text-(--el-input-disabled-text)');
+    expect(input).toContain('bg-(--el-input-readonly-bg)');
   });
 
   it('Combobox: eyebrow header, option-active-bg, identifier, icon-muted chevron, accent check', () => {
