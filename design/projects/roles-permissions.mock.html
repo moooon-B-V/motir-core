@@ -71,7 +71,7 @@
       Covers (multi-panel — review EACH):
         (0) the ROLE LIST, project-ADMIN view, inside the settings shell
         (1) a BUILT-IN role drilled into — its permissions at full width
-        (2) a CUSTOM role drilled into — Edit / Delete + its base provenance
+        (2) a CUSTOM role drilled into — Edit / Delete (no base provenance)
         (3) CREATING a role — a whole PAGE, with a sticky action bar
         (4) the MEMBER (non-admin) view — same list, no write affordances
         (5) DELETING a custom role — the reassign dialog, both states  [2463]
@@ -85,11 +85,13 @@
           them. Panel 5 composes the INHERITED Modal block — which this file's
           notes had marked "inherited but no longer used"; it is used now, and
           so is .btn-danger.
-        * REPORTER RE-CUT OFF A BUILT-IN. Its row previously read "A Contractor
-          who also triages…", i.e. a custom role based on another custom role.
-          `basedOn` is one of the three BUILT-INS and is PROVENANCE, not
-          inheritance — a snapshot taken at creation that never re-flows. The
-          illustrative chain specified a shape the schema will not have.
+        * NO BASE IS RECORDED AT ALL (Yue, 2026-08-09). Panel 2's "Based on
+          Viewer · +2" chip is gone and panel 0's Reporter no longer chains off
+          another custom role. An earlier revision of this amendment merely
+          re-cut Reporter onto a BUILT-IN; the decision went further — provenance
+          that never re-flows is a claim about history, not a property of the
+          role, so nothing stores it and nothing draws it. `Start from` survives
+          on panel 3 as a pure authoring SEED.
         * THE BULK GRANT-ALL / CLEAR-ALL TOGGLE IS REJECTED, not omitted. The
           measurement and the reasoning are in design-notes; the short form is
           that 28 rows over 15 headings is a median of TWO rows per heading, and
@@ -1550,12 +1552,11 @@
           marks are the model as it will BE, not today’s partial enforcement: Admin 28, Member 10,
           Viewer 2, over 28 role-gated keys, plus the three level-gated public-request grants in
           their own card. Built-in roles are IMMUTABLE (lock, no control); only a custom role
-          carries Edit / Delete and a “Based on …” provenance. Panel 3 creates a role on a WHOLE
-          PAGE with a sticky action bar. COMPOSES design/projects/settings-area.mock.html (rail +
-          chrome), access-members.mock.html (role-chip grammar, the secondary Button) and
-          details.mock.html (Input) — none is re-specified here. The one new primitive this asks for
-          is a <code>Checkbox</code>, and only MOTIR-2257 needs it. See design-notes.md “Roles &amp;
-          permissions (MOTIR-2255)”.
+          carries Edit / Delete. Panel 3 creates a role on a WHOLE PAGE with a sticky action bar.
+          COMPOSES design/projects/settings-area.mock.html (rail + chrome), access-members.mock.html
+          (role-chip grammar, the secondary Button) and details.mock.html (Input) — none is
+          re-specified here. The one new primitive this asks for is a <code>Checkbox</code>, and
+          only MOTIR-2257 needs it. See design-notes.md “Roles &amp; permissions (MOTIR-2255)”.
         </p>
       </div>
       <button
@@ -2286,10 +2287,11 @@
       2 · A CUSTOM ROLE’S PERMISSIONS — <strong>Contractor</strong>, the epic’s own motivating gap
       (may comment and attach, but cannot edit a work item), which none of the three built-ins can
       express. Same screen as panel 1 with two additions, both admin-only: <strong>Edit</strong> and
-      <strong>Delete</strong>, and a <strong>“Based on Viewer”</strong> chip. That chip is where the
-      side-by-side comparison went: “Contractor is Viewer plus comments and attachments” is the
-      relationship an admin actually needs, and it survives at any number of roles — where reading
-      four columns at once did not. Edit opens panel 3 with the values filled in.
+      <strong>Delete</strong>. <strong>NO provenance chip</strong> (Yue, 2026-08-09): an earlier
+      revision drew “Based on Viewer · +2” from a stored base. It described how the role was once
+      authored rather than what it IS, and went stale the moment either side was edited — a role’s
+      own <strong>N of 28</strong> already says everything true about it. Edit opens panel 3 with
+      the values filled in.
     </div>
 
     <div class="panel">
@@ -2408,10 +2410,6 @@
                   </p>
                   <div class="rh-meta">
                     <span class="pill pill-member">Custom</span>
-                    <span class="basechip"
-                      ><svg viewBox="0 0 24 24"><use href="#i-git-branch" /></svg>Based on Viewer ·
-                      +2</span
-                    >
                     <span class="basechip"
                       ><svg viewBox="0 0 24 24"><use href="#i-users" /></svg>4 members</span
                     >
@@ -2861,8 +2859,10 @@
               </label>
             </div>
             <p class="fieldhint">
-              The new role begins with everything <strong>Viewer</strong> holds — those arrive
-              ticked and greyed. Add to it below; you can always take something back off.
+              <strong>Start from</strong> SEEDS the grid below with everything that role holds —
+              then edit freely. It is an authoring convenience and nothing more:
+              <strong>the pick is not stored</strong>, so a saved role is its name and its set, and
+              re-opening it shows the ticks without claiming where they came from.
             </p>
             <div class="rp-stack">
               <div class="permcard">

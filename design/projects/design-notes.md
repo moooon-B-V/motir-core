@@ -259,9 +259,10 @@ panel 1's, grown:
 - **The `Built-in` heading is drawn even when the project has NO custom roles**
   (panel 5 draws both cases side by side), so the list grows rather than
   changes shape the first time somebody creates a role.
-- **Each custom option carries `Custom · based on Viewer`** — the provenance
-  chip's sentence, one surface over — so the kind and the base are read in
-  words at the moment of the choice.
+- **Each custom option is labelled `Custom role`** — so the kind is read in
+  words at the moment of the choice rather than inferred from a tint. (Not
+  "based on …": nothing records which built-in seeded a role — Yue,
+  2026-08-09.)
 
 ### The tint slot — why the roles asset's pairing does NOT transfer
 
@@ -1666,12 +1667,13 @@ comparison, and a drill-down loses it. Two things carry it instead, and both sur
 roles:
 
 - the list's **`N of 28`** on every row — the coarse comparison, scannable in one pass;
-- a custom role's **`Based on Viewer · +2`** chip on its detail screen. "Contractor is Viewer plus
-  comments and attachments" is the comparison an admin actually reaches for, and it is exact — where
-  reading four columns at once was neither.
+- a custom role's own **`N of 28`** on the SAME row, read against the built-ins above it. An earlier
+  revision proposed a `Based on Viewer · +2` chip here instead; it was removed (Yue, 2026-08-09)
+  because it compared against a base the product does not record — see § _A role is its name and its
+  set_ below.
 
 **Panels 1 and 2 are the same screen** in its built-in and custom states; the differences are the two
-admin-only write affordances (`Edit`, `Delete`) and the provenance chip. The **breadcrumb and the
+admin-only write affordances (`Edit`, `Delete`). The **breadcrumb and the
 `← All roles` link both appear**, deliberately: the inherited crumb trail is orientation, the back
 link is the control, and a drill-down needs a control rather than a place to read where you are.
 
@@ -1727,7 +1729,7 @@ show the whole model, so "not held" has to be as readable as "held".
    this screen.**
 2. **A CUSTOM role's permissions** — `Contractor`, the epic's own motivating gap (_may comment and
    attach, but cannot edit a work item_), which none of the three built-ins can express. Same screen
-   plus `Edit`, `Delete` and the `Based on Viewer · +2` provenance chip.
+   plus `Edit` and `Delete`. NO provenance chip — see § _A role is its name and its set_.
 3. **Creating a role — a WHOLE PAGE** (MOTIR-2257) at `/settings/project/roles/new`. See below.
 4. **The member (non-admin) view** — browse-gated, so a member reads the same list and drills into
    the same screens. Two differences, both admin-only WRITE affordances: no `Create role`, and a
@@ -1780,10 +1782,14 @@ full-page screenshot can never show a pinned element otherwise. The 760px height
 the app takes its height from `h-dvh`. No trailing spacer is needed: the bar is the last child, so at
 full scroll it returns to its static position with every row above it.
 
-The author names the role, picks a **base to start from**, and the base's grants arrive **ticked and
-greyed** (`from Viewer`) — visually distinct from what they add on top (accent). Starting from a base
-rather than an empty list is the GitHub custom-role pattern; it keeps a new role comprehensible
-instead of asking the author to derive 28 booleans from nothing.
+The author names the role and picks one to **start from**; that role's grants arrive **ticked**, and
+the author edits freely from there. Starting from a base rather than an empty list is the GitHub
+custom-role pattern; it keeps a new role comprehensible instead of asking the author to derive 28
+booleans from nothing.
+
+⚠️ **The pick SEEDS the grid and is not stored** (Yue, 2026-08-09). So the ticks carry no
+"where did this come from" distinction — there is one checked state, not two — and re-opening a saved
+role shows its set without claiming a lineage. See § _A role is its name and its set_.
 
 **Editing a custom role is this same page with the values filled in**, reached from the `Edit` button
 on panel 2 — one authoring surface, built once.
@@ -1923,7 +1929,6 @@ byte-identical rather than pruned, which is exactly why it was there to compose 
 | `Built-in` lock · `Custom` chip       | `Pill`                                              | `--el-text-faint` · `pill-member` sky                                                                        |
 | Domain heading                        | `SectionLabel` grammar                              | `--el-muted` · `--el-text-faint`                                                                             |
 | Held / withheld / level-gated mark    | icon + `aria-label`                                 | `--el-success` · `--el-text-faint`                                                                           |
-| `Based on …` provenance chip          | `Pill` (neutral)                                    | `--el-muted` + `--el-text-secondary`                                                                         |
 | `Create role` · `Cancel` · `Edit`     | `Button` (primary / ghost / secondary)              | `--el-accent` / `--el-accent-text` · `--radius-btn` · `--height-btn-md`                                      |
 | `Delete` on a custom role             | `Button` (icon)                                     | `--spacing-icon-btn` (PADDING) · `--radius-control`                                                          |
 | Name field · Start-from picker        | `Input` / `FormField`                               | `--radius-input` · `--height-input` · `--spacing-input-x/y`                                                  |
@@ -1986,10 +1991,11 @@ correctly without it. Nothing else on the screen depends on it.
 - **Held** = `check` in `--el-success`; **withheld** = `minus` in `--el-text-faint`; **level-gated**
   = `eye`. Each mark is a `role="img"` with an `aria-label` (_Held_ / _Not held_ / _Granted by
   access level_), so state is never carried by colour or glyph ALONE.
-- On the create page, a permission **from the base** is a grey-filled checkbox and one the author
-  **added** is an accent-filled one — two visual states, one affordance. Each is a `role="checkbox"`
-  with `aria-checked` and a label naming the state (_Held — from Viewer_ / _Held — added_ / _Not
-  held_), so "who granted this" is never carried by fill colour alone.
+- On the create page a permission is held or it is not — **ONE checked state**, an accent-filled
+  box. Each is a `role="checkbox"` with `aria-checked` and a label naming the state (_Held_ / _Not
+  held_), so the state is never carried by fill colour alone. (An earlier revision had a second,
+  grey "from the base" fill; it went with the stored base — with nothing recorded, a re-edit has no
+  base for anything to have come from, so the two fills could not be told apart honestly.)
 - A **built-in** role's tile is `--el-tint-lavender` and a **custom** one's is `--el-tint-sky` — the
   two tint slots `access-members.mock.html` already uses for Admin and Member. The kind is also
   stated in words (`Built-in` / `Custom`), never by tint alone.
@@ -2012,16 +2018,33 @@ code nothing while diverging would cost it a sort.)
 
 Copy matches the `permissions.*` i18n namespace, so MOTIR-2263 renders the same strings this mock
 shows. **`Contractor` (4 of 28) and `Reporter` (6 of 28) are illustrative** — custom roles, not
-shipped ones; they exist to draw the list at five roles and to show the `Based on …` provenance.
+shipped ones; they exist to draw the list at five roles.
 
-> **A base is ALWAYS one of the three BUILT-INS, and `basedOn` is PROVENANCE, not inheritance
-> (corrected 2026-08-09, MOTIR-2463).** An earlier revision drew `Reporter` as _"a Contractor who
-> also triages…"_ — a custom role cut from another custom role, so the provenance chip chained. That
-> is a shape the schema will not have: `ProjectRoleDefinition.basedOn` is the `MemberRole` enum, and
-> it records the base's permission set **as it stood at creation**. Later edits to the base never
-> re-flow into the role, and a role can never point at another role. So `Reporter` is now cut from
-> `Viewer` like `Contractor` is, and its description no longer names another custom role. The chip
-> reads `Based on Viewer · +N` — a comparison, taken once — and never a chain.
+### A role is its name and its set — nothing records where it started (Yue, 2026-08-09)
+
+**Nothing stores which built-in an author started from, and no screen draws one.** An earlier
+revision of this asset carried a `Based on Viewer · +2` chip on panel 2, fed by a `based_on` column.
+
+The reason it went is the card's own words turned back on it: the base was **provenance, not
+inheritance** — a snapshot taken at creation that never re-flows. That makes it a claim about how the
+role was once _authored_ rather than a fact about what it _is_, and it goes stale the moment either
+side is edited: change the role and the delta lies; change the built-in and the comparison lies. A
+role that lists its permissions already says everything true about itself, and the list row's
+`N of 28` gives the coarse comparison at a glance.
+
+**`Start from` survives, because its argument was never provenance.** It exists so an author does not
+face 28 blank checkboxes — a quiz rather than freedom. It seeds the grid in the browser and is not
+sent, not stored and not rendered.
+
+Three consequences, all of them simplifications:
+
+- the checkbox has **one** checked state, not two (§ _Colour + shape rules_);
+- `Reporter` and `Contractor` on panel 0 are just custom roles — neither chains off anything, and the
+  earlier "re-cut Reporter onto a built-in" correction is moot;
+- a membership on a custom role sits at one tier (`member`), so **the access level subtracts nothing
+  from a custom role — it grants exactly what it lists**. That is the one behaviour change, and it is
+  deliberate: the tier subtraction narrows the coarse built-ins, and a set an admin enumerated by
+  hand is not coarse.
 
 ## Who builds what (MOTIR-2257's allocation, readable from the asset)
 

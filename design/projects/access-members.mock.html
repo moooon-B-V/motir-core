@@ -59,7 +59,7 @@
       additions, no re-draw:
         * PANEL 5 — the per-member role select with the project's custom roles
           BENEATH the three built-ins, under headings that name the kind, each
-          custom option carrying "Custom · based on …". Drawn beside the
+          custom option carrying its "Custom" kind in words. Drawn beside the
           no-custom-roles case so the shape is visibly the same either way.
         * A CUSTOM-ROLE CHIP (.pill-custom) in panels 0 and 4. This surface had
           already spent lavender / sky / mint on the three built-in roles, so
@@ -392,7 +392,7 @@
          --el-tint-peach, with --el-text-strong ink — the same rule (hue in the
          tint background, AA-safe) applied to a slot this surface had not used.
          The kind is stated in WORDS at the point of choice (the picker's
-         "Custom roles" heading and each option's "Custom · based on …" line)
+         "Custom roles" heading and each option's "Custom" line)
          and on the chip itself via its accessible name, so nothing about
          built-in-versus-custom rests on the hue. */
       .pill-custom {
@@ -1249,10 +1249,10 @@
       the project’s <strong>custom roles listed BENEATH the three built-ins</strong>, under a
       heading that says which is which. The order is deliberate: the built-ins are the same three in
       every project and are what an admin reaches for by reflex, so they stay where they have always
-      been and the project’s own roles are appended rather than interleaved. Each custom option
-      carries <strong>Custom · based on …</strong> — the provenance chip’s sentence, one surface
-      over — so the kind and the base are read in WORDS at the moment the choice is made, never
-      inferred from a tint. <strong>MOTIR-2485 builds this.</strong>
+      been and the project’s own roles are appended rather than interleaved. Each custom option is
+      labelled <strong>Custom</strong> in words, so the kind is read at the moment the choice is
+      made rather than inferred from a tint. (No “based on …” — nothing records which built-in
+      seeded a role; Yue, 2026-08-09.) <strong>MOTIR-2485 builds this.</strong>
     </div>
     <div class="panel">
       <div class="stage">
@@ -1281,15 +1281,11 @@
               </div>
               <div class="menu-group">Custom roles</div>
               <div class="opt sel">
-                <span class="ot"
-                  ><span>Contractor</span><span class="od">Custom · based on Viewer</span></span
-                >
+                <span class="ot"><span>Contractor</span><span class="od">Custom role</span></span>
                 <svg viewBox="0 0 24 24" class="ck"><use href="#i-check" /></svg>
               </div>
               <div class="opt">
-                <span class="ot"
-                  ><span>Reporter</span><span class="od">Custom · based on Viewer</span></span
-                >
+                <span class="ot"><span>Reporter</span><span class="od">Custom role</span></span>
               </div>
             </div>
           </div>
