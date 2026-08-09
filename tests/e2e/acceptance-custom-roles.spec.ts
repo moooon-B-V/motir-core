@@ -177,7 +177,17 @@ test('an admin authors a role, assigns it, watches it bite, and deletes it with 
     );
     await page.getByRole('button', { name: 'Create role' }).click();
     expect((await created).status()).toBe(201);
-    await expect(page.getByText('Role created')).toBeVisible();
+    // ⚠️ `exact`, BECAUSE THE TOAST SAYS ITS TEXT TWICE. `ToastProvider` wraps
+    // Radix Toast, whose provider renders a hidden `role="status"` announcer
+    // alongside the visible toast, prefixed with its label — so the DOM holds
+    // both "Role created" and "Notification Role created", and a loose
+    // `getByText` resolves to two elements and dies in strict mode.
+    //
+    // It is a RACE, not a constant, which is why three local runs passed: the
+    // announcer is populated a beat after the toast, so a fast machine asserts
+    // while only one node exists. CI is slower and caught it. `exact` matches the
+    // title alone whether or not the announcer has caught up.
+    await expect(page.getByText('Role created', { exact: true })).toBeVisible();
     await beat();
   });
 
