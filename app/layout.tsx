@@ -11,6 +11,9 @@ import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
 import { ThemeProvider } from '@/lib/contexts/theme-context';
 import { buildThemeInitScript } from '@/lib/theme/init-script';
+// `metadataBase` + the title/description, built per request. Reaches only
+// `lib/baseUrl.ts` (a zero-import environment reader) — see MOTIR-2505 there.
+import { buildRootMetadata } from '@/lib/rootMetadata';
 // ⚠️ THE TWO IMPORTS BELOW PUT A PRISMA CLIENT IN EVERY ROUTE IN THE PRODUCT.
 // They are deliberate and load-bearing; the reasoning is the "Why the database
 // reach cannot move down" block above RootLayout. Do not add a third without
@@ -93,10 +96,16 @@ const fraunces = Fraunces({
   display: 'swap',
 });
 
-export const metadata: Metadata = {
-  title: 'Motir',
-  description: 'AI-native project management — open-source PM substrate.',
-};
+// MOTIR-2505 — a FUNCTION, not `export const metadata`. The object carries
+// `metadataBase`, which is read from the environment, and a static export is
+// evaluated at module load — build time for a statically-rendered route, where
+// `MOTIR_BASE_URL` is deliberately unset (the Dockerfile sets only the
+// placeholders module-load checks need). That would freeze the localhost
+// fallback into the output. See `lib/rootMetadata.ts` for the whole reasoning;
+// the two exports are mutually exclusive, so this replaced the const.
+export async function generateMetadata(): Promise<Metadata> {
+  return buildRootMetadata();
+}
 
 /**
  * ── Why the database reach cannot move down (MOTIR-2381) ────────────────────
