@@ -315,8 +315,10 @@ test.describe('board-config @smoke', () => {
     await page.goto('/settings/project/board');
 
     // The destination refuses — named for the room, not one generic apology.
-    await expect(page.getByText('Admins only')).toBeVisible();
-    await expect(page.getByText(/board configuration/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: /board configuration/i }),
+    ).toBeVisible();
     // And no form leaked in behind it: not one write affordance renders, which is
     // the half of the old assertion that still matters.
     await expect(page.getByTestId('board-config-add-column')).toHaveCount(0);

@@ -225,8 +225,8 @@ test.describe('project-details — the editable Details + change-key journey', (
     await signIn(page, member.email, PWD);
     await page.goto('/settings/project');
 
-    await expect(page.getByText('Admins only')).toBeVisible();
-    await expect(page.getByText(/project details/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+    await expect(page.getByRole('paragraph').filter({ hasText: /project details/i })).toBeVisible();
     // Every editing affordance is absent, as before — and now so is the form the
     // values sat in (the hide is presentation; the PATCH/DELETE reject
     // server-side too, proven at the service tier).

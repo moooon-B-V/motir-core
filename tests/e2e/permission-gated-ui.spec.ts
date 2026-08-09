@@ -150,8 +150,10 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // still one typed URL away, and it must refuse rather than render a read-only
   // form.
   await page.goto('/settings/project/members');
-  await expect(page.getByText('Admins only')).toBeVisible();
-  await expect(page.getByText(/managed by project admins/i)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+  await expect(
+    page.getByRole('paragraph').filter({ hasText: /managed by project admins/i }),
+  ).toBeVisible();
   // The back action leaves the area entirely — this actor has no room in it.
   await expect(page.getByRole('link', { name: 'Back to projects' })).toHaveAttribute(
     'href',
@@ -222,7 +224,7 @@ test('a hidden destination refuses a VIEWER the same way, per destination', asyn
   ];
   for (const [href, description] of destinations) {
     await page.goto(href);
-    await expect(page.getByText('Admins only'), href).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admins only' }), href).toBeVisible();
     await expect(page.getByText(description), href).toBeVisible();
   }
 });

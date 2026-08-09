@@ -218,7 +218,7 @@ test.describe('settings-area — the project-settings area journey', () => {
     await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
     // …and it is not merely unmentioned: typing the URL meets the refusal.
     await page.goto('/settings/project');
-    await expect(page.getByText('Admins only')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
     // No rail row survives for them, and the danger zone is gone with the page.
     await expect(
       settingsNav(page).getByRole('link', { name: 'Workflow', exact: true }),

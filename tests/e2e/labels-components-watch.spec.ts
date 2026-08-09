@@ -495,8 +495,12 @@ test('a viewer gets read-only chips but CAN watch; a non-admin member is REFUSED
   const memberPage = await memberCtx.newPage();
   await signIn(memberPage, member.email, PWD);
   await memberPage.goto('/settings/project/components');
-  await expect(memberPage.getByText('Admins only')).toBeVisible();
-  await expect(memberPage.getByText(/components are managed by project admins/i)).toBeVisible();
+  await expect(memberPage.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+  await expect(
+    memberPage
+      .getByRole('paragraph')
+      .filter({ hasText: /components are managed by project admins/i }),
+  ).toBeVisible();
   // …and the list it used to render read-only is gone with it.
   await expect(memberPage.locator('[data-testid^="component-row-"]')).toHaveCount(0);
   await expect(memberPage.getByRole('button', { name: 'Add component' })).toHaveCount(0);

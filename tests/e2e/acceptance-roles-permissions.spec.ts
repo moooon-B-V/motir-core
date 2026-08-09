@@ -182,13 +182,13 @@ test('a project member is REFUSED both roles screens', async ({ page }) => {
   await signIn(page, seed.memberEmail, seed.password);
 
   await page.goto('/settings/project/roles');
-  await expect(page.getByText('Admins only')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
   await expect(roleRow(page, 'admin')).toHaveCount(0);
 
   // The drill-down inherits its parent's key — a typed URL to a role detail is
   // refused the same way (MOTIR-2469).
   await page.goto('/settings/project/roles/viewer');
-  await expect(page.getByText('Admins only')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Viewer', level: 1 })).toHaveCount(0);
 });
 
@@ -249,5 +249,5 @@ test('a project viewer keeps exactly the affordances they had before', async ({ 
   // affordances are exactly what they were, which is what "keeps exactly the
   // affordances they had before" was always about.
   await page.goto('/settings/project/roles');
-  await expect(page.getByText('Admins only')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
 });

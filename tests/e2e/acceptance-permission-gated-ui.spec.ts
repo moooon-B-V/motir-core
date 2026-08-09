@@ -120,8 +120,10 @@ test('the shell shows each person the rooms they were given', async ({
     // And the room is shut, not merely unmentioned
     await beat();
     await page.goto('/settings/project/members');
-    await expect(page.getByText('Admins only')).toBeVisible();
-    await expect(page.getByText(/managed by project admins/i)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+    await expect(
+      page.getByRole('paragraph').filter({ hasText: /managed by project admins/i }),
+    ).toBeVisible();
   });
 
   await chapter('As a viewer: fewer rooms, and the same controls as before', async () => {

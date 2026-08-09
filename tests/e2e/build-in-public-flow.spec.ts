@@ -270,7 +270,9 @@ test.describe('build-in-public — start/stop + badge + access gating', () => {
     // And the settings surface that owns the access control refuses them: the
     // radio is not disabled, it is not reachable.
     await page.goto('/settings/project/members');
-    await expect(page.getByText('Admins only')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.getByRole('radiogroup', { name: ACCESS_GROUP })).toHaveCount(0);
 
     // ── 3b. PUBLIC project: the non-admin sees the badge READ-ONLY, no Stop ────
@@ -288,7 +290,9 @@ test.describe('build-in-public — start/stop + badge + access gating', () => {
     // But the CONTROL is still out of reach, now by refusal rather than by a
     // disabled button on a page they could open.
     await page.goto('/settings/project/members');
-    await expect(page.getByText('Admins only')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible({
+      timeout: 30_000,
+    });
     await expect(page.getByRole('button', { name: STOP_ACTION, exact: true })).toHaveCount(0);
   });
 });
