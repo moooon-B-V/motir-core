@@ -360,7 +360,7 @@ export function BacklogRows({
             {t('loadingMore')}
           </div>
         ) : !hasMore && items.length > 0 ? (
-          <div className="py-(--spacing-sm) text-center text-xs text-(--el-text-faint)">
+          <div className="py-(--spacing-sm) text-center text-xs text-(--el-text-secondary)">
             {t('allLoaded', { count: totalCount })}
           </div>
         ) : null}

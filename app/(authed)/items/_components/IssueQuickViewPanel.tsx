@@ -91,7 +91,7 @@ function OpenFullPageLink({ identifier }: { identifier: string }) {
 function RailField({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <dt className="text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <dt className="text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {label}
       </dt>
       <dd className="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)">
@@ -363,7 +363,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               className="mt-4"
             />
           ) : null}
-          <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+          <span className="mt-6 mb-2 block text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {t('description')}
           </span>
           {data.descriptionMd ? (

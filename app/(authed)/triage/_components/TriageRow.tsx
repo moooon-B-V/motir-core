@@ -49,7 +49,7 @@ export function TriageRow({ item, active, onSelect }: TriageRowProps) {
         <span className="line-clamp-2 flex-1 text-sm font-medium text-(--el-text)">
           {item.title}
         </span>
-        <span className="shrink-0 text-xs text-(--el-text-faint)">
+        <span className="shrink-0 text-xs text-(--el-text-secondary)">
           {format.relativeTime(new Date(item.triagedAt))}
         </span>
       </div>

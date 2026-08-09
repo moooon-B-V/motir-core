@@ -260,7 +260,7 @@ function PaywallShell({
         {actions}
       </div>
       {note ? (
-        <p className="text-(--el-text-faint) mt-(--spacing-sm) font-sans text-xs">{note}</p>
+        <p className="text-(--el-text-secondary) mt-(--spacing-sm) font-sans text-xs">{note}</p>
       ) : null}
     </Card>
   );

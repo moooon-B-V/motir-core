@@ -71,11 +71,21 @@ export async function PublicTabNav({
                 'inline-flex h-(--height-control) items-center gap-1.5 rounded-(--radius-control) px-(--spacing-control-x) text-[12.5px] font-medium transition-colors',
                 'focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
                 on
-                  ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle) [&_svg]:text-(--el-tabnav-active)'
-                  : 'text-(--el-text-secondary) hover:text-(--el-text) [&_svg]:text-(--el-text-faint)',
+                  ? 'bg-(--el-page-bg) text-(--el-text-strong) shadow-(--shadow-subtle)'
+                  : 'text-(--el-text-secondary) hover:text-(--el-text)',
               )}
             >
-              <span className="inline-flex shrink-0" aria-hidden>
+              {/* The icon's ink moved off the tab's `[&_svg]:…` descendant
+                  variant and onto the glyph's own wrapper (MOTIR-2475): the
+                  variant made a faint ink read as if it painted the tab's
+                  LABEL, when it only ever painted this `aria-hidden` glyph. */}
+              <span
+                className={cn(
+                  'inline-flex shrink-0',
+                  on ? 'text-(--el-tabnav-active)' : 'text-(--el-text-faint)',
+                )}
+                aria-hidden
+              >
                 {tab.icon}
               </span>
               {tab.label}

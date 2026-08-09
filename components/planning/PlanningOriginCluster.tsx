@@ -109,7 +109,7 @@ export function PlanningOriginCluster({ produced = null }: PlanningOriginCluster
           The chip is omitted entirely until the produced set resolves, so the card
           never asserts a verdict it cannot yet prove (design panel D). */}
       <div className="flex shrink-0 items-center gap-2">
-        <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-faint) uppercase">
+        <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
           {t('planning')}
         </span>
         {count === DIRECTION_DOC_ORDER.length ? (

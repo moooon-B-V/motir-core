@@ -93,16 +93,22 @@ export default async function PublicRequestDetailPage({
                   <IssueTypeIcon type={detail.kind} className="h-[14px] w-[14px]" />
                   {t(KIND_LABEL[detail.kind])}
                 </span>
-                <span className="text-(--el-text-faint)">·</span>
+                <span className="text-(--el-text-faint)" aria-hidden="true">
+                  ·
+                </span>
                 <span>{t('requestOpenedBy', { name: detail.openedByName })}</span>
-                <span className="text-(--el-text-faint)">·</span>
+                <span className="text-(--el-text-faint)" aria-hidden="true">
+                  ·
+                </span>
                 <time
                   dateTime={detail.createdAt}
                   title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
                 >
                   {format.relativeTime(createdAt)}
                 </time>
-                <span className="text-(--el-text-faint)">·</span>
+                <span className="text-(--el-text-faint)" aria-hidden="true">
+                  ·
+                </span>
                 <span className="font-medium text-(--el-text-secondary)">{detail.identifier}</span>
               </div>
             </div>

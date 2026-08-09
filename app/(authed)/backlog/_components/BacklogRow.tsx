@@ -168,6 +168,10 @@ export function BacklogRowBody({
         <span
           className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full border border-dashed border-(--el-border-strong) text-[10px] text-(--el-text-faint)"
           title={t('unassigned')}
+          // The dash is a GLYPH standing in for the avatar — the meaning is in
+          // the label, not the pixels, so the faint ink is legitimate here
+          // (MOTIR-2475). `role="img"` is what says so out loud.
+          role="img"
           aria-label={t('unassigned')}
         >
           {EM_DASH}

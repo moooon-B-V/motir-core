@@ -96,7 +96,7 @@ export function TierReviewGate({
         >
           {t('back')}
         </Button>
-        <span className="grow font-mono text-xs font-semibold uppercase tracking-wide text-(--el-text-faint)">
+        <span className="grow font-mono text-xs font-semibold uppercase tracking-wide text-(--el-text-secondary)">
           {t('stepHeader')}
         </span>
       </div>

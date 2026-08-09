@@ -119,7 +119,7 @@ function RoadmapColumn({
       </header>
       <div className="flex min-h-[220px] flex-1 flex-col gap-2.5 rounded-b-(--radius-card) border border-t-0 border-(--el-border) bg-(--el-surface-soft) p-2.5">
         {column.cards.length === 0 ? (
-          <p className="rounded-(--radius-card) border border-dashed border-(--el-border) px-1 py-3.5 text-center text-[12.5px] text-(--el-text-faint)">
+          <p className="rounded-(--radius-card) border border-dashed border-(--el-border) px-1 py-3.5 text-center text-[12.5px] text-(--el-text-secondary)">
             {t('roadmapColEmpty')}
           </p>
         ) : (

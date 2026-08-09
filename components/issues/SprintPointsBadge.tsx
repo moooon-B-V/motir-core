@@ -83,9 +83,13 @@ export function SprintPointsBadge({ points, state, className }: SprintPointsBadg
       })}
     >
       <Segment value={fmt(committed)} cap={t('committed')} />
-      <span className="text-(--el-text-faint)">·</span>
+      <span className="text-(--el-text-faint)" aria-hidden="true">
+        ·
+      </span>
       <Segment value={fmt(completed)} cap={t('done')} done />
-      <span className="text-(--el-text-faint)">·</span>
+      <span className="text-(--el-text-faint)" aria-hidden="true">
+        ·
+      </span>
       <Segment value={fmt(remaining)} cap={t('left')} />
     </span>
   );
@@ -110,13 +114,13 @@ function Segment({
           done
             ? 'text-(--el-success)'
             : faint
-              ? 'text-(--el-text-faint)'
+              ? 'text-(--el-text-secondary)'
               : 'text-(--el-text-strong)',
         )}
       >
         {value}
       </span>
-      <span className="font-sans text-(--el-text-faint)">{cap}</span>
+      <span className="font-sans text-(--el-text-secondary)">{cap}</span>
     </span>
   );
 }

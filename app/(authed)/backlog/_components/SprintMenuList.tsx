@@ -41,7 +41,7 @@ export function SprintMenuList({
 
   return (
     <div className="p-1" role="menu" aria-label={t('moveToSprint')}>
-      <div className="px-(--spacing-control-x) py-1 text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+      <div className="px-(--spacing-control-x) py-1 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
         {t('moveToSprint')}
       </div>
       {sprints.map((sprint) => {
