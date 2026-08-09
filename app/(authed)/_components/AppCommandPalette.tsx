@@ -27,9 +27,15 @@ import { useTheme } from '@/lib/contexts/theme-context';
 import { signOut } from '@/lib/auth/client';
 import {
   PROJECT_SETTINGS_ROUTES,
+  toSettingsNavPermissions,
   visibleSettingsNav,
-  type SettingsNavCapabilities,
 } from '@/lib/settings/projectSettingsNav';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+import {
+  AI_PLANNING_REQUIREMENT,
+  canOfferNavDestination,
+  satisfiesRequirement,
+} from '@/lib/settings/projectNavAccess';
 import { ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/accountSettingsNav';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
@@ -70,11 +76,12 @@ export interface AppCommandPaletteProps {
    *  (MOTIR-1299). */
   aiPlanningConfigured?: boolean;
   /**
-   * The actor's settings-area capabilities (Subtask 6.5.2) — filters the
+   * The actor's resolved permission keys (Subtask MOTIR-2468) — filters the
    * per-section project-settings deep links to the ones they can open. Omitted
-   * when there's no active project (no settings sections are shown).
+   * when there's no active project (no settings sections are shown); an absent
+   * value defaults CLOSED, so a missing prop never leaks a deep link.
    */
-  settingsAccess?: SettingsNavCapabilities;
+  settingsPermissions?: readonly PermissionKey[];
 }
 
 export function AppCommandPalette({
@@ -83,7 +90,7 @@ export function AppCommandPalette({
   projects,
   activeProjectId,
   hasProject,
-  settingsAccess,
+  settingsPermissions,
   aiPlanningConfigured = false,
 }: AppCommandPaletteProps) {
   const t = useTranslations('shell');
@@ -149,6 +156,11 @@ export function AppCommandPalette({
 
   const groups: CommandGroup[] = [];
 
+  // The actor's keys, resolved once for every gate below (MOTIR-2468 / -2471):
+  // the AI entrances, the project navigations and the settings deep links all
+  // read this one set, through the same two maps the sidebar reads.
+  const held = toSettingsNavPermissions(settingsPermissions);
+
   // Plan with AI — the ⌘K twin of the top-nav hero launcher (MOTIR-1299): the
   // universal entrance to the AI planning workspace. Shown only when AI planning
   // is wired AND there's a project to plan into (mirrors the hero pill's mount
@@ -167,16 +179,26 @@ export function AppCommandPalette({
         onSelect: () => go(ONBOARDING_RESUME_PATH),
       });
     }
-    aiActions.push({
-      id: 'plan-with-ai',
-      label: t('planWithAI.label'),
-      icon: <Sparkles />,
-      onSelect: () => go(planningWorkspaceHref({ kind: 'project' })),
-    });
-    groups.push({
-      heading: t('commandPalette.aiHeading'),
-      actions: aiActions,
-    });
+    // MOTIR-2471 — the planning workspace itself needs `ai:plan`, the key
+    // `aiGenerationService` / `aiChatService` / `aiPreplanService` all assert.
+    // Resume-onboarding above is left alone: it is gated on there BEING an
+    // in-progress session of the actor's own, which is a state, not a permission.
+    if (satisfiesRequirement(AI_PLANNING_REQUIREMENT, held)) {
+      aiActions.push({
+        id: 'plan-with-ai',
+        label: t('planWithAI.label'),
+        icon: <Sparkles />,
+        onSelect: () => go(planningWorkspaceHref({ kind: 'project' })),
+      });
+    }
+    // A heading with nothing under it reads as a loading failure — the same rule
+    // design panel 2 fixes for the settings rail, one surface over.
+    if (aiActions.length > 0) {
+      groups.push({
+        heading: t('commandPalette.aiHeading'),
+        actions: aiActions,
+      });
+    }
   }
 
   // Create — the create-issue entry point (one of three: also the top-nav "+"
@@ -198,33 +220,41 @@ export function AppCommandPalette({
 
   // Navigation — project-scoped routes only when a project is active; Settings
   // deep-links the same way the sidebar does (project vs. workspace settings).
+  //
+  // MOTIR-2471 — each entry is offered only when the actor may reach its
+  // destination, resolved through the SAME map `SidebarNav` uses, so ⌘K and the
+  // rail can never disagree about which rooms exist for this person. `offerNav`
+  // exists so a new entry is one wrapped push rather than a new condition, and
+  // the totality test fails on any href the map does not carry.
+  const offerNav = <T extends { id: string }>(href: string, action: T): T[] =>
+    canOfferNavDestination(href, held) ? [action] : [];
   const navActions = [];
   if (hasProject) {
     navActions.push(
-      {
+      ...offerNav('/dashboard', {
         id: 'nav-dashboard',
         label: t('commandPalette.goToDashboard'),
         icon: <LayoutDashboard />,
         onSelect: () => go('/dashboard'),
-      },
-      {
+      }),
+      ...offerNav('/items', {
         id: 'nav-issues',
         label: t('commandPalette.goToIssues'),
         icon: <CircleDot />,
         onSelect: () => go('/items'),
-      },
-      {
+      }),
+      ...offerNav('/boards', {
         id: 'nav-boards',
         label: t('commandPalette.goToBoards'),
         icon: <Columns3 />,
         onSelect: () => go('/boards'),
-      },
-      {
+      }),
+      ...offerNav('/backlog', {
         id: 'nav-backlog',
         label: t('commandPalette.goToBacklog'),
         icon: <LayoutList />,
         onSelect: () => go('/backlog'),
-      },
+      }),
       // The SECOND door onto AI sprint planning (Subtask MOTIR-1750). The
       // primary one is the two-action create-sprint strip on `/backlog`; this
       // entry reaches the SAME action from anywhere, by navigating there with
@@ -237,7 +267,10 @@ export function AppCommandPalette({
       // `aiSprintPlanningEnabled`: with the switch off the backlog shows the
       // door disabled plus the fix hint, which teaches the capability, whereas a
       // palette entry that silently does not exist teaches nothing.
-      ...(aiPlanningConfigured
+      // AI sprint planning also needs the actor to hold `ai:plan` — the key
+      // `aiPreplanService` asserts. Configured-and-refused is a worse offer than
+      // absent.
+      ...(aiPlanningConfigured && satisfiesRequirement(AI_PLANNING_REQUIREMENT, held)
         ? [
             {
               id: 'backlog-plan-sprints',
@@ -247,18 +280,18 @@ export function AppCommandPalette({
             },
           ]
         : []),
-      {
+      ...offerNav('/reports', {
         id: 'nav-reports',
         label: t('commandPalette.goToReports'),
         icon: <BarChart3 />,
         onSelect: () => go('/reports'),
-      },
-      {
+      }),
+      ...offerNav('/filters', {
         id: 'nav-filters',
         label: t('commandPalette.goToFilters'),
         icon: <Filter />,
         onSelect: () => go('/filters'),
-      },
+      }),
     );
   }
   // Settings: without a project there's nothing project-scoped to configure, so a
@@ -278,8 +311,7 @@ export function AppCommandPalette({
   // registry (Subtask 6.5.2), filtered by the actor's access. A new settings page
   // appears here automatically by adding a registry entry (no hand-kept list).
   if (hasProject) {
-    const caps: SettingsNavCapabilities = settingsAccess ?? { canBrowse: false, canManage: false };
-    const settingsEntries = visibleSettingsNav(caps, PROJECT_SETTINGS_ROUTES);
+    const settingsEntries = visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES);
     if (settingsEntries.length > 0) {
       groups.push({
         heading: ts('nav.eyebrow'),

@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -12,8 +11,8 @@ import { labelsService } from '@/lib/services/labelsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { collectFilterReferentIds } from '@/lib/filters/registry';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { NoAccessState } from '@/components/projects/NoAccessState';
 import { AutomationSettings } from './_components/AutomationSettings';
+import { guardSettingsPage } from '../_guard';
 
 // Project automation settings (Story 6.6 · Subtask 6.6.5) — the rule list + the
 // when/if/then editor, mounted in the 6.5 settings AREA's reserved Automation
@@ -42,35 +41,25 @@ export default async function ProjectAutomationPage() {
     );
   }
 
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `automation`, never re-declared here.
+  const refused = await guardSettingsPage('automation', ctx);
+  if (refused) return refused;
+
   // Gated on `automation:manage` end to end (MOTIR-2297): an actor without it
   // gets the no-access state, never the surface. The read resolves the actor's
   // whole permission SET once and tests membership, rather than asking a second
   // boolean question — and it still reads as 404 for a NON-BROWSER, so a project
   // they may not see stays hidden.
   //
-  // ⚠️ `lib/settings/projectSettingsNav.ts` is deliberately NOT touched. Its
-  // `automation` entry is the one whose `access` predicate is `manage` rather
-  // than `browse`, and moving that one predicate now buys nothing — Admin holds
-  // `automation:manage` exactly when it holds `project:administer`, so the nav
-  // filters identically either way — while colliding with MOTIR-2258, which is
-  // about to redesign `SettingsNavCapabilities` around a resolved permission set.
-  const held = await projectAccessService.getPermissions(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-  if (!held.has('automation:manage')) {
-    const ta = await getTranslations('settings.automation.noAccess');
-    return (
-      <div className="mx-auto max-w-[46rem]">
-        <NoAccessState
-          title={ta('title')}
-          description={ta('description')}
-          backHref="/settings/project"
-          backLabel={t('nav.details')}
-        />
-      </div>
-    );
-  }
+  // ⚠️ MOTIR-2469 replaced the inline gate that used to sit here — this page's
+  // own permission read, its own key test and its own NoAccessState. It
+  // was the EXEMPLAR the card generalised: every settings page now asks the
+  // shared guard above, and the key comes from the registry rather than being
+  // spelled out here, so the row that hides this page and the page that refuses
+  // the actor can never gate on different keys. The copy moved with it, from
+  // `settings.automation.noAccess.*` to the uniform `settings.noAccess.*`.
 
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 

@@ -1,0 +1,297 @@
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { PROJECT_SETTINGS_NAV, PROJECT_SETTINGS_ROOT } from '@/lib/settings/projectSettingsNav';
+import { PROJECT_NAV_ACCESS } from '@/lib/settings/projectNavAccess';
+import { PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
+
+// Story MOTIR-2258 · Subtask MOTIR-2476 — THE STORY GATE.
+//
+// Five cards each changed one surface and each proved its own half. The defect
+// this file exists to catch lives BETWEEN them, and it has an unpleasant
+// property: it is invisible from every angle the individual cards can see. If
+// the rail hides a settings entry on one permission while the page behind it
+// refuses on another, every test passes, every page renders, every refusal is
+// polite — and the only symptom is that some people are let into a room they
+// should not be in, or kept out of one they were given. Nobody files that bug,
+// because nobody knows what they were supposed to see.
+//
+// So the central assertion here is an AGREEMENT rather than a behaviour, and it
+// walks the registry rather than listing what exists today, so a room added next
+// year joins it automatically.
+
+const ROOT = process.cwd();
+const read = (path: string) => readFileSync(join(ROOT, path), 'utf8');
+
+const SETTINGS_DIR = join(ROOT, 'app/(authed)/settings/project');
+
+/** Every on-disk settings `page.tsx`, as [urlPath, repo-relative file]. */
+function collectPages(dir: string, base: string): [string, string][] {
+  const found: [string, string][] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (entry.name.startsWith('_')) continue;
+      found.push(...collectPages(join(dir, entry.name), `${base}/${entry.name}`));
+    } else if (entry.name === 'page.tsx') {
+      found.push([base, relative(ROOT, join(dir, entry.name))]);
+    }
+  }
+  return found;
+}
+const PAGES = collectPages(SETTINGS_DIR, PROJECT_SETTINGS_ROOT);
+
+/**
+ * Which SERVICE owns each settings destination's writes. Read at MOTIR-2468
+ * authoring time by opening each destination; the assertions below re-read the
+ * source, so a service that stops asserting its key fails here.
+ */
+const SERVICE_OF: Record<string, string> = {
+  details: 'lib/services/projectAccessService.ts',
+  repositories: 'lib/services/projectRepoSetService.ts',
+  members: 'lib/services/projectMembersService.ts',
+  roles: 'lib/services/projectMembersService.ts',
+  'code-access': 'lib/services/projectRepoAccessService.ts',
+  workflow: 'lib/services/workflowsService.ts',
+  board: 'lib/services/boardsService.ts',
+  estimation: 'lib/services/estimationService.ts',
+  fields: 'lib/services/customFieldsService.ts',
+  components: 'lib/services/componentsService.ts',
+  'ai-planning': 'lib/services/projectAiSettingsService.ts',
+  automation: 'lib/services/automationRulesService.ts',
+};
+
+describe('the three-way key agreement — rail ↔ page ↔ service (MOTIR-2476)', () => {
+  it('is TOTAL over the registry — a new entry joins it without an edit here', () => {
+    expect(Object.keys(SERVICE_OF).sort()).toEqual(PROJECT_SETTINGS_NAV.map((e) => e.id).sort());
+  });
+
+  it.each(PROJECT_SETTINGS_NAV.map((e) => [e.id, e] as const))(
+    '%s — the rail, the page and the service name the SAME key',
+    (id, entry) => {
+      // 1 · THE RAIL. What `visibleSettingsNav` hides the row on.
+      const railKey = entry.permission;
+
+      // 2 · THE PAGE. Which registry entry it guards on — the page never names a
+      //     key itself (MOTIR-2469), so agreement is by construction here and
+      //     this asserts the construction is still what ships.
+      const page = PAGES.find(([, file]) => {
+        const source = readFileSync(join(ROOT, file), 'utf8');
+        return source.includes(`await guardSettingsPage('${id}'`);
+      });
+      expect(page, `no guarded page resolves to registry entry "${id}"`).toBeTruthy();
+
+      // 3 · THE SERVICE. The key the destination's own writes assert.
+      const service = read(SERVICE_OF[id]!);
+      expect(
+        service,
+        `${SERVICE_OF[id]} no longer asserts '${railKey}' — the rail now hides ` +
+          `"${id}" on a key its own service does not check.`,
+      ).toContain(`'${railKey}'`);
+    },
+  );
+
+  it('the drill-down agrees with its parent, having no row of its own', () => {
+    const detail = PAGES.find(([p]) => p.includes('[roleKey]'))!;
+    expect(readFileSync(join(ROOT, detail[1]), 'utf8')).toContain("guardSettingsPage('roles'");
+  });
+});
+
+describe('no second gating list — every gated surface resolves through its registry', () => {
+  const SIDEBAR = read('app/(authed)/_components/SidebarNav.tsx');
+  const PALETTE = read('app/(authed)/_components/AppCommandPalette.tsx');
+
+  it('the settings rail reads the registry', () => {
+    expect(SIDEBAR).toContain('visibleSettingsNav(held)');
+    expect(SIDEBAR).toContain('hasVisibleSettingsArea(held)');
+  });
+
+  it('the palette settings block reads the SAME registry', () => {
+    expect(PALETTE).toContain('visibleSettingsNav(held, PROJECT_SETTINGS_ROUTES)');
+  });
+
+  it('the project nav and the palette navigations read the SAME map', () => {
+    expect(SIDEBAR).toContain('canOfferNavDestination(item.href, held)');
+    expect(PALETTE).toContain('canOfferNavDestination(href, held)');
+  });
+
+  it('neither surface spells a settings route or a permission key by hand', () => {
+    for (const source of [SIDEBAR, PALETTE]) {
+      for (const entry of PROJECT_SETTINGS_NAV) {
+        // The area ROOT is exempt: it is the door's own destination, and the
+        // sidebar now names it as `PROJECT_SETTINGS_ROOT` rather than a literal
+        // (a one-line change this guard is what prompted).
+        if (!entry.href || entry.href === PROJECT_SETTINGS_ROOT) continue;
+        expect(source).not.toContain(`'${entry.href}'`);
+      }
+      for (const key of PERMISSIONS) {
+        expect(source, `a gated surface hardcodes '${key}'`).not.toContain(`'${key}'`);
+      }
+    }
+  });
+
+  it('the nav map covers every destination BOTH surfaces offer', () => {
+    const known = new Set(PROJECT_NAV_ACCESS.map((e) => e.href));
+    expect(known.size).toBe(PROJECT_NAV_ACCESS.length);
+  });
+});
+
+describe('no legacy boolean survives, repo-wide', () => {
+  /** Every `.ts`/`.tsx` under the app's own source roots. */
+  function sources(dir: string, acc: string[] = []): string[] {
+    for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) sources(path, acc);
+      else if (/\.tsx?$/.test(entry.name)) acc.push(path);
+    }
+    return acc;
+  }
+  const FILES = ['app', 'components', 'lib'].flatMap((d) => sources(d));
+
+  /**
+   * Strip comments before matching. A guard that reads PROSE reports the
+   * paragraphs explaining why a component does NOT use this context — which is
+   * a false positive that teaches people to loosen the guard.
+   */
+  const code = (source: string) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+  it('found the source tree — the sweep is not walking an empty directory', () => {
+    expect(FILES.length).toBeGreaterThan(500);
+  });
+
+  it('nothing reads canEdit or canManage off the project-access context', () => {
+    // The sweep is SELF-RECOUNTING: a consumer added between planning and running
+    // cannot be missed by a stale count, because this walks the tree.
+    const offenders = FILES.filter((file) => {
+      const source = code(read(file));
+      if (!source.includes('useProjectAccess')) return false;
+      return /useProjectAccess\(\)[^;]*\b(canEdit|canManage)\b|\{\s*[^}]*\b(canEdit|canManage)\b[^}]*\}\s*=\s*useProjectAccess/.test(
+        source,
+      );
+    });
+    expect(offenders).toEqual([]);
+  });
+
+  it('the context type offers only `can`', () => {
+    const provider = read('app/(authed)/_components/ProjectAccessProvider.tsx');
+    const shape = provider.split('interface ProjectAccessContextValue {')[1]!.split('}')[0]!;
+    expect(shape).toContain('can:');
+    expect(shape).not.toContain('canEdit');
+    expect(shape).not.toContain('canManage');
+  });
+});
+
+describe('hiding never became enforcement (MOTIR-2476)', () => {
+  // The honest fear about moving access decisions closer to the surface is that
+  // enforcement follows them out of the services, where it stops being
+  // enforcement. This pins the server-side gate population so that cannot happen
+  // by accident — a card that drops a gate has to change this number on purpose.
+  const GATE = /projectAccessService\.(assertPermission|assertCan[A-Za-z]+)\(/g;
+
+  function serverSources(dir: string, acc: string[] = []): string[] {
+    for (const entry of readdirSync(join(ROOT, dir), { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue;
+      const path = `${dir}/${entry.name}`;
+      if (entry.isDirectory()) serverSources(path, acc);
+      else if (/\.ts$/.test(entry.name)) acc.push(path);
+    }
+    return acc;
+  }
+
+  const SERVER = [...serverSources('lib/services'), ...serverSources('app/api')];
+
+  it('every settings destination’s service still calls the shared gate', () => {
+    // Deliberately NOT a total count of call sites: this repo's services change
+    // for a hundred unrelated reasons and a brittle number would be silenced
+    // rather than read (`notes.html` #231 — a guard nobody trusts is a guard
+    // nobody keeps). What is pinned is the property that matters to THIS story.
+    for (const [id, file] of Object.entries(SERVICE_OF)) {
+      const source = read(file);
+      if (file.endsWith('projectAccessService.ts')) {
+        // `details` is gated by the module that DEFINES the gate, so it cannot
+        // call itself through the namespace. Assert it still exports the gate.
+        expect(source, 'projectAccessService no longer exports assertPermission').toContain(
+          'async assertPermission(',
+        );
+        continue;
+      }
+      expect(source.match(GATE), `${file} (${id}) calls no shared gate at all`).toBeTruthy();
+    }
+  });
+
+  it('no gate moved into the PRESENTATION layer', () => {
+    // A component that calls the service gate directly is enforcement in the
+    // wrong place: it runs on data the client already has, and it can be skipped.
+    const clientFiles = [
+      ...sourcesUnder('app/(authed)/_components'),
+      ...sourcesUnder('components'),
+    ];
+    for (const file of clientFiles) {
+      const source = read(file);
+      if (!source.includes("'use client'")) continue;
+      expect(source, `${file} calls a server gate from a client component`).not.toMatch(GATE);
+    }
+  });
+
+  function sourcesUnder(dir: string): string[] {
+    const acc: string[] = [];
+    const walk = (d: string) => {
+      for (const entry of readdirSync(join(ROOT, d), { withFileTypes: true })) {
+        if (entry.name.startsWith('.')) continue;
+        const path = `${d}/${entry.name}`;
+        if (entry.isDirectory()) walk(path);
+        else if (/\.tsx?$/.test(entry.name)) acc.push(path);
+      }
+    };
+    walk(dir);
+    return acc;
+  }
+
+  it('the server tree is non-empty — the pin is not vacuous', () => {
+    expect(SERVER.length).toBeGreaterThan(50);
+  });
+});
+
+describe('the settings guard never decides BROWSE — the 404 arm stays the layout’s', () => {
+  it('the guard tests a domain key and nothing else', () => {
+    const guard = read('app/(authed)/settings/project/_guard.tsx');
+    expect(guard).toContain('getPermissions');
+    // Collapsing the two refusals would let someone who cannot browse the project
+    // learn that a section exists.
+    expect(guard).not.toContain('canBrowse');
+    expect(guard).not.toContain('ProjectNotFoundError');
+  });
+
+  it('and the layout still answers a non-browser first', () => {
+    const layout = read('app/(authed)/settings/project/layout.tsx');
+    expect(layout.indexOf('if (!canBrowse)')).toBeGreaterThan(-1);
+    expect(layout.indexOf('if (!canBrowse)')).toBeLessThan(layout.indexOf('return children;'));
+  });
+});
+
+describe('the partial-administrative-domain case, asserted where it is assertable today', () => {
+  // No built-in role holds ONE administrative key without the other eleven, so
+  // the live walkthrough is MOTIR-2257's. This is the honest interim: the same
+  // capability, over a set constructed by hand, so it does not go unverified for
+  // a whole story.
+  const held = new Set<PermissionKey>(['project:browse', 'board:configure']);
+
+  it('the rail yields Board and omits Members', async () => {
+    const { visibleSettingsNav } = await import('@/lib/settings/projectSettingsNav');
+    const ids = visibleSettingsNav(held).map((e) => e.id);
+    expect(ids).toContain('board');
+    expect(ids).not.toContain('members');
+  });
+
+  it('the destination guard REFUSES /settings/project/members for the same actor', async () => {
+    const { resolveSettingsRefusal } = await import('@/app/(authed)/settings/project/_guard');
+    expect(resolveSettingsRefusal('members', held)).not.toBeNull();
+    expect(resolveSettingsRefusal('board', held)).toBeNull();
+  });
+
+  it('and the area door opens, because ONE room is enough', async () => {
+    const { hasVisibleSettingsArea } = await import('@/lib/settings/projectSettingsNav');
+    expect(hasVisibleSettingsArea(held)).toBe(true);
+  });
+});

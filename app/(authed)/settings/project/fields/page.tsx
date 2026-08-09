@@ -3,11 +3,9 @@ import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { customFieldsService } from '@/lib/services/customFieldsService';
-import { projectMembersService } from '@/lib/services/projectMembersService';
-import { workspacesService } from '@/lib/services/workspacesService';
-import { isWorkspaceManager } from '@/lib/projects/roles';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FieldsSettingsEditor } from './_components/FieldsSettingsEditor';
+import { guardSettingsPage } from '../_guard';
 
 // Project custom-fields settings — server component (Subtask 5.3.6). Reads
 // the active project and its field definitions (through the 5.3.2 service:
@@ -37,16 +35,25 @@ export default async function ProjectFieldsPage() {
     );
   }
 
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `fields`, never re-declared here.
+  const refused = await guardSettingsPage('fields', ctx);
+  if (refused) return refused;
+
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
-  const [fields, members, wsRole] = await Promise.all([
-    customFieldsService.listFields(actor),
-    projectMembersService.listMembers(actor),
-    workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
-  ]);
+  // The membership + workspace-role reads that used to ride this batch existed
+  // ONLY to compute the private admin check MOTIR-2469 retired — two fewer round
+  // trips on every load of this page.
+  const fields = await customFieldsService.listFields(actor);
 
-  const myMembership = members.find((m) => m.userId === ctx.userId);
-  const canManage = isWorkspaceManager(wsRole) || myMembership?.role === 'admin';
+  // MOTIR-2469 retired the private admin check that used to sit here — a role
+  // comparison against the workspace and project membership rows, written before
+  // there was a permission model to ask, and a SECOND policy answering a question
+  // the catalog already answers. The page is reached only by an actor who holds
+  // its registry key (the guard above), so the manage affordances are simply on.
+  const canManage = true;
 
   return (
     <div className="mx-auto flex max-w-[42rem] flex-col gap-6">

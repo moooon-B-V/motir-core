@@ -45,7 +45,7 @@ function row(over: Partial<IssueRowData> & { identifier: string }): IssueRowData
 function openRowMenu(data: IssueRowData) {
   renderWithIntl(
     <ToastProvider>
-      <ProjectAccessProvider canEdit canManage={false}>
+      <ProjectAccessProvider permissions={['work_item:edit']}>
         <WorkItemRowActions row={data} />
       </ProjectAccessProvider>
     </ToastProvider>,

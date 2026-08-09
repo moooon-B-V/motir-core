@@ -169,26 +169,27 @@ test('a project admin reads the role list, drills into a role, and comes back', 
   });
 });
 
-test('a project member reads both screens and can change nothing', async ({ page }) => {
+// ⚠️ INVERTED BY MOTIR-2258. This asserted that a member reads the roles screens
+// in full — the 2026-06-09 model, where a non-admin saw every settings section
+// read-only. `design/projects/design-notes.md` § *Amendment 2026-08-08*
+// supersedes it, and MOTIR-2468 keyed the Roles entry to `member:manage`: a role
+// IS member-domain administration, and MOTIR-2257 adds authoring to this very
+// screen. So a member no longer reads the model here; they are refused.
+//
+// The thing this test was really protecting — that a member can change nothing —
+// is now true a stronger way: there is no screen to change anything on.
+test('a project member is REFUSED both roles screens', async ({ page }) => {
   await signIn(page, seed.memberEmail, seed.password);
-  await openRolesList(page);
 
-  // Same content — a member is not shown a lesser version of the model.
-  await expect(roleRow(page, 'admin')).toContainText('Built-in');
-  await expect(page.getByText('Public requests')).toBeVisible();
+  await page.goto('/settings/project/roles');
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+  await expect(roleRow(page, 'admin')).toHaveCount(0);
 
-  // …and no write affordance on either screen. Asserted as absences of the
-  // named controls, since the whole card is read-only for everyone today.
-  for (const name of [/Create role/, /^Edit$/, /^Delete$/]) {
-    await expect(page.getByRole('button', { name })).toHaveCount(0);
-  }
-
-  await roleRow(page, 'viewer').click();
-  await page.waitForURL('**/settings/project/roles/viewer');
-  await expect(page.getByRole('heading', { name: 'Viewer', level: 1 })).toBeVisible();
-  for (const name of [/Create role/, /^Edit$/, /^Delete$/]) {
-    await expect(page.getByRole('button', { name })).toHaveCount(0);
-  }
+  // The drill-down inherits its parent's key — a typed URL to a role detail is
+  // refused the same way (MOTIR-2469).
+  await page.goto('/settings/project/roles/viewer');
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Viewer', level: 1 })).toHaveCount(0);
 });
 
 test('a user with no access to the project gets the no-access panel on BOTH routes', async ({
@@ -241,8 +242,12 @@ test('a project viewer keeps exactly the affordances they had before', async ({ 
   await expect(newWorkItem).toBeVisible({ timeout: 30_000 });
   await expect(newWorkItem, 'a viewer must still not be able to create work items').toBeDisabled();
 
-  // …and the roles surface is readable by them too — a viewer is a reader of the
-  // model, not somebody it is hidden from.
-  await openRolesList(page);
-  await expect(roleRow(page, 'viewer')).toContainText(`${ROLE_HEADCOUNT.viewer} members`);
+  // ⚠️ The second half of this test was inverted by MOTIR-2258: the roles surface
+  // used to be readable by a viewer ("a reader of the model, not somebody it is
+  // hidden from"), which is the 2026-06-09 treatment the amendment supersedes.
+  // The IMPORTANT half is above and is untouched — a viewer's in-place
+  // affordances are exactly what they were, which is what "keeps exactly the
+  // affordances they had before" was always about.
+  await page.goto('/settings/project/roles');
+  await expect(page.getByRole('heading', { name: 'Admins only' })).toBeVisible();
 });

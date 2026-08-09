@@ -44,7 +44,10 @@ export function ReportButton({ display = 'shell' }: { display?: 'shell' | 'inbox
   const t = useTranslations('triage');
   const ta = useTranslations('projectAccess');
   const { openReport, canReport } = useReport();
-  const { canEdit } = useProjectAccess();
+  // MOTIR-2473 — the key this control's own write asserts:
+  // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
 
   if (!canReport) return null;
 

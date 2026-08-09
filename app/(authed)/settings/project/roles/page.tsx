@@ -5,6 +5,7 @@ import { getActiveProject } from '@/lib/projects';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RoleList } from './_components/RoleList';
+import { guardSettingsPage } from '../_guard';
 
 // Project settings → Access → Roles & permissions, screen 1 (Story MOTIR-2282 ·
 // Subtask MOTIR-2263). A server component: it reads the active project's role
@@ -36,6 +37,12 @@ export default async function ProjectRolesPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `roles`, never re-declared here.
+  const refused = await guardSettingsPage('roles', ctx);
+  if (refused) return refused;
 
   const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, {
     userId: ctx.userId,

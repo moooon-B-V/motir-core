@@ -19,11 +19,12 @@
 // So this file widens BOTH arms: the unswept areas, and a POPULATED fixture on
 // every route it adds. Nothing here is a new kind of check — same `WCAG_TAGS`,
 // same `formatViolations` reporting as the three sibling files. It is the same
-// sweep pointed at more of the product. Two routes carry a NAMED, single-rule
-// carve-out citing the card that removes it (see "WHAT WIDENING FOUND" below —
-// it was three until MOTIR-2495 landed and removed its own); every other route
-// runs with zero exclusions, and no rule is disabled anywhere without a bug key
-// beside it.
+// sweep pointed at more of the product. ONE route still carries a NAMED,
+// single-rule carve-out citing the card that removes it (see "WHAT WIDENING
+// FOUND" below — it was three: /docs's went with MOTIR-2494 and
+// /settings/organization's with MOTIR-2495, and both are back to zero-exclusion
+// sweeps); every other route runs with zero exclusions, and no rule is disabled
+// anywhere without a bug key beside it.
 //
 // A FOURTH file rather than more entries in `shell-a11y.spec.ts`: the @a11y CI
 // leg shards by FILE (see the split rationale in shell-a11y.spec.ts's header
@@ -66,13 +67,14 @@
 //     `role="row"` inside `role="list"`, two CRITICAL violations), MOTIR-2494
 //     (/docs code panes unreachable by keyboard), MOTIR-2495 (a disabled
 //     Input's `opacity-50` compositing its affix below AA — a contrast RULE
-//     whose cause is not an ink choice, so no ink fixes it). Each has a NAMED
+//     whose cause is not an ink choice, so no ink fixes it). Each had a NAMED
 //     carve-out below citing its card, and each of those cards removes its own
 //     carve-out. A carve-out here is a tracked gap, never a silent one.
-//     MOTIR-2495 has since done exactly that: the shared `Input` now expresses
-//     `disabled` and `readOnly` through `--el-input-*` fills rather than an
-//     opacity filter, so /settings/organization is swept with no exclusion at
-//     all and only the two role/keyboard carve-outs remain.
+//     Two of the three have since landed and DELETED theirs: MOTIR-2494 made
+//     the /docs code panes keyboard-scrollable, and MOTIR-2495 moved the shared
+//     `Input`'s `disabled` / `readOnly` states onto `--el-input-*` fills instead
+//     of an opacity filter — so both routes are swept with zero exclusions
+//     again. 2493 is still open and still carries its own.
 //   • CLEAN on the first run — /triage and /settings/account.
 
 import AxeBuilder from '@axe-core/playwright';
@@ -355,16 +357,14 @@ test.describe('@a11y widened route coverage', () => {
     await page.goto('/docs');
     await page.waitForURL('**/docs/api');
     await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
-    // CARVE-OUT — MOTIR-2494. Every code pane in the reference is a scrollable
-    // region with nothing focusable in it, so `scrollable-region-focusable`
-    // fails on 20+ nodes. Not a contrast failure, so filed rather than
-    // absorbed; MOTIR-2494 fixes the shared code block and DELETES this line.
-    // The catalogue's eyebrow contrast — the other defect this route surfaced
-    // — WAS an `--el-text-*` failure and is fixed in this PR, so
-    // `color-contrast` stays on here.
-    await sweep(page, '/docs (→ /docs/api)', reports, {
-      disableRules: ['scrollable-region-focusable'],
-    });
+    // MOTIR-2494 removed this route's carve-out (`scrollable-region-focusable`,
+    // 20+ code panes with nothing focusable in them) by measuring each pane and
+    // making the ones that OVERFLOW a named focus stop. That measurement runs
+    // on hydration, so wait for it before axe reads the DOM — an unmeasured
+    // page is indistinguishable from an unfixed one, and would fail this sweep
+    // intermittently rather than honestly.
+    await expect(page.locator('pre[tabindex="0"]').first()).toBeAttached();
+    await sweep(page, '/docs (→ /docs/api)', reports);
 
     // ── /p/[identifier] — the public project overview ────────────────────────
     await page.goto(`/p/${tenant.projectKey}`);

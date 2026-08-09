@@ -388,7 +388,13 @@ test('the PM defines the five field types, sets each on an issue inline, and the
 
 // ── the role pass: non-admin member (settings) + viewer (rail) ───────────────
 
-test('a non-admin member gets the read-only Fields page; a project viewer gets the read-only rail', async ({
+// ⚠️ THE SETTINGS HALF WAS INVERTED BY MOTIR-2258. It asserted the 2026-06-09
+// treatment — a non-admin sees the settings page READ-ONLY — which
+// `design/projects/design-notes.md` § *Amendment 2026-08-08* supersedes: the row
+// is hidden and the destination refuses. The RAIL half is untouched and is the
+// half that matters most here: an in-place control on a surface the actor CAN
+// see stays visible-and-disabled, which the amendment explicitly did not reopen.
+test('a non-admin member is REFUSED the Fields page; a project viewer still gets the read-only rail', async ({
   browser,
 }) => {
   const tenant = await seedTenant('cf-owner@example.com');
@@ -416,14 +422,17 @@ test('a non-admin member gets the read-only Fields page; a project viewer gets t
   await pinActiveProject(member.id, tenant);
   await pinActiveProject(viewer.id, tenant);
 
-  // Member: the Fields page renders read-only — values visible, no mutation
-  // affordances, the quiet permission line (the 6.4 read-only grammar).
+  // Member: the Fields page REFUSES — and nothing of the form leaks in behind it.
   const memberCtx = await browser.newContext();
   const memberPage = await memberCtx.newPage();
   await signIn(memberPage, member.email, PWD);
-  await gotoFields(memberPage);
-  await expect(memberPage.getByText('Customer', { exact: true })).toBeVisible();
-  await expect(memberPage.getByText('Only project admins can manage fields.')).toBeVisible();
+  // NOT `gotoFields` — that helper asserts the page's own heading, which a
+  // refused actor never sees.
+  await memberPage.goto('/settings/project/fields');
+  await expect(memberPage.getByRole('heading', { name: 'Admins only' })).toBeVisible();
+  await expect(
+    memberPage.getByRole('paragraph').filter({ hasText: /custom fields/i }),
+  ).toBeVisible();
   await expect(memberPage.getByRole('button', { name: 'Add field' })).toHaveCount(0);
   await expect(memberPage.getByRole('button', { name: 'Edit Customer' })).toHaveCount(0);
   await expect(memberPage.getByRole('button', { name: 'Delete Customer' })).toHaveCount(0);

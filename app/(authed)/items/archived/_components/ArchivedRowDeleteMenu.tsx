@@ -14,7 +14,8 @@ import {
 // design/work-items/delete-confirm.mock.html + design-notes §2.9.7. Unlike the
 // live list/board's full WorkItemActionsMenu, this `⋯` is PURELY the Delete
 // affordance: a single danger `Delete…` row, so the menu maps 1:1 to the
-// `canManage` capability (Restore stays the prominent inline button on the row).
+// `work_item:delete` key — the same one Restore needs (MOTIR-2473; Restore
+// stays the prominent inline button on the row).
 // It reuses the shipped Popover + the SAME danger-row/trigger vocabulary (the
 // exported MENU_* classes) — no new primitive.
 //
