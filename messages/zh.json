@@ -2658,6 +2658,16 @@
       "editorHintNew": "“以此为起点”会用该角色的全部权限预填下面的列表，之后可自由修改。该选择不会被保存：保存后的角色只有名称和权限集合。",
       "editorHintEdit": "勾选该角色拥有的权限。角色只由名称和权限集合构成，不记录其他内容。",
       "saveRole": "保存修改",
+      "deleteRole": "删除 {name}",
+      "deleteDialog": {
+        "title": "删除“{name}”？",
+        "affected": "{count, plural, other {当前有 <b>#</b> 位成员持有该角色。}}请选择他们将转移到的角色——该角色一被删除，他们立即改为持有新角色。",
+        "noneAffected": "当前没有成员持有该角色，不会影响任何人。",
+        "lede": "删除角色不会将任何人移出项目。此操作无法撤销。",
+        "moveTo": "{count, plural, other {将这 # 位成员转移到}}",
+        "choosePlaceholder": "选择一个角色…",
+        "confirm": "删除角色"
+      },
       "toast": { "created": "角色已创建", "saved": "角色已保存" },
       "error": {
         "nameTaken": "本项目中已存在名为“{name}”的角色。",

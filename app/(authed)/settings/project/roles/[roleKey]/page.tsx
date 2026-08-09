@@ -56,6 +56,7 @@ export default async function ProjectRoleDetailPage({
       catalog={catalog}
       projectName={ctx.project.name}
       canManage={canManage}
+      projectKey={ctx.project.identifier}
     />
   );
 }

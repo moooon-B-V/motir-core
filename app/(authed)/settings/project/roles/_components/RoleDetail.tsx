@@ -3,6 +3,7 @@ import { ArrowLeft, Lock, Pencil, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
+import { RoleDeleteControl } from './RoleDeleteControl';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 import { PermissionGroups } from './PermissionGroups';
 import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
@@ -40,12 +41,15 @@ export function RoleDetail({
   catalog,
   projectName,
   canManage = false,
+  projectKey,
 }: {
   role: RoleDTO;
   catalog: RoleCatalogDTO;
   projectName: string;
   /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
   canManage?: boolean;
+  /** The `[key]` segment the delete control calls — MOTIR-2480. */
+  projectKey?: string;
 }) {
   const t = useTranslations('settings.rolesPage');
   const tCatalog = useTranslations();
@@ -110,6 +114,12 @@ export function RoleDetail({
               <Pencil aria-hidden="true" className="h-4 w-4" />
               {t('editRole')}
             </Link>
+          ) : null}
+          {/* DELETE — MOTIR-2480. Same two conditions as Edit: admin, and
+              custom. A built-in cannot be deleted by anyone, workspace owner
+              included, so there is no control to disable. */}
+          {canManage && !role.builtIn && projectKey ? (
+            <RoleDeleteControl projectKey={projectKey} role={role} roles={catalog.roles} />
           ) : null}
           <p className="text-(--el-text-secondary) shrink-0 font-sans text-[12.5px] whitespace-nowrap">
             {t.rich('holdsCount', {
