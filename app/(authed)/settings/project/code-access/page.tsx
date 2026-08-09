@@ -8,6 +8,7 @@ import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { CodeAccessSettings } from './_components/CodeAccessSettings';
+import { guardSettingsPage } from '../_guard';
 
 // TEAM CODE ACCESS — project settings (Story MOTIR-1775 · MOTIR-1945), the room
 // `design/repository-set/team-access.mock.html` draws at the placement
@@ -46,6 +47,12 @@ export default async function ProjectCodeAccessPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `code-access`, never re-declared here.
+  const refused = await guardSettingsPage('code-access', ctx);
+  if (refused) return refused;
 
   const actorCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
   const [access, repos, identity, caps] = await Promise.all([

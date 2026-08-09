@@ -7,6 +7,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { estimationService } from '@/lib/services/estimationService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { EstimationSettingsEditor } from './_components/EstimationSettingsEditor';
+import { guardSettingsPage } from '../_guard';
 
 // Estimation settings — server component (Subtask 4.3.6). Reads the active
 // project, the caller's role (owner == project admin in v1, finding #36), and
@@ -33,6 +34,12 @@ export default async function ProjectEstimationPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `estimation`, never re-declared here.
+  const refused = await guardSettingsPage('estimation', ctx);
+  if (refused) return refused;
 
   const role = await workspacesService.getMemberRole(ctx.userId, ctx.workspaceId);
   const isAdmin = isOwnerRole(role);

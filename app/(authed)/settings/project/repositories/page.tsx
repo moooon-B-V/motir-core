@@ -8,6 +8,7 @@ import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { RepositoriesRoom } from './_components/RepositoriesRoom';
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
+import { guardSettingsPage } from '../_guard';
 
 // THE TAKE-IT-OVER ROOM (Story MOTIR-1775 · MOTIR-1939) — the surface behind the
 // ownership promise's `How moving it works` door, the billing panel's
@@ -40,6 +41,12 @@ export default async function ProjectRepositoriesPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `repositories`, never re-declared here.
+  const refused = await guardSettingsPage('repositories', ctx);
+  if (refused) return refused;
 
   const view = await projectRepoRoomService.getRoomView(ctx.projectId, {
     userId: ctx.userId,

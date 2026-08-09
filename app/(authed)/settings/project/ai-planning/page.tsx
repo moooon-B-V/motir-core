@@ -12,6 +12,7 @@ import {
   type AutoPlanPauseView,
 } from './_components/AiPlanningSettingsEditor';
 import type { AutoPlanPauseDto } from '@/lib/dto/plans';
+import { guardSettingsPage } from '../_guard';
 
 // AI-planning project settings — server component (Story 7.13 · Subtask
 // MOTIR-919), the surface `design/ai-settings/` specifies. Mounted in the 6.5
@@ -73,6 +74,12 @@ export default async function ProjectAiPlanningPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `ai-planning`, never re-declared here.
+  const refused = await guardSettingsPage('ai-planning', ctx);
+  if (refused) return refused;
 
   const wsCtx = { userId: ctx.userId, workspaceId: ctx.workspaceId };
 

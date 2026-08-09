@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SectionLabel } from '@/components/ui/SectionLabel';
 import { BoardSwitcher } from '../../../boards/_components/BoardSwitcher';
 import { BoardConfigEditor, type BoardConfigModel } from './_components/BoardConfigEditor';
+import { guardSettingsPage } from '../_guard';
 
 // Board settings — server component (Subtask 3.6.3, made PER-BOARD by 3.7.8).
 // The board ADMINISTRATION surface: a project admin manages a board's COLUMNS
@@ -73,6 +74,12 @@ export default async function ProjectBoardSettingsPage({
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `board`, never re-declared here.
+  const refused = await guardSettingsPage('board', ctx);
+  if (refused) return refused;
 
   // The selected board (Subtask 3.7.8) — `?board=<id>` picks WHICH board to
   // configure; absent → the project's default board.

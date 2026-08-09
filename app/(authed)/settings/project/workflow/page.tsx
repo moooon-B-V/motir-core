@@ -9,6 +9,7 @@ import { projectStatusAutomationService } from '@/lib/services/projectStatusAuto
 import { EmptyState } from '@/components/ui/EmptyState';
 import { WorkflowEditor } from './_components/WorkflowEditor';
 import { StatusAutomationEditor } from './_components/StatusAutomationEditor';
+import { guardSettingsPage } from '../_guard';
 
 // Workflow settings — server component (Subtask 2.2.5). Reads the active
 // project, the caller's role (owner == project admin in v1, finding #36), and
@@ -34,6 +35,12 @@ export default async function ProjectWorkflowPage() {
       </div>
     );
   }
+
+  // THE DESTINATION GUARD (MOTIR-2469). Hiding is presentation and never
+  // protection: this page is still one typed URL away once its rail row is
+  // gone. The key comes from the registry entry `workflow`, never re-declared here.
+  const refused = await guardSettingsPage('workflow', ctx);
+  if (refused) return refused;
 
   const role = await workspacesService.getMemberRole(ctx.userId, ctx.workspaceId);
   const isAdmin = isOwnerRole(role);
