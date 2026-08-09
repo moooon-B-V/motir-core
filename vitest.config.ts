@@ -855,6 +855,25 @@ export default defineConfig({
         // It had no coverage entry while the same policy was written out at five
         // call sites; now that they all route through it, it is worth gating.
         'lib/baseUrl.ts',
+
+        // Story MOTIR-2384 · Subtask MOTIR-2394 (the story gate) — the OBJECT
+        // STORE half of the hosting move. `lib/baseUrl.ts` above was the app-URL
+        // half and joined the gate with its own card; these three are the seam
+        // MOTIR-2389 rewrote and MOTIR-2404 widened, and until this card none of
+        // them was in the report at all — so the ≥90% per-file gate did not apply
+        // to the file every attachment, avatar and acceptance artifact in the
+        // product is stored through. All three are GATED below, MEASURED first.
+        //
+        // ⚠️ `lib/blob/errors.ts` and `lib/blob/uploadClient.ts` are their
+        // neighbours and are deliberately NOT listed — `lib/blob/**` would have
+        // been one character shorter and wrong. Neither is code this Story wrote:
+        // the first sits at 50% branches and the second at 0% (a browser-side
+        // module no Node suite loads), and pinning either would gate work no card
+        // here did. That is the same line `lib/services/projectAccessService.ts`
+        // and `lib/repositories/projectMembershipRepository.ts` are held on above.
+        'lib/blob/uploader.ts',
+        'lib/blob/s3.ts',
+        'lib/blob/referencedUrls.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -922,6 +941,22 @@ export default defineConfig({
         'lib/api/v1/contractVersion.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-2388 — the ONE definition of the app's own origin.
         'lib/baseUrl.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2384 · Subtask MOTIR-2394 — the object-store seam.
+        //
+        // MEASURED FIRST, then pinned, on this branch over `tests/attachments`,
+        // `tests/hosting`, `tests/baseUrl` and `tests/mappers/avatar-projection`:
+        // `uploader.ts` and `s3.ts` at 100 / 100 / 100, `referencedUrls.ts` at
+        // 94.11 statements / 91.66 branches / 100 functions / 96.42 lines. The
+        // uploader reached that number in this card — it entered at 76.19%
+        // branches, with `withRandomSuffix`'s extension-less arm, two of
+        // `toBuffer`'s three input shapes and both of `headPrivateBlob`'s
+        // metadata defaults unexercised. Those are exactly the behaviours
+        // MOTIR-2389 had to REIMPLEMENT because the old provider did them
+        // server-side, which is what made them the wrong branches to leave
+        // unmeasured.
+        'lib/blob/uploader.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/blob/s3.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/blob/referencedUrls.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },
