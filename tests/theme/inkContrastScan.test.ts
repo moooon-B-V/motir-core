@@ -409,6 +409,73 @@ describe('ink-contrast scanner — `--el-text-muted` and the surface under it', 
     ).toEqual([]);
   });
 
+  it('clears the same text on `--el-page-bg`, the OTHER name for that white', () => {
+    // MOTIR-2497. `--el-page-bg` and `--el-card` are both
+    // `var(--color-background)`, so this fixture and the one above describe two
+    // elements painted the identical colour. Before the fix only the `--el-card`
+    // spelling ended the walk and this one was reported as ink on a tint.
+    expect(
+      verdictsFor(
+        `<div className="bg-(--el-page-bg) p-3"><span className="text-(--el-text-muted)">12 issues</span></div>`,
+        'muted',
+      ),
+    ).toEqual([]);
+  });
+
+  it('clears an element painting its OWN `--el-page-bg` inside a tinted ancestor', () => {
+    // The instance the bug was found on: `backlog/_components/CreateIssueRow.tsx`
+    // is an input carrying `bg-(--el-page-bg)` on ITSELF, inside a row painted
+    // `--el-surface-soft`. Its placeholder sits on white (4.54:1, passing) and
+    // the guard reported it at 4.12–4.34:1 on the ancestor's tint.
+    expect(
+      verdictsFor(
+        `<div className="bg-(--el-surface-soft) p-2">
+           <input aria-label="Title" className="bg-(--el-page-bg) placeholder:text-(--el-text-muted)" />
+         </div>`,
+        'muted',
+      ),
+    ).toEqual([]);
+  });
+
+  it('still reports that same ink when the element paints NO background of its own', () => {
+    // The other arm, and the one that proves the fix is a surface correction
+    // rather than an exemption: remove the input's own white and the ancestor's
+    // tint is what the placeholder actually sits on.
+    const finding = only(
+      scan(
+        `<div className="bg-(--el-surface-soft) p-2">
+           <input aria-label="Title" className="placeholder:text-(--el-text-muted)" />
+         </div>`,
+      ),
+    );
+    expect(finding).toMatchObject({ ink: 'muted', verdict: 'violation', element: 'input' });
+    expect(finding.reason).toContain('bg-(--el-surface-soft)');
+  });
+
+  it('refuses a safe background that only paints on HOVER', () => {
+    // A variant-prefixed white is not the element's resting surface: this
+    // button is tinted in every render but one. Reading it as safe would be a
+    // false NEGATIVE, which reads as coverage — so the safe arm matches only an
+    // UNPREFIXED class, unlike the tinted arm, which over-reports on purpose.
+    expect(
+      verdictsFor(
+        `<button className="bg-(--el-surface) hover:bg-(--el-page-bg) text-(--el-text-muted)">12 issues</button>`,
+        'muted',
+      ),
+    ).toEqual(['violation']);
+
+    // …and with the tint on the ancestor rather than the element itself, so the
+    // hover class is the only thing the safe arm could have matched.
+    expect(
+      verdictsFor(
+        `<div className="bg-(--el-muted) p-2">
+           <button className="hover:bg-(--el-card) text-(--el-text-muted)">12 issues</button>
+         </div>`,
+        'muted',
+      ),
+    ).toEqual(['violation']);
+  });
+
   it('takes the NEAREST surface, so a card inside a tinted panel still clears', () => {
     expect(
       verdictsFor(

@@ -53,6 +53,15 @@ import ts from 'typescript';
 // Still invisible, and knowingly so: a STATE variant that is itself the
 // exemption (`disabled:text-(--el-text-faint)` paints only while disabled).
 // One site carries it today, and it clears on the decorative arm anyway.
+//
+// ── One colour, two token names (MOTIR-2497) ────────────────────────────────
+// The surface walk knew ONE spelling of "this element paints the white page".
+// `--el-page-bg` and `--el-card` are both `var(--color-background)`, so two
+// elements painted the identical colour got opposite verdicts depending on
+// which token the author reached for — and the walk sailed past the
+// `--el-page-bg` one to report a tint further up. `SAFE_SURFACE_TOKENS` below
+// carries both, and `inkContrastLint.test.ts` derives that list from
+// `theme.css` so a third alias of the same colour cannot reopen it silently.
 
 /** The two inks under measurement, as they appear in an arbitrary-value class. */
 export const FAINT_CLASS = 'text-(--el-text-faint)';
@@ -60,14 +69,38 @@ export const MUTED_CLASS = 'text-(--el-text-muted)';
 
 /**
  * Backgrounds that are NOT the white page/card, on which `--el-text-muted`
- * drops below 4.5:1 (MOTIR-2455's measured table). `--el-card` and the bare
- * page are the safe ones and are deliberately absent.
+ * drops below 4.5:1 (MOTIR-2455's measured table). The safe ones are
+ * `SAFE_SURFACE_TOKENS` below and are deliberately absent.
  */
 const TINTED_SURFACE_CLASSES = [
   'bg-(--el-surface)',
   'bg-(--el-surface-soft)',
   'bg-(--el-muted)',
 ] as const;
+
+/**
+ * The `--el-*` backgrounds that ARE the white page/card, where `--el-text-muted`
+ * measures 4.54:1 — so an element painting one ends the surface walk with a
+ * PASS rather than being walked past (MOTIR-2497).
+ *
+ * There are two of them because the token layer spells the same colour twice:
+ * `--el-page-bg` and `--el-card` are both `var(--color-background)`. Knowing
+ * only one spelling is what made the guard report
+ * `backlog/_components/CreateIssueRow.tsx` — an input carrying
+ * `bg-(--el-page-bg)` inside an `--el-surface-soft` row — as ink on a tint,
+ * when its placeholder was painting on white the whole time. A false positive
+ * is not free here: the cheapest way to silence one is to swap the token for
+ * its identical twin, which changes no pixels and leaves the codebase carrying
+ * a colour choice made for a parser.
+ *
+ * Exported as TOKEN NAMES rather than classes because `inkContrastLint.test.ts`
+ * reads them back against `theme.css`: any `--el-*` used as a background that
+ * also resolves to `--color-background` has to appear here, so a THIRD spelling
+ * cannot reopen this hole quietly.
+ */
+export const SAFE_SURFACE_TOKENS: readonly string[] = ['--el-card', '--el-page-bg'];
+
+const SAFE_SURFACE_CLASSES = SAFE_SURFACE_TOKENS.map((token) => `bg-(${token})`);
 
 /**
  * Predicates whose TRUE branch is a disabled / inactive state — the 1.4.3
@@ -392,6 +425,29 @@ function classBlob(element: ts.JsxOpeningLikeElement): string {
   return className ? className.getText() : '';
 }
 
+/** A literal string, safe to embed in a `RegExp`. */
+function escapeForRegExp(source: string): string {
+  return source.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Does the blob carry this class with NO variant prefix — i.e. does the element
+ * paint it in its RESTING state?
+ *
+ * Only the safe arm asks. `hover:bg-(--el-page-bg)` on a
+ * `bg-(--el-surface)` button paints white under the pointer and the tint every
+ * other render, so reading it as a safe surface would clear the muted ink
+ * beside it — a false NEGATIVE, which reads as coverage. Two sites in the tree
+ * are that exact shape (`components/issues/EstimateBadge.tsx`,
+ * `components/ui/MarkdownEditor.tsx`), so widening the safe set without this is
+ * how the correction would silence real findings. The TINTED arm keeps its
+ * substring match on purpose: over-reporting a conditional tint is the
+ * documented safe way to be wrong (see `inkContrastLint.test.ts`).
+ */
+function paintsUnprefixed(blob: string, className: string): boolean {
+  return new RegExp(`(^|[\\s"'\`{])${escapeForRegExp(className)}([\\s"'\`}]|$)`).test(blob);
+}
+
 /**
  * The nearest ancestor (within this file) that paints a background, and whether
  * that background is one the muted ink fails on. Returns `null` when no
@@ -408,7 +464,8 @@ function nearestSurface(node: ts.Node): { className: string; tinted: boolean } |
           : null;
     if (!element) continue;
     const blob = classBlob(element);
-    if (/\bbg-\(--el-card\)/.test(blob)) return { className: blob, tinted: false };
+    const safe = SAFE_SURFACE_CLASSES.find((surface) => paintsUnprefixed(blob, surface));
+    if (safe) return { className: safe, tinted: false };
     const tinted = TINTED_SURFACE_CLASSES.find((surface) => blob.includes(surface));
     if (tinted) return { className: tinted, tinted: true };
   }
