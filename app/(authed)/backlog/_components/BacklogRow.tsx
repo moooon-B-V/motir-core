@@ -29,6 +29,22 @@ import type { StatusByKey } from './backlogShared';
 // DRAG (4.2.4): the WHOLE row is the dnd-kit drag handle (the grip is the hover
 // cue); while lifted, the resting row is a dashed ghost and the clone is the
 // `DragOverlay`'s `BacklogRowOverlay`.
+//
+// ARIA — the row is a `listitem` inside `BacklogRows`' `role="list"` viewport
+// (MOTIR-2493). It used to default to `role="row"`, which composes with NOTHING
+// here: a `row` requires a `rowgroup`/`grid`/`table`/`treegrid` parent and a
+// `list` requires `listitem` children, so BOTH `aria-required-parent` and
+// `aria-required-children` failed CRITICAL on every populated backlog and a
+// screen reader got neither a countable list nor a navigable grid. The list arm
+// was chosen over promoting the container to a `grid`: `grid` would oblige the
+// arrow-key cell keyboard model (and `gridcell` per slot) that nothing here
+// implements, so it would trade one false promise for another — while `list` is
+// what the drag-to-rank interaction already IS, and what the sibling
+// `ProposedSprintPanel` was already composing correctly. The design's
+// "no nested interactive elements, sibling controls only" contract
+// (design/backlog/design-notes.md, panel 2) is about NESTING and survives
+// verbatim; the asset's own `role="row"` annotation is stale and is corrected by
+// its own design card.
 // SELECTION + MENU (4.2.5): the **checkbox** toggles selection (keyed by id);
 // **row click** selects (shift = range, ⌘/ctrl = toggle); the **`⋯` menu** moves
 // the row to a sprint / the backlog / a backlog boundary. Selected rows carry the
@@ -62,7 +78,8 @@ export function BacklogRowBody({
   actions,
   onEstimateChanged,
   showGrip = true,
-  rowRole = 'row',
+  posInSet,
+  setSize,
   testIdPrefix = 'backlog-row',
   trailing,
   readOnlyEstimate = false,
@@ -86,10 +103,14 @@ export function BacklogRowBody({
   /** The drag-affordance cue. OFF on a proposed row (MOTIR-1750): a proposal has
    *  no lifecycle, so hinting at a drag that cannot happen would lie. */
   showGrip?: boolean;
-  /** The row's ARIA role. `row` in the sortable grid; `listitem` on the proposed
-   *  list, which is static — claiming row semantics for a non-grid list misleads
-   *  (the listbox-row-actions lesson). */
-  rowRole?: 'row' | 'listitem';
+  /** 1-based rank within the list, and the list's AGGREGATE size (MOTIR-2493).
+   *  Both are needed because the list is VIRTUALIZED and lazy-loaded: only a
+   *  window of rows is in the DOM, so without them a screen reader counts the
+   *  mounted rows and announces "3 of 12" on a 400-issue backlog — the ranked
+   *  order is the one thing a backlog conveys. Omitted where there is no ranked
+   *  set to position against (the drag clone, a proposed row). */
+  posInSet?: number;
+  setSize?: number;
   /** Test-id namespace, so proposed rows never collide with the live backlog's
    *  rows while both are on screen. */
   testIdPrefix?: string;
@@ -107,14 +128,23 @@ export function BacklogRowBody({
     <div
       ref={innerRef}
       style={style}
-      // Spread the dnd-kit attributes/listeners FIRST, then re-assert role="row"
-      // so the sortable's role=button doesn't override the design's row semantics
-      // (the row stays a labelled row; aria-roledescription="sortable" + the
-      // keyboard handlers survive). The whole row is the drag handle (design
-      // panel 3); `touch-none` keeps a touch-drag from scrolling the list.
+      // Spread the dnd-kit attributes/listeners FIRST, then re-assert
+      // role="listitem" so the sortable's role=button doesn't override the list
+      // semantics (aria-roledescription="sortable" + the keyboard handlers
+      // survive). ORDER IS LOAD-BEARING — do not hoist the role above the
+      // spread. The whole row is the drag handle (design panel 3); `touch-none`
+      // keeps a touch-drag from scrolling the list.
       {...dragProps}
-      role={rowRole}
-      aria-selected={selected || undefined}
+      role="listitem"
+      aria-posinset={posInSet}
+      aria-setsize={setSize}
+      // NO `aria-selected`: it is not an allowed attribute on `listitem` (only on
+      // `row`/`option`/`tab`/…), so keeping it would trade the two role
+      // violations for an `aria-allowed-attr` one. Selection is announced by the
+      // sibling checkbox's role="checkbox" aria-checked + its
+      // "Select/Deselect <key>" label — the accessible channel that was always
+      // carrying it — and shown by the tint AND the check (never colour-alone,
+      // finding #35). `data-selected` remains for tests/styling.
       onClick={onRowClick}
       data-testid={`${testIdPrefix}-${item.identifier}`}
       data-dragging={dragging ? 'true' : undefined}
@@ -239,6 +269,8 @@ export function BacklogSortableRow({
   assigneeNameById,
   regionKind,
   sprintId,
+  posInSet,
+  setSize,
 }: {
   item: WorkItemSummaryDto;
   statusByKey: StatusByKey;
@@ -247,6 +279,9 @@ export function BacklogSortableRow({
   regionKind: RegionKind;
   /** The current sprint id (null in the backlog) — check-marked in the move submenu. */
   sprintId?: string;
+  /** The row's rank + the region's aggregate size (MOTIR-2493) — see `BacklogRowBody`. */
+  posInSet?: number;
+  setSize?: number;
 }) {
   const { overRowId, activeId, selectedIds, activateRow, toggleRow, bumpSprintPoints } =
     useBacklogDnd();
@@ -266,6 +301,8 @@ export function BacklogSortableRow({
       dragging={isDragging}
       dropBefore={overRowId === item.id && activeId !== item.id}
       selected={selected}
+      posInSet={posInSet}
+      setSize={setSize}
       // An in-sprint point edit changes the sprint's committed roll-up → refetch
       // its badge once the estimate commits (MOTIR-1495).
       onEstimateChanged={bumpSprintPoints}
@@ -296,6 +333,16 @@ export function BacklogSortableRow({
 // distinct from both the resting row and its dashed ghost. A multi-select drag
 // (`count > 1`) stacks an accent **N** count badge (the bulk path it routes
 // through). Its checkbox + `⋯` are static (non-interactive) mirrors of the row's.
+//
+// `aria-hidden` on the wrapper (MOTIR-2493): the clone is a VISUAL duplicate of a
+// row that is still in the list as a dashed ghost, and it is portalled OUTSIDE
+// the `role="list"` viewport — so left in the tree it would both double-announce
+// the row and claim `listitem` with no `list` ancestor (`aria-required-parent`,
+// the same composition error this card fixes, one layer over). dnd-kit's own
+// aria-live region announces the drag. `readOnlyEstimate` pairs with it: the
+// read-only badge is a plain span, so nothing FOCUSABLE ends up inside an
+// aria-hidden subtree (`aria-hidden-focus`) — and a drag clone was never an edit
+// surface anyway (the MOTIR-1495 note on `onEstimateChanged`).
 export function BacklogRowOverlay({
   item,
   statusByKey,
@@ -308,12 +355,16 @@ export function BacklogRowOverlay({
   count?: number;
 }) {
   return (
-    <div className="relative rotate-1 cursor-grabbing rounded-(--radius-control) border border-(--el-accent) bg-(--el-surface) shadow-(--shadow-elevated)">
+    <div
+      aria-hidden
+      className="relative rotate-1 cursor-grabbing rounded-(--radius-control) border border-(--el-accent) bg-(--el-surface) shadow-(--shadow-elevated)"
+    >
       <BacklogRowBody
         item={item}
         statusByKey={statusByKey}
         assigneeNameById={assigneeNameById}
         selected={count > 1}
+        readOnlyEstimate
         checkbox={
           <span
             aria-hidden

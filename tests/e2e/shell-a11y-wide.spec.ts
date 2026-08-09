@@ -65,9 +65,11 @@
 //     `role="row"` inside `role="list"`, two CRITICAL violations), MOTIR-2494
 //     (/docs code panes unreachable by keyboard), MOTIR-2495 (a disabled
 //     Input's `opacity-50` compositing its affix below AA — a contrast RULE
-//     whose cause is not an ink choice, so no ink fixes it). Each has a NAMED
+//     whose cause is not an ink choice, so no ink fixes it). Each had a NAMED
 //     carve-out below citing its card, and each of those cards removes its own
 //     carve-out. A carve-out here is a tracked gap, never a silent one.
+//     MOTIR-2493 has since landed: /backlog is back to a ZERO-exclusion sweep,
+//     and the two rules it disabled now guard the fix.
 //   • CLEAN on the first run — /triage and /settings/account.
 
 import AxeBuilder from '@axe-core/playwright';
@@ -257,15 +259,14 @@ test.describe('@a11y widened route coverage', () => {
     // The backlog region is a CLIENT island fetching /api/backlog; wait for a
     // seeded row so axe analyses the populated list, not the loading frame.
     await expect(page.getByText('Wire the payment intent')).toBeVisible();
-    // CARVE-OUT — MOTIR-2493. Every backlog row is `role="row"` inside a
-    // `role="list"` viewport, so `aria-required-children` and
-    // `aria-required-parent` both fail CRITICAL on a populated backlog. It is
-    // not an `--el-text-*` contrast failure, so it is filed rather than
-    // absorbed here; MOTIR-2493 fixes the role composition and DELETES these
-    // two lines. Everything else on the route — contrast included — is swept.
-    await sweep(page, '/backlog (populated)', reports, {
-      disableRules: ['aria-required-children', 'aria-required-parent'],
-    });
+    // ZERO exclusions. This route carried a named `aria-required-children` +
+    // `aria-required-parent` carve-out until MOTIR-2493 made the rows
+    // `role="listitem"` inside the `role="list"` viewport they had always been
+    // sitting in; the carve-out was deleted by that card, as its comment
+    // promised. If either rule reappears here, the row/container roles have
+    // drifted apart again — read BacklogList.tsx's list comment before touching
+    // this call.
+    await sweep(page, '/backlog (populated)', reports);
 
     // ── /triage — populated queue ────────────────────────────────────────────
     await page.goto('/triage');
