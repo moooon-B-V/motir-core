@@ -40,12 +40,22 @@ export default async function ProjectRoleDetailPage({
   }
 
   const { roleKey } = await params;
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  // MOTIR-2483 — the WRITE affordances. Presentation only: the API refuses the
+  // write independently, so this decides what is offered, never what is allowed.
+  const canManage = (await projectAccessService.getPermissions(ctx.projectId, actor)).has(
+    'project:manage_access',
+  );
   const role = catalog.roles.find((candidate) => candidate.key === roleKey);
   if (!role) notFound();
 
-  return <RoleDetail role={role} catalog={catalog} projectName={ctx.project.name} />;
+  return (
+    <RoleDetail
+      role={role}
+      catalog={catalog}
+      projectName={ctx.project.name}
+      canManage={canManage}
+    />
+  );
 }

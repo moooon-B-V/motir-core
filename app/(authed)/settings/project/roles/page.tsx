@@ -37,10 +37,13 @@ export default async function ProjectRolesPage() {
     );
   }
 
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  // MOTIR-2483 — the WRITE affordances. Presentation only: the API refuses the
+  // write independently, so this decides what is offered, never what is allowed.
+  const canManage = (await projectAccessService.getPermissions(ctx.projectId, actor)).has(
+    'project:manage_access',
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -56,7 +59,7 @@ export default async function ProjectRolesPage() {
         </p>
       </header>
 
-      <RoleList catalog={catalog} />
+      <RoleList catalog={catalog} canManage={canManage} />
     </div>
   );
 }

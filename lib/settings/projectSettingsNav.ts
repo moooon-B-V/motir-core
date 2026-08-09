@@ -168,7 +168,13 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // mean, they just cannot author one. Turning that into a permission
     // predicate is MOTIR-2258's job, not this card's.
     access: browse,
-    nestedRoutes: ['/settings/project/roles/[roleKey]'],
+    // MOTIR-2483 adds the two authoring routes. The static `new` segment
+    // resolves ahead of the dynamic sibling; both keep this row active.
+    nestedRoutes: [
+      '/settings/project/roles/[roleKey]',
+      '/settings/project/roles/[roleKey]/edit',
+      '/settings/project/roles/new',
+    ],
   },
   {
     id: 'code-access',

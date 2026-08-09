@@ -1,8 +1,11 @@
 import Link from 'next/link';
-import { ChevronRight, Info, Lock } from 'lucide-react';
+import { ChevronRight, Info, Lock, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { MAX_CUSTOM_ROLES_PER_PROJECT } from '@/lib/permissions/limits';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 import { PermissionMark } from './PermissionMark';
 import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
@@ -36,11 +39,55 @@ import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdenti
 // constant, so the day a custom role narrows the answer per project this
 // component is already right.
 
-export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
+export function RoleList({
+  catalog,
+  canManage = false,
+}: {
+  catalog: RoleCatalogDTO;
+  /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
+  canManage?: boolean;
+}) {
   const t = useTranslations('settings.rolesPage');
+  // The count is the project's OWN roles, and the cap the SAME constant the
+  // server enforces — so the button and the refusal can never disagree, and a
+  // test at the boundary needs no hardcoded number.
+  const customCount = catalog.roles.filter((role) => !role.builtIn).length;
+  const atCap = customCount >= MAX_CUSTOM_ROLES_PER_PROJECT;
 
   return (
     <div className="flex flex-col gap-5">
+      {canManage ? (
+        <div className="flex justify-end">
+          {/* AT THE CAP: visible-but-DISABLED with its explanation, which is the
+              treatment design-notes § Gating affordances (6.4.6) prescribes for
+              an IN-PLACE control. A missing button reads as "this project cannot
+              have custom roles"; a disabled one reads as "you have used them
+              all" — the true statement, and the one that says what to do next. */}
+          {atCap ? (
+            <Tooltip content={t('createRoleAtCap', { limit: MAX_CUSTOM_ROLES_PER_PROJECT })}>
+              <span>
+                <Button variant="primary" disabled data-testid="create-role">
+                  <Plus aria-hidden="true" className="h-4 w-4" />
+                  {t('createRole')}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            /* A real LINK, not a button with a router push — this component is
+               rendered from a server page, and a link is focusable and
+               activatable by keyboard by construction. `buttonVariants` is the
+               shipped way to give one the button's shape. */
+            <Link
+              href="/settings/project/roles/new"
+              data-testid="create-role"
+              className={buttonVariants({ variant: 'primary' })}
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              {t('createRole')}
+            </Link>
+          )}
+        </div>
+      ) : null}
       <div className="border-(--el-border) bg-(--el-surface-soft) text-(--el-text-secondary) flex items-start gap-2 rounded-(--radius-card) border px-(--spacing-card-padding) py-(--spacing-control-y) font-sans text-[12.5px] leading-relaxed">
         <Info aria-hidden="true" className="mt-[2px] h-4 w-4 shrink-0 text-(--el-text-faint)" />
         <span>{t('builtInNote')}</span>

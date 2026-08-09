@@ -98,7 +98,15 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     // mean. Making that a permission predicate is MOTIR-2258's job.
     expect(roles?.access(MEMBER)).toBe(true);
     expect(roles?.access(NO_ACCESS)).toBe(false);
-    expect(roles?.nestedRoutes).toEqual(['/settings/project/roles/[roleKey]']);
+    // MOTIR-2483 added the two AUTHORING routes. Pinned literally, in order,
+    // because this list is what keeps the rail row active on a drilled-in
+    // screen — a route missing from it looks like a working page whose nav
+    // silently deselects, which is exactly what the totality guard is for.
+    expect(roles?.nestedRoutes).toEqual([
+      '/settings/project/roles/[roleKey]',
+      '/settings/project/roles/[roleKey]/edit',
+      '/settings/project/roles/new',
+    ]);
     // Rail order within Access — the model sits between who is on the team and
     // who can clone the code (design/projects/design-notes.md, access path).
     const accessIds = groupSettingsNav(PROJECT_SETTINGS_NAV)

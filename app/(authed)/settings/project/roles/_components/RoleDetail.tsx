@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { ArrowLeft, Lock, Users } from 'lucide-react';
+import { ArrowLeft, Lock, Pencil, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { buttonVariants } from '@/components/ui/Button';
 import { Pill } from '@/components/ui/Pill';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
 import { PermissionGroups } from './PermissionGroups';
@@ -38,10 +39,13 @@ export function RoleDetail({
   role,
   catalog,
   projectName,
+  canManage = false,
 }: {
   role: RoleDTO;
   catalog: RoleCatalogDTO;
   projectName: string;
+  /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
+  canManage?: boolean;
 }) {
   const t = useTranslations('settings.rolesPage');
   const tCatalog = useTranslations();
@@ -92,13 +96,29 @@ export function RoleDetail({
             </div>
           </div>
         </div>
-        <p className="text-(--el-text-secondary) shrink-0 font-sans text-[12.5px] whitespace-nowrap">
-          {t.rich('holdsCount', {
-            held: role.permissions.length,
-            total: catalog.roleGatedPermissionCount,
-            strong: (chunks) => <strong className="text-(--el-text)">{chunks}</strong>,
-          })}
-        </p>
+        <div className="flex shrink-0 items-center gap-3">
+          {/* EDIT — admin-only, and CUSTOM-only. A built-in keeps its lock and
+              no control at all: it reproduces the shipped behaviour by
+              definition, so editing one is not a thing that exists. `Delete` is
+              MOTIR-2480's and lands beside this. */}
+          {canManage && !role.builtIn ? (
+            <Link
+              href={`/settings/project/roles/${role.key}/edit`}
+              data-testid="edit-role"
+              className={buttonVariants({ variant: 'secondary' })}
+            >
+              <Pencil aria-hidden="true" className="h-4 w-4" />
+              {t('editRole')}
+            </Link>
+          ) : null}
+          <p className="text-(--el-text-secondary) shrink-0 font-sans text-[12.5px] whitespace-nowrap">
+            {t.rich('holdsCount', {
+              held: role.permissions.length,
+              total: catalog.roleGatedPermissionCount,
+              strong: (chunks) => <strong className="text-(--el-text)">{chunks}</strong>,
+            })}
+          </p>
+        </div>
       </div>
 
       <div className="border-(--el-border) bg-(--el-card) mt-5 overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">

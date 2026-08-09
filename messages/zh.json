@@ -2642,7 +2642,30 @@
         "description": "由项目的访问级别授予，而非由角色授予——这也是它们没有出现在上方角色列表中的原因。公开项目的每位访客都拥有这三项，无论是否登录；在开放、受限或私有项目上则无人拥有，包括工作区所有者。",
         "chip": "访问级别"
       },
-      "custom": "自定义"
+      "custom": "自定义",
+      "createRole": "创建角色",
+      "createRoleAtCap": "本项目的 {limit} 个自定义角色已用完。删除一个后才能再创建。",
+      "editRole": "编辑",
+      "createRoleTitle": "创建角色",
+      "editRoleTitle": "编辑角色",
+      "newRole": "新角色",
+      "editorCrumbs": "设置 · 角色与权限 · {roleName}",
+      "editorLede": "角色是一组权限，名称由你的团队自定。它只适用于本项目。",
+      "nameLabel": "名称",
+      "namePlaceholder": "外部协作者",
+      "startFrom": "以此为起点",
+      "startFromPlaceholder": "选择一个角色…",
+      "editorHintNew": "“以此为起点”会用该角色的全部权限预填下面的列表，之后可自由修改。该选择不会被保存：保存后的角色只有名称和权限集合。",
+      "editorHintEdit": "勾选该角色拥有的权限。角色只由名称和权限集合构成，不记录其他内容。",
+      "saveRole": "保存修改",
+      "toast": { "created": "角色已创建", "saved": "角色已保存" },
+      "error": {
+        "nameTaken": "本项目中已存在名为“{name}”的角色。",
+        "capReached": "每个项目最多可定义 {limit} 个自定义角色。",
+        "invalidName": "请为该角色填写名称。",
+        "noLongerAllowed": "你已不再拥有管理本项目角色的权限。",
+        "generic": "保存失败，请重试。"
+      }
     }
   },
   "boards": {
