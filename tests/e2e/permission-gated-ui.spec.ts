@@ -92,6 +92,24 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
   await page.getByRole('link', { name: 'Members & access' }).click();
   await page.waitForURL('**/settings/project/members');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+
+  // ⚠️ AND IT STILL SAVES. "Nothing was taken" is a claim about CAPABILITY, not
+  // visibility — a rail that renders over a page whose writes now refuse would
+  // satisfy every assertion above and be a worse regression than a missing row.
+  // So the admin walk ends on a real round trip: rename the project on Details
+  // and read the persisted value back after a reload.
+  await page.goto('/settings/project');
+  const nameField = page.getByLabel('Name', { exact: true });
+  await expect(nameField).toBeEnabled();
+  await nameField.fill('Permission-gated Project (renamed)');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  // The authoritative signal, never a sleep: the card's own saved state.
+  await expect(page.getByText('Saved')).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue(
+    'Permission-gated Project (renamed)',
+  );
 });
 
 test('a MEMBER is offered no settings area — and the room is still shut', async ({ page }) => {
