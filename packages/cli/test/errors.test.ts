@@ -21,4 +21,12 @@ describe('errors', () => {
     expect(new CliError('x').exitCode).toBe(1);
     expect(new CliError('x', { exitCode: 2 }).exitCode).toBe(2);
   });
+
+  it('CliError chains a `cause`, and installs none when none is given', () => {
+    const underlying = new CliError('the real diagnosis');
+    expect(new CliError('re-worded', { cause: underlying }).cause).toBe(underlying);
+    // No `cause` OWN PROPERTY at all when none was passed — `undefined` and
+    // "absent" print differently, and a catch that re-words is the only caller.
+    expect(Object.hasOwn(new CliError('x'), 'cause')).toBe(false);
+  });
 });

@@ -8,8 +8,15 @@ export class CliError extends Error {
   readonly exitCode: number;
   /** An optional one-line hint shown under the error (e.g. how to recover). */
   readonly hint: string | undefined;
-  constructor(message: string, opts: { exitCode?: number; hint?: string } = {}) {
-    super(message);
+  /**
+   * `cause` is here so a catch that RE-WORDS a failure can keep the original
+   * instead of destroying it. Nothing prints it — `src/index.ts` shows the
+   * message and the hint — but a rewrite that drops the underlying error leaves
+   * no way back to it, and `motir link` proved what that costs (MOTIR-2492).
+   * A catch that must re-word: narrow first, then chain.
+   */
+  constructor(message: string, opts: { exitCode?: number; hint?: string; cause?: unknown } = {}) {
+    super(message, opts.cause === undefined ? {} : { cause: opts.cause });
     this.name = 'CliError';
     this.exitCode = opts.exitCode ?? 1;
     this.hint = opts.hint;
