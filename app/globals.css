@@ -136,8 +136,13 @@ body {
   color: var(--el-text-secondary);
   font-weight: 600;
 }
+/* The lockup's prefix ("on Motir") is READ, so it is text WCAG measures — not a
+   decorative glyph. It was `--el-text-faint` (2.61:1 on white), which the ink
+   guard could not see because the colour is declared HERE, in CSS, and the
+   scanner reads JSX class literals. The widened /p/[identifier] sweep measured
+   it (MOTIR-2482). */
 .brand-pre {
   font-size: calc(var(--brand-size, 32px) * 0.62);
-  color: var(--el-text-faint);
+  color: var(--el-text-secondary);
   margin-right: calc(var(--brand-size, 32px) * -0.1);
 }
