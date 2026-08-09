@@ -34,6 +34,7 @@ import {
   visibleSettingsNav,
 } from '@/lib/settings/projectSettingsNav';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { canOfferNavDestination } from '@/lib/settings/projectNavAccess';
 import {
   ACCOUNT_SETTINGS_NAV,
   groupAccountSettingsNav,
@@ -316,7 +317,16 @@ export function SidebarNav({
         badge: <ResumeInProgressBadge label={t('nav.resumeOnboardingInProgress')} />,
       });
     }
-    sections.push({ id: 'primary', items: primaryItems });
+    // MOTIR-2471 — the same gate the ⌘K navigations use, from the same map, so
+    // the two surfaces cannot drift. A row whose destination refuses the actor
+    // outright is not rendered and the rows below close up; nothing marks the
+    // gap (design panel 4). The Resume-onboarding row above carries its own
+    // `canResume` gate and is deliberately not in the map — it is a state, not a
+    // permission.
+    const offered = primaryItems.filter(
+      (item) => item.href === ONBOARDING_RESUME_PATH || canOfferNavDestination(item.href, held),
+    );
+    sections.push({ id: 'primary', items: offered });
   }
 
   // THE AREA DOOR (Subtask MOTIR-2468, design panel 1). With an active project
