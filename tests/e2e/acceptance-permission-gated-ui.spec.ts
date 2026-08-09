@@ -21,6 +21,27 @@ import {
 //
 // Nothing is stubbed. Real roles on real memberships, the real resolution, the
 // real rail.
+//
+// ── WHY THIS SPEC HAS A RECEIPT PUBLISHED FROM A LATER PR (MOTIR-2501) ───────
+//
+// The receipt this file produces did not reach MOTIR-2258 on the runs that made
+// it. The spec was never the problem: it recorded a 47s chaptered clip on every
+// run it was in — 31305330776 and 31307902905, both of which then logged
+// `Published 0 of 2` and went green anyway. The uploader was PUTting to a
+// production deployment older than MOTIR-2389, so `/upload-token` still minted
+// the previous wire shape, and `continue-on-error` on the publish step rewrote
+// the failure to `success`. MOTIR-2499 removed the fail-open and made the stale
+// deployment say so in one line instead of `Failed to parse URL`.
+//
+// The fix for the receipt itself was not code but a DEPLOYMENT: MOTIR-2392 moved
+// app.motir.co onto Fly, where the mint returns the S3 presigned PUT this
+// uploader expects. What was left was a run — and the lane has no `push:`
+// trigger, so `main` never re-records. Hence this note. Both the workflow's
+// `paths:` filter and the run's owned-spec set (`ACCEPTANCE_CHANGED_SPECS`) key
+// on this file, so touching it is what re-triggers the lane and scopes the
+// publish to this story alone.
+//
+// Nothing below changed, and nothing below should be "fixed" for this reason.
 
 /**
  * The platform chord for ⌘K — `Meta` on a macOS dev box, `Control` on the Linux
