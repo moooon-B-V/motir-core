@@ -384,6 +384,17 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
   PRs; the bulk / a11y / at-scale legs are the regression net.
 - **Belt and braces.** The uploader still receives and filters on the owned set, so
   the correctness fix does not depend on the workflow gate being right.
+- **⚠️ THERE IS NO `main` BASELINE FOR THIS LANE, AND THAT COSTS A DIAGNOSTIC
+  (MOTIR-2506).** Because there is no `push:` trigger, `main` never runs the
+  acceptance lane — so the standard flake-vs-regression discriminator every other
+  check enjoys (`motir-core/CLAUDE.md`: _"the failure reproduces on `main` without
+  your change"_) is **unavailable here, by construction**. When this lane goes red,
+  reach for the substitutes instead: does the SAME test fail on a re-run of the same
+  commit (a real defect) or a DIFFERENT one (the runner); do the other tests in that
+  spec file pass (the seed and the boundary mocks are fine); and does the diff touch
+  any surface the failing spec renders. The second consequence of the `paths:` filter
+  compounds it — a PR adding ONE acceptance spec runs, and becomes answerable for,
+  all of them. Budget for that when a story plans its acceptance E2E.
 
 The starter (MOTIR-1941) shipped this shape from day one; motir-core now matches it.
 

@@ -44,6 +44,39 @@ export const CHAPTER_HOLD_MS = 2_500;
 /** Held by an explicit `beat()` — one user-visible action's worth of screen time. */
 export const BEAT_MS = 4_000;
 
+// ── The FIRST-PAINT budget (MOTIR-2506) ─────────────────────────────────────
+//
+// ⚠️ THIS IS A TIMEOUT, NOT A HOLD, and it is the opposite of the two above: it
+// bounds how long an assertion MAY wait, and nothing ever sleeps for it. It
+// exists because this lane's failures are not slow code — they are transient
+// runner stalls landing on whichever test is unlucky.
+//
+// MEASURED (2026-08-09, PR #1980's three runs plus a local prod-build run):
+//   * the planning workspace's first paint is SUB-SECOND locally — the whole
+//     "Plan with AI opens the workspace" chapter is 4,981 ms, of which 4,000 is
+//     its own deliberate `beat()`;
+//   * a PASSING CI run is comparable to (in fact faster than) local — 26.9 s for
+//     the whole plan-change test against 36.8 s locally;
+//   * yet two different planning specs blew the config's default 20 s `expect`
+//     timeout on the FIRST landmark after landing on `/planning`, on consecutive
+//     runs of the SAME commit.
+//
+// A uniform slowdown would fail the same test every time and would show up in
+// the median. A stall shows up exactly like this. So the budget is set far above
+// any plausible real paint rather than a little above the observed one: at 60 s
+// it is ~60x the measured paint, which rides out a stall while still failing a
+// page that genuinely never renders — the assertion keeps its meaning, it just
+// stops being a stopwatch on the runner's mood.
+//
+// ⚠️ USE IT ONLY FOR A FIRST LANDMARK AFTER A NAVIGATION. Once one landmark is
+// up the page has rendered and its siblings resolve instantly, so a second
+// assertion carrying this budget would be hiding a real regression behind a
+// minute of patience. `MOTIR-1682` is the precedent for the shape (and the
+// warning that a bigger number alone did not cure ITS cause, an on-demand
+// compile this lane no longer has — see MOTIR-2506 for why sharding, not a
+// bigger number, is the structural answer if this recurs).
+export const FIRST_PAINT_MS = 60_000;
+
 interface AcceptanceFixtures {
   /** Run a phase as a chaptered step; marks its start on the video timeline. */
   chapter: (label: string, body: () => Promise<void>) => Promise<void>;
