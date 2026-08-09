@@ -104,7 +104,7 @@ function DocTable({ block }: { block: Extract<GuideBlock, { kind: 'table' }> }) 
   return (
     <div className="mb-5">
       {block.caption ? (
-        <p className="mb-1.5 font-mono text-[11px] tracking-wide text-(--el-text-faint) uppercase">
+        <p className="mb-1.5 font-mono text-[11px] tracking-wide text-(--el-text-secondary) uppercase">
           {block.caption}
         </p>
       ) : null}
@@ -120,7 +120,7 @@ function DocTable({ block }: { block: Extract<GuideBlock, { kind: 'table' }> }) 
                 // The optional width is WIDE-ONLY and per column; the narrow arm
                 // below is a `<dl>` and has no columns to size. See the
                 // `columnWidths` note on `GuideBlock`.
-                className={`border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase${
+                className={`border-b border-(--el-border) px-2.5 py-1.5 text-left font-sans text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase${
                   block.columnWidths?.[index] ? ` ${block.columnWidths[index]}` : ''
                 }`}
               >
@@ -155,7 +155,7 @@ function DocTable({ block }: { block: Extract<GuideBlock, { kind: 'table' }> }) 
             <dl className="m-0 grid grid-cols-[minmax(0,5.5rem)_1fr] gap-x-2.5 gap-y-1">
               {row.map((cell, cellIndex) => (
                 <Fragment key={cellIndex}>
-                  <dt className="pt-0.5 text-[11px] tracking-wide text-(--el-text-faint) uppercase">
+                  <dt className="pt-0.5 text-[11px] tracking-wide text-(--el-text-secondary) uppercase">
                     {block.columns[cellIndex] ?? ''}
                   </dt>
                   <dd className="m-0 min-w-0 text-[12.5px] leading-relaxed break-words text-(--el-text-secondary)">

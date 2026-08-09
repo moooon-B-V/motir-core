@@ -332,7 +332,7 @@ export function BoardSwitcher({
           className="overflow-visible p-0"
         >
           <div className="flex flex-col gap-0.5 p-1.5">
-            <p className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+            <p className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
               {t('switcherMenuCap')}
             </p>
 

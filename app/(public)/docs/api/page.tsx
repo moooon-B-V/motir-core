@@ -77,7 +77,7 @@ export default async function ApiReferencePage() {
           <p className="mt-1.5 max-w-[68ch] text-[15px] leading-relaxed text-(--el-text-muted)">
             {t('referenceLede')}
           </p>
-          <p className="mt-3 text-[12.5px] text-(--el-text-faint)">
+          <p className="mt-3 text-[12.5px] text-(--el-text-secondary)">
             {t('specLine', {
               count: reference.operationCount,
               version: reference.contractVersion,
@@ -92,7 +92,7 @@ export default async function ApiReferencePage() {
           <div key={group.key}>
             <h2
               id={`group-${group.key}`}
-              className="mt-10 scroll-mt-6 font-sans text-xs font-semibold tracking-wide text-(--el-text-faint) uppercase"
+              className="mt-10 scroll-mt-6 font-sans text-xs font-semibold tracking-wide text-(--el-text-secondary) uppercase"
             >
               {group.label}
             </h2>

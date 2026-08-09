@@ -39,7 +39,7 @@ function ChildRow({ row, itemsBase }: { row: PublicWorkItemTreeRowDto; itemsBase
       className="flex items-center gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-page-bg) p-3 shadow-(--shadow-subtle) transition-colors hover:border-(--el-border-strong)"
     >
       <IssueTypeIcon type={row.kind} className="h-4 w-4 flex-none" />
-      <span className="font-mono text-[11.5px] text-(--el-text-faint)">{row.identifier}</span>
+      <span className="font-mono text-[11.5px] text-(--el-text-secondary)">{row.identifier}</span>
       <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-(--el-text)">
         {row.title}
       </span>
@@ -108,7 +108,7 @@ export function PublicChildIssues({
             <ChevronDown className="h-3.5 w-3.5" aria-hidden />
           )}
           {loading ? t('treeLoadingChildren') : t('treeLoadMoreChildren')}
-          <span className="text-(--el-text-faint)">
+          <span className="text-(--el-text-secondary)">
             {t('treeShowingCount', { loaded: rows.length, total })}
           </span>
         </button>

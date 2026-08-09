@@ -38,7 +38,7 @@ import { DocBlock, DocBlocks } from '../_components/DocBlocks';
 function StepHeading({ index, title }: { index: number; title: string }) {
   return (
     <h2 className="mt-0 mb-2 font-sans text-base font-semibold text-(--el-text)">
-      <span className="mr-2 font-mono text-(--el-text-faint)">{index}</span>
+      <span className="mr-2 font-mono text-(--el-text-secondary)">{index}</span>
       {title}
     </h2>
   );

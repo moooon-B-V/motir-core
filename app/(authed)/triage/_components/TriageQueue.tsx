@@ -52,7 +52,7 @@ export function TriageQueue({
     <div className="flex min-h-0 flex-col gap-3 p-3">
       <div className="flex items-center justify-between gap-2">
         <SectionLabel label={t('queueLabel')} />
-        <span className="text-xs tabular-nums text-(--el-text-faint)">{items.length}</span>
+        <span className="text-xs tabular-nums text-(--el-text-secondary)">{items.length}</span>
       </div>
 
       <Input

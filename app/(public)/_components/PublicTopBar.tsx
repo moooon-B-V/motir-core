@@ -51,7 +51,7 @@ export async function PublicTopBar({
             <span className="truncate text-[14.5px] font-bold text-(--el-text)">{name}</span>
             <BuildingInPublicBadge label={t('buildingInPublicChip')} />
           </div>
-          <span className="font-mono text-xs text-(--el-text-faint)">
+          <span className="font-mono text-xs text-(--el-text-secondary)">
             {identifier} · {workspaceName}
           </span>
         </div>

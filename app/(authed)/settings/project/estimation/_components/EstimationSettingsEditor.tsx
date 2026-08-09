@@ -247,7 +247,9 @@ function DeckPreview({ values }: { values: number[] }) {
   const t = useTranslations('settings');
   return (
     <div className="mt-2.5 flex flex-wrap items-center gap-1.5" data-testid="estimation-deck">
-      <span className="text-(--el-text-faint) mr-0.5 text-[11px]">{t('estimation.deckLabel')}</span>
+      <span className="text-(--el-text-secondary) mr-0.5 text-[11px]">
+        {t('estimation.deckLabel')}
+      </span>
       {values.map((v, i) => (
         <span
           key={`${v}-${i}`}

@@ -72,7 +72,7 @@ export function SnoozePopover({ busy, onSnooze }: SnoozePopoverProps) {
         </Button>
       </Popover.Trigger>
       <Popover.Content align="start" width={300} className="flex flex-col gap-1 p-2">
-        <p className="px-(--spacing-control-x) pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-faint)">
+        <p className="px-(--spacing-control-x) pb-1 pt-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-(--el-text-secondary)">
           {t('snoozePopover.heading')}
         </p>
         {optionRow(t('snoozePopover.tomorrow'), tomorrow, () => onSnooze(tomorrow.toISOString()))}

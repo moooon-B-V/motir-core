@@ -378,7 +378,10 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
   system: function SystemTurn() {
     const tc = useTranslations('planningWorkspace.conversation');
     return (
-      <p className="text-center text-xs text-(--el-text-faint)" data-testid="plan-change-marker">
+      <p
+        className="text-center text-xs text-(--el-text-secondary)"
+        data-testid="plan-change-marker"
+      >
         {tc('submitted')}
       </p>
     );
@@ -452,7 +455,7 @@ const TURN_RENDERERS: Record<PlanChangeTurnRoleDto, (props: TurnProps) => React.
             confirmed. */}
         {disposition ? (
           <p
-            className="text-center text-xs text-(--el-text-faint)"
+            className="text-center text-xs text-(--el-text-secondary)"
             data-testid={`plan-change-${disposition}`}
           >
             {tc(disposition === 'answered' ? 'answeredMarker' : 'supersededMarker')}

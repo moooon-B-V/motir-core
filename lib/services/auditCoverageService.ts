@@ -34,7 +34,17 @@ const COVERAGE_FINDINGS_LIMIT = 1;
 // Only a `MotirAiError` is absorbed. The project-gate errors come from
 // `assertCanManage` and are a statement about the CALLER, not about one repo —
 // and the gate runs once, before any of this.
-async function readRepoCoverage(
+//
+// ⚠️ EXPORTED AS A PRIMITIVE, NOT AS AN API SURFACE (MOTIR-2266). It carries NO
+// permission gate — `getCoverage` below runs one before it, and the auto-fire
+// trigger (`firstAuditTriggerService`) has no caller to gate, because it runs
+// inside `system.code-graph-index` where there is no request. It is exported so
+// the trigger's idempotency gate asks the SAME question this read asks rather
+// than growing a second definition of "does this repo have an audit" — the two
+// would drift on exactly the detail that matters (`audit === null` is a
+// successful read of an un-derived repo; a MotirAiError is not an answer at all).
+// A ROUTE that reaches for this instead of `getCoverage` has skipped the gate.
+export async function readRepoAuditState(
   query: { coreWorkspaceId: string; coreProjectId: string },
   repoKey: string,
 ): Promise<RepoAuditCoverageEntryDTO> {
@@ -84,7 +94,7 @@ export const auditCoverageService = {
     if (repoRefs.length === 0) return { repos: [], notAuditedCount: 0 };
 
     const query = { coreWorkspaceId: ctx.workspaceId, coreProjectId: projectId };
-    const repos = await Promise.all(repoRefs.map((repoKey) => readRepoCoverage(query, repoKey)));
+    const repos = await Promise.all(repoRefs.map((repoKey) => readRepoAuditState(query, repoKey)));
 
     return {
       repos,

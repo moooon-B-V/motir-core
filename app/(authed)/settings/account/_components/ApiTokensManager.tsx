@@ -171,9 +171,12 @@ export function ApiTokensManager({
               <tbody>
                 {ordered.map((token) => {
                   const revoked = token.revokedAt !== null;
-                  const dateClass = revoked
-                    ? 'text-(--el-text-faint)'
-                    : 'text-(--el-text-secondary)';
+                  // A revoked row's dates are still text somebody reads, and a
+                  // revoked TOKEN is not a disabled CONTROL, so the quieter arm
+                  // no longer takes `--el-text-faint` (2.61:1) — both take
+                  // `--el-text-secondary`. The row's revoked state reads from
+                  // its label and its Revoked pill (MOTIR-2475).
+                  const dateClass = 'text-(--el-text-secondary)';
                   const summary = summarizeScopes(token.scopes);
                   const hasDelete = grantsDelete(token.scopes);
                   const expanded = expandedIds.has(token.id);
@@ -184,7 +187,7 @@ export function ApiTokensManager({
                       >
                         <td className="py-(--spacing-control-y) pr-4 align-middle">
                           <span
-                            className={`font-sans text-sm font-medium ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
+                            className={`font-sans text-sm font-medium ${revoked ? 'text-(--el-text-secondary)' : 'text-(--el-text)'}`}
                           >
                             {token.label}
                           </span>
@@ -236,7 +239,7 @@ export function ApiTokensManager({
                         </td>
                         <td className="py-(--spacing-control-y) pr-4 align-middle">
                           <span
-                            className={`font-sans text-sm ${revoked ? 'text-(--el-text-faint)' : 'text-(--el-text-secondary)'}`}
+                            className={`font-sans text-sm ${revoked ? 'text-(--el-text-secondary)' : 'text-(--el-text-secondary)'}`}
                           >
                             {multiOrg
                               ? `${token.organization.name} · ${token.workspace.name}`
@@ -336,7 +339,7 @@ function Th({ children, className = '' }: { children: React.ReactNode; className
   return (
     <th
       scope="col"
-      className={`py-(--spacing-control-y) pr-4 font-sans text-xs font-medium tracking-wide text-(--el-text-faint) uppercase ${className}`}
+      className={`py-(--spacing-control-y) pr-4 font-sans text-xs font-medium tracking-wide text-(--el-text-secondary) uppercase ${className}`}
     >
       {children}
     </th>
@@ -353,7 +356,7 @@ function renderExpires(
   t: ReturnType<typeof useTranslations>,
 ) {
   if (token.revokedAt) {
-    return <span className="font-sans text-sm text-(--el-text-faint)">—</span>;
+    return <span className="font-sans text-sm text-(--el-text-secondary)">—</span>;
   }
   if (!token.expiresAt) {
     return (
@@ -371,7 +374,7 @@ function renderExpires(
   if (days < 0) {
     // Past expiry but not revoked — show the (muted) date; verify already rejects it.
     return (
-      <span className="font-sans text-sm text-(--el-text-faint)">
+      <span className="font-sans text-sm text-(--el-text-secondary)">
         {formatDate(token.expiresAt, locale)}
       </span>
     );

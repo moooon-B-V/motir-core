@@ -303,7 +303,7 @@ export function IssueTreeTable({
               <span className="relative z-10 flex items-center gap-1.5 text-(--el-link)">
                 <ChevronDown className="h-3.5 w-3.5" aria-hidden />
                 Load more children
-                <span className="text-(--el-text-faint)">
+                <span className="text-(--el-text-secondary)">
                   Showing {node.loaded} of {node.total}
                 </span>
               </span>

@@ -211,7 +211,7 @@ function ProposedRow({
   const flags = (
     <>
       {entry && entry.blockedByKeys.length > 0 ? (
-        <span className="shrink-0 text-xs text-(--el-text-faint)">
+        <span className="shrink-0 text-xs text-(--el-text-secondary)">
           {t('aiPlan.after', { key: entry.blockedByKeys.join(', ') })}
         </span>
       ) : null}

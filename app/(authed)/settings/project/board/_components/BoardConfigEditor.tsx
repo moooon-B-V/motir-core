@@ -878,7 +878,7 @@ function AddStatusMenu({
         aria-label={t('board.addStatusMenuAria', { name: column.name })}
       >
         <div className="flex flex-col gap-0.5 p-1.5" role="menu">
-          <span className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+          <span className="px-2 pt-1 pb-0.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
             {t('board.addStatusMenuCap')}
           </span>
           {unmapped.length === 0 ? (

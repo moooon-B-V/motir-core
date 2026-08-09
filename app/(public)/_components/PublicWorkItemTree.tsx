@@ -240,7 +240,7 @@ export function PublicWorkItemTree({
             <span className="relative z-10 flex items-center gap-1.5 text-(--el-link)">
               <ChevronDown className="h-3.5 w-3.5" aria-hidden />
               {t('treeLoadMoreChildren')}
-              <span className="text-(--el-text-faint)">
+              <span className="text-(--el-text-secondary)">
                 {t('treeShowingCount', { loaded: node.loaded, total: node.total })}
               </span>
             </span>
@@ -310,7 +310,7 @@ function TitleCell({
   return (
     <span className="flex min-w-0 items-center gap-2">
       <IssueTypeIcon type={row.kind} className="h-4 w-4 flex-none" />
-      <span className="font-mono text-[11.5px] text-(--el-text-faint)">{row.identifier}</span>
+      <span className="font-mono text-[11.5px] text-(--el-text-secondary)">{row.identifier}</span>
       <span className="min-w-0 truncate text-[13.5px] font-medium text-(--el-text)">
         {row.title}
       </span>

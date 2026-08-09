@@ -116,13 +116,13 @@ export function NotificationPreferencesCard({
           role="row"
           className="border-(--el-border) col-span-3 grid grid-cols-subgrid items-center border-b"
         >
-          <div className="text-(--el-text-faint) pb-3 font-sans text-[11px] font-semibold tracking-wide uppercase">
+          <div className="text-(--el-text-secondary) pb-3 font-sans text-[11px] font-semibold tracking-wide uppercase">
             {t('columns.event')}
           </div>
-          <div className="text-(--el-text-faint) pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
+          <div className="text-(--el-text-secondary) pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
             {t('columns.email')}
           </div>
-          <div className="text-(--el-text-faint) pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
+          <div className="text-(--el-text-secondary) pb-3 text-center font-sans text-[11px] font-semibold tracking-wide uppercase">
             {t('columns.inApp')}
           </div>
         </div>
@@ -166,7 +166,7 @@ function EventRow({
           <span
             className={cn(
               'font-sans text-sm font-medium',
-              row.settable ? 'text-(--el-text)' : 'text-(--el-text-faint)',
+              row.settable ? 'text-(--el-text)' : 'text-(--el-text-secondary)',
             )}
           >
             {label}

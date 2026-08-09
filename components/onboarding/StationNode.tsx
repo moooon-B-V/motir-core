@@ -73,7 +73,7 @@ export function IdeaCard({ idea }: { idea: string }) {
         >
           <Lightbulb className="size-4" />
         </span>
-        <span className="font-mono text-xs text-(--el-text-faint)">{t('ideaLabel')}</span>
+        <span className="font-mono text-xs text-(--el-text-secondary)">{t('ideaLabel')}</span>
       </div>
       <p className="mt-1.5 line-clamp-3 text-sm text-(--el-text-secondary) italic">“{idea}”</p>
     </div>
@@ -191,7 +191,12 @@ export function StationCard({
           }
           aria-hidden="true"
         >
-          <Icon className={tierKind ? 'size-4.5' : 'size-4 text-(--el-text-faint)'} />
+          {/* The wrapper is already `aria-hidden`; marking the glyph itself is
+              what lets the ink guard SEE that (MOTIR-2475). */}
+          <Icon
+            aria-hidden="true"
+            className={tierKind ? 'size-4.5' : 'size-4 text-(--el-text-faint)'}
+          />
         </span>
         <div className="min-w-0 flex-1">
           {/* The title reads in full (no truncation) — step names must read whole. */}
@@ -308,16 +313,19 @@ function StatePill({ state }: { state: StationView['state'] }) {
 // finding (the warning rows). Colour routes through `--el-*` only.
 const FINDING_TONE: Record<
   DirectionFindingTone,
-  { Icon: LucideIcon; iconClass: string; textClass: string }
+  { Icon: LucideIcon; iconClass: string | null; textClass: string }
 > = {
   positive: {
     Icon: Check,
     iconClass: 'text-(--el-success)',
     textClass: 'text-(--el-text-secondary)',
   },
+  // A `null` iconClass is the QUIET one — its faint ink is written at the
+  // element below, where the guard can see the glyph is `aria-hidden`
+  // (MOTIR-2475).
   neutral: {
     Icon: Minus,
-    iconClass: 'text-(--el-text-faint)',
+    iconClass: null,
     textClass: 'text-(--el-text-muted)',
   },
   caution: {
@@ -333,7 +341,10 @@ function FindingRow({ finding }: { finding: DirectionFinding }) {
   const { Icon, iconClass, textClass } = FINDING_TONE[finding.tone];
   return (
     <div className={`flex items-start gap-1.5 text-xs ${textClass}`}>
-      <Icon className={`mt-0.5 size-3.5 shrink-0 ${iconClass}`} aria-hidden="true" />
+      <Icon
+        className={`mt-0.5 size-3.5 shrink-0 ${iconClass ?? 'text-(--el-text-faint)'}`}
+        aria-hidden="true"
+      />
       <span className="min-w-0">
         <span className="font-semibold text-(--el-text)">{finding.label}</span> — {finding.value}
       </span>

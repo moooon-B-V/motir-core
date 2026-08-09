@@ -26,6 +26,9 @@ function StateShell({
   action?: React.ReactNode;
 }) {
   const Icon = ICON_BY_STATE[state];
+  // The state hues live in a constant; the QUIET default is written at the
+  // element instead, because that is the only place the ink guard can see the
+  // glyph it paints is `aria-hidden` (MOTIR-2475).
   const tone =
     state === 'error'
       ? 'text-(--el-danger)'
@@ -33,10 +36,10 @@ function StateShell({
         ? 'text-(--el-text-muted)'
         : state === 'stale'
           ? 'text-(--el-warning)'
-          : 'text-(--el-text-faint)';
+          : null;
   return (
     <div className="flex min-h-[176px] flex-col items-center justify-center gap-2 px-4 py-8 text-center">
-      <Icon className={`size-7 ${tone}`} aria-hidden />
+      <Icon className={`size-7 ${tone ?? 'text-(--el-text-faint)'}`} aria-hidden />
       <h5 className="font-serif text-sm font-semibold text-(--el-text-strong)">{title}</h5>
       <p className="max-w-[34ch] text-xs leading-relaxed text-(--el-text-muted)">{body}</p>
       {action ? <div className="mt-1.5">{action}</div> : null}

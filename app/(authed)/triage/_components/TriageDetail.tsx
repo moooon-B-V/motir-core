@@ -49,7 +49,7 @@ function CommentRowReadOnly({ comment }: { comment: CommentDTO }) {
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-(--el-text)">{comment.author.name}</span>
-          <span className="text-xs text-(--el-text-faint)">
+          <span className="text-xs text-(--el-text-secondary)">
             {format.relativeTime(new Date(comment.createdAt))}
           </span>
         </div>

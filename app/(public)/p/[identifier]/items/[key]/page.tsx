@@ -140,7 +140,7 @@ export default async function PublicWorkItemDetailPage({
 
               <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
                 <IssueTypeIcon type={detail.kind} className="h-5 w-5 flex-none" />
-                <span className="font-mono text-[12px] text-(--el-text-faint)">
+                <span className="font-mono text-[12px] text-(--el-text-secondary)">
                   {detail.identifier}
                 </span>
                 <h1 className="font-serif text-2xl font-semibold leading-tight text-(--el-text)">

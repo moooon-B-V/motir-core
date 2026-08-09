@@ -125,7 +125,7 @@ export function ColumnActionsMenu({
             <>
               <div className="mx-1 my-1.5 h-px bg-(--el-border)" />
               <div className="px-(--spacing-control-x) pb-1.5">
-                <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-faint) uppercase">
+                <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
                   {t('wipLimitLabel')}
                 </p>
                 <input

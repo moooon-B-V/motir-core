@@ -60,11 +60,25 @@ import type { CodeGraphIndexData } from '../types';
 // NOTE: this is motir-core's OWN internal job substrate. It is unrelated to
 // motir-ai's frozen JOB_KINDS contract — motir-ai exposes a plain bytes route
 // (`POST /v1/code-graph/index`), NOT a JobKind, so `lib/ai/types.ts` is untouched.
+//
+// ⚠️ SUCCESS NOW EMITS SOMETHING, AND IT IS THE ONE THING THIS FILE ADDS BEYOND
+// THE FLEET STEPS (MOTIR-2266 · `docs/decisions/audit-on-first-index.md`). A repo
+// used to get a code graph automatically and an assessment never; the trailing
+// `derive-first-audit` step closes that, firing the repo's `code_audit` +
+// `propose_convention` pair when — and only when — it has no derived audit yet.
+//
+// IT LIVES HERE AND NOT IN `runIndexFleetSteps` ON PURPOSE. That function is
+// shared with `system.code-graph-refresh` (MOTIR-2057), and the record decides
+// the FIRST audit only: whether an audit should refresh when a repo is re-indexed
+// after new commits is a separate, recurring-spend question §4 deliberately
+// leaves open. Putting the step in the shared shape would answer it by accident.
+// The step-shape PARITY test between the two jobs knows about this one
+// divergence by name.
 export const codeGraphIndex = defineJob(
   { id: 'system.code-graph-index', retryPolicy: 'idempotent' },
   async (ctx, services) => {
     const data = ctx.event.data as CodeGraphIndexData;
-    return runIndexFleetSteps(ctx, services, {
+    const result = await runIndexFleetSteps(ctx, services, {
       installationId: data.installationId,
       // Carried on the payload since MOTIR-1500 and now LOAD-BEARING
       // (MOTIR-1931): it is the repo's own tenant, stamped at enqueue.
@@ -73,5 +87,26 @@ export const codeGraphIndex = defineJob(
       repoName: data.repoName,
       defaultBranch: data.defaultBranch,
     });
+
+    // ⚠️ GATED ON `indexed`, SO A NO-OP RUN'S STEP SHAPE IS UNCHANGED. The three
+    // vanished-tenant verdicts and `provider_cannot_index` return `indexed: false`
+    // WITHOUT throwing (they are the ledger's contract), and none of them put a
+    // graph anywhere — there is nothing to assess. A FAILED index never reaches
+    // this line at all: `runIndexFleetSteps` throws.
+    //
+    // Its OWN step, so the derivation is checkpointed exactly once per run and a
+    // replay reads the memo rather than re-submitting. `deriveFirstAudit` never
+    // throws (see its contract), which is what keeps a motir-ai blip from failing
+    // — and Inngest from retrying — a run whose index already succeeded.
+    if (result.indexed) {
+      await ctx.step.run('derive-first-audit', () =>
+        services.firstAuditTrigger.deriveFirstAudit({
+          workspaceId: data.workspaceId,
+          repoRef: result.repoRef,
+        }),
+      );
+    }
+
+    return result;
   },
 );

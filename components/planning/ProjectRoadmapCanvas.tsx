@@ -834,7 +834,7 @@ export function ProjectRoadmapCanvas({
           data-testid="edge-legend"
           className="absolute bottom-[4.25rem] left-3 z-10 flex flex-col gap-1.5 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface) px-3 py-2 shadow-(--shadow-card)"
         >
-          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-faint) uppercase">
+          <span className="text-[10.5px] font-bold tracking-[0.05em] text-(--el-text-secondary) uppercase">
             {t('legend.heading')}
           </span>
           {(

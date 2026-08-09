@@ -152,10 +152,82 @@ describe('Dockerfile — the runner image', () => {
   it('builds with `next build`, never the `build` script that migrates', () => {
     // package.json's `build` is `prisma generate && node scripts/migrate-deploy.mjs
     // && next build`. Migrations belong to fly.toml's release_command; running
-    // them during an image build either fails the build (no DATABASE_URL at
-    // build time, by design) or migrates whatever database the builder can see.
+    // them during an image build would migrate whatever database the builder can
+    // reach — and the builder's DATABASE_URL is a placeholder pointing at
+    // localhost (see the placeholder describe below), so `migrate deploy` here
+    // would fail the build outright rather than do anything useful.
     expect(dockerfile).toMatch(/RUN pnpm exec next build/);
     expect(dockerfile).not.toMatch(/^RUN pnpm build$/m);
+  });
+});
+
+/**
+ * MOTIR-2490 — the first deploy never produced a machine, because `next build`
+ * died collecting page data with no `DATABASE_URL`.
+ *
+ * Next EVALUATES each route's module graph during collection, so a route that
+ * imports `@/lib/auth` or a service reaches `lib/db.ts`, whose module-scope
+ * `export const db = … ?? createClient()` throws without the variable. It never
+ * surfaced on Vercel, where builds carried the project's real environment.
+ *
+ * These are structural assertions because NOTHING in PR CI builds the image —
+ * the `build` job compiles the app with a real `DATABASE_URL` against an
+ * ephemeral Postgres, which is exactly the configuration that hides this. Until
+ * that gap is closed, this file is the only gate standing between a deleted ENV
+ * line and a failed production deploy.
+ */
+describe('Dockerfile — the build-time placeholders (MOTIR-2490)', () => {
+  /** Every name whose `requiredEnv` check runs at MODULE LOAD, so collection hits it. */
+  const MODULE_LOAD_ENV = [
+    'DATABASE_URL', // lib/db.ts — `export const db = … ?? createClient()`
+    'DATABASE_URL_UNPOOLED', // prisma.config.ts, read by the release lane
+    'BETTER_AUTH_SECRET', // lib/auth/index.ts — `betterAuth({ secret: … })`
+    'GOOGLE_CLIENT_ID', // lib/auth/index.ts — the Google provider block
+    'GOOGLE_CLIENT_SECRET',
+  ] as const;
+
+  /**
+   * Matches a name whether it opens the instruction (`ENV DATABASE_URL=…`) or
+   * continues it (`    GOOGLE_CLIENT_ID=…` after a trailing backslash), so
+   * re-ordering the block cannot turn a real assertion into a vacuous one.
+   */
+  const assignment = (name: string) => new RegExp(`^(?:ENV\\s+)?\\s*${name}=`, 'm');
+
+  it.each(MODULE_LOAD_ENV)('the BUILDER sets a placeholder for %s', (name) => {
+    expect(builderStage).toMatch(assignment(name));
+  });
+
+  it('sets them BEFORE `next build`, or they do not apply', () => {
+    const firstPlaceholder = builderStage.indexOf('DATABASE_URL=');
+    const build = builderStage.indexOf('RUN pnpm exec next build');
+    expect(firstPlaceholder).toBeGreaterThan(-1);
+    expect(build).toBeGreaterThan(firstPlaceholder);
+  });
+
+  it('NEVER lets a placeholder reach the runner — it is a separate FROM', () => {
+    // The whole safety argument for hardcoding credentials-shaped strings in a
+    // Dockerfile is that they die with the builder stage. If one ever appears
+    // below `AS runner`, the running image ships a fake secret and the real Fly
+    // secret may not override it.
+    for (const name of MODULE_LOAD_ENV) {
+      expect(runnerStage).not.toMatch(assignment(name));
+    }
+    expect(runnerStage).not.toMatch(/build-time-placeholder/);
+  });
+
+  it('points the placeholder database at localhost, so nothing real can be reached', () => {
+    // Inert by construction: even if a collected route did open a connection,
+    // 127.0.0.1 inside the build container is nothing. A placeholder naming a
+    // real host would be a live credential in the image history.
+    const url = builderStage.match(/DATABASE_URL="([^"]+)"/)?.[1] ?? '';
+    expect(url).toMatch(/@127\.0\.0\.1:/);
+  });
+
+  it('records WHY the placeholders exist, not just that they do', () => {
+    // The comment this replaced said "DATABASE_URL is read at RUNTIME" — true on
+    // Vercel, false here, and believed for long enough to cost the first deploy.
+    expect(builderStage).toMatch(/MOTIR-2490/);
+    expect(builderStage).toMatch(/page-data collection|collecting page data/i);
   });
 });
 
