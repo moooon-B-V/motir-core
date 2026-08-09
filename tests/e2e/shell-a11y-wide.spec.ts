@@ -19,11 +19,12 @@
 // So this file widens BOTH arms: the unswept areas, and a POPULATED fixture on
 // every route it adds. Nothing here is a new kind of check — same `WCAG_TAGS`,
 // same `formatViolations` reporting as the three sibling files. It is the same
-// sweep pointed at more of the product. Two routes still carry a NAMED,
+// sweep pointed at more of the product. ONE route still carries a NAMED,
 // single-rule carve-out citing the card that removes it (see "WHAT WIDENING
-// FOUND" below — /docs's was removed by MOTIR-2494 and that route is back to a
-// zero-exclusion sweep); every other route runs with zero exclusions, and no
-// rule is disabled anywhere without a bug key beside it.
+// FOUND" below — it was three: /docs's went with MOTIR-2494 and
+// /settings/organization's with MOTIR-2495, and both are back to zero-exclusion
+// sweeps); every other route runs with zero exclusions, and no rule is disabled
+// anywhere without a bug key beside it.
 //
 // A FOURTH file rather than more entries in `shell-a11y.spec.ts`: the @a11y CI
 // leg shards by FILE (see the split rationale in shell-a11y.spec.ts's header
@@ -69,9 +70,11 @@
 //     whose cause is not an ink choice, so no ink fixes it). Each had a NAMED
 //     carve-out below citing its card, and each of those cards removes its own
 //     carve-out. A carve-out here is a tracked gap, never a silent one.
-//     MOTIR-2494 has since landed and DELETED /docs's, so that route is swept
-//     with zero exclusions again; 2493 and 2495 are still open and still carry
-//     theirs.
+//     Two of the three have since landed and DELETED theirs: MOTIR-2494 made
+//     the /docs code panes keyboard-scrollable, and MOTIR-2495 moved the shared
+//     `Input`'s `disabled` / `readOnly` states onto `--el-input-*` fills instead
+//     of an opacity filter — so both routes are swept with zero exclusions
+//     again. 2493 is still open and still carries its own.
 //   • CLEAN on the first run — /triage and /settings/account.
 
 import AxeBuilder from '@axe-core/playwright';
@@ -290,17 +293,11 @@ test.describe('@a11y widened route coverage', () => {
     await expect(
       page.getByRole('heading', { name: 'Organization settings', level: 1 }),
     ).toBeVisible();
-    // CARVE-OUT — MOTIR-2495. The org-URL field is a DISABLED `Input`, and the
-    // shared primitive renders disabled as `opacity-50` on the whole wrapper,
-    // which composites its `motir.co/` affix below AA. No ink fixes it (the
-    // affix is already `--el-text-secondary`, the darkest caption ink; opacity
-    // halves whatever it is given), so it is not in the `--el-text-*` arm this
-    // card owns. MOTIR-2495 decides the disabled treatment and DELETES this
-    // exclusion plus the testid it anchors on. The rest of the page, and the
-    // color-contrast rule everywhere else on it, stay swept.
-    await sweep(page, '/settings/organization', reports, {
-      excludeSelectors: ['[data-testid="org-url-affix"]'],
-    });
+    // Zero exclusions since MOTIR-2495 — the org-URL field is `readOnly` rather
+    // than `disabled`, and the shared `Input` draws both non-editable states
+    // with `--el-input-*` fills instead of an opacity filter, so its
+    // `motir.co/` affix is measured against a real pair again.
+    await sweep(page, '/settings/organization', reports);
 
     expectClean(reports);
   });
