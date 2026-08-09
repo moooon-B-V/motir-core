@@ -49,7 +49,7 @@
 // observed by HOLDING the plan read until the assertion has run — an
 // authoritative gate, never a timeout.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
 import type { Page, Route } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
@@ -280,7 +280,12 @@ async function openWorkspaceFromItem(page: Page, itemKey: string, mode: 'plan' |
   await expect(entrance(page)).toHaveAttribute('data-mode', mode);
   await entrance(page).click();
   await page.waitForURL(/\/planning\?/);
-  await expect(rail(page)).toBeVisible();
+  // ⚠️ THE FIRST LANDMARK AFTER LANDING ON `/planning` CARRIES THE FIRST-PAINT
+  // BUDGET (MOTIR-2506) — see the constant's own note. Every test in this file
+  // reaches the workspace through this helper, so the budget belongs here rather
+  // than at one call site: the stall lands on whichever test happens to be
+  // running, which is exactly how it was found.
+  await expect(rail(page)).toBeVisible({ timeout: FIRST_PAINT_MS });
   // The thread is scoped to the ITEM, and the rail says so.
   await expect(rail(page).getByText(`Opened in the context of ${itemKey}.`)).toBeVisible();
 }

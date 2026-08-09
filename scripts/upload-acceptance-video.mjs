@@ -493,6 +493,47 @@ function assertWithinMintedCap(label, file, target) {
 }
 
 /**
+ * Describe a minted credential WITHOUT echoing it (MOTIR-2499).
+ *
+ * The job log of a public repo is a public document, and the diagnosis below
+ * only needs the token's SHAPE. The failure this replaces printed all ~700
+ * characters of a live upload grant into the log, twice per recording.
+ */
+function describeToken(value) {
+  if (typeof value !== 'string') return value === undefined ? 'nothing' : `a ${typeof value}`;
+  if (value === '') return 'an empty string';
+  return `a ${value.length}-character string starting "${value.slice(0, 20)}…"`;
+}
+
+/**
+ * Fail a mint response that does not speak this uploader's contract (MOTIR-2499).
+ *
+ * ⚠️ THIS SCRIPT AND THE SERVER IT CALLS ARE DEPLOYED SEPARATELY. The uploader
+ * ships with the PR (CI runs it from the branch); the endpoint it mints against
+ * is whatever is deployed at `MOTIR_BASE_URL` — production. So a change to the
+ * `/upload-token` wire shape is live on one side before the other, and
+ * MOTIR-2389 made exactly such a change: `token` went from a client upload token
+ * (handed to an SDK) to an S3 presigned PUT URL (fetched directly).
+ *
+ * Against a deployment that predates it, `fetch(target.token)` fails with
+ * `Failed to parse URL from <the whole credential>` — which reads as a malformed
+ * string, names neither side, and hid a three-day production-deploy outage
+ * behind a green lane. Checking the shape at the boundary turns it into the
+ * sentence a reader can act on.
+ */
+function assertPresignedTarget(label, target, baseUrl) {
+  const token = target?.token;
+  if (typeof token === 'string' && /^https?:\/\//i.test(token)) return;
+  throw new Error(
+    `the ${label} upload target minted by ${baseUrl} is not a presigned URL — got ` +
+      `${describeToken(token)}. This uploader PUTs each artifact straight to the URL the mint ` +
+      'returns (the S3 presigned-PUT contract, MOTIR-2389); a non-URL token is what the PREVIOUS ' +
+      `contract returned, so the deployment at ${baseUrl} is OLDER than this script. Deploy ` +
+      'motir-core there — re-running the lane against a stale deployment cannot succeed.',
+  );
+}
+
+/**
  * PUT one artifact to the presigned URL the mint returned (MOTIR-2389).
  *
  * ⚠️ `content-type` MUST be sent, and MUST equal the type the server bound at
@@ -563,6 +604,15 @@ export async function uploadAcceptanceVideo({
     );
   }
   const targets = await tokenRes.json();
+
+  // The CONTRACT check, before anything is read off the mint (MOTIR-2499): every
+  // target this run is about to PUT to must be a presigned URL. A deployment
+  // older than this script mints the previous shape, and the failure is far
+  // easier to read here than inside `fetch`.
+  assertPresignedTarget('video', targets?.video, base);
+  if (artifacts.trace && targets?.trace) {
+    assertPresignedTarget('trace', targets.trace, base);
+  }
 
   // The AUTHORITATIVE per-file cap, straight from the mint (MOTIR-1911). The
   // gate in `main` measures against a CONFIGURED expectation, because sizes are
@@ -709,6 +759,10 @@ export async function main() {
   // fails.
   ciSummary('### Acceptance videos\n');
   const maxArtifactBytes = resolveMaxArtifactBytes();
+  // OWNERSHIP (MOTIR-1937) is resolved HERE, ahead of the verdicts, because
+  // MOTIR-2499 made it decide more than what gets WRITTEN — it now decides what
+  // this run FAILS on. See the exit verdict at the bottom of this function.
+  const ownedSpecs = resolveOwnedSpecs();
   const assessed = targets.map((t) => {
     // Read the meta ONCE — the watchability verdict and the MOTIR-1937 ownership
     // gate both key off it (`totalSeconds` and `specFile` respectively).
@@ -716,6 +770,7 @@ export async function main() {
     return {
       ...t,
       meta,
+      owned: isOwnedRecording(meta, ownedSpecs),
       verdict: assessWatchability({ chapters: readChapters(t.recording.chapters), meta }),
       sizes: assessArtifactSizes({
         video: t.recording.video,
@@ -726,40 +781,69 @@ export async function main() {
   });
   // Two independent ways to be REJECTED, reported separately because they tell
   // the author to do different things — but pooled here, because the downstream
-  // handling is identical: not published, annotated, and non-zero at the end.
+  // handling is identical: not published and annotated.
   const rejected = assessed.filter((t) => !t.verdict.watchable || !t.sizes.publishable);
   const publishable = assessed.filter((t) => t.verdict.watchable && t.sizes.publishable);
+  // ── WHOSE DEFECT IS IT? (MOTIR-2499) ──────────────────────────────────────
+  //
+  // An UNPUBLISHABLE recording is a different verdict from a publish FAILURE,
+  // and since MOTIR-2499 the two are counted apart and exit apart.
+  //
+  // MOTIR-1905 failed the run on ANY unwatchable clip, owned or not, reasoning
+  // that pacing is a defect whoever is looking at the run can fix. That was
+  // free advice while the step ran under `continue-on-error` and could not go
+  // red whatever it returned. Now that it CAN (the step's `continue-on-error`
+  // was removed with this change, so a lost receipt is finally visible), the
+  // same rule would red-light every acceptance PR for a defect in a spec it
+  // never touched — measured: MOTIR-2268's 14.5s clip sat in the lane's
+  // recordings for days, so every owner of any other spec would have inherited
+  // it. A run is answerable for the specs it CHANGED; the rest it rehearses.
+  //
+  // So: an unpublishable OWNED recording is fatal (this PR's own story just lost
+  // its receipt, and this PR's author can fix it), an unpublishable REHEARSED
+  // one is reported, annotated as a warning, and counted separately.
+  const rejectedOwned = rejected.filter((t) => t.owned);
+  const rejectedRehearsed = rejected.filter((t) => !t.owned);
 
-  for (const { storyKey, recording, verdict, sizes } of rejected) {
+  for (const { storyKey, recording, verdict, sizes, owned: isOwned } of rejected) {
+    const consequence = isOwned
+      ? 'This run OWNS its spec, so the step fails.'
+      : 'This run does not own its spec — it is reported here and counted separately, and the ' +
+        'PR that changes that spec is the one it fails.';
     const message = !verdict.watchable
       ? `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is NOT watchable: ${verdict.reason}. ` +
-        'It was NOT published; the other recordings in this run were unaffected. ' +
+        `It was NOT published; the other recordings in this run were unaffected. ${consequence} ` +
         'Pace the recorded happy path: wrap each phase in `chapter(...)` (which paces itself) and ' +
         '`await beat()` after each user-visible action, both in tests/e2e/_helpers/acceptance-video.ts. ' +
         'Do NOT fix this by lowering the floor.'
       : `Acceptance video for ${storyKey} (${path.basename(recording.dir)}) is TOO LARGE to publish: ${sizes.reason}. ` +
-        'It was NOT published; the other recordings in this run were unaffected. ' +
+        `It was NOT published; the other recordings in this run were unaffected. ${consequence} ` +
         'The VIDEO is the receipt, so it cannot simply be dropped: record this lane at a lower ' +
         'resolution or bitrate (playwright.acceptance.config.ts `video.size`), or split the story. ' +
         'Do NOT fix this by shortening the clip below the watchability floor.';
     console.error(message);
-    // A CI ANNOTATION, so the failure is visible on the run without opening the
-    // raw job log (MOTIR-1905). `continue-on-error` rewrites the step's
-    // conclusion to `success`, which is why the log was the only witness.
+    // A CI ANNOTATION, so the verdict is visible on the run without opening the
+    // raw job log (MOTIR-1905). Its LEVEL now tracks the consequence: `error`
+    // for a defect this run fails on, `warning` for one it is only reporting —
+    // an `::error::` beside a green step is the ambiguity MOTIR-2499 removes.
     ciAnnotate(
-      'error',
+      isOwned ? 'error' : 'warning',
       !verdict.watchable
         ? `Unwatchable acceptance video for ${storyKey}: ${verdict.reason}`
         : `Over-limit acceptance video for ${storyKey}: ${sizes.reason}`,
     );
     ciSummary(
-      `- ❌ **${storyKey}** — not published: ${!verdict.watchable ? verdict.reason : sizes.reason}`,
+      `- ${isOwned ? '❌' : '⚠️'} **${storyKey}** — not published: ` +
+        `${!verdict.watchable ? verdict.reason : sizes.reason}`,
     );
   }
 
   if (publishable.length === 0) {
     console.error('No publishable acceptance recording in this run — nothing to publish.');
-    process.exit(1);
+    // Only the OWNED ones are this run's to answer for (see above); a lane whose
+    // single unpublishable clip belongs to another PR's spec stays green.
+    if (rejectedOwned.length > 0) process.exit(1);
+    return;
   }
 
   console.log(`Acceptance publish targets (${publishable.length}):`);
@@ -786,9 +870,8 @@ export async function main() {
   // the WRITE is scoped. Skipping the work entirely for un-owned recordings would
   // move those checks to whichever run does own them, which is how a broken
   // acceptance gate stayed invisible for days (MOTIR-1905).
-  const ownedSpecs = resolveOwnedSpecs();
-  const owned = publishable.filter((t) => isOwnedRecording(t.meta, ownedSpecs));
-  const rehearsed = publishable.filter((t) => !owned.includes(t));
+  const owned = publishable.filter((t) => t.owned);
+  const rehearsed = publishable.filter((t) => !t.owned);
 
   for (const { storyKey, recording, meta } of rehearsed) {
     console.log(
@@ -808,11 +891,12 @@ export async function main() {
         `this run changed (${ownedSpecs.size} owned spec(s)). A story's receipt is written by the ` +
         'PR that changes its acceptance spec, so an unrelated run never supersedes it.',
     );
-    // An unwatchable or over-limit clip is still a defect worth failing on — the
-    // author of a pacing / size regression is whoever is looking at this run.
-    if (rejected.length > 0) {
+    // An unwatchable or over-limit clip this run OWNS is still a defect worth
+    // failing on. One it merely rehearsed is not (MOTIR-2499) — see the
+    // whose-defect-is-it note above.
+    if (rejectedOwned.length > 0) {
       console.error(
-        `${rejected.length} unpublishable recording(s) out of ${targets.length} — reported above.`,
+        `${rejectedOwned.length} unpublishable owned recording(s) out of ${targets.length} — reported above.`,
       );
       process.exit(1);
     }
@@ -902,14 +986,31 @@ export async function main() {
     `Published ${owned.length - failed} of ${owned.length} owned acceptance recording(s) ` +
       `(${targets.length} recorded in this run).`,
   );
-  // Non-zero on EITHER kind of problem — a clip that is unwatchable or too big to
-  // publish is as much a broken acceptance gate as a failed upload, and both must
-  // survive `continue-on-error` as a visible annotation rather than a green step
-  // (MOTIR-1905 / MOTIR-1911). A DROPPED TRACE is deliberately NOT in here: the
-  // receipt published, so the run is not broken — it is a warning, not a failure.
-  if (failed > 0 || rejected.length > 0) {
+  if (rejectedRehearsed.length > 0) {
+    console.log(
+      `${rejectedRehearsed.length} unpublishable recording(s) belong to specs this run does not ` +
+        'own — reported above, and NOT counted as failures of this run.',
+    );
+  }
+  // THE EXIT VERDICT. Non-zero on either kind of problem this run is answerable
+  // for — a failed upload, or a clip of its OWN that was unwatchable or too big
+  // to publish; both mean a story this PR owns has no receipt (MOTIR-1905 /
+  // MOTIR-1911 / MOTIR-2499). Two things are deliberately NOT in here: a DROPPED
+  // TRACE (the receipt published, so the run is not broken — a warning), and an
+  // unpublishable REHEARSED recording (another PR's defect; counted separately
+  // just above, so it is visible without being inherited).
+  //
+  // ⚠️ THIS EXIT CODE IS NOW THE SIGNAL. The workflow step no longer runs under
+  // `continue-on-error`, which used to rewrite its conclusion to `success` and
+  // left the annotations and the raw log as the only witnesses — the fail-open
+  // that let "Published 0 of 2" pass for three days (MOTIR-2499).
+  if (failed > 0 || rejectedOwned.length > 0) {
     console.error(
-      `${failed} publish failure(s) and ${rejected.length} unpublishable recording(s) out of ${targets.length}.`,
+      `${failed} publish failure(s) and ${rejectedOwned.length} unpublishable owned ` +
+        `recording(s) out of ${targets.length}` +
+        (rejectedRehearsed.length > 0
+          ? ` (plus ${rejectedRehearsed.length} unpublishable rehearsed recording(s), not fatal).`
+          : '.'),
     );
     process.exit(1);
   }

@@ -191,7 +191,15 @@ describe('Backlog selection model (4.2.5)', () => {
 
     const row1 = await screen.findByTestId('backlog-row-PROD-150');
     fireEvent.click(row1);
-    expect(row1.getAttribute('aria-selected')).toBe('true');
+    // Selection reads off the row's `data-selected` + the sibling checkbox's
+    // `aria-checked` — NOT `aria-selected`, which MOTIR-2493 removed because it
+    // is not an allowed attribute on the `listitem` the row now is. The checkbox
+    // is the accessible channel, and it was always the one carrying the state.
+    expect(row1.getAttribute('data-selected')).toBe('true');
+    expect(row1.getAttribute('aria-selected')).toBeNull();
+    expect(screen.getByTestId('backlog-row-check-PROD-150').getAttribute('aria-checked')).toBe(
+      'true',
+    );
     expect(screen.getByTestId('backlog-selection-count').textContent).toContain('1');
 
     // ⌘-click a second row adds it (toggle); the bar shows 2.
@@ -222,7 +230,9 @@ describe('Backlog selection model (4.2.5)', () => {
 
     // A later-loaded row does not clear the id-keyed selection.
     rerender(<ToastProvider>{ui}</ToastProvider>);
-    expect(screen.getByTestId('backlog-row-PROD-151').getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByTestId('backlog-row-check-PROD-151').getAttribute('aria-checked')).toBe(
+      'true',
+    );
   });
 });
 

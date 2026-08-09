@@ -251,7 +251,11 @@ function ProposedRow({
       statusByKey={statusByKey}
       assigneeNameById={assigneeNameById}
       showGrip={false}
-      rowRole="listitem"
+      // No `rowRole` override any more: `BacklogRowBody` IS a `listitem` now
+      // (MOTIR-2493), so this panel's `role="list"` above and the live backlog's
+      // compose with it identically — which is the whole point of the fix. A
+      // proposed row carries no aria-posinset/setsize: a proposal is reviewed,
+      // not ranked, and its order is not a commitment.
       testIdPrefix="proposed-row"
       readOnlyEstimate
       trailing={flags}

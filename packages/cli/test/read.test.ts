@@ -124,7 +124,7 @@ describe('parseItemKey', () => {
       parseItemKey('nonsense', 'show');
     } catch (err) {
       expect((err as CliError).message).toContain('is not a work item key');
-      expect((err as CliError).hint).toContain('motir show PROD-7');
+      expect((err as CliError).hint).toContain('motir show ACME-7');
     }
   });
 });
