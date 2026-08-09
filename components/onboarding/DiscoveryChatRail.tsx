@@ -172,7 +172,10 @@ export function DiscoveryChatRail({
           disabled={isStreaming || showPaywall}
           placeholder={t('composerPlaceholder')}
           aria-label={t('composerPlaceholder')}
-          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-60"
+          // The placeholder paints on this input's OWN `--el-surface` fill,
+          // where `--el-text-muted` measures 4.17:1 — it clears AA on the white
+          // page/card only (MOTIR-2477's table). Secondary is 6.24:1 there.
+          className="h-(--height-input) min-w-0 flex-1 rounded-(--radius-input) border border-(--el-border) bg-(--el-surface) px-(--spacing-input-x) text-sm text-(--el-text) placeholder:text-(--el-text-secondary) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) disabled:opacity-60"
         />
         <Button
           type="submit"
