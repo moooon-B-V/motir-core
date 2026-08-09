@@ -115,7 +115,7 @@ export function GitlabProjectPicker() {
           loading={loading}
           emptyText={t('projects.noProjects')}
         />
-        <p className="font-sans text-xs text-(--el-text-muted)">{t('projects.memberOnly')}</p>
+        <p className="font-sans text-xs text-(--el-text-secondary)">{t('projects.memberOnly')}</p>
       </div>
       <div className="flex items-center gap-2">
         <Button size="sm" onClick={connect} disabled={!selectedId || pending} loading={pending}>

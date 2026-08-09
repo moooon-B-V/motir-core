@@ -133,7 +133,7 @@ export function SprintPlanDock({
       {state.phase === 'empty' || !proposal || sprints.length === 0 ? (
         <div className="flex flex-col items-center gap-2 bg-(--el-surface-soft) px-(--spacing-card-padding) py-8 text-center">
           <h3 className="font-semibold text-(--el-text-strong)">{t('aiPlan.emptyTitle')}</h3>
-          <p className="max-w-prose text-sm leading-relaxed text-(--el-text-muted)">
+          <p className="max-w-prose text-sm leading-relaxed text-(--el-text-secondary)">
             {t('aiPlan.emptyBody')}
           </p>
           <Button

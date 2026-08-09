@@ -110,7 +110,7 @@ export function NotificationBell({ initialUnreadCount }: { initialUnreadCount: n
             // one displaced-candidate that STAYS below `md` — it is the only
             // control with no second door, and a badge inside a closed drawer
             // conveys nothing.
-            'relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-muted) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
+            'relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none',
             open && 'bg-(--el-surface) text-(--el-text)',
           )}
         >

@@ -244,7 +244,7 @@ export function AcceptancePanel({
                     {i + 1}
                   </span>
                   {c.label}
-                  <span className="ml-auto font-mono text-xs text-(--el-text-muted)">
+                  <span className="ml-auto font-mono text-xs text-(--el-text-secondary)">
                     {formatTime(c.tSeconds)}
                   </span>
                 </button>

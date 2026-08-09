@@ -149,7 +149,7 @@ function IconAction({
       aria-label={label}
       data-testid={testId}
       onClick={onClick}
-      className={`inline-flex size-[26px] shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+      className={`inline-flex size-[26px] shrink-0 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
         danger ? 'hover:text-(--el-danger)' : 'hover:text-(--el-text)'
       }`}
     >
@@ -208,7 +208,7 @@ function MenuItem({
           : 'text-(--el-text) hover:bg-(--el-muted)'
       }`}
     >
-      <span className="shrink-0 text-(--el-text-muted)">{icon}</span>
+      <span className="shrink-0 text-(--el-text-secondary)">{icon}</span>
       {children}
     </button>
   );

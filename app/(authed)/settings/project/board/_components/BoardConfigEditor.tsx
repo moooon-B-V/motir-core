@@ -619,7 +619,7 @@ function UnmappedRail({ statuses }: { statuses: StatusLite[] }) {
         ) : null}
         <span className="flex-1" />
         {!empty ? (
-          <span className="hidden text-xs text-(--el-text-muted) sm:inline">
+          <span className="hidden text-xs text-(--el-text-secondary) sm:inline">
             {t('board.unmappedHint')}
           </span>
         ) : null}
@@ -985,7 +985,7 @@ function AddColumnGhost({ onAdd }: { onAdd: (name: string) => void }) {
           />
         </div>
         <div className="px-2.5 py-3">
-          <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-2.5 py-4 text-center text-xs text-(--el-text-muted)">
+          <p className="border-(--el-border) rounded-(--radius-control) border border-dashed px-2.5 py-4 text-center text-xs text-(--el-text-secondary)">
             {t('board.columnEmpty')}
           </p>
         </div>
@@ -999,7 +999,7 @@ function AddColumnGhost({ onAdd }: { onAdd: (name: string) => void }) {
       data-testid="board-config-add-column"
       className="border-(--el-border-strong) text-(--el-text-secondary) hover:bg-(--el-muted) flex min-h-60 w-[17rem] shrink-0 flex-col items-center justify-center gap-2 rounded-(--radius-card) border border-dashed text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color)"
     >
-      <span className="bg-(--el-muted) text-(--el-text-muted) inline-flex size-7 items-center justify-center rounded-full">
+      <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex size-7 items-center justify-center rounded-full">
         <Plus className="size-4" aria-hidden />
       </span>
       {t('board.addColumn')}
@@ -1150,7 +1150,7 @@ function IconButton({
       onClick={onClick}
       aria-label={label}
       data-testid={testId}
-      className={`text-(--el-text-muted) hover:bg-(--el-muted) inline-flex size-[26px] shrink-0 items-center justify-center rounded-(--radius-control) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
+      className={`text-(--el-text-secondary) hover:bg-(--el-muted) inline-flex size-[26px] shrink-0 items-center justify-center rounded-(--radius-control) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) ${
         danger ? 'hover:text-(--el-danger)' : ''
       }`}
     >

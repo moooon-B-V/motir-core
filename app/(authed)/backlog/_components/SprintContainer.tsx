@@ -171,7 +171,7 @@ export function SprintContainer({
         </button>
         <span className="font-semibold text-(--el-text-strong)">{sprint.name}</span>
         <Pill status={SPRINT_STATE_TONE[sprint.state]}>{stateLabel}</Pill>
-        <span className="flex items-center gap-1 text-xs text-(--el-text-muted)">
+        <span className="flex items-center gap-1 text-xs text-(--el-text-secondary)">
           <Calendar className="h-3.5 w-3.5" aria-hidden />
           {dateRange}
         </span>
@@ -255,7 +255,7 @@ export function SprintContainer({
             // sprint has issues, none match (the design's dashed placeholder).
             createRowOnEmpty={!filterActive}
             emptyState={
-              <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-4 text-center text-xs text-(--el-text-muted)">
+              <p className="my-1 rounded-(--radius-card) border border-dashed border-(--el-border) px-(--spacing-control-x) py-4 text-center text-xs text-(--el-text-secondary)">
                 {filterActive ? t('sprintFilterEmpty') : t('sprintEmpty')}
               </p>
             }

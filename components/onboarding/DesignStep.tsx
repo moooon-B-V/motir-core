@@ -201,7 +201,7 @@ export function DesignStep({ onBack, onUseDesign, initialChoice }: DesignStepPro
 
       {/* Footer — pinned (outside the scroll area). Motir's chrome. */}
       <div className="flex flex-none flex-wrap items-center gap-3 border-t border-(--el-border) bg-(--el-surface) px-4 py-3">
-        <span className="text-xs text-(--el-text-muted)">{t('footerNote')}</span>
+        <span className="text-xs text-(--el-text-secondary)">{t('footerNote')}</span>
         <span className="grow" />
         <Button
           variant="ghost"

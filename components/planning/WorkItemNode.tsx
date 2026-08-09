@@ -330,7 +330,7 @@ export function WorkItemNode({
             // card — the same struck-title language `showDone` uses below.
             data-node-title
             className={`mt-0.5 line-clamp-2 block text-sm leading-snug font-semibold ${
-              showDone ? 'text-(--el-text-muted) line-through' : 'text-(--el-text)'
+              showDone ? 'text-(--el-text-secondary) line-through' : 'text-(--el-text)'
             }`}
           >
             {item.title}
@@ -356,7 +356,7 @@ export function WorkItemNode({
               style={{ width: `${pct}%` }}
             />
           </div>
-          <span className="shrink-0 text-xs font-medium text-(--el-text-muted) tabular-nums">
+          <span className="shrink-0 text-xs font-medium text-(--el-text-secondary) tabular-nums">
             {progress.done} / {progress.total}
           </span>
           {/* CI-verified count (Subtask 7.10.6 / MOTIR-894) — the "N of M verified"
@@ -373,7 +373,7 @@ export function WorkItemNode({
           ) : null}
         </div>
       ) : item.assigneeName ? (
-        <span className="shrink-0 truncate pt-1.5 text-right text-xs text-(--el-text-muted)">
+        <span className="shrink-0 truncate pt-1.5 text-right text-xs text-(--el-text-secondary)">
           {item.assigneeName}
         </span>
       ) : null}

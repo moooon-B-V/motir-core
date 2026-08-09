@@ -81,7 +81,7 @@ export function ChildList({ items, workflow, members }: ChildListProps) {
               className="hover:bg-(--el-surface) group flex items-center gap-3 rounded-(--radius-control) px-(--spacing-control-x) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               <IssueTypeIcon type={child.kind} className="h-4 w-4 shrink-0" />
-              <span className="text-(--el-text-muted) shrink-0 font-mono text-xs">
+              <span className="text-(--el-text-secondary) shrink-0 font-mono text-xs">
                 {child.identifier}
               </span>
               <span className="text-(--el-text) min-w-0 flex-1 truncate font-sans text-sm group-hover:underline">

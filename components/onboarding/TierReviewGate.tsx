@@ -174,7 +174,7 @@ export function TierReviewGate({
           <Button variant="secondary" leftIcon={<ArrowLeft className="size-4" />} onClick={onBack}>
             {t('back')}
           </Button>
-          <span className="hidden items-center gap-1.5 text-xs text-(--el-text-muted) sm:flex">
+          <span className="hidden items-center gap-1.5 text-xs text-(--el-text-secondary) sm:flex">
             {blockedByDecision ? (
               <>
                 <Lock className="size-4 text-(--el-text-faint)" aria-hidden="true" />

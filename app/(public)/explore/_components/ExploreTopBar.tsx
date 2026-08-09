@@ -47,7 +47,7 @@ export async function ExploreTopBar({
       </Link>
       <nav aria-label={t('navProduct')} className="hidden items-center gap-5 md:flex">
         {navItems.map((item) => (
-          <span key={item.key} className="text-[13.5px] text-(--el-text-muted)">
+          <span key={item.key} className="text-[13.5px] text-(--el-text-secondary)">
             {item.label}
           </span>
         ))}

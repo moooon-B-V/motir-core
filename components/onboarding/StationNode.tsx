@@ -202,7 +202,7 @@ export function StationCard({
           {/* The title reads in full (no truncation) — step names must read whole. */}
           <span className="block text-sm leading-snug font-semibold text-(--el-text)">{title}</span>
           {subtitle && (
-            <span className="mt-0.5 block text-xs text-(--el-text-muted)">{subtitle}</span>
+            <span className="mt-0.5 block text-xs text-(--el-text-secondary)">{subtitle}</span>
           )}
         </div>
       </div>

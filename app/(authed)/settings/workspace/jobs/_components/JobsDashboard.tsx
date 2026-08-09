@@ -232,7 +232,7 @@ function RunsTable({ runs }: { runs: JobRunDTO[] }) {
               <Td className="text-right tabular-nums">{run.attempt}</Td>
               <Td className="whitespace-nowrap">{formatDateTime(run.startedAt, locale)}</Td>
               <Td className="text-right tabular-nums">{formatDuration(run.durationMs)}</Td>
-              <Td className="max-w-[16rem] truncate text-(--el-text-muted)">
+              <Td className="max-w-[16rem] truncate text-(--el-text-secondary)">
                 {run.failure ? firstLine(run.failure.message) : '—'}
               </Td>
               <Td className="text-right">
@@ -323,7 +323,7 @@ function DlqTable({ rows, isOwner }: { rows: JobRunDlqDTO[]; isOwner: boolean })
                 <Td className="text-right tabular-nums">{row.attempts}</Td>
                 <Td className="whitespace-nowrap">{formatDateTime(row.firstFailedAt, locale)}</Td>
                 <Td className="whitespace-nowrap">{formatDateTime(row.lastFailedAt, locale)}</Td>
-                <Td className="whitespace-nowrap text-(--el-text-muted)">
+                <Td className="whitespace-nowrap text-(--el-text-secondary)">
                   {row.replayedAt ? formatDateTime(row.replayedAt, locale) : '—'}
                 </Td>
                 <Td>

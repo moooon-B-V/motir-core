@@ -92,7 +92,7 @@ export function TriageDetail({ detail, busy, handlers }: TriageDetailProps) {
           <TriageAvatar name={submitterName} size="lg" />
           <div className="flex flex-col">
             <span className="text-sm font-semibold text-(--el-text)">{submitterName}</span>
-            <span className="text-xs text-(--el-text-muted)">{metaLine}</span>
+            <span className="text-xs text-(--el-text-secondary)">{metaLine}</span>
           </div>
         </div>
 
