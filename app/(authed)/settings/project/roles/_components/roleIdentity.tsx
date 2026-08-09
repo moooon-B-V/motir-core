@@ -56,6 +56,12 @@ export function roleTileTint(role: RoleDTO): string {
  * unrelated message.
  */
 export function roleName(role: RoleDTO, t: (key: string) => string): string {
+  // ⚠️ THE `?? ''` IS A TYPE OBLIGATION, NOT A CASE. Exactly one of `labelKey` /
+  // `name` is non-null on a `RoleDTO`, so reaching the fallback would mean a role
+  // with neither — which the mapper cannot produce. Marked rather than tested: a
+  // test asserting `''` for an input the DTO forbids would document a case that
+  // does not exist.
+  /* istanbul ignore next -- unreachable: a role without a labelKey has a name */
   return role.labelKey ? t(role.labelKey) : (role.name ?? '');
 }
 

@@ -282,6 +282,15 @@ describe('save', () => {
     fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'X' } });
     expect(submit.disabled).toBe(false);
   });
+
+  it('`Cancel` LEAVES — it does not merely close something', () => {
+    // The editor is a PAGE, not a dialog, so its Cancel has somewhere to go and
+    // has to actually go there. A Cancel that only cleared local state would look
+    // identical in a screenshot and strand the author on a form they abandoned.
+    render(<RoleEditor projectKey="MOTIR" domains={CATALOG.domains} catalog={CATALOG} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(pushMock).toHaveBeenCalledWith('/settings/project/roles');
+  });
 });
 
 describe('every refusal has a drawn outcome — none is a silent no-op', () => {

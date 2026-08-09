@@ -168,9 +168,11 @@ export function RoleDeleteControl({
                   count: prompt.count,
                   b: (chunks) => <strong className="font-semibold">{chunks}</strong>,
                 })
-              : t.rich('deleteDialog.noneAffected', {
-                  b: (chunks) => <strong className="font-semibold">{chunks}</strong>,
-                })}
+              : // Plain `t()`, not `t.rich()`: this string carries no markup in
+                // either catalogue, so a chunk renderer here would be a function
+                // nothing can ever call — and one that would quietly go on
+                // looking correct if a `<b>` were later added to only one locale.
+                t('deleteDialog.noneAffected')}
           </p>
           <p className="text-(--el-text-secondary) mt-2 font-sans text-[13px] leading-relaxed">
             {t('deleteDialog.lede')}
