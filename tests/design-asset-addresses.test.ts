@@ -868,12 +868,10 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: "Not a citation: the same blockquote's second rejected option — `icon1.png` DOES match the matcher, and is worse, because Next would then inject the full-bleed maskable renders as browser favicons from a content-hashed URL a static manifest cannot name.",
   },
 
-  // ── An instruction to BUILD a primitive, not a citation of one ────────────
-  {
-    file: 'design/projects/roles-permissions.mock.html',
-    path: 'components/ui/Checkbox.tsx',
-    why: 'Not a citation: the sentence is an instruction to BUILD the primitive — "`components/ui/Checkbox.tsx` to this spec: `--radius-control` …" — for the editable grid the custom-roles story adds. `components/ui/` ships `Combobox.tsx`, not `Checkbox.tsx`; whichever card creates it deletes this row with the file.',
-  },
+  // (The `components/ui/Checkbox.tsx` row that sat here was deleted by
+  //  MOTIR-2465, exactly as its own `why` instructed — "whichever card creates
+  //  it deletes this row with the file". The primitive now ships, so the path
+  //  is a real citation again and is guarded like any other.)
 ];
 
 describe('a design asset cites source paths that still exist', () => {
