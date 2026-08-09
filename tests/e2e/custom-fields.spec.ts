@@ -426,7 +426,9 @@ test('a non-admin member is REFUSED the Fields page; a project viewer still gets
   const memberCtx = await browser.newContext();
   const memberPage = await memberCtx.newPage();
   await signIn(memberPage, member.email, PWD);
-  await gotoFields(memberPage);
+  // NOT `gotoFields` — that helper asserts the page's own heading, which a
+  // refused actor never sees.
+  await memberPage.goto('/settings/project/fields');
   await expect(memberPage.getByText('Admins only')).toBeVisible();
   await expect(memberPage.getByText(/custom fields/i)).toBeVisible();
   await expect(memberPage.getByRole('button', { name: 'Add field' })).toHaveCount(0);

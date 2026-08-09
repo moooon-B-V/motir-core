@@ -52,13 +52,30 @@ async function openPalette(page: Page) {
   return palette;
 }
 
+/**
+ * The primary rail. Every nav assertion below is scoped to it, and that is not
+ * tidiness: the top bar's brand link is labelled "Motir — go to dashboard" and
+ * the mobile drawer carries the same names, so an unscoped `name: 'Dashboard'`
+ * resolves to two elements and fails strict mode. `shell.spec.ts` documents the
+ * same trap — naming the rail is the fix, not tightening the string.
+ */
+const rail = (page: Page) => page.getByRole('navigation', { name: 'Primary' });
+
+/**
+ * The settings-AREA rail, which REPLACES the project nav inside
+ * `/settings/project` and is labelled for the area rather than "Primary". Using
+ * the wrong one of these two is silent: the locator simply finds nothing.
+ */
+const settingsRail = (page: Page) => page.getByRole('navigation', { name: 'Project settings' });
+
 /** The bottom-nav Settings row — the AREA DOOR (design panel 1). */
-const settingsDoor = (page: Page) => page.getByRole('link', { name: 'Settings', exact: true });
+const settingsDoor = (page: Page) =>
+  rail(page).getByRole('link', { name: 'Settings', exact: true });
 
 /** Land in the project shell as `email`, with the active project already pinned. */
 async function enterShellAs(page: Page, email: string): Promise<void> {
   await signIn(page, email, seed.password);
-  await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: 'Work Items' })).toBeVisible();
 }
 
 test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page }) => {
@@ -81,15 +98,15 @@ test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page 
     'AI planning',
     'Rules',
   ]) {
-    await expect(page.getByRole('link', { name: label }), label).toBeVisible();
+    await expect(settingsRail(page).getByRole('link', { name: label }), label).toBeVisible();
   }
   // Every group heading survives, in rail order.
   for (const group of ['General', 'Access', 'Work', 'Automation']) {
-    await expect(page.getByText(group, { exact: true }).first(), group).toBeVisible();
+    await expect(settingsRail(page).getByText(group, { exact: true }), group).toBeVisible();
   }
 
   // And a destination genuinely opens — the door is not decorative.
-  await page.getByRole('link', { name: 'Members & access' }).click();
+  await settingsRail(page).getByRole('link', { name: 'Members & access' }).click();
   await page.waitForURL('**/settings/project/members');
   await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
 
@@ -118,8 +135,8 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // PANEL 1. The door is not there, and nothing marks the gap: no disabled row,
   // no tooltip, no "ask an admin" line. The rows below simply close up.
   await expect(settingsDoor(page)).toHaveCount(0);
-  await expect(page.getByRole('link', { name: 'Job runs' })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Docs' })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: 'Job runs' })).toBeVisible();
+  await expect(rail(page).getByRole('link', { name: 'Docs' })).toBeVisible();
 
   // ⌘K offers no settings deep link either — the palette reads the same registry.
   const palette = await openPalette(page);
@@ -148,7 +165,7 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   // nav, so asserting project-nav rows there fails for the wrong reason.
   await page.goto('/dashboard');
   for (const label of ['Dashboard', 'Work Items', 'Boards', 'Backlog', 'Reports', 'Triage']) {
-    await expect(page.getByRole('link', { name: label }), label).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: label }), label).toBeVisible();
   }
 });
 
@@ -159,11 +176,11 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
 
   // PANEL 4. The three rows whose destinations refuse a viewer outright are gone.
   for (const gone of ['Plans', 'Triage', 'Code health']) {
-    await expect(page.getByRole('link', { name: gone, exact: true }), gone).toHaveCount(0);
+    await expect(rail(page).getByRole('link', { name: gone, exact: true }), gone).toHaveCount(0);
   }
   // Every read surface stays — the primary nav never renders empty.
   for (const kept of ['Dashboard', 'Work Items', 'Boards', 'Roadmap', 'Backlog', 'Reports']) {
-    await expect(page.getByRole('link', { name: kept, exact: true }), kept).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: kept, exact: true }), kept).toBeVisible();
   }
 
   // PANEL 5 — the in-place treatments this story must NOT have touched.
@@ -173,7 +190,7 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
   await expect(create).toHaveAttribute('aria-disabled', 'true');
 
   // The board is read-only, and its cards do not drag.
-  await page.getByRole('link', { name: 'Boards', exact: true }).click();
+  await rail(page).getByRole('link', { name: 'Boards', exact: true }).click();
   await page.waitForURL('**/boards');
   // The board is read-only for a viewer. Asserted on the DISABLED create control
   // rather than the banner: the banner renders in both of `BoardContainer`'s

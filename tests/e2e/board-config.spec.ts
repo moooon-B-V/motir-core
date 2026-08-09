@@ -310,7 +310,9 @@ test.describe('board-config @smoke', () => {
     await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
     await page.waitForURL('**/dashboard');
 
-    await gotoBoardSettings(page);
+    // NOT `gotoBoardSettings` — that helper asserts the page's own heading, which
+    // a refused actor never sees. The URL is the case under test.
+    await page.goto('/settings/project/board');
 
     // The destination refuses — named for the room, not one generic apology.
     await expect(page.getByText('Admins only')).toBeVisible();

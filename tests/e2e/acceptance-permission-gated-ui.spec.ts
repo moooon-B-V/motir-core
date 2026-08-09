@@ -49,6 +49,22 @@ async function signOut(page: Page): Promise<void> {
   await page.context().clearCookies();
 }
 
+/**
+ * The primary rail. Every nav assertion below is scoped to it, and that is not
+ * tidiness: the top bar's brand link is labelled "Motir — go to dashboard" and
+ * the mobile drawer carries the same names, so an unscoped `name: 'Dashboard'`
+ * resolves to two elements and fails strict mode. `shell.spec.ts` documents the
+ * same trap — naming the rail is the fix, not tightening the string.
+ */
+const rail = (page: Page) => page.getByRole('navigation', { name: 'Primary' });
+
+/**
+ * The settings-AREA rail, which REPLACES the project nav inside
+ * `/settings/project` and is labelled for the area rather than "Primary". Using
+ * the wrong one of these two is silent: the locator simply finds nothing.
+ */
+const settingsRail = (page: Page) => page.getByRole('navigation', { name: 'Project settings' });
+
 test.describe.configure({ timeout: 240_000 });
 
 let seed: PermissionGatedSeed;
@@ -68,30 +84,32 @@ test('the shell shows each person the rooms they were given', async ({
 
   await chapter('A project admin: every door is there', async () => {
     await signIn(page, seed.adminEmail, seed.password);
-    await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Work Items' })).toBeVisible();
     // The Project settings door, in the footer of the nav
     await beat();
-    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
 
-    await page.getByRole('link', { name: 'Settings', exact: true }).click();
+    await rail(page).getByRole('link', { name: 'Settings', exact: true }).click();
     await page.waitForURL('**/settings/project');
     // Twelve sections, in four groups
     await beat();
-    await expect(page.getByRole('link', { name: 'Members & access' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Roles & permissions' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Rules' })).toBeVisible();
+    await expect(settingsRail(page).getByRole('link', { name: 'Members & access' })).toBeVisible();
+    await expect(
+      settingsRail(page).getByRole('link', { name: 'Roles & permissions' }),
+    ).toBeVisible();
+    await expect(settingsRail(page).getByRole('link', { name: 'Rules' })).toBeVisible();
   });
 
   await chapter('The same shell, as a project member: the door is not there', async () => {
     await signOut(page);
     await signIn(page, seed.memberEmail, seed.password);
-    await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Work Items' })).toBeVisible();
 
     // No Project settings row — and nothing marks the gap
     await beat();
-    await expect(page.getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
+    await expect(rail(page).getByRole('link', { name: 'Settings', exact: true })).toHaveCount(0);
     // The rows below it simply closed up.
-    await expect(page.getByRole('link', { name: 'Job runs' })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Job runs' })).toBeVisible();
 
     // ⌘K offers no way in either — it reads the same registry
     await beat();
@@ -109,17 +127,17 @@ test('the shell shows each person the rooms they were given', async ({
   await chapter('As a viewer: fewer rooms, and the same controls as before', async () => {
     await signOut(page);
     await signIn(page, seed.viewerEmail, seed.password);
-    await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Work Items' })).toBeVisible();
 
     // The destinations that would refuse them are gone from the nav
     await beat();
     for (const gone of ['Plans', 'Triage', 'Code health']) {
-      await expect(page.getByRole('link', { name: gone, exact: true })).toHaveCount(0);
+      await expect(rail(page).getByRole('link', { name: gone, exact: true })).toHaveCount(0);
     }
     // Every read surface stays
     await beat();
-    await expect(page.getByRole('link', { name: 'Boards', exact: true })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Reports', exact: true })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Boards', exact: true })).toBeVisible();
+    await expect(rail(page).getByRole('link', { name: 'Reports', exact: true })).toBeVisible();
 
     // And the in-place controls are UNCHANGED: visible, disabled, explained
     await beat();
@@ -127,7 +145,7 @@ test('the shell shows each person the rooms they were given', async ({
     await expect(create).toBeVisible();
     await expect(create).toHaveAttribute('aria-disabled', 'true');
 
-    await page.getByRole('link', { name: 'Boards', exact: true }).click();
+    await rail(page).getByRole('link', { name: 'Boards', exact: true }).click();
     await page.waitForURL('**/boards');
     // The board is read-only — the create control is there, and refuses
     await beat();
