@@ -46,7 +46,7 @@ export function PlanChangeConfirmBar({
             removed: index.counts.removed,
           })}
         </span>
-        <span className="truncate text-xs text-(--el-text-muted)">{t('barNothingSaved')}</span>
+        <span className="truncate text-xs text-(--el-text-secondary)">{t('barNothingSaved')}</span>
       </span>
       <div className="ml-auto flex shrink-0 items-center gap-2">
         {deciding ? <Spinner size="sm" aria-hidden="true" /> : null}

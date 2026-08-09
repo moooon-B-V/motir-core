@@ -126,7 +126,7 @@ export function StatusAutomationEditor({
         isAdmin ? (
           <div className="bg-(--el-surface-soft) border-(--el-border-soft) flex items-center justify-end gap-2.5 border-t px-(--spacing-card-padding) py-3.5">
             <span
-              className="text-(--el-text-muted) mr-auto text-xs"
+              className="text-(--el-text-secondary) mr-auto text-xs"
               data-testid="status-automation-footer-hint"
             >
               {dirty ? t('statusAutomation.footer.dirtyHint') : null}
@@ -147,7 +147,7 @@ export function StatusAutomationEditor({
         ) : (
           // Design §5 panel 3 — the shipped read-only band, in place of the save
           // footer. Stated reason, not a silently missing control.
-          <div className="bg-(--el-surface-soft) border-(--el-border-soft) text-(--el-text-muted) flex items-center gap-2.5 border-t px-(--spacing-card-padding) py-3.5 text-xs">
+          <div className="bg-(--el-surface-soft) border-(--el-border-soft) text-(--el-text-secondary) flex items-center gap-2.5 border-t px-(--spacing-card-padding) py-3.5 text-xs">
             <Lock className="size-3.5 shrink-0" aria-hidden />
             {t('statusAutomation.lock')}
           </div>

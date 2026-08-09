@@ -593,7 +593,7 @@ function EmptyGrid({
       <h3 className="font-serif text-base font-semibold text-(--el-text-strong)">
         {owner ? t('grid.emptyTitle') : t('grid.emptyViewerTitle')}
       </h3>
-      <p className="max-w-[44ch] text-sm text-(--el-text-muted)">
+      <p className="max-w-[44ch] text-sm text-(--el-text-secondary)">
         {owner ? t('grid.emptyBody') : t('grid.emptyViewerBody')}
       </p>
       {owner && editing ? (
@@ -764,7 +764,7 @@ function MenuRow({
         danger ? 'text-(--el-text) hover:text-(--el-danger)' : 'text-(--el-text)'
       }`}
     >
-      <span className="shrink-0 text-(--el-text-muted)">{icon}</span>
+      <span className="shrink-0 text-(--el-text-secondary)">{icon}</span>
       {children}
     </button>
   );

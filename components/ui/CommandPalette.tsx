@@ -251,12 +251,12 @@ function PaletteBody({
                         ) : null}
                         <span className="flex-1 truncate">{action.label}</span>
                         {action.badge ? (
-                          <span className="text-(--el-text-muted) shrink-0 rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[10px] font-medium uppercase tracking-wide">
+                          <span className="text-(--el-text-secondary) shrink-0 rounded-(--radius-badge) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-[10px] font-medium uppercase tracking-wide">
                             {action.badge}
                           </span>
                         ) : null}
                         {action.kbd ? (
-                          <kbd className="text-(--el-text-muted) shrink-0 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px]">
+                          <kbd className="text-(--el-text-secondary) shrink-0 rounded-(--radius-kbd) border border-(--el-border) px-(--spacing-kbd-x) py-(--spacing-kbd-y) font-mono text-[10px]">
                             {action.kbd}
                           </kbd>
                         ) : null}

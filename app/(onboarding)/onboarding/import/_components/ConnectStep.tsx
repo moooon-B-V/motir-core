@@ -466,7 +466,7 @@ function CsvConnect({
       >
         <FileUp className="size-6 text-(--el-text-muted)" aria-hidden />
         <span className="text-sm text-(--el-text)">{t('connect.csv.dropzone')}</span>
-        <span className="text-xs text-(--el-text-muted)">{t('connect.csv.dropzoneHint')}</span>
+        <span className="text-xs text-(--el-text-secondary)">{t('connect.csv.dropzoneHint')}</span>
       </button>
       <input
         ref={csvInputRef}

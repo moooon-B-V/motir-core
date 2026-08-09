@@ -55,7 +55,7 @@ export function TriageRow({ item, active, onSelect }: TriageRowProps) {
       </div>
 
       {item.descriptionSnippet ? (
-        <p className="line-clamp-1 pl-6 text-xs text-(--el-text-muted)">
+        <p className="line-clamp-1 pl-6 text-xs text-(--el-text-secondary)">
           {item.descriptionSnippet}
         </p>
       ) : null}

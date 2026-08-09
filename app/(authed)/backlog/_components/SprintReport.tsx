@@ -215,7 +215,7 @@ function PointStat({
       >
         {value}
       </span>
-      <span className="text-xs text-(--el-text-muted)">{label}</span>
+      <span className="text-xs text-(--el-text-secondary)">{label}</span>
     </div>
   );
 }
@@ -313,7 +313,9 @@ function ReportIssueRow({
       className="flex items-center gap-2 rounded-(--radius-control) border border-transparent px-(--spacing-control-x) py-(--spacing-control-y) hover:border-(--el-border-soft) hover:bg-(--el-surface-soft)"
     >
       <IssueTypeIcon type={item.kind as IssueType} className="h-4 w-4 shrink-0" />
-      <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.identifier}</span>
+      <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
+        {item.identifier}
+      </span>
       <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
       <span className="shrink-0">
         {status ? (
@@ -324,7 +326,7 @@ function ReportIssueRow({
       </span>
       {carryOverLabel ? (
         // A carried-over row shows where it went (mock panel 6 "→ Backlog").
-        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-(--el-text-muted)">
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-(--el-text-secondary)">
           <ArrowRight className="h-3.5 w-3.5" aria-hidden />
           {t('sprintReport.carriedTo', { destination: carryOverLabel })}
         </span>

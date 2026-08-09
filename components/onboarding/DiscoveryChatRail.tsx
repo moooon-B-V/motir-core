@@ -95,7 +95,7 @@ export function DiscoveryChatRail({
         {working && (
           <div className="flex items-start gap-2">
             <Avatar role="assistant" initial={t('assistantInitial')} />
-            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-muted)">
+            <div className="flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface-soft) px-3 py-2 text-sm text-(--el-text-secondary)">
               <Spinner size="sm" aria-hidden="true" />
               {working.phase === 'drafting' ? t('drafting') : t('working')}
             </div>
@@ -139,7 +139,7 @@ export function DiscoveryChatRail({
           <Button variant="secondary" size="sm" onClick={() => onSend(t('replies.buildItAll'))}>
             {t('buildItAllLabel')}
           </Button>
-          <p className="flex items-start gap-1.5 text-xs text-(--el-text-muted)">
+          <p className="flex items-start gap-1.5 text-xs text-(--el-text-secondary)">
             <Lock className="mt-0.5 size-3.5 shrink-0 text-(--el-text-faint)" aria-hidden="true" />
             {t('validateLockNote')}
           </p>
@@ -157,7 +157,7 @@ export function DiscoveryChatRail({
           >
             {t('skipLabel')}
           </Button>
-          <p className="text-xs text-(--el-text-muted)">{t('skipHint')}</p>
+          <p className="text-xs text-(--el-text-secondary)">{t('skipHint')}</p>
         </div>
       )}
 

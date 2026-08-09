@@ -185,7 +185,7 @@ export function PublicRequestComments({
               <LogIn className="h-4 w-4 text-(--el-text-muted)" aria-hidden />
               {t('signInToCommentTitle')}
             </div>
-            <p className="text-[12.5px] leading-relaxed text-(--el-text-muted)">
+            <p className="text-[12.5px] leading-relaxed text-(--el-text-secondary)">
               {t('signInToActBody')}
             </p>
             <Link

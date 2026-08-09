@@ -89,19 +89,19 @@ export function TargetSearchListbox({
       {/* The four states, in the design's order. Each is text OUTSIDE the
           listbox — an empty `role="listbox"` violates aria-required-children. */}
       {tooShort ? (
-        <p className="px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-muted)">
+        <p className="px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-secondary)">
           {trimmed.length === 0 ? t('emptyHint') : t('keepTyping')}
         </p>
       ) : loading ? (
         <p
           role="status"
-          className="flex items-center justify-center gap-1.5 px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-muted)"
+          className="flex items-center justify-center gap-1.5 px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-secondary)"
         >
           <Loader2 className="size-3.5 animate-spin text-(--el-text-faint)" aria-hidden="true" />
           {t('searching')}
         </p>
       ) : results.length === 0 ? (
-        <p className="px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-muted)">
+        <p className="px-(--spacing-control-x) py-2 text-center text-xs text-(--el-text-secondary)">
           {t('noResults', { query: trimmed })}
         </p>
       ) : (
@@ -127,12 +127,12 @@ export function TargetSearchListbox({
               )}
             >
               <IssueTypeIcon type={item.kind as IssueType} className="size-4 shrink-0" />
-              <span
-                className={cn(
-                  'shrink-0 font-mono text-xs',
-                  index === activeIndex ? 'text-(--el-text-secondary)' : 'text-(--el-text-muted)',
-                )}
-              >
+              {/* One ink for both states: only the ACTIVE row is tinted, but a
+                  conditional background is not something the ink scanner can
+                  correlate with the branch that paints it, and
+                  `--el-text-secondary` is AA on the tint and off it alike
+                  (MOTIR-2477). */}
+              <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
                 {item.identifier}
               </span>
               <span className="min-w-0 flex-1 truncate">{item.title}</span>

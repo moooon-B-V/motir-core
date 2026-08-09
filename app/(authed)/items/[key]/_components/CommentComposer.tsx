@@ -102,7 +102,10 @@ export function CommentComposer({
           ref={restRef}
           type="button"
           onClick={() => setExpanded(true)}
-          className="border-(--el-border) bg-(--el-surface) text-(--el-text-muted) hover:border-(--el-border-strong) hover:text-(--el-text-secondary) h-(--height-control) min-w-0 flex-1 rounded-(--radius-input) border px-(--spacing-control-x) text-left font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          // The placeholder ink was `--el-text-muted`, which is 4.17:1 on this
+          // button's own `--el-surface` (MOTIR-2477); the hover step it used to
+          // make is now the resting state, so only the border moves on hover.
+          className="border-(--el-border) bg-(--el-surface) text-(--el-text-secondary) hover:border-(--el-border-strong) h-(--height-control) min-w-0 flex-1 rounded-(--radius-input) border px-(--spacing-control-x) text-left font-sans text-sm focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
         >
           {t('addPlaceholder')}
         </button>

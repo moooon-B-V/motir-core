@@ -485,7 +485,9 @@ export function ProjectMembersSettings({
         {!canManage ? (
           <div className="mb-3 flex items-center gap-2 rounded-(--radius-card) bg-(--el-surface) p-(--spacing-control-y) px-(--spacing-control-x)">
             <Info className="size-4 shrink-0 text-(--el-text-muted)" aria-hidden />
-            <p className="text-(--el-text-muted) font-sans text-xs">{t('access.readOnlyNote')}</p>
+            <p className="text-(--el-text-secondary) font-sans text-xs">
+              {t('access.readOnlyNote')}
+            </p>
           </div>
         ) : null}
 

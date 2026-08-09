@@ -337,7 +337,7 @@ function SeatSummaryBand({ seat, seats }: { seat: SeatSummaryDTO; seats: number 
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-sans text-sm font-semibold text-(--el-text) tabular-nums">
             {t('seat.count', { n: seats })}
-            <span className="text-(--el-text-muted) font-normal">
+            <span className="text-(--el-text-secondary) font-normal">
               {' · '}
               {t('seat.price', { total, period })}
             </span>
@@ -354,7 +354,7 @@ function SeatSummaryBand({ seat, seats }: { seat: SeatSummaryDTO; seats: number 
             </Pill>
           )}
           {!pastDue && seat.cadence === 'annual' && saving > 0 ? (
-            <span className="text-(--el-text-muted) font-sans text-xs">
+            <span className="text-(--el-text-secondary) font-sans text-xs">
               {t('seat.annualSaving', { save: saving })}
             </span>
           ) : null}
@@ -366,7 +366,7 @@ function SeatSummaryBand({ seat, seats }: { seat: SeatSummaryDTO; seats: number 
           ) : null}
         </div>
 
-        <p className="text-(--el-text-muted) mt-1 font-sans text-xs leading-relaxed">
+        <p className="text-(--el-text-secondary) mt-1 font-sans text-xs leading-relaxed">
           {pastDue
             ? t('seat.pastDueNote')
             : seat.canManageBilling

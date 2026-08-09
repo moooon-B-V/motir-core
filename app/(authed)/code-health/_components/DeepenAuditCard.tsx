@@ -170,7 +170,7 @@ function ToolRow({
           {t(tool === 'codeql' ? 'deepen.codeql.action' : 'deepen.sonar.action')}
         </Button>
       </div>
-      <p className="mt-1 text-xs text-(--el-text-muted)">
+      <p className="mt-1 text-xs text-(--el-text-secondary)">
         {t(tool === 'codeql' ? 'deepen.codeql.blurb' : 'deepen.sonar.blurb')}
       </p>
     </div>
@@ -200,7 +200,7 @@ export function DeepenAuditCard({
       className="flex flex-col gap-3 rounded-(--radius-card) border border-(--el-border) bg-(--el-surface-soft) p-(--spacing-card-padding)"
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-(--el-text-muted)">
+        <span className="text-xs font-medium uppercase tracking-wide text-(--el-text-secondary)">
           {t('deepen.eyebrow')}
         </span>
         <button
@@ -232,7 +232,7 @@ export function DeepenAuditCard({
         </div>
       ) : (
         <>
-          <p className="text-xs font-medium text-(--el-text-muted)">{t('deepen.bestFit')}</p>
+          <p className="text-xs font-medium text-(--el-text-secondary)">{t('deepen.bestFit')}</p>
           <div className="flex flex-col gap-2">
             {(['codeql', 'sonar'] as Tool[])
               .sort((a) => (a === recommended ? -1 : 1))
@@ -258,7 +258,7 @@ export function DeepenAuditCard({
         </>
       )}
 
-      <p className="text-xs text-(--el-text-muted)">{t('deepen.footerHint')}</p>
+      <p className="text-xs text-(--el-text-secondary)">{t('deepen.footerHint')}</p>
     </section>
   );
 }

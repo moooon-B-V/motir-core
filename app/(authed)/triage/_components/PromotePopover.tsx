@@ -120,7 +120,7 @@ export function PromotePopover({ busy, onPromote }: PromotePopoverProps) {
         <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center">{icon}</span>
         <span className="flex flex-1 flex-col">
           <span className="text-sm font-medium text-(--el-text)">{label}</span>
-          <span className="text-xs text-(--el-text-muted)">{sub}</span>
+          <span className="text-xs text-(--el-text-secondary)">{sub}</span>
         </span>
         {chevron ? <ChevronRight className="h-4 w-4 text-(--el-text-faint)" aria-hidden /> : null}
       </button>

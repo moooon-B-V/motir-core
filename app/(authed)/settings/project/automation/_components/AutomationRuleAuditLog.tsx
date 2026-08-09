@@ -237,7 +237,7 @@ function ExecutionRow({ execution }: { execution: AutomationExecutionDto }) {
               aria-expanded={expanded}
               aria-label={t('expandFailureAria')}
               onClick={() => setExpanded((v) => !v)}
-              className="inline-flex size-6 items-center justify-center rounded-(--radius-control) text-(--el-text-muted) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+              className="inline-flex size-6 items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) hover:bg-(--el-muted) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
             >
               {expanded ? (
                 <ChevronUp className="size-4" aria-hidden />

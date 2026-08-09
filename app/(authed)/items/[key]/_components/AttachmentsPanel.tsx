@@ -419,7 +419,7 @@ export function AttachmentsPanel({
                       <span className="text-(--el-text) truncate font-sans text-xs font-medium">
                         {upload.filename}
                       </span>
-                      <span className="text-(--el-text-muted) ml-auto font-sans text-[11px] tabular-nums">
+                      <span className="text-(--el-text-secondary) ml-auto font-sans text-[11px] tabular-nums">
                         {upload.progress === null ? t('uploading') : `${upload.progress}%`}
                       </span>
                     </div>
@@ -645,17 +645,17 @@ function AttachmentRow({
         </span>
       </button>
       {attachment.source === 'editor' ? <SourceChip className="shrink-0" /> : null}
-      <span className="text-(--el-text-muted) w-[58px] shrink-0 text-right font-sans text-xs tabular-nums">
+      <span className="text-(--el-text-secondary) w-[58px] shrink-0 text-right font-sans text-xs tabular-nums">
         {formatBytes(attachment.sizeBytes)}
       </span>
       <span
-        className="text-(--el-text-muted) w-[76px] shrink-0 truncate font-sans text-xs"
+        className="text-(--el-text-secondary) w-[76px] shrink-0 truncate font-sans text-xs"
         title={format.dateTime(createdAt, { dateStyle: 'medium', timeStyle: 'short' })}
       >
         {format.relativeTime(createdAt)}
       </span>
       <span
-        className="text-(--el-text-muted) w-[92px] shrink-0 truncate font-sans text-xs"
+        className="text-(--el-text-secondary) w-[92px] shrink-0 truncate font-sans text-xs"
         title={attachment.uploader.name}
       >
         {attachment.uploader.name}

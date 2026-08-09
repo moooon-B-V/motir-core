@@ -145,7 +145,9 @@ export function BacklogRowBody({
       ) : null}
       {checkbox}
       <IssueTypeIcon type={item.kind as IssueType} className="h-4 w-4 shrink-0" />
-      <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">{item.identifier}</span>
+      <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
+        {item.identifier}
+      </span>
       <span className="min-w-0 flex-1 truncate text-sm text-(--el-text)">{item.title}</span>
       {trailing}
       {/* The estimate seam the 4.2 row reserved is FILLED (Subtask 4.3.4) by the

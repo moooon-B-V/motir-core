@@ -183,7 +183,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           <QuickViewCloseButton variant="icon" onClose={props.onClose} />
         </header>
         <div className="flex flex-1 flex-col items-center justify-center gap-2 px-8 text-center">
-          <span className="mb-1.5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-muted)">
+          <span className="mb-1.5 inline-flex h-14 w-14 items-center justify-center rounded-full bg-(--el-muted) text-(--el-text-secondary)">
             <SearchX className="h-7 w-7" aria-hidden />
           </span>
           <h2 className="font-serif text-lg font-semibold text-(--el-text)">
@@ -425,7 +425,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     <span className="truncate">{tl(`workItemType.${data.type}`)}</span>
                   </>
                 ) : (
-                  <span className="text-(--el-text-muted)">{t('none')}</span>
+                  <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}
               </RailField>
               <RailField label={t('executor')}>
@@ -438,7 +438,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     <span className="truncate">{tl(`executor.${data.executor}`)}</span>
                   </>
                 ) : (
-                  <span className="text-(--el-text-muted)">{t('none')}</span>
+                  <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}
               </RailField>
             </>
@@ -467,7 +467,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 <span className="truncate text-(--el-text-secondary)">{data.parent.title}</span>
               </Link>
             ) : (
-              <span className="text-(--el-text-muted)">{t('none')}</span>
+              <span className="text-(--el-text-secondary)">{t('none')}</span>
             )}
           </RailField>
 
@@ -486,7 +486,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 ))}
               </div>
             ) : (
-              <span className="text-(--el-text-muted)">{t('noLabels')}</span>
+              <span className="text-(--el-text-secondary)">{t('noLabels')}</span>
             )}
           </RailField>
 
@@ -502,7 +502,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 ))}
               </div>
             ) : (
-              <span className="text-(--el-text-muted)">{t('noComponents')}</span>
+              <span className="text-(--el-text-secondary)">{t('noComponents')}</span>
             )}
           </RailField>
 
@@ -510,7 +510,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             {data.dueLabel ? (
               <span className="truncate">{data.dueLabel}</span>
             ) : (
-              <span className="text-(--el-text-muted)">{t('noDueDate')}</span>
+              <span className="text-(--el-text-secondary)">{t('noDueDate')}</span>
             )}
           </RailField>
 
@@ -524,7 +524,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                   <span className="truncate">{data.sprintName}</span>
                 </>
               ) : (
-                <span className="text-(--el-text-muted)">{sprintEmptyLabel}</span>
+                <span className="text-(--el-text-secondary)">{sprintEmptyLabel}</span>
               )}
             </RailField>
           ) : null}
@@ -537,7 +537,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 <span className="truncate">{numberFormat.format(data.storyPoints)}</span>
               </>
             ) : (
-              <span className="text-(--el-text-muted)">{t('none')}</span>
+              <span className="text-(--el-text-secondary)">{t('none')}</span>
             )}
           </RailField>
 
@@ -548,7 +548,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                 <span className="truncate">{data.estimateLabel}</span>
               </>
             ) : (
-              <span className="text-(--el-text-muted)">{t('noEstimate')}</span>
+              <span className="text-(--el-text-secondary)">{t('noEstimate')}</span>
             )}
           </RailField>
 
@@ -593,7 +593,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
 
           {/* Created / Updated — the quiet audit line at the foot. */}
           <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
-          <div className="flex flex-col gap-1 font-sans text-xs text-(--el-text-muted)">
+          <div className="flex flex-col gap-1 font-sans text-xs text-(--el-text-secondary)">
             <span>
               {t('created')} {formatDate(data.createdAt, locale)}
             </span>

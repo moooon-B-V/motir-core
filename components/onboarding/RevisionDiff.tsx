@@ -78,7 +78,7 @@ function DiffRow({ entry }: { entry: DocDiffEntry }) {
 
       <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
         {entry.kind !== 'added' && (
-          <span className="text-(--el-text-muted) line-through">
+          <span className="text-(--el-text-secondary) line-through">
             {formatDiffValue(entry.before)}
           </span>
         )}
