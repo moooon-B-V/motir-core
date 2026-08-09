@@ -243,7 +243,15 @@ test.describe('build-in-public — start/stop + badge + access gating', () => {
     await anonCtx.close();
   });
 
-  test('a non-admin gets no entry CTA on a non-public project and only a read-only badge (no Stop) on a public one', async ({
+  // ⚠️ THE SETTINGS LEGS WERE INVERTED BY MOTIR-2258 (`design-notes.md` §
+  // *Amendment 2026-08-08*). They read the access control on
+  // `/settings/project/members` as a non-admin and asserted a DISABLED radio and
+  // a read-only badge — the 2026-06-09 treatment. That page now refuses a
+  // non-admin outright, so those two assertions describe a screen this actor can
+  // no longer reach. What they were really protecting — that a non-admin cannot
+  // START or STOP building in public — is unchanged and asserted here as a
+  // refusal, which is a stronger claim than a disabled control.
+  test('a non-admin gets no entry CTA, and is refused the access surface entirely', async ({
     page,
   }) => {
     const tenant = await seedTenant('bip-owner-2@example.com', 'BIN');
@@ -259,26 +267,28 @@ test.describe('build-in-public — start/stop + badge + access gating', () => {
     await expect(page).toHaveURL(/\/dashboard/);
     await expect(page.getByRole('button', { name: ENTRY_CTA, exact: true })).toHaveCount(0);
 
-    // In settings the access control renders read-only: the `public` ("Building in
-    // public") radio is present but DISABLED — a non-admin cannot start either.
+    // And the settings surface that owns the access control refuses them: the
+    // radio is not disabled, it is not reachable.
     await page.goto('/settings/project/members');
-    const accessGroup = page.getByRole('radiogroup', { name: ACCESS_GROUP });
-    await expect(accessGroup).toBeVisible({ timeout: 30_000 });
-    await expect(accessGroup.getByRole('radio', { name: /^Building in public/ })).toBeDisabled();
+    await expect(page.getByText('Admins only')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('radiogroup', { name: ACCESS_GROUP })).toHaveCount(0);
 
     // ── 3b. PUBLIC project: the non-admin sees the badge READ-ONLY, no Stop ────
     // Flip access directly (the non-admin can't, and the admin make-public flow is
     // covered by test 1) so this leg isolates the per-role manage gating.
     await db.project.update({ where: { id: tenant.projectId }, data: { accessLevel: 'public' } });
 
-    await page.goto('/settings/project/members');
-    await expect(manageRow(page).getByText(STATUS_BADGE, { exact: true })).toBeVisible({
+    // The team-visible STATUS is unaffected — it lives in the app header, is shown
+    // to all team members by design (6.17.6c: status to the team, control gated at
+    // the destination), and this story did not touch it.
+    await page.goto('/dashboard');
+    await expect(page.getByText(STATUS_BADGE, { exact: true }).first()).toBeVisible({
       timeout: 30_000,
     });
-    // No Stop action for a non-admin — the manage gate stays legible (badge + link
-    // read-only) rather than the control vanishing entirely.
+    // But the CONTROL is still out of reach, now by refusal rather than by a
+    // disabled button on a page they could open.
+    await page.goto('/settings/project/members');
+    await expect(page.getByText('Admins only')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByRole('button', { name: STOP_ACTION, exact: true })).toHaveCount(0);
-    // The read-only "View public page" link is still offered.
-    await expect(page.getByRole('link', { name: 'View public page' })).toBeVisible();
   });
 });

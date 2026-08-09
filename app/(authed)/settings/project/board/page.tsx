@@ -3,8 +3,6 @@ import { getTranslations } from 'next-intl/server';
 import { Columns3, SearchX } from 'lucide-react';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { isOwnerRole } from '@/lib/workspaces/roles';
-import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { boardsService } from '@/lib/services/boardsService';
 import { BoardNotFoundError } from '@/lib/boards/errors';
@@ -86,8 +84,12 @@ export default async function ProjectBoardSettingsPage({
   const sp = await searchParams;
   const selectedBoardId = resolveSelectedBoardId(sp.board);
 
-  const role = await workspacesService.getMemberRole(ctx.userId, ctx.workspaceId);
-  const isAdmin = isOwnerRole(role);
+  // MOTIR-2473 retired the private admin derivation that used to sit here — a
+  // WORKSPACE-OWNER check (`isOwnerRole`) standing in for "may configure this",
+  // which was both a second policy and a tighter one than the key the service
+  // actually asserts. The page is reached only by an actor who holds its registry
+  // key (the guard above), so the edit affordances are simply on.
+  const isAdmin = true;
 
   let projection;
   try {

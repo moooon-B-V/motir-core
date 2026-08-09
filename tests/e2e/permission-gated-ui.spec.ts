@@ -58,7 +58,7 @@ const settingsDoor = (page: Page) => page.getByRole('link', { name: 'Settings', 
 /** Land in the project shell as `email`, with the active project already pinned. */
 async function enterShellAs(page: Page, email: string): Promise<void> {
   await signIn(page, email, seed.password);
-  await expect(page.getByRole('link', { name: 'Work items' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
 }
 
 test('an ADMIN keeps the whole shell — nothing was taken away', async ({ page }) => {
@@ -144,7 +144,10 @@ test('a MEMBER is offered no settings area — and the room is still shut', asyn
   await expect(page.getByRole('button', { name: /add a member/i })).toHaveCount(0);
 
   // The project nav is otherwise intact — a member's work surfaces are untouched.
-  for (const label of ['Dashboard', 'Work items', 'Boards', 'Backlog', 'Reports', 'Triage']) {
+  // ⚠️ Leave the settings AREA first: inside it the rail SWAPS to the settings
+  // nav, so asserting project-nav rows there fails for the wrong reason.
+  await page.goto('/dashboard');
+  for (const label of ['Dashboard', 'Work Items', 'Boards', 'Backlog', 'Reports', 'Triage']) {
     await expect(page.getByRole('link', { name: label }), label).toBeVisible();
   }
 });
@@ -159,7 +162,7 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
     await expect(page.getByRole('link', { name: gone, exact: true }), gone).toHaveCount(0);
   }
   // Every read surface stays — the primary nav never renders empty.
-  for (const kept of ['Dashboard', 'Work items', 'Boards', 'Roadmap', 'Backlog', 'Reports']) {
+  for (const kept of ['Dashboard', 'Work Items', 'Boards', 'Roadmap', 'Backlog', 'Reports']) {
     await expect(page.getByRole('link', { name: kept, exact: true }), kept).toBeVisible();
   }
 
@@ -169,10 +172,19 @@ test('a VIEWER loses the destinations that refuse them, and keeps every read', a
   await expect(create).toBeVisible();
   await expect(create).toHaveAttribute('aria-disabled', 'true');
 
-  // The board carries its read-only banner and its cards do not drag.
+  // The board is read-only, and its cards do not drag.
   await page.getByRole('link', { name: 'Boards', exact: true }).click();
   await page.waitForURL('**/boards');
-  await expect(page.getByText(/read-only access/i)).toBeVisible();
+  // The board is read-only for a viewer. Asserted on the DISABLED create control
+  // rather than the banner: the banner renders in both of `BoardContainer`'s
+  // branches but only once a board projection exists, and a freshly seeded
+  // project's board state is not something this spec should depend on. The
+  // toolbar's presence proves the can-browse branch rendered; its disabled state
+  // is the read-only gate still holding — the same pair
+  // `acceptance-roles-permissions.spec.ts` already relies on.
+  const newWorkItem = page.getByRole('button', { name: 'New work item' }).first();
+  await expect(newWorkItem).toBeVisible({ timeout: 30_000 });
+  await expect(newWorkItem, 'a viewer must still not be able to create work items').toBeDisabled();
 
   // The issue detail offers no Edit door, and the edit route is guarded.
   await page.goto(`/items/${seed.itemKey}`);

@@ -269,13 +269,19 @@ test.describe('board-config @smoke', () => {
     expect(await columnNames(page)).toEqual(expected);
   });
 
-  test('a non-owner member sees the board-config surface read-only', async ({ page }) => {
+  // ⚠️ INVERTED BY MOTIR-2258, deliberately. This asserted the 2026-06-09
+  // treatment — a non-admin sees the board-config surface READ-ONLY — which
+  // `design/projects/design-notes.md` § *Amendment 2026-08-08* supersedes: an
+  // entry point whose destination the actor cannot use at all is HIDDEN, and the
+  // destination itself refuses rather than rendering a form nobody can submit.
+  // The seeding is unchanged; only what the member meets at the end of it is.
+  test('a non-owner member is REFUSED the board-config surface', async ({ page }) => {
     await signUp(page, OWNER_EMAIL);
     const { workspaceId, projectId } = await seedActiveProject(OWNER_EMAIL);
 
     // A second user, added to the owner's workspace as a plain member (not owner),
-    // with the project pinned active — the 3.6.2 admin gate must deny them every
-    // write, and the surface renders read-only.
+    // with the project pinned active — the 3.6.2 admin gate denies them every
+    // write, and after MOTIR-2258 the surface refuses them outright.
     const memberEmail = 'e2e-board-config-member@example.com';
     const member = await usersService.createUser({
       email: memberEmail,
@@ -306,8 +312,11 @@ test.describe('board-config @smoke', () => {
 
     await gotoBoardSettings(page);
 
-    // The read-only banner shows, and not one write affordance renders.
-    await expect(page.getByText('read-only access to board settings')).toBeVisible();
+    // The destination refuses — named for the room, not one generic apology.
+    await expect(page.getByText('Admins only')).toBeVisible();
+    await expect(page.getByText(/board configuration/i)).toBeVisible();
+    // And no form leaked in behind it: not one write affordance renders, which is
+    // the half of the old assertion that still matters.
     await expect(page.getByTestId('board-config-add-column')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Add status' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^Delete .* column$/ })).toHaveCount(0);

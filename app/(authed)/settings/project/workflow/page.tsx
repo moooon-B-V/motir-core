@@ -2,8 +2,6 @@ import { redirect } from 'next/navigation';
 import { getTranslations } from 'next-intl/server';
 import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
-import { isOwnerRole } from '@/lib/workspaces/roles';
-import { workspacesService } from '@/lib/services/workspacesService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { projectStatusAutomationService } from '@/lib/services/projectStatusAutomationService';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -42,8 +40,12 @@ export default async function ProjectWorkflowPage() {
   const refused = await guardSettingsPage('workflow', ctx);
   if (refused) return refused;
 
-  const role = await workspacesService.getMemberRole(ctx.userId, ctx.workspaceId);
-  const isAdmin = isOwnerRole(role);
+  // MOTIR-2473 retired the private admin derivation that used to sit here — a
+  // WORKSPACE-OWNER check (`isOwnerRole`) standing in for "may configure this",
+  // which was both a second policy and a tighter one than the key the service
+  // actually asserts. The page is reached only by an actor who holds its registry
+  // key (the guard above), so the edit affordances are simply on.
+  const isAdmin = true;
   const workflow = await workflowsService.getWorkflow(ctx.projectId, ctx.workspaceId);
   // Story MOTIR-1615 · MOTIR-1622 — the two status-derivation switches live on
   // THIS page (design/projects/design-notes.md §1): they govern how a status move

@@ -68,7 +68,7 @@ test('the shell shows each person the rooms they were given', async ({
 
   await chapter('A project admin: every door is there', async () => {
     await signIn(page, seed.adminEmail, seed.password);
-    await expect(page.getByRole('link', { name: 'Work items' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
     // The Project settings door, in the footer of the nav
     await beat();
     await expect(page.getByRole('link', { name: 'Settings', exact: true })).toBeVisible();
@@ -85,7 +85,7 @@ test('the shell shows each person the rooms they were given', async ({
   await chapter('The same shell, as a project member: the door is not there', async () => {
     await signOut(page);
     await signIn(page, seed.memberEmail, seed.password);
-    await expect(page.getByRole('link', { name: 'Work items' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
 
     // No Project settings row — and nothing marks the gap
     await beat();
@@ -109,7 +109,7 @@ test('the shell shows each person the rooms they were given', async ({
   await chapter('As a viewer: fewer rooms, and the same controls as before', async () => {
     await signOut(page);
     await signIn(page, seed.viewerEmail, seed.password);
-    await expect(page.getByRole('link', { name: 'Work items' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Work Items' })).toBeVisible();
 
     // The destinations that would refuse them are gone from the nav
     await beat();
@@ -129,8 +129,10 @@ test('the shell shows each person the rooms they were given', async ({
 
     await page.getByRole('link', { name: 'Boards', exact: true }).click();
     await page.waitForURL('**/boards');
-    // The board is read-only, and says so
+    // The board is read-only — the create control is there, and refuses
     await beat();
-    await expect(page.getByText(/read-only access/i)).toBeVisible();
+    const newWorkItem = page.getByRole('button', { name: 'New work item' }).first();
+    await expect(newWorkItem).toBeVisible({ timeout: 30_000 });
+    await expect(newWorkItem).toBeDisabled();
   });
 });
