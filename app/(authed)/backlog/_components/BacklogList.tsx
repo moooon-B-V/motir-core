@@ -306,6 +306,20 @@ export function BacklogRows({
 
   return (
     <div ref={setDropRef} className={dropClass}>
+      {/* The SCROLL viewport is the `list` (MOTIR-2493) — its rows are
+          `role="listitem"` (`BacklogRowBody`), which is the pairing that was
+          missing while they claimed `role="row"`. The role stays on THIS element
+          rather than moving down to the sortable container because it is the
+          scrollable, labelled region the a11y tree and the E2E contract both
+          address (`getByRole('list', { name: 'Backlog work items' })`, which the
+          at-scale spec also SCROLLS to drive lazy-load).
+          The `SortableContext` container and the per-row absolute-position
+          wrappers below carry NO role: a role-less element is transparent to
+          list→listitem ownership, so the chain resolves through them (axe's
+          `aria-required-children` descends into any child with no role and no
+          global aria/focusability; `aria-required-parent` skips them walking up).
+          Do not give either wrapper a role without re-running the /backlog sweep
+          in shell-a11y-wide.spec.ts. */}
       <div
         ref={viewportRef}
         role="list"
@@ -346,6 +360,13 @@ export function BacklogRows({
                     assigneeNameById={assigneeNameById}
                     regionKind={regionKind}
                     sprintId={sprintId}
+                    // The RANK, announced (MOTIR-2493). `index` is the position
+                    // in the ranked list, not in the mounted window, and the set
+                    // size is the AGGREGATE `totalCount` — the same number the
+                    // bounded count header reads (finding #57), never
+                    // `items.length`, which is only what has been paged in.
+                    posInSet={index + 1}
+                    setSize={totalCount}
                   />
                 </div>
               );

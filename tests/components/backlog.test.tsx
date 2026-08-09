@@ -285,10 +285,62 @@ describe('BacklogContainer (4.2.3 read render)', () => {
     const row = await screen.findByTestId('backlog-row-PROD-150');
     // `useSortable` marks the row a draggable item (aria-roledescription) inside
     // the backlog's single DndContext, and the whole row is the grab handle — the
-    // 4.2.4 drag wiring — while the design's row semantics (role="row") survive.
+    // 4.2.4 drag wiring — while the row's list semantics survive the spread.
+    // Both halves matter: the role is re-asserted AFTER dnd-kit's attributes, so
+    // a regression in that order silently hands the row back to role="button".
     expect(row.getAttribute('aria-roledescription')).toBe('sortable');
-    expect(row.getAttribute('role')).toBe('row');
+    expect(row.getAttribute('role')).toBe('listitem');
     expect(row.className).toContain('cursor-grab');
+  });
+
+  // ── MOTIR-2493: the container's role and the rows' role must COMPOSE ────────
+  // The defect was two roles picked independently: a `role="list"` viewport whose
+  // rows claimed `role="row"`. A `list` requires `listitem` children and a `row`
+  // requires a rowgroup/grid/table/treegrid parent, so BOTH `aria-required-children`
+  // and `aria-required-parent` failed CRITICAL on every populated backlog — and a
+  // screen reader resolved neither promise. These assertions are the cheap tier of
+  // that guard (the authoritative one is the zero-exclusion axe sweep of /backlog
+  // in tests/e2e/shell-a11y-wide.spec.ts); they exist because a role pairing is
+  // exactly the kind of thing that gets half-changed.
+  it('composes list semantics: the labelled list OWNS listitem rows, and no row role survives', async () => {
+    mockFetch({
+      sprints: [sprint({ id: 'sp1', name: 'Sprint 7', state: 'active', issueCount: 1 })],
+      backlog: {
+        items: [item({ id: 'b1', key: 150 }), item({ id: 'b2', key: 151 })],
+        // Only 2 of 90 paged in — the set size a screen reader hears must be the
+        // AGGREGATE, not the mounted window (the list is virtualized + lazy).
+        nextCursor: 'cursor-1',
+        totalCount: 90,
+      },
+      sprintIssues: { items: [item({ id: 's1', key: 201 })], nextCursor: null, totalCount: 1 },
+    });
+
+    render(<BacklogContainer workflow={workflow} members={members} projectName="motir" />);
+
+    const list = await screen.findByRole('list', { name: 'Backlog work items' });
+    const rows = within(list).getAllByRole('listitem');
+    expect(rows.map((r) => r.getAttribute('data-testid'))).toEqual([
+      'backlog-row-PROD-150',
+      'backlog-row-PROD-151',
+    ]);
+    // The rank is announced against the aggregate, so "1 of 90" — never "1 of 2".
+    expect(rows.map((r) => r.getAttribute('aria-posinset'))).toEqual(['1', '2']);
+    expect(rows.map((r) => r.getAttribute('aria-setsize'))).toEqual(['90', '90']);
+
+    // The SPRINT region composes identically — it is the same `BacklogRows`, and
+    // the defect would recur per-region if the role lived at a call site.
+    const sprintRows = within(
+      screen.getByRole('list', { name: 'Sprint 7 work items' }),
+    ).getAllByRole('listitem');
+    expect(sprintRows).toHaveLength(1);
+    expect(sprintRows[0]!.getAttribute('role')).toBe('listitem');
+
+    // Nothing anywhere on the page claims `row` any more, and no row carries the
+    // `aria-selected` that `listitem` does not allow.
+    expect(document.querySelectorAll('[role="row"]')).toHaveLength(0);
+    expect(document.querySelectorAll('[data-testid^="backlog-row-"][aria-selected]')).toHaveLength(
+      0,
+    );
   });
 });
 
