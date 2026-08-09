@@ -107,7 +107,15 @@ export function OrgGeneralCard({
           value={slug}
           readOnly
           disabled
-          addonStart={<span className="text-(--el-text-secondary)">motir.co/</span>}
+          // The testid is the anchor for the a11y sweep's named carve-out
+          // (MOTIR-2482 → MOTIR-2495): the disabled Input's `opacity-50`
+          // composites this affix below AA, and no ink fixes it. MOTIR-2495
+          // decides the disabled treatment and removes both.
+          addonStart={
+            <span data-testid="org-url-affix" className="text-(--el-text-secondary)">
+              motir.co/
+            </span>
+          }
           helperText={t('settings.urlHint')}
         />
       </div>
