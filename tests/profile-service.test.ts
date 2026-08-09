@@ -16,12 +16,13 @@ import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 // assertable without touching object storage. The mock returns the object KEY,
 // which is what `putPublicAsset` returns since MOTIR-2404.
 //
-// Three storage forms appear below and all three are deliberate: a KEY is what
-// is written today; the CONFIGURED-origin and LEGACY-Vercel absolute URLs are
-// what rows written before MOTIR-2404 / MOTIR-2389 still carry. The read
-// tolerance for those two is what let the storage change ship with no backfill,
-// so it is covered here rather than assumed.
-const TEST_BLOB_HOST = 'teststore.public.blob.vercel-storage.com';
+// Two storage forms appear below and both are deliberate: a KEY is what is
+// written today, and the CONFIGURED-origin absolute URL is what rows written
+// before MOTIR-2404 still carry. The read tolerance for the second is what let
+// the storage change ship with no backfill, so it is covered here rather than
+// assumed. (A third — an absolute URL on the retired Vercel public host — was
+// dropped with the rest of the abandoned path by MOTIR-2393, against a measured
+// ZERO rows with a non-null `image`.)
 const PUBLIC_BASE = 'https://s3.test.invalid/motir-public';
 
 vi.mock('@/lib/blob/uploader', () => ({
@@ -39,9 +40,9 @@ const ownAvatarKey = (userId: string, name: string) => `avatars/${userId}/${name
 /** What the DTO carries for that key — the key resolved against the public base. */
 const resolved = (key: string) => `${PUBLIC_BASE}/${key}`;
 
-/** A pre-MOTIR-2389 row: an absolute URL on the retired Vercel public host. */
-const legacyAvatarUrl = (userId: string, name: string) =>
-  `https://${TEST_BLOB_HOST}/avatars/${userId}/${name}`;
+/** A pre-MOTIR-2404 row: the same object, stored as an absolute URL. */
+const absoluteAvatarUrl = (userId: string, name: string) =>
+  `${PUBLIC_BASE}/avatars/${userId}/${name}`;
 
 const fileOf = (name: string, type: string, bytes = 8) =>
   new File([new Uint8Array(bytes)], name, { type });
@@ -149,16 +150,16 @@ describe('usersService.updateProfile — avatar', () => {
     );
   });
 
-  it('accepts a LEGACY absolute row, passes it through, and still GCs it', async () => {
+  it('accepts a pre-MOTIR-2404 ABSOLUTE row, passes it through, and still GCs it', async () => {
     const user = await createTestUser();
-    const legacy = legacyAvatarUrl(user.id, 'old.png');
+    const legacy = absoluteAvatarUrl(user.id, 'old.png');
     await db.user.update({ where: { id: user.id }, data: { image: legacy } });
 
     // Read tolerance: an absolute value is returned untouched, never re-prefixed.
     expect((await usersService.getProfile(user.id))?.image).toBe(legacy);
 
     // And it is still recognised as ours, so replacing it collects the object —
-    // by KEY, which is where MOTIR-2401 copied it to.
+    // by KEY, which is what the column holds today.
     const next = ownAvatarKey(user.id, 'new.png');
     await usersService.updateProfile(user.id, { image: next });
     expect(deletePublicAsset).toHaveBeenCalledWith('avatars/' + user.id + '/old.png');
@@ -174,7 +175,11 @@ describe('usersService.updateProfile — avatar', () => {
     await reject('https://evil.example.com/x.png');
     // Another user's prefix, in BOTH storage forms.
     await reject(ownAvatarKey('someone-else', 'x.png'));
-    await reject(legacyAvatarUrl('someone-else', 'x.png'));
+    await reject(absoluteAvatarUrl('someone-else', 'x.png'));
+    // An own-prefix path on an origin that is not the configured public bucket
+    // is somebody else's object — the arm that used to accept the retired
+    // platform's host is gone (MOTIR-2393).
+    await reject(`https://teststore.public.store.invalid/avatars/${user.id}/x.png`);
     // The containment trap the gate's own comment names: a filename that merely
     // CONTAINS our prefix must not read as ours.
     await reject('avatars/someone-else/x-avatars-' + user.id + '-y.png');

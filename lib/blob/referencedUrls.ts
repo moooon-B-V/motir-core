@@ -17,26 +17,6 @@
 // "referenced" means, or an edit could unlink a file the body still displays.
 
 /**
- * The PRE-MIGRATION public host suffix (`<storeId>.public.blob.vercel-storage.com`).
- * Used by the AVATAR path — avatars are PUBLIC (a profile picture renders
- * everywhere with no per-item auth), so they keep a public URL and the
- * host+prefix validation below. Content attachments no longer use it.
- *
- * ⚠️ MOTIR-2389 moved new public assets onto the S3 public bucket, so this is
- * no longer the host anything is WRITTEN to. MOTIR-2404 then stopped `User.image`
- * persisting an absolute URL at all — it now stores the object KEY — so nothing
- * this codebase writes carries this host in either form.
- *
- * It is kept for READ tolerance only: a row written before either change still
- * carries it, and {@link storedAssetUrl} passes such a value through untouched
- * while {@link storedAssetKey} still resolves it to a key the GC can delete.
- * That tolerance is what let MOTIR-2404 ship with no backfill. Retiring the
- * constant is MOTIR-2393's (the abandoned-Vercel-path deletion), whose `BLOB_`
- * grep already reaches this line.
- */
-export const BLOB_PUBLIC_HOST_SUFFIX = '.public.blob.vercel-storage.com';
-
-/**
  * The authenticated content path an attachment is served + embedded under
  * (MOTIR-1667). The single source of truth for both the DTO/embed value and the
  * keep-linked substring probe — they MUST agree.
@@ -113,16 +93,20 @@ export function avatarBlobPrefix(userId: string): string {
  * throws).
  *
  * ⚠️ It takes a STORED REFERENCE, not a URL (MOTIR-2404). `User.image` now holds
- * the object KEY for our own avatars, so the three accepted forms are:
+ * the object KEY for our own avatars, so the two accepted forms are:
  *  - a bare KEY (`avatars/<userId>/…`) — what `uploadAvatar` returns today;
  *  - the CONFIGURED public bucket origin (`MOTIR_S3_PUBLIC_BASE_URL`) — what it
- *    returned between MOTIR-2389 and MOTIR-2404;
- *  - the LEGACY Vercel public host — what it returned before MOTIR-2389.
+ *    returned between MOTIR-2389 and MOTIR-2404.
  *
- * All three are read tolerance, and the two absolute ones are why this card
- * needed no backfill. Accepting them is NOT a security relaxation: the
- * owning-user prefix check below is what scopes an avatar to its user, and it
- * applies identically to all three because each is reduced to a key FIRST.
+ * A third form — an absolute URL on the retired Vercel public host — used to be
+ * accepted here as read tolerance for rows written before MOTIR-2389. MOTIR-2393
+ * dropped it with the rest of the abandoned path: the live database holds ZERO
+ * rows with a non-null `image` (measured 2026-08-07), so the tolerance protects
+ * nothing and only keeps the old platform's hostname load-bearing.
+ *
+ * Accepting the absolute form is NOT a security relaxation: the owning-user
+ * prefix check below is what scopes an avatar to its user, and it applies to
+ * both forms because each is reduced to a key FIRST.
  */
 export function isOwnAvatarRef(stored: string | null | undefined, userId: string): boolean {
   if (!stored) return false;
@@ -166,9 +150,13 @@ export function storedAssetUrl(stored: string | null | undefined): string | null
 /**
  * A stored public-asset reference → the object KEY, or null when it is not ours.
  * What the avatar GC deletes by. The counterpart to {@link storedAssetUrl}: that
- * one is for showing a value, this one is for acting on the object behind it,
- * and both accept the same three forms so they can never disagree about what a
- * stored value means.
+ * one is for showing a value, this one is for acting on the object behind it.
+ *
+ * The two are deliberately NOT symmetric on an absolute value: `storedAssetUrl`
+ * passes ANY absolute reference through (it must — a Google avatar has to keep
+ * rendering), while this one recognises only the configured public origin. A
+ * foreign URL is therefore displayable and not collectable, which is the correct
+ * pair of answers for an object we do not own.
  */
 export function storedAssetKey(stored: string | null | undefined): string | null {
   if (!stored) return null;
@@ -251,7 +239,5 @@ function ownPublicAssetKey(url: string, parsed: URL): string | null {
     }
   }
 
-  // A pre-migration Vercel public URL — the key is the pathname as-is.
-  if (parsed.hostname.toLowerCase().endsWith(BLOB_PUBLIC_HOST_SUFFIX)) return key;
   return null;
 }

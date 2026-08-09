@@ -76,9 +76,9 @@ async function main() {
   process.env['MOTIR_S3_SECRET_ACCESS_KEY'] ??= 'seed-collab-local-stub-secret';
   process.env['MOTIR_S3_PRIVATE_BUCKET'] ??= 'seed-collab-private';
   process.env['MOTIR_S3_PUBLIC_BUCKET'] ??= 'seed-collab-public';
-  // Kept on the legacy public host shape so any fixture expectation about an
-  // avatar URL still holds; the bytes never leave this process either way.
-  process.env['MOTIR_S3_PUBLIC_BASE_URL'] ??= 'https://seed-collab.public.blob.vercel-storage.com';
+  // An unroutable stub origin — the bytes never leave this process, so the host
+  // only has to be a well-formed prefix for the seeded public asset URLs.
+  process.env['MOTIR_S3_PUBLIC_BASE_URL'] ??= 'https://seed-collab.public.store.invalid';
   process.env['INNGEST_DEV'] = '1';
   process.env['INNGEST_BASE_URL'] = stub.origin;
 

@@ -7,7 +7,6 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
-import { BLOB_PUBLIC_HOST_SUFFIX } from '@/lib/blob/referencedUrls';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -24,12 +23,13 @@ import { truncateAuthTables } from '../helpers/db';
 // publish post-commit events.
 
 vi.mock('@/lib/blob/uploader', () => {
-  // Unique URL per put, on the REAL public-host suffix — mirrors
-  // `addRandomSuffix`, and keeps the 5.2.3 URL parser recognising the uploads.
+  // Unique URL per put — mirrors `addRandomSuffix`. Since MOTIR-1668 the
+  // link-on-write parser matches the authenticated content PATH, not a public
+  // host, so the origin here is an arbitrary stub.
   let urlSeq = 0;
   return {
     putAttachment: vi.fn(async (pathname: string) => ({
-      url: `https://store1.public.blob.vercel-storage.com/${pathname}-${++urlSeq}`,
+      url: `https://store1.public.store.invalid/${pathname}-${++urlSeq}`,
     })),
     putPrivateAttachment: vi.fn(async (pathname: string) => ({
       pathname: `${pathname}-${++urlSeq}`,
@@ -316,14 +316,5 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     expect(await db.attachment.count()).toBe(0);
     // The GC deletes each orphan's blob by its stored private pathname.
     for (const row of orphans) expect(deleteAttachmentBlob).toHaveBeenCalledWith(row.blobPathname);
-  });
-});
-
-describe('Story 5.2 — the blob URL contract the walk rides on', () => {
-  it('the mocked store emits parser-recognised public-host URLs (guards the seam itself)', () => {
-    // The walk's editor steps only work because the mock's host matches the
-    // 5.2.3 parser's suffix — assert that explicitly so a drift in either side
-    // fails HERE with a readable message, not as a mysterious never-linked row.
-    expect('https://store1.public.blob.vercel-storage.com/x').toContain(BLOB_PUBLIC_HOST_SUFFIX);
   });
 });

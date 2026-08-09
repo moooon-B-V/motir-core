@@ -160,17 +160,10 @@ describe('the two-bucket split — every path writes the bucket it should', () =
   });
 
   // The URL-to-key derivation moved to `storedAssetKey` when MOTIR-2404 made
-  // `deletePublicAsset` take a key (its caller now has one directly). These two
-  // cases still matter — they are what keeps a row written before MOTIR-2404
-  // collectable — so they follow the logic to where it now lives.
-  it('storedAssetKey resolves a PRE-MIGRATION Vercel URL to the same key', () => {
-    // The objects were copied across at the same key (MOTIR-2401), so a
-    // `User.image` still carrying the old host is still garbage-collectable.
-    expect(storedAssetKey('https://store1.public.blob.vercel-storage.com/avatars/u1/old.png')).toBe(
-      'avatars/u1/old.png',
-    );
-  });
-
+  // `deletePublicAsset` take a key (its caller now has one directly), so the
+  // case that still matters follows the logic to where it now lives. (The
+  // companion case — a URL on the retired Vercel public host — went with the
+  // arm that recognised it, MOTIR-2393.)
   it('storedAssetKey yields nothing for a value that is not ours, so the GC no-ops', async () => {
     expect(storedAssetKey('https://lh3.googleusercontent.com/a/photo.jpg')).toBeNull();
     // And the deleter refuses an empty key rather than issuing a DELETE against
@@ -227,7 +220,7 @@ describe('signedDownloadUrl — a presigned GET at the ADR’s 300 s', () => {
 
   // The regression guard for MOTIR-2395. This test used to assert the OPPOSITE
   // — that E2E_TEST_BLOB short-circuited to a fabricated, signature-free URL on
-  // the old Vercel host — which meant every "private" download in the E2E suite
+  // a host of its own — which meant every "private" download in the E2E suite
   // proved nothing about access control. `signedDownloadUrl` now has ONE code
   // path; the browser-side interception moved to a `page.route` on the endpoint
   // (tests/e2e/_helpers/object-store.ts), which is where the fetch actually is.
@@ -238,7 +231,8 @@ describe('signedDownloadUrl — a presigned GET at the ADR’s 300 s', () => {
     expect(underFlag.pathname).toBe('/motir-private/a/b.png');
     expect(underFlag.searchParams.get('X-Amz-Signature')).toBeTruthy();
     expect(underFlag.searchParams.get('X-Amz-Expires')).toBe('300');
-    expect(underFlag.host).not.toContain('blob.vercel-storage.com');
+    // …and against the CONFIGURED endpoint, not a host the flag invented.
+    expect(underFlag.origin).toBe(ENV.MOTIR_S3_ENDPOINT);
   });
 });
 
