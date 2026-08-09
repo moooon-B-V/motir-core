@@ -23,8 +23,9 @@ container is the _recommended_ path, not a requirement.
 > credential mount is **optional**, `MOTIR_TOKEN` / `MOTIR_SERVER` are honoured
 > everywhere, and `motir login` runs inside the container (see
 > [the three ways](#three-ways-to-give-it-a-motir-credential)) — reaching the
-> **published** image only with `cli-v0.1.1`, the current release (MOTIR-2131;
-> see [Published images](#published-images)).
+> **published** image only with `cli-v0.1.1` (MOTIR-2131). The current release is
+> **`cli-v0.2.0`**, which carries `@motir/cli@0.2.0` and its move onto `/api/v1`
+> (MOTIR-1855; see [Published images](#published-images)).
 
 ## Run
 
@@ -135,14 +136,55 @@ a transcription, so the registry is always the authority:
 docker buildx imagetools inspect ghcr.io/moooon-b-v/motir-sandbox:claude
 ```
 
+### Release `cli-v0.2.0`
+
+([run 31280497216](https://github.com/moooon-B-V/motir-core/actions/runs/31280497216)).
+The release that moved the CLI onto `/api/v1` (MOTIR-1855) — the `motir` inside
+each image is [`@motir/cli@0.2.0`](https://www.npmjs.com/package/@motir/cli/v/0.2.0),
+the same build npm serves. Each row's immutable twin — `:<profile>-0.2.0` — points
+at the same manifest, and the moving `:<profile>` tags point here too: this is the
+current release.
+
+**Read from the registry, not from the run's job summary** (MOTIR-2220). Every
+digest below is the `Docker-Content-Digest` GHCR returned for that tag, fetched
+with a token minted from the anonymous endpoint — no `Authorization` on the token
+request, so it is the answer a stranger gets, not the publisher's:
+
+```sh
+TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:moooon-b-v/motir-sandbox:pull&service=ghcr.io" | jq -r .token)
+curl -sI -H "Authorization: Bearer $TOKEN" \
+  -H 'Accept: application/vnd.oci.image.index.v1+json' \
+  https://ghcr.io/v2/moooon-b-v/motir-sandbox/manifests/claude-0.2.0 | grep -i docker-content-digest
+```
+
+Two things that check rather than assume, both verified at transcription time:
+each moving `:<profile>` tag resolves to the **same** manifest as its
+`:<profile>-0.2.0` twin (9 of 9), and **every digest below differs from its
+`cli-v0.1.1` row** (9 of 9) — an unchanged digest across a version bump would
+mean a variant did not actually rebuild, which is a finding, not a formatting
+detail.
+
+| Tag                                            | Digest                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `ghcr.io/moooon-b-v/motir-sandbox:base`        | `sha256:518925114ac46bd3dbb061f947422b74773bbf83ee3a6a636d683a1f52ef6190` |
+| `ghcr.io/moooon-b-v/motir-sandbox:claude`      | `sha256:44d90222195f6bb6665fd8a9bf84bd631db41d39a1b77af473cb9878dc853904` |
+| `ghcr.io/moooon-b-v/motir-sandbox:codex`       | `sha256:74a585bbb4c8d0d228a2bc6e3b48d165f75e2ff612e0b62a443ed1ba6d9ef25c` |
+| `ghcr.io/moooon-b-v/motir-sandbox:opencode`    | `sha256:594adcab904b75ff96b12f8120f2ce5aceb26b6a1cd941ecfdbf697d9986d783` |
+| `ghcr.io/moooon-b-v/motir-sandbox:kimi`        | `sha256:bb3e40d8588c042b5e4bf990cdebee506c2e5f78255e483e58f51760a9230ecb` |
+| `ghcr.io/moooon-b-v/motir-sandbox:antigravity` | `sha256:5609b0375bbf2e4b24f769b0884e8d1bfc0a822b204aab5f475cb5aaa6913d9b` |
+| `ghcr.io/moooon-b-v/motir-sandbox:cursor`      | `sha256:534522c6571904961a5384252b90b14cb4770fbdf2dfe2f8797560bcc5a21bfd` |
+| `ghcr.io/moooon-b-v/motir-sandbox:aider`       | `sha256:846876bb174fd84fa353a57bc2a7b27748a0abac0b84e2d0e7377e6f5922f915` |
+| `ghcr.io/moooon-b-v/motir-sandbox:goose`       | `sha256:2a6a1f547fe4a918a967d0a98b592e7b2659d7b5e31f03996ab9ce1c92a24f95` |
+
 ### Release `cli-v0.1.1`
 
 ([run 30966874373](https://github.com/moooon-B-V/motir-core/actions/runs/30966874373)).
-Each row's immutable twin — `:<profile>-0.1.1` — points at the same manifest, and
-the moving `:<profile>` tags point here too: this is the current release. Every
-digest below differs from its `cli-v0.1.0` row, which is the whole point of the
-release — see [Current, and asserted to
-be](#current-and-asserted-to-be-motir-2131).
+Each row's immutable twin — `:<profile>-0.1.1` — points at the same manifest.
+It **was** the current release until `cli-v0.2.0`; the moving `:<profile>` tags
+have since moved on and no longer point here, which is exactly what a moving tag
+is for and why the immutable twin exists. Every digest below differs from its
+`cli-v0.1.0` row, which is the whole point of the release — see [Current, and
+asserted to be](#current-and-asserted-to-be-motir-2131).
 
 | Tag                                            | Digest                                                                    |
 | ---------------------------------------------- | ------------------------------------------------------------------------- |
