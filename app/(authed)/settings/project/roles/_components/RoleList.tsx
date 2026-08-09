@@ -1,11 +1,14 @@
 import Link from 'next/link';
-import { ChevronRight, Eye, Info, Lock, Shield, Users } from 'lucide-react';
+import { ChevronRight, Info, Lock, Plus } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Button, buttonVariants } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
+import { Tooltip } from '@/components/ui/Tooltip';
+import { MAX_CUSTOM_ROLES_PER_PROJECT } from '@/lib/permissions/limits';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
-import type { ProjectRole } from '@/lib/projects/roles';
 import { PermissionMark } from './PermissionMark';
+import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
 
 // The role LIST — screen 1 of the Roles & permissions drill-down (Subtask
 // MOTIR-2263), built to `design/projects/roles-permissions.mock.html` panel 0.
@@ -36,18 +39,55 @@ import { PermissionMark } from './PermissionMark';
 // constant, so the day a custom role narrows the answer per project this
 // component is already right.
 
-/** The tile glyph per built-in role — the mock's shield / users / eye. */
-const ROLE_ICON: Record<ProjectRole, typeof Shield> = {
-  admin: Shield,
-  member: Users,
-  viewer: Eye,
-};
-
-export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
+export function RoleList({
+  catalog,
+  canManage = false,
+}: {
+  catalog: RoleCatalogDTO;
+  /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
+  canManage?: boolean;
+}) {
   const t = useTranslations('settings.rolesPage');
+  // The count is the project's OWN roles, and the cap the SAME constant the
+  // server enforces — so the button and the refusal can never disagree, and a
+  // test at the boundary needs no hardcoded number.
+  const customCount = catalog.roles.filter((role) => !role.builtIn).length;
+  const atCap = customCount >= MAX_CUSTOM_ROLES_PER_PROJECT;
 
   return (
     <div className="flex flex-col gap-5">
+      {canManage ? (
+        <div className="flex justify-end">
+          {/* AT THE CAP: visible-but-DISABLED with its explanation, which is the
+              treatment design-notes § Gating affordances (6.4.6) prescribes for
+              an IN-PLACE control. A missing button reads as "this project cannot
+              have custom roles"; a disabled one reads as "you have used them
+              all" — the true statement, and the one that says what to do next. */}
+          {atCap ? (
+            <Tooltip content={t('createRoleAtCap', { limit: MAX_CUSTOM_ROLES_PER_PROJECT })}>
+              <span>
+                <Button variant="primary" disabled data-testid="create-role">
+                  <Plus aria-hidden="true" className="h-4 w-4" />
+                  {t('createRole')}
+                </Button>
+              </span>
+            </Tooltip>
+          ) : (
+            /* A real LINK, not a button with a router push — this component is
+               rendered from a server page, and a link is focusable and
+               activatable by keyboard by construction. `buttonVariants` is the
+               shipped way to give one the button's shape. */
+            <Link
+              href="/settings/project/roles/new"
+              data-testid="create-role"
+              className={buttonVariants({ variant: 'primary' })}
+            >
+              <Plus aria-hidden="true" className="h-4 w-4" />
+              {t('createRole')}
+            </Link>
+          )}
+        </div>
+      ) : null}
       <div className="border-(--el-border) bg-(--el-surface-soft) text-(--el-text-secondary) flex items-start gap-2 rounded-(--radius-card) border px-(--spacing-card-padding) py-(--spacing-control-y) font-sans text-[12.5px] leading-relaxed">
         <Info aria-hidden="true" className="mt-[2px] h-4 w-4 shrink-0 text-(--el-text-faint)" />
         <span>{t('builtInNote')}</span>
@@ -55,7 +95,7 @@ export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
 
       <ul className="border-(--el-border) bg-(--el-card) list-none overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
         {catalog.roles.map((role) => (
-          <li key={role.role} className="border-(--el-border-soft) border-b last:border-b-0">
+          <li key={role.key} className="border-(--el-border-soft) border-b last:border-b-0">
             <RoleRow role={role} total={catalog.roleGatedPermissionCount} />
           </li>
         ))}
@@ -73,35 +113,45 @@ export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
 function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
   const t = useTranslations('settings.rolesPage');
   const tRoles = useTranslations();
-  const Glyph = ROLE_ICON[role.role];
 
   return (
     <Link
-      href={`/settings/project/roles/${role.role}`}
-      data-role-row={role.role}
+      href={`/settings/project/roles/${role.key}`}
+      data-role-row={role.key}
       className="hover:bg-(--el-surface-soft) focus-visible:ring-(--focus-ring-color) grid grid-cols-[36px_minmax(0,1fr)_auto_16px] items-center gap-3.5 px-(--spacing-card-padding) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
     >
       <span
         aria-hidden="true"
-        className="bg-(--el-tint-lavender) text-(--el-text-strong) flex h-9 w-9 items-center justify-center rounded-(--radius-control)"
+        className={`${roleTileTint(role)} flex h-9 w-9 items-center justify-center rounded-(--radius-control)`}
       >
-        <Glyph className="h-[17px] w-[17px]" />
+        <RoleGlyph role={role} className="h-[17px] w-[17px]" />
       </span>
 
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-2">
           <span className="text-(--el-text) font-sans text-sm font-semibold">
-            {tRoles(role.labelKey)}
+            {roleName(role, tRoles)}
           </span>
           {role.builtIn ? (
             <span className="text-(--el-text-secondary) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
               <Lock aria-hidden="true" className="h-3 w-3" />
               {t('builtIn')}
             </span>
-          ) : null}
+          ) : (
+            /* The `Custom` chip — `--el-tint-sky`, the slot the design pairs with
+               a custom role (`severity="info"` is that token; `tone` has no sky).
+               The kind is in WORDS, so the tint is never load-bearing. */
+            <Pill severity="info" className="shrink-0">
+              {t('custom')}
+            </Pill>
+          )}
         </span>
+        {/* BOTH sides of the merge: MOTIR-2477 swept this ink off the tinted
+            row (`--el-text-muted` -> `--el-text-secondary`), and MOTIR-2478
+            widened the DTO so a CUSTOM role's description is a literal rather
+            than an i18n key. Taking either alone regresses the other. */}
         <span className="text-(--el-text-secondary) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
-          {tRoles(role.descriptionKey)}
+          {roleDescription(role, tRoles)}
         </span>
       </span>
 

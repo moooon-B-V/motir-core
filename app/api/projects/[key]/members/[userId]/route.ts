@@ -4,8 +4,12 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectMemberErrorResponse } from '@/lib/projects/memberErrorResponse';
 
 // /api/projects/[key]/members/[userId] (Story 6.4 · Subtask 6.4.4)
-//   PATCH  — change a member's project role. Body: { role }. Project-admin
-//            gated; guards the last admin.
+//   PATCH  — put a member on a role. Body: { role }, carrying a `RoleDTO.key` —
+//            a built-in's enum value, or one of the project's own custom role
+//            definitions' ids (MOTIR-2485). The service decides which it is and
+//            404s a definition belonging to another project or workspace, under
+//            the same no-existence-leak posture the key resolution takes.
+//            Project-admin gated; guards the last admin.
 //   DELETE — remove a member from the project. Project-admin gated; guards the
 //            last admin.
 //

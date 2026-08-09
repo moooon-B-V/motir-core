@@ -189,6 +189,22 @@ export default defineConfig({
         // already in this file are keyed the literal way and are therefore inert.
         'app/**/settings/project/roles/_components/*.tsx',
 
+        // Story MOTIR-2257 · Subtask MOTIR-2486 (the story gate) — the custom-role
+        // WRITE surface. `lib/permissions/**` above already reported the policy
+        // modules; these are the service, the repository and the two route
+        // handlers this story added, and all four are GATED below.
+        //
+        // ⚠️ WRITTEN WITH `**`, NOT A LITERAL `[key]`, FOR THE SAME REASON THE
+        // ROUTE-GROUP NOTE ABOVE GIVES — and it is a DIFFERENT syntax biting: in
+        // a glob, `[key]` is a CHARACTER CLASS matching one of `k`/`e`/`y`, so a
+        // literal `app/api/projects/[key]/roles/route.ts` names a directory
+        // called `k`. `tests/coverage-gate-globs.test.ts` fails the build on
+        // either mistake rather than passing vacuously.
+        'lib/services/projectRoleDefinitionService.ts',
+        'lib/repositories/projectRoleDefinitionRepository.ts',
+        'app/api/projects/**/roles/route.ts',
+        'app/api/projects/**/roles/**/route.ts',
+
         // Story 5.7 (in-app notifications) · Subtask 5.7.6 — the per-user
         // notification-preference layer (the channel gate) lands gated.
         'lib/services/notificationPreferencesService.ts',
@@ -870,6 +886,35 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story MOTIR-2257 · Subtask MOTIR-2486 — the story gate PINS what the
+        // story added, because an unnamed new file is an ungated one and this is
+        // the card that owns "every file this story changed meets the gate".
+        //
+        // MEASURED FIRST, then pinned — the order this file's header argues for,
+        // and the follow-up the `lib/permissions/**` note above asked for by
+        // name. On this branch, over `tests/permissions` + `tests/settings` +
+        // the members suites: every `lib/permissions/*` file is at 100% on all
+        // three metrics; the service is 100 / 97.95 / 100; the repository and
+        // both route handlers are at 100%.
+        //
+        // ⚠️ `lib/permissions/**` IS PINNED AS A GLOB, WHICH AGGREGATES the six
+        // files into one summary rather than gating each. That is the honest
+        // shape here: `catalog.ts` and `builtinRoles.ts` predate this story and
+        // pinning them individually would gate code no card here wrote. The four
+        // files the epic added or rewrote carry the aggregate on their own.
+        'lib/permissions/**': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/projectRoleDefinitionService.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/repositories/projectRoleDefinitionRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/projects/**/roles/route.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/projects/**/roles/**/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.1 · Subtask 11.1.5 — the public `/api/v1` envelope.
         'lib/api/v1/route.ts': { branches: 90, functions: 90, lines: 90 },
         // MOTIR-2275 — the ONE definition of the contract version, read by both

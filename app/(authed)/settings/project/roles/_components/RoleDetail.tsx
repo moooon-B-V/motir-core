@@ -1,9 +1,12 @@
 import Link from 'next/link';
-import { ArrowLeft, Eye, Lock, Shield, Users } from 'lucide-react';
+import { ArrowLeft, Lock, Pencil, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { buttonVariants } from '@/components/ui/Button';
+import { Pill } from '@/components/ui/Pill';
+import { RoleDeleteControl } from './RoleDeleteControl';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
-import type { ProjectRole } from '@/lib/projects/roles';
 import { PermissionGroups } from './PermissionGroups';
+import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
 
 // The role DETAIL — screen 2 of the drill-down (Subtask MOTIR-2263), built to
 // `design/projects/roles-permissions.mock.html` panel 1: one role's permissions
@@ -18,33 +21,44 @@ import { PermissionGroups } from './PermissionGroups';
 //
 // ⚠️ A BUILT-IN ROLE GETS A LOCK AND NO CONTROL AT ALL. Not a disabled Edit, not
 // a greyed Delete: the three built-ins reproduce the shipped behaviour by
-// definition, so editing one is not a thing that exists. `Edit` / `Delete` and
-// the `Based on …` provenance chip arrive with custom roles (MOTIR-2257).
-
-const ROLE_ICON: Record<ProjectRole, typeof Shield> = {
-  admin: Shield,
-  member: Users,
-  viewer: Eye,
-};
+// definition, so editing one is not a thing that exists.
+//
+// ⚠️ STILL READ-ONLY FOR EVERY ACTOR, A PROJECT ADMIN INCLUDED (MOTIR-2478). A
+// custom role now RENDERS here — with its `Custom` chip and its `Based on … · ±N`
+// provenance — but this card adds no control. `Edit`, `Delete` and the
+// delete-with-reassign dialog are MOTIR-2480's, drawn in panels 2 and 5 of
+// `design/projects/roles-permissions.mock.html`.
+//
+// ⚠️ NO PROVENANCE CHIP (Yue, 2026-08-09). An earlier revision drew
+// `Based on Viewer · +2` from a stored `based_on`. It recorded which built-in
+// SEEDED the role, which is a fact about how it was once authored rather than
+// about what it is — and stale the moment either side was edited. A role's own
+// `N of M` says everything true about it. The editor still offers a built-in to
+// start from; nothing is stored and nothing is drawn.
 
 export function RoleDetail({
   role,
   catalog,
   projectName,
+  canManage = false,
+  projectKey,
 }: {
   role: RoleDTO;
   catalog: RoleCatalogDTO;
   projectName: string;
+  /** `project:manage_access` — MOTIR-2483. Absent means read-only, as before. */
+  canManage?: boolean;
+  /** The `[key]` segment the delete control calls — MOTIR-2480. */
+  projectKey?: string;
 }) {
   const t = useTranslations('settings.rolesPage');
   const tCatalog = useTranslations();
-  const Glyph = ROLE_ICON[role.role];
-  const roleName = tCatalog(role.labelKey);
+  const displayName = roleName(role, tCatalog);
 
   return (
     <div className="flex flex-col">
       <p className="text-(--el-text-secondary) mb-2 font-mono text-[11px] tracking-[0.02em]">
-        {t('crumbs', { projectName, roleName })}
+        {t('crumbs', { projectName, roleName: displayName })}
       </p>
 
       <Link
@@ -59,14 +73,14 @@ export function RoleDetail({
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
-            className="bg-(--el-tint-lavender) text-(--el-text-strong) flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control)"
+            className={`${roleTileTint(role)} flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control)`}
           >
-            <Glyph className="h-[17px] w-[17px]" />
+            <RoleGlyph role={role} className="h-[17px] w-[17px]" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-(--el-text) font-serif text-xl font-semibold">{roleName}</h1>
+            <h1 className="text-(--el-text) font-serif text-xl font-semibold">{displayName}</h1>
             <p className="text-(--el-text-muted) mt-1.5 max-w-[62ch] font-sans text-[13px] leading-relaxed">
-              {tCatalog(role.descriptionKey)}
+              {roleDescription(role, tCatalog)}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {role.builtIn ? (
@@ -74,7 +88,11 @@ export function RoleDetail({
                   <Lock aria-hidden="true" className="h-3 w-3" />
                   {t('builtInLocked')}
                 </span>
-              ) : null}
+              ) : (
+                <Pill severity="info" className="shrink-0">
+                  {t('custom')}
+                </Pill>
+              )}
               <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-5 items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) font-sans text-[11.5px] whitespace-nowrap">
                 <Users aria-hidden="true" className="h-3 w-3" />
                 {t('memberCount', { count: role.memberCount })}
@@ -82,13 +100,35 @@ export function RoleDetail({
             </div>
           </div>
         </div>
-        <p className="text-(--el-text-secondary) shrink-0 font-sans text-[12.5px] whitespace-nowrap">
-          {t.rich('holdsCount', {
-            held: role.permissions.length,
-            total: catalog.roleGatedPermissionCount,
-            strong: (chunks) => <strong className="text-(--el-text)">{chunks}</strong>,
-          })}
-        </p>
+        <div className="flex shrink-0 items-center gap-3">
+          {/* EDIT — admin-only, and CUSTOM-only. A built-in keeps its lock and
+              no control at all: it reproduces the shipped behaviour by
+              definition, so editing one is not a thing that exists. `Delete` is
+              MOTIR-2480's and lands beside this. */}
+          {canManage && !role.builtIn ? (
+            <Link
+              href={`/settings/project/roles/${role.key}/edit`}
+              data-testid="edit-role"
+              className={buttonVariants({ variant: 'secondary' })}
+            >
+              <Pencil aria-hidden="true" className="h-4 w-4" />
+              {t('editRole')}
+            </Link>
+          ) : null}
+          {/* DELETE — MOTIR-2480. Same two conditions as Edit: admin, and
+              custom. A built-in cannot be deleted by anyone, workspace owner
+              included, so there is no control to disable. */}
+          {canManage && !role.builtIn && projectKey ? (
+            <RoleDeleteControl projectKey={projectKey} role={role} roles={catalog.roles} />
+          ) : null}
+          <p className="text-(--el-text-secondary) shrink-0 font-sans text-[12.5px] whitespace-nowrap">
+            {t.rich('holdsCount', {
+              held: role.permissions.length,
+              total: catalog.roleGatedPermissionCount,
+              strong: (chunks) => <strong className="text-(--el-text)">{chunks}</strong>,
+            })}
+          </p>
+        </div>
       </div>
 
       <div className="border-(--el-border) bg-(--el-card) mt-5 overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">

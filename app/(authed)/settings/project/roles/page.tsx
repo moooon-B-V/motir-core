@@ -44,10 +44,16 @@ export default async function ProjectRolesPage() {
   const refused = await guardSettingsPage('roles', ctx);
   if (refused) return refused;
 
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  // MOTIR-2483 — the WRITE affordances. `true` past the guard, and that is the
+  // point of MOTIR-2469's model: this destination's key IS `project:manage_access`
+  // (the registry entry says so, and the service asserts the same key on every
+  // write), so an actor who got here holds it. Re-reading it in the page would be
+  // a SECOND copy of the policy — the exact shape the destination guard forbids,
+  // because it is how a row hides on one permission while its page offers on
+  // another. Presentation only either way: the API refuses independently.
+  const canManage = true;
 
   return (
     <div className="flex flex-col gap-6">
@@ -63,7 +69,7 @@ export default async function ProjectRolesPage() {
         </p>
       </header>
 
-      <RoleList catalog={catalog} />
+      <RoleList catalog={catalog} canManage={canManage} />
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { projectRoleDefinitionService } from '@/lib/services/projectRoleDefinitionService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
@@ -15,6 +17,7 @@ import {
   ProjectNotFoundError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
+import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from './helpers/db';
 
@@ -94,12 +97,21 @@ describe('addMember', () => {
       role: 'viewer',
     });
 
-    // DTO shape: userId / name / email / role ONLY — never a raw Prisma row.
-    expect(Object.keys(member).sort()).toEqual(['email', 'name', 'role', 'userId']);
+    // DTO shape: userId / name / email / role / roleDefinition ONLY — never a
+    // raw Prisma row. `roleDefinition` joined MOTIR-2485: it is what the member
+    // row's chip reads, and `null` here IS the "built-in" answer.
+    expect(Object.keys(member).sort()).toEqual([
+      'email',
+      'name',
+      'role',
+      'roleDefinition',
+      'userId',
+    ]);
     expect(member.userId).toBe(alice.id);
     expect(member.name).toBe('Alice');
     expect(member.email).toBe('alice-add@example.com');
     expect(member.role).toBe('viewer');
+    expect(member.roleDefinition).toBeNull();
 
     const persisted = await projectMembershipRepository.findByUserAndProject(alice.id, project.id);
     expect(persisted?.role).toBe('viewer');
@@ -411,6 +423,275 @@ describe('setRole', () => {
       role: 'member',
     });
     expect(demoted.role).toBe('member');
+  });
+});
+
+// ── Assigning a CUSTOM role (Story MOTIR-2257 · Subtask MOTIR-2485) ─────────
+//
+// `setRole` is the ONE single-member assignment path, and after this card it
+// takes a `RoleDTO.key`: a built-in's enum value, or a role definition's id. What
+// these tests are really guarding is the PAIRED-COLUMN invariant — `role` is a
+// tier and `role_definition_id` is the pointer, and a membership that carries one
+// without the other is a member whose screens and whose permissions disagree.
+describe('setRole — custom roles', () => {
+  it('assigns a custom role: the DTO names it, and the pointer + tier are written TOGETHER', async () => {
+    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-assign');
+    const dana = await addWorkspaceMember(workspace.id, 'dana-assign@example.com', 'Dana');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: dana.id,
+      role: 'viewer',
+    });
+    const role = await projectRoleDefinitionService.create({
+      projectId: project.id,
+      ctx: ownerCtx,
+      name: 'Contractor',
+      permissions: ['work_item:edit'],
+    });
+
+    const updated = await projectMembersService.setRole({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: dana.id,
+      role: role.id,
+    });
+
+    expect(updated.roleDefinition).toEqual({ id: role.id, name: 'Contractor' });
+    // The tier moved to CUSTOM_ROLE_TIER in the SAME write — a membership left on
+    // `viewer` with a pointer would resolve one way and read another.
+    expect(updated.role).toBe('member');
+
+    // ⚠️ SURVIVES A RELOAD, READ BACK THROUGH THE DTO — not through the database.
+    // The row is what the members screen renders, so the screen's own read is the
+    // one that has to carry the role's name.
+    const listed = await projectMembersService.listMembers({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+    });
+    expect(listed.find((m) => m.userId === dana.id)?.roleDefinition).toEqual({
+      id: role.id,
+      name: 'Contractor',
+    });
+  });
+
+  it('assigning a BUILT-IN to a custom-role holder CLEARS the pointer and sets the tier', async () => {
+    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-clear');
+    const eli = await addWorkspaceMember(workspace.id, 'eli-clear@example.com', 'Eli');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: eli.id,
+      role: 'member',
+    });
+    const role = await projectRoleDefinitionService.create({
+      projectId: project.id,
+      ctx: ownerCtx,
+      name: 'Contractor',
+      permissions: ['work_item:edit'],
+    });
+    await projectMembersService.setRole({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: eli.id,
+      role: role.id,
+    });
+
+    const back = await projectMembersService.setRole({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: eli.id,
+      role: 'viewer',
+    });
+
+    expect(back.role).toBe('viewer');
+    expect(back.roleDefinition).toBeNull();
+    // No membership is ever left pointing at a role it does not hold.
+    const persisted = await projectMembershipRepository.findByUserAndProject(eli.id, project.id);
+    expect(persisted?.roleDefinitionId).toBeNull();
+    expect(persisted?.role).toBe('viewer');
+  });
+
+  it('THE ASSIGNMENT BITES: a role that withholds sprint:manage resolves without it', async () => {
+    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-bites');
+    const fay = await addWorkspaceMember(workspace.id, 'fay-bites@example.com', 'Fay');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: fay.id,
+      // A `member` HOLDS sprint:manage — so the absence below is the role's
+      // doing, not the tier's.
+      role: 'member',
+    });
+    const before = await projectAccessService.getPermissions(
+      project.id,
+      ctxFor(fay.id, workspace.id),
+    );
+    expect(before.has('sprint:manage')).toBe(true);
+
+    const role = await projectRoleDefinitionService.create({
+      projectId: project.id,
+      ctx: ownerCtx,
+      name: 'No sprints',
+      permissions: ['work_item:edit', 'project:browse'],
+    });
+    await projectMembersService.setRole({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: fay.id,
+      role: role.id,
+    });
+
+    // The read-back through the RESOLUTION is what proves the seam: the write
+    // reached the column the policy reads, not merely a column.
+    const after = await projectAccessService.getPermissions(
+      project.id,
+      ctxFor(fay.id, workspace.id),
+    );
+    expect(after.has('sprint:manage')).toBe(false);
+    expect(after.has('work_item:edit')).toBe(true);
+  });
+
+  it('a role definition from ANOTHER project in the same workspace is refused with 404, before any write', async () => {
+    const { workspace, key, owner, ownerCtx } = await makeFixture('custom-sibling');
+    const other = await projectsService.createProject({
+      workspaceId: workspace.id,
+      actorUserId: owner.id,
+      name: 'Other project',
+    });
+    const foreign = await projectRoleDefinitionService.create({
+      projectId: other.id,
+      ctx: ownerCtx,
+      name: 'Contractor',
+      permissions: ['work_item:edit'],
+    });
+    const gus = await addWorkspaceMember(workspace.id, 'gus-sibling@example.com', 'Gus');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: gus.id,
+      role: 'viewer',
+    });
+
+    await expect(
+      projectMembersService.setRole({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        targetUserId: gus.id,
+        role: foreign.id,
+      }),
+    ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
+
+    // BEFORE any write — the membership is untouched, tier and pointer both.
+    const listed = await projectMembersService.listMembers({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+    });
+    const row = listed.find((m) => m.userId === gus.id);
+    expect(row?.role).toBe('viewer');
+    expect(row?.roleDefinition).toBeNull();
+  });
+
+  it('a role definition from ANOTHER WORKSPACE is refused with the same 404 — no existence leak', async () => {
+    const mine = await makeFixture('custom-mine');
+    const theirs = await makeFixture('custom-theirs');
+    const foreign = await projectRoleDefinitionService.create({
+      projectId: theirs.project.id,
+      ctx: theirs.ownerCtx,
+      name: 'Contractor',
+      permissions: ['work_item:edit'],
+    });
+    const hal = await addWorkspaceMember(mine.workspace.id, 'hal-foreign@example.com', 'Hal');
+    await projectMembersService.addMember({
+      key: mine.key,
+      actorUserId: mine.owner.id,
+      ctx: mine.ownerCtx,
+      targetUserId: hal.id,
+      role: 'viewer',
+    });
+
+    // Driven under MY workspace context, naming THEIR role. The refusal must be
+    // indistinguishable from an id that never existed.
+    await expect(
+      projectMembersService.setRole({
+        key: mine.key,
+        actorUserId: mine.owner.id,
+        ctx: mine.ownerCtx,
+        targetUserId: hal.id,
+        role: foreign.id,
+      }),
+    ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
+    await expect(
+      projectMembersService.setRole({
+        key: mine.key,
+        actorUserId: mine.owner.id,
+        ctx: mine.ownerCtx,
+        targetUserId: hal.id,
+        role: 'role-that-never-existed',
+      }),
+    ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
+  });
+
+  it('`owner` stays a 400, not a 404 — a misused enum member is not a missing object', async () => {
+    const { workspace, key, owner, ownerCtx } = await makeFixture('custom-owner');
+    const ivy = await addWorkspaceMember(workspace.id, 'ivy-owner@example.com', 'Ivy');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: ivy.id,
+      role: 'viewer',
+    });
+    await expect(
+      projectMembersService.setRole({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        targetUserId: ivy.id,
+        role: 'owner',
+      }),
+    ).rejects.toBeInstanceOf(InvalidProjectRoleError);
+  });
+
+  it('the LAST-ADMIN guard trips when the only admin is moved onto a custom role', async () => {
+    const { workspace, key, owner, ownerCtx, project } = await makeFixture('custom-lastadmin');
+    const jo = await addWorkspaceMember(workspace.id, 'jo-lastadmin@example.com', 'Jo');
+    await projectMembersService.addMember({
+      key,
+      actorUserId: owner.id,
+      ctx: ownerCtx,
+      targetUserId: jo.id,
+      role: 'admin',
+    });
+    const role = await projectRoleDefinitionService.create({
+      projectId: project.id,
+      ctx: ownerCtx,
+      name: 'Contractor',
+      permissions: ['work_item:edit'],
+    });
+
+    // A custom role sits at CUSTOM_ROLE_TIER, so this IS a demotion — the guard
+    // reads the resolved tier, not the requested key.
+    await expect(
+      projectMembersService.setRole({
+        key,
+        actorUserId: owner.id,
+        ctx: ownerCtx,
+        targetUserId: jo.id,
+        role: role.id,
+      }),
+    ).rejects.toBeInstanceOf(LastProjectAdminError);
   });
 });
 

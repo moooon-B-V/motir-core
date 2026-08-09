@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { teamAccessSummary } from '@/lib/projectRepos/teamAccessView';
@@ -49,17 +50,23 @@ export default async function ProjectMembersPage() {
 
   // The workspace-role read that used to ride this batch went with the private
   // admin check (MOTIR-2469) — one fewer round trip on every load of this page.
-  const [members, access, workspaceMembers, workspace, codeAccess, repos] = await Promise.all([
-    projectMembersService.listMembers(actor),
-    projectMembersService.getAccess(actor),
-    workspacesService.listMembers(ctx.workspaceId, ctx.userId),
-    workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
-    // Door 2's count (MOTIR-1945) — read here rather than inside the card so
-    // the card stays a pure presentational leaf and the reads still go out in
-    // one parallel batch.
-    projectRepoAccessService.listTeamAccess(ctx.projectId, ctx),
-    projectRepoSetService.listByProject(ctx.projectId, ctx),
-  ]);
+  const [members, access, roleCatalog, workspaceMembers, workspace, codeAccess, repos] =
+    await Promise.all([
+      projectMembersService.listMembers(actor),
+      projectMembersService.getAccess(actor),
+      // The roles a member can be put ON (MOTIR-2485) — the SAME project-scoped
+      // read the Roles & permissions screen uses, joining this batch rather than
+      // opening a second round trip, so the picker's list and that screen's list
+      // can never disagree.
+      projectAccessService.getRoleCatalog(ctx.projectId, ctx),
+      workspacesService.listMembers(ctx.workspaceId, ctx.userId),
+      workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
+      // Door 2's count (MOTIR-1945) — read here rather than inside the card so
+      // the card stays a pure presentational leaf and the reads still go out in
+      // one parallel batch.
+      projectRepoAccessService.listTeamAccess(ctx.projectId, ctx),
+      projectRepoSetService.listByProject(ctx.projectId, ctx),
+    ]);
   const codeAccessCounts = teamAccessSummary(codeAccess, repos);
 
   // MOTIR-2469 retired the private admin check that used to sit here — a role
@@ -87,6 +94,7 @@ export default async function ProjectMembersPage() {
         workspaceName={workspace?.name ?? ''}
         accessLevel={access.accessLevel}
         members={members}
+        roles={roleCatalog.roles}
         workspaceMembers={workspaceMembers}
         currentUserId={ctx.userId}
         canManage={canManage}

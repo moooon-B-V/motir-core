@@ -10,6 +10,7 @@ import {
   ProjectNotFoundError,
   TargetNotWorkspaceMemberError,
 } from '@/lib/projects/errors';
+import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 
 // Shared typed-error → HTTP-status translation for the project membership +
 // access routes (Story 6.4 · 6.4.4). Keeps the three thin route files from
@@ -18,6 +19,10 @@ import {
 //
 //   ProjectNotFoundError / NotAProjectMemberError        → 404 (incl. the
 //       no-existence-leak 404 for a cross-tenant / unknown project key)
+//   RoleDefinitionNotFoundError                          → 404 (MOTIR-2485 — a
+//       role definition id naming another project's or another workspace's role,
+//       under the SAME no-existence-leak posture: it must be indistinguishable
+//       from an id that never existed, so PATCH can't probe a foreign role.)
 //   NotProjectAdminError / PermissionDeniedError         → 403 (MOTIR-2295 —
 //       these routes now gate on `member:manage` / `project:manage_access` /
 //       `project:browse` through the shared `assertPermission`, so the refusal
@@ -28,7 +33,11 @@ import {
 //       / InvalidAccessLevelError                        → 400
 //   AlreadyProjectMemberError / LastProjectAdminError    → 409
 export function projectMemberErrorResponse(err: unknown): NextResponse | null {
-  if (err instanceof ProjectNotFoundError || err instanceof NotAProjectMemberError) {
+  if (
+    err instanceof ProjectNotFoundError ||
+    err instanceof NotAProjectMemberError ||
+    err instanceof RoleDefinitionNotFoundError
+  ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 404 });
   }
   if (err instanceof PermissionDeniedError) {

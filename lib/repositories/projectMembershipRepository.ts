@@ -2,6 +2,7 @@ import {
   type MemberRole,
   Prisma,
   type ProjectMembership,
+  type ProjectRoleDefinition,
   type User,
 } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
@@ -10,8 +11,25 @@ import { db } from '@/lib/db';
 // renders. Kept here (not in the service) because the join shape is a
 // data-access concern; the service maps it to a DTO. Mirrors
 // `MembershipWithUser` on workspaceMembershipRepository.
+//
+// ⚠️ IT ALSO CARRIES THE CUSTOM ROLE (MOTIR-2485), and it has to. A membership's
+// `role` column is a TIER, and for a member on a custom role that tier is always
+// `CUSTOM_ROLE_TIER` (`member`) — so a members list built from `role` alone would
+// draw every custom-role holder as a Member and be silently WRONG about the one
+// thing the row is there to say. The name is joined in the SAME query rather than
+// looked up per row: the list read is one round trip, and it stays one.
 export type ProjectMembershipWithUser = ProjectMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
+  /** The custom role this membership points at, or null when it names a built-in. */
+  roleDefinition: Pick<ProjectRoleDefinition, 'id' | 'name'> | null;
+};
+
+// A membership joined with the CUSTOM role it points at, if any (Story
+// MOTIR-2257 · MOTIR-2470). `roleDefinition` is null for every membership that
+// names a built-in through `role`. The resolution reads this shape so the
+// membership and its permission set arrive in one round trip.
+export type ProjectMembershipWithRoleDefinition = ProjectMembership & {
+  roleDefinition: ProjectRoleDefinition | null;
 };
 
 // ProjectMembership repository — single Prisma operations on the
@@ -38,6 +56,30 @@ export const projectMembershipRepository = {
     const client = tx ?? db;
     return client.projectMembership.findUnique({
       where: { userId_projectId: { userId, projectId } },
+    });
+  },
+
+  /**
+   * The user's membership in a project WITH the custom role it points at, in
+   * ONE query (Story MOTIR-2257 · Subtask MOTIR-2470). The read behind
+   * `projectAccessService.resolveInputs`: a `findUnique` with an `include` is a
+   * single Prisma operation and a single round trip, so a caller inside a
+   * transaction gets the membership and its role definition on ONE snapshot,
+   * under ONE binding of the `app.workspace_id` GUC that both tables' RLS
+   * policies read.
+   *
+   * `roleDefinition` is null when the membership names a BUILT-IN through
+   * `role` — which is every membership until somebody authors a role.
+   */
+  async findByUserAndProjectWithRoleDefinition(
+    userId: string,
+    projectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ProjectMembershipWithRoleDefinition | null> {
+    const client = tx ?? db;
+    return client.projectMembership.findUnique({
+      where: { userId_projectId: { userId, projectId } },
+      include: { roleDefinition: true },
     });
   },
 
@@ -73,7 +115,10 @@ export const projectMembershipRepository = {
   ): Promise<ProjectMembershipWithUser | null> {
     return tx.projectMembership.findUnique({
       where: { userId_projectId: { userId, projectId } },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        roleDefinition: { select: { id: true, name: true } },
+      },
     });
   },
 
@@ -91,7 +136,10 @@ export const projectMembershipRepository = {
     return tx.projectMembership.findMany({
       where: { projectId },
       orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        roleDefinition: { select: { id: true, name: true } },
+      },
     });
   },
 
@@ -128,6 +176,105 @@ export const projectMembershipRepository = {
     return groups.map((group) => ({ role: group.role, count: group._count._all }));
   },
 
+  /**
+   * How many of the project's members hold each CUSTOM role — one grouped read
+   * over `role_definition_id`, the custom-role counterpart of `countByRole`
+   * (Story MOTIR-2257 · MOTIR-2467). Two grouped reads together cover the whole
+   * catalog for MOTIR-2478's list, never one query per role.
+   *
+   * Rows with a NULL pointer (every membership on a built-in) are excluded —
+   * they are `countByRole`'s. Only definitions with at least one holder come
+   * back; zero-filling belongs to the mapper, which knows the full role set.
+   *
+   * Also the pre-check for `delete`: the service calls it inside the deleting
+   * transaction to learn the affected count before it refuses (the number the
+   * `RoleInUseError` and the confirmation dialog carry).
+   */
+  async countByRoleDefinition(
+    projectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<{ roleDefinitionId: string; count: number }[]> {
+    const client = tx ?? db;
+    const groups = await client.projectMembership.groupBy({
+      by: ['roleDefinitionId'],
+      where: { projectId, roleDefinitionId: { not: null } },
+      _count: { _all: true },
+    });
+    return groups
+      .filter((group): group is typeof group & { roleDefinitionId: string } =>
+        Boolean(group.roleDefinitionId),
+      )
+      .map((group) => ({ roleDefinitionId: group.roleDefinitionId, count: group._count._all }));
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // THE PAIRED-COLUMN WRITERS (Story MOTIR-2257 · Subtask MOTIR-2467)
+  //
+  // ⚠️ `role` and `roleDefinitionId` MOVE TOGETHER, and these two methods are
+  // the ONLY write paths for `role_definition_id` in the codebase. Neither
+  // column is writable alone:
+  //
+  //   * `role` keeps deciding which built-in TIER a membership sits at — that
+  //     is what `levelGrants` in `lib/permissions/resolve.ts` subtracts from on
+  //     a `limited` / `private` project;
+  //   * `roleDefinitionId` decides WHAT that tier grants.
+  //
+  // So a membership on a custom role carries `role = CUSTOM_ROLE_TIER`
+  // (`member`), never a stale leftover value — which is why `resolve.ts` needs
+  // no custom-role branch in `levelGrants` at all, and why the access level
+  // takes NOTHING away from a custom role: it grants exactly what it lists.
+  // Writing one column without the other is what would break that, and the only
+  // way to do it is to add a third writer. Don't.
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Put one membership on a role — custom or built-in — writing BOTH columns in
+   * the SAME statement.
+   *
+   *   * a CUSTOM role: pass its id and `CUSTOM_ROLE_TIER`; the pointer is set
+   *     and `role` becomes that tier;
+   *   * a BUILT-IN role: pass `roleDefinitionId: null` and the built-in; the
+   *     pointer is cleared and `role` becomes it.
+   *
+   * Targets the (userId, projectId) unique. Throws P2025 if no such membership
+   * exists — the service reads the membership first inside the same tx, so this
+   * is belt + suspenders.
+   */
+  async setRoleDefinition(
+    userId: string,
+    projectId: string,
+    assignment: { roleDefinitionId: string | null; role: MemberRole },
+    tx: Prisma.TransactionClient,
+  ): Promise<ProjectMembership> {
+    return tx.projectMembership.update({
+      where: { userId_projectId: { userId, projectId } },
+      data: { roleDefinitionId: assignment.roleDefinitionId, role: assignment.role },
+    });
+  },
+
+  /**
+   * Move EVERY membership currently on `fromRoleDefinitionId` onto a
+   * destination, writing both columns in the same statement — the bulk half of
+   * the delete-with-reassign, run inside the service's one transaction so the
+   * move and the delete can never half-happen.
+   *
+   * The destination is another custom role (`{ roleDefinitionId, role:
+   * CUSTOM_ROLE_TIER }`) or a built-in (`{ roleDefinitionId: null, role: the
+   * built-in }`).
+   * Returns the number of memberships moved.
+   */
+  async reassignRoleDefinition(
+    fromRoleDefinitionId: string,
+    destination: { roleDefinitionId: string | null; role: MemberRole },
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const result = await tx.projectMembership.updateMany({
+      where: { roleDefinitionId: fromRoleDefinitionId },
+      data: { roleDefinitionId: destination.roleDefinitionId, role: destination.role },
+    });
+    return result.count;
+  },
+
   async create(
     data: { workspaceId: string; projectId: string; userId: string; role: MemberRole },
     tx: Prisma.TransactionClient,
@@ -150,24 +297,15 @@ export const projectMembershipRepository = {
     return result.count;
   },
 
-  /**
-   * Update a member's role, returning the updated row. Targets the
-   * (userId, projectId) unique. Throws P2025 if the row doesn't exist — the
-   * service translates "no such membership" to a typed NotAProjectMemberError
-   * (it reads the membership first inside the same tx, so this is belt +
-   * suspenders).
-   */
-  async updateRole(
-    userId: string,
-    projectId: string,
-    role: MemberRole,
-    tx: Prisma.TransactionClient,
-  ): Promise<ProjectMembership> {
-    return tx.projectMembership.update({
-      where: { userId_projectId: { userId, projectId } },
-      data: { role },
-    });
-  },
+  // ⚠️ `updateRole` USED TO LIVE HERE AND WAS DELETED BY MOTIR-2485, deliberately.
+  // It wrote `role` and left `role_definition_id` alone — which was harmless
+  // while the pointer did not exist, and became a live bug the moment it did: a
+  // member on a custom role "demoted" to `viewer` through it would keep the
+  // pointer, so the resolution would go on handing them their custom role's
+  // permissions while every screen said Viewer. `setRoleDefinition` is the
+  // replacement and writes BOTH columns; its only cost is that a caller must say
+  // what happens to the pointer, which is exactly the thing that must not be
+  // forgotten. Do not reintroduce a single-column writer.
 
   /**
    * Delete a membership, returning the deleted row or null when no matching

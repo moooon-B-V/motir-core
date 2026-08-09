@@ -1853,6 +1853,12 @@
       "remove": "Remove",
       "youSuffix": " (you)",
       "roleSelectLabel": "Role for {name}",
+      "roleGroup": {
+        "builtIn": "Built-in",
+        "custom": "Custom roles",
+        "customOption": "Custom role"
+      },
+      "customRoleChipLabel": "{name} — a custom role",
       "role": {
         "admin": "Admin",
         "member": "Member",
@@ -2637,6 +2643,40 @@
         "title": "Public requests",
         "description": "Granted by the project’s access level, not by a role — which is why they are not a role in the list above. Every visitor of a public project holds all three, signed in or not; nobody holds them on an open, limited or private project, a workspace owner included.",
         "chip": "Access level"
+      },
+      "custom": "Custom",
+      "createRole": "Create role",
+      "createRoleAtCap": "This project has all {limit} custom roles. Delete one to create another.",
+      "editRole": "Edit",
+      "createRoleTitle": "Create a role",
+      "editRoleTitle": "Edit role",
+      "newRole": "New role",
+      "editorCrumbs": "Settings · Roles & permissions · {roleName}",
+      "editorLede": "A role is a set of permissions with a name your team chose. It applies to this project only.",
+      "nameLabel": "Name",
+      "namePlaceholder": "Contractor",
+      "startFrom": "Start from",
+      "startFromPlaceholder": "Choose a role…",
+      "editorHintNew": "Start from seeds the grid below with everything that role holds — then edit freely. The pick is not stored: a saved role is its name and its set.",
+      "editorHintEdit": "Tick what this role holds. A role is its name and its set — nothing else is recorded.",
+      "saveRole": "Save changes",
+      "deleteRole": "Delete {name}",
+      "deleteDialog": {
+        "title": "Delete “{name}”?",
+        "affected": "{count, plural, one {<b>1 member</b> holds this role.} other {<b># members</b> hold this role.}} Choose the role they move to — they will hold it the moment this one is deleted.",
+        "noneAffected": "No one holds this role, so nobody is affected.",
+        "lede": "Deleting a role does not remove anybody from the project. It cannot be undone.",
+        "moveTo": "{count, plural, one {Move that member to} other {Move those # members to}}",
+        "choosePlaceholder": "Choose a role…",
+        "confirm": "Delete role"
+      },
+      "toast": { "created": "Role created", "saved": "Role saved" },
+      "error": {
+        "nameTaken": "A role named “{name}” already exists in this project.",
+        "capReached": "A project may define at most {limit} custom roles.",
+        "invalidName": "Give the role a name.",
+        "noLongerAllowed": "You no longer have permission to manage this project’s roles.",
+        "generic": "That didn’t save. Try again."
       }
     },
     "noAccess": {

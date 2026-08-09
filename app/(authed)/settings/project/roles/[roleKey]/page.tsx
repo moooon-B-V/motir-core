@@ -11,9 +11,10 @@ import { guardSettingsPage } from '../../_guard';
 // drill-down (Story MOTIR-2282 · Subtask MOTIR-2263).
 //
 // ⚠️ THE ROLE IS RESOLVED OUT OF THE CATALOG THE READ RETURNS, never narrowed
-// against a constant. An unknown `roleKey` is a 404, and the day MOTIR-2257 adds
-// a project's own custom roles this page resolves them with no change: the URL
-// segment is looked up in `catalog.roles`, which is already project-scoped.
+// against a constant — and MOTIR-2478 CASHED THAT IN. A custom role reaches this
+// page with no routing change at all: the segment is `RoleDTO.key`, which is the
+// enum value for a built-in and the definition's id for a custom role, and the
+// lookup is the same `find` it always was. An unknown segment is still a 404.
 //
 // This route deliberately has NO rail entry of its own — it is reached by
 // activating a row on the list, and `lib/settings/projectSettingsNav.ts` declares
@@ -46,12 +47,26 @@ export default async function ProjectRoleDetailPage({
   if (refused) return refused;
 
   const { roleKey } = await params;
-  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, {
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-  });
-  const role = catalog.roles.find((candidate) => candidate.role === roleKey);
+  const actor = { userId: ctx.userId, workspaceId: ctx.workspaceId };
+  const catalog = await projectAccessService.getRoleCatalog(ctx.projectId, actor);
+  // MOTIR-2483 — the WRITE affordances. `true` past the guard, and that is the
+  // point of MOTIR-2469's model: this destination's key IS `project:manage_access`
+  // (the registry entry says so, and the service asserts the same key on every
+  // write), so an actor who got here holds it. Re-reading it in the page would be
+  // a SECOND copy of the policy — the exact shape the destination guard forbids,
+  // because it is how a row hides on one permission while its page offers on
+  // another. Presentation only either way: the API refuses independently.
+  const canManage = true;
+  const role = catalog.roles.find((candidate) => candidate.key === roleKey);
   if (!role) notFound();
 
-  return <RoleDetail role={role} catalog={catalog} projectName={ctx.project.name} />;
+  return (
+    <RoleDetail
+      role={role}
+      catalog={catalog}
+      projectName={ctx.project.name}
+      canManage={canManage}
+      projectKey={ctx.project.identifier}
+    />
+  );
 }

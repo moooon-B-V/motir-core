@@ -27,17 +27,59 @@ export interface PermissionDescriptorDTO {
   descriptionKey: string;
 }
 
-/** One role in the catalog: its identity, and the permissions it holds. */
+/**
+ * ONE custom role definition, as the write API returns it (Story MOTIR-2257 ·
+ * Subtask MOTIR-2472). Distinct from {@link RoleDTO}, which is what the READ
+ * screens render for every role in a project, built-in ones included — this is
+ * the row the create / rename / re-permission calls just wrote, and nothing
+ * more.
+ */
+export interface RoleDefinitionDTO {
+  id: string;
+  name: string;
+  /** The permissions it holds, in CATALOG order (never insertion order). */
+  permissions: PermissionKey[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * One role in the catalog: its identity, and the permissions it holds.
+ *
+ * ⚠️ WIDENED BY MOTIR-2478, and the widening IS the ripple of custom roles. Until
+ * a project could have roles of its own, every role was one of three known
+ * things — so `role` could be its identity, its URL segment AND a translation
+ * key all at once. A role somebody invented breaks all three: its name is text a
+ * person typed in their own language and must never go through a translation
+ * lookup, and its identity has to survive being renamed.
+ */
 export interface RoleDTO {
-  role: ProjectRole;
-  /** i18n key for the role's display name (`settings.roles.<role>.name`). */
-  labelKey: string;
-  /** i18n key for the one-line "who is this for" description. */
-  descriptionKey: string;
   /**
-   * True for a role the code owns and a user cannot edit. Every role is built-in
-   * until Story MOTIR-2257 ships custom roles; the flag exists now so the grid's
-   * `Built-in` chip reads a field rather than assuming.
+   * The role's IDENTITY and its `[roleKey]` URL segment: `admin` / `member` /
+   * `viewer` for a built-in, the definition's id for a custom role. Replaces the
+   * old `role` field, which doubled as identity and enum.
+   */
+  key: string;
+  /**
+   * The `ProjectRole` enum where it still exists — a built-in's own value, or
+   * `null` for a custom role. What the icon map and the tint choice key off, and
+   * the one field a `Record<ProjectRole, …>` may be indexed with.
+   */
+  builtInRole: ProjectRole | null;
+  /**
+   * i18n key for a BUILT-IN's display name (`settings.roles.<role>.name`), or
+   * `null` for a custom role. Exactly one of `labelKey` / `name` is non-null.
+   */
+  labelKey: string | null;
+  /** i18n key for a BUILT-IN's one-line description, or `null` for a custom role. */
+  descriptionKey: string | null;
+  /** A CUSTOM role's literal name, as its author typed it. Null for a built-in. */
+  name: string | null;
+  /** A CUSTOM role's literal description. Null for a built-in — and today always null. */
+  description: string | null;
+  /**
+   * True for a role the code owns and a user cannot edit — the three built-ins.
+   * A custom role is `false`.
    */
   builtIn: boolean;
   /** The permissions this role holds, in catalog order. */

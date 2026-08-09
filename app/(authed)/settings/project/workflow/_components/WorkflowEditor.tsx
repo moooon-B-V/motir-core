@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { ArrowDown, ArrowUp, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { Checkbox } from '@/components/ui/Checkbox';
 import { Input } from '@/components/ui/Input';
 import { ColorSwatchPicker } from '@/components/ui/ColorSwatchPicker';
 import { Modal } from '@/components/ui/Modal';
@@ -671,15 +672,17 @@ function StatusFormModal({
           disabled={isPending}
         />
         {!colorOnly && !requireKey && (
-          <label className="flex items-center gap-2 font-sans text-sm">
-            <input
-              type="checkbox"
-              checked={isInitial}
-              onChange={(e) => setIsInitial(e.target.checked)}
-              disabled={isPending}
-            />
-            <span className="text-(--el-text)">{t('workflow.makeInitial')}</span>
-          </label>
+          // MOTIR-2465 — this was the product's ONLY raw, unstyled browser
+          // tick box. The design-system primitive renders the same control with
+          // no behaviour change. (Phrased without the markup so the card's
+          // `git grep` guard stays honest.)
+          <Checkbox
+            checked={isInitial}
+            onChange={setIsInitial}
+            label={t('workflow.makeInitial')}
+            labelVisible
+            disabled={isPending}
+          />
         )}
         <Modal.Footer>
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={isPending}>

@@ -11,7 +11,7 @@ import { cn } from '../../utils/cn';
  *  - `priority`: highest | high | medium | low | lowest — work-item priority, a
  *    5-step diverging ramp (`--el-priority-*` hue tinted over the surface, plus a
  *    redundant direction icon). The single source of truth is `PRIORITY_META`.
- *  - `memberRole`: admin | member | viewer — a project membership role
+ *  - `memberRole`: admin | member | viewer | custom — a project membership role
  *    (Story 6.4), one hued tint per role. (Named `memberRole`, not `role`, so
  *    it can't collide with the DOM `role` ARIA attribute on the span.)
  *  - `orgRole`: owner | admin | member — an ORGANIZATION role (Story 6.10),
@@ -82,10 +82,16 @@ const pillVariants = cva(
       // through the DEDICATED `--el-role-*` tokens (MOTIR-1274 · 1266.3) so a
       // palette can tune roles apart from the other --el-tint-* meanings; each
       // defaults to its prior tint (zero visual change).
+      // `custom` (MOTIR-2257 · MOTIR-2485) is a project's OWN role, which has no
+      // enum value — it takes the next free tint slot (peach) because this
+      // surface had already spent lavender / sky / mint on the built-ins, so a
+      // custom chip in any of those would read as one of them. The KIND is
+      // carried in WORDS by the chip's accessible name; nothing rests on the hue.
       memberRole: {
         admin: 'bg-(--el-role-admin) text-(--el-text-strong) border-transparent',
         member: 'bg-(--el-role-member) text-(--el-text-strong) border-transparent',
         viewer: 'bg-(--el-role-viewer) text-(--el-text-strong) border-transparent',
+        custom: 'bg-(--el-role-custom) text-(--el-text-strong) border-transparent',
       },
       // Organization roles (Story 6.10 · design/org-admin): owner → lavender
       // (the highest, brand-purple tier), admin → sky, member → mint — the hue

@@ -23,8 +23,8 @@ import { Pill } from '@/components/ui/Pill';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
 import { BuildingInPublicBadge } from '@/components/projects/BuildingInPublicBadge';
-import { PROJECT_ASSIGNABLE_ROLES, type ProjectRole } from '@/lib/projects/roles';
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
+import type { RoleDTO } from '@/lib/dto/permissions';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import { BuildInPublicDialog } from './BuildInPublicDialog';
 import { StopBuildInPublicDialog } from './StopBuildInPublicDialog';
@@ -82,6 +82,15 @@ export interface ProjectMembersSettingsProps {
   // now including `public` (6.12.8, the make-public control).
   accessLevel: ProjectAccessLevel;
   members: ProjectMemberDTO[];
+  /**
+   * Every role the project can put a member on — the three built-ins followed by
+   * its own custom roles, from the server page's `getRoleCatalog` read
+   * (MOTIR-2485). Passed DOWN rather than fetched: this component already
+   * receives its members and its workspace members as props, and a client that
+   * fetched a role list of its own would be a second read of a page the server
+   * already rendered.
+   */
+  roles: RoleDTO[];
   workspaceMembers: WorkspaceMemberDTO[];
   currentUserId: string;
   canManage: boolean;
@@ -93,6 +102,7 @@ export function ProjectMembersSettings({
   workspaceName,
   accessLevel: initialAccessLevel,
   members: initialMembers,
+  roles,
   workspaceMembers,
   currentUserId,
   canManage,
@@ -180,6 +190,7 @@ export function ProjectMembersSettings({
             name: w.name,
             email: w.email,
             role: 'member',
+            roleDefinition: null,
           }));
         return [...current, ...seeded];
       });
@@ -235,6 +246,7 @@ export function ProjectMembersSettings({
       name: target.name,
       email: target.email,
       role: 'member',
+      roleDefinition: null,
     };
     setMembers((current) => [...current, optimistic]);
     setPending(userId, true);
@@ -284,18 +296,42 @@ export function ProjectMembersSettings({
     }
   }
 
-  async function changeRole(member: ProjectMemberDTO, role: ProjectRole) {
-    if (role === member.role) return;
+  /**
+   * Put a member on a role. `roleKey` is a `RoleDTO.key` — a built-in's enum
+   * value, or a custom role definition's id — and it is what the PATCH sends;
+   * the server resolves which kind it is (MOTIR-2485).
+   *
+   * ⚠️ THE OPTIMISTIC PATCH TOUCHES ONLY WHAT THE CHIP READS, and stops there.
+   * A membership's `role` column is a TIER, and the tier a custom role sits at is
+   * a SERVER fact (`CUSTOM_ROLE_TIER`) — guessing it here would put a second copy
+   * of that rule in the client, to drift the day it moves. So a custom pick sets
+   * `roleDefinition` (which is what the row renders) and leaves the tier alone,
+   * and the response's member REPLACES the row with the truth either way.
+   */
+  async function changeRole(member: ProjectMemberDTO, roleKey: string) {
+    if (roleKey === currentRoleKey(member)) return;
+    const target = roles.find((r) => r.key === roleKey);
+    if (!target) return;
     const prev = members;
-    setMembers((current) => current.map((m) => (m.userId === member.userId ? { ...m, role } : m)));
+    setMembers((current) =>
+      current.map((m) =>
+        m.userId === member.userId
+          ? target.builtInRole
+            ? { ...m, role: target.builtInRole, roleDefinition: null }
+            : { ...m, roleDefinition: { id: target.key, name: target.name ?? '' } }
+          : m,
+      ),
+    );
     setPending(member.userId, true);
     try {
       const res = await fetch(`/api/projects/${projectKey}/members/${member.userId}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ role }),
+        body: JSON.stringify({ role: roleKey }),
       });
       if (!res.ok) throw new Error(await readError(res));
+      const data = (await res.json()) as { member: ProjectMemberDTO };
+      setMembers((current) => current.map((m) => (m.userId === member.userId ? data.member : m)));
       toast({ variant: 'success', title: t('access.roleChangedToast', { name: member.name }) });
     } catch (err) {
       setMembers(prev);
@@ -311,14 +347,34 @@ export function ProjectMembersSettings({
     }
   }
 
-  const roleOptions = useMemo<ComboboxOption<ProjectRole>[]>(
+  // The picker: the three built-ins, then the project's own roles under a
+  // heading that names the kind (design/projects/access-members.mock.html panel
+  // 5). The order is the catalog's, which already puts the built-ins first — the
+  // list GROWS when a project authors a role, it never reshuffles.
+  //
+  // ⚠️ A CUSTOM ROLE'S NAME NEVER GOES THROUGH `t()`. It is text its author typed,
+  // in their own language; a translation lookup on it would miss and echo the key
+  // — or, worse, hit an unrelated message. Only a built-in has a `labelKey`.
+  // The `Built-in` heading is drawn either way, so a project with no custom roles
+  // renders exactly the picker that shipped, one heading richer.
+  const roleOptions = useMemo<ComboboxOption<string>[]>(
     () =>
-      PROJECT_ASSIGNABLE_ROLES.map((r) => ({
-        value: r,
-        label: t(`access.role.${r}`),
-        secondary: t(`access.roleDesc.${r}`),
-      })),
-    [t],
+      roles.map((r) =>
+        r.builtInRole
+          ? {
+              value: r.key,
+              label: t(`access.role.${r.builtInRole}`),
+              secondary: t(`access.roleDesc.${r.builtInRole}`),
+              group: t('access.roleGroup.builtIn'),
+            }
+          : {
+              value: r.key,
+              label: r.name ?? '',
+              secondary: t('access.roleGroup.customOption'),
+              group: t('access.roleGroup.custom'),
+            },
+      ),
+    [roles, t],
   );
 
   return (
@@ -525,12 +581,28 @@ export function ProjectMembersSettings({
                   <div className="w-[8.5rem]">
                     <Combobox
                       options={roleOptions}
-                      value={member.role}
-                      onChange={(role) => changeRole(member, role)}
+                      value={currentRoleKey(member)}
+                      onChange={(roleKey) => changeRole(member, roleKey)}
                       label={t('access.roleSelectLabel', { name: member.name })}
                       disabled={busy}
                     />
                   </div>
+                ) : member.roleDefinition ? (
+                  // A CUSTOM role's chip. `--el-role-custom` (peach): this
+                  // surface had already spent lavender / sky / mint on the three
+                  // built-ins, so the roles screen's built-in-vs-custom pairing
+                  // cannot transfer here — a custom chip in sky would read as a
+                  // Member chip. The KIND is carried in WORDS, by the chip's
+                  // accessible name, never by the hue.
+                  <Pill
+                    memberRole="custom"
+                    role="img"
+                    aria-label={t('access.customRoleChipLabel', {
+                      name: member.roleDefinition.name,
+                    })}
+                  >
+                    {member.roleDefinition.name}
+                  </Pill>
                 ) : (
                   <Pill memberRole={member.role}>{t(`access.role.${member.role}`)}</Pill>
                 )}
@@ -552,6 +624,16 @@ export function ProjectMembersSettings({
       </Card>
     </div>
   );
+}
+
+/**
+ * The role a member is ON, as a `RoleDTO.key` — the value the picker shows and
+ * the value a change is compared against. The pointer WINS over the tier: a
+ * member on a custom role carries `CUSTOM_ROLE_TIER` in `role`, so reading `role`
+ * alone would select "Member" in the picker for someone who is not on it.
+ */
+function currentRoleKey(member: ProjectMemberDTO): string {
+  return member.roleDefinition?.id ?? member.role;
 }
 
 function AccessSummaryPill({ level, label }: { level: ProjectAccessLevel; label: string }) {

@@ -101,14 +101,22 @@ describe('projectSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(roles?.group).toBe('access');
     expect(roles?.labelKey).toBe('nav.roles');
     expect(roles?.placeholder).toBeUndefined();
-    // MOTIR-2468 retired the browse gate this entry shipped with. `member:manage`
-    // is a JUDGEMENT (the page has no write of its own): the screen is the
-    // reference behind the Members role picker, the catalog files role-shaped
-    // keys under the `member` domain, and MOTIR-2257 adds role AUTHORING here.
-    expect(roles?.permission).toBe('member:manage');
+    // MOTIR-2468 retired the browse gate this entry shipped with, and MOTIR-2257
+    // moved the key it left to `project:manage_access`: that entry's own
+    // reasoning turned on the screen having "no write of its own", and this story
+    // gave it three — each gated by that key at the service.
+    expect(roles?.permission).toBe('project:manage_access');
     expect(visibleSettingsNav(MEMBER).map((e) => e.id)).not.toContain('roles');
     expect(visibleSettingsNav(ADMIN).map((e) => e.id)).toContain('roles');
-    expect(roles?.nestedRoutes).toEqual(['/settings/project/roles/[roleKey]']);
+    // MOTIR-2483 added the two AUTHORING routes. Pinned literally, in order,
+    // because this list is what keeps the rail row active on a drilled-in
+    // screen — a route missing from it looks like a working page whose nav
+    // silently deselects, which is exactly what the totality guard is for.
+    expect(roles?.nestedRoutes).toEqual([
+      '/settings/project/roles/[roleKey]',
+      '/settings/project/roles/[roleKey]/edit',
+      '/settings/project/roles/new',
+    ]);
     // Rail order within Access — the model sits between who is on the team and
     // who can clone the code (design/projects/design-notes.md, access path).
     const accessIds = groupSettingsNav(PROJECT_SETTINGS_NAV)
@@ -279,9 +287,16 @@ const KEY_EVIDENCE: Record<string, { permission: PermissionKey; source: string; 
   },
   // Roles has NO write of its own — a judgement, argued at the entry. Its key is
   // asserted by the service that owns the domain it belongs to.
+  // ⚠️ RE-KEYED BY MOTIR-2257, AND THIS ROW IS WHY THE CHANGE WAS OWED. When
+  // MOTIR-2468 wrote it, the roles screen had no service of its own, so its
+  // evidence had to BORROW the members service — a rail row pointing at a gate
+  // that governs a different destination. This story gave the screen three
+  // writes (`Create role` / `Edit` / `Delete`) and a service that asserts
+  // `project:manage_access` on every one of them, so the row now cites the code
+  // the destination actually runs.
   roles: {
-    permission: 'member:manage',
-    source: 'lib/services/projectMembersService.ts',
+    permission: 'project:manage_access',
+    source: 'lib/services/projectRoleDefinitionService.ts',
     gate: 'assertPermission',
   },
   'code-access': {

@@ -189,19 +189,37 @@ export const PROJECT_SETTINGS_NAV: SettingsNavEntry[] = [
     // by activating a row — hence `nestedRoutes` rather than a second entry. The
     // rail keeps this row active on the detail screen (non-`exact` matching).
     //
-    // A JUDGEMENT, not a lookup — the page has no write, so it asserts no key of
-    // its own (MOTIR-2468 owed this decision; the note that deferred it here is
-    // the paragraph this replaces). `member:manage`, for three reasons: the
-    // screen is the reference behind the Members screen's role picker; the
-    // catalog files `member:manage` and `project:manage_access` under the SAME
-    // `member` domain, which is the domain a role IS; and MOTIR-2257 adds role
-    // AUTHORING to this very screen, which is member-domain administration.
-    // The alternative considered and rejected: keeping it `project:browse`, so a
-    // member could read what their own role can do. Rejected because the parent
-    // story's own recipe requires a member to see no settings entries, and
-    // because "what may I do here" is a question the affordances answer in place.
-    permission: 'member:manage',
-    nestedRoutes: ['/settings/project/roles/[roleKey]'],
+    // MOTIR-2468 retired the browse gate this entry shipped with — a member does
+    // NOT read this screen, because the parent story's recipe requires a member
+    // to see no settings entries, and "what may I do here" is a question the
+    // affordances answer in place.
+    //
+    // ⚠️ `project:manage_access`, NOT `member:manage` — CHANGED BY MOTIR-2257, and
+    // the change is the anticipated half of MOTIR-2468's own reasoning arriving.
+    // That entry chose `member:manage` as a JUDGEMENT expressly because *"the page
+    // has no write, so it asserts no key of its own"*, while naming this story as
+    // the one that would add role AUTHORING here. It has: `Create role`, `Edit`
+    // and `Delete` all live on this screen now, and every one of them is gated by
+    // `project:manage_access` at the service (`docs/decisions/permission-inventory.md`
+    // R51 — governed by the shipped key rather than a new one). So the premise
+    // that made `member:manage` a judgement is gone, and the destination now has
+    // a key of its own to LOOK UP.
+    //
+    // The two are identical for all three built-ins, so nothing observable moves
+    // today. They come apart for exactly the thing this story invented: a role
+    // somebody composed by hand can hold one and not the other — and a rail row
+    // that opened onto a screen whose every affordance then refused would be the
+    // "looks governed without being it" failure MOTIR-2469's guard exists to stop,
+    // wearing the other face.
+    permission: 'project:manage_access',
+    // MOTIR-2483 adds the two AUTHORING routes beside the drill-down. The static
+    // `new` segment resolves ahead of the dynamic sibling; all three keep this
+    // row active, so an author never watches the rail lose its place mid-edit.
+    nestedRoutes: [
+      '/settings/project/roles/[roleKey]',
+      '/settings/project/roles/[roleKey]/edit',
+      '/settings/project/roles/new',
+    ],
   },
   {
     id: 'code-access',

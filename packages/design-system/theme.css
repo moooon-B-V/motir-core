@@ -2369,6 +2369,9 @@
   --el-role-admin: var(--color-tint-lavender);
   --el-role-member: var(--color-tint-sky);
   --el-role-viewer: var(--color-tint-mint);
+  /* A project's OWN role (MOTIR-2485) — peach, the next free slot: the members
+     surface had already spent lavender / sky / mint on the three built-ins. */
+  --el-role-custom: var(--color-tint-peach);
   --el-org-role-owner: var(--color-tint-lavender);
   --el-org-role-admin: var(--color-tint-sky);
   --el-org-role-member: var(--color-tint-mint);
