@@ -1,6 +1,7 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { MemberRole, Project } from '@/generated/prisma/client';
@@ -711,21 +712,37 @@ export const projectAccessService = {
     ctx: AccessActorContext,
     tx?: Prisma.TransactionClient,
   ): Promise<RoleCatalogDTO> {
-    // Resolves for its SIDE EFFECT — the ProjectNotFoundError guard. The
-    // permission half is code-owned today; MOTIR-2257 will read the project's own
-    // roles here, which is the reason the projectId is threaded at all.
+    // Resolves for its SIDE EFFECT — the ProjectNotFoundError guard, which runs
+    // BEFORE any read so a foreign project's roles are never returned OR
+    // counted. This is the card MOTIR-2439's note pointed at: the read was built
+    // project-scoped precisely so the day a project has roles of its own,
+    // nothing about its shape had to change.
     await resolveInputs(projectId, ctx, tx);
-    // ONE grouped read for every role's headcount — never one query per role.
-    // Outside a caller-supplied transaction it needs its own workspace context:
-    // the project_membership RLS policy reads the per-transaction GUC, so a bare
-    // `db` read returns zero rows under the non-bypass app role.
-    const counts = tx
-      ? await projectMembershipRepository.countByRole(projectId, tx)
+
+    // ⚠️ TWO GROUPED READS FOR THE WHOLE CATALOG, plus one read of the role rows
+    // — never one query per role. `countByRole` covers memberships on built-ins;
+    // `countByRoleDefinition` covers memberships on custom ones. Both, and the
+    // definitions themselves, run under the SAME workspace context: all three
+    // tables' RLS policies read the per-transaction GUC, so a bare `db` read
+    // returns zero rows under the non-bypass app role.
+    const read = async (t: Prisma.TransactionClient) =>
+      Promise.all([
+        projectMembershipRepository.countByRole(projectId, t),
+        projectMembershipRepository.countByRoleDefinition(projectId, t),
+        projectRoleDefinitionRepository.findManyByProject(projectId, t),
+      ]);
+    const [builtInCounts, customCounts, customRoles] = tx
+      ? await read(tx)
       : await withWorkspaceContext(
           { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
-          (t) => projectMembershipRepository.countByRole(projectId, t),
+          read,
         );
-    return toRoleCatalogDTO(toRoleMemberCounts(counts));
+
+    return toRoleCatalogDTO(
+      toRoleMemberCounts(builtInCounts),
+      customRoles,
+      Object.fromEntries(customCounts.map((c) => [c.roleDefinitionId, c.count])),
+    );
   },
 };
 

@@ -324,12 +324,12 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     const s = await buildScenario('open', 'dto-catalog');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
 
-    expect(catalog.roles.map((r) => r.role)).toEqual(['admin', 'member', 'viewer']);
+    expect(catalog.roles.map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
     for (const role of catalog.roles) {
-      expect(role.builtIn, `${role.role} must be marked built-in`).toBe(true);
-      expect(role.labelKey).toBe(`settings.roles.${role.role}.name`);
+      expect(role.builtIn, `${role.key} must be marked built-in`).toBe(true);
+      expect(role.labelKey).toBe(`settings.roles.${role.key}.name`);
       const positions = role.permissions.map((k) => PERMISSIONS.indexOf(k));
-      expect(positions, `${role.role} permissions out of catalog order`).toEqual(
+      expect(positions, `${role.key} permissions out of catalog order`).toEqual(
         [...positions].sort((a, b) => a - b),
       );
     }
@@ -337,10 +337,10 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // The sets the grid will render, spelled out so a silent widening fails here.
     // MOTIR-2349 widened two of them ON PURPOSE — a viewer gains `report:view`,
     // a member gains six — and those are the only additions this assertion admits.
-    expect([...(catalog.roles.find((r) => r.role === 'viewer')?.permissions ?? [])].sort()).toEqual(
+    expect([...(catalog.roles.find((r) => r.key === 'viewer')?.permissions ?? [])].sort()).toEqual(
       ['project:browse', 'report:view'].sort(),
     );
-    expect([...(catalog.roles.find((r) => r.role === 'member')?.permissions ?? [])].sort()).toEqual(
+    expect([...(catalog.roles.find((r) => r.key === 'member')?.permissions ?? [])].sort()).toEqual(
       [
         'project:browse',
         'work_item:edit',
@@ -352,14 +352,14 @@ describe('the DTO boundary is serialisable and deterministic', () => {
     // Compare as a SET: the DTO emits catalog order, which MOTIR-2277 changed
     // when it grouped the keys by domain. The membership is the contract, not
     // the ordering of the source constant.
-    expect([...(catalog.roles.find((r) => r.role === 'admin')?.permissions ?? [])].sort()).toEqual(
+    expect([...(catalog.roles.find((r) => r.key === 'admin')?.permissions ?? [])].sort()).toEqual(
       [...ROLE_GATED_PERMISSIONS].sort(),
     );
 
     // No role holds a level-gated public-request grant — a role cannot give one.
     for (const role of catalog.roles) {
       for (const key of role.permissions) {
-        expect(key.startsWith('public_request:'), `${role.role} holds ${key}`).toBe(false);
+        expect(key.startsWith('public_request:'), `${role.key} holds ${key}`).toBe(false);
       }
     }
   });
@@ -416,7 +416,11 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
 
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
     for (const role of catalog.roles) {
-      expect(role.memberCount, `${role.role} headcount`).toBe(expected.get(role.role) ?? 0);
+      // `expected` is keyed by the `MemberRole` enum; only a BUILT-IN has one
+      // (`builtInRole` is null for a custom role — MOTIR-2478), and this project
+      // has no custom roles.
+      expect(role.builtInRole).not.toBeNull();
+      expect(role.memberCount, `${role.key} headcount`).toBe(expected.get(role.builtInRole!) ?? 0);
     }
     // `buildScenario` adds exactly one project member per role on an `open`
     // project (the owner is a workspace manager, not a project membership row).
@@ -437,7 +441,7 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
     expect(again.roles.map((r) => r.memberCount)).toEqual([1, 1, 1]);
     expect(
       (await projectAccessService.getRoleCatalog(other.projectId, other.ctxs.owner)).roles.find(
-        (r) => r.role === 'member',
+        (r) => r.key === 'member',
       )?.memberCount,
     ).toBe(2);
   });
@@ -463,9 +467,9 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
       project.id,
       ctxFor(owner.id, workspace.id),
     );
-    expect(catalog.roles.map((r) => r.role)).toEqual(['admin', 'member', 'viewer']);
+    expect(catalog.roles.map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
     for (const role of catalog.roles) {
-      expect(role.memberCount, `${role.role} must be a number, not undefined`).toBe(0);
+      expect(role.memberCount, `${role.key} must be a number, not undefined`).toBe(0);
     }
   });
 
@@ -701,6 +705,144 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     const restored = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
     expect(restored.has('work_item:edit')).toBe(true);
     expect(restored.has('comment:add')).toBe(true);
+  });
+});
+
+describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
+  async function seedRole(
+    fx: Scenario,
+    name: string,
+    basedOn: 'admin' | 'member' | 'viewer',
+    permissions: string[],
+  ) {
+    return db.projectRoleDefinition.create({
+      data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, basedOn, permissions },
+    });
+  }
+
+  it('appends them AFTER the three built-ins, by name, with their provenance', async () => {
+    const s = await buildScenario('open', 'cat-custom');
+    await seedRole(s, 'Reporter', 'viewer', ['project:browse', 'work_item:triage']);
+    await seedRole(s, 'Contractor', 'viewer', ['project:browse', 'comment:add']);
+
+    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    expect(catalog.roles.map((r) => r.name)).toEqual([null, null, null, 'Contractor', 'Reporter']);
+    expect(catalog.roles.slice(0, 3).map((r) => r.key)).toEqual(['admin', 'member', 'viewer']);
+
+    const contractor = catalog.roles.find((r) => r.name === 'Contractor')!;
+    expect(contractor.builtIn).toBe(false);
+    expect(contractor.builtInRole).toBeNull();
+    expect(contractor.labelKey).toBeNull();
+    expect(contractor.basedOn).toBe('viewer');
+    expect(contractor.basedOnDelta).toBe(0); // viewer holds 2; so does this
+    expect(contractor.permissions).toEqual(['project:browse', 'comment:add']);
+  });
+
+  it('a project with NO custom roles returns exactly what it returned before', async () => {
+    // Asserted against the EXISTING expectations rather than rewritten ones —
+    // the widening must be invisible to a project that has no roles of its own.
+    const s = await buildScenario('open', 'cat-none');
+    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    expect(catalog.roles).toHaveLength(3);
+    expect(catalog.roles.every((r) => r.builtIn)).toBe(true);
+  });
+
+  it('every count is real, from TWO grouped reads — the query count does not scale with the roles', async () => {
+    const s = await buildScenario('open', 'cat-counts');
+    const a = await seedRole(s, 'A role', 'viewer', ['project:browse']);
+    const b = await seedRole(s, 'B role', 'viewer', ['project:browse']);
+    const c = await seedRole(s, 'C role', 'viewer', ['project:browse']);
+    await db.$transaction(async (tx) => {
+      await projectMembershipRepository.setRoleDefinition(
+        s.ctxs.member.userId,
+        s.projectId,
+        { roleDefinitionId: a.id, role: 'viewer' },
+        tx,
+      );
+      await projectMembershipRepository.setRoleDefinition(
+        s.ctxs.viewer.userId,
+        s.projectId,
+        { roleDefinitionId: a.id, role: 'viewer' },
+        tx,
+      );
+      await projectMembershipRepository.setRoleDefinition(
+        s.ctxs.admin.userId,
+        s.projectId,
+        { roleDefinitionId: b.id, role: 'viewer' },
+        tx,
+      );
+    });
+
+    async function countReads(): Promise<number> {
+      let reads = 0;
+      const client = db.$extends({
+        query: {
+          async $allOperations({ args, query, operation }) {
+            if (operation.startsWith('find') || operation === 'count' || operation === 'groupBy') {
+              reads += 1;
+            }
+            return query(args);
+          },
+        },
+      });
+      await (client as unknown as typeof db).$transaction(async (tx) => {
+        await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner, tx);
+      });
+      return reads;
+    }
+
+    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    expect(catalog.roles.find((r) => r.name === 'A role')?.memberCount).toBe(2);
+    expect(catalog.roles.find((r) => r.name === 'B role')?.memberCount).toBe(1);
+    expect(catalog.roles.find((r) => r.name === 'C role')?.memberCount).toBe(0);
+    expect(catalog.roles.find((r) => r.key === 'admin')?.memberCount).toBe(0);
+
+    const withThree = await countReads();
+    await seedRole(s, 'D role', 'viewer', ['project:browse']);
+    await seedRole(s, 'E role', 'viewer', ['project:browse']);
+    expect(await countReads()).toBe(withThree);
+    expect(
+      (await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner)).roles,
+    ).toHaveLength(3 + 5);
+    expect(c.id).toBeTruthy();
+  });
+
+  it('the GATE runs before the read — a foreign project`s roles are never returned OR counted', async () => {
+    const mine = await buildScenario('open', 'cat-gate-mine');
+    const theirs = await buildScenario('open', 'cat-gate-theirs');
+    await seedRole(theirs, 'Theirs', 'viewer', ['project:browse']);
+    // It really is there for its own workspace…
+    expect(
+      (await projectAccessService.getRoleCatalog(theirs.projectId, theirs.ctxs.owner)).roles.some(
+        (r) => r.name === 'Theirs',
+      ),
+    ).toBe(true);
+    // …and unreachable from mine.
+    await expect(
+      projectAccessService.getRoleCatalog(theirs.projectId, mine.ctxs.owner),
+    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+  });
+
+  it('is INVISIBLE under a foreign workspace GUC, as the non-bypass app role', async () => {
+    const mine = await buildScenario('open', 'cat-rls-mine');
+    const other = await buildScenario('open', 'cat-rls-other');
+    const role = await seedRole(mine, 'Contractor', 'viewer', ['project:browse']);
+    const leaked = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
+      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      return tx.projectRoleDefinition.findMany({ where: { id: role.id } });
+    });
+    expect(leaked).toEqual([]);
+  });
+
+  it('a stale stored key is dropped from the DTO too, so `N of M` never over-counts', async () => {
+    const s = await buildScenario('open', 'cat-stale');
+    await seedRole(s, 'Stale', 'viewer', [
+      'project:browse',
+      'repository:connect', // retired by MOTIR-2294
+    ]);
+    const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
+    expect(catalog.roles.find((r) => r.name === 'Stale')?.permissions).toEqual(['project:browse']);
   });
 });
 

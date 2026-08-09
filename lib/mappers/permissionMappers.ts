@@ -21,8 +21,16 @@ import type {
 // returns. Every permission list leaves here in CATALOG order, so the boundary is
 // deterministic and the grid never reshuffles between two identical requests.
 
-/** How many of the project's members hold each role — a role absent from the map is `0`. */
+/** How many of the project's members hold each BUILT-IN role — a role absent from the map is `0`. */
 export type RoleMemberCounts = Partial<Record<ProjectRole, number>>;
+
+/** The slice of a `ProjectRoleDefinition` row the mappers need (MOTIR-2478). */
+export interface CustomRoleRow {
+  id: string;
+  name: string;
+  basedOn: string;
+  permissions: string[];
+}
 
 /**
  * The catalog's domain grouping, as the role screens render it — the ROLE-GATED
@@ -69,14 +77,69 @@ function groupsToDTOs(
   }));
 }
 
-/** One built-in role as a DTO — its i18n identity, its set in catalog order, and its headcount. */
+/**
+ * One BUILT-IN role as a DTO — its i18n identity, its set in catalog order, and
+ * its headcount. Its `key` IS its enum value, which is what keeps every existing
+ * `/settings/project/roles/admin` URL working after the MOTIR-2478 widening.
+ */
 export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDTO {
   return {
-    role,
+    key: role,
+    builtInRole: role,
     labelKey: `settings.roles.${role}.name`,
     descriptionKey: `settings.roles.${role}.description`,
+    name: null,
+    description: null,
+    basedOn: null,
+    basedOnDelta: null,
     builtIn: true,
     permissions: sortByCatalogOrder(BUILTIN_ROLE_PERMISSIONS[role]),
+    memberCount,
+  };
+}
+
+/**
+ * One CUSTOM role as a DTO (Story MOTIR-2257 · Subtask MOTIR-2478).
+ *
+ * ⚠️ ITS NAME IS A LITERAL, NEVER AN i18n KEY. A built-in's copy must stay
+ * translatable; an author's name must never be run through a translation lookup,
+ * because it is text a person typed in their own language. So `labelKey` /
+ * `descriptionKey` are null here and `name` / `description` carry the strings —
+ * the client renders whichever is present.
+ *
+ * ⚠️ `builtInRole` IS NULL, and that is what makes the icon map safe. A
+ * `Record<ProjectRole, …>` may only be indexed with a real enum value; a custom
+ * role's `key` is a cuid, so a component that reached for `ROLE_ICON[role.key]`
+ * would be indexing a total record with a string that is not in its domain.
+ *
+ * The stored `permissions` array is intersected with the ROLE-GATED set and
+ * re-sorted into catalog order — the same posture `resolvePermissions` takes
+ * (MOTIR-2470), so a key retired from the catalog after the role was authored is
+ * neither counted nor shown.
+ */
+export function toCustomRoleDTO(
+  row: { id: string; name: string; basedOn: string; permissions: string[] },
+  memberCount: number,
+): RoleDTO {
+  const roleGated = new Set<string>(ROLE_GATED_PERMISSIONS);
+  const held = sortByCatalogOrder(
+    row.permissions.filter((key): key is PermissionKey => roleGated.has(key)),
+  );
+  const basedOn = asProjectRole(row.basedOn);
+  /* istanbul ignore next -- unreachable: `basedOn` is NOT NULL in the schema and the service refuses any value outside PROJECT_ASSIGNABLE_ROLES */
+  if (!basedOn) throw new Error(`Role definition ${row.id} carries a non-assignable base.`);
+  return {
+    key: row.id,
+    builtInRole: null,
+    labelKey: null,
+    descriptionKey: null,
+    name: row.name,
+    description: null,
+    basedOn,
+    // The chip's ±N, computed HERE so a component never re-derives it.
+    basedOnDelta: held.length - BUILTIN_ROLE_PERMISSIONS[basedOn].size,
+    builtIn: false,
+    permissions: held,
     memberCount,
   };
 }
@@ -93,10 +156,25 @@ export function toBuiltinRoleDTO(role: ProjectRole, memberCount: number): RoleDT
  * `levelGatedDomains` carries what `domains` leaves out, so the two together are
  * always the whole catalog.
  */
-export function toRoleCatalogDTO(memberCounts: RoleMemberCounts = {}): RoleCatalogDTO {
+export function toRoleCatalogDTO(
+  memberCounts: RoleMemberCounts = {},
+  customRoles: CustomRoleRow[] = [],
+  customRoleMemberCounts: Record<string, number> = {},
+): RoleCatalogDTO {
   const domains = toPermissionDomainDTOs();
   return {
-    roles: PROJECT_ASSIGNABLE_ROLES.map((role) => toBuiltinRoleDTO(role, memberCounts[role] ?? 0)),
+    // ⚠️ DETERMINISTIC ORDER: the three built-ins in their canonical order, THEN
+    // the project's own roles by name. An order that depended on insertion would
+    // reshuffle the list between two identical requests for no reason a reader
+    // can see — the same argument this file already makes about permission
+    // order. (The repository returns them name-ordered; re-sorting here means
+    // the DTO's contract does not rest on a `findMany` option.)
+    roles: [
+      ...PROJECT_ASSIGNABLE_ROLES.map((role) => toBuiltinRoleDTO(role, memberCounts[role] ?? 0)),
+      ...[...customRoles]
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .map((row) => toCustomRoleDTO(row, customRoleMemberCounts[row.id] ?? 0)),
+    ],
     domains,
     roleGatedPermissionCount: domains.reduce((total, group) => total + group.permissions.length, 0),
     levelGatedDomains: toLevelGatedDomainDTOs(),

@@ -1,11 +1,11 @@
 import Link from 'next/link';
-import { ChevronRight, Eye, Info, Lock, Shield, Users } from 'lucide-react';
+import { ChevronRight, Info, Lock } from 'lucide-react';
 import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
-import type { ProjectRole } from '@/lib/projects/roles';
 import { PermissionMark } from './PermissionMark';
+import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
 
 // The role LIST — screen 1 of the Roles & permissions drill-down (Subtask
 // MOTIR-2263), built to `design/projects/roles-permissions.mock.html` panel 0.
@@ -36,13 +36,6 @@ import { PermissionMark } from './PermissionMark';
 // constant, so the day a custom role narrows the answer per project this
 // component is already right.
 
-/** The tile glyph per built-in role — the mock's shield / users / eye. */
-const ROLE_ICON: Record<ProjectRole, typeof Shield> = {
-  admin: Shield,
-  member: Users,
-  viewer: Eye,
-};
-
 export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
   const t = useTranslations('settings.rolesPage');
 
@@ -55,7 +48,7 @@ export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
 
       <ul className="border-(--el-border) bg-(--el-card) list-none overflow-hidden rounded-(--radius-card) border shadow-(--shadow-card)">
         {catalog.roles.map((role) => (
-          <li key={role.role} className="border-(--el-border-soft) border-b last:border-b-0">
+          <li key={role.key} className="border-(--el-border-soft) border-b last:border-b-0">
             <RoleRow role={role} total={catalog.roleGatedPermissionCount} />
           </li>
         ))}
@@ -73,35 +66,41 @@ export function RoleList({ catalog }: { catalog: RoleCatalogDTO }) {
 function RoleRow({ role, total }: { role: RoleDTO; total: number }) {
   const t = useTranslations('settings.rolesPage');
   const tRoles = useTranslations();
-  const Glyph = ROLE_ICON[role.role];
 
   return (
     <Link
-      href={`/settings/project/roles/${role.role}`}
-      data-role-row={role.role}
+      href={`/settings/project/roles/${role.key}`}
+      data-role-row={role.key}
       className="hover:bg-(--el-surface-soft) focus-visible:ring-(--focus-ring-color) grid grid-cols-[36px_minmax(0,1fr)_auto_16px] items-center gap-3.5 px-(--spacing-card-padding) py-(--spacing-control-y) focus-visible:ring-2 focus-visible:ring-inset focus-visible:outline-none"
     >
       <span
         aria-hidden="true"
-        className="bg-(--el-tint-lavender) text-(--el-text-strong) flex h-9 w-9 items-center justify-center rounded-(--radius-control)"
+        className={`${roleTileTint(role)} flex h-9 w-9 items-center justify-center rounded-(--radius-control)`}
       >
-        <Glyph className="h-[17px] w-[17px]" />
+        <RoleGlyph role={role} className="h-[17px] w-[17px]" />
       </span>
 
       <span className="min-w-0">
         <span className="flex flex-wrap items-center gap-2">
           <span className="text-(--el-text) font-sans text-sm font-semibold">
-            {tRoles(role.labelKey)}
+            {roleName(role, tRoles)}
           </span>
           {role.builtIn ? (
             <span className="text-(--el-text-secondary) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
               <Lock aria-hidden="true" className="h-3 w-3" />
               {t('builtIn')}
             </span>
-          ) : null}
+          ) : (
+            /* The `Custom` chip — `--el-tint-sky`, the slot the design pairs with
+               a custom role (`severity="info"` is that token; `tone` has no sky).
+               The kind is in WORDS, so the tint is never load-bearing. */
+            <Pill severity="info" className="shrink-0">
+              {t('custom')}
+            </Pill>
+          )}
         </span>
         <span className="text-(--el-text-muted) mt-0.5 block font-sans text-[12.5px] leading-relaxed">
-          {tRoles(role.descriptionKey)}
+          {roleDescription(role, tRoles)}
         </span>
       </span>
 

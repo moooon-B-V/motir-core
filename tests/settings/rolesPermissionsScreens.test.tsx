@@ -118,7 +118,7 @@ describe('the role LIST (screen 1)', () => {
 });
 
 describe('the role DETAIL (screen 2)', () => {
-  const member = CATALOG.roles.find((role) => role.role === 'member')!;
+  const member = CATALOG.roles.find((role) => role.key === 'member')!;
 
   it('renders every role-gated permission, grouped under its domain heading', () => {
     renderWith(<RoleDetail role={member} catalog={CATALOG} projectName="motir" />);
@@ -188,7 +188,7 @@ describe('the zh catalog carries every string these screens render', () => {
     const { container: list } = renderWith(<RoleList catalog={CATALOG} />, zhMessages);
     expectNoRawKeys(list);
     cleanup();
-    const member = CATALOG.roles.find((role) => role.role === 'member')!;
+    const member = CATALOG.roles.find((role) => role.key === 'member')!;
     const { container: detail } = renderWith(
       <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
       zhMessages,
@@ -230,7 +230,7 @@ describe('a11y — zero axe violations on both screens', () => {
   });
 
   it('the role detail', async () => {
-    const member = CATALOG.roles.find((role) => role.role === 'member')!;
+    const member = CATALOG.roles.find((role) => role.key === 'member')!;
     const { container } = renderWith(
       <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
     );
@@ -238,35 +238,131 @@ describe('a11y — zero axe violations on both screens', () => {
   });
 });
 
-// The branches the three built-in roles cannot reach on their own. `builtIn` is a
-// FIELD on the DTO precisely so the chip reads it rather than assuming — a
-// distinction that only becomes visible when MOTIR-2257 ships a role for which it
-// is false. Driving it now with a synthetic DTO tests the component's actual
-// contract; waiting for that story would mean shipping an untested branch and
-// discovering it in the story that depends on it.
-describe('the branches a built-in-only catalog cannot reach', () => {
-  const CUSTOM: RoleCatalogDTO = {
-    ...CATALOG,
-    roles: [
+// A project's OWN roles, rendered READ-ONLY (Story MOTIR-2257 · Subtask
+// MOTIR-2478). Built from the REAL mapper rather than a hand-spread built-in
+// DTO: a `{ builtIn: false, labelKey: 'settings.roles.member.name' }` object is
+// a shape the read can no longer produce, so a test driven by one would prove
+// something about a value that cannot occur.
+describe('a project`s OWN roles on the two screens', () => {
+  const CUSTOM: RoleCatalogDTO = toRoleCatalogDTO(
+    { admin: 3, member: 12, viewer: 0 },
+    [
       {
-        ...CATALOG.roles.find((role) => role.role === 'member')!,
-        builtIn: false,
-        memberCount: 4,
+        id: 'r_contractor',
+        name: 'Contractor',
+        basedOn: 'viewer',
+        permissions: ['project:browse', 'comment:add', 'attachment:create'],
       },
     ],
-  };
+    { r_contractor: 4 },
+  );
+  const contractor = CUSTOM.roles.find((role) => role.key === 'r_contractor')!;
 
-  it('a NON-built-in role gets no lock chip on the list', () => {
+  it('the LIST renders its literal name — never run through a translation lookup', () => {
     renderWith(<RoleList catalog={CUSTOM} />);
-    expect(screen.queryByText('Built-in')).toBeNull();
+    expect(screen.getByText('Contractor')).toBeTruthy();
+    // A `t()` miss would echo the key; this asserts neither happened.
+    expect(screen.queryByText(/settings\.roles\./)).toBeNull();
     expect(screen.getByText('4 members')).toBeTruthy();
   });
 
-  it('a NON-built-in role gets no lock line on the detail', () => {
-    renderWith(<RoleDetail role={CUSTOM.roles[0]!} catalog={CUSTOM} projectName="motir" />);
+  it('it links by its ID, and the built-ins still link by their enum value', () => {
+    renderWith(<RoleList catalog={CUSTOM} />);
+    expect(screen.getAllByRole('link').map((row) => row.getAttribute('href'))).toEqual([
+      '/settings/project/roles/admin',
+      '/settings/project/roles/member',
+      '/settings/project/roles/viewer',
+      '/settings/project/roles/r_contractor',
+    ]);
+  });
+
+  it('it wears the `Custom` chip and NO lock; the built-ins are unchanged', () => {
+    renderWith(<RoleList catalog={CUSTOM} />);
+    expect(screen.getByText('Custom')).toBeTruthy();
+    // Three built-ins, three locks — the custom row adds none.
+    expect(screen.getAllByText('Built-in')).toHaveLength(3);
+  });
+
+  it('the DETAIL renders the `Based on … · ±N` provenance chip', () => {
+    renderWith(<RoleDetail role={contractor} catalog={CUSTOM} projectName="motir" />);
+    expect(screen.getByText('Contractor')).toBeTruthy();
+    // Contractor holds 3; Viewer holds 2 → +1.
+    expect(screen.getByText('Based on Viewer · +1')).toBeTruthy();
     expect(screen.queryByText('Built-in · can’t be changed')).toBeNull();
-    // …and the rest of the screen is unchanged: the permissions still render.
     expect(document.querySelector('[data-permission]')).toBeTruthy();
+  });
+
+  it('the chip signs the delta — `+N`, a real MINUS for `−N`, and `±0` for a role that matches its base', () => {
+    // The design's exact string is `Based on Member · −2`: a U+2212 MINUS SIGN,
+    // not a hyphen. And a role holding precisely its base's set is `±0` rather
+    // than a bare `0`, which would read as "holds nothing".
+    const cases: Array<{ basedOn: 'admin' | 'member' | 'viewer'; held: string[]; text: string }> = [
+      { basedOn: 'viewer', held: ['project:browse'], text: 'Based on Viewer · \u22121' },
+      {
+        basedOn: 'viewer',
+        held: ['project:browse', 'report:view'],
+        text: 'Based on Viewer · \u00b10',
+      },
+    ];
+    for (const { basedOn, held, text } of cases) {
+      const catalog = toRoleCatalogDTO(
+        {},
+        [{ id: 'r_x', name: 'Narrowed', basedOn, permissions: held }],
+        {},
+      );
+      renderWith(
+        <RoleDetail
+          role={catalog.roles.find((r) => r.key === 'r_x')!}
+          catalog={catalog}
+          projectName="motir"
+        />,
+      );
+      expect(screen.getByText(text), text).toBeTruthy();
+      cleanup();
+    }
+  });
+
+  it('a built-in`s detail carries NO provenance chip — it was cloned from nothing', () => {
+    const member = CUSTOM.roles.find((role) => role.key === 'member')!;
+    renderWith(<RoleDetail role={member} catalog={CUSTOM} projectName="motir" />);
+    expect(screen.queryByText(/^Based on /)).toBeNull();
+  });
+
+  it('BOTH screens stay READ-ONLY for every actor, a project admin included', () => {
+    // MOTIR-2478 adds no control. `Edit` / `Delete` / `Create role` and the
+    // delete-with-reassign dialog are MOTIR-2480's.
+    const { container: list } = renderWith(<RoleList catalog={CUSTOM} />);
+    expect(within(list).queryAllByRole('button')).toEqual([]);
+    expect(within(list).queryByText(/Create role/)).toBeNull();
+    cleanup();
+    const { container: detail } = renderWith(
+      <RoleDetail role={contractor} catalog={CUSTOM} projectName="motir" />,
+    );
+    expect(within(detail).queryAllByRole('button')).toEqual([]);
+    expect(within(detail).queryByText(/^Edit$/)).toBeNull();
+    expect(within(detail).queryByText(/^Delete$/)).toBeNull();
+  });
+
+  it('renders no raw catalog key, and passes axe, with a custom role present', async () => {
+    const { container } = renderWith(<RoleList catalog={CUSTOM} />);
+    expectNoRawKeys(container);
+    expect(
+      (
+        await axe.run(container, {
+          rules: { 'color-contrast': { enabled: false }, region: { enabled: false } },
+        })
+      ).violations,
+    ).toEqual([]);
+  });
+
+  it('the zh catalog carries the two new strings — the parity gate, at the point of use', () => {
+    renderWith(<RoleList catalog={CUSTOM} />, zhMessages as unknown as Record<string, unknown>);
+    const zhRoles = zhMessages.settings.rolesPage;
+    expect(zhRoles.custom).toBeTruthy();
+    expect(zhRoles.basedOn).toBeTruthy();
+    expect(screen.getByText(zhRoles.custom)).toBeTruthy();
+    // The author's own name is NOT translated in any locale.
+    expect(screen.getByText('Contractor')).toBeTruthy();
   });
 
   it('omits the access-level card entirely when the read returns no level-gated keys', () => {
@@ -279,7 +375,7 @@ describe('the branches a built-in-only catalog cannot reach', () => {
 
   it('marks every row withheld for a role that holds nothing at all', () => {
     const empty: RoleDTO = {
-      ...CATALOG.roles.find((role) => role.role === 'viewer')!,
+      ...CATALOG.roles.find((role) => role.key === 'viewer')!,
       permissions: [],
     };
     renderWith(<RoleDetail role={empty} catalog={CATALOG} projectName="motir" />);
@@ -306,7 +402,7 @@ describe('AA — the screens carry no un-measurable ink on informational text', 
   it('uses --el-text-faint only on glyphs whose meaning lives in a label', () => {
     const { container: list } = renderWith(<RoleList catalog={CATALOG} />);
     cleanup();
-    const member = CATALOG.roles.find((role) => role.role === 'member')!;
+    const member = CATALOG.roles.find((role) => role.key === 'member')!;
     const { container: detail } = renderWith(
       <RoleDetail role={member} catalog={CATALOG} projectName="motir" />,
     );

@@ -2641,7 +2641,9 @@
         "title": "Public requests",
         "description": "Granted by the project’s access level, not by a role — which is why they are not a role in the list above. Every visitor of a public project holds all three, signed in or not; nobody holds them on an open, limited or private project, a workspace owner included.",
         "chip": "Access level"
-      }
+      },
+      "custom": "Custom",
+      "basedOn": "Based on {base} · {delta}"
     }
   },
   "boards": {

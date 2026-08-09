@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   toBuiltinRoleDTO,
+  toCustomRoleDTO,
   toLevelGatedDomainDTOs,
   toPermissionDomainDTOs,
   toRoleCatalogDTO,
@@ -63,7 +64,8 @@ describe('toBuiltinRoleDTO carries the headcount alongside the set', () => {
 
   it('keeps the role identity and its set unchanged', () => {
     const dto = toBuiltinRoleDTO('viewer', 0);
-    expect(dto.role).toBe('viewer');
+    expect(dto.key).toBe('viewer');
+    expect(dto.builtInRole).toBe('viewer');
     expect(dto.builtIn).toBe(true);
     expect(dto.labelKey).toBe('settings.roles.viewer.name');
     expect(dto.descriptionKey).toBe('settings.roles.viewer.description');
@@ -74,13 +76,13 @@ describe('toBuiltinRoleDTO carries the headcount alongside the set', () => {
 describe('toRoleCatalogDTO', () => {
   it('zero-fills a role nobody holds rather than omitting the key', () => {
     const catalog = toRoleCatalogDTO({ admin: 2 });
-    expect(catalog.roles.map((r) => r.role)).toEqual([...PROJECT_ASSIGNABLE_ROLES]);
-    expect(catalog.roles.find((r) => r.role === 'admin')?.memberCount).toBe(2);
+    expect(catalog.roles.map((r) => r.key)).toEqual([...PROJECT_ASSIGNABLE_ROLES]);
+    expect(catalog.roles.find((r) => r.key === 'admin')?.memberCount).toBe(2);
     for (const role of catalog.roles) {
-      expect(typeof role.memberCount, `${role.role} must carry a number`).toBe('number');
+      expect(typeof role.memberCount, `${role.key} must carry a number`).toBe('number');
     }
-    expect(catalog.roles.find((r) => r.role === 'member')?.memberCount).toBe(0);
-    expect(catalog.roles.find((r) => r.role === 'viewer')?.memberCount).toBe(0);
+    expect(catalog.roles.find((r) => r.key === 'member')?.memberCount).toBe(0);
+    expect(catalog.roles.find((r) => r.key === 'viewer')?.memberCount).toBe(0);
   });
 
   it('defaults every count to zero when no counts are supplied at all', () => {
@@ -104,7 +106,7 @@ describe('toRoleCatalogDTO', () => {
     }
     // Admin holds the whole role-gated set, which is what makes `M` the right
     // denominator rather than the catalog's own length.
-    expect(catalog.roles.find((r) => r.role === 'admin')?.permissions.length).toBe(
+    expect(catalog.roles.find((r) => r.key === 'admin')?.permissions.length).toBe(
       catalog.roleGatedPermissionCount,
     );
   });
@@ -144,5 +146,101 @@ describe('toLevelGatedDomainDTOs is the exact complement of the role rows', () =
         expect(permission.labelKey).toMatch(/^permissions\.[a-z_]+\.label$/);
       }
     }
+  });
+});
+
+// ── Custom roles (Story MOTIR-2257 · Subtask MOTIR-2478) ────────────────────
+
+describe('toCustomRoleDTO', () => {
+  const ROW = {
+    id: 'role_contractor',
+    name: 'Contractor',
+    basedOn: 'viewer',
+    permissions: ['comment:add', 'project:browse', 'attachment:create'],
+  };
+
+  it('carries the literal name and NO i18n key — an author`s name is never translated', () => {
+    const dto = toCustomRoleDTO(ROW, 4);
+    expect(dto.key).toBe('role_contractor');
+    expect(dto.name).toBe('Contractor');
+    expect(dto.labelKey).toBeNull();
+    expect(dto.descriptionKey).toBeNull();
+    expect(dto.builtIn).toBe(false);
+    expect(dto.memberCount).toBe(4);
+  });
+
+  it('`builtInRole` is NULL — so a `Record<ProjectRole, …>` is never indexed with a cuid', () => {
+    expect(toCustomRoleDTO(ROW, 0).builtInRole).toBeNull();
+  });
+
+  it('emits its permissions in CATALOG order, whatever order they were stored in', () => {
+    const dto = toCustomRoleDTO(ROW, 0);
+    const positions = dto.permissions.map((k) => PERMISSIONS.indexOf(k));
+    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+    expect([...dto.permissions].sort()).toEqual(
+      ['project:browse', 'comment:add', 'attachment:create'].sort(),
+    );
+  });
+
+  it('computes the chip`s ±N against its BASE, in the mapper', () => {
+    // Viewer holds 2; this role holds 3 → +1.
+    expect(toCustomRoleDTO(ROW, 0).basedOn).toBe('viewer');
+    expect(toCustomRoleDTO(ROW, 0).basedOnDelta).toBe(3 - BUILTIN_ROLE_PERMISSIONS.viewer.size);
+    // A role that holds exactly its base's set is ±0, not null.
+    const same = toCustomRoleDTO(
+      { ...ROW, basedOn: 'viewer', permissions: [...BUILTIN_ROLE_PERMISSIONS.viewer] },
+      0,
+    );
+    expect(same.basedOnDelta).toBe(0);
+    // And one that took things away is negative.
+    const fewer = toCustomRoleDTO({ ...ROW, basedOn: 'admin', permissions: ['project:browse'] }, 0);
+    expect(fewer.basedOnDelta).toBe(1 - BUILTIN_ROLE_PERMISSIONS.admin.size);
+  });
+
+  it('a key retired from the catalog is neither counted nor shown', () => {
+    const stale = toCustomRoleDTO(
+      { ...ROW, permissions: ['project:browse', 'repository:connect', 'not:a:permission'] },
+      0,
+    );
+    expect(stale.permissions).toEqual(['project:browse']);
+    expect(stale.basedOnDelta).toBe(1 - BUILTIN_ROLE_PERMISSIONS.viewer.size);
+  });
+});
+
+describe('toRoleCatalogDTO with a project`s own roles', () => {
+  const rows = [
+    { id: 'r_reporter', name: 'Reporter', basedOn: 'viewer', permissions: ['project:browse'] },
+    { id: 'r_contractor', name: 'Contractor', basedOn: 'viewer', permissions: ['project:browse'] },
+  ];
+
+  it('puts the three built-ins FIRST, then the custom roles BY NAME — deterministically', () => {
+    const catalog = toRoleCatalogDTO({}, rows, {});
+    expect(catalog.roles.map((r) => r.key)).toEqual([
+      ...PROJECT_ASSIGNABLE_ROLES,
+      'r_contractor', // Contractor sorts before Reporter
+      'r_reporter',
+    ]);
+    // And the order does NOT depend on the order the rows arrived in.
+    expect(toRoleCatalogDTO({}, [...rows].reverse(), {}).roles.map((r) => r.key)).toEqual(
+      catalog.roles.map((r) => r.key),
+    );
+  });
+
+  it('zero-fills a custom role nobody holds, and reports the count it was given', () => {
+    const catalog = toRoleCatalogDTO({}, rows, { r_contractor: 4 });
+    expect(catalog.roles.find((r) => r.key === 'r_contractor')?.memberCount).toBe(4);
+    expect(catalog.roles.find((r) => r.key === 'r_reporter')?.memberCount).toBe(0);
+  });
+
+  it('a project with NO custom roles returns EXACTLY what it returned before', () => {
+    // The regression that matters: the widening must not change the shipped
+    // answer for a project that has no roles of its own.
+    expect(toRoleCatalogDTO({ admin: 2 }, [], {})).toEqual(toRoleCatalogDTO({ admin: 2 }));
+  });
+
+  it('`roleGatedPermissionCount` is unaffected by how many roles exist', () => {
+    expect(toRoleCatalogDTO({}, rows, {}).roleGatedPermissionCount).toBe(
+      toRoleCatalogDTO().roleGatedPermissionCount,
+    );
   });
 });

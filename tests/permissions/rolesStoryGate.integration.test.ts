@@ -214,7 +214,9 @@ describe('the widened DTO survives the round trip through real rows', () => {
     });
     const expected = new Map(seeded.map((row) => [row.role, row._count._all]));
     for (const role of catalog.roles) {
-      expect(role.memberCount, `${role.role}`).toBe(expected.get(role.role) ?? 0);
+      // Keyed by the `MemberRole` enum, which only a BUILT-IN carries.
+      expect(role.builtInRole).not.toBeNull();
+      expect(role.memberCount, `${role.key}`).toBe(expected.get(role.builtInRole!) ?? 0);
     }
 
     // The screens' own contract, read off the SERVICE rather than the mapper.
@@ -231,7 +233,7 @@ describe('the widened DTO survives the round trip through real rows', () => {
     // so the marks a real member would see are the capabilities they really have.
     const s = await buildScenario('open', 'seam-marks');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.member);
-    const memberRole = catalog.roles.find((role) => role.role === 'member')!;
+    const memberRole = catalog.roles.find((role) => role.key === 'member')!;
     const held = await projectAccessService.getPermissions(s.projectId, s.ctxs.member);
     for (const key of ROLE_GATED_PERMISSIONS) {
       expect(memberRole.permissions.includes(key), `member mark for ${key}`).toBe(held.has(key));
@@ -461,9 +463,13 @@ describe('guard — both i18n catalogs stay total over the ROLE-GATED keys', () 
         expect(lookup(messages, group.labelKey), `${locale} ${group.labelKey}`).toBeTruthy();
       }
       for (const role of catalog.roles) {
+        // Every BUILT-IN carries i18n keys; a custom role carries literals instead
+        // and must never be run through a translation lookup (MOTIR-2478).
+        if (!role.labelKey) continue;
         expect(lookup(messages, role.labelKey), `${locale} ${role.labelKey}`).toBeTruthy();
+        expect(role.descriptionKey).not.toBeNull();
         expect(
-          lookup(messages, role.descriptionKey),
+          lookup(messages, role.descriptionKey!),
           `${locale} ${role.descriptionKey}`,
         ).toBeTruthy();
       }

@@ -1,9 +1,10 @@
 import Link from 'next/link';
-import { ArrowLeft, Eye, Lock, Shield, Users } from 'lucide-react';
+import { ArrowLeft, GitBranch, Lock, Users } from 'lucide-react';
 import { useTranslations } from 'next-intl';
+import { Pill } from '@/components/ui/Pill';
 import type { RoleCatalogDTO, RoleDTO } from '@/lib/dto/permissions';
-import type { ProjectRole } from '@/lib/projects/roles';
 import { PermissionGroups } from './PermissionGroups';
+import { RoleGlyph, roleDescription, roleName, roleTileTint } from './roleIdentity';
 
 // The role DETAIL — screen 2 of the drill-down (Subtask MOTIR-2263), built to
 // `design/projects/roles-permissions.mock.html` panel 1: one role's permissions
@@ -18,14 +19,18 @@ import { PermissionGroups } from './PermissionGroups';
 //
 // ⚠️ A BUILT-IN ROLE GETS A LOCK AND NO CONTROL AT ALL. Not a disabled Edit, not
 // a greyed Delete: the three built-ins reproduce the shipped behaviour by
-// definition, so editing one is not a thing that exists. `Edit` / `Delete` and
-// the `Based on …` provenance chip arrive with custom roles (MOTIR-2257).
-
-const ROLE_ICON: Record<ProjectRole, typeof Shield> = {
-  admin: Shield,
-  member: Users,
-  viewer: Eye,
-};
+// definition, so editing one is not a thing that exists.
+//
+// ⚠️ STILL READ-ONLY FOR EVERY ACTOR, A PROJECT ADMIN INCLUDED (MOTIR-2478). A
+// custom role now RENDERS here — with its `Custom` chip and its `Based on … · ±N`
+// provenance — but this card adds no control. `Edit`, `Delete` and the
+// delete-with-reassign dialog are MOTIR-2480's, drawn in panels 2 and 5 of
+// `design/projects/roles-permissions.mock.html`.
+//
+// ⚠️ THE PROVENANCE CHIP IS WHERE THE SIDE-BY-SIDE COMPARISON WENT. The design
+// gave up a matrix's four-columns-at-once and bought back something exact:
+// "Contractor is Viewer plus two". `basedOnDelta` is computed in the mapper, so
+// nothing here does arithmetic over a role set.
 
 export function RoleDetail({
   role,
@@ -38,13 +43,12 @@ export function RoleDetail({
 }) {
   const t = useTranslations('settings.rolesPage');
   const tCatalog = useTranslations();
-  const Glyph = ROLE_ICON[role.role];
-  const roleName = tCatalog(role.labelKey);
+  const displayName = roleName(role, tCatalog);
 
   return (
     <div className="flex flex-col">
       <p className="text-(--el-text-secondary) mb-2 font-mono text-[11px] tracking-[0.02em]">
-        {t('crumbs', { projectName, roleName })}
+        {t('crumbs', { projectName, roleName: displayName })}
       </p>
 
       <Link
@@ -59,20 +63,33 @@ export function RoleDetail({
         <div className="flex min-w-0 items-start gap-3">
           <span
             aria-hidden="true"
-            className="bg-(--el-tint-lavender) text-(--el-text-strong) flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control)"
+            className={`${roleTileTint(role)} flex h-9 w-9 shrink-0 items-center justify-center rounded-(--radius-control)`}
           >
-            <Glyph className="h-[17px] w-[17px]" />
+            <RoleGlyph role={role} className="h-[17px] w-[17px]" />
           </span>
           <div className="min-w-0">
-            <h1 className="text-(--el-text) font-serif text-xl font-semibold">{roleName}</h1>
+            <h1 className="text-(--el-text) font-serif text-xl font-semibold">{displayName}</h1>
             <p className="text-(--el-text-muted) mt-1.5 max-w-[62ch] font-sans text-[13px] leading-relaxed">
-              {tCatalog(role.descriptionKey)}
+              {roleDescription(role, tCatalog)}
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               {role.builtIn ? (
                 <span className="text-(--el-text-secondary) inline-flex items-center gap-1 font-sans text-[11px] font-medium whitespace-nowrap">
                   <Lock aria-hidden="true" className="h-3 w-3" />
                   {t('builtInLocked')}
+                </span>
+              ) : (
+                <Pill severity="info" className="shrink-0">
+                  {t('custom')}
+                </Pill>
+              )}
+              {role.basedOn ? (
+                <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-5 items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) font-sans text-[11.5px] whitespace-nowrap">
+                  <GitBranch aria-hidden="true" className="h-3 w-3" />
+                  {t('basedOn', {
+                    base: tCatalog(`settings.roles.${role.basedOn}.name`),
+                    delta: formatDelta(role.basedOnDelta ?? 0),
+                  })}
                 </span>
               ) : null}
               <span className="bg-(--el-muted) text-(--el-text-secondary) inline-flex h-5 items-center gap-1.5 rounded-(--radius-badge) px-(--spacing-chip-x) font-sans text-[11.5px] whitespace-nowrap">
@@ -96,4 +113,15 @@ export function RoleDetail({
       </div>
     </div>
   );
+}
+
+/**
+ * The provenance chip's `±N`, signed and with a MINUS SIGN rather than a hyphen
+ * — `Based on Member · −2` is the design's exact string. `0` renders as `±0`,
+ * which is the honest reading of a role that holds precisely its base's set.
+ */
+function formatDelta(delta: number): string {
+  if (delta > 0) return `+${delta}`;
+  if (delta < 0) return `\u2212${Math.abs(delta)}`;
+  return '\u00b10';
 }
