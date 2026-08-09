@@ -5,6 +5,7 @@ import { projectMembershipRepository } from '@/lib/repositories/projectMembershi
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import { isEnforced, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { asProjectRole, type ProjectRole } from '@/lib/projects/roles';
@@ -158,6 +159,24 @@ export interface DeleteRoleInput {
 }
 
 export const projectRoleDefinitionService = {
+  /**
+   * Resolve a project `[key]` segment to its id (Story MOTIR-2257 · Subtask
+   * MOTIR-2474). A SERVER COMPONENT already holds the id (`getActiveProject`);
+   * an HTTP route holds the key, and resolving one is a READ the service owns
+   * rather than logic a route may carry.
+   *
+   * Routes through the ONE alias-aware resolver every key-addressed read funnels
+   * through, so a RETIRED key keeps working here exactly as it does on the
+   * members routes — and a key naming a project in another workspace raises
+   * `ProjectNotFoundError` (404), with no existence leak.
+   */
+  async resolveProjectIdByKey(key: string, ctx: AccessActorContext): Promise<string> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const { project } = await resolveProjectByKeyWithAliasInTx(key, ctx.workspaceId, tx);
+      return project.id;
+    });
+  },
+
   /** One of the project's own roles, by id. Gated on `project:manage_access`. */
   async findById(
     projectId: string,

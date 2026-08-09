@@ -314,6 +314,8 @@ worse failure than a gap.
 
 **R50.** A per-user, per-project node ARRANGEMENT of the planning canvas — the actor's own view state inside a project they already have open, not a planning act and not something that spends anything. Governed by `project:browse`: you may arrange the canvas of a project you can see.
 
+**R51.** A project's OWN roles — authoring one, re-permissioning it, deleting it with a reassignment (Story MOTIR-2257 · MOTIR-2474). Governed by **`project:manage_access`**, the SAME key that already governs add-member / set-role / set-access-level, and deliberately NOT a new catalog key: a role definition IS project access, and whoever may decide who is on a project may decide what the roles on it mean. Splitting the two would let an actor hand out a role they could not have authored, or author one they could not hand out — a distinction with no operational meaning that doubles the surface an admin has to reason about. There is no GET: the settings screens are server components reading through `getRoleCatalog`, and no client fetches a role list.
+
 ---
 
 ## The full table
@@ -520,6 +522,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/projects/[key]/members`          | GET          | `projectMembersService.listMembers` → `assertPermission`            | `project:browse`        | existing | R27 |
 | `/api/projects/[key]/members`          | POST         | `projectMembersService.addMember` → `assertPermission`              | `member:manage`         | existing | R27 |
 | `/api/projects/[key]/members/[userId]` | DELETE/PATCH | `projectMembersService.{removeMember,setRole}` → `assertPermission` | `member:manage`         | existing | R27 |
+| `/api/projects/[key]/roles`            | POST         | `projectRoleDefinitionService.create` → `assertPermission`          | `project:manage_access` | existing | R51 |
+| `/api/projects/[key]/roles/[roleId]`   | PATCH/DELETE | `projectRoleDefinitionService.{update,delete}` → `assertPermission` | `project:manage_access` | existing | R51 |
 
 ### `project`
 
