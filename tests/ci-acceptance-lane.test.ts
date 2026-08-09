@@ -139,6 +139,22 @@ describe('the acceptance-video lane is story-scoped (MOTIR-1949)', () => {
     expect(e2eBody).not.toMatch(/^\s*id-token:\s*write/m);
   });
 
+  it('does NOT run the publish under `continue-on-error` (MOTIR-2499)', () => {
+    // THE fail-open. `continue-on-error: true` rewrites a step's conclusion to
+    // `success` — on the checks UI, in `gh pr checks`, and in the REST API —
+    // even on exit 1. Measured: from 2026-08-07 the publish failed on every run
+    // ("Published 0 of 2", two `##[error]` lines) and the lane reported `pass`
+    // each time, so two stories lost their receipt with nothing saying so.
+    //
+    // Asserted at the STEP, not the file: the workflow is allowed to keep the
+    // key elsewhere, and it is only the publish step whose exit code is the
+    // signal. Steps are `- ` items at eight spaces inside `steps:`.
+    const steps = acceptanceJob!.split(/^ {6}- /m).slice(1);
+    const publish = steps.find((s) => s.includes('node scripts/upload-acceptance-video.mjs'));
+    expect(publish).toBeDefined();
+    expect(codeOf(publish!)).not.toMatch(/continue-on-error/);
+  });
+
   it('uploads its report under a name the e2e legs cannot collide with', () => {
     // upload-artifact@v4+ errors on a duplicate name; the e2e legs upload
     // `playwright-report-${{ matrix.id }}`.

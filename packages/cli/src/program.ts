@@ -143,7 +143,7 @@ export function buildProgram(): Command {
     .option('--workspace <slug>', 'Workspace slug (defaults to the token’s active workspace).')
     .option(
       '--project <key>',
-      'Project key, e.g. PROD. Omit it and the workspace’s only project is used.',
+      'Project key, e.g. ACME. Omit it and the workspace’s only project is used.',
     )
     .option(
       '--repo <name>',

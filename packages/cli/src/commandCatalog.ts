@@ -233,7 +233,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
       },
       {
         flags: '--project <key>',
-        description: 'Project key, e.g. PROD. Omit it and the workspace’s only project is used.',
+        description: 'Project key, e.g. ACME. Omit it and the workspace’s only project is used.',
       },
       {
         flags: '--repo <name>',
@@ -322,7 +322,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'show',
     signature: '<key>',
-    description: 'Read one work item (e.g. PROD-7): fields, readiness, children, edges, body.',
+    description: 'Read one work item (e.g. ACME-7): fields, readiness, children, edges, body.',
     helpGroup: HELP_GROUP.read,
     options: [
       {
@@ -359,7 +359,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'open',
     signature: '<key>',
-    description: 'Open a work item (e.g. PROD-7) in the browser; prints the URL.',
+    description: 'Open a work item (e.g. ACME-7) in the browser; prints the URL.',
     helpGroup: HELP_GROUP.read,
     options: [
       {
@@ -395,7 +395,7 @@ export const COMMAND_CATALOG: readonly CommandCatalogEntry[] = [
   {
     path: 'run',
     signature: '<key>',
-    description: 'Dispatch a SPECIFIC work item (e.g. PROD-7), ready or forced.',
+    description: 'Dispatch a SPECIFIC work item (e.g. ACME-7), ready or forced.',
     helpGroup: HELP_GROUP.workLoop,
     options: [
       {

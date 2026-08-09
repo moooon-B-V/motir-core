@@ -19,11 +19,12 @@
 // So this file widens BOTH arms: the unswept areas, and a POPULATED fixture on
 // every route it adds. Nothing here is a new kind of check — same `WCAG_TAGS`,
 // same `formatViolations` reporting as the three sibling files. It is the same
-// sweep pointed at more of the product. ONE route still carries a NAMED,
-// single-element carve-out citing the card that removes it (see "WHAT WIDENING
-// FOUND" below — /docs's was removed by MOTIR-2494 and /backlog's by MOTIR-2493,
-// so both are back to zero-exclusion sweeps); every other route runs with zero
-// exclusions, and no rule is disabled anywhere without a bug key beside it.
+// sweep pointed at more of the product. EVERY route below now runs with ZERO
+// exclusions: this file opened with three NAMED carve-outs and all three have
+// been deleted by the cards that owned them (see "WHAT WIDENING FOUND" below —
+// /docs's went with MOTIR-2494, /settings/organization's with MOTIR-2495, and
+// /backlog's with MOTIR-2493). Nothing is disabled or excluded anywhere here any
+// more, and nothing should be re-added without a bug key beside it.
 //
 // A FOURTH file rather than more entries in `shell-a11y.spec.ts`: the @a11y CI
 // leg shards by FILE (see the split rationale in shell-a11y.spec.ts's header
@@ -69,12 +70,16 @@
 //     whose cause is not an ink choice, so no ink fixes it). Each had a NAMED
 //     carve-out below citing its card, and each of those cards removes its own
 //     carve-out. A carve-out here is a tracked gap, never a silent one.
-//     MOTIR-2494 and MOTIR-2493 have both since landed and DELETED theirs, so
-//     /docs and /backlog are each swept with zero exclusions again — and the
-//     three rules they had disabled (`scrollable-region-focusable` there,
-//     `aria-required-children` + `aria-required-parent` here) now guard those
-//     fixes instead of hiding them. MOTIR-2495 is still open and still carries
-//     its exclusion.
+//     ALL THREE have since landed and DELETED theirs: MOTIR-2494 made the /docs
+//     code panes keyboard-scrollable, MOTIR-2495 moved the shared `Input`'s
+//     `disabled` / `readOnly` states onto `--el-input-*` fills instead of an
+//     opacity filter, and MOTIR-2493 made the backlog's rows `listitem`s of the
+//     `list` they were already sitting inside. So the three rules those
+//     carve-outs disabled (`scrollable-region-focusable`,
+//     `aria-required-children`, `aria-required-parent`) and the one element they
+//     excluded (the org-URL affix) are all back IN the sweep, where they now
+//     guard the fixes instead of hiding the defects — which is the point of
+//     naming a carve-out after the card that owes its removal.
 //   • CLEAN on the first run — /triage and /settings/account.
 
 import AxeBuilder from '@axe-core/playwright';
@@ -292,17 +297,11 @@ test.describe('@a11y widened route coverage', () => {
     await expect(
       page.getByRole('heading', { name: 'Organization settings', level: 1 }),
     ).toBeVisible();
-    // CARVE-OUT — MOTIR-2495. The org-URL field is a DISABLED `Input`, and the
-    // shared primitive renders disabled as `opacity-50` on the whole wrapper,
-    // which composites its `motir.co/` affix below AA. No ink fixes it (the
-    // affix is already `--el-text-secondary`, the darkest caption ink; opacity
-    // halves whatever it is given), so it is not in the `--el-text-*` arm this
-    // card owns. MOTIR-2495 decides the disabled treatment and DELETES this
-    // exclusion plus the testid it anchors on. The rest of the page, and the
-    // color-contrast rule everywhere else on it, stay swept.
-    await sweep(page, '/settings/organization', reports, {
-      excludeSelectors: ['[data-testid="org-url-affix"]'],
-    });
+    // Zero exclusions since MOTIR-2495 — the org-URL field is `readOnly` rather
+    // than `disabled`, and the shared `Input` draws both non-editable states
+    // with `--el-input-*` fills instead of an opacity filter, so its
+    // `motir.co/` affix is measured against a real pair again.
+    await sweep(page, '/settings/organization', reports);
 
     expectClean(reports);
   });

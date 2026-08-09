@@ -2455,6 +2455,33 @@
   --el-card: var(--color-background); /* untinted card surface — fixes the bg-card orphan */
   --el-input-border: var(--color-hairline-strong); /* input outline (was --el-border-strong) */
   --el-button-border: var(--color-hairline-strong); /* secondary-button outline */
+
+  /* ── Non-editable field states (MOTIR-2495) ──
+     A field that cannot be typed into used to be drawn with `opacity-50` on the
+     whole wrapper, which composites its CHILDREN — value, placeholder, and the
+     `addonStart`/`addonEnd` affixes — against the page and roughly halves
+     whatever contrast the palette guaranteed them. Contrast is a property of a
+     PAIR (theme.css's own colour rule); opacity quietly makes it a property of
+     a triple, so no ink choice can be checked and none can be fixed: the org
+     URL's affix was already `--el-text-secondary`, the darkest caption ink, and
+     still measured below AA. These four tokens express the two states as
+     COLOUR instead, so every ink over them is AA-checkable and palette-swappable.
+     Measured on the base palette, light (the binding theme; dark clears by more):
+       disabled  value/affix --color-slate on --color-muted   = 6.18:1 ✓
+       read-only value       --color-foreground on --color-surface = 15.98:1 ✓
+       read-only affix       --color-slate on --color-surface  = 6.24:1 ✓
+     The DISABLED border is deliberately softer than the enabled one — the state
+     reads through fill + ink + edge together, so it survives a surface-material
+     style (glassmorphism repaints [data-surface='input'], and its rule outranks
+     a utility class) that erases the fill alone. */
+  --el-input-disabled-bg: var(--color-muted); /* disabled field fill (replaces opacity-50) */
+  --el-input-disabled-border: var(--color-hairline); /* disabled field edge — softer than enabled */
+  --el-input-disabled-text: var(
+    --color-slate
+  ); /* disabled value/placeholder/affix ink — AA on the fill above */
+  --el-input-readonly-bg: var(
+    --color-surface
+  ); /* read-only field fill — not editable, but focusable + full ink */
   --el-count-bg: var(--color-muted); /* count-badge fill (shipped value; see note above) */
   --el-count-text: var(--color-slate); /* count-badge ink (was --el-text-secondary) */
 

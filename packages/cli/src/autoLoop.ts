@@ -369,7 +369,7 @@ export function renderAutoSummary(summary: AutoSummary, titleWidth = 44): string
  * The planning section: what `--include-planning` fired, and what it did NOT do.
  *
  * The "awaiting your approval" wording is load-bearing, not decoration. A run
- * that printed "expanded PROD-5" would be claiming work items it never created
+ * that printed "expanded ACME-5" would be claiming work items it never created
  * — the exact misreading the tool's own description guards against — so every
  * triggered line says out loud that a human's approval stands between this plan
  * and any subtask.
