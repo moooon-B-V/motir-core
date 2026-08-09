@@ -375,7 +375,7 @@ export function notReadyError(detail: {
 
 export async function runCommand(key: string, opts: RunOptions): Promise<void> {
   const trimmed = key.trim();
-  if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run PROD-7`.');
+  if (!trimmed) throw new CliError('A work item key is required, e.g. `motir run ACME-7`.');
   await withProjectSession(async (session) => {
     const { client } = session;
     const detail = await client.getWorkItem(trimmed);
@@ -447,7 +447,7 @@ export async function doneCommand(key: string | undefined, opts: DoneOptions): P
 
   const trimmed = (key ?? '').trim();
   if (!trimmed) {
-    throw new CliError('A work item key is required, e.g. `motir done PROD-7`.', {
+    throw new CliError('A work item key is required, e.g. `motir done ACME-7`.', {
       hint: 'Or close out a merged session PR with `motir done --session <branch>`.',
     });
   }

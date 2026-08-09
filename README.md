@@ -103,8 +103,8 @@ Motir exposes a stable agent contract so you can drive your own coding agent
 (Claude Code / Cursor / Aider / your own script) against the project's ready
 set — the work items whose blockers have all landed, so they're safe to start:
 
-- `GET /api/ready?projectKey=PROD` — list every ready work item.
-- `POST /api/ready/next` with body `{ "projectKey": "PROD", "kinds": ["subtask"] }` —
+- `GET /api/ready?projectKey=ACME` — list every ready work item.
+- `POST /api/ready/next` with body `{ "projectKey": "ACME", "kinds": ["subtask"] }` —
   get ONE item to run next, including its full description + context-file
   references. Pass `"excludeIds": [...]` across calls to walk the set.
 

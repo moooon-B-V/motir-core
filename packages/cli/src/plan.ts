@@ -25,7 +25,7 @@ import type { PlanProposal, PlanSession, PlanTurn, PlanWithItems, PlanOutcome } 
 // items"; {@link PROPOSALS_NOT_WORK_ITEMS} is printed with every proposal tree
 // and is the same wording the `get_plan` / `expand_item` tools carry.
 
-/** `PROD-7` / `motir-1832` — a work-item identifier, the anchor form. */
+/** `ACME-7` / `motir-1832` — a work-item identifier, the anchor form. */
 export const WORK_ITEM_KEY = /^[A-Za-z][A-Za-z0-9]*-\d+$/;
 
 /** How long a non-detached submit waits for the planner before giving up. */
@@ -55,7 +55,7 @@ export interface PlanArgs {
  * from the first non-key onward is the turn body, joined back with spaces (so an
  * unquoted sentence works as well as a quoted one). The discriminator is the KEY
  * SHAPE rather than a flag because that is how every other Motir surface
- * addresses an item, and a planning turn that happens to be exactly `PROD-7` and
+ * addresses an item, and a planning turn that happens to be exactly `ACME-7` and
  * nothing else is not a sentence anyone types.
  *
  * The anchor SET is the thread's identity, so order and duplicates are

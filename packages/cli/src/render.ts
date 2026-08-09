@@ -73,7 +73,7 @@ export function sprintFilter(sprintId: string, kinds?: string[]): SearchFilterEn
 }
 
 /** The canonical web URL for a work item, from the link's server + the
- * `PROD-<n>` key (the issue detail route is `<server>/issues/<key>`). No
+ * `<KEY>-<n>` key (the issue detail route is `<server>/issues/<key>`). No
  * hardcoded host — the server comes from `.motir.json`. */
 export function issueUrl(serverUrl: string, key: string): string {
   return `${normalizeServerUrl(serverUrl)}/issues/${encodeURIComponent(key)}`;

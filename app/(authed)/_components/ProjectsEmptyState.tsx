@@ -9,8 +9,10 @@ import { startNewAiProjectAction } from '../_project-actions';
 import { CreateProjectModal } from './CreateProjectModal';
 
 // Empty-state surface shown when the active workspace has zero projects.
-// The literal "PROD-1" in the description is intentional — there is no
-// project yet, so there's no real identifier to interpolate.
+// The literal "ACME-1" in the description is intentional — there is no
+// project yet, so there's no real identifier to interpolate. It is deliberately
+// a third-party-looking key rather than "MOTIR-1", which would read as a
+// reserved prefix (MOTIR-2342's placeholder convention).
 //
 // Two peer "start a project" doors (MOTIR-1485 / 1486): the accent AI door
 // LEADS (Motir is chat-first, Principle #1). It mints a fresh DRAFT project and
