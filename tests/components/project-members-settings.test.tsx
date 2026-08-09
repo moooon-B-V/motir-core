@@ -5,6 +5,7 @@ import { renderWithIntl } from '../helpers/renderWithIntl';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ProjectMembersSettings } from '@/app/(authed)/settings/project/members/_components/ProjectMembersSettings';
 import type { ProjectMemberDTO } from '@/lib/dto/projectMembers';
+import type { RoleDTO } from '@/lib/dto/permissions';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 
 // ProjectMembersSettings (Subtask 6.4.5) — the project-settings Members +
@@ -22,10 +23,52 @@ vi.mock('next/navigation', () => ({
 const SELF = 'u-self';
 
 const members: ProjectMemberDTO[] = [
-  { userId: SELF, name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'admin' },
-  { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@motir.co', role: 'member' },
-  { userId: 'u-odie', name: 'Odie', email: 'odie@motir.co', role: 'viewer' },
+  { userId: SELF, name: 'Zhu Yue', email: 'zhuyue@motir.co', role: 'admin', roleDefinition: null },
+  {
+    userId: 'u-bob',
+    name: 'Bo Philips',
+    email: 'bophilips@motir.co',
+    role: 'member',
+    roleDefinition: null,
+  },
+  { userId: 'u-odie', name: 'Odie', email: 'odie@motir.co', role: 'viewer', roleDefinition: null },
 ];
+
+// The role catalog the page passes down (MOTIR-2485). `builtIn` roles carry a
+// labelKey and no name; a custom role is the mirror image — which is exactly the
+// split the picker and the chip have to get right.
+function builtInRole(role: 'admin' | 'member' | 'viewer'): RoleDTO {
+  return {
+    key: role,
+    builtInRole: role,
+    labelKey: `settings.roles.${role}.name`,
+    descriptionKey: `settings.roles.${role}.description`,
+    name: null,
+    description: null,
+    builtIn: true,
+    permissions: [],
+    memberCount: 0,
+  };
+}
+function customRole(id: string, name: string): RoleDTO {
+  return {
+    key: id,
+    builtInRole: null,
+    labelKey: null,
+    descriptionKey: null,
+    name,
+    description: null,
+    builtIn: false,
+    permissions: [],
+    memberCount: 0,
+  };
+}
+const BUILT_IN_ROLES: RoleDTO[] = [
+  builtInRole('admin'),
+  builtInRole('member'),
+  builtInRole('viewer'),
+];
+const CONTRACTOR = customRole('role-contractor', 'Contractor');
 
 const workspaceMembers: WorkspaceMemberDTO[] = [
   ...members.map((m) => ({ userId: m.userId, name: m.name, email: m.email, role: 'member' })),
@@ -60,6 +103,7 @@ function renderAdmin(overrides: Partial<React.ComponentProps<typeof ProjectMembe
         workspaceName="moooon"
         accessLevel="private"
         members={members}
+        roles={BUILT_IN_ROLES}
         workspaceMembers={workspaceMembers}
         currentUserId={SELF}
         canManage
@@ -120,6 +164,11 @@ describe('ProjectMembersSettings (6.4.5)', () => {
   });
 
   it('changing a role PATCHes the member sub-resource', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ member: { ...members[2]!, role: 'admin' } }),
+    });
     renderAdmin();
     fireEvent.click(screen.getByRole('combobox', { name: 'Role for Odie' }));
     fireEvent.click(await screen.findByRole('option', { name: /Admin/ }));
@@ -131,6 +180,96 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     );
     const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
     expect(body).toEqual({ role: 'admin' });
+  });
+
+  // ── Custom roles (Story MOTIR-2257 · Subtask MOTIR-2485) ──────────────────
+  //
+  // The picker's shape does not change when a project authors a role — it GROWS.
+  // Both cases are asserted, because "a project with no custom roles renders
+  // exactly the picker that ships today" is an acceptance criterion, not an
+  // incidental property.
+
+  it('with no custom roles the picker is the three built-ins under one heading', async () => {
+    renderAdmin();
+    fireEvent.click(screen.getByRole('combobox', { name: 'Role for Odie' }));
+    expect(await screen.findByRole('option', { name: /Admin/ })).toBeTruthy();
+    expect(screen.getAllByRole('option')).toHaveLength(3);
+    expect(screen.getByText('Built-in')).toBeTruthy();
+    expect(screen.queryByText('Custom roles')).toBeNull();
+  });
+
+  it('lists the project’s custom roles BENEATH the built-ins, each named as custom', async () => {
+    renderAdmin({
+      roles: [...BUILT_IN_ROLES, CONTRACTOR, customRole('role-reporter', 'Reporter')],
+    });
+    fireEvent.click(screen.getByRole('combobox', { name: 'Role for Odie' }));
+    const options = await screen.findAllByRole('option');
+    // Order is the catalog's — built-ins first, then the project's own roles.
+    expect(options.map((o) => o.textContent)).toEqual([
+      expect.stringContaining('Admin'),
+      expect.stringContaining('Member'),
+      expect.stringContaining('Viewer'),
+      expect.stringContaining('Contractor'),
+      expect.stringContaining('Reporter'),
+    ]);
+    // The KIND is stated in words at the point of choice, never left to a tint.
+    expect(screen.getByText('Custom roles')).toBeTruthy();
+    expect(options.at(-1)!.textContent).toContain('Custom role');
+  });
+
+  it('choosing a custom role PATCHes its DEFINITION ID and the row wears its name', async () => {
+    const assigned: ProjectMemberDTO = {
+      ...members[2]!,
+      // The server pairs the columns: the tier goes to CUSTOM_ROLE_TIER and the
+      // pointer names the role. The row must read the POINTER, not the tier —
+      // reading the tier would draw this member as "Member".
+      role: 'member',
+      roleDefinition: { id: CONTRACTOR.key, name: 'Contractor' },
+    };
+    fetchMock.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ member: assigned }),
+    });
+    renderAdmin({ roles: [...BUILT_IN_ROLES, CONTRACTOR] });
+
+    fireEvent.click(screen.getByRole('combobox', { name: 'Role for Odie' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Contractor/ }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/projects/PROD/members/u-odie',
+        expect.objectContaining({ method: 'PATCH' }),
+      ),
+    );
+    const body = JSON.parse((fetchMock.mock.calls.at(-1)![1] as RequestInit).body as string);
+    expect(body).toEqual({ role: 'role-contractor' });
+    // The picker now SHOWS the custom role — its `value` is the definition id,
+    // so a component that keyed off `member.role` would show "Member" here.
+    await waitFor(() =>
+      expect(screen.getByRole('combobox', { name: 'Role for Odie' }).textContent).toContain(
+        'Contractor',
+      ),
+    );
+  });
+
+  it('a member on a custom role wears its NAME in the read-only chip, kind in words', () => {
+    renderAdmin({
+      canManage: false,
+      roles: [...BUILT_IN_ROLES, CONTRACTOR],
+      members: [
+        members[0]!,
+        {
+          ...members[1]!,
+          role: 'member',
+          roleDefinition: { id: CONTRACTOR.key, name: 'Contractor' },
+        },
+      ],
+    });
+    const chip = screen.getByRole('img', { name: 'Contractor — a custom role' });
+    expect(chip.textContent).toBe('Contractor');
+    // Built-in rows are untouched beside it.
+    expect(screen.getByText('Admin')).toBeTruthy();
   });
 
   it('selecting Private PATCHes access and seeds workspace members locally', async () => {
@@ -183,7 +322,13 @@ describe('ProjectMembersSettings (6.4.5)', () => {
     // A project with two admins so both have a Remove button; reject the call.
     const twoAdmins: ProjectMemberDTO[] = [
       members[0]!,
-      { userId: 'u-bob', name: 'Bo Philips', email: 'bophilips@motir.co', role: 'admin' },
+      {
+        userId: 'u-bob',
+        name: 'Bo Philips',
+        email: 'bophilips@motir.co',
+        role: 'admin',
+        roleDefinition: null,
+      },
     ];
     renderAdmin({ members: twoAdmins });
 

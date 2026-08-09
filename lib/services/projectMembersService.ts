@@ -1,6 +1,7 @@
-import { Prisma } from '@/generated/prisma/client';
+import { MemberRole, Prisma } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
+import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import {
@@ -15,6 +16,8 @@ import { resolveProjectByKeyWithAliasInTx } from '@/lib/projects/resolveByKey';
 import { asAccessLevel, asProjectRole, type ProjectRole } from '@/lib/projects/roles';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
+import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
+import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import { toProjectAccessDTO, toProjectMemberDTO } from '@/lib/mappers/projectMemberMappers';
 import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMembers';
 
@@ -112,6 +115,44 @@ function validateRole(role: string): ProjectRole {
   return parsed;
 }
 
+/**
+ * Resolve a `RoleDTO.key` — a built-in's enum value, or a custom role
+ * definition's id — to the PAIR of columns a membership carries (MOTIR-2485).
+ *
+ * ⚠️ THE ONE RULE THE ASSIGNMENT ADDS: a role definition must belong to THIS
+ * project. A cross-project or cross-workspace id is `RoleDefinitionNotFoundError`
+ * → 404, thrown before any write and indistinguishable from an id that does not
+ * exist at all, so the endpoint cannot be used to probe whether a role in another
+ * workspace is real. (The read runs inside the caller's `withWorkspaceContext`
+ * transaction, so RLS already hides another WORKSPACE's rows under the non-bypass
+ * role; the explicit `projectId` check is what covers a sibling project in the
+ * SAME workspace, which RLS admits.)
+ *
+ * A name that is a `MemberRole` the project cannot assign — `owner` — is a 400,
+ * not a 404: it is a real enum member the caller misused, not a missing object,
+ * and nothing about a global enum leaks. That preserves the shipped
+ * InvalidProjectRoleError contract for exactly the input that used to hit it.
+ */
+async function resolveAssignment(
+  roleKey: string,
+  projectId: string,
+  tx: Prisma.TransactionClient,
+): Promise<{ roleDefinitionId: string | null; role: ProjectRole }> {
+  const builtIn = asProjectRole(roleKey);
+  if (builtIn) return { roleDefinitionId: null, role: builtIn };
+  if ((Object.values(MemberRole) as string[]).includes(roleKey)) {
+    throw new InvalidProjectRoleError(roleKey);
+  }
+
+  const definition = await projectRoleDefinitionRepository.findById(roleKey, tx);
+  if (!definition || definition.projectId !== projectId) {
+    throw new RoleDefinitionNotFoundError(roleKey);
+  }
+  // Every custom role sits at the same tier, so the access level subtracts
+  // nothing from it — it grants exactly what it lists.
+  return { roleDefinitionId: definition.id, role: CUSTOM_ROLE_TIER };
+}
+
 export interface ActorScopedInput {
   key: string;
   actorUserId: string;
@@ -206,17 +247,32 @@ export const projectMembersService = {
   },
 
   /**
-   * Change a member's project role. Project-admin gated. Guards the last admin:
-   * demoting the only `admin` throws LastProjectAdminError (409). The target
-   * must already be a member (NotAProjectMemberError → 404).
+   * Put a member on a role — a built-in OR one of the project's own custom roles
+   * (Story MOTIR-2257 · Subtask MOTIR-2485). `input.role` carries a `RoleDTO.key`:
+   * `admin` / `member` / `viewer`, or a role definition's id. Project-admin
+   * gated. Guards the last admin: moving the only `admin` off `admin` — including
+   * onto a custom role, which sits at `CUSTOM_ROLE_TIER` — throws
+   * LastProjectAdminError (409). The target must already be a member
+   * (NotAProjectMemberError → 404).
+   *
+   * ⚠️ THIS IS THE ONLY SINGLE-MEMBER ASSIGNMENT PATH, and it writes the tier and
+   * the pointer TOGETHER through `setRoleDefinition`. The bulk move a role
+   * deletion performs belongs to `projectRoleDefinitionService`; neither
+   * reimplements the other, and neither writes `role_definition_id` any other way
+   * (`tests/permissions/roleAssignment.test.ts` asserts no third writer
+   * appears in `lib/services/`).
    */
   async setRole(
     input: ActorScopedInput & { targetUserId: string; role: string },
   ): Promise<ProjectMemberDTO> {
-    const role = validateRole(input.role);
     return withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectInTx(input.key, input.ctx, tx);
       await assertPermission(input, project.id, 'member:manage', tx);
+
+      // Resolved AFTER the gate and BEFORE any write: a role definition id is a
+      // tenant object, so a caller who cannot manage this project must not learn
+      // from the status code whether some id exists.
+      const assignment = await resolveAssignment(input.role, project.id, tx);
 
       const existing = await projectMembershipRepository.findByUserAndProject(
         input.targetUserId,
@@ -227,13 +283,20 @@ export const projectMembersService = {
 
       // Last-admin guard: demoting the only admin would strand the project with
       // no project-level admin. The count + the update run in one tx so two
-      // concurrent demotions can't both see count > 1.
-      if (existing.role === 'admin' && role !== 'admin') {
+      // concurrent demotions can't both see count > 1. It reads the RESOLVED
+      // tier, not the requested key — putting the last admin on a custom role is
+      // a demotion (custom roles sit at CUSTOM_ROLE_TIER) and trips this too.
+      if (existing.role === 'admin' && assignment.role !== 'admin') {
         const adminCount = await projectMembershipRepository.countAdmins(project.id, tx);
         if (adminCount <= 1) throw new LastProjectAdminError(project.id);
       }
 
-      await projectMembershipRepository.updateRole(input.targetUserId, project.id, role, tx);
+      await projectMembershipRepository.setRoleDefinition(
+        input.targetUserId,
+        project.id,
+        assignment,
+        tx,
+      );
       const updated = await projectMembershipRepository.findByUserAndProjectWithUser(
         input.targetUserId,
         project.id,

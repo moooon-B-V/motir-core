@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { getActiveProject } from '@/lib/projects';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectRepoAccessService } from '@/lib/services/projectRepoAccessService';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { isWorkspaceManager } from '@/lib/projects/roles';
@@ -41,10 +42,15 @@ export default async function ProjectMembersPage() {
 
   const actor = { key: ctx.project.identifier, actorUserId: ctx.userId, ctx };
 
-  const [members, access, workspaceMembers, workspace, wsRole, codeAccess, repos] =
+  const [members, access, roleCatalog, workspaceMembers, workspace, wsRole, codeAccess, repos] =
     await Promise.all([
       projectMembersService.listMembers(actor),
       projectMembersService.getAccess(actor),
+      // The roles a member can be put ON (MOTIR-2485) — the SAME project-scoped
+      // read the Roles & permissions screen uses, joining this batch rather than
+      // opening a second round trip, so the picker's list and that screen's list
+      // can never disagree.
+      projectAccessService.getRoleCatalog(ctx.projectId, ctx),
       workspacesService.listMembers(ctx.workspaceId, ctx.userId),
       workspacesService.getWorkspaceSummary(ctx.workspaceId, ctx.userId),
       workspacesService.getMemberRole(ctx.userId, ctx.workspaceId),
@@ -77,6 +83,7 @@ export default async function ProjectMembersPage() {
         workspaceName={workspace?.name ?? ''}
         accessLevel={access.accessLevel}
         members={members}
+        roles={roleCatalog.roles}
         workspaceMembers={workspaceMembers}
         currentUserId={ctx.userId}
         canManage={canManage}

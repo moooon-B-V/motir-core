@@ -1853,6 +1853,12 @@
       "remove": "移除",
       "youSuffix": "（你）",
       "roleSelectLabel": "{name} 的角色",
+      "roleGroup": {
+        "builtIn": "内置",
+        "custom": "自定义角色",
+        "customOption": "自定义角色"
+      },
+      "customRoleChipLabel": "{name}——自定义角色",
       "role": {
         "admin": "管理员",
         "member": "成员",

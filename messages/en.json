@@ -1853,6 +1853,12 @@
       "remove": "Remove",
       "youSuffix": " (you)",
       "roleSelectLabel": "Role for {name}",
+      "roleGroup": {
+        "builtIn": "Built-in",
+        "custom": "Custom roles",
+        "customOption": "Custom role"
+      },
+      "customRoleChipLabel": "{name} — a custom role",
       "role": {
         "admin": "Admin",
         "member": "Member",

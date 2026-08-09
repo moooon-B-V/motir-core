@@ -281,6 +281,25 @@ WORDS** in the picker headings, in each option's line, and in the chip's
 accessible name (`Contractor — a custom role`), so nothing about
 built-in-versus-custom rests on the hue.
 
+**In code that slot is `--el-role-custom` (MOTIR-2485), not `--el-tint-peach`
+directly** — and the difference is not a deviation from the asset, it is the
+same recipe the three built-in chips already follow. `Pill`'s `memberRole`
+tones each read a DEDICATED `--el-role-*` token (`--el-role-admin` /
+`-member` / `-viewer`), every one of which defaults to the tint the mock
+draws; the indirection exists so a palette can tune role chips apart from the
+other meanings those tints carry. A fourth role needed a fourth token, so
+`--el-role-custom: var(--color-tint-peach)` joins them in
+`packages/design-system/theme.css` and the mock's `--el-tint-peach` remains
+the value it resolves to. The chip is `<Pill memberRole="custom">` carrying
+the role's own name as its text and the kind in its `aria-label`.
+
+**The glyph the mock draws on the chip is NOT rendered** — the shipped
+`Pill` takes no icon and no built-in role chip on this surface has ever
+carried one, so adding one for custom roles alone would have made the KIND
+visible as decoration on exactly the row where the notes above insist it be
+carried in words. The `user-round` glyph continues to identify the role on
+the roles screen's tile, where `RoleGlyph` renders it.
+
 ## Mirror product (rung 1, VERIFIED June 2026 — Atlassian docs, not asserted)
 
 Jira team-managed projects gate by an **Access level**:

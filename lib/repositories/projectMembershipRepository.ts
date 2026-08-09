@@ -11,8 +11,17 @@ import { db } from '@/lib/db';
 // renders. Kept here (not in the service) because the join shape is a
 // data-access concern; the service maps it to a DTO. Mirrors
 // `MembershipWithUser` on workspaceMembershipRepository.
+//
+// ⚠️ IT ALSO CARRIES THE CUSTOM ROLE (MOTIR-2485), and it has to. A membership's
+// `role` column is a TIER, and for a member on a custom role that tier is always
+// `CUSTOM_ROLE_TIER` (`member`) — so a members list built from `role` alone would
+// draw every custom-role holder as a Member and be silently WRONG about the one
+// thing the row is there to say. The name is joined in the SAME query rather than
+// looked up per row: the list read is one round trip, and it stays one.
 export type ProjectMembershipWithUser = ProjectMembership & {
   user: Pick<User, 'id' | 'name' | 'email'>;
+  /** The custom role this membership points at, or null when it names a built-in. */
+  roleDefinition: Pick<ProjectRoleDefinition, 'id' | 'name'> | null;
 };
 
 // A membership joined with the CUSTOM role it points at, if any (Story
@@ -106,7 +115,10 @@ export const projectMembershipRepository = {
   ): Promise<ProjectMembershipWithUser | null> {
     return tx.projectMembership.findUnique({
       where: { userId_projectId: { userId, projectId } },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        roleDefinition: { select: { id: true, name: true } },
+      },
     });
   },
 
@@ -124,7 +136,10 @@ export const projectMembershipRepository = {
     return tx.projectMembership.findMany({
       where: { projectId },
       orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+        roleDefinition: { select: { id: true, name: true } },
+      },
     });
   },
 
@@ -282,24 +297,15 @@ export const projectMembershipRepository = {
     return result.count;
   },
 
-  /**
-   * Update a member's role, returning the updated row. Targets the
-   * (userId, projectId) unique. Throws P2025 if the row doesn't exist — the
-   * service translates "no such membership" to a typed NotAProjectMemberError
-   * (it reads the membership first inside the same tx, so this is belt +
-   * suspenders).
-   */
-  async updateRole(
-    userId: string,
-    projectId: string,
-    role: MemberRole,
-    tx: Prisma.TransactionClient,
-  ): Promise<ProjectMembership> {
-    return tx.projectMembership.update({
-      where: { userId_projectId: { userId, projectId } },
-      data: { role },
-    });
-  },
+  // ⚠️ `updateRole` USED TO LIVE HERE AND WAS DELETED BY MOTIR-2485, deliberately.
+  // It wrote `role` and left `role_definition_id` alone — which was harmless
+  // while the pointer did not exist, and became a live bug the moment it did: a
+  // member on a custom role "demoted" to `viewer` through it would keep the
+  // pointer, so the resolution would go on handing them their custom role's
+  // permissions while every screen said Viewer. `setRoleDefinition` is the
+  // replacement and writes BOTH columns; its only cost is that a caller must say
+  // what happens to the pointer, which is exactly the thing that must not be
+  // forgotten. Do not reintroduce a single-column writer.
 
   /**
    * Delete a membership, returning the deleted row or null when no matching
