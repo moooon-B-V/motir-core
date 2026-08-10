@@ -332,6 +332,131 @@ error class's name change (`InsufficientScopeError` → the permission-shaped on
 
 ---
 
+## AMENDMENT 1 — a token may also bind to a PROJECT (Yue, 2026-08-10)
+
+**This overturns Story MOTIR-2572's own scope boundary**, which reads:
+
+> **Workspace-level authority.** A token is still BOUND to one workspace and the
+> binding picker is untouched.
+
+Correct when the story was cut, and not correct once §1–§3 above landed. The
+reversal is Yue's explicit call, recorded here with its date for the same reason
+the story's other reversal is: a boundary that changes silently is
+indistinguishable from a boundary nobody read.
+
+### A.1 What was wrong — the PICKER, not the binding
+
+`apiTokensService.create` validates a requested grant against the STATIC
+`GRANTABLE_PERMISSIONS` and never against the caller's own access. So a project
+VIEWER can tick _Delete work items_, mint the token, and hold a grant they cannot
+exercise anywhere.
+
+It is not privilege escalation — §4's `grant ∩ role` still decides every call —
+but it is the lie `lib/permissions/catalog.ts` opens by forbidding, one level up,
+on a screen that promises _"You can grant less than your own access, never
+more."_
+
+And the fix is not "filter the picker by the user's role", because **there is no
+single such role.** `resolvePermissions` (`lib/permissions/resolve.ts`) resolves
+per PROJECT from `accessLevel` + `workspaceRole` + `projectRole` + the custom
+role's stored set. A token binds to a WORKSPACE. An admin in project A can be a
+viewer in project B of the same workspace, so _"may this token edit work items?"_
+has no answer until a project is named.
+
+### A.2 The rule: the binding is REQUIRED where the GRANT IS CHOSEN
+
+| Credential  | Minted by                          | Grant                                             | Binding                           |
+| ----------- | ---------------------------------- | ------------------------------------------------- | --------------------------------- |
+| Hand-minted | the create-token modal             | **chosen** from that project's set for that actor | **project** — required            |
+| Device      | `motir login` → `/device` approval | **fixed** `CLI_TOKEN_GRANT`, unconfigurable       | **workspace** — `project_id` NULL |
+
+A **chosen** grant needs a project, because the question the picker asks is
+meaningless without one. A **fixed** grant asks nothing: the approval screen
+SHOWS `CLI_TOKEN_GRANT` and cannot edit it (§7), so there is no offer to be wrong
+and `grant ∩ role` resolves per project at dispatch. That is precisely the
+property that makes a device credential _"what the holder can do, decided by their
+roles in the projects."_
+
+**No picker, no lie.** The rule follows from that sentence and nothing else.
+
+### A.3 `project_id` is NULLABLE, and NULL is a MEANING
+
+Not "optional", and not "legacy tolerated". **NULL is the device-credential
+shape**, and it is a permanent legal state.
+
+Write it that way in the Prisma doc-comment. A column documented as optional
+acquires a `NOT NULL` and a backfill within a year, and this one has no correct
+value to backfill: there is no project a `motir login` credential should be
+pinned to.
+
+No migration rewrites a row. Every token minted before this amendment is the
+device shape by construction, which is also why the token list can render them
+without a special case.
+
+### A.4 The grantable set has ONE arm
+
+Project-bound → `projectAccessService.getPermissions(projectId, actor)` ∩
+`GRANTABLE_PERMISSIONS`, in catalog order.
+
+A union-across-the-workspace arm was considered and is **dead**: nothing reaches
+it, because the only tokens without a project are the ones whose grant is fixed,
+and a fixed grant is not chosen from an offer. Recorded so a reader does not
+re-derive it as a missing case.
+
+**The workspace-owner rail makes this a no-op for most people.** `resolvePermissions`
+layer 2 hands a workspace owner/admin the whole role-gated catalog in EVERY
+project, so their offer is the full grantable set either way. This amendment
+changes nothing for them and everything for members and viewers — worth saying,
+or the filtering reads as dead code.
+
+### A.5 What `create` must enforce
+
+Two legal shapes, and only two:
+
+- `{ permissions, projectId }` — a chosen grant, bound to a project. Each key
+  validated against **what the caller can confer in THAT project**, not against
+  the static set. A key they do not hold is a typed error → 422.
+- `{ }` (fixed grant, no project) — the device path, which supplies
+  `CLI_TOKEN_GRANT` and no `projectId`.
+
+A chosen grant with no project, and a fixed grant with a project, are both
+refused. Four combinations of which two are bugs is a shape worth designing out
+rather than testing around.
+
+A `projectId` the caller cannot browse is a **404**, never a 403 — the shipped
+404-not-403 contract, so the binding cannot be used to discover projects.
+
+### A.6 What DISPATCH does with the binding
+
+A project-bound token calling an operation that resolves to a DIFFERENT project
+is refused as **NOT-FOUND**, not as a permission denial.
+
+"Forbidden" is the intuitive answer and the wrong one: it confirms the other
+project exists, turning a deliberately-narrowed credential into an oracle for
+enumerating a workspace. Every cross-tenant read in the product already answers
+404-not-403 for exactly this reason; a new gate that answered differently would
+be a hole shaped like the contract everything else keeps.
+
+A NULL-bound token is unaffected at both seams. That is not a compatibility shim
+to remove later — **it is the specification of how `motir login` works.**
+
+### A.7 `list_projects` STAYS
+
+An earlier revision of this amendment proposed retiring it. It does not, and the
+reason is the one that decides A.2: the device credential legitimately spans the
+projects its holder's roles reach, and `list_projects` is how an agent — and
+`motir link` — discovers them. `packages/cli/src/projectLink.ts` (`resolveProject`,
+`autoLinkAfterLogin`) calls it to bind a folder.
+
+Its two behaviours are part of the contract:
+
+- a NULL-bound (device) token → every project its holder can browse in the
+  workspace;
+- a project-bound token → exactly its one project.
+
+That pair is what makes the binding legible to an agent at the moment it asks
+what it can reach, in both shapes.
+
 ## Consequences
 
 - The picker offers six switches today and grows when an operation's permission
@@ -342,6 +467,9 @@ error class's name change (`InsufficientScopeError` → the permission-shaped on
   the implementing PR bodies rather than discovered in a 403.
 - `docs/mcp.md`, the `/docs` pages, `docs/cli.md` and both CLI READMEs stop
   teaching the six-scope vocabulary (MOTIR-2581).
+- **From Amendment 1:** a hand-minted token now names a project, and the token
+  list shows two credential shapes side by side. Nothing a `motir login` user
+  does changes, and no existing token is migrated.
 
 ## Superseded / related
 
