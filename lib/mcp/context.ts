@@ -91,7 +91,21 @@ function readAuthExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
  * {@link McpMissingContextError} if it's absent (a gate misconfiguration).
  */
 export function contextFromExtra(extra: McpRequestExtra): ServiceContext {
-  const authExtra = readAuthExtra(extra.authInfo);
+  return contextFromAuthInfo(extra.authInfo);
+}
+
+/**
+ * The same lift, from the `AuthInfo` `withMcpAuth` attaches to the REQUEST
+ * (`req.auth`) rather than from a tool's `extra`.
+ *
+ * The transport rate limiter (MOTIR-2610) needs the actor BEFORE any tool
+ * dispatch exists to carry it — it runs between the auth gate and the JSON-RPC
+ * handler — and this is the one seam where that actor is available. Sharing
+ * `readAuthExtra` with {@link contextFromExtra} is the point: the key a request
+ * is metered under and the context its tools act as can never drift apart.
+ */
+export function contextFromAuthInfo(authInfo: AuthInfo | undefined): ServiceContext {
+  const authExtra = readAuthExtra(authInfo);
   if (!authExtra) throw new McpMissingContextError();
   return { userId: authExtra.userId, workspaceId: authExtra.workspaceId };
 }

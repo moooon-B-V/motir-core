@@ -1034,6 +1034,12 @@ export default defineConfig({
         'lib/rateLimit/authGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/rateLimit/publicWriteGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/rateLimit/aiGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        // The MCP transport's guard (MOTIR-2610). Listed for the same reason as
+        // its nine siblings above: `include` is the `lib/rateLimit/**` glob, so a
+        // new file lands in the REPORT automatically but is gated by nothing
+        // until it has a key here — and a limiter nobody measures is exactly the
+        // shape of the gap this card exists to close.
+        'lib/rateLimit/mcpGuard.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/rateLimit/fixedWindow.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/rateLimitService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/repositories/rateLimitCounterRepository.ts': {
