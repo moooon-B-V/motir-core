@@ -297,10 +297,15 @@ test.describe('@a11y widened route coverage', () => {
     await expect(
       page.getByRole('heading', { name: 'Organization settings', level: 1 }),
     ).toBeVisible();
-    // Zero exclusions since MOTIR-2495 — the org-URL field is `readOnly` rather
-    // than `disabled`, and the shared `Input` draws both non-editable states
-    // with `--el-input-*` fills instead of an opacity filter, so its
-    // `motir.co/` affix is measured against a real pair again.
+    // Zero exclusions, and as of MOTIR-2548 for a simpler reason than before.
+    // The carve-out originally existed because the org-URL field's `motir.co/`
+    // affix sat behind an opacity filter that no ink choice could rescue;
+    // MOTIR-2495 removed it by drawing non-editable `Input` states with
+    // `--el-input-*` fills, so the affix was measured against a real pair again.
+    // That field is now GONE from this route entirely (it addressed nothing —
+    // `docs/decisions/organization-url.md`), so nothing here depends on that fix
+    // any more. It still governs every other `readOnly` input, and
+    // `tests/components/input-non-editable-states.test.tsx` remains its guard.
     await sweep(page, '/settings/organization', reports);
 
     expectClean(reports);

@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { publicRequestsService } from '@/lib/services/publicRequestsService';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
+import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 
 // POST /api/public-requests/[id]/upvote (Story 6.12 · Subtask 6.12.6) — toggle
 // the signed-in account's upvote on a public request. Sign-in-to-act: the route
@@ -18,9 +19,14 @@ import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 //   ProjectAccessDeniedError                                 → 403
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  // The shared per-IP public-write ceiling (8.5.9 / MOTIR-1165), before the
+  // session read — see `lib/rateLimit/publicWriteGuard.ts`.
+  const limited = await enforcePublicWriteRateLimit(req);
+  if (limited) return limited;
+
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 

@@ -758,10 +758,6 @@
       "global": "Global",
       "brandHome": "Motir — go to dashboard"
     },
-    "sidebarHeader": {
-      "activeProject": "Active project",
-      "project": "Project"
-    },
     "project": {
       "createFirst": "Create your first project",
       "emptyDescription": "Projects group your work items and give them a key like ACME-1. Create one to start planning.",
@@ -3872,8 +3868,6 @@
       "youreOwner": "You’re an owner",
       "youreAdmin": "You’re an admin",
       "nameLabel": "Organization name",
-      "urlLabel": "Organization URL",
-      "urlHint": "Used in links to this organization. Lowercase letters, numbers and hyphens.",
       "save": "Save changes",
       "saved": "Organization updated",
       "saveError": "Couldn’t save changes",

@@ -128,6 +128,8 @@
         --radius-control: 6px;
         --radius-btn: 8px;
         --radius-badge: 9999px;
+        --spacing-chip-x: 10px; /* badge / pill chips — theme.css */
+        --spacing-chip-y: 2px;
         --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
         --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
         --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
@@ -1382,6 +1384,46 @@
         width: 16px;
         height: 16px;
         flex: none;
+      }
+
+      /* The estimate chip (MOTIR-2591) — copied VERBATIM from
+         design/estimation/estimation.mock.html panels 0–2 + 5, because this
+         asset COMPOSES that one rather than redrawing it. If the chip changes
+         there, it changes here. */
+      .est {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--el-text-secondary);
+        white-space: nowrap;
+      }
+      .est svg {
+        width: 12px;
+        height: 12px;
+      }
+      .est--btn {
+        border: 1px solid transparent;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: none;
+        cursor: pointer;
+        font-family: var(--font-mono);
+      }
+      .est--btn:hover {
+        border-color: var(--el-border);
+        background: var(--el-surface);
+        color: var(--el-text-strong);
+      }
+      .est--btn:focus-visible {
+        outline: none;
+        border-color: var(--el-border);
+        box-shadow: 0 0 0 2px var(--focus-ring-color);
+      }
+      .est.is-empty {
+        color: var(--el-text-faint);
       }
 
       /* A rail shown on its own (panels 8–11) — the SAME .qv-rail at its real
@@ -2943,14 +2985,19 @@
         </p>
       </div>
 
-      <!-- ═══════════ PANEL 11 — The DETAIL rail's Story-points row ═══════════ -->
+      <!-- ═══════════ PANEL 11 — Story points: the COMPOSED EstimateBadge ═══════════
+           CORRECTED by MOTIR-2591. The earlier revision of this panel drew a
+           chevron + numeric input for this row, on the premise that story points
+           were editable on no inline surface. They already were: EstimateBadge is
+           a click-to-edit chip that opens the project's estimation scale deck.
+           See the design-notes correction. -->
       <div class="panel">
         <div class="panel-label">
-          11 · The second surface — Story points becomes editable on the DETAIL rail too
+          11 · Story points — the composed EstimateBadge (CORRECTED · MOTIR-2591)
         </div>
         <div class="rail-row">
           <div>
-            <p class="rail-cap">Detail rail — today (read-only)</p>
+            <p class="rail-cap">Peek rail — today (a bare number)</p>
             <div class="rail-solo">
               <dl class="qv-rail">
                 <div class="rail-field">
@@ -2967,47 +3014,51 @@
             <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
           </div>
           <div>
-            <p class="rail-cap">Detail rail — after MOTIR-2565</p>
+            <p class="rail-cap">Peek rail — the shipped chip, click to edit</p>
             <div class="rail-solo">
               <dl class="qv-rail">
-                <div class="rail-field is-editable">
-                  <dt>
-                    Story points
-                    <button class="chev" aria-label="Edit Story points">
-                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
-                    </button>
-                  </dt>
+                <div class="rail-field">
+                  <dt>Story points</dt>
                   <dd>
-                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
-                    5
+                    <button class="est est--btn" aria-label="Story points: 5 — edit">
+                      <svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg>5
+                    </button>
                   </dd>
                 </div>
-                <div class="rail-field is-editable is-editing">
-                  <dt>
-                    Story points
-                    <button class="chev" aria-label="Close Story points">
-                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                <div class="rail-field">
+                  <dt>Story points</dt>
+                  <dd>
+                    <button
+                      class="est est--btn is-empty"
+                      aria-label="Story points: unestimated — edit"
+                    >
+                      <svg viewBox="0 0 24 24"><use href="#i-gauge" /></svg>—
                     </button>
-                  </dt>
-                  <dd><input class="rc-input is-focus" type="text" value="5" /></dd>
+                  </dd>
                 </div>
               </dl>
             </div>
           </div>
         </div>
         <p class="panel-note">
-          Drawn here in the peek's rail grammar for diffability; on the detail page the row is a
-          <code>FieldCard</code> and takes that card's existing corner chevron + numeric input
-          <strong>verbatim from the Estimate row directly above it</strong> — see
-          <code>design/work-items/detail.png</code> and
-          <code>design/work-items/sprint-field.mock.html</code> (the
-          <code>.fcard .chev</code> grammar).
-          <strong>No new element is designed for the detail page</strong>; an existing row stops
-          being <code>editable={false}</code>. <br /><br />
-          <strong>Empty means UNESTIMATED, not zero.</strong> Clearing the input writes
-          <code>null</code>, and the row then reads a muted <em>None</em> like every other empty
-          built-in — a zero-point item is a different, legitimate value and must stay
-          distinguishable from one nobody has sized.
+          <strong>This row composes <code>EstimateBadge</code>; it does not draw a control.</strong>
+          The chip is the one Motir already renders on the backlog row, the board card, the item
+          list's Points column and the detail rail — specified by
+          <code>design/estimation/estimation.mock.html</code> panels 0–2 + 5, which this panel
+          COMPOSES rather than redraws. Clicking it opens that asset's scale-deck popover, and the
+          write goes through the badge's own <code>PATCH /api/work-items/[id]/estimate</code>. The
+          peek was simply the one issue surface that never composed it. <br /><br />
+          <strong>NO edit chevron on this row.</strong> The badge IS the affordance, so a chevron
+          beside it would be a second one for a single field — which is exactly why the detail
+          rail's <code>FieldCard</code> for this row is <code>editable={false}</code>. That flag
+          describes the CARD's chrome, not the field: the earlier revision of this panel read it as
+          "story points cannot be edited" and drew a numeric input on that premise. A free-text box
+          would also have bypassed the project's configured deck, letting someone enter a value the
+          scale does not contain, and would have ignored the estimation statistic entirely.
+          <br /><br />
+          <strong>The detail rail is UNCHANGED by this story</strong> — it already composes the
+          badge correctly, which is the whole finding. Unestimated renders as the badge's own muted
+          em-dash, distinct from a legitimate zero.
         </p>
       </div>
 

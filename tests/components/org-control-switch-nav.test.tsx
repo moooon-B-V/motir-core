@@ -45,7 +45,7 @@ function renderOrgControl() {
   return render(
     <ToastProvider>
       <OrgControl
-        activeOrg={{ id: ACME.id, name: ACME.name, slug: ACME.slug, role: 'owner' }}
+        activeOrg={{ id: ACME.id, name: ACME.name, role: 'owner' }}
         orgs={[ACME, BEACON]}
         cloudBilling={false}
       />

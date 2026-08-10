@@ -14,21 +14,27 @@ import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 export interface OrgGeneralCardProps {
   orgId: string;
   initialName: string;
-  slug: string;
   role: string;
   workspaceCount: number;
   memberCount: number;
 }
 
-// The org-settings General card (design/org-admin panel 2). Name is editable;
-// the URL (slug) is a read-only preview (slug changes are out of 6.10.4's
-// service surface). Save PATCHes the org route, then router.refresh() so the
-// new name re-renders the shell org control too (an explicit Save, not a
-// list-cell edit — so the whole-tree refresh is appropriate here).
+// The org-settings General card (design/org-admin panel 2). The organization's
+// NAME is the only thing this card edits. Save PATCHes the org route, then
+// router.refresh() so the new name re-renders the shell org control too (an
+// explicit Save, not a list-cell edit — so the whole-tree refresh is
+// appropriate here).
+//
+// It used to carry a second, read-only row: an "Organization URL" showing
+// `motir.co/<slug>`. That row is gone (MOTIR-2548), per
+// `docs/decisions/organization-url.md` — Motir does not adopt
+// organization-addressable URLs, nothing in the product resolves that address,
+// and a field whose helper text promised it was "used in links" was the product
+// describing a capability it does not have. `Organization.slug` itself is
+// untouched; it is internal substrate now, not a value anyone is shown.
 export function OrgGeneralCard({
   orgId,
   initialName,
-  slug,
   role,
   workspaceCount,
   memberCount,
@@ -96,26 +102,11 @@ export function OrgGeneralCard({
         </div>
       }
     >
-      <div className="flex flex-col gap-4">
-        <Input
-          label={t('settings.nameLabel')}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Input
-          label={t('settings.urlLabel')}
-          value={slug}
-          // READ-ONLY, not disabled (MOTIR-2495). The org URL is a value people
-          // read and copy; a disabled input is not focusable, so the only way to
-          // get the string was to select it with a mouse. `readOnly` keeps it out
-          // of edit while leaving it in the tab order and selectable, and the
-          // shared Input draws that state with a fill rather than an opacity
-          // filter — which is what put this field's `motir.co/` affix below AA.
-          readOnly
-          addonStart={<span>motir.co/</span>}
-          helperText={t('settings.urlHint')}
-        />
-      </div>
+      <Input
+        label={t('settings.nameLabel')}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
     </Card>
   );
 }

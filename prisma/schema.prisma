@@ -437,6 +437,49 @@ model IdeaDraft {
   @@map("idea_draft")
 }
 
+/// The SHARED rate-limit counter (Subtask 8.5.9 / MOTIR-1165) — one fixed-window
+/// tally per `(key, window_start)`, readable and writable by every app instance.
+/// It is the `RateLimitStore` backend pinned in
+/// `docs/decisions/production-service-stack.md` §6: motir-core runs long-lived
+/// Fly processes that already hold a Postgres pool, so the database answers "how
+/// many times has this caller done this in the last minute" without adding a
+/// vendor, a bill, and a failure domain in front of every request. The increment
+/// is ONE statement — `INSERT … ON CONFLICT DO UPDATE SET count = count + 1
+/// RETURNING count` — never read → compare → write, which would leak the limit
+/// under exactly the concurrent load the limiter exists to control.
+///
+/// ⚠️ DELIBERATELY NOT WORKSPACE-SCOPED — no `workspace_id`, no RLS, and that is
+/// a decision rather than an omission (ADR §7; the migration header states the
+/// three reasons). The limited surfaces — sign-in, sign-up, password reset,
+/// public writes — run BEFORE any tenant is known, so a `workspace_id NOT NULL`
+/// column would be unfillable on exactly the requests that need the limiter
+/// most, and an RLS policy reading `app.workspace_id` would deny those writes
+/// outright, turning a protection into an outage on the pre-auth path. `key`
+/// holds no tenant content: every component composed into it is SHA-256 hashed
+/// (`lib/rateLimit/keys.ts`), so the table holds opaque short-lived strings
+/// rather than a log of who tried to sign in from where.
+model RateLimitCounter {
+  /// The opaque bucket identity: a clear-text SCOPE prefix (`auth:sign-in`,
+  /// `ai:chat`, …) plus one or more SHA-256-hashed caller components. Never a
+  /// plaintext IP, email, token or user id.
+  key         String
+  /// The window's start as UNIX MILLISECONDS (`floor(now / windowMs) * windowMs`).
+  /// `BigInt` because an epoch-ms value overflows `Int`. Part of the primary key,
+  /// so a new window is a new row and the old one simply expires — that is what
+  /// makes the window RESET without a reset job.
+  windowStart BigInt   @map("window_start")
+  /// Requests counted in this window. Only ever written by the atomic increment.
+  count       Int
+  /// `windowStart + windowMs` — when this row stops being meaningful. Indexed so
+  /// the daily `system.rate-limit-sweep` job can delete expired rows in a bounded
+  /// scan; without it the limiter would become the product's largest table.
+  expiresAt   DateTime @map("expires_at")
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+  @@map("rate_limit_counter")
+}
+
 /// The ROOT tenancy tier (Story 6.10) — the account a customer signs up as, the
 /// parent of N workspaces, and THE BILLING ENTITY credits + usage roll up to
 /// (the orchestrator re-keys 7.12's ledger to the org separately; 6.10 ships no

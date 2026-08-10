@@ -1,5 +1,6 @@
 import { verifyJobToken } from './jobToken';
 import { verifyServiceBearer } from './serviceBearer';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 // Authenticates an incoming ai→core read-back request (the /api/internal/ai/*
@@ -32,6 +33,24 @@ export class JobAuthError extends Error {
   }
 }
 
+/**
+ * The service-to-service caller is over the shared AI budget (Subtask 8.5.9 /
+ * MOTIR-1165). Distinct from {@link JobAuthError} because it is a 429 with a
+ * `Retry-After`, not a 401 — the credential was fine, the spend was not.
+ *
+ * Carried through the same throw path as the auth failure so the ~15
+ * `/api/internal/ai/*` routes gain the limit without each growing its own
+ * enforcement block; `mapJobRequestError` renders both.
+ */
+export class JobRateLimitedError extends Error {
+  readonly code = 'RATE_LIMITED' as const;
+  readonly httpStatus = 429;
+  constructor(readonly response: Response) {
+    super('Too many requests.');
+    this.name = 'JobRateLimitedError';
+  }
+}
+
 export interface JobRequestAuth {
   ctx: ServiceContext;
   projectId: string;
@@ -58,4 +77,25 @@ export function authenticateJobRequest(req: Request): JobRequestAuth {
     ctx: { userId: claims.sub, workspaceId: claims.workspaceId },
     projectId: claims.projectId,
   };
+}
+
+/**
+ * `authenticateJobRequest`, then the shared AI rate limit (Subtask 8.5.9 /
+ * MOTIR-1165) — what every `/api/internal/ai/*` route calls.
+ *
+ * Order is a contract, not a detail: AUTH runs first, so an unauthenticated
+ * caller cannot spend a real workspace's budget. That mirrors the ordering
+ * `/api/v1`'s wrapper pins for the same reason — otherwise anyone who learned a
+ * workspace id could exhaust its ceiling without holding a credential.
+ *
+ * The limit keys on the token's `(workspaceId, userId)` claims rather than the
+ * caller's IP: `motir-ai` calls from a handful of machines, so an IP key would
+ * merge every tenant's read-backs into one bucket, and the cost these calls drive
+ * belongs to a workspace anyway.
+ */
+export async function authenticateAndLimitJobRequest(req: Request): Promise<JobRequestAuth> {
+  const auth = authenticateJobRequest(req);
+  const limited = await enforceAiRateLimit(auth.ctx, 'ai:internal');
+  if (limited) throw new JobRateLimitedError(limited);
+  return auth;
 }

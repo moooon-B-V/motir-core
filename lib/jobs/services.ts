@@ -8,6 +8,7 @@ import { mentionNotificationsService } from '@/lib/services/mentionNotifications
 import { watcherNotificationsService } from '@/lib/services/watcherNotificationsService';
 import { notificationFanInService } from '@/lib/services/notificationFanInService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
+import { rateLimitService } from '@/lib/services/rateLimitService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { automationEngineService } from '@/lib/services/automationEngineService';
 import { billingService } from '@/lib/services/billingService';
@@ -48,6 +49,7 @@ export const jobServices = {
   watcherNotifications: watcherNotificationsService,
   notificationFanIn: notificationFanInService,
   attachments: attachmentsService,
+  rateLimit: rateLimitService,
   savedFilterSubscriptions: savedFilterSubscriptionsService,
   automationEngine: automationEngineService,
   billing: billingService,

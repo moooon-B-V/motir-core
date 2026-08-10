@@ -17,8 +17,7 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-import { truncateAuthTables } from '@/tests/helpers/db';
-import { __resetRateLimitsForTest } from '@/lib/rateLimit/fixedWindow';
+import { truncateAuthTables, truncateRateLimitCounters } from '@/tests/helpers/db';
 import { PENDING_IDEA_COOKIE } from '@/lib/onboarding/pendingIdea';
 
 // Import the handlers AFTER the mock is registered.
@@ -29,7 +28,7 @@ const ALLOWED = 'https://motir.co';
 
 beforeEach(async () => {
   await truncateAuthTables();
-  __resetRateLimitsForTest();
+  await truncateRateLimitCounters();
   cookieStore.clear();
   process.env['MOTIR_MARKETING_ORIGIN'] = ALLOWED;
 });

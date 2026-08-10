@@ -82,10 +82,18 @@ export const emailService = {
    * throws (the job wrapper turns that into a retried run, then a DLQ entry in
    * 1.6.4) — this method does not swallow failures, so a down provider is
    * visible to the runtime rather than silently dropped.
+   *
+   * `idempotencyKey` is the envelope field the `email.send` event already
+   * carries (`EmailSendData`), threaded to the provider so a job RETRY of an
+   * accepted send is deduped AT THE PROVIDER too (MOTIR-1127). It is optional
+   * because the parameter's shape is the email domain's `TransactionalEmail`,
+   * which knows nothing about background-job envelopes; the job supplies it,
+   * a direct caller need not. No caller changed to gain this — the job was
+   * already passing the whole `EmailSendData` payload, envelope included.
    */
-  async send(message: TransactionalEmail): Promise<void> {
+  async send(message: TransactionalEmail & { idempotencyKey?: string }): Promise<void> {
     const rendered = await renderTemplate(message);
-    await sendEmail({ to: message.to, ...rendered });
+    await sendEmail({ to: message.to, ...rendered, idempotencyKey: message.idempotencyKey });
   },
 };
 

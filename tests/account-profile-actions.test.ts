@@ -1,8 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
-import { __resetRateLimitsForTest } from '@/lib/rateLimit/fixedWindow';
-import { truncateAuthTables } from './helpers/db';
+import { truncateAuthTables, truncateRateLimitCounters } from './helpers/db';
 
 // Action-wiring tests for the Account › Profile security controls (Subtask
 // 8.8.23). They prove the TRANSPORT layer — `actions.ts` — resolves the
@@ -47,7 +46,7 @@ function actAs(user: { id: string; email: string }) {
 
 beforeEach(async () => {
   await truncateAuthTables();
-  __resetRateLimitsForTest();
+  await truncateRateLimitCounters();
 });
 
 afterEach(() => {
