@@ -215,6 +215,22 @@ withholds; and the widening touches no irreversible operation —
 also only producible by explicitly deselecting everything else in the modal:
 neither `DEFAULT_TOKEN_SCOPES` nor `CLI_TOKEN_SCOPES` is that shape.
 
+**⚠️ AND ONE OPERATION IS LOST BY A LEGACY `read` TOKEN — `open_plan_session`.**
+Measured, not estimated: walking all 39 tools, exactly one has a new permission
+its old scope does not forward-map to. `open_plan_session` declared `read`
+("opening the door is not starting a conversation"), and its service
+`planChangeSessionsService.getOrCreateForScope` asserts **`ai:plan`**. The old
+scope was over-permissive relative to its own gate, so a stored `read`-only token
+that could open a planning thread no longer can.
+
+We do NOT widen `read` to cover it. `read → ai:plan` would hand every legacy
+read-only token `expand_item` and `submit_plan_session` — billable operations it
+never had — which is a widening in the one direction that costs the owner money.
+Losing the mount read of a planning thread is the cheapest of the four planning
+operations to lose, and the loss is a correction of the scope, not of the gate.
+`tests/mcp/scopes.test.ts` pins this as a NAMED exception, so the tool-by-tool
+coverage check stays exhaustive and a second loss cannot appear unnoticed.
+
 **Why expand-on-read and not a migration.** Tokens are credentials living in
 other people's CI systems and agent containers. A migration would have to be
 exactly right the first time, against live rows, with no way afterwards to tell
@@ -275,12 +291,32 @@ grant breaks `motir auto` mid-run).
 `CLI_TOKEN_SCOPES` did: adding an MCP tool must carry the question _does the CLI
 call it, and does this set already cover it?_
 
-### 8. The default grant
+### 8. The default grant — and the one thing it stops conferring
 
 `DEFAULT_TOKEN_GRANT` is `GRANTABLE_PERMISSIONS` minus `work_item:delete` —
 the same "all but the irreversible one" rule `DEFAULT_TOKEN_SCOPES` encoded, now
 derived rather than filtered by hand. `work_item:delete` is the one key marked
 **irreversible**, and the surfaces set it apart visually (MOTIR-2578).
+
+**⚠️ It NARROWS, and the narrowing is archive.** `DEFAULT_TOKEN_SCOPES` was
+`TOKEN_SCOPES` minus `work_items:delete`, so it INCLUDED `work_items:archive` —
+archive was on by default because it is recoverable. But archive and delete both
+assert `work_item:delete` in shipped code (§3), so under one key "all but the
+irreversible one" necessarily withholds both. A token minted after this story
+with the default grant **cannot archive**; it could before.
+
+The alternative is to put `work_item:delete` in the default grant so archive
+keeps working — which would make every default-minted token able to
+subtree-delete, the exact thing 7.7 was careful to prevent, and a far worse trade
+than losing a recoverable operation from a default. So the default narrows, and
+someone who wants archive ticks the key.
+
+This affects NEW tokens only. An existing row carrying `work_items:archive`
+expands to `work_item:delete` on read (§5) and keeps archiving — and, being the
+same key, can now also delete. That is the second half of the §5 merge, in the
+`work_items:archive` → `work_items:delete` direction, and it is accepted on the
+same grounds: the gates already govern both with one key, so the old split was
+describing a distinction the product stopped making.
 
 ### 9. The denial wire code
 
