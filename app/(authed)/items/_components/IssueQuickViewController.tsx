@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { IssueQuickView } from './IssueQuickView';
 import { IssueQuickViewPanel } from './IssueQuickViewPanel';
+import { useNotifyIssuesChanged } from '../../_components/CreateIssueProvider';
 import type { QuickViewData } from '@/lib/dto/quickView';
 
 // The quick-view (peek) CONTROLLER (bug 8.8.2) — the single client island that
@@ -42,6 +43,20 @@ export function IssueQuickViewController() {
   // was actually confirmed. Close is the only moment that is both safe — the
   // modal is going away, so no optimistic cell can be repainted by the re-read —
   // and sufficient, because the user's next glance is at the list.
+  //
+  // MOTIR-2604 — settling takes BOTH mechanisms, because this controller's hosts
+  // are two different KINDS of surface at once (CLAUDE.md § page state after a
+  // mutation). `router.refresh()` re-runs the Server Components and updates the
+  // genuinely server-rendered bits. It does NOT reach `IssueTreeTable` or
+  // `BoardContainer`: both are client islands seeded once from server props, so
+  // the refreshed props are ignored by a `useState` initializer that already ran
+  // and neither key changes to force a remount. Those watch the provider's
+  // `issuesChangedAt` tick instead — so the peek bumps that too. Shipping only
+  // the refresh left the row behind the modal reading its pre-edit value until
+  // the user reloaded by hand, which is the panel-12 promise not being kept on
+  // the primary surface. The non-throwing accessor is deliberate: this island
+  // also mounts in unit tests and on surfaces with no provider above it.
+  const notifyIssuesChanged = useNotifyIssuesChanged();
   const editedRef = useRef(false);
   const markEdited = useCallback(() => {
     editedRef.current = true;
@@ -75,13 +90,14 @@ export function IssueQuickViewController() {
   }, [peek]);
 
   // The peek closed (the `?peek` param cleared). If anything was written while
-  // it was open, re-read the server-rendered host surface now.
+  // it was open, re-read the host surface now — both halves of it (MOTIR-2604).
   useEffect(() => {
     if (peek) return;
     if (!editedRef.current) return;
     editedRef.current = false;
     router.refresh();
-  }, [peek, router]);
+    notifyIssuesChanged();
+  }, [peek, router, notifyIssuesChanged]);
 
   if (!peek) return null;
 

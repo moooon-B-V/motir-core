@@ -34,6 +34,16 @@ vi.mock('@/app/(authed)/items/[key]/edit/actions', () => ({
   changeStatusAction: vi.fn(),
 }));
 
+// The client-island tick (MOTIR-2604). Stubbed at the accessor rather than by
+// mounting the real provider, which would drag the create-issue modal and its
+// whole dependency tree into a test about one callback.
+const notifyIssuesChanged = vi.fn();
+vi.mock('@/app/(authed)/_components/CreateIssueProvider', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@/app/(authed)/_components/CreateIssueProvider')>();
+  return { ...actual, useNotifyIssuesChanged: () => notifyIssuesChanged };
+});
+
 import { IssueQuickViewController } from '@/app/(authed)/items/_components/IssueQuickViewController';
 import { WorkItemQuickView } from '@/components/planning/WorkItemQuickView';
 
@@ -134,21 +144,28 @@ async function closeUrlDriver(rerender: (ui: React.ReactElement) => void) {
 // canvas, which owns its own state.
 
 describe('both peek drivers settle the surface behind them the SAME way', () => {
-  it('URL driver: an edit then a close re-reads the host ONCE', async () => {
+  it('URL driver: an edit then a close re-reads the host ONCE — BOTH of its halves', async () => {
     const { rerender } = await renderUrlDriver();
 
     await editPriority();
     // NOT per edit — that fan-out is `bug-inline-status-revert-on-second-edit`.
     expect(refresh).not.toHaveBeenCalled();
+    expect(notifyIssuesChanged).not.toHaveBeenCalled();
 
     await closeUrlDriver(rerender);
     expect(refresh).toHaveBeenCalledTimes(1);
+    // MOTIR-2604 — the refresh alone reaches only the SERVER-rendered bits. The
+    // rows on /items and the cards on /boards are client islands seeded once
+    // from props, and they watch this tick instead; without it the row behind
+    // the modal kept its pre-edit value until the user reloaded by hand.
+    expect(notifyIssuesChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('URL driver: a close with NO edit re-reads nothing', async () => {
+  it('URL driver: a close with NO edit re-reads nothing, by either mechanism', async () => {
     const { rerender } = await renderUrlDriver();
     await closeUrlDriver(rerender);
     expect(refresh).not.toHaveBeenCalled();
+    expect(notifyIssuesChanged).not.toHaveBeenCalled();
   });
 
   it('local-state driver: an edit then a close signals the host ONCE', async () => {
