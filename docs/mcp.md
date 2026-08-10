@@ -52,12 +52,12 @@ agent ──POST /api/mcp (Authorization: Bearer motir_pat_…)──▶ withMcp
            └─ tool handler ──ServiceContext──▶ the SAME service the UI route calls
 ```
 
-## Creating an API token
+## Creating a token
 
 The MCP server authenticates with a **personal access token (PAT)**. Mint one
 from the web UI:
 
-**Settings → Account → API tokens → Create.**
+**Settings → Account → Tokens → Create.**
 
 Give the token a **label** (a human name, e.g. `claude-code`, ≤ 100 chars) and
 an **expiry** (the select offers 30 / 90 / 365 days or never; 90 days is the

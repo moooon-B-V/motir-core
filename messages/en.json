@@ -5997,7 +5997,7 @@
     "mcpThMcp": "The MCP server",
     "mcpThRest": "The REST API",
     "mcpStepToken": "Mint a token",
-    "mcpStepTokenBody": "In the app: **Settings → Account → API tokens → Create**. Give it a label and an expiry. The plaintext is shown **once** — copy it then; Motir keeps only a hash.",
+    "mcpStepTokenBody": "In the app: **Settings → Account → Tokens → Create**. Give it a label and an expiry. The plaintext is shown **once** — copy it then; Motir keeps only a hash.",
     "mcpStepWire": "Point your client at the endpoint",
     "mcpStepWireBody": "Every client needs the same four facts. They are Motir’s, they are the same for every agent, and everything below this table is one of them transcribed into a vendor’s file format.",
     "mcpSecretCallout": "Don’t paste the token into a file your repository tracks. Where your client can read it from somewhere else, the block below does that instead.",

@@ -5993,7 +5993,7 @@
     "mcpThMcp": "MCP 服务器",
     "mcpThRest": "REST API",
     "mcpStepToken": "创建令牌",
-    "mcpStepTokenBody": "在应用中：**设置 → 账户 → API 令牌 → 创建**。填写名称和有效期。明文**只显示一次**——请当场复制；Motir 只保存哈希值。",
+    "mcpStepTokenBody": "在应用中：**设置 → 账户 → 令牌 → 创建**。填写名称和有效期。明文**只显示一次**——请当场复制；Motir 只保存哈希值。",
     "mcpStepWire": "把客户端指向该端点",
     "mcpStepWireBody": "每个客户端需要的都是同样四项信息。它们属于 Motir，对所有智能体都一样；下面的每段配置，都只是把它们写成某个厂商的文件格式。",
     "mcpSecretCallout": "不要把令牌粘贴进会被仓库跟踪的文件。只要客户端支持从别处读取，下面的配置就会那样做。",
