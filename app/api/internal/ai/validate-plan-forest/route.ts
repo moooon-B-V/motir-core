@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { authenticateJobRequest, JobAuthError } from '@/lib/ai/jobAuth';
+import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
+import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { planValidityService } from '@/lib/services/planValidityService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
@@ -29,11 +30,10 @@ import type { ValidityCondition } from '@/lib/dto/sprints';
 export async function POST(req: Request): Promise<Response> {
   let auth;
   try {
-    auth = authenticateJobRequest(req);
+    auth = await authenticateAndLimitJobRequest(req);
   } catch (err) {
-    if (err instanceof JobAuthError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: err.httpStatus });
-    }
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
     throw err;
   }
 

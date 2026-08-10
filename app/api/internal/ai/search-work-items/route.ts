@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { authenticateJobRequest, JobAuthError } from '@/lib/ai/jobAuth';
+import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
+import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiBoundaryService } from '@/lib/services/aiBoundaryService';
 import {
   decodeFilterEnvelope,
@@ -61,11 +62,10 @@ export async function POST(req: Request): Promise<Response> {
   // ── Authenticate: the service bearer + job token (no cookie) ──
   let auth;
   try {
-    auth = authenticateJobRequest(req);
+    auth = await authenticateAndLimitJobRequest(req);
   } catch (err) {
-    if (err instanceof JobAuthError) {
-      return fail(err.code, err.message, err.httpStatus);
-    }
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
     throw err;
   }
 

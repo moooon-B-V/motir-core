@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { authenticateJobRequest, JobAuthError } from '@/lib/ai/jobAuth';
+import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
+import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiBoundaryService } from '@/lib/services/aiBoundaryService';
 import { ProjectAccessDeniedError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -25,11 +26,10 @@ function parseBool(v: string | null): boolean {
 export async function GET(req: Request): Promise<Response> {
   let auth;
   try {
-    auth = authenticateJobRequest(req);
+    auth = await authenticateAndLimitJobRequest(req);
   } catch (err) {
-    if (err instanceof JobAuthError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: err.httpStatus });
-    }
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
     throw err;
   }
 

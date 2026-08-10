@@ -170,6 +170,16 @@ describe('RLS coverage across the public schema', () => {
       user_appearance_preference: 'per-user preference, deliberately cross-workspace',
       // Anonymous / pre-tenant rows.
       idea_draft: 'anonymous pre-signup drafts; no tenant exists yet',
+      // The shared rate-limit counter (8.5.9 / MOTIR-1165). The surfaces it
+      // protects — sign-in, sign-up, password reset, public writes — are limited
+      // BEFORE any workspace is known, so `workspace_id NOT NULL` would be
+      // unfillable on exactly the requests that need it most and an RLS policy
+      // reading `app.workspace_id` would deny those writes outright, turning a
+      // protection into an outage on the pre-auth path. Every caller component in
+      // `key` is SHA-256 hashed, so there is no tenant content to guard.
+      // Reasoned out in full in `docs/decisions/production-service-stack.md` §7
+      // and restated in the table's migration header.
+      rate_limit_counter: 'pre-auth counters keyed by a hash; no tenant exists at write time',
       // Project-scoped tables reached through an already-guarded parent.
       canvas_node_position: 'reached only via project, which is workspace-guarded',
       project_tag: 'reached only via project, which is workspace-guarded',

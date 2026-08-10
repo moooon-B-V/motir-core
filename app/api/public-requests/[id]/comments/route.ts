@@ -4,6 +4,7 @@ import { publicRequestsService } from '@/lib/services/publicRequestsService';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { EmptyCommentBodyError } from '@/lib/comments/errors';
+import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 
 // POST /api/public-requests/[id]/comments (Story 6.12 · Subtask 6.12.6) — add a
 // PUBLIC-visible comment to a public request, attributed to the signed-in
@@ -24,6 +25,11 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
+  // The shared per-IP public-write ceiling (8.5.9 / MOTIR-1165), before the
+  // session read — see `lib/rateLimit/publicWriteGuard.ts`.
+  const limited = await enforcePublicWriteRateLimit(req);
+  if (limited) return limited;
+
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 

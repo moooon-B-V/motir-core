@@ -734,6 +734,16 @@ export default defineConfig({
         'lib/api/v1/bearer.ts',
         'lib/api/v1/pagination.ts',
         'lib/api/v1/rateLimit.ts',
+        // Story 8.5 · Subtask 8.5.9 (MOTIR-1165) — the SHARED rate limiter and
+        // its Postgres store. This is a security control on the pre-auth surfaces
+        // (sign-in, sign-up, password reset, public writes) and a cost control on
+        // the AI ones, so it belongs under the gate rather than beside it. Every
+        // file is MEASURED at 100% before being pinned below — the honest sequence
+        // the permission-model note above asks for.
+        'lib/rateLimit/**',
+        'lib/services/rateLimitService.ts',
+        'lib/repositories/rateLimitCounterRepository.ts',
+        'lib/ai/jobAuthResponse.ts',
         'app/api/v1/me/route.ts',
         'app/api/v1/workspaces/route.ts',
         // Story 11.3 (the planning resources) · Subtask 11.3.10 — MOTIR-2067.
@@ -1008,6 +1018,25 @@ export default defineConfig({
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/rateLimit.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story 8.5 · Subtask 8.5.9 — MOTIR-1165. Named file by file rather than
+        // by glob: an unnamed new file is an ungated one.
+        'lib/rateLimit/store.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/postgresStore.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/limiter.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/guard.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/keys.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/budgets.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/authGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/publicWriteGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/aiGuard.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/rateLimit/fixedWindow.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/rateLimitService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/rateLimitCounterRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/ai/jobAuthResponse.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/me/route.ts': { branches: 90, functions: 90, lines: 90 },
         'app/api/v1/workspaces/route.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 11.7 · Subtask 11.7.8 — MOTIR-2242. Every file the story added
