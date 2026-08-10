@@ -168,6 +168,7 @@
         --el-border-strong: var(--color-hairline-strong);
         --el-link: var(--color-link);
         --el-danger: var(--color-destructive);
+        --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
@@ -1090,6 +1091,330 @@
         justify-content: center;
         height: var(--height-btn-md);
         font-size: 14px;
+      }
+
+      /* ══════════════════════════════════════════════════════════════════════
+         EDITABLE RAIL (MOTIR-2561) — the peek's rail becomes a WRITE surface.
+         The detail rail's FieldCard hangs its chevron in card chrome; the peek's
+         rail has none, so the affordance is the ROW: the whole rail-field is a
+         hit target, and the chevron sits inline on the dt line, right-aligned.
+         Reveal-on-hover ALONE is not enough (touch + a11y), so the chevron is
+         always rendered at --el-text-faint and only strengthens on hover/focus.
+         ══════════════════════════════════════════════════════════════════════ */
+
+      /* An editable row. The dt becomes a flex line so the chevron can sit on it
+         without stealing a line of the 300px rail's vertical budget. */
+      .rail-field.is-editable dt {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .rail-field.is-editable .chev {
+        margin-left: auto;
+        padding: 1px;
+        border: none;
+        background: transparent;
+        border-radius: 4px;
+        color: var(--el-text-faint);
+        cursor: pointer;
+        display: inline-flex;
+      }
+      .rail-field.is-editable:hover .chev,
+      .rail-field.is-editable .chev:focus-visible {
+        color: var(--el-text-secondary);
+      }
+      .rail-field.is-editable .chev:focus-visible {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .rail-field.is-editable .chev svg {
+        width: 14px;
+        height: 14px;
+        transition: transform 0.12s ease;
+      }
+      .rail-field.is-editing .chev svg {
+        transform: rotate(180deg);
+      }
+
+      /* ── The open control. The rail is 300px wide and scrolls independently,
+         so a control is FULL-BLEED to the rail column and its menu is an
+         in-flow block BELOW it — never an overlay. That is not a style choice:
+         @motir/design-system's Combobox / MultiSelectPicker portal their listbox
+         to <body> normally, but detect an enclosing role="dialog" and render it
+         INLINE instead (the Radix focus scope fights a body portal, and Modal's
+         -translate-x/y-1/2 centring breaks position:fixed). The peek IS that
+         dialog, so the inline branch is the one that runs here. ───────────── */
+      .rail-field .rc {
+        position: relative;
+        width: 100%;
+      }
+      .rail-field .rc-trigger {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+        text-align: left;
+        cursor: pointer;
+      }
+      .rail-field .rc-trigger.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+      .rail-field .rc-trigger .tval {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .rail-field .rc-trigger .updown {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .rail-field .rc-trigger .updown svg {
+        width: 14px;
+        height: 14px;
+      }
+      .rail-field .rc-menu {
+        margin-top: 4px;
+        width: 100%;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-elevated);
+        padding: 4px;
+      }
+      .rail-field .rc-opt {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .rail-field .rc-opt.is-active {
+        background: var(--el-surface);
+      }
+      .rail-field .rc-opt .check {
+        margin-left: auto;
+        flex: none;
+        display: inline-flex;
+        color: var(--el-accent);
+      }
+      .rail-field .rc-opt .check svg {
+        width: 14px;
+        height: 14px;
+      }
+      /* A numeric field (Estimate, Story points) — the same control box, typed. */
+      .rail-field .rc-input {
+        width: 100%;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--el-text);
+      }
+      .rail-field .rc-input.is-focus {
+        outline: var(--focus-ring-width) solid var(--focus-ring-color);
+        outline-offset: var(--focus-ring-offset);
+      }
+
+      /* ── WRITE STATES. Pending is the value dimmed + a hairline bar; there is
+         deliberately NO spinner and NO disabled overlay — the value the user
+         picked is already on screen (the optimistic override), and the response
+         only confirms it. Confirmed is a brief check beside the dt, then gone. */
+      .rail-field.is-pending dd {
+        opacity: 0.55;
+      }
+      .rail-field .rc-bar {
+        height: 2px;
+        margin-top: 6px;
+        border-radius: 999px;
+        background: var(--el-border-soft);
+        overflow: hidden;
+      }
+      .rail-field .rc-bar > i {
+        display: block;
+        width: 40%;
+        height: 100%;
+        border-radius: 999px;
+        background: var(--el-accent);
+      }
+      .rail-field .ok {
+        display: inline-flex;
+        color: var(--el-success);
+      }
+      .rail-field .ok svg {
+        width: 13px;
+        height: 13px;
+      }
+      /* Error — the value REVERTS to the served one and the reason sits under
+         it, in the rail. A toast is wrong here: the modal owns the viewport, and
+         a message about one field belongs on that field.
+         ⚠️ The danger hue is on the GLYPH ONLY; the message itself is --el-text.
+         --el-danger-text is #ffffff (ink FOR a danger fill) and would be
+         invisible on this surface, and --el-danger AS TEXT measures 4.25:1 on
+         the dark page — under AA for a caption this size. A glyph needs only
+         3:1, so the hue carries the meaning and the words stay readable in both
+         themes. */
+      .rail-field .rc-err {
+        display: flex;
+        align-items: flex-start;
+        gap: 5px;
+        margin-top: 5px;
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text);
+      }
+      .rail-field .rc-err svg {
+        width: 13px;
+        height: 13px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-danger);
+      }
+      /* Stale conflict — someone else wrote first. Not a field error: the peek
+         re-reads, so the notice sits at the TOP of the rail and names the reload. */
+      .rail-stale {
+        display: flex;
+        align-items: flex-start;
+        gap: 7px;
+        padding: 8px 10px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-surface);
+        font-size: 11.5px;
+        line-height: 1.45;
+        color: var(--el-text-secondary);
+      }
+      .rail-stale svg {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        margin-top: 1px;
+        color: var(--el-text-faint);
+      }
+      /* Multi-value rows gain a "+" affordance INSIDE the chip stack rather than
+         a chevron, because the row is never "one value being swapped". */
+      .rail-field .chip-add {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 7px;
+        border: 1px dashed var(--el-border);
+        border-radius: var(--radius-badge);
+        background: transparent;
+        color: var(--el-text-secondary);
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        cursor: pointer;
+      }
+      .rail-field .chip-add:hover {
+        color: var(--el-text);
+        border-color: var(--el-text-faint);
+      }
+      /* A chip in edit mode carries its own remove ×. */
+      .pill .chip-x {
+        margin-left: 4px;
+        display: inline-flex;
+        opacity: 0.55;
+        cursor: pointer;
+      }
+      .pill .chip-x svg {
+        width: 10px;
+        height: 10px;
+      }
+      .pill .chip-x:hover {
+        opacity: 1;
+      }
+
+      /* The host row BEHIND the modal — used by panel 12 to show what the list
+         looks like before/after the peek closes. */
+      .host-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+      }
+      .host-row .lr-id {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text-muted);
+      }
+      .host-row .grow {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: var(--el-text);
+      }
+      .host-row.is-stale {
+        opacity: 0.62;
+      }
+      .arrowed {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--el-text-faint);
+      }
+      .arrowed svg {
+        width: 16px;
+        height: 16px;
+        flex: none;
+      }
+
+      /* A rail shown on its own (panels 8–11) — the SAME .qv-rail at its real
+         300px column width, cropped out of the modal so each state is reviewable
+         side by side. Nothing about the rail itself changes. */
+      .rail-solo {
+        width: 300px;
+        flex: none;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+      }
+      .rail-solo .qv-rail {
+        border-left: none;
+        overflow: visible;
+        gap: 16px;
+      }
+      .rail-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        align-items: flex-start;
+      }
+      /* Mock scaffolding caption. --el-text-secondary (6.24:1 on --el-surface),
+         not --el-text-muted (4.17) — the CLAUDE.md contrast table's pairing
+         rule holds for the asset's own chrome too. */
+      .rail-cap {
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-secondary);
+        margin: 0 0 7px;
       }
     </style>
   </head>
@@ -2051,6 +2376,692 @@
           above the description that carries the <strong>same full field set</strong> (the body
           scrolls); the <em>Open full page</em> button is pinned full-width at the bottom as the
           primary action. Close is backdrop / swipe-down / <kbd>Esc</kbd>.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 7 — The rail is EDITABLE (MOTIR-2561) ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          7 · Editable rail — at rest (the affordance, in situ) · MOTIR-2561
+        </div>
+        <div class="stage">
+          <!-- UNROLLED: the real modal is 680px / max 82vh and the rail SCROLLS
+               (see panel 2, which clips at Due date). This panel lets it grow so
+               every row of the editable rail is reviewable in one look — the
+               composition is otherwise identical. -->
+          <div
+            class="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="qv-title-e"
+            style="height: auto; max-height: none"
+          >
+            <div class="qv-head">
+              <span class="type-icon t-story"
+                ><svg viewBox="0 0 24 24"><use href="#i-book" /></svg
+              ></span>
+              <a class="qv-id" href="#/items/PROD-23">PROD-23</a>
+              <span class="pill pill--inprogress">in-progress</span>
+              <span class="spacer"></span>
+              <a class="btn btn-primary" href="#/items/PROD-23">
+                Open full page
+                <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+              </a>
+              <button class="icon-btn" aria-label="Close quick view">
+                <svg viewBox="0 0 24 24"><use href="#i-x" /></svg>
+              </button>
+            </div>
+            <div class="qv-body">
+              <div class="qv-main">
+                <h2 class="qv-title" id="qv-title-e">Email + password sign-in</h2>
+                <div class="qv-desc">
+                  <p>
+                    The rail on the right is unchanged in layout, order and density — every field
+                    the peek already showed is still there, still condensed. What changed is that
+                    the rows the detail page can edit now carry an affordance.
+                  </p>
+                  <p>
+                    <strong>Read-only rows keep no chevron</strong>: Reporter and the Created /
+                    Updated audit line are read-only on the detail rail too, so they are read-only
+                    here. The boundary is visible in the picture, not only in the prose.
+                  </p>
+                </div>
+              </div>
+              <dl class="qv-rail">
+                <div class="rail-field is-editable">
+                  <dt>
+                    Status
+                    <button class="chev" aria-label="Edit Status">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd><span class="pill pill--inprogress">in-progress</span></dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Type
+                    <button class="chev" aria-label="Edit Type">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                    Code
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Executor
+                    <button class="chev" aria-label="Edit Executor">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-bot" /></svg>
+                    Coding agent
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Priority
+                    <button class="chev" aria-label="Edit Priority">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <span class="pill pill--neutral"
+                      ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg
+                      >Medium</span
+                    >
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Assignee
+                    <button class="chev" aria-label="Edit Assignee">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd><span class="avatar">M</span><span class="nm">Marco Ortiz</span></dd>
+                </div>
+                <!-- Reporter: NO chevron. Read-only on the detail rail, so read-only here. -->
+                <div class="rail-field">
+                  <dt>Reporter</dt>
+                  <dd><span class="avatar">A</span><span class="nm">Alice Chen</span></dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Parent
+                    <button class="chev" aria-label="Edit Parent">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <a class="rail-parent" href="#/items/PROD-12">
+                      <svg class="vg" viewBox="0 0 24 24"><use href="#i-parent" /></svg>
+                      <span class="lr-id">PROD-12</span>
+                      <span class="nm">Q3 launch — Auth</span>
+                    </a>
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Labels
+                    <button class="chev" aria-label="Edit Labels">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd class="chips">
+                    <span class="pill pill--label">auth</span>
+                    <span class="pill pill--label">security</span>
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Components
+                    <button class="chev" aria-label="Edit Components">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd class="chips">
+                    <span class="pill pill--neutral">API</span>
+                    <span class="pill pill--neutral">Web</span>
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Due date
+                    <button class="chev" aria-label="Edit Due date">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>Jun 12, 2026</dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Sprint
+                    <button class="chev" aria-label="Edit Sprint">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-goal" /></svg>
+                    Sprint 7
+                  </dd>
+                </div>
+                <!-- Story points: NEWLY editable, and on the DETAIL rail too (panel 12). -->
+                <div class="rail-field is-editable">
+                  <dt>
+                    Story points
+                    <button class="chev" aria-label="Edit Story points">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
+                    5
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Estimate
+                    <button class="chev" aria-label="Edit Estimate">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+                    8h
+                  </dd>
+                </div>
+
+                <div class="rail-div"></div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Team
+                    <button class="chev" aria-label="Edit Team">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>Platform</dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Target release
+                    <button class="chev" aria-label="Edit Target release">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-calendar" /></svg>
+                    Jul 1, 2026
+                  </dd>
+                </div>
+                <!-- The disclosure is no longer read-only: it is now the ONLY route to
+                     an empty custom field you want to fill. Its label says so. -->
+                <button class="rail-more" aria-expanded="false">
+                  <svg viewBox="0 0 24 24"><use href="#i-chevron-right" /></svg>
+                  2 more fields
+                </button>
+
+                <div class="rail-div"></div>
+                <div class="rail-audit">
+                  <span>Created <time>Jun 2, 2026</time></span>
+                  <span>Updated <time>Jun 10, 2026</time></span>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>The affordance is the ROW, and the chevron is its marker.</strong> The detail rail
+          hangs its chevron in <code>FieldCard</code> chrome; the peek's rail has no card, so the
+          chevron sits <strong>inline on the caption line, right-aligned</strong> — it costs no
+          vertical space in a 300px column already carrying fifteen rows. It is
+          <strong>always rendered</strong> at <code>--el-text-faint</code> and only strengthens to
+          <code>--el-text-secondary</code> on hover/focus: reveal-on-hover alone is unreachable on
+          touch and invisible to a keyboard user. The whole row is the hit target; the chevron is a
+          real <code>&lt;button&gt;</code> with an <code>aria-label="Edit &lt;field&gt;"</code>, so
+          the rail stays a <code>&lt;dl&gt;</code>
+          and each control is individually reachable by tab.
+          <br /><br />
+          <strong>Order, density and content are unchanged from 8.8.4</strong> — this panel is
+          deliberately diffable against panel 2. <strong>Reporter</strong> and the
+          <strong>Created / Updated</strong> line carry no chevron, because the detail rail does not
+          edit them either (the story's rule: the peek edits what the detail rail edits). The
+          <em>Show more fields (2)</em> disclosure is relabelled <strong>“2 more fields”</strong>:
+          in 8.8.4 it hid clutter, and it is now the only way to REACH an empty custom field, so a
+          label promising only to “show” it would be wrong.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 8 — A row mid-edit ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          8 · A row mid-edit — the control opens IN FLOW, never as an overlay
+        </div>
+        <div class="rail-row">
+          <div>
+            <p class="rail-cap">Status — picker open</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable is-editing">
+                  <dt>
+                    Status
+                    <button class="chev" aria-label="Close Status">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <div class="rc">
+                      <button class="rc-trigger is-focus">
+                        <span class="tval">In Progress</span>
+                        <span class="updown"
+                          ><svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg
+                        ></span>
+                      </button>
+                      <div class="rc-menu" role="listbox" aria-label="Status">
+                        <div class="rc-opt" role="option">
+                          <span class="tval">To Do</span>
+                        </div>
+                        <div class="rc-opt is-active" role="option" aria-selected="true">
+                          <span class="tval">In Progress</span>
+                          <span class="check"
+                            ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                          ></span>
+                        </div>
+                        <div class="rc-opt" role="option"><span class="tval">Blocked</span></div>
+                        <div class="rc-opt" role="option"><span class="tval">In Review</span></div>
+                        <div class="rc-opt" role="option"><span class="tval">Cancelled</span></div>
+                      </div>
+                    </div>
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Type
+                    <button class="chev" aria-label="Edit Type">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-code" /></svg>
+                    Code
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div>
+            <p class="rail-cap">Story points — numeric</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable is-editing">
+                  <dt>
+                    Story points
+                    <button class="chev" aria-label="Close Story points">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <input class="rc-input is-focus" type="text" value="5" />
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Estimate
+                    <button class="chev" aria-label="Edit Estimate">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-clock" /></svg>
+                    8h
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>Why the menu is in flow and not floating.</strong>
+          <code>@motir/design-system</code>'s <code>Combobox</code> and
+          <code>MultiSelectPicker</code> portal their listbox to <code>&lt;body&gt;</code> with
+          <code>position: fixed</code> — <em>except</em> when they detect an enclosing
+          <code>role="dialog"</code>, where they render it INLINE instead. Both branches already
+          ship. The peek IS that dialog (<code>Modal.tsx</code> wraps
+          <code>@radix-ui/react-dialog</code>), so
+          <strong>the inline branch is the one that runs here</strong> and the design must draw it:
+          the menu is a block below the trigger, inside the rail's own
+          <code>overflow-y: auto</code> column. <br /><br />
+          <strong>The consequence, and it is the one thing this panel decides:</strong> a menu near
+          the bottom of the rail does not float over the modal edge — it EXTENDS the rail's scroll
+          height, so the rail scrolls to it. That is correct and needs no new mechanism, but it does
+          mean the code card must <strong>scroll the opened control into view</strong> rather than
+          assume it is visible. The control is full-bleed to the 300px column so it never reflows
+          the two-column body.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 9 — Write states ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">9 · Write states — pending · confirmed · refused · stale</div>
+        <div class="rail-row">
+          <div>
+            <p class="rail-cap">Pending</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable is-pending">
+                  <dt>
+                    Assignee
+                    <button class="chev" aria-label="Edit Assignee">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd><span class="avatar">P</span><span class="nm">Priya Raman</span></dd>
+                  <div class="rc-bar"><i></i></div>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div>
+            <p class="rail-cap">Confirmed</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable">
+                  <dt>
+                    Assignee
+                    <span class="ok"
+                      ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                    ></span>
+                    <button class="chev" aria-label="Edit Assignee">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd><span class="avatar">P</span><span class="nm">Priya Raman</span></dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div>
+            <p class="rail-cap">Refused — value reverted</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable">
+                  <dt>
+                    Parent
+                    <button class="chev" aria-label="Edit Parent">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <a class="rail-parent" href="#/items/PROD-12">
+                      <svg class="vg" viewBox="0 0 24 24"><use href="#i-parent" /></svg>
+                      <span class="lr-id">PROD-12</span>
+                      <span class="nm">Q3 launch — Auth</span>
+                    </a>
+                  </dd>
+                  <div class="rc-err">
+                    <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                    <span>A subtask cannot be parented to another subtask.</span>
+                  </div>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div>
+            <p class="rail-cap">Stale — someone else wrote first</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-stale">
+                  <svg viewBox="0 0 24 24"><use href="#i-alert" /></svg>
+                  <span
+                    >This item changed while the quick view was open. The fields below have been
+                    reloaded.</span
+                  >
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Status
+                    <button class="chev" aria-label="Edit Status">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd><span class="pill pill--inprogress">in-progress</span></dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>Pending shows no spinner, and that is deliberate.</strong> The picked value is
+          ALREADY on screen — the rail commits optimistically and the action response is only the
+          confirmation (the rule <code>app/(authed)/items/_components/IssueInlineEdit.tsx</code> was
+          rewritten to enforce after <code>bug-inline-status-revert-on-second-edit</code>). So
+          pending dims the value and runs a hairline bar under it; it never disables the row, blanks
+          the value, or shows a spinner where the answer already is. <strong>Confirmed</strong> is a
+          check beside the caption that fades; there is no toast for a success nobody needed to be
+          told about. <br /><br />
+          <strong>Refused is a FIELD message, not a toast.</strong> The peek owns the viewport, and
+          a toast about one field would appear far from it. The value reverts to the served one and
+          the typed reason sits under the row.
+          <strong>The danger hue is on the GLYPH only</strong> — <code>--el-danger-text</code> is
+          <code>#ffffff</code> (it is ink for a danger FILL, not a label on a surface), and
+          <code>--el-danger</code> as text measures 4.25:1 on the dark page, under AA at this size.
+          A glyph needs 3:1, so the hue carries the meaning and the words stay on
+          <code>--el-text</code>, readable in both themes. <br /><br />
+          <strong>Stale is not a field error</strong> — it means the whole payload is behind, so the
+          peek re-reads and the notice sits at the TOP of the rail naming the reload, above rows
+          that may all have moved.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 10 — Multi-value rows + read-only actor ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">10 · Multi-value rows · and the read-only actor</div>
+        <div class="rail-row">
+          <div>
+            <p class="rail-cap">Labels / Components — editing</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable is-editing">
+                  <dt>
+                    Labels
+                    <button class="chev" aria-label="Close Labels">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd class="chips">
+                    <span class="pill pill--label"
+                      >auth<span class="chip-x" aria-label="Remove auth"
+                        ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg></span
+                    ></span>
+                    <span class="pill pill--label"
+                      >security<span class="chip-x" aria-label="Remove security"
+                        ><svg viewBox="0 0 24 24"><use href="#i-x" /></svg></span
+                    ></span>
+                    <button class="chip-add">+ Add</button>
+                  </dd>
+                </div>
+                <div class="rail-field is-editable">
+                  <dt>
+                    Components
+                    <button class="chev" aria-label="Edit Components">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd class="chips">
+                    <span class="pill pill--neutral">API</span>
+                    <span class="pill pill--neutral">Web</span>
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div>
+            <p class="rail-cap">Read-only actor — no affordance anywhere</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field">
+                  <dt>Status</dt>
+                  <dd><span class="pill pill--inprogress">in-progress</span></dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Assignee</dt>
+                  <dd><span class="avatar">M</span><span class="nm">Marco Ortiz</span></dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Labels</dt>
+                  <dd class="chips">
+                    <span class="pill pill--label">auth</span>
+                    <span class="pill pill--label">security</span>
+                  </dd>
+                </div>
+                <div class="rail-field">
+                  <dt>Story points</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
+                    5
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong>A collection row has no single commit moment</strong>, so it does not swap its
+          value for one control. It stays a chip stack and gains two affordances: each chip carries
+          a remove <code>×</code>, and a dashed <strong>+ Add</strong> chip opens the
+          <code>MultiSelectPicker</code>. The row stays in edit mode across several adds and removes
+          — which is why the chrome's optimistic ledger has to survive repeated writes to the same
+          row rather than one write per open. <br /><br />
+          <strong>Read-only is a DRAWN state, not the absence of one.</strong> An actor without
+          <code>work_item:edit</code> gets exactly the 8.8.4 rail — no chevrons, no
+          <code>+ Add</code>, no remove <code>×</code>, no disclosure change. Not disabled controls:
+          <em>absent</em> ones. A disabled chevron advertises a capability the viewer does not have
+          and invites a click that can only fail.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 11 — The DETAIL rail's Story-points row ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">
+          11 · The second surface — Story points becomes editable on the DETAIL rail too
+        </div>
+        <div class="rail-row">
+          <div>
+            <p class="rail-cap">Detail rail — today (read-only)</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field">
+                  <dt>Story points</dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
+                    5
+                  </dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+          <div class="arrowed">
+            <svg viewBox="0 0 24 24"><use href="#i-arrow-right" /></svg>
+          </div>
+          <div>
+            <p class="rail-cap">Detail rail — after MOTIR-2565</p>
+            <div class="rail-solo">
+              <dl class="qv-rail">
+                <div class="rail-field is-editable">
+                  <dt>
+                    Story points
+                    <button class="chev" aria-label="Edit Story points">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd>
+                    <svg class="vg" viewBox="0 0 24 24"><use href="#i-gauge" /></svg>
+                    5
+                  </dd>
+                </div>
+                <div class="rail-field is-editable is-editing">
+                  <dt>
+                    Story points
+                    <button class="chev" aria-label="Close Story points">
+                      <svg viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </dt>
+                  <dd><input class="rc-input is-focus" type="text" value="5" /></dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          Drawn here in the peek's rail grammar for diffability; on the detail page the row is a
+          <code>FieldCard</code> and takes that card's existing corner chevron + numeric input
+          <strong>verbatim from the Estimate row directly above it</strong> — see
+          <code>design/work-items/detail.png</code> and
+          <code>design/work-items/sprint-field.mock.html</code> (the
+          <code>.fcard .chev</code> grammar).
+          <strong>No new element is designed for the detail page</strong>; an existing row stops
+          being <code>editable={false}</code>. <br /><br />
+          <strong>Empty means UNESTIMATED, not zero.</strong> Clearing the input writes
+          <code>null</code>, and the row then reads a muted <em>None</em> like every other empty
+          built-in — a zero-point item is a different, legitimate value and must stay
+          distinguishable from one nobody has sized.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 12 — The surface BEHIND the modal ═══════════ -->
+      <div class="panel">
+        <div class="panel-label">12 · What the row behind the modal does</div>
+        <div class="rail-row" style="flex-direction: column; gap: 12px">
+          <div style="width: 100%; max-width: 620px">
+            <p class="rail-cap">
+              While the peek is open — the row behind is stale, and stays stale
+            </p>
+            <div class="host-row is-stale">
+              <span class="lr-id">PROD-23</span>
+              <span class="grow">Email + password sign-in</span>
+              <span class="pill pill--neutral">to-do</span>
+              <span class="avatar">M</span>
+            </div>
+          </div>
+          <div style="width: 100%; max-width: 620px">
+            <p class="rail-cap">On close — one re-read, and the row is current</p>
+            <div class="host-row">
+              <span class="lr-id">PROD-23</span>
+              <span class="grow">Email + password sign-in</span>
+              <span class="pill pill--inprogress">in-progress</span>
+              <span class="avatar">P</span>
+            </div>
+          </div>
+        </div>
+        <p class="panel-note">
+          <strong
+            >The decision: the host surface re-reads ONCE, on CLOSE, and only if at least one edit
+            was confirmed.</strong
+          >
+          Not per edit, and not never. <br /><br />
+          <strong>Not per edit</strong>, because that is the shape that already caused a bug here:
+          refreshing the route on every successful inline edit shipped a full RSC snapshot per
+          keystroke-sized change, two quick edits raced, and a stale snapshot landing last repainted
+          an unrelated row with its old value (<code>bug-inline-status-revert-on-second-edit</code>;
+          the reasoning is preserved in <code>IssueInlineEdit.tsx</code> and in the header of
+          <code>app/(authed)/items/[key]/edit/actions.ts</code>). <strong>Not never</strong>,
+          because a list that contradicts the change you just made is worse than one that lags — and
+          the user is looking straight at both. <br /><br />
+          Close is the only moment that is both safe and sufficient: the modal is going away, so no
+          optimistic cell can be repainted by the re-read, and the user's next glance is at the
+          list.
+          <strong>Both peek drivers must do it</strong> —
+          <code>IssueQuickViewController.tsx</code> (URL-driven, over <code>/items</code>,
+          <code>/ready</code>, <code>/boards</code>) and
+          <code>components/planning/WorkItemQuickView.tsx</code> (local state, on the planning
+          canvas). They are separate files with the same job; a signal added to one and not the
+          other is how the canvas peek silently becomes a different product. <br /><br />
+          The canvas is a <strong>client island</strong>, so <code>router.refresh()</code> does not
+          reach it (the page-state-after-mutation contract, case 3) — its driver needs an explicit
+          refetch of the node it peeked, not a route refresh.
         </p>
       </div>
     </div>
