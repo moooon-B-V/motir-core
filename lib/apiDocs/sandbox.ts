@@ -119,6 +119,48 @@ export function sandboxRunCommand(row: SandboxProfileRow): string {
   ].join('\n');
 }
 
+/**
+ * The dev-container config the VS Code sub-step tells the reader to write, as
+ * the ONE source both of that step's code blocks are built from.
+ *
+ * Two blocks show this object: the file listing a reader may create by hand,
+ * and the heredoc inside `SANDBOX_DEVCONTAINER_WRITE_COMMAND`. They were a
+ * drift waiting to happen — a `mounts` entry corrected in one and not the
+ * other publishes two different configs under one caption — so neither is
+ * typed twice (MOTIR-2608, acceptance criterion 6).
+ *
+ * The `\${…}` escapes are template-literal escapes, not shell ones: what this
+ * constant HOLDS is the literal text `${localWorkspaceFolder}`, which is a Dev
+ * Containers substitution the editor resolves and nothing before it may.
+ */
+export const SANDBOX_DEVCONTAINER_JSON = `{
+  "name": "Motir sandbox (Claude Code)",
+  "image": "${SANDBOX_IMAGE}:claude",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=\${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=\${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true
+}`;
+
+/**
+ * The command that PRODUCES that file, because naming a filename is not an
+ * instruction a reader can carry out: macOS Finder and most GUI file pickers
+ * refuse a name beginning with `.`, and refuse it without saying why.
+ *
+ * ⚠️ The heredoc delimiter is QUOTED — `<<'JSON'`. Unquoted, the shell expands
+ * `${localWorkspaceFolder}` and `${localEnv:HOME}` to empty strings on the way
+ * into the file, and the reader gets a container that mounts nothing and finds
+ * no credential — a silent failure strictly worse than being stuck, which is
+ * why the truth test greps for the quoted form rather than trusting review.
+ */
+export const SANDBOX_DEVCONTAINER_WRITE_COMMAND = `mkdir -p .devcontainer
+cat > .devcontainer/devcontainer.json <<'JSON'
+${SANDBOX_DEVCONTAINER_JSON}
+JSON`;
+
 /** One numbered step of the setup. */
 export interface SandboxStep {
   id: string;
@@ -267,27 +309,31 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: '**1 · Install the Dev Containers extension.** From the Extensions view, or the command palette’s **Extensions: Install Extensions**. It is what starts the container on your behalf, and it drives the same Docker engine step 2 uses.',
+        text: '**1 · Install the Dev Containers extension.** From the Extensions view, or from the command palette — **⇧⌘P** on macOS, **Ctrl+Shift+P** on Windows and Linux, **F1** on all three, or **View → Command Palette…** if you would rather not hold a chord — then **Extensions: Install Extensions**. The palette is where two of these three sub-steps happen, so it is worth pinning now. The extension is what starts the container on your behalf, and it drives the same Docker engine step 2 uses.',
       },
       {
         kind: 'prose',
-        text: '**2 · Add `.devcontainer/devcontainer.json`** to the folder you are mounting — the same one step 2 would have started from. It pins the published image and passes the mount your profile needs:',
+        text: '**2 · Add `.devcontainer/devcontainer.json`** to the folder you are mounting — the same one step 2 would have started from. It pins the published image and passes the mount your profile needs. Write it from that folder in one command, because a GUI file manager will not do it for you: macOS Finder and most file pickers **refuse a name beginning with a dot**, and they refuse it without saying why.',
+      },
+      {
+        kind: 'code',
+        caption: 'your machine — in the folder you are mounting',
+        copyable: true,
+        code: SANDBOX_DEVCONTAINER_WRITE_COMMAND,
+      },
+      {
+        kind: 'prose',
+        text: "The quotes around `<<'JSON'` are load-bearing: they are what stops your shell from expanding `${localWorkspaceFolder}` and `${localEnv:HOME}` before they reach the file. Those are Dev Containers substitutions, and the editor is what resolves them. That command writes exactly this — the same file, if you would rather create it by hand:",
       },
       {
         kind: 'code',
         caption: '.devcontainer/devcontainer.json',
         copyable: true,
-        code: `{
-  "name": "Motir sandbox (Claude Code)",
-  "image": "${SANDBOX_IMAGE}:claude",
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=\${localWorkspaceFolder},target=/workspace,type=bind",
-  "mounts": [
-    "source=\${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
-  ],
-  "remoteUser": "node",
-  "overrideCommand": true
-}`,
+        code: SANDBOX_DEVCONTAINER_JSON,
+      },
+      {
+        kind: 'prose',
+        text: 'Two routes inside VS Code do accept the dot-name where Finder will not: **Explorer → New File**, typing the whole path `.devcontainer/devcontainer.json` — it creates the `.devcontainer` folder for you — or the palette’s **Dev Containers: Add Dev Container Configuration Files…**, then replace what it scaffolds with the above.',
       },
       {
         kind: 'prose',
@@ -295,7 +341,7 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: '**3 · Reopen in Container.** Command palette → **Dev Containers: Reopen in Container**. VS Code pulls the image and attaches; its terminal is the same shell step 2 would have dropped you into.',
+        text: '**3 · Open the folder in the container.** Command palette → **Dev Containers: Open Folder in Container…**, and pick the folder you just wrote the file into. VS Code pulls the image and attaches; its terminal is the same shell step 2 would have dropped you into. **If that folder is already open in VS Code**, **Dev Containers: Reopen in Container** does the same attach without asking which folder — that precondition is the entire difference between the two commands, and it is why the sub-step does not lead with the one that begins “Re”.',
       },
       {
         kind: 'callout',
