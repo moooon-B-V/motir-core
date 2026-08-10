@@ -13,6 +13,9 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 //
 // `no-store` for the same reason the ready nudge uses it: the answer changes the
 // moment an audit lands, and a cached "1 repo un-audited" outlives the fix.
+// NOT rate-limited, deliberately (MOTIR-2597): this reads audit coverage back, so no model job
+// is submitted and no provider money is spent on this path. The AI ceiling guards the doors that
+// SUBMIT; adding one here would only cap a database read.
 export async function GET(): Promise<Response> {
   const resolved = await resolveActiveProjectContext();
   if ('response' in resolved) return resolved.response;

@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 export async function POST(req: Request): Promise<Response> {
   const session = await getSession();
@@ -16,6 +17,13 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The AI ceiling, applied on the door that SUBMITS the job (MOTIR-2597). Its own
+  // `ai:generate` bucket, tighter than `ai:chat`, because a generation costs many
+  // chat turns. Spent here — after the two gates, before the body is read and long
+  // before the provider is called, since a 429 afterwards has already paid the bill.
+  const limited = await enforceAiRateLimit(ctx, 'ai:generate');
+  if (limited) return limited;
 
   let body: unknown;
   try {
