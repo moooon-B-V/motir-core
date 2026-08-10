@@ -11,6 +11,9 @@ import { workItemRevisionsService } from '@/lib/services/workItemRevisionsServic
 import { deleteAttachmentBlob, putPrivateAttachment, signedDownloadUrl } from '@/lib/blob/uploader';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { MAX_UPLOAD_BYTES, isAllowedUploadType, isImageType } from '@/lib/blob/allowlist';
+import { uploadBudget } from '@/lib/rateLimit/budgets';
+import { rateLimitKey } from '@/lib/rateLimit/keys';
+import { consumeSharedRateLimit } from '@/lib/rateLimit/limiter';
 import {
   AttachmentEditorSourcedError,
   AttachmentForbiddenError,
@@ -175,18 +178,36 @@ function attachmentsDiffCell(
   return { attachments: { [op]: [item] } };
 }
 
-// Per-user rate limit — a simple in-memory sliding window. Per-instance only
-// (fine pre-Epic-8; a shared limiter is an Epic-8 concern). ~10 uploads / minute.
-const RATE_LIMIT = 10;
-const RATE_WINDOW_MS = 60_000;
-const uploadLog = new Map<string, number[]>();
-
-function checkRateLimit(userId: string): void {
-  const now = Date.now();
-  const recent = (uploadLog.get(userId) ?? []).filter((t) => now - t < RATE_WINDOW_MS);
-  if (recent.length >= RATE_LIMIT) throw new RateLimitError();
-  recent.push(now);
-  uploadLog.set(userId, recent);
+/**
+ * Per-user upload throttle — counted through the SHARED store (MOTIR-2598).
+ *
+ * ⚠️ IT NO LONGER OWNS A COUNTER. This was a module-level
+ * `Map<string, number[]>` sliding window, which meant the ceiling was per Node
+ * PROCESS: Motir runs `machine_count: 2` on Fly, so an advertised 10 uploads a
+ * minute was really 20, and would grow with every machine added. Subtask 8.5.9
+ * (MOTIR-1165) landed one shared counter for the whole app and left this
+ * surface behind because it sits outside 8.5.9's three surface classes; this is
+ * the part that was skipped.
+ *
+ * TWO deliberate consequences of the swap, neither a regression:
+ *
+ * 1. **Sliding → FIXED window.** The shared store buckets on an epoch-aligned
+ *    grid, so the allowance resets on the clock rather than aging out per
+ *    request. A burst can therefore straddle a boundary and spend two windows'
+ *    worth in quick succession — the standard fixed-window trade every other
+ *    limiter in the app already makes (ADR §6), and still a far tighter real
+ *    ceiling than `limit × instances` was.
+ * 2. **A REFUSED attempt still counts.** The store increments before the
+ *    comparison, so hammering a spent budget keeps the counter climbing. That
+ *    changes nothing about when a request is refused (the comparison is against
+ *    the budget, not the excess) and costs one row update per refused call.
+ *
+ * The budget is env-configurable (`lib/rateLimit/budgets.ts`), which is also
+ * what lets a test pin the window instead of racing a 60 s one.
+ */
+async function checkRateLimit(userId: string): Promise<void> {
+  const decision = await consumeSharedRateLimit(rateLimitKey('upload', userId), uploadBudget());
+  if (!decision.allowed) throw new RateLimitError();
 }
 
 export const attachmentsService = {
@@ -211,7 +232,7 @@ export const attachmentsService = {
       : MAX_UPLOAD_BYTES;
     if (file.size > perFileLimit) throw new FileTooLargeError(perFileLimit);
     if (!isAllowedUploadType(file.type)) throw new UnsupportedFileTypeError(file.type);
-    checkRateLimit(ctx.userId);
+    await checkRateLimit(ctx.userId);
     if (organizationId) await entitlementsService.assertWithinStorageCap(organizationId, file.size);
 
     const pathname = `attachments/${ctx.workspaceId}/${file.name}`;
