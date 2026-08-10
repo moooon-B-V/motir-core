@@ -74,9 +74,6 @@ import { AccountSidebarHeader } from './AccountSidebarHeader';
 // <md off-canvas body, always expanded, no footer — the drawer chrome owns
 // its own close affordance).
 
-// Docs is an external link (no in-app docs route yet); points at the repo.
-const DOCS_URL = 'https://github.com/moooon-B-V/motir-core#readme';
-
 export interface SidebarNavProps {
   activeProject: ProjectDTO | null;
   projects: ProjectDTO[];
@@ -392,9 +389,18 @@ export function SidebarNav({
           isActive(pathname, '/settings/workspace/gitlab'),
       },
       {
+        // The documentation area's front door (MOTIR-2570) — `/docs`, not
+        // `/docs/api`: the index IS the area, and pointing the rail at the REST
+        // reference is the defect the index story exists to fix. This row used
+        // to escape to the GitHub README on the premise that there was no
+        // in-app docs route; there has been one since `/docs/api` shipped.
+        //
+        // No `active` arm, deliberately: `/docs` renders in the `(public)`
+        // route group OUTSIDE this shell, so the rail is never on screen there
+        // and `pathname` can never match.
         icon: <BookOpen />,
         label: t('nav.docs'),
-        href: DOCS_URL,
+        href: '/docs',
       },
     ],
   });
