@@ -27,11 +27,18 @@ import { Pill } from '@/components/ui/Pill';
 import { ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
+import { PriorityPicker } from '@/components/issues/PriorityPicker';
+import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
+import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Input } from '@/components/ui/Input';
+import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
 import { WORK_ITEM_TYPE_META } from '@/lib/issues/workItemTypeMeta';
-import { isTypeableKind } from '@/lib/issues/executorDefaults';
+import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { showsReadiness } from '@/lib/issues/readinessVisibility';
 import { labelTint } from '@/lib/labels/labelTint';
 import { formatDate } from '@/lib/utils/datetime';
+import { formatDurationMinutes } from '@/lib/utils/duration';
 import type { ExecutorDto } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { Locale } from '@/lib/i18n/locales';
@@ -64,7 +71,17 @@ export type { QuickViewData };
 // roadmap-canvas quick-view, which drives the peek from local state. Omitted on
 // /items · /ready · /boards, where the close clears `?peek` via the shipped
 // URL-driven default (see QuickViewCloseButton).
-type IssueQuickViewPanelProps = { onClose?: () => void } & (
+type IssueQuickViewPanelProps = {
+  onClose?: () => void;
+  /**
+   * Fired ONCE, the first time a rail edit is confirmed (MOTIR-2563). The driver
+   * uses it to decide whether the surface behind the modal needs re-reading when
+   * the peek closes — the design's panel-12 decision: re-read on CLOSE, not per
+   * edit (that shape caused `bug-inline-status-revert-on-second-edit`), and not
+   * at all when nothing changed.
+   */
+  onEdited?: () => void;
+} & (
   | { state: 'loading'; peekKey: string }
   | { state: 'notfound'; peekKey: string }
   | { state: 'ready'; data: QuickViewData }
@@ -117,6 +134,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // The expanded rail's empty custom fields hide behind a read-only "Show more
   // fields (N)" disclosure (8.8.8, mirroring the detail rail 5.3.7).
   const [showAllCustom, setShowAllCustom] = useState(false);
+  // Called above the early returns — hooks cannot be conditional, so the rail's
+  // edit state takes a nullable payload and is inert until the peek is `ready`.
+  const edit = useQuickViewRailEdit(props.state === 'ready' ? props.data : null, props.onEdited);
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
     [locale],
@@ -241,6 +261,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
 
   // ── READY (panel 2) — the populated peek ──────────────────────────────────
   const { data } = props;
+  // The rail renders the OPTIMISTIC view for the rows this card edits; every
+  // other row still reads `data` directly (untouched by MOTIR-2563).
+  const view = edit.effective ?? data;
   // Custom fields split the detail-rail way (5.3.7): the VALUED ones render as
   // rows, the empty ones hide behind the read-only "Show more fields (N)".
   const valuedCustom = data.customFields.filter((f) => f.value !== null);
@@ -250,8 +273,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // its empty label is status-aware (a done/cancelled item is excluded from the
   // backlog → "None", otherwise "Backlog"), matching CoreFieldsPanel.
   const showWorkType = isTypeableKind(data.kind);
-  const TypeGlyph = data.type ? WORK_ITEM_TYPE_META[data.type].icon : null;
-  const ExecutorGlyph = data.executor ? EXECUTOR_GLYPH[data.executor] : null;
+  // Derived from the OPTIMISTIC view, so an executor/type change repaints its
+  // glyph with the value the user just picked rather than the served one.
+  const ViewTypeGlyph = view.type ? WORK_ITEM_TYPE_META[view.type].icon : null;
+  const ViewExecutorGlyph = view.executor ? EXECUTOR_GLYPH[view.executor] : null;
   const sprintEmptyLabel = data.statusCategory === 'done' ? t('none') : t('backlog');
   return (
     <>
@@ -405,6 +430,9 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             the fixed-height modal; built-in fields always render (muted "None"
             when empty), custom fields split valued / "Show more". */}
         <dl className="flex min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
+          {/* Not a field error — the whole payload is behind, so the notice sits
+              ABOVE rows that may all have moved (design panel 9). */}
+          {edit.stale ? <RailStaleNotice /> : null}
           <RailField label={t('status')}>
             <StatusValue category={data.statusCategory} label={data.statusLabel} />
           </RailField>
@@ -415,38 +443,77 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               in the header (IssueTypeIcon), so the rail adds only the work type. */}
           {showWorkType ? (
             <>
-              <RailField label={t('type')}>
-                {data.type && TypeGlyph ? (
+              <EditableRailField
+                label={t('type')}
+                fieldKey="workItemType"
+                edit={edit}
+                control={
+                  <WorkItemTypePicker
+                    value={view.type}
+                    autoOpen
+                    onClose={edit.close}
+                    onChange={(type) => void edit.commit('workItemType', { type }, { type })}
+                  />
+                }
+              >
+                {view.type && ViewTypeGlyph ? (
                   <>
-                    <TypeGlyph
+                    <ViewTypeGlyph
                       className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)"
                       aria-hidden
                     />
-                    <span className="truncate">{tl(`workItemType.${data.type}`)}</span>
+                    <span className="truncate">{tl(`workItemType.${view.type}`)}</span>
                   </>
                 ) : (
                   <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}
-              </RailField>
-              <RailField label={t('executor')}>
-                {data.executor && ExecutorGlyph ? (
+              </EditableRailField>
+              <EditableRailField
+                label={t('executor')}
+                fieldKey="executor"
+                edit={edit}
+                control={
+                  view.type == null ? undefined : (
+                    <ExecutorPicker
+                      value={view.executor ?? defaultExecutorForType(view.type)}
+                      onChange={(executor) => {
+                        edit.close();
+                        void edit.commit('executor', { executor }, { executor });
+                      }}
+                    />
+                  )
+                }
+              >
+                {view.executor && ViewExecutorGlyph ? (
                   <>
-                    <ExecutorGlyph
+                    <ViewExecutorGlyph
                       className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)"
                       aria-hidden
                     />
-                    <span className="truncate">{tl(`executor.${data.executor}`)}</span>
+                    <span className="truncate">{tl(`executor.${view.executor}`)}</span>
                   </>
                 ) : (
                   <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}
-              </RailField>
+              </EditableRailField>
             </>
           ) : null}
 
-          <RailField label={t('priority')}>
-            <PriorityValue priority={data.priority} />
-          </RailField>
+          <EditableRailField
+            label={t('priority')}
+            fieldKey="priority"
+            edit={edit}
+            control={
+              <PriorityPicker
+                value={view.priority}
+                autoOpen
+                onClose={edit.close}
+                onChange={(priority) => void edit.commit('priority', { priority }, { priority })}
+              />
+            }
+          >
+            <PriorityValue priority={view.priority} />
+          </EditableRailField>
           <RailField label={t('assignee')}>
             <AssigneeValue name={data.assigneeName} />
           </RailField>
@@ -506,13 +573,34 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             )}
           </RailField>
 
-          <RailField label={t('dueDate')}>
-            {data.dueLabel ? (
-              <span className="truncate">{data.dueLabel}</span>
+          {/* Due date + Estimate carry BOTH axes, so an optimistic write updates
+              the raw value AND its display label together — the payload's
+              display/raw pairing is what keeps the panel presentational, and
+              leaving the label behind would show the OLD date under a new one. */}
+          <EditableRailField
+            label={t('dueDate')}
+            fieldKey="dueDate"
+            edit={edit}
+            control={
+              <DatePicker
+                value={view.dueDate ? view.dueDate.slice(0, 10) : ''}
+                onChange={(next) => {
+                  const iso = next ? `${next}T00:00:00.000Z` : null;
+                  void edit.commit(
+                    'dueDate',
+                    { dueDate: iso, dueLabel: iso ? formatDate(iso, locale) : null },
+                    { dueDate: iso },
+                  );
+                }}
+              />
+            }
+          >
+            {view.dueLabel ? (
+              <span className="truncate">{view.dueLabel}</span>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noDueDate')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
           {/* Sprint — omitted for epics (they span sprints). Goal glyph + name,
               or the status-aware empty label (Backlog / None). */}
@@ -541,16 +629,52 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             )}
           </RailField>
 
-          <RailField label={t('estimate')}>
-            {data.estimateLabel ? (
+          <EditableRailField
+            label={t('estimate')}
+            fieldKey="estimate"
+            edit={edit}
+            control={
+              <Input
+                type="number"
+                min={0}
+                autoFocus
+                defaultValue={view.estimateMinutes ?? ''}
+                onBlur={(e) => {
+                  const raw = e.currentTarget.value.trim();
+                  const minutes = raw === '' ? null : Number(raw);
+                  if (minutes !== null && (!Number.isFinite(minutes) || minutes < 0)) {
+                    edit.close();
+                    return;
+                  }
+                  if (minutes === view.estimateMinutes) {
+                    edit.close();
+                    return;
+                  }
+                  void edit.commit(
+                    'estimate',
+                    {
+                      estimateMinutes: minutes,
+                      estimateLabel: minutes != null ? formatDurationMinutes(minutes) : null,
+                    },
+                    { estimateMinutes: minutes },
+                  );
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') edit.close();
+                }}
+              />
+            }
+          >
+            {view.estimateLabel ? (
               <>
                 <Clock className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                <span className="truncate">{data.estimateLabel}</span>
+                <span className="truncate">{view.estimateLabel}</span>
               </>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noEstimate')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
           {/* Custom fields (5.3.7) — valued rows, then the empty ones behind a
               read-only "Show more fields (N)" disclosure. A faint divider sets

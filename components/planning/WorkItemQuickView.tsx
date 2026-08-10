@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 import { IssueQuickViewPanel } from '@/app/(authed)/items/_components/IssueQuickViewPanel';
@@ -31,14 +31,41 @@ type PeekResult =
 export function WorkItemQuickView({
   peekKey,
   onClose,
+  onEdited,
 }: {
   /** The work item's identifier (e.g. `MOTIR-12`) to peek, or null when closed. */
   peekKey: string | null;
   /** Close the peek — wired to the panel's × / "Close" and the modal's Esc/backdrop. */
   onClose: () => void;
+  /**
+   * MOTIR-2563 — fired on close when a rail edit was confirmed while the peek was
+   * open, so the CANVAS can re-read the node it peeked.
+   *
+   * The /items driver answers the same question with `router.refresh()`, and that
+   * is exactly why this one cannot: the canvas is a CLIENT ISLAND seeded from its
+   * own state, so a route refresh does not reach it (the page-state contract,
+   * case 3). It needs an explicit refetch, which only its owner can perform —
+   * hence a callback rather than a refresh in here.
+   */
+  onEdited?: () => void;
 }) {
   const t = useTranslations('issueViews');
   const [result, setResult] = useState<PeekResult | null>(null);
+  const editedRef = useRef(false);
+  const markEdited = useCallback(() => {
+    editedRef.current = true;
+  }, []);
+  // Re-read on CLOSE, once, and only if something was written — the same
+  // decision the /items driver implements (design panel 12). Wrapping the
+  // caller's `onClose` is what makes both peeks behave identically; a signal
+  // added to one driver and not the other is how the canvas peek silently
+  // becomes a different product.
+  const closeAndSettle = useCallback(() => {
+    const edited = editedRef.current;
+    editedRef.current = false;
+    onClose();
+    if (edited) onEdited?.();
+  }, [onClose, onEdited]);
 
   useEffect(() => {
     if (!peekKey) return;
@@ -79,7 +106,7 @@ export function WorkItemQuickView({
     <Modal
       open
       onOpenChange={(next) => {
-        if (!next) onClose();
+        if (!next) closeAndSettle();
       }}
       hideClose
       size="xl"
@@ -87,11 +114,16 @@ export function WorkItemQuickView({
       className="h-[680px] max-h-[82vh] w-[90vw] p-0"
     >
       {showing === null ? (
-        <IssueQuickViewPanel state="loading" peekKey={peekKey} onClose={onClose} />
+        <IssueQuickViewPanel state="loading" peekKey={peekKey} onClose={closeAndSettle} />
       ) : showing.status === 'notfound' ? (
-        <IssueQuickViewPanel state="notfound" peekKey={peekKey} onClose={onClose} />
+        <IssueQuickViewPanel state="notfound" peekKey={peekKey} onClose={closeAndSettle} />
       ) : (
-        <IssueQuickViewPanel state="ready" data={showing.data} onClose={onClose} />
+        <IssueQuickViewPanel
+          state="ready"
+          data={showing.data}
+          onClose={closeAndSettle}
+          onEdited={markEdited}
+        />
       )}
     </Modal>
   );

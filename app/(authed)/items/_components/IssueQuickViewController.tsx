@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { IssueQuickView } from './IssueQuickView';
 import { IssueQuickViewPanel } from './IssueQuickViewPanel';
 import type { QuickViewData } from '@/lib/dto/quickView';
@@ -30,9 +30,22 @@ type PeekResult =
   | { key: string; status: 'notfound' };
 
 export function IssueQuickViewController() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const peek = searchParams.get('peek')?.trim() || null;
   const [result, setResult] = useState<PeekResult | null>(null);
+  // MOTIR-2563 — the host surface behind the modal. The rail edits
+  // optimistically and NEVER refreshes the route on success (doing that per edit
+  // is what caused `bug-inline-status-revert-on-second-edit`), so the list/board
+  // underneath keeps rendering what the server sent before the peek opened. The
+  // design (panel 12) settles it: re-read ONCE, on CLOSE, and only when an edit
+  // was actually confirmed. Close is the only moment that is both safe — the
+  // modal is going away, so no optimistic cell can be repainted by the re-read —
+  // and sufficient, because the user's next glance is at the list.
+  const editedRef = useRef(false);
+  const markEdited = useCallback(() => {
+    editedRef.current = true;
+  }, []);
 
   useEffect(() => {
     if (!peek) return;
@@ -61,6 +74,15 @@ export function IssueQuickViewController() {
     return () => controller.abort();
   }, [peek]);
 
+  // The peek closed (the `?peek` param cleared). If anything was written while
+  // it was open, re-read the server-rendered host surface now.
+  useEffect(() => {
+    if (peek) return;
+    if (!editedRef.current) return;
+    editedRef.current = false;
+    router.refresh();
+  }, [peek, router]);
+
   if (!peek) return null;
 
   // Show the fetched result ONLY when it's for the key currently in the URL;
@@ -74,7 +96,7 @@ export function IssueQuickViewController() {
       ) : showing.status === 'notfound' ? (
         <IssueQuickViewPanel state="notfound" peekKey={peek} />
       ) : (
-        <IssueQuickViewPanel state="ready" data={showing.data} />
+        <IssueQuickViewPanel state="ready" data={showing.data} onEdited={markEdited} />
       )}
     </IssueQuickView>
   );
