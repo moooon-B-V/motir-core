@@ -78,7 +78,18 @@ export const DOCS_REDIRECTS = [
   // The addresses those two pages served between Amendment 9 and Amendment 11.
   { source: '/docs/getting-started', destination: '/docs/api/getting-started', permanent: true },
   { source: '/docs/stability', destination: '/docs/api/stability', permanent: true },
-  { source: '/docs', destination: '/docs/api', permanent: true },
+  // ── MOTIR-2523 / ADR Amendment 19 Q5 ──────────────────────────────────────
+  // `/docs` → `/docs/api` IS GONE. `/docs` now RENDERS the area's index
+  // (`app/(public)/docs/page.tsx`), and a Next redirect resolves BEFORE routing
+  // — so while that rule existed the page was unreachable code, no matter how
+  // green its tests were. Deleting it is a precondition of the page, not a
+  // tidy-up, which is why the two ship in one commit.
+  //
+  // Rule 3 above (`/api-docs` → `/docs/api`) is deliberately NOT re-pointed at
+  // `/docs`: `/api-docs` was the API reference's address when the area was
+  // API-only, so an old bookmark to the reference must keep landing on the
+  // reference. Only the CURRENT root changes meaning, and it has no legacy
+  // readers to protect — it has never rendered anything of its own.
 ] as const;
 
 const nextConfig: NextConfig = {

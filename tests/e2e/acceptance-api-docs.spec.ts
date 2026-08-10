@@ -92,6 +92,18 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     const docs = page.getByRole('link', { name: 'Docs', exact: true });
     await expect(docs).toBeVisible();
     await docs.click();
+    // ⚠️ Re-pointed by MOTIR-2523: the door now opens on the AREA, not on the
+    // API reference (ADR Amendment 19 Q1/Q5 — `/docs` renders an index and its
+    // redirect is deleted). This spec's subject is still the API reference, so
+    // it picks that surface from the index and carries on. The index's OWN
+    // coverage is MOTIR-2525's; nothing new is asserted here.
+    await page.waitForURL(/\/docs$/);
+    await beat();
+
+    await page
+      .getByRole('link', { name: /API reference/ })
+      .first()
+      .click();
     await page.waitForURL('**/docs/api');
     await beat();
 

@@ -4382,7 +4382,7 @@
     "topicEmptyTitle": "暂无公开的 {topic} 项目",
     "topicEmptyBody": "尚无团队在此主题下公开项目。先去浏览整个广场吧。",
     "backToSquare": "返回项目广场",
-    "footProductApiDocs": "API 文档"
+    "footProductDocs": "文档"
   },
   "aiUsage": {
     "title": "用量与费用",

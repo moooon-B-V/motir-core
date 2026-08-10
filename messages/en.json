@@ -4382,7 +4382,7 @@
     "topicEmptyTitle": "No public {topic} projects yet",
     "topicEmptyBody": "No team has published a public project in this topic yet. Explore the full square instead.",
     "backToSquare": "Back to the project square",
-    "footProductApiDocs": "API docs"
+    "footProductDocs": "Documentation"
   },
   "aiUsage": {
     "title": "Usage & cost",

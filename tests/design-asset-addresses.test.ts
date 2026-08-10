@@ -237,32 +237,9 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: 'A historical note ABOUT this very rename ("the `/api-docs` → `/docs` route move"), not an address the design uses.',
   },
   {
-    file: 'design/agent-sandbox/design-notes.md',
-    address: '/docs',
-    why: 'The same historical note. `/docs` now 308s to `/docs/api` (Amendment 11), which is what makes the note worth keeping.',
-  },
-  {
     file: 'design/api-docs/design-notes.md',
     address: '/api-docs',
     why: "The asset's own ⚠️ block recording that these addresses moved twice — the correction MOTIR-2316 was filed about, so it must name the old address.",
-  },
-  {
-    file: 'design/api-docs/design-notes.md',
-    address: '/docs',
-    why: "The ownership table's row for the unbuilt `/docs` area root (MOTIR-2315), which states that `/docs` still 308s to `/docs/api`.",
-  },
-  {
-    file: 'design/api-docs/docs-index.mock.html',
-    address: '/docs',
-    why:
-      'FORWARD-LOOKING, and the one state this table exists for: MOTIR-2521 DRAWS the ' +
-      '`/docs` index page, which ADR Amendment 19 Q1 decided and MOTIR-2523 builds. ' +
-      'Today `/docs` resolves only by 308ing away to `/docs/api` (DOCS_REDIRECTS rule 7), ' +
-      'so the guard reads a page-shaped address as redirects-away — correctly. ' +
-      '⚠️ DELETE THIS ROW in MOTIR-2523, in the same commit that deletes rule 7 and adds ' +
-      '`app/(public)/docs/page.tsx`: from that commit on `/docs` is a real page, the row ' +
-      'stops firing, and this table is asserted TIGHT in both directions, so leaving it ' +
-      'here turns the guard red.',
   },
   {
     file: 'design/roadmap/design-notes.md',
@@ -273,11 +250,6 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/mcp-server/design-notes.md',
     address: '/API/MCP',
     why: 'Not an address: the line specifies how the header row RENDERS the route name, "`/api/mcp` as `/API/MCP`" — a typographic instruction about small-caps display. The lower-case /api/mcp it names does resolve.',
-  },
-  {
-    file: 'design/mcp-server/design-notes.md',
-    address: '/docs',
-    why: 'A prose reference to the unbuilt `/docs` area root (MOTIR-2315) in the reopened-by-its-own-trigger note, not an address the design uses. `/docs` 308s to /docs/api (Amendment 11).',
   },
   // ── Slash-prefixed paths that are not addresses ───────────────────────────
   {
@@ -595,7 +567,11 @@ describe('the sweep catches the drift it was written for', () => {
       '/api-docs redirects-away',
       '/api-docs/getting-started redirects-away',
       '/api-docs/stability redirects-away',
-      '/docs redirects-away',
+      // ⚠️ `/docs ok`, not `redirects-away`, since MOTIR-2523: the area root is
+      // a real page now (Amendment 19 Q1) and its redirect is deleted. The
+      // three `/api-docs*` verdicts — the drift this fixture was written to
+      // prove the sweep catches — are unchanged, which is the point of the case.
+      '/docs ok',
     ]);
   });
 
