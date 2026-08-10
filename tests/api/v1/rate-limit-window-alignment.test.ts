@@ -91,10 +91,18 @@ describe('fixed-window alignment lives in ONE place', () => {
   // not-redefining it. `conformance.test.ts` is on this list because it sets
   // the limiter env directly rather than through a local `budget()` helper —
   // which is exactly how it survived two sweeps that grepped for `budget(`.
+  //
+  // The last two arrived with MOTIR-2598, which moved the upload and
+  // public-submit throttles off their per-process Maps onto the shared store:
+  // that swap is what makes them accumulating fixed-window assertions, and so
+  // members of this class, in a part of the tree (`tests/attachments`,
+  // `tests/publicProjects`) no `/api/v1`-shaped sweep would have looked at.
   it.each([
     'tests/api/v1/rate-limit.test.ts',
     'tests/api/v1/story-gate.test.ts',
     'tests/api/v1/conformance.test.ts',
+    'tests/attachments/attachments-service.test.ts',
+    'tests/publicProjects/publicSubmit.test.ts',
   ])('%s imports the shared helper', (file) => {
     const source = readFileSync(join(REPO_ROOT, file), 'utf8');
 

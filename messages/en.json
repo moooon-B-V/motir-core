@@ -5976,6 +5976,7 @@
     "sandboxThTier": "Tier",
     "sandboxThInstalled": "Installed from",
     "sandboxThMount": "Credential mount (read-only)",
+    "sandboxPullCaption": "sh · pull the {profile} image first — the same tag the command below runs",
     "sandboxRunCaption": "sh · the {profile} row — swap the tag and the mount for yours",
     "navCli": "Motir CLI",
     "cliTitle": "The Motir CLI",
