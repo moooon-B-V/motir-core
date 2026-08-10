@@ -1,5 +1,20 @@
 import type { McpToolName } from './registry';
 
+// ⚠️ SUPERSEDED — READ `docs/decisions/token-permissions.md` FIRST (MOTIR-2573,
+// 2026-08-10). The paragraph below insisting that "scopes" and "permissions" are
+// two vocabularies that must never merge WAS the decision and is no longer. A
+// token now GRANTS `PermissionKey`s from `lib/permissions/catalog.ts`; the
+// grantable subset, the per-operation maps and the forward mapping of the six
+// strings below all live in `lib/tokens/grant.ts`. What survives of the original
+// reasoning is the COMPOSITION rule — the grant still NARROWS the owner's role
+// and the two are still intersected at dispatch — not the naming.
+//
+// This module keeps exactly one job: the LEGACY table. `TokenScope` is the key
+// type of `LEGACY_SCOPE_PERMISSIONS` and nothing else. It is not a live
+// vocabulary; nothing new may be typed against it, and no card may cite the
+// superseded paragraph.
+//
+// ── The superseded statement, quoted so the reversal is legible as a reversal ──
 // Per-token SCOPES — the capability boundary for an API token (Story 7.7 ·
 // Subtask 7.7.16). A scope decides which MCP operations a given token may
 // perform; it NARROWS (never widens) the token owner's existing 6.4
