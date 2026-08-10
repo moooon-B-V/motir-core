@@ -45,12 +45,7 @@ const VIEWER = [...BUILTIN_ROLE_PERMISSIONS.viewer];
 
 function renderRail(permissions?: readonly PermissionKey[], project: ProjectDTO | null = PROJECT) {
   return renderWithIntl(
-    <SidebarNav
-      activeProject={project}
-      projects={project ? [project] : []}
-      settingsPermissions={permissions}
-      user={USER}
-    />,
+    <SidebarNav activeProject={project} settingsPermissions={permissions} user={USER} />,
   );
 }
 
