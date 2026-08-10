@@ -140,10 +140,36 @@ export function currentWorkerUrl(): string {
  * Fixtures and teardown need privileges the runtime role does not have and must
  * never be granted: `TRUNCATE` requires ownership, and seeding across tenants is
  * exactly what the policies exist to forbid. So the admin client keeps using the
- * base URL's credentials whether or not the flag is set — which also means this
- * is unaffected by the flag, by design.
+ * base URL's credentials whether or not the app-role flag is set — which also
+ * means this is unaffected by that flag, by design.
+ *
+ * ⚠️ THE PER-WORKER SUFFIX IS APPLIED ONLY INSIDE A VITEST WORKER. The `…_test_wN`
+ * databases are provisioned by `tests/setup/globalDb.ts`, which is a Vitest
+ * `globalSetup` — they do not exist anywhere else. **Playwright imports these
+ * same helpers** (`tests/e2e/_helpers/db-reset.ts` calls `truncateAuthTables`)
+ * and runs against `DATABASE_URL` directly, with no worker fan-out. Appending a
+ * suffix there points at a database that was never created:
+ *
+ *     Raw query failed. Code: `3D000`. Message: `database "prodect_test_w1" does not exist`
+ *
+ * which is what nine of eleven E2E shards did when this helper first landed.
+ * `currentWorkerIndex()` defaults to 1 when `VITEST_POOL_ID` is unset, so the
+ * wrong name is produced silently rather than by throwing.
+ *
+ * The signal is `VITEST_DB_BASE_URL`: `perWorkerDb` sets it as the FIRST
+ * setupFile, before anything can import this module, so it is present in every
+ * Vitest worker and absent everywhere else.
  */
 export function currentWorkerAdminUrl(): string {
+  const raw = process.env['DATABASE_URL'];
+  if (!process.env['VITEST_DB_BASE_URL']) {
+    // Not inside a Vitest worker — Playwright, a script, an ad-hoc process. The
+    // base database IS the database; there is no clone to point at.
+    if (!raw) {
+      throw new Error('DATABASE_URL is not set — the admin test client needs it.');
+    }
+    return raw;
+  }
   const u = baseUrl();
   u.pathname = `/${workerDbName(currentWorkerIndex())}`;
   return u.toString();

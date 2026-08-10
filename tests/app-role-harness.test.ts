@@ -53,6 +53,31 @@ describe('the two-client harness wiring', () => {
     // impossible on the runtime role — TRUNCATE requires ownership.
     await expect(truncateAuthTables()).resolves.not.toThrow();
   });
+
+  it('does NOT append the per-worker suffix outside a Vitest worker', () => {
+    // The regression this pins: Playwright imports these helpers
+    // (`tests/e2e/_helpers/db-reset.ts` → `truncateAuthTables`) and runs against
+    // DATABASE_URL directly, with no `…_test_wN` clones — those exist only
+    // because a Vitest globalSetup creates them. Appending the suffix there
+    // produced `database "prodect_test_w1" does not exist` and took out nine of
+    // eleven E2E shards.
+    //
+    // It failed SILENTLY rather than loudly: `currentWorkerIndex()` falls back
+    // to 1 when VITEST_POOL_ID is unset, so a plausible-looking name is built
+    // for a database nobody created.
+    const saved = process.env['VITEST_DB_BASE_URL'];
+    try {
+      delete process.env['VITEST_DB_BASE_URL'];
+      // DATABASE_URL is returned UNCHANGED. (Note this assertion is run from
+      // inside a worker, where DATABASE_URL is itself already a clone — so what
+      // it pins is "no further suffix is added", which is exactly the bug: in
+      // Playwright, DATABASE_URL is the real database and must be left alone.)
+      expect(currentWorkerAdminUrl()).toBe(process.env['DATABASE_URL']);
+      expect(currentWorkerAdminUrl()).not.toMatch(/_test_w\d+_test_w\d+/);
+    } finally {
+      if (saved !== undefined) process.env['VITEST_DB_BASE_URL'] = saved;
+    }
+  });
 });
 
 describe.runIf(isAppRoleTestMode())('under TEST_DB_APP_ROLE=1', () => {
