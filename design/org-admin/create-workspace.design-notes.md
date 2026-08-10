@@ -90,9 +90,22 @@ editable slug field. **Why:** the shipped `CreateWorkspaceModal`
 4-char suffix on collision. Surfacing an editable slug at create time would
 contradict that and invite a second collision surface. The slug stays
 **renameable later** in workspace settings (mirrors the project `ChangeKeyModal`
-pattern), where the org-settings "Organization URL" field already establishes the
-`motir.co/` prefix + lowercase/hyphen grammar. So: derive-and-preview at create;
-edit in settings.
+pattern). So: derive-and-preview at create; edit in settings.
+
+> **⚠️ Amended 2026-08-10 (MOTIR-2548) — the precedent this paragraph cited is
+> gone.** It used to end _"…where the org-settings 'Organization URL' field
+> already establishes the `motir.co/` prefix + lowercase/hyphen grammar."_ That
+> field has been removed, and with it the only place in the product that showed a
+> `motir.co/<slug>` address to anyone. `docs/decisions/organization-url.md`
+> decided that **organizations** are not addressable by URL; it decided nothing
+> about **workspaces**, so this dialog's preview is not settled either way by it.
+>
+> What that means for whoever builds this surface: the `motir.co/{slug}` preview
+> drawn here now rests on **nothing** — there is no shipped precedent for the
+> grammar and no route that resolves a workspace slug either. Re-open the
+> question before building it rather than inheriting a justification that has
+> been deleted. The derive-and-preview-vs-editable-slug reasoning above stands on
+> its own and is unaffected; only the citation is void.
 
 ### (b) "Start blank" — offered, but Copy is the default
 

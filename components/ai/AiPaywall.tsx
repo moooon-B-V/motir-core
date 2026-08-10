@@ -7,6 +7,7 @@ import { Pause, Sparkles, Lock, ArrowUp } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button, buttonVariants } from '@/components/ui/Button';
 import { useAiAccess } from '@/lib/hooks/useAiAccess';
+import { isAiPaywallApplicable } from '@/lib/billing/aiEntitlement';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 import { cn } from '@/lib/utils/cn';
 
@@ -58,7 +59,7 @@ export function resolveAiPaywall(
   access: AiAccessDTO | null,
   triggeredOutOfCredits: boolean,
 ): ResolvedAiPaywall | null {
-  const applicable = access?.applicable === true;
+  const applicable = isAiPaywallApplicable(access);
   const proactive = applicable && access!.balance <= 0;
   if (!triggeredOutOfCredits && !proactive) return null;
 

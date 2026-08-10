@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { LiveProjectsQueryError, parseLiveProjectsQuery } from '@/lib/codeGraph/liveProjects';
 import { authenticateServiceRequest, ServiceAuthError } from '@/lib/internalApi/serviceAuth';
 import { liveProjectsService } from '@/lib/services/liveProjectsService';
+import { enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/internal/ai/live-projects (MOTIR-2197 ·
 // `docs/decisions/code-graph-index-fleet.md` §14.5) — motir-ai asks which of the
@@ -36,6 +37,12 @@ export async function POST(req: Request): Promise<Response> {
     }
     throw err;
   }
+
+  // The shared AI ceiling (8.5.9 / MOTIR-1165), keyed on the service credential
+  // because this path carries no tenant at all. After the bearer check, so an
+  // unauthenticated caller cannot spend the real credential's budget.
+  const limited = await enforceInternalServiceRateLimit(req);
+  if (limited) return limited;
 
   let body: unknown;
   try {

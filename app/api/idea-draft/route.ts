@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { ideaDraftService } from '@/lib/services/ideaDraftService';
 import { EmptyIdeaError } from '@/lib/ideaDraft/errors';
 import { consumeRateLimit } from '@/lib/rateLimit/fixedWindow';
+import { clientIp } from '@/lib/rateLimit/keys';
 import { corsHeaders, isForbiddenCrossOrigin, resolveAllowedOrigin } from '@/lib/ideaDraft/cors';
 
 // POST /api/idea-draft (Subtask 7.22.2 / MOTIR-1458) — the PUBLIC, cross-origin
@@ -21,17 +22,12 @@ import { corsHeaders, isForbiddenCrossOrigin, resolveAllowedOrigin } from '@/lib
 // idea length-capped (in the service, via the shared cookie bound), and TTL'd.
 
 // Per-IP fixed window: enough for a human retrying a couple of times, tight
-// enough to blunt scripted draft-spraying. In-memory (per instance) — same class
-// as the app's other limiters (see lib/rateLimit/fixedWindow.ts).
+// enough to blunt scripted draft-spraying. Counted in the SHARED store since
+// 8.5.9 (MOTIR-1165), so the ceiling is the real one across both Fly machines
+// rather than `max x instances`; the IP is hashed into the key, never stored in
+// the clear (`lib/rateLimit/keys.ts`).
 const RATE_LIMIT_MAX = 10;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
-
-/** First hop of `x-forwarded-for` (the client), falling back to a shared bucket. */
-function clientIp(req: Request): string {
-  const fwd = req.headers.get('x-forwarded-for');
-  const first = fwd?.split(',')[0]?.trim();
-  return first || 'unknown';
-}
 
 export async function OPTIONS(req: Request): Promise<Response> {
   const allowedOrigin = resolveAllowedOrigin(req);
@@ -53,8 +49,9 @@ export async function POST(req: Request): Promise<Response> {
   const allowedOrigin = resolveAllowedOrigin(req);
   const headers = allowedOrigin ? corsHeaders(allowedOrigin) : undefined;
 
-  const limit = consumeRateLimit(
-    `idea-draft:${clientIp(req)}`,
+  const limit = await consumeRateLimit(
+    'idea-draft',
+    [clientIp(req)],
     RATE_LIMIT_MAX,
     RATE_LIMIT_WINDOW_MS,
   );

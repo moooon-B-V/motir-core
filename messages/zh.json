@@ -758,10 +758,6 @@
       "global": "全局",
       "brandHome": "Motir — 前往工作台"
     },
-    "sidebarHeader": {
-      "activeProject": "当前项目",
-      "project": "项目"
-    },
     "project": {
       "createFirst": "创建你的第一个项目",
       "emptyDescription": "项目用于归类你的工作项，并赋予它们类似ACME-1的标识。创建一个即可开始规划。",
@@ -3865,8 +3861,6 @@
       "youreOwner": "你是所有者",
       "youreAdmin": "你是管理员",
       "nameLabel": "组织名称",
-      "urlLabel": "组织网址",
-      "urlHint": "用于指向该组织的链接。仅限小写字母、数字和连字符。",
       "save": "保存更改",
       "saved": "组织已更新",
       "saveError": "无法保存更改",

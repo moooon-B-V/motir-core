@@ -51,6 +51,11 @@ const props = {
   orgs: [],
   workspaces: [],
   activeWorkspaceId: null,
+  // The project half of the context path (MOTIR-2556). Null here: this file is
+  // about the BRAND slot, and the tier nav is stubbed.
+  activeProject: null,
+  projects: [],
+  aiConfigured: false,
   user: { name: 'Zhu Yue', email: 'yue@example.com' },
   initialUnreadCount: null,
   buildInPublicProjectKey: null,
@@ -99,9 +104,11 @@ describe('the shell brand slot (§7a)', () => {
     const cluster = container.querySelector('a[href="/dashboard"]')!.parentElement!;
     const order = Array.from(cluster.children);
     expect(order[0]!.tagName).toBe('A');
-    expect(order[1]!.getAttribute('aria-hidden')).toBe('true'); // the divider
-    expect(order[2]!.querySelector('[data-testid="hamburger"]')).not.toBeNull();
-    expect(order[3]!.getAttribute('data-testid')).toBe('tier-nav');
+    // The hairline divider that used to sit here is GONE (MOTIR-2557): the
+    // tile's own edge says what it said, and the 9px went back to a row that
+    // measured 69px of slack. So the hamburger follows the mark directly.
+    expect(order[1]!.querySelector('[data-testid="hamburger"]')).not.toBeNull();
+    expect(order[2]!.getAttribute('data-testid')).toBe('tier-nav');
   });
 
   it('YIELDS to the hamburger below md — the slot is desktop-only', async () => {
@@ -122,11 +129,13 @@ describe('the shell brand slot (§7a)', () => {
     // `tests/e2e/top-bar-budget.spec.ts`.
     const { container } = render(await TopNav(props));
     const brand = container.querySelector('a[href="/dashboard"]')!;
-    const divider = brand.nextElementSibling!;
     expect(brand.className).toContain('hidden');
     expect(brand.className).toContain('md:flex');
-    expect(divider.className).toContain('hidden');
-    expect(divider.className).toContain('md:block');
+    // …and it is now a painted TILE rather than a bare glyph (MOTIR-2557). The
+    // fill and its hairline ride the same element, so they inherit the same
+    // `md` gate for free — there is no second element left to gate.
+    expect(brand.className).toContain('bg-(--el-surface)');
+    expect(brand.className).toContain('border-(--el-border)');
     // The hamburger keeps its own mirror-image breakpoint, so exactly one of the
     // two leads the cluster at any width.
     const hamburgerWrapper = container.querySelector('[data-testid="hamburger"]')!.parentElement!;

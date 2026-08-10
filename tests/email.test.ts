@@ -40,7 +40,9 @@ describe('getEmailProvider', () => {
   });
 
   it('throws on send for a stubbed provider until wired', async () => {
-    process.env['EMAIL_PROVIDER'] = 'resend';
+    // 'postmark' is the remaining stub — 'resend' is wired (MOTIR-1127) and has
+    // its own describe block below.
+    process.env['EMAIL_PROVIDER'] = 'postmark';
     const provider = getEmailProvider();
     await expect(
       provider({ to: 'x@example.com', subject: 's', html: '<p>h</p>' }),

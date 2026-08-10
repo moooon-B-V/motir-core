@@ -7,6 +7,7 @@ import {
 } from '@/lib/services/aiSprintPlanningService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/plan/sprint (Subtask 7.13.5 · MOTIR-918) — submit a `plan_sprint`
 // packing job for the active project. HTTP only: session, active project, ONE
@@ -24,6 +25,13 @@ export async function POST(): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The AI ceiling, applied on the door that SUBMITS the job (MOTIR-2597). Its own
+  // `ai:generate` bucket, tighter than `ai:chat`, because a generation costs many
+  // chat turns. Spent here — after the two gates, before the body is read and long
+  // before the provider is called, since a 429 afterwards has already paid the bill.
+  const limited = await enforceAiRateLimit(ctx, 'ai:generate');
+  if (limited) return limited;
 
   try {
     const { jobId } = await aiSprintPlanningService.submitSprintPlan(ctx);

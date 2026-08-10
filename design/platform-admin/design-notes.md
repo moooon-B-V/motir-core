@@ -370,3 +370,316 @@ confirm token parity.
 
 The full string set is added to the app's locale files (en + zh, the shipped
 locale set) by the 10.1.x code subtasks under the new `admin` namespace.
+
+---
+
+# The DAY-1 operator panels — Panels 8 & 9 (Story 8.5 · Subtask 8.5.10, card MOTIR-1166)
+
+Everything above this line is **Subtask 10.1.1**'s (card `MOTIR-728`, merged
+2026-06-21/22) and is **NOT re-specified here**. Panels 1–7 — the access path, the
+console shell, the global search, the two usage/cost views, the tenant drill-down
+and the states — remain that card's design, unchanged. This section adds the two
+panels 10.1.1 deliberately deferred, because **Story 8.5 (launch readiness) needs
+them before Epic 10 runs**: a read-only **system-health glance** and a minimal
+**audited support action**.
+
+> **Why they live in THIS file rather than a second asset.** The area already has
+> one asset with one basename. A second `platform-admin.*` trio would be two
+> pictures of one screen, free to drift from the day both merged — the failure
+> `notes.html` #82 names (_a design card COMPOSES an already-designed sub-surface;
+> it does NOT REDRAW it_). So these panels extend `console.mock.html`, reuse its
+> shell verbatim, and are drawn INSIDE the same left-nav.
+
+| Surface                            | Asset                                 | Notes                                                                                                                                     |
+| ---------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **Day-1 system health** (Panel 8)  | **`console.mock.html`** (HTML mockup) | Six read-only signal cards + the overdue-schedules list. Occupies the **Operations → Monitoring** row. **Gates MOTIR-1167.**              |
+| **Day-1 support action** (Panel 9) | **`console.mock.html`** (HTML mockup) | The USER drill-down, the two writes, the confirm step with a required reason, and the audit row the write produces. **Gates MOTIR-1167.** |
+
+## The three boundaries, in writing
+
+1. **Story 10.2 SUPERSEDES Panel 8.** The day-1 glance takes the left-nav
+   **Operations → Monitoring** row that Panels 2–6 draw as a reserved `10.2` stub.
+   When `MOTIR-737` (10.2.1) draws the full ops board — per-provider panels,
+   thresholds, error-rate and traffic — that board takes this row and this panel
+   goes away. The row has one owner at a time; 10.2.1's own notes must say which
+   of these elements it replaces and which it keeps.
+2. **Story 10.3 owns the rest of the WRITES.** Panel 9 draws exactly two: send
+   password reset, and suspend / unsuspend an account. Credit and plan governance,
+   tier changes, per-org feature flags, time-boxed WRITE-level impersonation and
+   the tamper-evident **hash-chained** audit log are 10.3. The "Support actions"
+   table here is the plain append-only row `MOTIR-1167` writes — deliberately not
+   that. Suspending an ORGANIZATION is 10.3 too; the day-1 answer to an abusive
+   tenant is to suspend the account behind it.
+3. **Story 10.1 keeps the usage/cost rollups.** Panels 2, 4 and 5 are drawn but are
+   NOT `MOTIR-1167`'s to build.
+
+## Panel 8 — the day-1 system-health glance
+
+**Access path (the door, drawn).** The left-nav **Operations → Monitoring** row,
+`.nav-item.active` with `--el-tint-sky`, its reserved `10.2` `.soon` chip removed
+for this panel. Everything else in the rail, the operator top bar and the footer is
+Panel 2's shell verbatim. Breadcrumb `.crumb` → **"Platform · Monitoring"**.
+
+**Posture: READ and LINK, never remediate.** Six cards, each a state and a link-out
+to the provider's own dashboard. Motir does not redeploy, cancel or replay — the
+link-out is how the operator acts. This is 10.2's _integrate-not-rebuild_ stance
+applied one story early, and it is why there is no trace timeline, no log search
+and no per-run viewer here.
+
+**The six signals, and where each comes from** (all verified on `origin/main`,
+2026-08-10 — a signal nobody can read is not a design, it is a wish):
+
+| Card                  | Reads                                                                                                                                              | Drawn state     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| **Database**          | A reachability + latency ping. Neon Postgres, region `iad` — `docs/decisions/application-hosting.md`                                               | Healthy         |
+| **Hosting**           | Fly app `motir-core`, org `moooon`, `machine_count` — `production-service-stack.md` records 2, asserted from Fly's API by `ci.yml` on every deploy | Healthy         |
+| **Scheduled jobs**    | `ScheduleHealthReportDTO.overdue` from `lib/services/jobScheduleHealthService.ts`, produced by the 09:00 `dailyHealthCheck` schedule probe         | **Degraded**    |
+| **Failed jobs**       | The dead-letter set — `lib/jobs/dlq.ts` / `JobRunDlqDTO`                                                                                           | **Degraded**    |
+| **Errors**            | Sentry. **Not wired yet** — `MOTIR-1161` provisions and `MOTIR-1162` wires it; `grep sentry package.json` returns nothing today                    | **Can't reach** |
+| **Last health check** | The `job_run` row for `scheduled.system.daily-health-check` and its three probes (schedules, runner image, indexer image)                          | Healthy         |
+
+**Three tones, and why all three are on ONE board rather than three boards.** An
+operator's real screen is mixed, and the mixed board is the one that proves the
+rule that matters: **an unreachable probe must never read as a zero.** The Errors
+card says _"No response from Sentry"_ and _"this is **not** an error count of zero"_
+in situ — a green card reading "0 errors" while the probe is down is the failure
+this panel exists to prevent.
+
+**The one list the glance owns.** _"Overdue schedules"_ — a `.tbl` of the crons
+that missed more than one consecutive tick (`Job` / `Cron` / `Last fired` /
+`Expected`), with the standard `.card-foot` pager. Everything deeper is a link-out.
+
+**⚠️ Do NOT fork the existing jobs surface.** A per-WORKSPACE view of this same job
+data already ships at **`/settings/workspace/jobs`** (`JobsDashboard.tsx`, tabs
+`runs | dlq | system`, a DLQ badge count, status filter, paging, row-detail panel).
+`MOTIR-1167` reads the platform-wide equivalent through its own staff-gated
+service; it does not copy that component and it does not widen it in place.
+
+### Panel 8 — primitives composed (no hand-rolling)
+
+- **`Sidebar` / `.admin-nav`, `.adminbar`, `.navfoot`** — Panel 2's shell, verbatim.
+- **`Card`** (`.card` + `.card-head` + `.card-body`) — every signal card and the
+  overdue list. New modifier `.hcard` sets only the body padding and two text
+  scales (`.hval`, `.hmeta`); it adds no colour and no shape of its own.
+- **`Pill`** — the state chip: `.pill-active` (reused verbatim) for Healthy,
+  `.pill-warn` and `.pill-down` added. Each carries a `.dot` in the matching tone.
+- **The icon tile `.ico`** — with `.sig-ok` / `.sig-warn` / `.sig-down`, following
+  `.ico.ent-*`'s exact pattern (a tint background + a stronger ink).
+  **⚠️ NOT the `.ico.ent-*` entity tints** — those encode org / workspace / project /
+  user identity, and borrowing them for a health card would say "this card is about
+  users" in a system where that tint means exactly that.
+- **Table + `.card-foot` pager** — the overdue list, the issues-list pattern.
+- **`.linkout`** — the new text link-out affordance: `--el-link` + the `i-external`
+  lucide glyph.
+- **`.note`** — the dashed reviewer note carrying the scope boundary.
+
+### Panel 8 — colour & shape roles
+
+| Element           | Colour token                                                  | Why                                                                                            |
+| ----------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Healthy pill      | `--el-tint-mint` bg + `--el-text-strong`                      | Hue in the tint BACKGROUND, strong ink on top — finding #35, AA-safe                           |
+| Degraded pill     | `--el-tint-yellow` bg + `--el-text-strong`                    | Same rule, warning hue                                                                         |
+| Unreachable pill  | `--el-tint-rose` bg + `--el-text-strong`                      | Same rule, danger hue                                                                          |
+| Status dot        | `--el-success` / `--el-warning` / `--el-danger`               | The saturated ink, safe on a dot (no text on it)                                               |
+| Signal icon tile  | tint bg + `--el-success` / `--el-warning` / `--el-danger` ink | Mirrors `.ico.ent-*`; the card states its tone twice, which is what an at-a-glance board wants |
+| Link-out          | `--el-link`                                                   | The shipped link ink                                                                           |
+| Card value / meta | `--el-text` / `--el-text-secondary`                           | The shipped text ramp                                                                          |
+
+Shape everywhere is the element-semantic set — `--radius-card` (cards),
+`--radius-badge` (pills), `--spacing-card-padding`, `--height-btn-md`. **No Tier-0
+`--color-*` and no raw `rounded-*` / `p-*` / `h-*` in any element this card adds.**
+
+### Panel 8 — copy strings (the `admin` namespace `MOTIR-1167` adds)
+
+- Nav row **"Monitoring"**; breadcrumb **"Platform · Monitoring"**; title
+  **"System health"**; sub **"Is the machinery running? Six signals, read-only,
+  refreshed on load. Each card links OUT to the provider's own dashboard — Motir
+  shows the state and never redeploys, cancels or replays. The deeper per-provider
+  board is Story 10.2."**
+- State chips: **"Healthy"** · **"Degraded"** · **"Can't reach"** · **"Ran"**.
+- Cards: **"Database"** / **"Reachable · {ms} ms"** / **"Neon Postgres · region
+  {region}, alongside the app."** / **"Neon console"** · **"Hosting"** /
+  **"{n} machines running"** / **"Fly app {app} · org {org} · {region} — last deploy
+  {ago}."** / **"Fly dashboard"** · **"Scheduled jobs"** / **"{n} of {total} crons
+  overdue"** / **"From the 09:00 daily health check's schedule probe — a cron that
+  stopped firing. Listed below."** / **"Inngest functions"** · **"Failed jobs"** /
+  **"{n} dead-lettered · 24h"** / **"Failed after their retries. Inngest has no
+  literal DLQ — this is the failed-set, and replay happens there."** /
+  **"Inngest runs"** · **"Errors"** / **"No response from Sentry"** / **"The probe
+  failed — this is not an error count of zero. Last good reading {ago}."** /
+  **"Sentry issues"** · **"Last health check"** / **"{date} {time} · {n} probes"** /
+  **"Schedules, runner image, indexer image. Runs once daily and does not retry, so
+  a miss shows up here as a stale timestamp."** / **"Job runs"**.
+- List: **"Overdue schedules"** / **"Crons that missed more than one consecutive
+  tick, newest miss first."**; pill **"{n} overdue"**; columns **"Job"**,
+  **"Cron"**, **"Last fired"**, **"Expected"**; foot **"Showing {n} of {total}
+  overdue · {checked} schedules checked"**.
+
+## Panel 9 — the day-1 support action
+
+**Access path (the door, drawn).** The **USER** drill-down. Panel 3's global search
+already groups results into Organizations / Workspaces / Projects / **Users**, each
+row with a drill-in chevron — so the user destination is a door Panel 3 promises and
+10.1.1 never drew. Panel 9 draws it, in Panel 6's exact grammar: the `.scope`
+breadcrumb chips **"Platform › Users › {user}"**, the `--el-info` `.audit-banner`
+recording the cross-tenant read, then the identity header.
+
+**The two writes, and nothing else.** `Send password reset` (`.btn-secondary`,
+`i-key`) and `Suspend account` (`.btn-danger`, `i-ban`) sit in the header's right
+slot, exactly where Panel 6 puts _"View as tenant (read-only)"_. Every other field
+on the account is read-only.
+
+**The confirm step is the design.** Each action opens a `.confirm` dialog
+(`--radius-modal` + `--shadow-modal`) that states the consequence in plain words —
+what happens to the person, what happens to their data, and that it is reversible —
+and requires a **reason** before the destructive button is usable. The reason is not
+decoration: it is what makes the audit row readable months later. A row that says
+only _"suspended by OP"_ answers nothing.
+
+**The result is rendered back.** The **"Support actions"** card underneath is the
+append-only log of every operator write on the account (`When` / `Action` /
+`Operator` / `Reason`), newest first, with the just-performed row at the top. The
+write and its record are one surface, so an operator can never perform an action and
+wonder whether it was recorded.
+
+### Panel 9 — primitives composed (no hand-rolling)
+
+- **The shell**, `.scope` breadcrumb chips, `.audit-banner`, the `.row-between`
+  identity header, `.ava.ent-user`, `.pill-active` / `.pill-neutral` / `.pill-tier`
+  — all Panel 6's, verbatim.
+- **`Button`** — `.btn-secondary` (reset, Cancel) and the new `.btn-danger`.
+- **`Modal`** — `.confirm`, on `--radius-modal` / `--shadow-modal`.
+- **`FormField` / `Input`** — `.field` label + `.input` + `.hint`, on
+  `--radius-input`, `--height-input`, `--spacing-input-*`.
+- **Table + `.card-foot` pager** — the Support-actions log.
+- **`Pill`** — `.pill-down` for **"Suspended"**, `.pill-readonly` for **"Password
+  reset sent"**.
+
+### Panel 9 — colour & shape roles
+
+| Element                    | Colour token                                     | Why                                                                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Destructive button         | `--el-danger` fill + `--el-danger-text` label    | The shipped filled-danger CTA. `--el-danger-text` is the **ink ON the fill** (`--color-destructive-foreground`, white), NOT a red label — see the token-correction note below. Measured **4.51:1**, AA |
+| Secondary action           | `--el-text` on transparent, `--el-border-strong` | The shipped secondary button                                                                                                                                                                           |
+| Audit banner               | `--el-tint-sky` + `--el-text-strong`             | Panel 6's cross-tenant read banner, verbatim                                                                                                                                                           |
+| "Suspended" row chip       | `--el-tint-rose` + `--el-text-strong`            | Hue in the tint background — finding #35                                                                                                                                                               |
+| "Password reset sent" chip | `--el-tint-sky` + `--el-text-strong`             | A non-destructive operator action                                                                                                                                                                      |
+| Confirm dialog             | `--el-page-bg`, `--el-border`, `--shadow-modal`  | The shipped modal surface                                                                                                                                                                              |
+
+### Panel 9 — copy strings (the `admin` namespace `MOTIR-1167` adds)
+
+- Breadcrumb **"Platform › Users › {name}"**; audit **"You are viewing {name}'s
+  account as platform staff. This cross-tenant read is recorded in the audit log
+  (operator {op} · {email}, just now)."**
+- Actions **"Send password reset"** · **"Suspend account"** · **"Cancel"**.
+- Confirm **"Suspend {name}?"** / **"They are signed out of every session
+  immediately and cannot sign back in. Their workspaces, projects and work items are
+  untouched, and another platform operator can lift the suspension. {org} keeps
+  running for its other {n} members."**; field **"Reason"** + **"— required, written
+  to the audit log"**; hint **"Shown to any operator reading this account later, and
+  to {name} if they ask."**
+- Log **"Support actions"** / **"Every operator write on this account, newest first.
+  Append-only."**; pill **"This account"**; columns **"When"**, **"Action"**,
+  **"Operator"**, **"Reason"**; chips **"Suspended"**, **"Password reset sent"**;
+  foot **"Showing {n}–{m} of {total} actions"**.
+
+## ⚠️ A correction to this file's own token block (made by 8.5.10)
+
+The inlined Tier-3 block carried **`--el-danger-text: var(--color-destructive)`** —
+the danger red itself. In the shipped design system
+(`packages/design-system/theme.css`) that token is
+**`var(--color-destructive-foreground)`**, i.e. the **white ink that goes ON the
+danger fill**. Any filled destructive control built from this asset therefore
+rendered **red text on a red fill — 1.00:1, invisible**, which is exactly how Panel
+9's Suspend button first came out.
+
+Corrected here: `--color-destructive-foreground: #ffffff` was added to the Tier-0
+block and `--el-danger-text` re-aliased to it. `.state.err .ico` in Panel 7 had been
+leaning on the wrong alias to obtain the RED, so it now names `--el-danger`
+directly — which is the same value, so **Panels 1–7 render pixel-for-pixel
+identically** (verified: a 2400×11220 device-pixel diff of panels 1–7 before and
+after returns **0** differing pixels).
+
+**One drift was left UNFIXED on purpose** — `--el-accent` — and is now fixed by
+MOTIR-2595; see the next section.
+
+## ⚠️ `--el-accent` aliases the FILL, not the ink (fixed by MOTIR-2595)
+
+The block carried **`--el-accent: var(--color-primary)`** where `theme.css` says
+**`var(--color-primary-fill)`**. The two are a deliberate pair — `--color-primary`
+is the accent **as ink** on a pale surface, `--color-primary-fill` is the **block of
+colour behind a white label** — and `--el-accent` is the fill role (`.btn-primary`
+here is `background: var(--el-accent); color: var(--el-accent-text)`). The ink form
+has its own token, `--el-accent-on-surface`, which was already correct.
+
+Corrected: `--color-primary-fill` was added to the inlined Tier-0 block in both
+themes (`#5645d4` light, `#6c5cdd` dark — the values `theme.css` carries) and
+`--el-accent` re-aliased to it. What that changes:
+
+| theme (default palette) | accent fill before  | after                | white label on it                                              |
+| ----------------------- | ------------------- | -------------------- | -------------------------------------------------------------- |
+| light                   | `#5645d4`           | `#5645d4`            | 6.57:1 — unchanged, **the light PNG export is byte-identical** |
+| dark                    | `#7b6ce5` (the ink) | `#6c5cdd` (the fill) | **4.10:1 → 4.99:1**, i.e. below AA → AA                        |
+
+So this was never only an other-palettes hazard: the mock's own dark mode was
+painting the accent CTA with the ink colour and failing AA on its label. Under a
+palette where the pair diverges further (several define a light `--color-primary`
+against a near-black or near-white `--color-primary-fill`) the gap is larger.
+
+## ⚠️ The inlined token block is a POINT-IN-TIME COPY — re-check it, don't trust it
+
+`console.mock.html` inlines a **subset** of the design system's Tier-0 + Tier-3
+layers so the asset renders standalone from a `file://` URL. That copy was taken by
+hand and does not update when `packages/design-system/theme.css` moves, so **every
+value in it is a claim about a past state of the design system.** Two corrections
+have already been needed (`--el-danger-text`, above; `--el-accent`, here), and both
+were invisible in the default light palette.
+
+Re-run this from the repo root before trusting the block — it parses every `--el-*`
+declaration out of both files and diffs them, so it reports drift the eye cannot
+see. It prints `DISAGREEMENTS: 0` today:
+
+```bash
+python3 - <<'PY'
+import re
+M='design/platform-admin/console.mock.html'; T='packages/design-system/theme.css'
+def body(t,sel):
+    for m in re.finditer(sel,t):
+        j=t.index('{',m.start()); d,k=1,j+1
+        while d: d+={'{':1,'}':-1}.get(t[k],0); k+=1
+        yield t[j+1:k-1]
+def decls(t,sel,pre='--el-'):
+    o={}
+    for b in body(t,sel):
+        o.update({m[1]:' '.join(m[2].split())
+                  for m in re.finditer('('+pre+r'[a-z0-9-]+)\s*:\s*([^;]+);',b)})
+    return o
+strip=lambda s: re.sub(r'/\*.*?\*/','',s,flags=re.S)  # a comment naming a token would fool the scan
+mock=strip(open(M).read()); theme=strip(open(T).read()); bad=0
+for label,ms,ts in [('LIGHT',r'(?m)^\s*:root\s*\{',r'(?m)^:root,\s*\n\[data-appearance-scope\]\s*\{'),
+                    ('DARK',r"(?m)^\s*\[data-theme='dark'\]\s*\{",r"(?m)^\[data-theme='dark'\]\s*\{")]:
+    m=decls(mock,ms); t=decls(theme,ts)
+    print(f'== {label} == mock {len(m)} · theme {len(t)}')
+    for k in sorted(m):
+        if k not in t: print(f'  ONLY-IN-MOCK {k}: {m[k]}'); bad+=1
+        elif m[k]!=t[k]: print(f'  DIFFERS {k}: mock={m[k]} theme={t[k]}'); bad+=1
+print('DISAGREEMENTS:',bad)
+PY
+```
+
+`ONLY-IN-MOCK` and `DIFFERS` are both defects — the first means the mock invented a
+token or kept one the system dropped, the second is a stale alias. Tokens the mock
+simply does not inline are fine (it copies 37 of the system's 200 `--el-*`). To
+check the Tier-0 half the same way, change `pre='--el-'` to `pre='--color-'` **and**
+the light theme-side selector to `r'(?m)^@theme\s*\{'` — Tier-0 lives in the
+`@theme` block, Tier-3 in the `:root, [data-appearance-scope]` one.
+
+**The Tier-0 half currently has four known drifts, tracked as MOTIR-2609** (they
+change rendered hues across every panel, so they are not a footnote in MOTIR-2595's
+diff): `--color-link` `#0075de` vs `#0070d2`, `--color-tint-yellow` `#fbf0c4` vs
+`#fef7d6` (light) and `#332d12` vs `#3a341a` (dark), plus a dark `--color-warning`
+override the mock still carries and `theme.css` no longer has.
+
+Whenever the block is corrected, re-export `console.png` after `prettier --write`:
+Playwright chromium, light theme, `deviceScaleFactor: 2`, viewport width 1200,
+`fullPage` — which reproduces the committed 2400×16180 export.

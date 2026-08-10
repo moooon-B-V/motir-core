@@ -15,6 +15,9 @@ import { mapPlanChangeError, noActiveProject } from '../_errors';
 //
 // HTTP only (CLAUDE.md 4-layer): resolve the session + active project, call ONE
 // service method, map typed errors.
+// NOT rate-limited, deliberately (MOTIR-2597): this opens a conversation row in our own
+// database, so no model job is submitted and no provider money is spent on this path. The AI
+// ceiling guards the doors that SUBMIT; adding one here would only cap a database read.
 export async function POST(): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });

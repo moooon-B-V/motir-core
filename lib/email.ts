@@ -16,16 +16,25 @@
 //     file is unauthenticated, so this MUST NOT be selected in
 //     production. Choosing it in NODE_ENV=production throws at module
 //     load with a clear message.
-//   - 'resend' / 'postmark' — stubs that throw a loud not-yet-implemented
-//     error if selected. Real provider wiring is planner work for each
-//     Motir-planned project's pre-plan phase.
+//   - 'postmark' — a stub that throws a loud not-yet-implemented error if
+//     selected. Real provider wiring is planner work for each Motir-planned
+//     project's pre-plan phase.
+//
+// and ONE production provider (MOTIR-1127):
+//   - 'resend'  — POSTs to the Resend HTTP API with the send-only key in
+//     RESEND_API_KEY and the sender identity in EMAIL_FROM. Selected in
+//     production via EMAIL_PROVIDER=resend; self-hosters leave it unset (or
+//     point EMAIL_PROVIDER at their own arm) and nothing about their deploy
+//     changes.
 //
 // The provider is resolved eagerly at module-import time (see the
-// `sendEmail` export at the bottom). An unknown EMAIL_PROVIDER value
-// therefore crashes the app at boot with a clear message — not on the
-// first email two days into a deploy.
+// `sendEmail` export at the bottom). An unknown EMAIL_PROVIDER value —
+// or a 'resend' selection missing its credentials — therefore crashes the
+// app at boot with a clear message, not on the first email two days into a
+// deploy.
 
 import { appendFile, readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { isE2EProdHarness } from '@/lib/e2eProdHarness';
 
 export interface EmailMessage {
@@ -33,9 +42,68 @@ export interface EmailMessage {
   subject: string;
   html: string;
   text?: string;
+  /**
+   * The per-send dedup key the `email.send` job already carries (the reset
+   * token, the invite token). A provider that supports request-level
+   * idempotency passes it through, so a job RETRY of the same send cannot
+   * double-deliver AT THE PROVIDER — Inngest's event-level dedup only
+   * collapses duplicate EVENTS, not a retried attempt of one accepted event
+   * whose response was lost in flight. Optional: the dev providers ignore it.
+   */
+  idempotencyKey?: string;
 }
 
 export type SendEmail = (msg: EmailMessage) => Promise<void>;
+
+/**
+ * How a failed send should be treated by the caller's retry machinery.
+ * `transient` — the provider or the network blipped; the same request is
+ * worth repeating. `permanent` — the provider rejected the request itself
+ * (bad address, unverified domain, restricted key); repeating it changes
+ * nothing, so the retry budget is only a delay before the dead-letter.
+ */
+export type EmailFailureKind = 'transient' | 'permanent';
+
+/** The `code` a permanent failure carries onto the job's dead-letter row. */
+export const EMAIL_PERMANENT_FAILURE_CODE = 'EMAIL_PERMANENT_FAILURE';
+/** The `code` a transient failure carries onto the job's dead-letter row. */
+export const EMAIL_TRANSIENT_FAILURE_CODE = 'EMAIL_TRANSIENT_FAILURE';
+
+/**
+ * A provider send that failed, classified.
+ *
+ * Both kinds THROW: `lib/email.ts` is deliberately runtime-agnostic (the
+ * ESLint boundary in `eslint.config.mjs` forbids it the Inngest SDK), so it
+ * cannot reach for `NonRetriableError` and does not try to. What it does
+ * instead is make the classification READABLE where an operator actually
+ * meets it: `defineJob`'s `serializeFailure` copies `message`, `stack` and a
+ * string `code` onto the `job_run_dlq` row, so a permanent failure
+ * dead-letters as `EMAIL_PERMANENT_FAILURE` naming the status, the provider's
+ * own error name and its message — not as an anonymous `fetch failed`.
+ */
+export class EmailDeliveryError extends Error {
+  /** Retry-worthiness of this failure. */
+  readonly kind: EmailFailureKind;
+  /** Stable machine code — lands on the dead-letter row's `failure.code`. */
+  readonly code: string;
+  /** The provider's HTTP status, when the failure came back as a response. */
+  readonly status: number | undefined;
+  /** The provider's own error name (Resend's `name` field), when it sent one. */
+  readonly providerErrorName: string | undefined;
+
+  constructor(
+    kind: EmailFailureKind,
+    message: string,
+    details: { status?: number; providerErrorName?: string; cause?: unknown } = {},
+  ) {
+    super(message, details.cause === undefined ? undefined : { cause: details.cause });
+    this.name = 'EmailDeliveryError';
+    this.kind = kind;
+    this.code = kind === 'permanent' ? EMAIL_PERMANENT_FAILURE_CODE : EMAIL_TRANSIENT_FAILURE_CODE;
+    this.status = details.status;
+    this.providerErrorName = details.providerErrorName;
+  }
+}
 
 // Strips HTML tags from a body for the plain-text fallback. Intentionally
 // dumb — the console provider prints whichever body the caller passed; this
@@ -84,6 +152,172 @@ function unimplementedProvider(name: string): SendEmail {
         `Production providers are planner work for each Motir-planned project's ` +
         `pre-plan phase — see lib/email.ts and the Story 1.1 decisions log. ` +
         `Set EMAIL_PROVIDER=console for local dev.`,
+    );
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// The production provider: Resend (MOTIR-1127).
+//
+// Provisioned by MOTIR-1123: the `motir.co` sending domain is authenticated
+// (SPF + DKIM + DMARC) in Resend's us-east-1 region, and the three values
+// below are Fly secrets on the `motir-core` app — RESEND_API_KEY (send-only
+// scope), EMAIL_FROM, EMAIL_PROVIDER. Nothing here is hardcoded to that
+// vendor account: a self-hoster points the same three env vars at their own
+// Resend workspace, or leaves EMAIL_PROVIDER unset and keeps 'console'.
+//
+// Talked to over plain `fetch`, not the vendor SDK. The API is one POST with
+// a JSON body; an SDK would add a dependency, a second retry layer competing
+// with Inngest's, and a mocking surface, for nothing.
+//
+// SEND-ONLY BY DESIGN. The provisioned key is scoped to sending: a GET to
+// /emails/{id} comes back 401 `restricted_api_key` (observed on the live key,
+// recorded on MOTIR-1123). So this module POSTs and never reads back — the
+// message id in the 200 response is the only receipt we get, and the job's
+// own ledger row is where delivery is recorded.
+// ─────────────────────────────────────────────────────────────────────────
+
+const RESEND_ENDPOINT = 'https://api.resend.com/emails';
+
+/** Resend rejects a key outside 1–256 chars with 400 `invalid_idempotency_key`. */
+const RESEND_IDEMPOTENCY_KEY_MAX_LENGTH = 256;
+
+/** Resend error names on 409 that a retry CAN clear (the key is mid-flight). */
+const RESEND_RETRYABLE_CONFLICTS = new Set(['concurrent_idempotent_requests']);
+
+/**
+ * Read a required env var or throw a message that says what to set and where.
+ * Called during provider RESOLUTION, which is module load (see `sendEmail`
+ * below) — so a production deploy that selects `resend` without its
+ * credentials fails at boot, loudly, instead of on the first password reset.
+ */
+function requireEmailEnv(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || value.trim() === '') {
+    throw new Error(
+      `EMAIL_PROVIDER='resend' requires ${name}, which is unset or empty. ` +
+        `Set it on the deployment alongside RESEND_API_KEY and EMAIL_FROM ` +
+        `(on Fly: \`flyctl secrets set -a motir-core ${name}=…\`; locally: .env.local). ` +
+        `Set EMAIL_PROVIDER=console for local dev if you don't want to send real email.`,
+    );
+  }
+  return value;
+}
+
+/**
+ * The value for Resend's `Idempotency-Key` header, derived from the SAME key
+ * the `email.send` event carries — so a job retry of an already-accepted send
+ * is deduped at the provider, not just at Inngest's event boundary.
+ *
+ * Two guards, both about the 1–256-char limit rather than about secrecy: an
+ * absent/blank key means "no header" (the dev providers and any future
+ * non-job caller pass nothing), and an over-long key is folded to its SHA-256
+ * hex. Folding keeps the mapping stable and collision-free in practice, so
+ * two retries of one send still agree on a key — which is the whole point.
+ * Truncating instead would make two DIFFERENT long keys collide and silently
+ * drop a real email as a duplicate.
+ */
+export function resendIdempotencyKey(key: string | undefined): string | undefined {
+  const trimmed = key?.trim();
+  if (trimmed === undefined || trimmed === '') return undefined;
+  if (trimmed.length <= RESEND_IDEMPOTENCY_KEY_MAX_LENGTH) return trimmed;
+  return createHash('sha256').update(trimmed).digest('hex');
+}
+
+/** Resend's error envelope, as much of it as we depend on. */
+interface ResendErrorBody {
+  name?: unknown;
+  message?: unknown;
+}
+
+/**
+ * Classify a non-2xx response. Transient: 408/429 and every 5xx (the provider
+ * or the hop between us is unhealthy), plus the 409 that says our own key is
+ * still in flight. Everything else the provider returned is a considered
+ * rejection of THIS request — a malformed address, an unverified sender
+ * domain, a key without send scope — and repeating it just delays the
+ * dead-letter.
+ */
+function classifyResendStatus(status: number, providerErrorName: string | undefined) {
+  if (status >= 500) return 'transient' as const;
+  if (status === 429 || status === 408) return 'transient' as const;
+  if (
+    status === 409 &&
+    providerErrorName !== undefined &&
+    RESEND_RETRYABLE_CONFLICTS.has(providerErrorName)
+  ) {
+    return 'transient' as const;
+  }
+  return 'permanent' as const;
+}
+
+/** Best-effort read of the error envelope; a non-JSON body must not mask the status. */
+async function readResendError(res: Response): Promise<ResendErrorBody> {
+  try {
+    const raw = await res.text();
+    if (raw.trim() === '') return {};
+    return JSON.parse(raw) as ResendErrorBody;
+  } catch {
+    return {};
+  }
+}
+
+function resendProvider(): SendEmail {
+  // Eager: both reads happen at resolution, so the boot fails, not the send.
+  const apiKey = requireEmailEnv('RESEND_API_KEY');
+  const from = requireEmailEnv('EMAIL_FROM');
+
+  return async (msg) => {
+    const idempotencyKey = resendIdempotencyKey(msg.idempotencyKey);
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    };
+    // Only send the header when we actually have a key — an empty one is a 400.
+    if (idempotencyKey !== undefined) headers['Idempotency-Key'] = idempotencyKey;
+
+    let res: Response;
+    try {
+      res = await fetch(RESEND_ENDPOINT, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          from,
+          to: msg.to,
+          subject: msg.subject,
+          html: msg.html,
+          // Always send a text part: templates hand-write one (CLAUDE.md), and
+          // the stripped fallback keeps a caller that skipped it out of the
+          // spam-scoring penalty an html-only message earns.
+          text: msg.text ?? htmlToText(msg.html),
+        }),
+      });
+    } catch (cause) {
+      // No response at all — DNS, TLS, socket, timeout. Always worth a retry.
+      throw new EmailDeliveryError(
+        'transient',
+        `Resend send to '${msg.to}' failed before a response was received: ${
+          cause instanceof Error ? cause.message : String(cause)
+        }`,
+        { cause },
+      );
+    }
+
+    if (res.ok) return;
+
+    const body = await readResendError(res);
+    const providerErrorName = typeof body.name === 'string' ? body.name : undefined;
+    const providerMessage = typeof body.message === 'string' ? body.message : undefined;
+    const kind = classifyResendStatus(res.status, providerErrorName);
+    throw new EmailDeliveryError(
+      kind,
+      `Resend send to '${msg.to}' failed ${kind}ly with HTTP ${res.status}` +
+        `${providerErrorName === undefined ? '' : ` (${providerErrorName})`}` +
+        `${providerMessage === undefined ? '' : `: ${providerMessage}`}`,
+      {
+        status: res.status,
+        ...(providerErrorName === undefined ? {} : { providerErrorName }),
+      },
     );
   };
 }
@@ -199,7 +433,7 @@ export function getEmailProvider(): SendEmail {
     case 'file':
       return fileProvider();
     case 'resend':
-      return unimplementedProvider('resend');
+      return resendProvider();
     case 'postmark':
       return unimplementedProvider('postmark');
     default:

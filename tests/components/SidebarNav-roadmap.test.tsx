@@ -37,25 +37,25 @@ afterEach(() => {
 
 describe('SidebarNav — Roadmap entry', () => {
   it('renders a Roadmap nav link to /roadmap', () => {
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />);
     expect(screen.getByRole('link', { name: 'Roadmap' }).getAttribute('href')).toBe('/roadmap');
   });
 
   it('marks Roadmap active on /roadmap', () => {
     pathname = '/roadmap';
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />);
     expect(screen.getByRole('link', { name: 'Roadmap' }).getAttribute('aria-current')).toBe('page');
   });
 
   it('does not mark Roadmap active on /boards (and Boards is the active one there)', () => {
     pathname = '/boards';
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />);
     expect(screen.getByRole('link', { name: 'Roadmap' }).getAttribute('aria-current')).toBeNull();
     expect(screen.getByRole('link', { name: 'Boards' }).getAttribute('aria-current')).toBe('page');
   });
 
   it('renders the localized label (zh)', () => {
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />, {
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />, {
       locale: 'zh',
       messages: zhMessages,
     });

@@ -15,6 +15,10 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 // work items by KEY only. Titles, kinds, estimates and the dependency captions
 // are database facts, and the design requires them server-derived rather than
 // guessed client-side. HTTP only — session, active project, ONE service call.
+// NOT rate-limited, deliberately (MOTIR-2597): this route READS a job whose cost was already
+// paid at submit time, where the `ai:generate` ceiling was spent. A limiter here would refuse a
+// caller mid-generation — cutting off the answer they have already been charged for — without
+// ever preventing a single provider call.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ jobId: string }> },

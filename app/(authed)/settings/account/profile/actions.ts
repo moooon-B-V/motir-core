@@ -34,9 +34,10 @@ import { consumeRateLimit } from '@/lib/rateLimit/fixedWindow';
 //     confirm.
 //
 // Rate limiting is keyed by the AUTHENTICATED user id (not IP): more precise
-// for a signed-in action and not spoofable from the client. The limiter is the
-// same in-memory class the shipped Better-Auth reset limiter uses (see
-// lib/rateLimit/fixedWindow.ts).
+// for a signed-in action and not spoofable from the client. Since 8.5.9
+// (MOTIR-1165) the tally lives in the SHARED store, so these ceilings hold across
+// both Fly machines instead of being `max x instances`; the user id is hashed into
+// the key rather than stored in the clear (lib/rateLimit/fixedWindow.ts).
 
 const CHANGE_PASSWORD_MAX = 5;
 const CHANGE_PASSWORD_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
@@ -127,8 +128,9 @@ export async function changePasswordAction(
 ): Promise<ChangePasswordResult> {
   const session = await requireSession();
 
-  const limit = consumeRateLimit(
-    `change-password:${session.user.id}`,
+  const limit = await consumeRateLimit(
+    'account:change-password',
+    [session.user.id],
     CHANGE_PASSWORD_MAX,
     CHANGE_PASSWORD_WINDOW_MS,
   );
@@ -172,8 +174,9 @@ export async function sendSetPasswordLinkAction(): Promise<SendSetPasswordLinkRe
   const { hasPassword } = await usersService.getPasswordCapability(session.user.id);
   if (hasPassword) return { ok: false, code: 'ALREADY_HAS_PASSWORD' };
 
-  const limit = consumeRateLimit(
-    `set-password-link:${session.user.id}`,
+  const limit = await consumeRateLimit(
+    'account:set-password-link',
+    [session.user.id],
     SET_LINK_MAX,
     SET_LINK_WINDOW_MS,
   );

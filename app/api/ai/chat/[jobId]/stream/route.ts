@@ -37,6 +37,10 @@ const SSE_HEADERS = {
   Connection: 'keep-alive',
 } as const;
 
+// NOT rate-limited, deliberately (MOTIR-2597): this route READS a job whose cost was already
+// paid at submit time, where the `ai:generate` ceiling was spent. A limiter here would refuse a
+// caller mid-generation — cutting off the answer they have already been charged for — without
+// ever preventing a single provider call.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ jobId: string }> },

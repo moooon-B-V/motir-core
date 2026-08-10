@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { authenticateJobRequest, JobAuthError } from '@/lib/ai/jobAuth';
+import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
+import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScanningProxyService';
 
 // GET /api/internal/ai/code-scanning/analyses?repoRef=owner/name (MOTIR-1605) —
@@ -17,11 +18,10 @@ import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScannin
 export async function GET(req: Request): Promise<Response> {
   let auth;
   try {
-    auth = authenticateJobRequest(req);
+    auth = await authenticateAndLimitJobRequest(req);
   } catch (err) {
-    if (err instanceof JobAuthError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: err.httpStatus });
-    }
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
     throw err;
   }
 

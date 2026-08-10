@@ -42,12 +42,13 @@ import {
   isAccountSettingsEntryActive,
   isAccountSettingsPath,
 } from '@/lib/settings/accountSettingsNav';
-import { SidebarHeader } from './SidebarHeader';
 import { SettingsSidebarHeader } from './SettingsSidebarHeader';
 import { AccountSidebarHeader } from './AccountSidebarHeader';
 
-// The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with
-// a SidebarHeader (project context) and the route-aware nav sections. Active
+// The signed-in navigation rail. Composes the 1.5.2 Sidebar primitive with the
+// route-aware nav sections — and, in the settings and account AREAS, that
+// area's own header. The DEFAULT area has no header: the project context it
+// used to hold is the top bar's context path since MOTIR-2556. Active
 // detection is client-side (usePathname), which is why the whole rail is a
 // client component rather than the layout building <Sidebar sections={…} />
 // directly — section `active` flags can't be computed in the server layout.
@@ -59,6 +60,10 @@ import { AccountSidebarHeader } from './AccountSidebarHeader';
 //     render the "this project is archived" empty state themselves.
 //   - no project (#29.1) → only the bottom section, with Settings deep-
 //     linking to the WORKSPACE settings (there's no project to configure).
+//
+// #29's THIRD state — the create-first CTA — is no longer here: it moved with
+// the project control into the bar's project tier (`ProjectTier`), which is
+// also where the archived pill and the switcher went.
 //
 // Settings AREA swap (Story 6.5 · Subtask 6.5.2): when the route is inside the
 // project-settings area (`/settings/project*`) and a project is active, the rail
@@ -74,16 +79,9 @@ import { AccountSidebarHeader } from './AccountSidebarHeader';
 // <md off-canvas body, always expanded, no footer — the drawer chrome owns
 // its own close affordance).
 
-// Docs is an external link (no in-app docs route yet); points at the repo.
-const DOCS_URL = 'https://github.com/moooon-B-V/motir-core#readme';
-
 export interface SidebarNavProps {
   activeProject: ProjectDTO | null;
-  projects: ProjectDTO[];
   variant?: 'rail' | 'drawer';
-  /** Whether the AI planning backend is configured — forwarded to the
-   * ProjectSwitcher's "Plan a new project with AI" door gate. */
-  aiConfigured?: boolean;
   /**
    * The actor's resolved permission keys for the active project (Subtask
    * MOTIR-2468), resolved once in the (authed) layout. Drives BOTH the
@@ -132,11 +130,9 @@ function ResumeInProgressBadge({ label }: { label: string }) {
 
 export function SidebarNav({
   activeProject,
-  projects,
   variant = 'rail',
   settingsPermissions,
   user,
-  aiConfigured = false,
 }: SidebarNavProps) {
   const t = useTranslations('shell');
   const ts = useTranslations('settings');
@@ -392,23 +388,31 @@ export function SidebarNav({
           isActive(pathname, '/settings/workspace/gitlab'),
       },
       {
+        // The documentation area's front door (MOTIR-2570) — `/docs`, not
+        // `/docs/api`: the index IS the area, and pointing the rail at the REST
+        // reference is the defect the index story exists to fix. This row used
+        // to escape to the GitHub README on the premise that there was no
+        // in-app docs route; there has been one since `/docs/api` shipped.
+        //
+        // No `active` arm, deliberately: `/docs` renders in the `(public)`
+        // route group OUTSIDE this shell, so the rail is never on screen there
+        // and `pathname` can never match.
         icon: <BookOpen />,
         label: t('nav.docs'),
-        href: DOCS_URL,
+        href: '/docs',
       },
     ],
   });
 
   return (
     <Sidebar
-      header={
-        <SidebarHeader
-          activeProject={activeProject}
-          projects={projects}
-          collapsed={collapsed}
-          aiConfigured={aiConfigured}
-        />
-      }
+      // NO header in the default area (MOTIR-2556 · design/shell § *The rail
+      // head, after the project leaves*). The rail answers "where inside this
+      // project can I go"; its head was answering "which project am I in",
+      // which is the top bar's context path now — and is why this slot needed
+      // three states (a create-first card, an archived pill, a collapsed
+      // avatar) that no rail ROW needs. The settings and account areas keep
+      // their own headers above; only the project one left.
       sections={sections}
       footer={isDrawer ? undefined : <SidebarToggle variant="footer" />}
       collapsed={isDrawer ? false : undefined}

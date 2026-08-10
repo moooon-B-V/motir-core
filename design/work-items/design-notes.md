@@ -1073,6 +1073,30 @@ mock was **using `--el-success` without declaring it** in its Tier-3 block, so t
 confirmed check silently inherited the faint grey; `--el-success:
 var(--color-success)` is now wired beside `--el-danger` / `--el-warning`.
 
+#### ⚠️ Panel 11 CORRECTED (MOTIR-2591) — story points were never uneditable
+
+The revision of panel 11 that shipped with this section drew a **chevron + numeric
+input** for the Story-points row, and its note said the detail rail's row "stops
+being `editable={false}`". Both were wrong, and the error is worth keeping
+visible because the misreading is an easy one.
+
+`editable` on `FieldCard` governs **that card's own chevron**, not the field. The
+detail rail's Story-points row is `editable={false}` _because its contents are
+already an editor_: `components/issues/EstimateBadge.tsx` is a click-to-edit chip
+that opens the project's configured estimation scale deck and writes through
+`PATCH /api/work-items/[id]/estimate`. It is composed by the backlog row, the
+board card, the item list's Points column and the detail rail — by seven call
+sites, and by no peek file.
+
+So the finding inverts: **story points were editable everywhere except the quick
+view**, and the gap was a missing COMPOSITION, not a missing capability. Panel 11
+now draws the composed chip, and **the detail rail is unchanged by this story.**
+
+Had the numeric input shipped it would have given one column a second writer
+(`updateIssueAction` beside the estimate route), let a user type a value the
+project's scale does not contain, and ignored the estimation statistic entirely.
+Recorded as `MOTIR-2592` and `notes.html` #252.
+
 **Access path — unchanged, and deliberately so.** The peek is reached exactly as it
 is today (a row click on `/items` · `/ready`, a board card, a `motir:` chip, the
 canvas View button); panel 1 still draws it. This amendment changes what the peek

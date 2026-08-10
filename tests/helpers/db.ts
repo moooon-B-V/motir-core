@@ -51,3 +51,17 @@ export async function truncateJobRuns(): Promise<void> {
 export async function truncateCodeGraphOffboarding(): Promise<void> {
   await db.$executeRawUnsafe('TRUNCATE TABLE "code_graph_offboarding" RESTART IDENTITY CASCADE');
 }
+
+// `rate_limit_counter` (Subtask 8.5.9 / MOTIR-1165) is the same class as
+// `idea_draft` / `job_run` / `code_graph_offboarding`: it carries NO FK to
+// workspace or user — deliberately, because the surfaces it protects (sign-in,
+// sign-up, password reset, public writes) are limited BEFORE any tenant is known
+// (ADR §7) — so a `TRUNCATE "workspace" CASCADE` never reaches it.
+//
+// ⚠️ A suite that exercises ANY limited surface must clear it between tests, or
+// the counters carry over: the second test's first request arrives with the first
+// test's tally already spent, which shows up as a 429 nobody asked for in a case
+// that has nothing to do with rate limiting.
+export async function truncateRateLimitCounters(): Promise<void> {
+  await db.$executeRawUnsafe('TRUNCATE TABLE "rate_limit_counter"');
+}
