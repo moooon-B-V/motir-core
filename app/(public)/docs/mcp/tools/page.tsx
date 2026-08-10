@@ -88,10 +88,10 @@ export default async function McpToolsPage() {
 
             {groups.map((group) => (
               <section
-                key={group.scope}
-                id={group.scope.replace(':', '-')}
+                key={group.permission}
+                id={group.permission.replace(':', '-')}
                 className="mb-8 scroll-mt-6"
-                data-testid={`mcp-group-${group.scope}`}
+                data-testid={`mcp-group-${group.permission}`}
               >
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <h2 className="m-0 font-sans text-sm font-semibold tracking-wide text-(--el-text) uppercase">
@@ -104,7 +104,7 @@ export default async function McpToolsPage() {
                         : 'rounded-(--radius-badge) bg-(--el-tint-peach) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] text-(--el-text-strong)'
                     }
                   >
-                    {group.scope}
+                    {group.permission}
                   </span>
                   {!group.grantedByDefault && (
                     <span className="text-[11.5px] text-(--el-text-secondary)">

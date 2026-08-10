@@ -6,7 +6,7 @@ merge it.
 
 The CLI is a client of **Motir's public REST API** (`/api/v1`). Every command is
 an ordinary HTTPS request with a personal access token as its bearer — the same
-documented endpoints, the same credential and the same scopes any third-party
+documented endpoints, the same credential and the same permissions any third-party
 integration gets. It reads readiness from the server rather than computing it,
 so the CLI can never disagree with the web app about what "ready" means.
 
@@ -93,42 +93,47 @@ never written to disk at all.
 The token `motir login` creates is **not** a general-purpose PAT. It is fixed at
 the boundary, and the approval screen shows it rather than letting you edit it:
 
-| Property      | Value                                                        |
-| ------------- | ------------------------------------------------------------ |
-| **Scopes**    | `read`, `work_items:write`, `integration` — and nothing else |
-| **Expiry**    | 90 days                                                      |
-| **Label**     | `CLI · <hostname>`, so you can tell which machine it is      |
-| **Workspace** | the one you choose on the approval screen                    |
+| Property        | Value                                                                           |
+| --------------- | ------------------------------------------------------------------------------- |
+| **Permissions** | `project:browse`, `work_item:edit`, `comment:add`, `ai:plan` — and nothing else |
+| **Expiry**      | 90 days                                                                         |
+| **Label**       | `CLI · <hostname>`, so you can tell which machine it is                         |
+| **Workspace**   | the one you choose on the approval screen                                       |
 
-Those three scopes are exactly what the CLI's requests need: `read` for the
-selection, detail and prompt endpoints, `work_items:write` for the status flips,
-and `integration` for marking an item integrated and closing a session (which
-`motir auto` and `motir done --session` use). It calls nothing gated by
-`work_items:archive`, `work_items:delete`, or `sprints:write`.
+Those permissions are exactly what the CLI's requests need: `project:browse` for
+the selection, detail and prompt endpoints, `work_item:edit` for the status flips
+and for marking an item integrated / closing a session (which `motir auto` and
+`motir done --session` use), `comment:add` for posting a comment, and `ai:plan`
+for a planning submit. It calls nothing gated by `sprint:manage` or
+`work_item:delete` — so a credential living unattended on a remote box cannot
+delete a subtree.
 
-**A missing scope is an HTTP 403, and the CLI names the scope.** Every `/api/v1`
-endpoint declares the scope it requires, and the CLI knows that declaration
-locally — so a refusal reads as _the token lacks `read`_ rather than as
-"forbidden", without the CLI having to parse the server's sentence:
+**A missing permission is an HTTP 403, and the CLI names it.** Every `/api/v1`
+endpoint declares the permission it requires, and the CLI knows that declaration
+locally — so a refusal reads as _the token is not granted `project:browse`_
+rather than as "forbidden", without the CLI having to parse the server's
+sentence:
 
 ```
 $ motir ready
-Error: This token lacks the 'read' scope required for getProjectReadySet.
-Hint: Create a token with the 'read' scope: Settings → Account → Tokens.
+Error: This token is not granted the 'project:browse' permission required for getProjectReadySet.
+Hint: Grant the 'project:browse' permission on a token: Settings → Account → Tokens.
 ```
 
-The remedy is a new token, not a retry: scopes are fixed when a token is minted
-and cannot be widened afterwards. `motir doctor` reports which scopes the token
-you are holding actually carries.
+The remedy is a new token, not a retry: a grant is fixed when a token is minted
+and cannot be widened afterwards. `motir doctor` reports what the token you are
+holding actually carries.
 
 The grant cannot **widen** that set, and cannot **narrow** it either — a
 hand-narrowed grant would fail somewhere in the middle of an unattended
-`motir auto` run, which is the worst place to discover a missing scope. If you
-want a different grant, mint one by hand in **Settings → Account → Tokens →
-Create** (which keeps its full scope choice and its 30/90/365/never expiry) and
-supply it with the `--token` tier below. Reasoning:
-[`docs/decisions/cli-login.md`](./decisions/cli-login.md); per-scope detail:
-[`docs/mcp.md` § Token scopes](./mcp.md#token-scopes).
+`motir auto` run, which is the worst place to discover a missing permission. If
+you want a different grant, mint one by hand in **Settings → Account → Tokens →
+Create** (which keeps its full permission choice and its 30/90/365/never expiry)
+and supply it with the `--token` tier below. Reasoning:
+[`docs/decisions/cli-login.md`](./decisions/cli-login.md) and
+[`docs/decisions/token-permissions.md`](./decisions/token-permissions.md);
+per-permission detail:
+[`docs/mcp.md` § Token permissions](./mcp.md#token-permissions).
 
 ### The three credential tiers
 
