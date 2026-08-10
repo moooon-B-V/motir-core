@@ -1,6 +1,7 @@
 import type { IssueType } from '@/lib/issues/parentRules';
 import type { WorkItemStatus } from '@/components/planning/WorkItemNode';
 import type { ExecutorDto, WorkItemTypeDto } from '@/lib/dto/workItems';
+import { WORK_ITEM_TYPES } from '@/lib/issues/executorDefaults';
 
 // Client read of ONE LEVEL of the project roadmap (Subtask 7.20.2 / MOTIR-1194)
 // from the per-level endpoint (`GET /api/projects/[key]/roadmap?parentId=`,
@@ -108,22 +109,19 @@ function toStatus(raw: string, isDone: boolean): WorkItemStatus {
 
 const KNOWN_KINDS = new Set<IssueType>(['epic', 'story', 'task', 'bug', 'subtask']);
 
-// The ten work-item TYPE members (Story 2.7 · the 2.7.2 taxonomy ADR). Used to
+// The work-item TYPE members (Story 2.7 · the 2.7.2 taxonomy ADR). Used to
 // guard the raw wire value the SAME way `KNOWN_KINDS` guards `kind`: an
 // unrecognised / absent `type` degrades to `null` (no chip) rather than crashing
 // the best-effort level read (MOTIR-1642 / 8.8.36).
-const KNOWN_TYPES = new Set<WorkItemTypeDto>([
-  'code',
-  'design',
-  'test',
-  'content',
-  'research',
-  'review',
-  'decision',
-  'deploy',
-  'manual',
-  'chore',
-]);
+//
+// READ from `WORK_ITEM_TYPES` rather than re-stated (MOTIR-2632). This was a
+// hand-copied ten-member literal, and a `Set` literal is not total-checked the
+// way `Record<WorkItemTypeDto, …>` is — so when Amendment 1 admitted four
+// members the compiler had nothing to say, and every roadmap node carrying one
+// would have silently degraded to "no chip". That is the same silent-drop the
+// story this change belongs to exists to fix, so the copy is removed rather
+// than extended.
+const KNOWN_TYPES: ReadonlySet<WorkItemTypeDto> = new Set(WORK_ITEM_TYPES);
 
 /** Map one raw `RoadmapNode` wire row to a `RoadmapLevelItem` — exported for the
  *  unit test (the fallback behaviour matters and is otherwise internal). */

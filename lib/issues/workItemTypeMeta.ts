@@ -1,6 +1,6 @@
 // Work-item TYPE presentation metadata (Story 2.7 · Subtask 2.7.4).
 //
-// The PRODUCT-FACING display layer for the ten-member `WorkItemType` enum —
+// The PRODUCT-FACING display layer for the FOURTEEN-member `WorkItemType` enum —
 // the per-TYPE analogue of `issueTypes.ts`'s per-KIND `ISSUE_TYPE_META`. The
 // enum itself + the type→executor default map + the leaf-only rule are frozen
 // in the 2.7.2 ADR (docs/decisions/work-item-type-taxonomy.md) and encoded in
@@ -12,8 +12,9 @@
 // Two deliberate decisions, mirroring `issueTypes.ts`:
 //
 //  1. A typed in-code map keyed by `WorkItemTypeDto`, so a lookup is TOTAL and
-//     type-checked — `WORK_ITEM_TYPE_META[type]` can never miss, and adding an
-//     eleventh enum member is a compile error here until its metadata lands.
+//     type-checked — `WORK_ITEM_TYPE_META[type]` can never miss, and adding a
+//     fifteenth enum member is a compile error here until its metadata lands.
+//     (That guard fired exactly as designed for MOTIR-2632's four additions.)
 //  2. The hue is a STATIC, full utility-class string (`text-(--el-type-code)`),
 //     never `text-(--el-type-${type})` — a constructed class name is invisible
 //     to the Tailwind JIT scanner and would be stripped. Same pattern as
@@ -21,19 +22,41 @@
 //
 // `icon` is the lucide component reference (type-safe; renders as `<meta.icon />`),
 // matching the `issueTypes.ts` convention. Colour flows through the Tier-3
-// `--el-type-*` element tokens added to `app/globals.css` in 2.7.4 (the
-// per-component token-growth pattern, notes.html #20) — NEVER a raw `--color-*`.
+// `--el-type-*` element tokens (the per-component token-growth pattern,
+// notes.html #20) — NEVER a raw `--color-*`.
+//
+// ── The four MOTIR-2629 admitted: DECISIONS, not placeholders ──────────────
+// The original ten tokens live in `app/globals.css` from 2.7.4. The four below
+// are defined in `packages/design-system/theme.css` by MOTIR-2633, which owns
+// the tokens, the message-catalogue labels and the picker/chip/icon surfaces.
+// The glyph + hue NAMES here are MOTIR-2631's design decisions, recorded so the
+// sibling card inherits choices rather than guesses:
+//
+//   copy         Type        --el-type-copy         -> --color-accent-teal   (with content)
+//   translate    Languages   --el-type-translate    -> --color-accent-teal   (with content)
+//   verification BadgeCheck  --el-type-verification -> --color-accent-orange (with review)
+//   legal        Gavel       --el-type-legal        -> --color-charcoal      (with decision)
+//
+// The palette holds seven mutually distinct saturated hues and three greys, and
+// 2.7.4 spent all ten; there is no eighth and inventing one is forbidden. So hue
+// names the FAMILY and the glyph names the member — each still gets its own
+// token pointing at the shared Tier-0 var, so a palette can split them later
+// without touching a component. (ADR Amendment 1 §1a + design-notes.md "Q2".)
 
 import {
+  BadgeCheck,
   ClipboardCheck,
   Code,
   FileText,
   FlaskConical,
+  Gavel,
   Hand,
+  Languages,
   Lightbulb,
   Pencil,
   Rocket,
   Scale,
+  Type,
   Wrench,
   type LucideIcon,
 } from 'lucide-react';
@@ -63,8 +86,10 @@ export interface WorkItemTypeMeta {
 /**
  * The single source of truth for work-item-type presentation. Keyed by
  * `WorkItemTypeDto` (total + type-checked), in the canonical 2.7.2 enum order
- * (the "doing" types first, the meta/admin types last) so iterating it yields
- * the design's menu/legend order. Glyphs + hues are the 2.7.1 panel-4 map.
+ * as extended by its Amendment 1 — which reads as four contiguous groups (Build
+ * / Author / Investigate / Govern & operate) — so iterating it yields the
+ * design's menu/legend order. Glyphs + hues are the 2.7.1 panel-4 map, extended
+ * by MOTIR-2631's panel 5.
  */
 export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
   code: { type: 'code', icon: Code, hueClass: 'text-(--el-type-code)', hueVar: '--el-type-code' },
@@ -86,6 +111,18 @@ export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
     hueClass: 'text-(--el-type-content)',
     hueVar: '--el-type-content',
   },
+  copy: {
+    type: 'copy',
+    icon: Type,
+    hueClass: 'text-(--el-type-copy)',
+    hueVar: '--el-type-copy',
+  },
+  translate: {
+    type: 'translate',
+    icon: Languages,
+    hueClass: 'text-(--el-type-translate)',
+    hueVar: '--el-type-translate',
+  },
   research: {
     type: 'research',
     icon: Lightbulb,
@@ -97,6 +134,12 @@ export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
     icon: ClipboardCheck,
     hueClass: 'text-(--el-type-review)',
     hueVar: '--el-type-review',
+  },
+  verification: {
+    type: 'verification',
+    icon: BadgeCheck,
+    hueClass: 'text-(--el-type-verification)',
+    hueVar: '--el-type-verification',
   },
   decision: {
     type: 'decision',
@@ -116,6 +159,12 @@ export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
     hueClass: 'text-(--el-type-manual)',
     hueVar: '--el-type-manual',
   },
+  legal: {
+    type: 'legal',
+    icon: Gavel,
+    hueClass: 'text-(--el-type-legal)',
+    hueVar: '--el-type-legal',
+  },
   chore: {
     type: 'chore',
     icon: Wrench,
@@ -127,13 +176,15 @@ export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
 /**
  * The chip tint BACKGROUND for a type — a `color-mix` of the type's saturated
  * hue into the page background, so one `--el-type-*` token yields both the
- * glyph hue and the chip tint (no separate `--el-tint-*` pairs). The two grey
- * meta-types (`manual`, `chore`, `decision` reads near-neutral too) use a
- * slightly higher mix so the near-neutral tint still reads (design panel 4).
+ * glyph hue and the chip tint (no separate `--el-tint-*` pairs). The grey
+ * meta-types (`manual`, `chore`; `decision` and `legal` read near-neutral too)
+ * use a slightly higher mix so the near-neutral tint still reads (design
+ * panel 4).
  * Returns a CSS value for an inline `backgroundColor` style — it references
  * only `--el-*` tokens, so it stays on the colour swap layer.
  */
 export function workItemTypeChipBackground(type: WorkItemTypeDto): string {
-  const pct = type === 'manual' || type === 'chore' || type === 'decision' ? 18 : 14;
+  const pct =
+    type === 'manual' || type === 'chore' || type === 'decision' || type === 'legal' ? 18 : 14;
   return `color-mix(in srgb, var(${WORK_ITEM_TYPE_META[type].hueVar}) ${pct}%, var(--el-page-bg))`;
 }

@@ -26,7 +26,15 @@
 import type { ExecutorDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 
 /**
- * Every `WorkItemType` member, in the canonical order the 2.7.2 ADR froze.
+ * Every `WorkItemType` member, in the canonical order the 2.7.2 ADR froze and
+ * its Amendment 1 (MOTIR-2629) extended to FOURTEEN. The four admitted members
+ * are INSERTED beside the neighbour the amendment named, so the original ten
+ * keep their relative order exactly and no downstream menu is reshuffled. The
+ * order reads as four contiguous groups — Build (code/design/test), Author
+ * (content/copy/translate), Investigate (research/review/verification) and
+ * Govern & operate (decision/deploy/manual/legal/chore) — which is what
+ * MOTIR-2631's picker renders as section headers; the grouping is a CONSEQUENCE
+ * of this order, never a second ordering laid over it.
  * Mirrors the `WorkItemType` Prisma enum 1:1. Exported so pickers / filter
  * facets / the loader's validate-against-the-enum check read one list instead
  * of re-declaring it (the priority.ts `PRIORITY_OPTIONS` precedent).
@@ -36,11 +44,15 @@ export const WORK_ITEM_TYPES = [
   'design',
   'test',
   'content',
+  'copy',
+  'translate',
   'research',
   'review',
+  'verification',
   'decision',
   'deploy',
   'manual',
+  'legal',
   'chore',
 ] as const satisfies readonly WorkItemTypeDto[];
 
@@ -51,9 +63,15 @@ export const WORK_ITEM_TYPES = [
  * the enum — adding an eleventh `WorkItemType` member without extending this
  * map is a compile error here (and a failed table-test in 2.7.7), never a
  * silent `default` fall-through. Read as three groups: always-agent
- * (`code` / `test` / `deploy`), always-human (`manual` / `decision` /
- * `review`), and either-default-agent (`design` / `content` / `research` /
- * `chore`).
+ * (`code` / `test` / `deploy`), always-human (`manual` / `decision` / `review`
+ * / `legal`), and either-default-agent (`design` / `content` / `copy` /
+ * `translate` / `research` / `verification` / `chore`).
+ *
+ * Amendment 1 (§3a) placed the four admitted members. `legal` is the only one
+ * that is always-HUMAN, and deliberately so: a binding artifact ends in a
+ * signature, and an agent cannot sign. A wrong `human` default costs one
+ * reassignment; a wrong `coding_agent` default costs a card that stalls
+ * mid-run, which is the failure this map exists to prevent.
  */
 export const DEFAULT_EXECUTOR_BY_TYPE: Record<WorkItemTypeDto, ExecutorDto> = {
   code: 'coding_agent',
@@ -62,9 +80,13 @@ export const DEFAULT_EXECUTOR_BY_TYPE: Record<WorkItemTypeDto, ExecutorDto> = {
   manual: 'human',
   decision: 'human',
   review: 'human',
+  legal: 'human',
   design: 'coding_agent',
   content: 'coding_agent',
+  copy: 'coding_agent',
+  translate: 'coding_agent',
   research: 'coding_agent',
+  verification: 'coding_agent',
   chore: 'coding_agent',
 };
 
@@ -102,7 +124,7 @@ export function isTypeableKind(kind: WorkItemKindDto): boolean {
   return TYPEABLE_KINDS.has(kind);
 }
 
-/** Narrowing guard: true when `value` is one of the ten work-item types. */
+/** Narrowing guard: true when `value` is one of the fourteen work-item types. */
 export function isWorkItemType(value: unknown): value is WorkItemTypeDto {
   return typeof value === 'string' && (WORK_ITEM_TYPES as readonly string[]).includes(value);
 }

@@ -34,15 +34,20 @@ export function composeDescription(item: SeedItem): string | null {
 
 /**
  * The plan's free-string `type` (SeedItem.type — `string` in types.ts) → the
- * frozen ten-member `WorkItemType` enum (the 2.7.2 ADR;
- * `lib/issues/executorDefaults.ts`). The ten members map to themselves; the
- * plan's richer / legacy vocabulary normalises DOWN to the enum:
+ * frozen FOURTEEN-member `WorkItemType` enum (the 2.7.2 ADR + its Amendment 1,
+ * MOTIR-2629; `lib/issues/executorDefaults.ts`). The fourteen members map to
+ * themselves; the plan's richer / legacy vocabulary normalises DOWN to the enum:
  *
  *   • `e2e`   → `test`     a Playwright E2E spec IS a test — the enum has no
  *                          separate `e2e` member (unit + e2e both store `test`).
  *   • `spike` → `research` the 2.7.2 ADR glosses `research` as
  *                          "spike/investigation".
- *   • `copy`  → `content`  the ADR glosses `content` as "copy/docs/translate".
+ *   • `spike` → `research` and `doc` → `content` are the TWO aliases ADR
+ *                          Amendment 1 (MOTIR-2629) declared: neither carries an
+ *                          authoring bar of its own in plan-rules.md, so neither
+ *                          is a member. (`copy` USED to alias to `content` for
+ *                          the same reason; Amendment 1 admitted it as a member
+ *                          in its own right, so it now maps to itself.)
  *   • `bug`   → `code`     the bug-logging convention carries the KIND in `type`
  *                          (`kind: 'bug'` + `type: 'bug'`); a bug's executable
  *                          work-nature is code, so it seeds executor coding_agent.
@@ -57,15 +62,19 @@ export const PLAN_TYPE_TO_WORK_ITEM_TYPE: Record<string, WorkItemTypeDto> = {
   design: 'design',
   test: 'test',
   content: 'content',
+  copy: 'copy',
+  translate: 'translate',
   research: 'research',
   review: 'review',
+  verification: 'verification',
   decision: 'decision',
   deploy: 'deploy',
   manual: 'manual',
+  legal: 'legal',
   chore: 'chore',
   e2e: 'test',
   spike: 'research',
-  copy: 'content',
+  doc: 'content',
   bug: 'code',
 };
 
