@@ -6,7 +6,6 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
-import { TOKEN_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
 import { toolPermission } from '@/lib/mcp/toolPermissions';
 import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
@@ -16,7 +15,6 @@ import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
-import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Story-CLOSING suite for the Motir MCP server (Story 7.7 · Subtask 7.7.12).

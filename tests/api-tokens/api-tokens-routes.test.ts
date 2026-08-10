@@ -250,7 +250,7 @@ describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
   });
 
   it('an unknown permission string is 422, and nothing is minted', async () => {
-    const { owner, workspace, project } = await makeUserWs();
+    const { owner, workspace } = await makeUserWs();
     signInAs(owner);
     const res = await POST(
       postReq({ label: 'bad', workspaceId: workspace.id, permissions: ['work_item:nuke'] }),
@@ -261,7 +261,7 @@ describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
 
   it('a non-array `permissions` is a 400 SHAPE error, not a 422', async () => {
     // The route owns the shape; the service owns which strings are acceptable.
-    const { owner, workspace, project } = await makeUserWs();
+    const { owner, workspace } = await makeUserWs();
     signInAs(owner);
     const res = await POST(
       postReq({ label: 'bad', workspaceId: workspace.id, permissions: 'project:browse' }),
@@ -273,7 +273,7 @@ describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
     // The field rename is a contract change. A client still posting the six-scope
     // vocabulary must get a loud 422 rather than a token whose grant is not what
     // it asked for.
-    const { owner, workspace, project } = await makeUserWs();
+    const { owner, workspace } = await makeUserWs();
     signInAs(owner);
     const res = await POST(
       postReq({ label: 'legacy', workspaceId: workspace.id, permissions: ['work_items:write'] }),
@@ -290,7 +290,7 @@ describe('DELETE /api/me/api-tokens/[tokenId]', () => {
   });
 
   it("soft-revokes the user's own token and returns the revoked DTO", async () => {
-    const { owner: alice, workspace, project } = await makeUserWs();
+    const { owner: alice, workspace } = await makeUserWs();
     signInAs(alice);
     const { dto } = await apiTokensService.create(alice.id, workspace.id, {
       label: 'to-revoke',

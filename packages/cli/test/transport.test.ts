@@ -8,7 +8,7 @@ import {
   NotFoundError,
   RateLimitError,
   ResponseShapeError,
-  ScopeError,
+  PermissionError,
 } from '../src/errors.js';
 import { describeField, isVersionBehind, V1Transport } from '../src/transport.js';
 import { GENERATED_AGAINST } from '../src/api/index.js';
@@ -278,7 +278,7 @@ describe('the status map', () => {
     expect((error as CliError).hint).toContain('motir auth login');
   });
 
-  it('403 → ScopeError NAMING the scope, taken from the generated table', async () => {
+  it('403 → PermissionError NAMING the permission, taken from the generated table', async () => {
     stub.queue({ status: 403, body: { code: 'INSUFFICIENT_SCOPE', error: 'nope' } });
 
     const error = await transport()
@@ -288,10 +288,11 @@ describe('the status map', () => {
       })
       .catch((err: unknown) => err);
 
-    expect(error).toBeInstanceOf(ScopeError);
-    // `work_items:write` comes from `x-motir-scope` on the operation, NOT from
-    // the server's sentence — which said only "nope".
-    expect((error as CliError).message).toContain("'work_items:write'");
+    expect(error).toBeInstanceOf(PermissionError);
+    // `work_item:edit` comes from `x-motir-permission` on the operation, NOT
+    // from the server's sentence — which said only "nope". Since Story
+    // MOTIR-2572 that is a catalog key rather than one of the six scopes.
+    expect((error as CliError).message).toContain("'work_item:edit'");
     expect((error as CliError).message).toContain('createWorkItem');
   });
 
@@ -403,8 +404,8 @@ describe('the error path reads the machine `code`, never the human sentence', ()
       .request('getProject', { path: { projectKey: 'MOTIR' } })
       .catch((err: unknown) => err);
 
-    expect(first).toBeInstanceOf(ScopeError);
-    expect(second).toBeInstanceOf(ScopeError);
+    expect(first).toBeInstanceOf(PermissionError);
+    expect(second).toBeInstanceOf(PermissionError);
     // Note the second sentence contains "unauthorized" — the word the MCP-era
     // `isUnauthorized` regex matched. Under HTTP it changes nothing.
     expect(second).not.toBeInstanceOf(AuthError);

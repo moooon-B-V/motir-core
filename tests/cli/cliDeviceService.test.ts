@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
-import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 
 // Better-Auth's rate limiter buckets /sign-in|/sign-up per IP (window 10s, max 3),

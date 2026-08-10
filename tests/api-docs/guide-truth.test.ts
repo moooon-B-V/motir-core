@@ -14,7 +14,7 @@ import { findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { isV1Status } from '@/lib/api/v1/openapi/statuses';
 import { V1_SHARED_RESPONSE_HEADERS } from '@/lib/api/v1/openapi/headers';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
-import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
+import { isGrantable } from '@/lib/tokens/grant';
 
 // The guide and the policy, CHECKED AGAINST THE THING THEY DESCRIBE
 // (Story 11.4 · Subtask 11.4.8 — MOTIR-2189).
