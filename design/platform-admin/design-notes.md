@@ -600,11 +600,86 @@ directly — which is the same value, so **Panels 1–7 render pixel-for-pixel
 identically** (verified: a 2400×11220 device-pixel diff of panels 1–7 before and
 after returns **0** differing pixels).
 
-**One drift is left UNFIXED on purpose.** The same block has
-**`--el-accent: var(--color-primary)`** where `theme.css` says
-**`var(--color-primary-fill)`**. The two are the same value in the default palette,
-so nothing renders differently today — but they are a deliberate pair
-(`--color-primary` is _ink on a surface_, `--color-primary-fill` is _fill behind
-white labels_), and they diverge in most of the other shipped palettes. Correcting
-it would re-tone the accent across Panels 1–7, which is outside this card. Filed as
-its own card.
+**One drift was left UNFIXED on purpose** — `--el-accent` — and is now fixed by
+MOTIR-2595; see the next section.
+
+## ⚠️ `--el-accent` aliases the FILL, not the ink (fixed by MOTIR-2595)
+
+The block carried **`--el-accent: var(--color-primary)`** where `theme.css` says
+**`var(--color-primary-fill)`**. The two are a deliberate pair — `--color-primary`
+is the accent **as ink** on a pale surface, `--color-primary-fill` is the **block of
+colour behind a white label** — and `--el-accent` is the fill role (`.btn-primary`
+here is `background: var(--el-accent); color: var(--el-accent-text)`). The ink form
+has its own token, `--el-accent-on-surface`, which was already correct.
+
+Corrected: `--color-primary-fill` was added to the inlined Tier-0 block in both
+themes (`#5645d4` light, `#6c5cdd` dark — the values `theme.css` carries) and
+`--el-accent` re-aliased to it. What that changes:
+
+| theme (default palette) | accent fill before  | after                | white label on it                                              |
+| ----------------------- | ------------------- | -------------------- | -------------------------------------------------------------- |
+| light                   | `#5645d4`           | `#5645d4`            | 6.57:1 — unchanged, **the light PNG export is byte-identical** |
+| dark                    | `#7b6ce5` (the ink) | `#6c5cdd` (the fill) | **4.10:1 → 4.99:1**, i.e. below AA → AA                        |
+
+So this was never only an other-palettes hazard: the mock's own dark mode was
+painting the accent CTA with the ink colour and failing AA on its label. Under a
+palette where the pair diverges further (several define a light `--color-primary`
+against a near-black or near-white `--color-primary-fill`) the gap is larger.
+
+## ⚠️ The inlined token block is a POINT-IN-TIME COPY — re-check it, don't trust it
+
+`console.mock.html` inlines a **subset** of the design system's Tier-0 + Tier-3
+layers so the asset renders standalone from a `file://` URL. That copy was taken by
+hand and does not update when `packages/design-system/theme.css` moves, so **every
+value in it is a claim about a past state of the design system.** Two corrections
+have already been needed (`--el-danger-text`, above; `--el-accent`, here), and both
+were invisible in the default light palette.
+
+Re-run this from the repo root before trusting the block — it parses every `--el-*`
+declaration out of both files and diffs them, so it reports drift the eye cannot
+see. It prints `DISAGREEMENTS: 0` today:
+
+```bash
+python3 - <<'PY'
+import re
+M='design/platform-admin/console.mock.html'; T='packages/design-system/theme.css'
+def body(t,sel):
+    for m in re.finditer(sel,t):
+        j=t.index('{',m.start()); d,k=1,j+1
+        while d: d+={'{':1,'}':-1}.get(t[k],0); k+=1
+        yield t[j+1:k-1]
+def decls(t,sel,pre='--el-'):
+    o={}
+    for b in body(t,sel):
+        o.update({m[1]:' '.join(m[2].split())
+                  for m in re.finditer('('+pre+r'[a-z0-9-]+)\s*:\s*([^;]+);',b)})
+    return o
+strip=lambda s: re.sub(r'/\*.*?\*/','',s,flags=re.S)  # a comment naming a token would fool the scan
+mock=strip(open(M).read()); theme=strip(open(T).read()); bad=0
+for label,ms,ts in [('LIGHT',r'(?m)^\s*:root\s*\{',r'(?m)^:root,\s*\n\[data-appearance-scope\]\s*\{'),
+                    ('DARK',r"(?m)^\s*\[data-theme='dark'\]\s*\{",r"(?m)^\[data-theme='dark'\]\s*\{")]:
+    m=decls(mock,ms); t=decls(theme,ts)
+    print(f'== {label} == mock {len(m)} · theme {len(t)}')
+    for k in sorted(m):
+        if k not in t: print(f'  ONLY-IN-MOCK {k}: {m[k]}'); bad+=1
+        elif m[k]!=t[k]: print(f'  DIFFERS {k}: mock={m[k]} theme={t[k]}'); bad+=1
+print('DISAGREEMENTS:',bad)
+PY
+```
+
+`ONLY-IN-MOCK` and `DIFFERS` are both defects — the first means the mock invented a
+token or kept one the system dropped, the second is a stale alias. Tokens the mock
+simply does not inline are fine (it copies 37 of the system's 200 `--el-*`). To
+check the Tier-0 half the same way, change `pre='--el-'` to `pre='--color-'` **and**
+the light theme-side selector to `r'(?m)^@theme\s*\{'` — Tier-0 lives in the
+`@theme` block, Tier-3 in the `:root, [data-appearance-scope]` one.
+
+**The Tier-0 half currently has four known drifts, tracked as MOTIR-2609** (they
+change rendered hues across every panel, so they are not a footnote in MOTIR-2595's
+diff): `--color-link` `#0075de` vs `#0070d2`, `--color-tint-yellow` `#fbf0c4` vs
+`#fef7d6` (light) and `#332d12` vs `#3a341a` (dark), plus a dark `--color-warning`
+override the mock still carries and `theme.css` no longer has.
+
+Whenever the block is corrected, re-export `console.png` after `prettier --write`:
+Playwright chromium, light theme, `deviceScaleFactor: 2`, viewport width 1200,
+`fullPage` — which reproduces the committed 2400×16180 export.
