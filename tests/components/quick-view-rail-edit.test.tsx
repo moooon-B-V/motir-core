@@ -73,6 +73,12 @@ const DATA: QuickViewData = {
   members: [],
   sprints: [],
   projectComponents: [],
+  estimation: {
+    estimationStatistic: 'story_points' as const,
+    pointScale: 'fibonacci' as const,
+    customScaleValues: [],
+    canEdit: true,
+  },
 };
 
 beforeEach(() => {
@@ -340,5 +346,45 @@ describe('the option-sourced editors (MOTIR-2564)', () => {
 
     fireEvent.click(within(row('Sprint')).getByRole('button', { name: 'Edit Sprint' }));
     expect(await screen.findByRole('option', { name: 'None' })).toBeTruthy();
+  });
+});
+
+// ── Story points via the composed EstimateBadge (MOTIR-2565 / MOTIR-2593) ────
+// The peek was the one issue surface that rendered a bare number instead of the
+// shared click-to-edit chip. The failure mode this guards is silent: without the
+// estimation config the badge still renders and shows the right value, and is
+// simply inert — no error, no failed assertion anywhere else.
+describe('story points — the composed EstimateBadge', () => {
+  const POINTED: QuickViewData = { ...DATA, storyPoints: 5, estimateMinutes: 90 };
+
+  it('renders the badge, not a bare number, and it is INTERACTIVE for an editor', () => {
+    render(<IssueQuickViewPanel state="ready" data={POINTED} />);
+
+    // The chip is a button when the actor may edit — that is the whole point of
+    // composing it rather than printing the value.
+    const badge = within(row('Story points')).getByRole('button');
+    expect(badge.textContent).toContain('5');
+  });
+
+  it('is STATIC when the payload says the actor cannot edit — the silent-inert case, made loud', () => {
+    render(
+      <IssueQuickViewPanel
+        state="ready"
+        data={{ ...POINTED, estimation: { ...POINTED.estimation, canEdit: false } }}
+      />,
+    );
+
+    // Same value, no affordance. This is exactly what a MISSING provider would
+    // have produced for every actor, on every surface, unnoticed.
+    expect(within(row('Story points')).queryByRole('button')).toBeNull();
+    expect(within(row('Story points')).getByText('5')).toBeTruthy();
+  });
+
+  it('carries no edit chevron — the badge is the affordance, matching the detail rail', () => {
+    render(<IssueQuickViewPanel state="ready" data={POINTED} />);
+
+    expect(
+      within(row('Story points')).queryByRole('button', { name: 'Edit Story points' }),
+    ).toBeNull();
   });
 });

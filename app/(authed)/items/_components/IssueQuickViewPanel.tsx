@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Clock,
   Component as ComponentIcon,
-  Gauge,
   Goal,
   SearchX,
   User,
@@ -34,6 +33,8 @@ import { ParentPicker } from '@/components/issues/ParentPicker';
 import { setWorkItemSprint } from '@/components/issues/actions/workItemActionsClient';
 import { changeStatusAction } from '../[key]/edit/actions';
 import type { IssueType } from '@/lib/issues/parentRules';
+import { EstimateBadge } from '@/components/issues/EstimateBadge';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
@@ -286,7 +287,11 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const ViewExecutorGlyph = view.executor ? EXECUTOR_GLYPH[view.executor] : null;
   const sprintEmptyLabel = view.statusCategory === 'done' ? t('none') : t('backlog');
   return (
-    <>
+    // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
+    // Only three pages mount `EstimationConfigProvider` and none of them wraps
+    // this modal, so without this the composed `EstimateBadge` silently falls
+    // back to a read-only default and is inert on every peek surface.
+    <EstimationConfigProvider config={data.estimation} canEdit={data.estimation.canEdit}>
       <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
         <Link
@@ -733,15 +738,24 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           ) : null}
 
           {/* Story points — the agile estimate, distinct from the TIME estimate. */}
+          {/* Story points (MOTIR-2565) — the shipped `EstimateBadge`, the same
+              click-to-edit chip the backlog, the board, the item list and the
+              detail rail all compose. The peek was the ONE issue surface that
+              rendered a bare number instead.
+              NO edit chevron on this row, deliberately: the badge IS the
+              affordance, which is exactly why the detail rail's FieldCard is
+              `editable={false}` here. A chevron beside it would be a second
+              affordance for one field. Editing routes through the badge's own
+              `PATCH /api/work-items/[id]/estimate` and the project's configured
+              scale deck — never a free-text number, which could hold a value the
+              scale does not contain. */}
           <RailField label={t('storyPoints')}>
-            {data.storyPoints != null ? (
-              <>
-                <Gauge className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                <span className="truncate">{numberFormat.format(data.storyPoints)}</span>
-              </>
-            ) : (
-              <span className="text-(--el-text-secondary)">{t('none')}</span>
-            )}
+            <EstimateBadge
+              itemId={view.id}
+              storyPoints={view.storyPoints}
+              estimateMinutes={view.estimateMinutes}
+              forceStoryPoints
+            />
           </RailField>
 
           <EditableRailField
@@ -842,6 +856,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </div>
         </dl>
       </div>
-    </>
+    </EstimationConfigProvider>
   );
 }
