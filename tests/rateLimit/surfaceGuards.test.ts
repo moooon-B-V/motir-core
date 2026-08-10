@@ -597,7 +597,7 @@ describe('the routes are actually WIRED to the guards', () => {
     // so it fails HERE now rather than in production.
     ['app/api/mcp/route.ts', 'enforceMcpRateLimit'],
     // …and the dispatch-seam half: the route asks for it, the registry applies it.
-    ['app/api/mcp/route.ts', 'registerMcpTools(server, contextFromExtra, scopesFromExtra, true)'],
+    ['app/api/mcp/route.ts', 'registerMcpTools(server, contextFromExtra, grantFromExtra, true)'],
     ['lib/mcp/registry.ts', 'rateLimitedServer'],
   ];
 
