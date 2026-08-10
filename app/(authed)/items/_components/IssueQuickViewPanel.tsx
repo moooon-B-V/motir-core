@@ -695,16 +695,21 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               />
             }
           >
-            {data.parent ? (
+            {/* The OPTIMISTIC parent, not the served one: the picker hands the
+                chosen item's identifier + title over with the id (above), and
+                reading `data` here would compute that label and then throw it
+                away — the row would keep showing the old parent until a re-read
+                the peek never performs. */}
+            {view.parent ? (
               <Link
-                href={`/items/${data.parent.identifier}`}
+                href={`/items/${view.parent.identifier}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex min-w-0 items-center gap-1.5 text-(--el-link) hover:underline"
               >
-                <IssueTypeIcon type={data.parent.kind} className="h-3.5 w-3.5 shrink-0" />
-                <span className="shrink-0 font-mono text-xs">{data.parent.identifier}</span>
-                <span className="truncate text-(--el-text-secondary)">{data.parent.title}</span>
+                <IssueTypeIcon type={view.parent.kind} className="h-3.5 w-3.5 shrink-0" />
+                <span className="shrink-0 font-mono text-xs">{view.parent.identifier}</span>
+                <span className="truncate text-(--el-text-secondary)">{view.parent.title}</span>
               </Link>
             ) : (
               <span className="text-(--el-text-secondary)">{t('none')}</span>

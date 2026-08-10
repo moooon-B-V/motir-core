@@ -348,6 +348,17 @@ export default defineConfig({
         // Story MOTIR-2284 · Subtask MOTIR-2289 — the Children panel's List ↔
         // Graph switcher. (`WorkItemRoadmap`, the adapter it mounts, is already
         // gated above.)
+        // Story MOTIR-2560 — the editable quick-view rail. Every file the story
+        // ADDED or made a write surface, entered as `app/**/…` because a literal
+        // `app/(authed)/…` reaches no file (MOTIR-2449) and would gate nothing.
+        'app/**/items/_components/QuickViewRailEdit.tsx',
+        'app/**/items/_components/fieldChipEditing.ts',
+        'app/**/items/_components/customFieldEditing.tsx',
+        'app/**/items/_components/IssueQuickViewPanel.tsx',
+        'app/**/items/_components/IssueQuickViewController.tsx',
+        // …and the SEAM the payload widening landed in. `workItemsService.ts`
+        // (the other half) is already included + gated above.
+        'lib/mappers/quickViewMappers.ts',
         'app/**/items/[key]/_components/ChildPanel.tsx',
         'app/**/items/[key]/_components/ChildList.tsx',
         'lib/mcp/registry.ts',
@@ -1709,6 +1720,45 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/items/[key]/_components/ChildList.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        // Story MOTIR-2560 · Subtask MOTIR-2567 — the editable quick-view rail's
+        // story gate. MEASURED FIRST, then pinned (the order this file's header
+        // argues for), over the story's own suites plus the three detail-rail
+        // suites that drive the shared hooks:
+        //
+        //   IssueQuickViewPanel.tsx        100.0 L   96.8 B  100.0 F
+        //   QuickViewRailEdit.tsx          100.0 L  100.0 B   94.1 F
+        //   customFieldEditing.tsx         100.0 L   92.5 B  100.0 F
+        //   fieldChipEditing.ts            100.0 L  100.0 B  100.0 F
+        //   IssueQuickViewController.tsx    93.3 L   90.9 B  100.0 F
+        //
+        // Keyed `app/**/…`, never the literal `app/(authed)/…`: picomatch reads
+        // the parentheses as a group, so the literal form matches NO file and
+        // the threshold would pass vacuously (MOTIR-2449).
+        'app/**/items/_components/QuickViewRailEdit.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/_components/fieldChipEditing.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/_components/customFieldEditing.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/_components/IssueQuickViewPanel.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/items/_components/IssueQuickViewController.tsx': {
           branches: 90,
           functions: 90,
           lines: 90,
