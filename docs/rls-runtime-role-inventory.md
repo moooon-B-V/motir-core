@@ -116,7 +116,15 @@ directory behind the flag without ever red-lighting `main`.
 
 ## Cards filed from this inventory
 
+Both are **successors** to MOTIR-2435, not children of it — tasks under Epic 8, in a
+same-level chain. Filing them under the container would have made that container
+un-completable by its own PR, which is recorded as planning bug MOTIR-2538.
+
 - **MOTIR-2527** — route the 12 membership-gate reads through the tx-aware variant
-  (the production defect; Finding 1). `high`, 5 points.
+  (the production defect; Finding 1). `high`, 5 points, `blocked_by` MOTIR-2435.
 - **MOTIR-2528** — migrate the DB-backed fixtures onto `adminDb`, directory by directory,
   and flip the default when the last one lands (Finding 2). 8 points, `blocked_by` 2527.
+
+The chain then ends at **MOTIR-2515**, the deployed cutover — which is the point at
+which RLS actually starts executing in production. Nothing before it changes what the
+deployed application is subject to.
