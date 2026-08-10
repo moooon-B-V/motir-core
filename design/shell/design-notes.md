@@ -368,12 +368,30 @@ first.
 
 Same method as the control budget above, so the asset cannot drift from the app:
 
-1. `tests/_render-2555.test.tsx` (a temporary harness, not committed) renders `OrgControl`,
-   `WorkspaceSwitcher`, `ProjectSwitcher` (active / archived / open popover), `SidebarHeader` (all
-   three states), `ShellTierNav` (one and two workspaces) and `TopNav` (every optional slot live)
-   through `renderWithIntl` inside `ThemeProvider` / `ToastProvider` / `CommandPaletteProvider` /
-   `CreateIssueProvider` / `ProjectAccessProvider` / `ReportProvider`, dumping `container.innerHTML`
-   per state. Run it with `./node_modules/.bin/vitest run tests/_render-2555.test.tsx`.
+1. **The dump.** A THROWAWAY vitest file — written under `tests/`, run, and deleted, so nothing in the
+   repo cites it — renders `OrgControl`, `WorkspaceSwitcher`, `ProjectSwitcher` (active / archived /
+   open popover), `SidebarHeader` (all three states), `ShellTierNav` (one and two workspaces) and
+   `TopNav` (every optional slot live) and writes each `container.innerHTML` to a temp directory. To
+   reproduce it, the shape is:
+
+   ```tsx
+   // @vitest-environment happy-dom
+   vi.mock('next-intl/server', () => ({ getTranslations: … })); // resolve from messages/en.json
+   vi.mock('next/navigation', () => ({ useRouter: …, usePathname: () => '/dashboard' }));
+   // CreateIssueModal / CreateProjectModal / BuildInPublicDialog stubbed to null
+   renderWithIntl(
+     <ThemeProvider><ToastProvider><CommandPaletteProvider><CreateIssueProvider hasProject canEdit>
+       <ProjectAccessProvider permissions={['work_item:edit', 'project:administer']}>
+         <ReportProvider projectKey="MOTIR" canEdit>{node}</ReportProvider>
+       </ProjectAccessProvider>
+     </CreateIssueProvider></CommandPaletteProvider></ToastProvider></ThemeProvider>,
+   );
+   // TopNav is async: `const bar = await TopNav(props)` first, then render it.
+   ```
+
+   Run it with the LOCAL binary (`./node_modules/.bin/vitest run <that file>`) — `pnpm exec` re-runs a
+   dependency check that fights the shared pnpm store in a fresh worktree.
+
 2. The TARGET cluster is composed from those dumps: the real buttons, in the arrangement and with the
    responsive prefixes this design decides — which is exactly what MOTIR-2556 ships. The three edits
    are isolated and named in the ladder section above.
