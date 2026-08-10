@@ -77,7 +77,14 @@ describe('the documented surface list', () => {
   it('carries the index page chrome in both catalogs', () => {
     // The index's own strings ship with this card even though the page that
     // renders them is MOTIR-2523's — the page adds no key of its own.
-    for (const key of ['indexTitle', 'indexLede', 'indexMetaTitle', 'indexMetaDescription']) {
+    //
+    // Its `<title>` is NOT here: MOTIR-2526 retargeted the area default
+    // (`metaTitle` / `metaDescription`, read by the layout) from the API
+    // reference's words to the AREA's, and the index IS the area — so it
+    // inherits them, and a second pair saying the same thing was deleted rather
+    // than kept in step by hand. `docs-page-metadata.test.ts` exempts exactly
+    // this one route for exactly this reason.
+    for (const key of ['indexTitle', 'indexLede']) {
       expect(en.apiDocs).toHaveProperty(key);
       expect(zh.apiDocs).toHaveProperty(key);
     }
