@@ -844,7 +844,8 @@
       "helper": "Choose a relationship · links are created together with the work item."
     },
     "commandPalette": {
-      "search": "Search",
+      "search": "Shortcut",
+      "placeholder": "Search a shortcut",
       "createHeading": "Create",
       "navigationHeading": "Navigation",
       "workspaceHeading": "Workspace",

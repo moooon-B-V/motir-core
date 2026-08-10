@@ -136,7 +136,7 @@ describe('the top bar’s control budget below md (MOTIR-2373)', () => {
 
     expect(visibleBelowMd.map((el) => el.getAttribute('aria-label'))).toEqual([
       'Create work item',
-      'Search',
+      'Shortcut',
       'Notifications, 3 unread',
       'Account menu',
     ]);
