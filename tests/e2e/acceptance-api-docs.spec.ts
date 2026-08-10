@@ -256,6 +256,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
 test('a reader with no session finds the sandbox guide from the rail and leaves with a runnable docker run', async ({
   page,
   chapter,
+  beat,
   acceptanceStory,
 }) => {
   acceptanceStory('MOTIR-2268');
@@ -295,6 +296,11 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
         matrix.getByRole('cell', { name: profile.sandboxMounts[0]!, exact: false }).first(),
       ).toBeVisible();
     }
+
+    // The matrix is the fact a reader is CHOOSING on — it earns more than the
+    // chapter hold. (Pacing, not synchronisation: every assertion above has
+    // already resolved. See MOTIR-2542 for why this clip needed it.)
+    await beat();
   });
 
   await chapter('Copy the command it came for', async () => {
@@ -311,6 +317,9 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     expect(copied).toContain('-v "$PWD:/workspace"');
     // It sets the container UP; it does not start a work loop.
     expect(copied).not.toContain('motir auto');
+
+    // The command IS the thing this reader came for; let it sit on screen.
+    await beat();
   });
 
   await chapter('Leave for the API — and reach its pages from inside it', async () => {
