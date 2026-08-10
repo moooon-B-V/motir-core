@@ -120,11 +120,11 @@ describe('getQuickView() — the editor inputs the editable rail needs (MOTIR-25
 
     expect(p.sprintId).toBe(sprint.id);
     expect(p.sprints.some((x) => x.id === sprint.id)).toBe(true);
-    // The option shape is the three fields SprintPicker reads — deliberately NOT
+    // The option shape is the four fields SprintPicker reads — deliberately NOT
     // the full SprintDto, whose `issueCount` costs one query per sprint on a
     // payload fetched on every row click.
     const opt = p.sprints.find((x) => x.id === sprint.id)!;
-    expect(Object.keys(opt).sort()).toEqual(['id', 'name', 'state']);
+    expect(Object.keys(opt).sort()).toEqual(['id', 'name', 'sequence', 'state']);
   });
 
   it('carries the project’s COMPONENT taxonomy, not just the item’s components', async () => {

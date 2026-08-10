@@ -27,6 +27,13 @@ import { Pill } from '@/components/ui/Pill';
 import { ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
+import { StatusPicker } from '@/components/issues/StatusPicker';
+import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { SprintPicker } from '@/components/issues/SprintPicker';
+import { ParentPicker } from '@/components/issues/ParentPicker';
+import { setWorkItemSprint } from '@/components/issues/actions/workItemActionsClient';
+import { changeStatusAction } from '../[key]/edit/actions';
+import type { IssueType } from '@/lib/issues/parentRules';
 import { PriorityPicker } from '@/components/issues/PriorityPicker';
 import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
 import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
@@ -277,7 +284,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // glyph with the value the user just picked rather than the served one.
   const ViewTypeGlyph = view.type ? WORK_ITEM_TYPE_META[view.type].icon : null;
   const ViewExecutorGlyph = view.executor ? EXECUTOR_GLYPH[view.executor] : null;
-  const sprintEmptyLabel = data.statusCategory === 'done' ? t('none') : t('backlog');
+  const sprintEmptyLabel = view.statusCategory === 'done' ? t('none') : t('backlog');
   return (
     <>
       <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
@@ -433,9 +440,39 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           {/* Not a field error — the whole payload is behind, so the notice sits
               ABOVE rows that may all have moved (design panel 9). */}
           {edit.stale ? <RailStaleNotice /> : null}
-          <RailField label={t('status')}>
-            <StatusValue category={data.statusCategory} label={data.statusLabel} />
-          </RailField>
+          {/* Status has its OWN action — it stopped being a patch field when
+              finding #46 closed, so it goes through the gated `changeStatusAction`
+              and the picker offers only the LEGAL targets under the project's
+              policyMode. */}
+          <EditableRailField
+            label={t('status')}
+            fieldKey="status"
+            edit={edit}
+            control={
+              <StatusPicker
+                statuses={view.workflow.statuses}
+                transitions={view.workflow.transitions}
+                policyMode={view.workflow.policyMode}
+                value={view.status}
+                autoOpen
+                onClose={edit.close}
+                onChange={(toStatusKey) => {
+                  const next = view.workflow.statuses.find((st) => st.key === toStatusKey);
+                  void edit.commitVia(
+                    'status',
+                    {
+                      status: toStatusKey,
+                      statusLabel: next?.label ?? toStatusKey,
+                      statusCategory: next?.category ?? view.statusCategory,
+                    },
+                    () => changeStatusAction({ id: view.id, toStatusKey }),
+                  );
+                }}
+              />
+            }
+          >
+            <StatusValue category={view.statusCategory} label={view.statusLabel} />
+          </EditableRailField>
 
           {/* Work Type + Executor — leaf-only (Story 2.7). The faint value glyph
               follows the Estimate/Due grammar (NOT the coloured type chip — the
@@ -514,14 +551,60 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           >
             <PriorityValue priority={view.priority} />
           </EditableRailField>
-          <RailField label={t('assignee')}>
-            <AssigneeValue name={data.assigneeName} />
-          </RailField>
+          <EditableRailField
+            label={t('assignee')}
+            fieldKey="assignee"
+            edit={edit}
+            control={
+              <AssigneePicker
+                members={view.members}
+                value={view.assigneeId}
+                autoOpen
+                onClose={edit.close}
+                onChange={(assigneeId) => {
+                  const m = view.members.find((x) => x.userId === assigneeId);
+                  void edit.commit(
+                    'assignee',
+                    { assigneeId, assigneeName: m ? m.name || m.email : null },
+                    { assigneeId },
+                  );
+                }}
+              />
+            }
+          >
+            <AssigneeValue name={view.assigneeName} />
+          </EditableRailField>
           <RailField label={t('reporter')}>
             <Avatar name={data.reporterName} />
             <span className="truncate">{data.reporterName}</span>
           </RailField>
-          <RailField label={t('parent')}>
+          <EditableRailField
+            label={t('parent')}
+            fieldKey="parent"
+            edit={edit}
+            control={
+              <ParentPicker
+                childType={view.kind as IssueType}
+                value={view.parentId}
+                onChange={(parentId, picked) => {
+                  edit.close();
+                  void edit.commit(
+                    'parent',
+                    {
+                      parentId,
+                      // The picker hands the chosen label over so the row shows it
+                      // immediately, without a server re-read.
+                      parent:
+                        parentId && picked
+                          ? { identifier: picked.identifier, title: picked.title, kind: 'story' }
+                          : null,
+                    },
+                    { parentId },
+                  );
+                }}
+              />
+            }
+          >
             {data.parent ? (
               <Link
                 href={`/items/${data.parent.identifier}`}
@@ -536,7 +619,7 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             ) : (
               <span className="text-(--el-text-secondary)">{t('none')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
           {/* Labels — coloured chips. Reuses the SHIPPED ValueChip + name-hash
               labelTint (5.4.8), NOT a fixed lavender: the labelTint decision
@@ -605,16 +688,48 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           {/* Sprint — omitted for epics (they span sprints). Goal glyph + name,
               or the status-aware empty label (Backlog / None). */}
           {data.kind !== 'epic' ? (
-            <RailField label={t('sprint')}>
-              {data.sprintName ? (
+            <EditableRailField
+              label={t('sprint')}
+              fieldKey="sprint"
+              edit={edit}
+              control={
+                <SprintPicker
+                  sprints={view.sprints}
+                  value={view.sprintId}
+                  autoOpen
+                  onClose={edit.close}
+                  // The SAME value the read row uses, so "Backlog" and "None"
+                  // can never disagree between the label and the sentinel.
+                  emptyLabel={sprintEmptyLabel}
+                  onChange={(sprintId) => {
+                    const picked = view.sprints.find((x) => x.id === sprintId);
+                    void edit.commitVia(
+                      'sprint',
+                      { sprintId, sprintName: picked?.name ?? null },
+                      // Sprint has its own endpoint, not `updateIssueAction`.
+                      // Shape its response into the shared result type.
+                      async () => {
+                        try {
+                          const res = await setWorkItemSprint(view.id, sprintId);
+                          return { ok: true as const, updatedAt: res.updatedAt };
+                        } catch {
+                          return { ok: false as const, error: t('sprintUpdateFailed') };
+                        }
+                      },
+                    );
+                  }}
+                />
+              }
+            >
+              {view.sprintName ? (
                 <>
                   <Goal className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                  <span className="truncate">{data.sprintName}</span>
+                  <span className="truncate">{view.sprintName}</span>
                 </>
               ) : (
                 <span className="text-(--el-text-secondary)">{sprintEmptyLabel}</span>
               )}
-            </RailField>
+            </EditableRailField>
           ) : null}
 
           {/* Story points — the agile estimate, distinct from the TIME estimate. */}

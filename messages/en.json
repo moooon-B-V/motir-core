@@ -1138,7 +1138,8 @@
     "quickViewCloseField": "Close {field}",
     "quickViewFieldSaving": "Saving",
     "quickViewFieldSaved": "Saved",
-    "quickViewStaleReloaded": "This item changed while the quick view was open. The fields below have been reloaded."
+    "quickViewStaleReloaded": "This item changed while the quick view was open. The fields below have been reloaded.",
+    "sprintUpdateFailed": "Couldn’t update the sprint. Try again."
   },
   "comments": {
     "title": "Activity",

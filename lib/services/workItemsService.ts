@@ -3680,7 +3680,7 @@ export const workItemsService = {
     // re-asserts `canBrowse`, all of which `getIssueDetail` has already done in
     // this same call. Reading the leaf and mapping it is the pattern
     // `getIssueDetail` itself uses for the item's own components.
-    // Sprints come off the LEAF and are projected to the three fields
+    // Sprints come off the LEAF and are projected to the four fields
     // `SprintPicker` reads. `sprintsService.listByProject` would return the full
     // `SprintDto`, but it runs one `countSprintIssues` query PER SPRINT to fill
     // `issueCount` — 1+N on a `no-store` payload fetched on every row click, for
@@ -3692,7 +3692,12 @@ export const workItemsService = {
       sprintRepository.listByProject(projectId, ctx.workspaceId),
       componentRepository.listByProject(projectId),
     ]);
-    const sprints = sprintRows.map((s) => ({ id: s.id, name: s.name, state: s.state }));
+    const sprints = sprintRows.map((s) => ({
+      id: s.id,
+      name: s.name,
+      state: s.state,
+      sequence: s.sequence,
+    }));
     const projectComponents = componentRows.map(toComponentDto);
     // Resolve the committed sprint's display name (8.8.8) — the one rail field
     // not carried by the detail aggregate. Epics span sprints, so the rail omits

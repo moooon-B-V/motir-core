@@ -46,15 +46,16 @@ import type { ComponentDto } from '@/lib/dto/components';
 // would make the route-agnostic canvas learn which project it is standing in.
 
 /**
- * A sprint as the peek's Sprint picker needs it (MOTIR-2562) — the three fields
- * `SprintPicker` actually reads, and no more. See the `sprints` field below for
- * why the full `SprintDto` is the wrong shape on this payload.
+ * A sprint as the peek's Sprint picker needs it (MOTIR-2562) — the four fields
+ * `SprintPicker` actually reads (`sequence` orders the planned ones), and no
+ * more. See the `sprints` field below for why the full `SprintDto` is the wrong
+ * shape on this payload.
  *
- * `SprintPicker`'s prop is typed `SprintDto[]` today. The card that mounts the
- * picker in the peek (MOTIR-2564) widens that prop to this shape — a strictly
- * safe generalisation, since every existing caller passes a superset.
+ * `SprintPicker`'s prop was `SprintDto[]`; MOTIR-2564 narrowed it to its own
+ * `SprintOption` — the same four fields — which is a strictly safe
+ * generalisation, since every existing caller passes a superset.
  */
-export type QuickViewSprintOption = Pick<SprintDto, 'id' | 'name' | 'state'>;
+export type QuickViewSprintOption = Pick<SprintDto, 'id' | 'name' | 'state' | 'sequence'>;
 
 /** The serializable payload the peek renders (a condensed slice of the detail read). */
 export interface QuickViewData {
@@ -217,9 +218,9 @@ export interface QuickViewData {
    * carries `issueCount`, and the only way to produce it —
    * `sprintsService.listByProject` — runs ONE count query PER SPRINT (MOTIR has
    * 45). That is a 1+N fan-out on a `no-store` payload fetched on every row
-   * click, to fill a field `SprintPicker` never reads: it uses `id`, `name` and
-   * `state` and nothing else. So the peek reads the sprint rows off the leaf and
-   * projects exactly those three.
+   * click, to fill a field `SprintPicker` never reads: it uses `id`, `name`,
+   * `state` and `sequence` (which orders the planned ones) and nothing else. So
+   * the peek reads the sprint rows off the leaf and projects exactly those four.
    */
   sprints: QuickViewSprintOption[];
   /**

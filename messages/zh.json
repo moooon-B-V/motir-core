@@ -1138,7 +1138,8 @@
     "quickViewCloseField": "关闭{field}",
     "quickViewFieldSaving": "保存中",
     "quickViewFieldSaved": "已保存",
-    "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。"
+    "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。",
+    "sprintUpdateFailed": "无法更新冲刺，请重试。"
   },
   "comments": {
     "title": "动态",

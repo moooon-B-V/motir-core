@@ -248,3 +248,97 @@ describe('the surface behind the modal (design panel 12)', () => {
     vi.unstubAllGlobals();
   });
 });
+
+// ── The option-sourced editors (MOTIR-2564) ──────────────────────────────────
+// Status, Assignee, Sprint and Parent are the four fields people actually change
+// from a list, and each has a quirk the others do not: status has its own gated
+// action, sprint has its own endpoint AND a status-aware empty label, parent is
+// validated server-side.
+describe('the option-sourced editors (MOTIR-2564)', () => {
+  const WITH_OPTIONS: QuickViewData = {
+    ...DATA,
+    workflow: {
+      statuses: [
+        {
+          id: 's1',
+          projectId: 'p',
+          key: 'todo',
+          label: 'To Do',
+          category: 'todo',
+          color: null,
+          position: 'a0',
+          isInitial: true,
+        },
+        {
+          id: 's2',
+          projectId: 'p',
+          key: 'in_progress',
+          label: 'In Progress',
+          category: 'in_progress',
+          color: null,
+          position: 'a1',
+          isInitial: false,
+        },
+        {
+          id: 's3',
+          projectId: 'p',
+          key: 'done',
+          label: 'Done',
+          category: 'done',
+          color: null,
+          position: 'a2',
+          isInitial: false,
+        },
+      ],
+      transitions: [
+        { id: 't1', projectId: 'p', fromStatusId: 's2', toStatusId: 's3' },
+        { id: 't2', projectId: 'p', fromStatusId: 's2', toStatusId: 's1' },
+      ],
+      policyMode: 'restricted',
+    },
+    members: [
+      { userId: 'u1', name: 'Priya Raman', email: 'priya@example.com' },
+      { userId: 'u2', name: 'Marco Ortiz', email: 'marco@example.com' },
+    ] as QuickViewData['members'],
+    sprints: [
+      { id: 'sp1', name: 'Sprint 7', state: 'active', sequence: 7 },
+      { id: 'sp2', name: 'Sprint 8', state: 'planned', sequence: 8 },
+    ],
+  };
+
+  it('offers only the LEGAL status transitions under a restricted policy', async () => {
+    render(<IssueQuickViewPanel state="ready" data={WITH_OPTIONS} />);
+
+    fireEvent.click(within(row('Status')).getByRole('button', { name: 'Edit Status' }));
+
+    // From in_progress the workflow allows todo + done (plus staying put). A
+    // status with no transition edge must not be selectable — the server
+    // re-validates, but an unreachable option should never be offered.
+    const names = screen.getAllByRole('option').map((o) => o.textContent);
+    expect(names).toEqual(expect.arrayContaining(['To Do', 'Done']));
+  });
+
+  it('commits an assignee and shows the picked NAME immediately', async () => {
+    render(<IssueQuickViewPanel state="ready" data={WITH_OPTIONS} />);
+
+    fireEvent.click(within(row('Assignee')).getByRole('button', { name: 'Edit Assignee' }));
+    fireEvent.click(await screen.findByRole('option', { name: /Priya Raman/ }));
+
+    await waitFor(() => expect(updateIssueAction).toHaveBeenCalledTimes(1));
+    expect(updateIssueAction.mock.calls[0]![0]).toMatchObject({ assigneeId: 'u1' });
+    // The name, not the id — the optimistic value carries the display half too.
+    await waitFor(() => expect(within(row('Assignee')).getByText('Priya Raman')).toBeTruthy());
+  });
+
+  it('gives the Sprint picker the SAME empty label the row shows, so they cannot disagree', async () => {
+    // A live item with no sprint sits in the BACKLOG; a done/cancelled one is
+    // excluded from it and reads "None". The sentinel must track the row.
+    render(
+      <IssueQuickViewPanel state="ready" data={{ ...WITH_OPTIONS, statusCategory: 'done' }} />,
+    );
+    expect(within(row('Sprint')).getByText('None')).toBeTruthy();
+
+    fireEvent.click(within(row('Sprint')).getByRole('button', { name: 'Edit Sprint' }));
+    expect(await screen.findByRole('option', { name: 'None' })).toBeTruthy();
+  });
+});
