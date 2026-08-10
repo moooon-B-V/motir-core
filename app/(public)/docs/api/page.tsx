@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
 import { getTranslations } from 'next-intl/server';
 import { buildApiReference, SPEC_PATH, type ApiReference } from '@/lib/apiDocs/reference';
 import { Button } from '@/components/ui/Button';
@@ -20,6 +21,12 @@ import { OperationSection } from '../_components/OperationSection';
 // API has no operations" — a statement that is both false and unfalsifiable from
 // the outside. It says what happened, what still works, and offers the raw
 // document, which is public.
+
+// This page's OWN title and description, so it does not publish the area's
+// default (Bug MOTIR-2526 — every page in the tree used to inherit the API
+// reference's). The pattern lives in `lib/apiDocs/pageMetadata.ts`.
+export const generateMetadata = () =>
+  docsPageMetadata('metaTitleReference', 'metaDescriptionReference');
 
 export default async function ApiReferencePage() {
   const t = await getTranslations('apiDocs');

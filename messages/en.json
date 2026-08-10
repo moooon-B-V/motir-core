@@ -2670,7 +2670,10 @@
         "choosePlaceholder": "Choose a role…",
         "confirm": "Delete role"
       },
-      "toast": { "created": "Role created", "saved": "Role saved" },
+      "toast": {
+        "created": "Role created",
+        "saved": "Role saved"
+      },
       "error": {
         "nameTaken": "A role named “{name}” already exists in this project.",
         "capReached": "A project may define at most {limit} custom roles.",
@@ -4379,7 +4382,7 @@
     "topicEmptyTitle": "No public {topic} projects yet",
     "topicEmptyBody": "No team has published a public project in this topic yet. Explore the full square instead.",
     "backToSquare": "Back to the project square",
-    "footProductApiDocs": "API docs"
+    "footProductDocs": "Documentation"
   },
   "aiUsage": {
     "title": "Usage & cost",
@@ -5925,8 +5928,8 @@
     "connectWhy": "Motir needs one thing to move a repository to you: the GitHub account it belongs to. It is the same account it invites you to your code with — you'll see which one."
   },
   "apiDocs": {
-    "metaTitle": "Motir API reference",
-    "metaDescription": "Every operation in the Motir public REST API, with its scopes, parameters, responses and a copy-pasteable authenticated example.",
+    "metaTitle": "Motir documentation",
+    "metaDescription": "The REST API, the Motir CLI, the MCP server and the agent sandbox — what each one is, who it is for, and where to start.",
     "navLabel": "Documentation",
     "navDocumentation": "Documentation",
     "navReference": "API reference",
@@ -6022,7 +6025,27 @@
     "mcpThScope": "Scope",
     "mcpThGates": "What it gates",
     "mcpWhatNextBody": "all {count} tools, what each does, and the scope that gates it.",
-    "mcpForkApiLink": "Read the API reference"
+    "mcpForkApiLink": "Read the API reference",
+    "indexTitle": "Motir documentation",
+    "indexLede": "Everything Motir publishes for people building on it. Start with the surface that matches what you are doing — each one below stands on its own.",
+    "surfaceReferenceDesc": "The REST API, operation by operation, with scopes and a working example. For a client you ship and cannot afford to break.",
+    "surfaceSandboxDesc": "The published container to run an unattended coding agent in, so it reaches your workspace tree and nothing else on your machine.",
+    "surfaceCliDesc": "Install it, sign in, and hand a work item to your own coding agent from the terminal — without cloning anything.",
+    "surfaceMcpDesc": "One endpoint that plugs an agent you control into the plan: read the ready set, claim work, move it, comment.",
+    "metaTitleReference": "API reference · Motir docs",
+    "metaDescriptionReference": "Every operation in the Motir public REST API, with its scopes, parameters, responses and a copy-pasteable authenticated example.",
+    "metaTitleGuide": "Getting started · API reference · Motir docs",
+    "metaDescriptionGuide": "From an account to a working call against the Motir REST API, in five steps — a token, a first request, and what the errors mean.",
+    "metaTitleStability": "Stability & deprecation · API reference · Motir docs",
+    "metaDescriptionStability": "What Motir's v1 REST API promises not to change, what may change without notice, and how anything is deprecated.",
+    "metaTitleSandbox": "Agent sandbox · Motir docs",
+    "metaDescriptionSandbox": "Set up the published container that runs an unattended coding agent against your workspace tree and nothing else on your machine.",
+    "metaTitleCli": "Motir CLI · Motir docs",
+    "metaDescriptionCli": "Install the Motir CLI, sign in, point it at your project, and hand a work item to your own coding agent — without cloning anything.",
+    "metaTitleMcp": "MCP server · Motir docs",
+    "metaDescriptionMcp": "Point any Model Context Protocol client at Motir's plan with a personal access token, and know whether to use the MCP server or the REST API.",
+    "metaTitleMcpTools": "Tools · MCP server · Motir docs",
+    "metaDescriptionMcpTools": "Every tool the Motir MCP server exposes, what each one does, and the token scope that gates it."
   },
   "auditCoverage": {
     "count": "{count, plural, one {# repository has no code-health audit.} other {# repositories have no code-health audit.}}",

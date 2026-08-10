@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
 import { buildApiReference } from '@/lib/apiDocs/reference';
 import { ADR_PATH, POLICY_ADDITIVE, POLICY_FORBIDDEN, POLICY_SECTIONS } from '@/lib/apiDocs/guide';
 import { CatalogueNav } from '../../_components/CatalogueNav';
@@ -17,6 +18,12 @@ import { DocBlocks } from '../../_components/DocBlocks';
 // The page is deliberately plainer than the reference: it is read once, in
 // order, and then cited. The two lists are the load-bearing content and are the
 // page's only structure.
+
+// This page's OWN title and description, so it does not publish the area's
+// default (Bug MOTIR-2526 — every page in the tree used to inherit the API
+// reference's). The pattern lives in `lib/apiDocs/pageMetadata.ts`.
+export const generateMetadata = () =>
+  docsPageMetadata('metaTitleStability', 'metaDescriptionStability');
 
 export default async function StabilityPage() {
   const t = await getTranslations('apiDocs');

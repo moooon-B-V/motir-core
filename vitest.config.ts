@@ -784,6 +784,15 @@ export default defineConfig({
         'app/**/docs/_components/OperationSection.tsx',
         'app/**/docs/sandbox/page.tsx',
         'lib/apiDocs/sandbox.ts',
+        // Story MOTIR-2315 · Subtask MOTIR-2524 — the `/docs` INDEX and the
+        // shared surface list behind it. The index is the area's front door, so
+        // its branches decide what a first-time reader sees; `surfaces.ts` is
+        // read by BOTH renderers, so a defect there is wrong in two places at
+        // once. `pageMetadata.ts` is what stops a page inheriting another
+        // page's title — the defect MOTIR-2526 fixed, now under the gate.
+        'app/**/docs/page.tsx',
+        'lib/apiDocs/surfaces.ts',
+        'lib/apiDocs/pageMetadata.ts',
         'app/**/settings/account/_components/ApiDocsLinkPanel.tsx',
         'app/api/v1/projects/route.ts',
         'app/api/v1/projects/[projectKey]/route.ts',
@@ -1088,6 +1097,10 @@ export default defineConfig({
           lines: 90,
         },
         'app/**/docs/api/stability/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2315 · Subtask MOTIR-2524 — the index and its shared list.
+        'app/**/docs/page.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiDocs/surfaces.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/apiDocs/pageMetadata.ts': { branches: 90, functions: 90, lines: 90 },
         'app/**/docs/_components/CatalogueNav.tsx': {
           branches: 90,
           functions: 90,

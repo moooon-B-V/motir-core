@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
 import { buildApiReference } from '@/lib/apiDocs/reference';
 import { GUIDE_STEPS } from '@/lib/apiDocs/guide';
 import { CatalogueNav } from '../../_components/CatalogueNav';
@@ -21,6 +22,11 @@ import { DocBlocks } from '../../_components/DocBlocks';
 //
 // It mounts into 11.4.7's shell and reuses its catalogue rail unchanged — this
 // card builds no shell and no navigation.
+
+// This page's OWN title and description, so it does not publish the area's
+// default (Bug MOTIR-2526 — every page in the tree used to inherit the API
+// reference's). The pattern lives in `lib/apiDocs/pageMetadata.ts`.
+export const generateMetadata = () => docsPageMetadata('metaTitleGuide', 'metaDescriptionGuide');
 
 export default async function GettingStartedPage() {
   const t = await getTranslations('apiDocs');

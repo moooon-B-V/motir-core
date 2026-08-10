@@ -35,8 +35,23 @@ describe('the documentation area keeps every address it ever served', () => {
         permanent: true,
       },
       { source: '/docs/stability', destination: '/docs/api/stability', permanent: true },
-      { source: '/docs', destination: '/docs/api', permanent: true },
     ]);
+  });
+
+  it('no longer redirects `/docs`, because `/docs` is a PAGE now', () => {
+    // MOTIR-2523 / Amendment 19 Q5. This is the one rule that was DELETED, and
+    // it is asserted by absence on purpose: a Next redirect resolves BEFORE
+    // routing, so if this rule ever comes back `app/(public)/docs/page.tsx`
+    // stops rendering — silently, with every one of its own tests still green.
+    // The exact-array case above would catch a re-add too; this case says WHY,
+    // to whoever is looking at a red line and deciding what to do about it.
+    // Read through a widened type on purpose: `DOCS_REDIRECTS` is `as const`,
+    // so once the rule is gone its `source` union no longer contains '/docs'
+    // and a direct comparison is a compile error rather than a test. The
+    // widening keeps this a RUNTIME assertion, which is what has to hold if
+    // someone re-adds the rule.
+    const rules: readonly { source: string }[] = DOCS_REDIRECTS;
+    expect(rules.find((rule) => rule.source === '/docs')).toBeUndefined();
   });
 
   it('sends the TWO addresses Amendment 11 moved to their new homes', () => {
