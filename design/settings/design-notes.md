@@ -7,13 +7,13 @@ grows. Built FROM the real design system (`app/globals.css` `--el-*` / shape
 tokens + the shipped `components/ui/*` primitives), so the code subtasks compose
 the same primitives — no Pencil→code gap.
 
-| Surface                   | Asset                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area** | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                     |
-| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                                                                                     |
-| **Appearance pane**       | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                  |
-| **Connect the CLI**       | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
-| **Profile pane**          | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
+| Surface                        | Asset                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Account settings area**      | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                     |
+| **Token permission selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes) and, as amended by **MOTIR-2578**, MOTIR-2579 / -2580 (the permission picker over the MOTIR-2254 catalog — SIX rows, five domains; see that section, which supersedes the 7.7.18 one).                               |
+| **Appearance pane**            | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                  |
+| **Connect the CLI**            | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
+| **Profile pane**               | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
 
 ## Why the whole area (the corner that was cut, then fixed)
 
@@ -259,6 +259,173 @@ expiresField,expiresHelper,submit,cancel}`, `expiry.{d30,d90,d365,never}`,
 No new design-system primitive is invented for this surface. If a future need
 arises that a shipped primitive can't cover, that is a NEW `design/` subtask, not
 a code workaround.
+
+---
+
+# Token PERMISSION selection — `token-scopes.mock.html` (MOTIR-2578)
+
+> **⚠️ THIS SECTION SUPERSEDES the 7.7.18 one below it**, which designed a picker
+> over the six retired `TokenScope` values. Story MOTIR-2572 replaced those with
+> the MOTIR-2254 permission catalog (`docs/decisions/token-permissions.md`), so the
+> vocabulary the picker grants CHANGED. The old section is kept, unedited, as the
+> record of what the shipped component was built to — read it to understand the
+> code you are replacing, never as the target.
+
+**Rendered before drawing** (the design-against-shipped-reality gate): the asset
+was rendered with `scripts/render-token-scopes.mjs` (chromium, light, ×2, 1200px)
+and the measurements below are that render's, not estimates. The composition was
+amended against those pixels. The shipped `CreateTokenModal.tsx` cites this asset
+as its source, and its markup was read alongside — the copy here is now the
+SHIPPED `permissions.*` i18n strings, so the mock and the component resolve the
+same words.
+
+## ⚠️ THE COUNT — six rows, five groups. Measured, and it changes the answer.
+
+**`GRANTABLE_PERMISSIONS` is SIX keys across FIVE domains**, derived from the
+operation maps (`lib/tokens/grant.ts`): a permission is grantable because some
+token-reachable operation asserts it.
+
+| Domain (group label) | Permission key     | Label (shipped)   | Default                      |
+| -------------------- | ------------------ | ----------------- | ---------------------------- |
+| Project              | `project:browse`   | View project      | **on**                       |
+| Work items           | `work_item:edit`   | Edit work items   | **on**                       |
+| Work items           | `work_item:delete` | Delete work items | **off** — the one danger row |
+| Comments             | `comment:add`      | Add comments      | **on**                       |
+| Sprints & backlog    | `sprint:manage`    | Manage sprints    | **on**                       |
+| AI planning          | `ai:plan`          | Run AI planning   | **on**                       |
+
+Six of the catalog's 31 keys. The other 25 govern UI-administration surfaces no
+API caller can reach; offering one would be a switch that gates nothing — the
+lie `lib/permissions/catalog.ts` opens by forbidding.
+
+**MOTIR-2578's brief assumed "twenty-plus rows across sixteen domains" and asked
+which of a scrolling list / collapsing sections / a rail-and-pane / presets should
+replace the two-column grid. At six rows the honest answer is NONE OF THEM.** Six
+is the same row count the six retired scopes had. Adding a collapse to a panel
+that does not need one, or presets over six switches, would be complexity bought
+with nothing. **Rejected, with the reason: not enough rows.**
+
+## THE MEASUREMENT — the number, not an adjective
+
+Modal panel heights, natural (unclipped), from the render script:
+
+| Panel | Shape                                                                                                                                   | Height    |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| 1     | resting, single-org account (Workspace reads `Default`)                                                                                 | **734px** |
+| 1b    | **tallest reachable**: ≥2 orgs + ≥2 workspaces (discloses the Organization Combobox as a third metadata row) + every permission granted | **836px** |
+
+Against the shipped `max-h-[90vh]` ceiling:
+
+| Viewport             | Ceiling | 836px verdict        |
+| -------------------- | ------- | -------------------- |
+| 720px (short window) | 648px   | scrolls              |
+| 800px (13" laptop)   | 720px   | scrolls              |
+| 900px (15" laptop)   | 810px   | **scrolls, by 26px** |
+| 1080px               | 972px   | fits                 |
+
+**Decision: the body SCROLLS at the tallest shape, and that is the shipped
+contract working, not a failure.** MOTIR-2488 already moved the fields into
+`Modal.Body` with the footer PINNED beside it, precisely so a tall form scrolls
+its body while Cancel / Create token stay reachable. The pre-change modal was
+718px resting and already over the 13" ceiling at the two-org shape, so this is
+not a regression the new vocabulary introduces — it is the same behaviour, 16px
+taller, because five domain groups carry one more group label than the old four.
+
+**What the code card must therefore check** (MOTIR-2580): at the ≥2-org /
+≥2-workspace shape, with every permission on, BOTH footer buttons are visible and
+reachable and the scroll is inside `Modal.Body`. That is the shape the
+single-tenant fixture never renders — and the one the clipped-footer bug appeared
+on.
+
+## What CHANGED from the 7.7.18 design, and what did not
+
+**Unchanged** — the wide (~42rem) modal, the two-column grid, `Switch` rows of
+`icon + name + description`, the rose `.scope-danger` block for the irreversible
+key, the list's summary Pill + persistent "Can delete" chip, the chevron
+disclosure, and the binding-scope picker.
+
+**Changed:**
+
+1. **Grouping is the catalog's DOMAINS**, not invented buckets — `Project`,
+   `Work items`, `Comments`, `Sprints & backlog`, `AI planning`, read from
+   `permissions.domain.*`. Column split is 3 rows / 3 rows so neither column
+   drives the height alone.
+2. **Copy is the SHIPPED `permissions.<slug>.label` / `.description`** — the same
+   strings the Roles & permissions screen renders. This asset authors NO copy for
+   the rows, which is the point: one capability, one sentence, everywhere.
+3. **The archive row is GONE.** `work_items:archive` and `work_items:delete` were
+   two scopes and two rows; `archiveWorkItem` / `unarchiveWorkItem` /
+   `deleteWorkItem` all assert `work_item:delete`. Two rows over one key would be
+   two switches that cannot move independently. **One row**, and the caption names
+   both acts — otherwise someone flips it expecting only the recoverable half.
+4. **The default grant therefore no longer includes archiving.** "All but the
+   irreversible one" now withholds archive too. Drawn: the danger row is the only
+   one off in Panel 1.
+5. **AI planning is its own row.** It used to ride inside _edit work items_, which
+   meant a token wired to file issues could also spend the workspace's AI credits.
+6. **No raw `resource:action` key is drawn anywhere.** An earlier revision of this
+   asset put the key under each row so a 403 naming `work_item:edit` could be
+   traced to its switch. **Removed** — MOTIR-2579's acceptance criteria forbid
+   displaying a raw key to a reader, and a design that contradicts a sibling
+   card's AC is a design that will not be built. The label is the surface; the
+   shared presenter is what maps a key to it. (It also cost 63px of height.)
+7. **"Create API token" → "Create token"**, and the pane is **Tokens** at
+   `/settings/account/tokens` (MOTIR-2532's shipped copy).
+
+## The panels
+
+1. **Create token, resting** — single-org shape, default grant applied. 734px.
+   1b. **Dense / tallest** — ≥2 orgs, ≥2 workspaces, every permission on. 836px. The
+   panel the height decision is made against.
+2. **The Work items group, Delete ON** — the danger close-up. Rose
+   `--el-tint-rose` block, `· Danger` tag, trash icon, and the cascade caption
+   that now names archiving too.
+3. **Empty / invalid** — nothing granted; inline `.scope-error` + disabled CTA.
+   The refusal is the SURFACE's: the service accepts an empty grant and mints a
+   do-nothing token, so nothing below the UI would stop you.
+4. **Token list** — the column is now **Permissions**. Summary Pill (Full access /
+   Standard / Read only / Custom) and the "Can delete" chip are **kept, not
+   re-decided**: at six keys a cell could nearly list them, but a cell that grows
+   with the catalog breaks the day the catalog grows, and the four words read
+   correctly over the new set.
+5. **A row expanded** — the granted permissions as chips, by shipped label.
+6. **`/device` approval** — the CLI's FIXED grant, four permissions
+   (`project:browse`, `work_item:edit`, `comment:add`, `ai:plan`). Names only,
+   one-screen fit preserved. **What it CANNOT do is drawn**, because the two
+   withheld keys (delete/archive, sprints) are exactly what someone approving a
+   remote machine needs to know, and an omission is invisible unless stated.
+7. **THE ACCESS PATH** — avatar menu → Settings → the Account rail →
+   **Tokens** → the **Create token** button in the "Your tokens" card header,
+   ringed with `--el-accent-on-surface`. There is no other route to the picker.
+
+## Colour + contrast
+
+Every colour is an `--el-*` token; every radius/spacing a shape token. Fixed in
+this pass, because the AC asks for it and the AST ink guard cannot see CSS:
+
+- `.scope-grp-label`, `.grp-label`, `.settings-eyebrow`, `.ttable thead th` moved
+  `--el-text-faint` → `--el-text-secondary`. Faint measures **2.61** on the white
+  modal and these are all INFORMATIONAL text (a domain heading, a nav section, an
+  area eyebrow, a column heading), not decoration. Faint survives only on
+  `.panel-label` (asset chrome, not product UI), `.nav-row.soon` and
+  `.ttable tr.revoked` (disabled / inactive, which 1.4.3 exempts).
+- `.scope-desc` stays `--el-text-muted` — **4.54 on the white modal panel**, which
+  is where it renders. Inside `.scope-danger` it is already overridden to
+  `--el-text-strong` on the rose tint.
+- `.sw.on .kn` was a raw `#fff`; now `--el-text-inverted`, so the knob flips with
+  the theme.
+
+## GIVES / TAKES
+
+- **GIVES to [MOTIR-2579]** — the group order, the summary vocabulary, the danger
+  treatment, and the rule that no raw key is rendered.
+- **GIVES to [MOTIR-2580]** — the composition, the default grant, and the 836px /
+  ≥2-org footer-reachability check.
+- **GIVES to [MOTIR-2586]** — the access path to walk, and the empty-grant refusal
+  to assert.
+- **TAKES from [MOTIR-2573]** the grantable set and which key is irreversible;
+  **TAKES from [MOTIR-2532]** the "Tokens" label and the `/settings/account/tokens`
+  address.
 
 ---
 
