@@ -14,7 +14,7 @@ import { truncateAuthTables } from '../helpers/db';
 // the READ + mark-state API the bell/drawer (5.7.5) calls. Real Postgres, no DB
 // mocks (CLAUDE.md). They run as the dev/CI superuser via the `db` singleton, so
 // RLS is inert (BYPASSRLS) — the workspace gate the service binds via
-// withWorkspaceContext is exercised under the prodect_app role in the
+// withWorkspaceContext is exercised under the motir_app role in the
 // multi-tenant-rls suite's pattern; what's proven HERE is the application-layer
 // contract: per-recipient scoping, the finding-#44 404 (a row owned by another
 // user / in another workspace is indistinguishable from a missing one), cursor

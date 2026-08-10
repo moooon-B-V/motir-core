@@ -26,7 +26,7 @@ import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser (BYPASSRLS) — RLS is inert under it regardless of FORCE ROW LEVEL
 // SECURITY. Every assertion below runs inside a transaction that
-// `SET LOCAL ROLE prodect_app` (the NOSUPERUSER NOBYPASSRLS role). The asAppRole
+// `SET LOCAL ROLE motir_app` (the NOSUPERUSER NOBYPASSRLS role). The asAppRole
 // helper binds the SAME GUCs the runtime binds (app.workspace_id via
 // withWorkspaceContext for reads; app.system_admin via withSystemContext for the
 // trusted writer) then drops the role so the policies bite. Local copy of the
@@ -115,7 +115,7 @@ async function makeLedgerFixture(): Promise<JobLedgerFixture> {
 
 /**
  * Run `fn` inside a transaction that (a) optionally binds app.workspace_id /
- * app.user_id / app.system_admin and (b) drops to the non-bypass prodect_app
+ * app.user_id / app.system_admin and (b) drops to the non-bypass motir_app
  * role for the duration. The role switch is what makes RLS bite; it reverts at
  * txn end.
  */
@@ -133,13 +133,13 @@ async function asAppRole<T>(
     if (ctx.systemAdmin) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('job_run RLS — read isolation', () => {
-  it('with NO context, prodect_app sees zero job_run rows', async () => {
+  it('with NO context, motir_app sees zero job_run rows', async () => {
     await makeLedgerFixture();
     const rows = await asAppRole({}, (tx) => tx.jobRun.findMany());
     expect(rows).toEqual([]);
@@ -171,7 +171,7 @@ describe('job_run RLS — read isolation', () => {
 });
 
 describe('job_run_dlq RLS — read isolation', () => {
-  it('with NO context, prodect_app sees zero DLQ rows', async () => {
+  it('with NO context, motir_app sees zero DLQ rows', async () => {
     await makeLedgerFixture();
     const rows = await asAppRole({}, (tx) => tx.jobRunDlq.findMany());
     expect(rows).toEqual([]);

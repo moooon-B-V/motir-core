@@ -52,7 +52,7 @@ function readRaw(m: Member, source: ImportSource) {
 }
 
 /**
- * Run `fn` under the `app.user_id` GUC + the non-bypass `prodect_app` role —
+ * Run `fn` under the `app.user_id` GUC + the non-bypass `motir_app` role —
  * the role switch is what makes the RLS policy bite (the test superuser bypasses
  * even FORCE). Mirrors the helper in tests/github/githubIdentityService.test.ts.
  */
@@ -62,7 +62,7 @@ async function asAppRole<T>(
 ): Promise<T> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.user_id', ${userId}, true)`;
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }

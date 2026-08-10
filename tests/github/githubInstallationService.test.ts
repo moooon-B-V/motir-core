@@ -42,7 +42,7 @@ async function makeWorkspace(email: string) {
   return { user, workspace };
 }
 
-/** Run `fn` as the non-bypass `prodect_app` role with both GUCs bound — the role
+/** Run `fn` as the non-bypass `motir_app` role with both GUCs bound — the role
  *  switch is what makes the workspace RLS policy actually bite. */
 async function asAppRole<T>(
   ctx: { userId: string; workspaceId: string },
@@ -51,7 +51,7 @@ async function asAppRole<T>(
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
     await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }

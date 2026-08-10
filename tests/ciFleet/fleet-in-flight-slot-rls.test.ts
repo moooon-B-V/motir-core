@@ -25,7 +25,7 @@ import { truncateAuthTables } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE ROW
 // LEVEL SECURITY. Every assertion therefore runs inside a transaction that
-// `SET LOCAL ROLE prodect_app`. Without the role switch each assertion would
+// `SET LOCAL ROLE motir_app`. Without the role switch each assertion would
 // assert the OPPOSITE of reality.
 
 const EXPIRES_AT = new Date('2026-08-02T18:00:00.000Z');
@@ -64,7 +64,7 @@ async function seed(): Promise<Fixture> {
   };
 }
 
-/** Run `fn` with the given GUCs bound, as the non-bypass `prodect_app` role —
+/** Run `fn` with the given GUCs bound, as the non-bypass `motir_app` role —
  *  the role switch is what makes RLS actually bite. Reverts at txn end. */
 async function asAppRole<T>(
   ctx: { userId?: string; workspaceId?: string; systemAdmin?: boolean },
@@ -80,7 +80,7 @@ async function asAppRole<T>(
     if (ctx.systemAdmin === true) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
@@ -95,7 +95,7 @@ afterAll(async () => {
 });
 
 describe('fleet_in_flight_slot RLS — system context only', () => {
-  it('with NO GUC set, the prodect_app role sees zero slots', async () => {
+  it('with NO GUC set, the motir_app role sees zero slots', async () => {
     await seed();
     expect(await asAppRole({}, (tx) => tx.fleetInFlightSlot.findMany())).toEqual([]);
   });

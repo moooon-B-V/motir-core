@@ -28,20 +28,20 @@ echo "    Postgres is ready."
 echo "==> Applying Prisma migrations (prisma migrate deploy)"
 pnpm prisma migrate deploy
 
-# PRODECT_FINDINGS #5(deploy): the grant_prodect_app_login migration gives the
-# non-bypass `prodect_app` role the LOGIN capability but deliberately commits no
+# PRODECT_FINDINGS #5(deploy): the 20260528175528_grant_prodect_app_login migration gives the
+# non-bypass `motir_app` role the LOGIN capability but deliberately commits no
 # password (a static password in git is a secret-management anti-pattern). Set
 # the LOCAL DEV password here, out of band, so the role can actually connect
 # when we point a DATABASE_URL at it. This is the dev/CI password ONLY —
-# production provisions prodect_app's credentials via its secret store / managed
+# production provisions motir_app's credentials via its secret store / managed
 # Postgres provider, never via this script. Idempotent: ALTER ROLE ... PASSWORD
 # is safe to re-run.
-echo "==> Setting local dev password for the prodect_app RLS role"
+echo "==> Setting local dev password for the motir_app RLS role"
 docker compose exec -T postgres \
   psql -U prodect -d prodect -v ON_ERROR_STOP=1 \
-  -c "ALTER ROLE prodect_app WITH PASSWORD 'prodect_app';" >/dev/null
+  -c "ALTER ROLE motir_app WITH PASSWORD 'motir_app';" >/dev/null
 
 echo "==> Done. Database is up at postgresql://prodect:prodect@localhost:5433/prodect"
-echo "    RLS-enforcing role available at postgresql://prodect_app:prodect_app@localhost:5433/prodect"
+echo "    RLS-enforcing role available at postgresql://motir_app:motir_app@localhost:5433/prodect"
 echo "    (still unused — the active DATABASE_URL connects as the superuser 'prodect';"
 echo "     see PRODECT_FINDINGS #5(deploy) for the runtime cutover.)"

@@ -16,7 +16,7 @@ import { truncateAuthTables } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE ROW
 // LEVEL SECURITY. Every assertion below therefore runs inside a transaction that
-// `SET LOCAL ROLE prodect_app`. WITHOUT the role switch each assertion would
+// `SET LOCAL ROLE motir_app`. WITHOUT the role switch each assertion would
 // assert the OPPOSITE of reality. `asAppRole` is a local copy of the helper in
 // project-repo-rls.test.ts / project-rls.test.ts, for the reason those files give.
 //
@@ -134,7 +134,7 @@ async function makeMeterTenants(): Promise<MeterTenantFixture> {
   };
 }
 
-/** Run `fn` with the given GUCs bound, as the non-bypass `prodect_app` role —
+/** Run `fn` with the given GUCs bound, as the non-bypass `motir_app` role —
  *  the role switch is what makes RLS actually bite. Reverts at txn end. */
 async function asAppRole<T>(
   ctx: { userId?: string; workspaceId?: string; systemAdmin?: boolean },
@@ -150,13 +150,13 @@ async function asAppRole<T>(
     if (ctx.systemAdmin === true) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('ci_workflow_run_usage RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero metered runs', async () => {
+  it('with NO GUC set, the motir_app role sees zero metered runs', async () => {
     await makeMeterTenants();
     expect(await asAppRole({}, (tx) => tx.ciWorkflowRunUsage.findMany())).toEqual([]);
   });
@@ -220,7 +220,7 @@ describe('ci_workflow_run_usage RLS — read isolation', () => {
 });
 
 describe('ci_period_usage RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero rollups', async () => {
+  it('with NO GUC set, the motir_app role sees zero rollups', async () => {
     await makeMeterTenants();
     expect(await asAppRole({}, (tx) => tx.ciPeriodUsage.findMany())).toEqual([]);
   });

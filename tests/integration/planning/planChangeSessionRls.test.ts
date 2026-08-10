@@ -14,7 +14,7 @@ import { truncateAuthTables } from '../../helpers/db';
 //
 // ⚠️ The dev/CI DB connects as the `prodect` SUPERUSER, which has BYPASSRLS —
 // RLS does nothing under it regardless of FORCE ROW LEVEL SECURITY. So every
-// assertion runs inside a transaction that `SET LOCAL ROLE prodect_app` (the
+// assertion runs inside a transaction that `SET LOCAL ROLE motir_app` (the
 // NOSUPERUSER NOBYPASSRLS role the workspace-RLS migration created), exactly as
 // `tests/multi-tenant-rls.test.ts` and `tests/workspace-rls.test.ts` do. Without
 // the role switch each assertion below would assert the OPPOSITE of reality.
@@ -39,7 +39,7 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }

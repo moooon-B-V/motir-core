@@ -21,7 +21,7 @@ import { truncateAuthTables } from './helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE.
 // Every RLS assertion below runs inside a transaction that drops to the
-// non-bypass `prodect_app` role (the asAppRole helper, a local copy per the
+// non-bypass `motir_app` role (the asAppRole helper, a local copy per the
 // convention each RLS suite carries its own); it binds the same app.workspace_id
 // GUC withWorkspaceContext binds, then reverts at txn end. Constraint tests
 // (uniqueness, cascade, defaults) run as the superuser via the `db` singleton —
@@ -96,7 +96,7 @@ async function makeMembershipTenants(): Promise<MembershipTenantFixture> {
 
 /**
  * Run `fn` inside a transaction that (a) optionally binds app.workspace_id and
- * (b) drops to the non-bypass prodect_app role for the duration. The role
+ * (b) drops to the non-bypass motir_app role for the duration. The role
  * switch is what makes RLS bite; it reverts at txn end.
  */
 async function asAppRole<T>(
@@ -107,7 +107,7 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
@@ -201,7 +201,7 @@ describe('project_membership — round-trip + role default', () => {
 });
 
 describe('project_membership — RLS read isolation', () => {
-  it('with NO context, prodect_app sees zero project_membership rows', async () => {
+  it('with NO context, motir_app sees zero project_membership rows', async () => {
     await makeMembershipTenants();
     const rows = await asAppRole({}, (tx) => tx.projectMembership.findMany());
     expect(rows).toEqual([]);

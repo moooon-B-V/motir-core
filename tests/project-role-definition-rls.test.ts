@@ -31,7 +31,7 @@ import { truncateAuthTables } from './helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE.
 // Every RLS assertion below runs inside a transaction that drops to the
-// non-bypass `prodect_app` role (the asAppRole helper, a local copy per the
+// non-bypass `motir_app` role (the asAppRole helper, a local copy per the
 // convention each RLS suite carries its own). Constraint tests run as the
 // superuser via the `db` singleton — they assert DB constraints, which bite
 // regardless of role.
@@ -112,7 +112,7 @@ async function makeRoleTenants(): Promise<RoleTenantFixture> {
 
 /**
  * Run `fn` inside a transaction that (a) optionally binds app.workspace_id and
- * (b) drops to the non-bypass prodect_app role for the duration. The role
+ * (b) drops to the non-bypass motir_app role for the duration. The role
  * switch is what makes RLS bite; it reverts at txn end.
  */
 async function asAppRole<T>(
@@ -123,7 +123,7 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
@@ -198,7 +198,7 @@ describe('project_role_definition — round-trip + constraints', () => {
 });
 
 describe('project_role_definition — RLS isolation', () => {
-  it('with NO workspace context, prodect_app sees zero role definitions', async () => {
+  it('with NO workspace context, motir_app sees zero role definitions', async () => {
     await makeRoleTenants();
     const rows = await asAppRole({}, (tx) => tx.projectRoleDefinition.findMany());
     expect(rows).toEqual([]);

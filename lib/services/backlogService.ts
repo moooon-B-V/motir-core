@@ -39,7 +39,7 @@ import type { RankedIssuePageDto, RankPlacementInput } from '@/lib/dto/backlog';
 //
 // 4-layer (CLAUDE.md): one method = one transaction; every WRITE runs under
 // `withWorkspaceContext` (binds the workspace GUCs so the `work_item` RLS WITH
-// CHECK passes under the non-bypass `prodect_app` role), threading the bound
+// CHECK passes under the non-bypass `motir_app` role), threading the bound
 // `tx` into the repo writes + the 1.4.6 revision; repositories stay single-op
 // leaves; methods return DTOs, never raw Prisma rows.
 //

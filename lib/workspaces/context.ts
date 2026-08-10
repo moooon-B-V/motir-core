@@ -76,7 +76,7 @@ export async function withWorkspaceContext<T>(
  *   * the background-jobs runtime (jobRunsService, run by defineJob) — it
  *     writes ledger rows OUTSIDE any HTTP request, so it has no active
  *     workspace context; the system-admin branch is what lets its INSERT/UPDATE
- *     pass WITH CHECK under the non-bypass prodect_app role.
+ *     pass WITH CHECK under the non-bypass motir_app role.
  *   * operator tooling that must see SYSTEM rows (workspace_id IS NULL) or span
  *     workspaces (the 1.6.5 dashboard's system tab).
  *

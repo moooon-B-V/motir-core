@@ -629,7 +629,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     // role's set across the tenant boundary.
     const leaked = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
-      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
     });
     expect(leaked).toEqual([]);
@@ -638,7 +638,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     // is the policy biting, not a missing row.
     const visible = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${s.workspaceId}, true)`;
-      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
     });
     expect(visible.map((r) => r.id)).toEqual([roleId]);
@@ -823,7 +823,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     const role = await seedRole(mine, 'Contractor', ['project:browse']);
     const leaked = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
-      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return tx.projectRoleDefinition.findMany({ where: { id: role.id } });
     });
     expect(leaked).toEqual([]);

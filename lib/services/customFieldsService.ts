@@ -48,7 +48,7 @@ import type {
 //
 // 4-layer (CLAUDE.md): this service owns the transactions (one method = one
 // transaction, via withWorkspaceContext so the custom-field RLS policies see
-// the workspace GUC under prodect_app), the validation, the caps, the
+// the workspace GUC under motir_app), the validation, the caps, the
 // admin gate, and the DTO mapping; routes are thin HTTP transports; the
 // single Prisma ops live in the three 5.3.1 repositories.
 //

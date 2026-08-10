@@ -16,7 +16,7 @@ import { truncateAuthTables } from './helpers/db';
 //      Postgres role can't bypass RLS.
 //
 // (2) needs the role-switch dance: the dev container's `prodect` role is a
-// superuser and bypasses RLS even under FORCE. We `SET LOCAL ROLE prodect_app`
+// superuser and bypasses RLS even under FORCE. We `SET LOCAL ROLE motir_app`
 // (the non-bypass role from add_workspace_rls) inside a transaction; the role
 // reverts at txn end. The org tier is a TENANT-ROOT pair (organization /
 // organization_membership), so its policies admit "the active-org GUC OR a row
@@ -70,7 +70,7 @@ async function makeFixture(): Promise<OrgRlsFixture> {
 
 /**
  * Run `fn` inside a transaction that (a) optionally pins the org + user GUCs and
- * (b) drops to the non-bypass `prodect_app` role for the duration. The
+ * (b) drops to the non-bypass `motir_app` role for the duration. The
  * role-switch is what exercises RLS — without it the superuser default bypasses
  * the policies even under FORCE ROW LEVEL SECURITY. Mirrors workspace-rls's
  * asAppRole, but binds the org-tier GUCs.
@@ -86,13 +86,13 @@ async function asAppRole<T>(
     if (ctx.organizationId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.organization_id', ${ctx.organizationId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('organization RLS — visibility', () => {
-  it('with no GUC set, the prodect_app role sees zero organization rows', async () => {
+  it('with no GUC set, the motir_app role sees zero organization rows', async () => {
     await makeFixture();
     const rows = await asAppRole({}, (tx) => tx.organization.findMany());
     expect(rows).toEqual([]);

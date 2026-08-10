@@ -20,12 +20,12 @@ import { truncateAuthTables } from './helpers/db';
 //   * PRODECT_FINDINGS #19: the six structural-integrity trigger functions
 //     (kind/depth/cycle on work_item + cycle/self/workspace on
 //     work_item_link) still enforce correctly when their internal SELECTs run
-//     under FORCE RLS as the non-bypass prodect_app role.
+//     under FORCE RLS as the non-bypass motir_app role.
 //
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE
 // ROW LEVEL SECURITY. Every RLS assertion below therefore runs inside a
-// transaction that `SET LOCAL ROLE prodect_app` (the NOSUPERUSER NOBYPASSRLS
+// transaction that `SET LOCAL ROLE motir_app` (the NOSUPERUSER NOBYPASSRLS
 // role installed by the add_workspace_rls migration). Without the role switch
 // each assertion would assert the OPPOSITE of reality. The role reverts at
 // txn end. The asAppRole helper is intentionally a local copy of the one in
@@ -34,7 +34,7 @@ import { truncateAuthTables } from './helpers/db';
 //
 // asAppRole binds the SAME three GUCs that withWorkspaceContext
 // (lib/workspaces/context.ts) binds — app.user_id, app.workspace_id, and the
-// new app.project_id — then drops to prodect_app so the policies bite. It is
+// new app.project_id — then drops to motir_app so the policies bite. It is
 // "withWorkspaceContext under the non-bypass role". A dedicated test at the
 // bottom exercises withWorkspaceContext directly to prove it binds
 // app.project_id.
@@ -227,7 +227,7 @@ async function makeWorkItemTenants(): Promise<WorkItemTenantFixture> {
 /**
  * Run `fn` inside a transaction that (a) optionally binds the user +
  * workspace + project GUCs the RLS policies read and (b) drops to the
- * non-bypass `prodect_app` role for the duration of the transaction. The role
+ * non-bypass `motir_app` role for the duration of the transaction. The role
  * switch is what makes RLS actually bite (the default superuser bypasses it);
  * the role reverts when the transaction ends.
  *
@@ -249,13 +249,13 @@ async function asAppRole<T>(
     if (ctx.projectId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('work_item RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero work_item rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero work_item rows', async () => {
     await makeWorkItemTenants();
     const rows = await asAppRole({}, (tx) => tx.workItem.findMany());
     expect(rows).toEqual([]);
@@ -323,7 +323,7 @@ describe('work_item RLS — project narrowing (restrictive policy)', () => {
 });
 
 describe('work_item_link RLS — workspace scope, no project narrowing', () => {
-  it('with NO GUC set, the prodect_app role sees zero work_item_link rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero work_item_link rows', async () => {
     await makeWorkItemTenants();
     const rows = await asAppRole({}, (tx) => tx.workItemLink.findMany());
     expect(rows).toEqual([]);
@@ -435,12 +435,12 @@ describe('work_item_link RLS — write isolation (WITH CHECK)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// PRODECT_FINDINGS #19 — trigger functions under FORCE RLS as prodect_app
+// PRODECT_FINDINGS #19 — trigger functions under FORCE RLS as motir_app
 // ---------------------------------------------------------------------------
 // The six structural-integrity trigger functions each run internal SELECTs
 // against work_item / work_item_link. Under FORCE RLS as the non-bypass role
 // those SELECTs are filtered by the active GUCs. These tests perform
-// trigger-validated writes INSIDE the workspace context as prodect_app and
+// trigger-validated writes INSIDE the workspace context as motir_app and
 // confirm the triggers still fire when they should (and pass when they
 // should). Within a single workspace a row and its ancestors / link endpoints
 // share one workspaceId, so the active app.workspace_id GUC matches every row
@@ -508,7 +508,7 @@ describe('PRODECT_FINDINGS #19 — work_item triggers fire under RLS', () => {
 describe('PRODECT_FINDINGS #19 — work_item_link triggers fire under RLS', () => {
   it('cycle prevention still rejects an is_blocked_by cycle under RLS (existing link visible to the CTE)', async () => {
     const fx = await makeWorkItemTenants();
-    // Seed A is_blocked_by B (superuser; valid). Then under RLS as prodect_app
+    // Seed A is_blocked_by B (superuser; valid). Then under RLS as motir_app
     // attempt B is_blocked_by A — a 2-cycle. The cycle trigger's recursive CTE
     // must SELECT the seed link row; if RLS hid it the cycle would go
     // undetected and WRONGLY pass. We assert it rejects.

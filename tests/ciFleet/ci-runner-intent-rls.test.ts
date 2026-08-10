@@ -17,7 +17,7 @@ import { truncateAuthTables } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE ROW
 // LEVEL SECURITY. Every assertion below therefore runs inside a transaction that
-// `SET LOCAL ROLE prodect_app`. WITHOUT the role switch each assertion would
+// `SET LOCAL ROLE motir_app`. WITHOUT the role switch each assertion would
 // assert the OPPOSITE of reality. `asAppRole` is a local copy of the helper in
 // ci-minutes-meter-rls.test.ts, for the reason that file gives.
 
@@ -91,7 +91,7 @@ async function makeFleetTenants(): Promise<TenantFixture> {
   };
 }
 
-/** Run `fn` with the given GUCs bound, as the non-bypass `prodect_app` role —
+/** Run `fn` with the given GUCs bound, as the non-bypass `motir_app` role —
  *  the role switch is what makes RLS actually bite. Reverts at txn end. */
 async function asAppRole<T>(
   ctx: { userId?: string; workspaceId?: string; systemAdmin?: boolean },
@@ -107,13 +107,13 @@ async function asAppRole<T>(
     if (ctx.systemAdmin === true) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('ci_runner_provisioning_intent RLS', () => {
-  it('with NO GUC set, the prodect_app role sees zero intents', async () => {
+  it('with NO GUC set, the motir_app role sees zero intents', async () => {
     await makeFleetTenants();
     expect(await asAppRole({}, (tx) => tx.ciRunnerProvisioningIntent.findMany())).toEqual([]);
   });

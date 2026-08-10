@@ -147,17 +147,17 @@ export const story_1_3: SeedStory = {
         'any future endpoint that forgets to. The Story-level "structurally impossible" claim requires the ' +
         "DB-layer gate, validated by 1.3.6's direct-DB test.\n\n" +
         "**What you'll do:** Add a migration (`add_project_rls`) enabling RLS + " +
-        'the workspace-match policy on `project`, granting the `prodect_app` role ' +
+        'the workspace-match policy on `project`, granting the `motir_app` role ' +
         '(from 1.2.3) the usual CRUD. Add `projectsService.getActiveProject(userId, workspaceId)` ' +
         'returning a DTO or null, reading via `withWorkspaceContext`. Wire it into ' +
         '`lib/workspaces/index.ts` or a sibling `lib/projects/index.ts` export so ' +
         'server components can read it the same way they read the workspace context. Note finding #5 ' +
         '(dev/CI connects as a BYPASSRLS superuser) — the RLS test in 1.3.6 must `SET LOCAL ROLE ' +
-        'prodect_app` to make the policy bite; do NOT copy the direct-Prisma pattern from ' +
+        'motir_app` to make the policy bite; do NOT copy the direct-Prisma pattern from ' +
         '`lib/workspaces/middleware.ts` (finding #5/#7).\n\n' +
         '## Acceptance criteria\n\n' +
         '- Migration `add_project_rls` enables RLS on `project` and creates a policy matching' +
-        " `workspace_id` against `current_setting('app.workspace_id', true)`; grants `prodect_app` CRUD.\n" +
+        " `workspace_id` against `current_setting('app.workspace_id', true)`; grants `motir_app` CRUD.\n" +
         "- `projectsService.getActiveProject(userId, workspaceId)` resolves the member's" +
         " `activeProjectId`, falling back to the workspace's first project (createdAt asc) or null; runs" +
         ' inside `withWorkspaceContext`; returns a DTO.\n' +
@@ -169,7 +169,7 @@ export const story_1_3: SeedStory = {
         '- `prisma/migrations/…add_workspace_rls` — the exact RLS migration pattern to mirror\n' +
         '- `lib/workspaces/context.ts` (withWorkspaceContext) + `lib/workspaces/index.ts` (getWorkspaceContext)' +
         ' — the resolver shape to analogize\n' +
-        '- `tests/workspace-rls.test.ts` — the `SET LOCAL ROLE prodect_app` test harness\n' +
+        '- `tests/workspace-rls.test.ts` — the `SET LOCAL ROLE motir_app` test harness\n' +
         '- `PRODECT_FINDINGS.md` #5/#7 — RLS-inert-under-superuser + the middleware direct-Prisma' +
         ' anti-pattern to NOT copy',
     },
@@ -305,13 +305,13 @@ export const story_1_3: SeedStory = {
         "only that workspace's projects, and any project-scoped Server Action / endpoint operating on a " +
         "foreign project is refused (cross-tenant returns 404, not 403, per the Story AC and 1.2.7's " +
         'anti-enumeration rule). **(2) Direct-DB** (Vitest, `SET LOCAL ROLE ' +
-        'prodect_app`): a transaction without the `app.workspace_id` GUC sees zero ' +
+        'motir_app`): a transaction without the `app.workspace_id` GUC sees zero ' +
         "`project` rows; with workspace A's GUC sees only A's projects; cross-workspace UPDATE " +
         'affects zero rows; INSERT for a non-matching workspace is denied.\n\n' +
         "**Reuse, don't reinvent:** the E2E helpers (`db-reset`, " +
         '`email-capture`), the `signUp` helper, and the rate-limit env-gate ' +
         '(`E2E_DISABLE_RATE_LIMIT`, already on main per finding #9) from 1.2.6/1.2.7. The RLS ' +
-        'test reuses the `SET LOCAL ROLE prodect_app` harness from ' +
+        'test reuses the `SET LOCAL ROLE motir_app` harness from ' +
         '`tests/multi-tenant-rls.test.ts`.\n\n' +
         '## Acceptance criteria\n\n' +
         '- `tests/e2e/project-isolation.spec.ts` (`@smoke`): the project switcher shows only the active' +
@@ -319,7 +319,7 @@ export const story_1_3: SeedStory = {
         ' Passes locally + CI, no flakes (verify with `--repeat-each`).\n' +
         "- `tests/project-rls.test.ts`: no-GUC → zero project rows; workspace-A GUC → only A's" +
         ' projects; cross-workspace UPDATE → 0 rows; cross-workspace INSERT → RLS denial (42501) —' +
-        ' all under `prodect_app`.\n' +
+        ' all under `motir_app`.\n' +
         '- Cascade re-verified: deleting a workspace removes its projects (and their future work items' +
         ' by extension).\n' +
         '- All quality gates green; prior suites stay green.\n\n' +

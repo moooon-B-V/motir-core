@@ -111,7 +111,7 @@ export const ciRunnerProvisioningService = {
     //   * `project_repository` / `workspace` — policy gates PURELY on
     //     `app.workspace_id` with NO system escape, so `withSystemContext` would
     //     read NOTHING here in production (where the app connects as the
-    //     non-BYPASSRLS `prodect_app` role) and every job would resolve to
+    //     non-BYPASSRLS `motir_app` role) and every job would resolve to
     //     "unattributed". They are read under `withWorkspaceServiceContext`,
     //     bound to the REPO's workspace.
     //

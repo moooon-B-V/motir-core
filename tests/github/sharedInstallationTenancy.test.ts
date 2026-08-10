@@ -415,7 +415,7 @@ describe('inbound deliveries route by REPO, not by installation', () => {
     // The PR row hangs off B's repo — the only one it could, since the repo is
     // what the delivery resolved through. (Its INVISIBILITY to tenant A is proved
     // in `github-repo-rls.test.ts`, which drops to the non-BYPASSRLS
-    // `prodect_app` role; asserting it here would assert nothing, because these
+    // `motir_app` role; asserting it here would assert nothing, because these
     // suites connect as the `prodect` superuser.)
     const prRows = await db.githubPullRequest.findMany({});
     expect(prRows).toHaveLength(1);

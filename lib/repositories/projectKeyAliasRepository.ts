@@ -19,7 +19,7 @@ export const projectKeyAliasRepository = {
    * live identifiers and aliases against one key space. Takes `tx`: it is the
    * guarding read for the rename write (and the create-path reservation check),
    * so it must run inside the enclosing transaction (and, under the non-bypass
-   * prodect_app role, see the RLS workspace GUC).
+   * motir_app role, see the RLS workspace GUC).
    */
   async findByWorkspaceAndIdentifier(
     workspaceId: string,

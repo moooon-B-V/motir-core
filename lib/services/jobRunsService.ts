@@ -17,7 +17,7 @@ import type { JobRunDTO, JobRunFailure } from '@/lib/dto/jobs';
 // `withSystemContext`, which binds `app.system_admin = 'true'`. The job runtime
 // runs OUTSIDE any HTTP request, so it has no active workspace context; the
 // job_run / job_run_dlq RLS policies' system-admin branch is what lets these
-// INSERT/UPDATEs land under the non-bypass prodect_app role in production (in
+// INSERT/UPDATEs land under the non-bypass motir_app role in production (in
 // dev/CI the superuser bypasses RLS regardless, so this is a no-op there). The
 // READ path — the 1.6.5 dashboard — uses withWorkspaceContext instead, so a
 // tenant sees only its own workspace's rows.

@@ -51,7 +51,7 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 //   * RLS-aware writes — every project-scoped write (create/rename/archive/
 //     setActiveProject/list) now runs inside withWorkspaceContext so the
 //     project RLS policy added in 20260529202445_add_project_rls permits
-//     the operation under the non-bypass prodect_app role. The membership
+//     the operation under the non-bypass motir_app role. The membership
 //     assertion stays as the application-layer gate (defense in depth: the
 //     assertion gives a typed NotAMemberError, the RLS policy is the
 //     structural backstop). Under the dev/CI superuser role (BYPASSRLS) the
@@ -310,7 +310,7 @@ export const projectsService = {
     const trimmed = input.name.trim();
     // The cross-workspace guard (assertProjectInWorkspace) and the UPDATE
     // both run inside withWorkspaceContext so (a) the project RLS policy
-    // exposes the row to the read under prodect_app, and (b) the UPDATE's
+    // exposes the row to the read under motir_app, and (b) the UPDATE's
     // WITH CHECK predicate is satisfied by the same workspace GUC.
     const project = await withWorkspaceContext(
       { userId: input.actorUserId, workspaceId: input.workspaceId },
@@ -570,7 +570,7 @@ export const projectsService = {
    * unique constraint.
    *
    * RLS-aware: the read runs inside `withWorkspaceContext` so the project RLS
-   * policy exposes the row under the non-bypass prodect_app role (the wrapper
+   * policy exposes the row under the non-bypass motir_app role (the wrapper
    * binds the workspace GUC the policy keys on); under the dev/CI BYPASSRLS
    * role the wrapper is a behavioural no-op.
    */
@@ -614,7 +614,7 @@ export const projectsService = {
   /**
    * In-transaction variant of assertProjectInWorkspace. Production-correct:
    * the read happens through the supplied `tx`, so under the non-bypass
-   * prodect_app role the project RLS policy gates the row using the same
+   * motir_app role the project RLS policy gates the row using the same
    * workspace GUC bound by the enclosing withWorkspaceContext. (The
    * non-tx variant above queries via `db` and would return NULL on an
    * RLS-enabled connection without the GUC — only the BYPASSRLS dev role
@@ -659,7 +659,7 @@ export const projectsService = {
    *
    * Reads + the recovery write run inside withWorkspaceContext so the project
    * RLS policy exposes rows (and the membership UPDATE's WITH CHECK passes)
-   * under the non-bypass prodect_app role; under the dev BYPASSRLS role the
+   * under the non-bypass motir_app role; under the dev BYPASSRLS role the
    * wrapper is a behavioral no-op. Threading the membership read through the
    * same transaction keeps the resolver atomic: the pointer and the project
    * it names are read in the same snapshot, so a concurrent setActiveProject

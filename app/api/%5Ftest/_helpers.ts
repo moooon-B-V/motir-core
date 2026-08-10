@@ -43,7 +43,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 // an explicit `workspaceId` check (workItemsService.getWorkItem / getLink, or
 // projectsService.assertProjectInWorkspace) that returns 404 on a tenant miss.
 // RLS remains the structural backstop, proven directly in
-// tests/work-item-rls.test.ts under the non-bypass prodect_app role.
+// tests/work-item-rls.test.ts under the non-bypass motir_app role.
 
 /**
  * The NODE_ENV gate. Returns a 404 response when running a production build,

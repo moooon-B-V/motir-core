@@ -19,7 +19,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 // diff shape; that no-op writes emit nothing; that the create/revision pair
 // rolls back together on failure; that listByWorkItem orders newest-first; and
 // that the work_item_revision RLS policy isolates revisions by the parent work
-// item's workspace (mirroring tests/work-item-rls.test.ts's prodect_app
+// item's workspace (mirroring tests/work-item-rls.test.ts's motir_app
 // pattern, since the revision row has no workspaceId of its own).
 
 async function truncateAll(): Promise<void> {
@@ -475,11 +475,11 @@ describe('listByWorkItem — ordering', () => {
   });
 });
 
-// ── RLS isolation (prodect_app, mirrors tests/work-item-rls.test.ts) ─────────
+// ── RLS isolation (motir_app, mirrors tests/work-item-rls.test.ts) ─────────
 
 /**
  * Run `fn` inside a transaction that binds the user/workspace/project GUCs the
- * RLS policies read and drops to the non-bypass `prodect_app` role for the
+ * RLS policies read and drops to the non-bypass `motir_app` role for the
  * duration (the role switch is what makes RLS bite — the dev/CI superuser has
  * BYPASSRLS). Local copy of the helper in tests/work-item-rls.test.ts; the RLS
  * suites each carry their own copy.
@@ -498,7 +498,7 @@ async function asAppRole<T>(
     if (ctx.projectId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
@@ -565,7 +565,7 @@ describe('work_item_revision RLS — read isolation', () => {
     expect(byId).toEqual([]);
   });
 
-  it('with NO GUC set, prodect_app sees zero revisions', async () => {
+  it('with NO GUC set, motir_app sees zero revisions', async () => {
     await makeRevisionTenants();
     const rows = await asAppRole({}, (tx) => tx.workItemRevision.findMany());
     expect(rows).toEqual([]);

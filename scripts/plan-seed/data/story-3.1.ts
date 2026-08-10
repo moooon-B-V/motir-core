@@ -68,7 +68,7 @@ export const story_3_1: SeedStory = {
     '- **Scale check (finding #57):** `pnpm db:seed:large` (Story 2.5.16), open a column with hundreds of cards → the projection returns a bounded first page + a total count + a cursor; `GET …/board/columns/[id]/cards?cursor=…` returns the next page. The board never loads every row.\n' +
     "- **Move = transition check:** `POST …/board/move` a card from To Do → In Progress → it returns the moved card with the new status, and the issue's `status` is updated via the workflow path. Attempt an illegal cross-column move under `restricted` policy (e.g. To Do → Done if no such transition) → a typed `IllegalBoardMoveError` (HTTP 409), issue status unchanged — the snapback contract 3.2 relies on.\n" +
     '- **In-column reorder check:** move a card within the same column (no status change) → only `work_item.position` changes, no transition is attempted, column membership is unchanged.\n' +
-    "- **RLS proof:** open a psql session as `prodect_app`, `SET app.workspace_id = '<workspace-A>'`, query `board` / `board_column` / `board_column_status` — see only workspace A's rows.",
+    "- **RLS proof:** open a psql session as `motir_app`, `SET app.workspace_id = '<workspace-A>'`, query `board` / `board_column` / `board_column_status` — see only workspace A's rows.",
   items: [
     {
       id: '3.1.1',
@@ -114,7 +114,7 @@ export const story_3_1: SeedStory = {
         "hatch `OR current_setting('app.system_admin', true) = 'true'` (finding #33), mirroring " +
         '`workflow_status` exactly.\n\n' +
         "**What this does NOT do:** seed any rows (the default board is 3.1.2's job — application " +
-        'code under the `prodect_app` role with the workspace GUC set, never a SQL `INSERT` in the ' +
+        'code under the `motir_app` role with the workspace GUC set, never a SQL `INSERT` in the ' +
         'migration); add any read/write service or repository (3.1.3+); or change `work_item` ' +
         '(card placement is derived from its existing `status` + `position`, no new column).\n\n' +
         '## Acceptance criteria\n\n' +
@@ -123,7 +123,7 @@ export const story_3_1: SeedStory = {
         '- `@@unique([boardId, statusId])` on `board_column_status` enforces ≤1 column per status per board; a second mapping of the same status to a different column on the same board is rejected by a constraint violation.\n' +
         '- `board.projectId` is indexed but NOT unique (multiple boards per project is legal at the schema level).\n' +
         '- `board_column.position` is `Decimal(20,10)` (finding #18); `board_column.wipLimit` is nullable `Int`.\n' +
-        '- An RLS-proof test (mirroring `tests/jobs/rls.test.ts` / the 2.2.1 workflow RLS test) under `SET LOCAL ROLE prodect_app`: workspace A sees only its own board rows; cross-workspace SELECT returns 0; an INSERT carrying a foreign `workspaceId` is rejected.\n' +
+        '- An RLS-proof test (mirroring `tests/jobs/rls.test.ts` / the 2.2.1 workflow RLS test) under `SET LOCAL ROLE motir_app`: workspace A sees only its own board rows; cross-workspace SELECT returns 0; an INSERT carrying a foreign `workspaceId` is rejected.\n' +
         '- No SQL `INSERT` for default rows in the migration (seeding is application-layer, 3.1.2).\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — Story 1.3 `project`, Story 1.4 `work_item`, Story 2.2 `workflow_status` / `workflow_transition` / `StatusCategory`\n' +
@@ -172,7 +172,7 @@ export const story_3_1: SeedStory = {
         '## Acceptance criteria\n\n' +
         '- `lib/boards/defaultBoard.ts` exports a pure `buildDefaultBoard(statuses)` returning the board + ordered columns + column→status mappings; unit-tested in isolation (snapshot of the six-column default).\n' +
         '- `projectsService.createProject` seeds the default board inside its existing transaction, after the workflow seed; a newly created project has exactly one Kanban board with one column per status, in workflow order, each mapped to its status.\n' +
-        '- The seed is workspace-scoped (runs under the `prodect_app` role with the workspace GUC) — no raw SQL inserts, all through the 3.1.3 repositories.\n' +
+        '- The seed is workspace-scoped (runs under the `motir_app` role with the workspace GUC) — no raw SQL inserts, all through the 3.1.3 repositories.\n' +
         '- An idempotent backfill creates the default board for pre-existing board-less projects and is safe to re-run (no duplicate boards).\n' +
         '- A vitest integration test (real Postgres) asserts: create project → board + 6 columns + 6 mappings exist with the right names/order; re-running the backfill is a no-op.\n\n' +
         '## Context refs\n\n' +

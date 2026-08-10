@@ -22,7 +22,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 //   * WORKSPACE — every method runs inside `withWorkspaceContext`, which binds
 //     the `app.workspace_id` GUC the `notification` RLS policy reads (5.7.2's
 //     deliberate design: "workspace = RLS, recipient = app filter"). Under the
-//     production non-bypass `prodect_app` role the policy narrows reads to the
+//     production non-bypass `motir_app` role the policy narrows reads to the
 //     active workspace; the bell is a per-workspace surface (Jira's per-site /
 //     Linear's per-workspace inbox).
 //   * RECIPIENT — every read/mutate filters/gates on `recipientUserId ===

@@ -45,7 +45,7 @@ export const planRepository = {
    *
    * Newest first, so the ONE row returned is the plan a caller would show. Takes
    * an optional `tx` because both consumers read it inside a workspace context
-   * (correct under the non-bypass `prodect_app` role, where the plan policy keys
+   * (correct under the non-bypass `motir_app` role, where the plan policy keys
    * on the per-transaction workspace GUC).
    */
   async findUndecidedByProject(

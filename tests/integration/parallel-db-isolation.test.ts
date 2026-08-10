@@ -24,7 +24,7 @@ describe('per-worker database isolation', () => {
   it('preserves the RLS security surface carried by the TEMPLATE clone', async () => {
     // The non-bypass app role is cluster-level, so a cloned DB still sees it.
     const roles = await db.$queryRawUnsafe<{ rolname: string }[]>(
-      "SELECT rolname FROM pg_roles WHERE rolname = 'prodect_app'",
+      "SELECT rolname FROM pg_roles WHERE rolname = 'motir_app'",
     );
     expect(roles).toHaveLength(1);
 

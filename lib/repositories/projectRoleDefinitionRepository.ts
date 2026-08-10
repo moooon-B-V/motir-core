@@ -22,7 +22,7 @@ import { db } from '@/lib/db';
 // policy keyed on the per-transaction `app.workspace_id` GUC that
 // withWorkspaceContext binds. So every read here takes an optional `tx` for the
 // same reason projectMembershipRepository's do — outside a workspace-context
-// transaction the non-bypass `prodect_app` role sees zero rows. Writes require
+// transaction the non-bypass `motir_app` role sees zero rows. Writes require
 // `tx` per the 4-layer rule.
 
 export const projectRoleDefinitionRepository = {

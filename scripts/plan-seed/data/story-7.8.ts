@@ -148,7 +148,7 @@ export const story_7_8: SeedStory = {
         'so the list can show `motir_pat_AbC1…`), `expiresAt` (nullable timestamptz), ' +
         '`lastUsedAt` (nullable), `revokedAt` (nullable — soft revoke, the row stays for the ' +
         'audit trail), `createdAt`. Index on `userId`. RLS policies matching the existing ' +
-        'per-table pattern (the `prodect_app` non-bypass role).\n\n' +
+        'per-table pattern (the `motir_app` non-bypass role).\n\n' +
         '**Token format.** `motir_pat_` + 32 bytes of `crypto.randomBytes` base62. The fixed ' +
         'prefix makes tokens greppable in leaked-secret scanners (the GitHub `ghp_` rationale).\n\n' +
         '**Service (`lib/services/apiTokensService.ts`) + repository ' +

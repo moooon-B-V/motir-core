@@ -24,7 +24,7 @@
  *     several workspaces) is REFUSED, not guessed at.
  *   - No raw Prisma write and no raw SQL: the write goes through the repository
  *     layer inside `withWorkspaceContext`, so the workspace GUC is bound and the
- *     write passes under production's non-bypass `prodect_app` role.
+ *     write passes under production's non-bypass `motir_app` role.
  *
  * ⚠️ TWO CONSEQUENCES THIS ACCEPTS KNOWINGLY (Yue, MOTIR-1799)
  *

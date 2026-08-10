@@ -38,13 +38,13 @@ export type ProjectMembershipWithRoleDefinition = ProjectMembership & {
 // not Project. Writes require `tx`; reads that guard a write inside a
 // transaction also take `tx` so the project_membership RLS policy (which keys
 // off the per-transaction `app.workspace_id` GUC bound by withWorkspaceContext)
-// admits the rows under the non-bypass prodect_app role.
+// admits the rows under the non-bypass motir_app role.
 
 export const projectMembershipRepository = {
   /**
    * The user's membership in a specific project, or null. Optionally takes
    * `tx` when the caller is inside a withWorkspaceContext transaction — required
-   * under the non-bypass prodect_app role so the RLS policy's workspace GUC is
+   * under the non-bypass motir_app role so the RLS policy's workspace GUC is
    * bound (outside it the policy hides every row). Used by the project-admin
    * gate and the role/remove guards.
    */

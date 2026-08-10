@@ -49,7 +49,7 @@ export type StampOnboardingRanOutcome =
  *
  * Every write goes through `projectRepository.markOnboardingRan` inside
  * `withWorkspaceContext` — no raw Prisma write, no raw SQL, and the workspace
- * GUC is bound so the write passes under the non-bypass `prodect_app` role in
+ * GUC is bound so the write passes under the non-bypass `motir_app` role in
  * production exactly as it does under the dev/CI BYPASSRLS role.
  *
  * IDEMPOTENT: `markOnboardingRan` is a null-guarded `updateMany`, so it is

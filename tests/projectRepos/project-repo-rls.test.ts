@@ -14,12 +14,12 @@ import { truncateAuthTables } from '../helpers/db';
 // Mirrors tests/project-rls.test.ts for the new workspace-scoped table the card
 // ships. Two independent tenants, each with a workspace + project + one repo-set
 // row, must never see or mutate the other's rows once we drop to the non-bypass
-// `prodect_app` role.
+// `motir_app` role.
 //
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE ROW
 // LEVEL SECURITY. Every assertion below therefore runs inside a transaction that
-// `SET LOCAL ROLE prodect_app`. WITHOUT the role switch each assertion would
+// `SET LOCAL ROLE motir_app`. WITHOUT the role switch each assertion would
 // assert the OPPOSITE of reality. The role reverts at txn end. `asAppRole` is
 // intentionally a local copy of the helper in project-rls.test.ts /
 // multi-tenant-rls.test.ts — see those files for why it is not hoisted yet.
@@ -54,7 +54,7 @@ interface RepoSetTenantFixture {
 /**
  * Two independent tenants, each owning a workspace with a project that has ONE
  * repo-set row. Setup runs as the superuser (BYPASSRLS) — that is fine; the
- * assertions are what run as `prodect_app` and what RLS bites on.
+ * assertions are what run as `motir_app` and what RLS bites on.
  */
 async function makeRepoSetTenants(): Promise<RepoSetTenantFixture> {
   const userA = await usersService.createUser({
@@ -122,7 +122,7 @@ async function makeRepoSetTenants(): Promise<RepoSetTenantFixture> {
 
 /**
  * Run `fn` in a transaction that (a) optionally pins the user + workspace GUCs the
- * RLS policies read and (b) drops to the non-bypass `prodect_app` role for the
+ * RLS policies read and (b) drops to the non-bypass `motir_app` role for the
  * duration. The role switch is what makes RLS actually bite; it reverts at txn end.
  */
 async function asAppRole<T>(
@@ -136,13 +136,13 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('project_repository RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero repo-set rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero repo-set rows', async () => {
     await makeRepoSetTenants();
     expect(await asAppRole({}, (tx) => tx.projectRepo.findMany())).toEqual([]);
   });

@@ -14,7 +14,7 @@
 //            (lib/workspaces/context.ts), so workspaceId is A's
 //          - projectsService.{setActiveProject,archiveProject} call
 //            assertProjectInWorkspaceInTx(B.projectId, A.workspaceId, tx)
-//          - under prodect_app, the project RLS policy already hides B's
+//          - under motir_app, the project RLS policy already hides B's
 //            row from the read, so the assertion throws
 //            ProjectNotFoundError; under the dev/CI superuser (BYPASSRLS)
 //            the read returns B's row and the workspaceId mismatch path

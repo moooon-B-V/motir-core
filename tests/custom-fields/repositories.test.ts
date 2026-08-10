@@ -17,7 +17,7 @@ import { truncateAuthTables } from '../helpers/db';
 // one-value-per-(issue, field) unique that makes the upsert converge. Real
 // Postgres (no mocks), per CLAUDE.md. They run as the dev/CI superuser via
 // the `db` singleton (RLS is inert under BYPASSRLS — the policies are
-// exercised separately under the prodect_app role, the multi-tenant-rls
+// exercised separately under the motir_app role, the multi-tenant-rls
 // suite's pattern); what's proven here is the repository contract — incl.
 // the explicit-workspaceId gates (finding #26) — and the migration-built
 // constraints. Writes run inside a real `db.$transaction` to exercise the

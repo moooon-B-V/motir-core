@@ -304,7 +304,7 @@ async function assertPending(
       // WORKSPACE GUC — `project_repository`'s policy is FOR ALL and predicates
       // purely on `app.workspace_id`, so a bare `db.$transaction` would write
       // nothing in production (the app connects as the non-BYPASSRLS
-      // `prodect_app` role) and every row would silently re-pend forever.
+      // `motir_app` role) and every row would silently re-pend forever.
       await withWorkspaceServiceContext(workspaceId, (tx) =>
         projectRepoRepository.markCiActionsApplied(row.id, tx),
       );
