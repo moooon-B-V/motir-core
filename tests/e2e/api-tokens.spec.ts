@@ -31,7 +31,7 @@ test.afterAll(async () => {
 test('create → shown-once copy → revoke → revoked render', async ({ page }) => {
   await signUp(page, 'tokens-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
+  await page.goto('/settings/account/tokens');
   // `exact` — "API tokens" is a substring of the empty-state heading "No API
   // tokens yet", which is also an <h2>; the page-head is the exact match.
   await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
@@ -93,7 +93,7 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
 test('create with a chosen expiry → the list shows the expiry', async ({ page }) => {
   await signUp(page, 'tokens-expiry-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
+  await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
@@ -132,7 +132,7 @@ test('create with a custom scope selection → shown-once + the list shows the g
 }) => {
   await signUp(page, 'tokens-scopes-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
+  await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
@@ -193,7 +193,7 @@ test('create with a custom scope selection → shown-once + the list shows the g
 test('create a default token → "Standard", and delete is off', async ({ page }) => {
   await signUp(page, 'tokens-default-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
+  await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
@@ -272,7 +272,7 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   // Shorter than the 720 default and than any laptop the suite has run on.
   await page.setViewportSize({ width: 1280, height: 700 });
 
-  await page.goto('/settings/account/api-tokens');
+  await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();

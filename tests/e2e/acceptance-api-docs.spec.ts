@@ -194,7 +194,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
   await chapter('And from inside: the door on the API-tokens page', async () => {
     const seed = await seedCliConnect(`api-docs-${Date.now()}@example.com`);
     await signIn(page, seed.email, seed.password);
-    await page.goto('/settings/account/api-tokens');
+    await page.goto('/settings/account/tokens');
     // `exact` because the EMPTY state's own heading — "No API tokens yet" — is
     // also on this page for a user who has minted none, and a substring match
     // resolves to both.
@@ -632,7 +632,7 @@ test('a reader with no session finds the CLI guide by clicking, and a signed-in 
   await chapter('And from inside: the door in Settings that used to point at GitHub', async () => {
     const seed = await seedCliConnect(`cli-guide-${Date.now()}@example.com`);
     await signIn(page, seed.email, seed.password);
-    await page.goto('/settings/account/api-tokens');
+    await page.goto('/settings/account/tokens');
     await expect(page.getByRole('heading', { name: 'Connect the CLI' })).toBeVisible();
     await beat();
 

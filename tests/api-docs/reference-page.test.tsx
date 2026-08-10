@@ -255,11 +255,11 @@ describe('THE IN-APP DOOR — the API-tokens settings page', () => {
   });
 
   it('is the ONLY thing this story adds to the tokens page', () => {
-    // The card: "No file under app/(authed)/settings/account/api-tokens/ changes
+    // The card: "No file under app/(authed)/settings/account/tokens/ changes
     // apart from the added link." The token manager and the CLI panel belong to
     // design/settings and design/cli-connect.
     const page = readFileSync(
-      join(REPO_ROOT, 'app/(authed)/settings/account/api-tokens/page.tsx'),
+      join(REPO_ROOT, 'app/(authed)/settings/account/tokens/page.tsx'),
       'utf8',
     );
     expect(page).toContain('<ApiDocsLinkPanel />');
@@ -272,7 +272,7 @@ describe('THE IN-APP DOOR — the API-tokens settings page', () => {
 
   it('reads FIRST — above the CLI panel and the token manager', () => {
     const page = readFileSync(
-      join(REPO_ROOT, 'app/(authed)/settings/account/api-tokens/page.tsx'),
+      join(REPO_ROOT, 'app/(authed)/settings/account/tokens/page.tsx'),
       'utf8',
     );
     // The placement IS the argument (MOTIR-1869's "the route out reads first",

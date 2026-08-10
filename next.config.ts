@@ -81,9 +81,37 @@ export const DOCS_REDIRECTS = [
   { source: '/docs', destination: '/docs/api', permanent: true },
 ] as const;
 
+/**
+ * Settings-area address moves (MOTIR-2534 / Story MOTIR-2532).
+ *
+ * A SIBLING of `DOCS_REDIRECTS`, deliberately not an addition to it. That
+ * constant is the docs map by name and by contract — `tests/api-docs/
+ * docs-redirects.test.ts` asserts it as such, and `tests/design-asset-
+ * addresses.test.ts` reads it as the set of addresses the repo declares dead —
+ * so folding a settings rule into it would make both names lie.
+ *
+ * `permanent: true` (308) for the same reason the docs moves are: a URL is a
+ * promise to strangers. This one is quoted in shipped `docs/`, in a published
+ * `@motir/cli`'s help text, in five design assets and in whatever readers
+ * bookmarked, so it has to keep working forever rather than for a deprecation
+ * window.
+ *
+ * ⚠️ A redirect makes the old address RESOLVE but no longer SERVE, and
+ * `tests/design-asset-addresses.test.ts` treats "redirects away" as a finding —
+ * which is correct, and why the design assets that still quote the old address
+ * carry `KNOWN` rows as point-in-time records. See that file.
+ */
+export const SETTINGS_REDIRECTS = [
+  {
+    source: '/settings/account/api-tokens',
+    destination: '/settings/account/tokens',
+    permanent: true,
+  },
+] as const;
+
 const nextConfig: NextConfig = {
   async redirects() {
-    return [...DOCS_REDIRECTS];
+    return [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS];
   },
   // The two `next/og` cards read Inter's bytes off disk at request time
   // (`app/_brand/ogFonts.ts` — satori has no CSS tree and no system font stack,

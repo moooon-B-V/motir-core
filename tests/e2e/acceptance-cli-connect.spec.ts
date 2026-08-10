@@ -63,7 +63,7 @@ test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 const TERMINAL_HOSTNAME = 'studio-mbp';
 const CLI_TOKEN_LABEL = cliTokenLabel(TERMINAL_HOSTNAME);
 
-const TOKENS_PATH = '/settings/account/api-tokens';
+const TOKENS_PATH = '/settings/account/tokens';
 
 // ── Page helpers ─────────────────────────────────────────────────────────────
 

@@ -206,7 +206,7 @@ describe('/device — state 3: approved (design Panel 5)', () => {
     expect(screen.getByText(/90 days/)).toBeTruthy();
     // The forward path off a terminal screen.
     expect(screen.getByRole('link', { name: 'View API tokens' }).getAttribute('href')).toBe(
-      '/settings/account/api-tokens',
+      '/settings/account/tokens',
     );
   });
 

@@ -178,7 +178,7 @@ test('a reader with no session reaches the MCP page from the rail and leaves abl
   await chapter('And from inside: the door on the API-tokens page', async () => {
     const seed = await seedCliConnect(`mcp-docs-${Date.now()}@example.com`);
     await signIn(page, seed.email, seed.password);
-    await page.goto('/settings/account/api-tokens');
+    await page.goto('/settings/account/tokens');
     await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
     await beat();
 
