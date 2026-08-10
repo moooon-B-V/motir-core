@@ -5,6 +5,7 @@ import {
   SystemPrincipalNotProvisionedError,
 } from '@/lib/ai/serviceAuth';
 import { aiWorkItemsService } from '@/lib/services/aiWorkItemsService';
+import { enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
 import { PlannerBugHomeNotProvisionedError } from '@/lib/ai/plannerBugHome';
 import { ProjectNotFoundError, ProjectAccessDeniedError } from '@/lib/projects/errors';
 import {
@@ -59,6 +60,13 @@ export async function POST(req: Request): Promise<Response> {
     if (err instanceof SystemPrincipalNotProvisionedError) return fail(err.code, err.message, 500);
     throw err;
   }
+
+  // The shared AI ceiling (8.5.9 / MOTIR-1165), keyed on the service credential
+  // because this path acts as the system principal and carries no tenant. After
+  // the bearer check, so an unauthenticated caller cannot spend the real
+  // credential's budget.
+  const limited = await enforceInternalServiceRateLimit(req);
+  if (limited) return limited;
 
   // ── Parse + validate the body ──
   let body: unknown;

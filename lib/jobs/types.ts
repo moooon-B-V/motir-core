@@ -322,6 +322,7 @@ export interface CiRunnerBootData {
 export interface JobEventDataMap {
   'system.daily-health-check': SystemScheduledData;
   'system.attachment-gc': SystemScheduledData;
+  'system.rate-limit-sweep': SystemScheduledData;
   'system.filter-subscription-tick': SystemScheduledData;
   'system.auto-plan-cadence-tick': SystemScheduledData;
   'system.automation-retention-sweep': SystemScheduledData;

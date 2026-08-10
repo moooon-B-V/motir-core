@@ -3,6 +3,7 @@ import { getSession } from '@/lib/auth';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import type { TriageSubmissionKind } from '@/lib/services/triageService';
 import { mapPublicProjectError } from '@/lib/publicProjects/errorResponse';
+import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 
 // POST /api/public/projects/[projectId]/requests (Story 6.12 · Subtask 6.12.5)
 // — the cross-account public "submit a request" intake. ANY signed-in account
@@ -22,6 +23,12 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ projectId: string }> },
 ): Promise<Response> {
+  // The shared per-IP ceiling (8.5.9 / MOTIR-1165), BEFORE the session read: an
+  // account is free to create, so the per-account throttle inside the service
+  // bounds one identity while this bounds one origin.
+  const limited = await enforcePublicWriteRateLimit(req);
+  if (limited) return limited;
+
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });
 

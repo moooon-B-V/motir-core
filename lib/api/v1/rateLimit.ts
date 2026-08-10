@@ -64,7 +64,16 @@ export function rateLimitBudget(): RateLimitBudget {
   };
 }
 
-function positiveIntEnv(name: string, fallback: number): number {
+/**
+ * Read a positive integer from the environment, falling back on anything unset,
+ * non-numeric or non-positive.
+ *
+ * Exported because the app-level budgets (`lib/rateLimit/budgets.ts`,
+ * MOTIR-1165) resolve their own env names with the SAME semantics — most
+ * importantly the same refusal to let a malformed value DISABLE a limiter. A
+ * second copy of these four lines would be free to drift on exactly that point.
+ */
+export function positiveIntEnv(name: string, fallback: number): number {
   const raw = process.env[name];
   if (raw === undefined || !/^\d+$/.test(raw)) return fallback;
   const parsed = Number(raw);

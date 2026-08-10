@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { authenticateJobRequest, JobAuthError } from '@/lib/ai/jobAuth';
+import { authenticateAndLimitJobRequest } from '@/lib/ai/jobAuth';
+import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import {
   InvalidProposalError,
@@ -47,11 +48,10 @@ export async function PATCH(
 ): Promise<Response> {
   let auth;
   try {
-    auth = authenticateJobRequest(req);
+    auth = await authenticateAndLimitJobRequest(req);
   } catch (err) {
-    if (err instanceof JobAuthError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: err.httpStatus });
-    }
+    const failure = mapJobRequestError(err);
+    if (failure) return failure;
     throw err;
   }
 

@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiChatService } from '@/lib/services/aiChatService';
 import { MotirAiError } from '@/lib/ai/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/chat (Subtask 7.3.4) — submit a user turn into the onboarding
 // `discovery` job for the active project, and return its `jobId`. The 7.3.5 chat
@@ -32,6 +33,13 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The shared AI ceiling (8.5.9 / MOTIR-1165), keyed on workspace + user because
+  // what is being protected is the model-provider bill, not capacity. Spent
+  // before the body is parsed and long before the job is submitted — a 429 after
+  // the provider call would have already spent the money.
+  const limited = await enforceAiRateLimit(ctx, 'ai:chat');
+  if (limited) return limited;
 
   let body: unknown;
   try {
