@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GET as specRoute } from '@/app/api/openapi/v1.json/route';
@@ -142,5 +143,56 @@ describe('Q4’s import rule — a wire type never reaches a renderer', () => {
   it('`render.ts` is the file the rule exists to protect, and it is clean', async () => {
     const source = await readFile(join(REPO_ROOT, 'packages/cli/src/render.ts'), 'utf8');
     expect(source).not.toMatch(/from\s+['"][^'"]*\/api(\/[^'"]*)?['"]/);
+  });
+});
+
+describe('Guard C — the CLI table agrees with the emitted x-motir-permission (MOTIR-2583)', () => {
+  // Guard A proves the committed artifacts are what the generator produces
+  // right now. It does NOT, on its own, say the field the CLI's 403 hint reads
+  // means what the server publishes: a generator that read the wrong extension,
+  // or a rename that moved only one side, regenerates cleanly and stays green.
+  //
+  // So this compares the two halves DIRECTLY, per operation. The CLI names the
+  // missing permission from its own table rather than parsing the server's
+  // English (`docs/decisions/cli-v1-client.md` Q5), which is the right design
+  // and has exactly one cost — the table is a mirror, and a mirror of a contract
+  // that moved is simply wrong. Wrong in the quietest way, too: every command
+  // still works, and only the FAILURE path lies, telling someone to grant
+  // something that does not exist on a screen that does not offer it. That is
+  // the worst moment to be wrong, because they are already stuck.
+  it('every operation requires what the document says it requires', async () => {
+    const { V1_OPERATIONS } = await import('../../packages/cli/src/api/operations');
+    const { V1_PERMISSION_EXTENSION } = await import('@/lib/api/v1/openapi/security');
+    const document = emitOpenApiDocument() as {
+      paths: Record<string, Record<string, Record<string, unknown>>>;
+    };
+
+    let compared = 0;
+    for (const [operationId, entry] of Object.entries(V1_OPERATIONS)) {
+      const published = document.paths[entry.path]?.[entry.method.toLowerCase()];
+      expect(published, `${entry.method} ${entry.path} is not in the document`).toBeDefined();
+      expect(
+        published?.[V1_PERMISSION_EXTENSION],
+        `${operationId}: the CLI table and the document disagree`,
+      ).toBe(entry.permission);
+      compared += 1;
+    }
+    // The sweep really covered the surface rather than an empty map.
+    expect(compared).toBe(Object.keys(V1_OPERATIONS).length);
+    expect(compared).toBeGreaterThanOrEqual(40);
+  });
+
+  it('names no retired scope string anywhere in the table', () => {
+    // The 403 hint is rendered from these values, so a straggler here is a
+    // message pointing at a vocabulary the product no longer has.
+    const table = readFileSync(join(REPO_ROOT, 'packages/cli/src/api/operations.ts'), 'utf8');
+    for (const retired of [
+      'work_items:write',
+      'work_items:archive',
+      'work_items:delete',
+      'sprints:write',
+    ]) {
+      expect(table, `the CLI table still names "${retired}"`).not.toContain(retired);
+    }
   });
 });

@@ -23,7 +23,7 @@ import {
   renderSprintsTable,
   renderWorkItemDetail,
 } from '../../../packages/cli/src/render';
-import { RateLimitError, ScopeError } from '../../../packages/cli/src/errors';
+import { RateLimitError, PermissionError } from '../../../packages/cli/src/errors';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -409,7 +409,7 @@ describe('the error path, end to end from a real refusal', () => {
     resetRateLimitStore();
   });
 
-  it('a real 403 becomes a ScopeError NAMING the permission the operation needs', async () => {
+  it('a real 403 becomes a PermissionError NAMING the permission the operation needs', async () => {
     // A token that can edit work items and cannot browse: the routes below all
     // gate on `project:browse`, so the refusal comes from the shipped permission
     // gate rather than from anything arranged here.
@@ -419,12 +419,12 @@ describe('the error path, end to end from a real refusal', () => {
       .whoami()
       .catch((err: unknown) => err);
 
-    expect(failure).toBeInstanceOf(ScopeError);
+    expect(failure).toBeInstanceOf(PermissionError);
     // The CLI reads the requirement off its OWN operation table rather than
     // parsing the server's sentence — ADR Q5's instruction, and what makes the
     // message actionable ("this token lacks X") instead of "forbidden". Since
     // MOTIR-2577 that table names a PERMISSION.
-    expect((failure as ScopeError).message).toContain('project:browse');
+    expect((failure as PermissionError).message).toContain('project:browse');
   });
 
   it('a real 429 becomes a RateLimitError carrying the reset the server sent', async () => {

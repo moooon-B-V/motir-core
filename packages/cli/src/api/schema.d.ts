@@ -328,7 +328,7 @@ export interface paths {
         put?: never;
         /**
          * Create a planned sprint
-         * @description Create a sprint in the `planned` state. ⚠️ TWO gates apply: the token needs `sprints:write`, AND its OWNER must be a sprint admin — a scope narrows a role and never widens it, so an ordinary member’s token is refused with the distinct `NOT_SPRINT_ADMIN` code rather than `INSUFFICIENT_SCOPE`. The `Location` header names the created sprint.
+         * @description Create a sprint in the `planned` state. ⚠️ TWO gates apply: the token must be granted `sprint:manage`, AND its OWNER must be a sprint admin — a grant narrows a role and never widens it, so an ordinary member’s token is refused with the distinct `NOT_SPRINT_ADMIN` code rather than `INSUFFICIENT_PERMISSION`. The `Location` header names the created sprint.
          *
          *     Requires the `sprint:manage` permission.
          */
