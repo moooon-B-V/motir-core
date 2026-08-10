@@ -252,6 +252,19 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     why: "The ownership table's row for the unbuilt `/docs` area root (MOTIR-2315), which states that `/docs` still 308s to `/docs/api`.",
   },
   {
+    file: 'design/api-docs/docs-index.mock.html',
+    address: '/docs',
+    why:
+      'FORWARD-LOOKING, and the one state this table exists for: MOTIR-2521 DRAWS the ' +
+      '`/docs` index page, which ADR Amendment 19 Q1 decided and MOTIR-2523 builds. ' +
+      'Today `/docs` resolves only by 308ing away to `/docs/api` (DOCS_REDIRECTS rule 7), ' +
+      'so the guard reads a page-shaped address as redirects-away — correctly. ' +
+      '⚠️ DELETE THIS ROW in MOTIR-2523, in the same commit that deletes rule 7 and adds ' +
+      '`app/(public)/docs/page.tsx`: from that commit on `/docs` is a real page, the row ' +
+      'stops firing, and this table is asserted TIGHT in both directions, so leaving it ' +
+      'here turns the guard red.',
+  },
+  {
     file: 'design/roadmap/design-notes.md',
     address: '/roadmap/sprint',
     why: 'A counterfactual the design REJECTED ("a query param on one route, not a distinct /roadmap/sprint path").',
