@@ -81,6 +81,12 @@ function crowdedProps(overrides: Partial<TopNavProps> = {}): TopNavProps {
     orgs: [],
     workspaces: [],
     activeWorkspaceId: null,
+    // The project half of the context path (MOTIR-2556). Null here: neither
+    // file is about the tier nav — both stub it — so the bar's widest state is
+    // still the one the RIGHT cluster produces.
+    activeProject: null,
+    projects: [],
+    aiConfigured: false,
     user: { name: 'Zhu Yue', email: 'yue@example.com' },
     initialUnreadCount: 3,
     buildInPublicProjectKey: null,

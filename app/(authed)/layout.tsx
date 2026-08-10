@@ -43,12 +43,17 @@ import { PlanWithAIFab } from '@/components/planning/PlanWithAIFab';
 // user menu + workspace switcher anyway.
 //
 // Data flow into the shell slots:
-//   - TopNav   ← workspaces + active workspace + user (the project switcher
-//                MOVED to the sidebar in 1.5.3, so no project data here).
-//   - SidebarNav ← the active project + the workspace's projects. SidebarNav
-//                renders the ProjectSwitcher / empty-CTA / archived states
-//                (PRODECT_FINDINGS #29). The same data feeds the rail and the
-//                drawer, so they stay in lockstep.
+//   - TopNav   ← workspaces + active workspace + user + THE PROJECT. The
+//                project switcher came BACK from the sidebar in MOTIR-2556:
+//                the bar carries the whole context path (`org › workspace ›
+//                project`), so the switcher, the archived state and the
+//                create-first door all live in its tier nav now.
+//   - SidebarNav ← the active project only, for its nav sections and the
+//                settings-area header swap. It no longer takes `projects` or
+//                `aiConfigured`: the rail has no project control to feed.
+//   - SidebarDrawer's header ← the same ShellTierNav at placement="drawer",
+//                which carries the ANCESTORS (`org › workspace`) at every
+//                width — that is where the bar's below-md band sends them.
 
 export default async function AuthedLayout({ children }: { children: ReactNode }) {
   const session = await getSession();
@@ -238,6 +243,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       orgs={orgs}
                       workspaces={workspaces}
                       activeWorkspaceId={activeWorkspaceId}
+                      activeProject={activeProject}
+                      projects={projects}
+                      aiConfigured={aiPlanningConfigured}
                       user={{ name: session.user.name, email: session.user.email }}
                       initialUnreadCount={initialUnreadCount}
                       buildInPublicProjectKey={buildInPublicProjectKey}
@@ -249,11 +257,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                   sidebar={
                     <SidebarNav
                       activeProject={activeProject}
-                      projects={projects}
                       variant="rail"
                       settingsPermissions={settingsPermissions}
                       user={{ name: session.user.name, email: session.user.email }}
-                      aiConfigured={aiPlanningConfigured}
                     />
                   }
                 >
@@ -273,6 +279,7 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                       workspaces={workspaces}
                       activeWorkspaceId={activeWorkspaceId}
                       cloudBilling={cloudBilling}
+                      placement="drawer"
                     />
                   }
                   // The utility strip (MOTIR-2373 · design/shell Panel D): the
@@ -300,11 +307,9 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
                 >
                   <SidebarNav
                     activeProject={activeProject}
-                    projects={projects}
                     variant="drawer"
                     settingsPermissions={settingsPermissions}
                     user={{ name: session.user.name, email: session.user.email }}
-                    aiConfigured={aiPlanningConfigured}
                   />
                 </SidebarDrawer>
 

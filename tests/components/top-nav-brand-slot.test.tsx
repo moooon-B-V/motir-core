@@ -51,6 +51,11 @@ const props = {
   orgs: [],
   workspaces: [],
   activeWorkspaceId: null,
+  // The project half of the context path (MOTIR-2556). Null here: this file is
+  // about the BRAND slot, and the tier nav is stubbed.
+  activeProject: null,
+  projects: [],
+  aiConfigured: false,
   user: { name: 'Zhu Yue', email: 'yue@example.com' },
   initialUnreadCount: null,
   buildInPublicProjectKey: null,

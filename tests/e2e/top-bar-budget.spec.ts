@@ -148,6 +148,53 @@ test.describe('the top bar’s four-slot budget below md', () => {
     }
   });
 
+  // MOTIR-2556 · design/shell/design-notes.md § *The measurement*.
+  //
+  // The budget above computes the four-slot ceiling from a 68px floor reserved
+  // for the tier nav — and the design pass MEASURED that floor and found it
+  // unreachable: `OrgControl` + `WorkspaceSwitcher` cannot compress below 112px
+  // between them, because their avatar, chevron and padding are all
+  // `flex-none`. So the bar that shipped after this file was written still
+  // overflowed by 47px at 320px, the narrowest viewport the app supports —
+  // visible to nobody, because a horizontal overflow scrolls rather than
+  // repaints, and every element stays "visible" throughout.
+  //
+  // The context row closes it by carrying ONE tier below `md`. This asserts the
+  // outcome rather than the mechanism, so it keeps holding whatever the path
+  // does next: at 320px the bar must not overflow AT ALL.
+  test('the bar does not overflow at 320px — the narrowest viewport we support', async ({
+    page,
+  }) => {
+    await seedCrowdedShell();
+    await signIn(page, EMAIL, PASSWORD);
+
+    // the crowded state is real before anything is measured
+    await expect(page.getByRole('link', { name: 'Building in public — manage' })).toBeVisible();
+
+    await page.setViewportSize({ width: 320, height: 812 });
+
+    const overflow = await page.evaluate(() => {
+      const nav = document.querySelector('header nav[aria-label]');
+      if (!nav) return { found: false, by: 0, content: '' };
+      return {
+        found: true,
+        by: nav.scrollWidth - nav.clientWidth,
+        content: (nav.textContent ?? '').trim().slice(0, 120),
+      };
+    });
+
+    expect(overflow.found, 'the top bar’s nav landmark is in the DOM').toBe(true);
+    expect(
+      overflow.by,
+      `at 320px the bar overflows by ${overflow.by}px; it carries: ${overflow.content}`,
+    ).toBeLessThanOrEqual(0);
+
+    // and the hamburger is still the thing at its own centre — an overflow that
+    // is merely scrolled off-screen would satisfy the check above alone
+    const { hitsHamburger, chain } = await hitTestHamburger(page);
+    expect(hitsHamburger, `at 320px the element at the hamburger’s centre is: ${chain}`).toBe(true);
+  });
+
   test('the bar carries FOUR slots below md and the displaced controls leave it', async ({
     page,
   }) => {

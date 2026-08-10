@@ -43,7 +43,6 @@ function renderRail(permissions?: readonly PermissionKey[], project: ProjectDTO 
   return renderWithIntl(
     <SidebarNav
       activeProject={project}
-      projects={project ? [project] : []}
       settingsPermissions={permissions}
       user={USER}
     />,
