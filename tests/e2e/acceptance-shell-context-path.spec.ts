@@ -34,7 +34,10 @@ test('a person reads where they are from one row, and it follows them', async ({
   beat,
 }) => {
   await resetDatabase();
-  await page.setViewportSize({ width: 1280, height: 812 });
+  // 1440, not 1280: `xl` is 1280 and a classic scrollbar shortens the layout
+  // viewport a media query reads, so the breakpoint's first pixel is a coin
+  // flip in CI. The receipt should show the full path, not straddle it.
+  await page.setViewportSize({ width: 1440, height: 812 });
 
   const bar = page.locator('header nav[aria-label]');
   const project = bar.getByRole('button', { name: 'Switch project' });

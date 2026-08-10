@@ -31,7 +31,13 @@ import { signUp, createFirstProject, createWorkspace } from './_helpers/shell-se
 // (`shell-flows.spec.ts`). Those specs reach the switcher by its accessible
 // name, so they followed it into the bar without a change.
 
-const WIDE = { width: 1280, height: 812 }; // ≥ xl — the full path
+// ≥ xl — the full path. 1440 rather than 1280 ON PURPOSE: `xl` is 1280 and a
+// media query reads the LAYOUT viewport, which a classic scrollbar shortens by
+// ~15px. At exactly 1280 the run therefore straddles the boundary — headless
+// CI landed at ~1265 and correctly rendered the md–xl path, so the assertion
+// failed on a product that was behaving. Asserting a band AT its first pixel
+// tests the scrollbar, not the ladder.
+const WIDE = { width: 1440, height: 812 };
 const MEDIUM = { width: 1024, height: 812 }; // md–xl — org mark + project
 const PHONE = { width: 375, height: 812 };
 const NARROWEST = { width: 320, height: 812 }; // the narrowest we support
