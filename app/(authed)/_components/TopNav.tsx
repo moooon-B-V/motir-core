@@ -188,11 +188,27 @@ export async function TopNav({
           <Link
             href="/dashboard"
             aria-label={t('topNav.brandHome')}
-            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex"
+            // The tile (MOTIR-2557 · design/shell § *The brand tile*). The box
+            // was always here and simply unpainted; it now takes an
+            // `--el-surface` field and an `--el-border` hairline, and the
+            // hairline DIVIDER that used to follow it is gone — the tile's own
+            // edge says what the divider said, and that returns 9px to a row
+            // measured at 69px of slack.
+            //
+            // Deliberately NOT a tint: OrgControl's avatar is a 20px
+            // `--el-tint-lavender` tile and ProjectAvatar an
+            // `--el-avatar-lavender` one, so a third lavender square 20px away
+            // would read as another tier chip instead of as the brand. The
+            // glyph keeps `--el-accent-on-surface` — the token whose name is
+            // literally this composition — so `.brand-glyph`'s GLOBAL rule,
+            // shared with auth / explore / public / OG / the specimen, is not
+            // touched. 6.03:1 light, 4.24:1 dark; asserted in
+            // tests/theme/brand-tile-contrast.test.ts, because the ink guard
+            // cannot see a pair whose ink lives in a stylesheet.
+            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
           >
             <BrandMark variant="mark" size={24} />
           </Link>
-          <span aria-hidden className="mx-1 hidden h-5 w-px flex-none bg-(--el-border) md:block" />
           {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
               where the persistent rail takes over. */}
           <div className="md:hidden">
