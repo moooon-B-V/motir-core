@@ -3042,12 +3042,20 @@
         </div>
         <p class="panel-note">
           <strong>This row composes <code>EstimateBadge</code>; it does not draw a control.</strong>
-          The chip is the one Motir already renders on the backlog row, the board card, the item
-          list's Points column and the detail rail — specified by
+          The chip is the one Motir already renders on the backlog row, the item list's Points
+          column and the detail rail — three call sites, verified by
+          <code>git grep '&lt;EstimateBadge' -- app components</code> — specified by
           <code>design/estimation/estimation.mock.html</code> panels 0–2 + 5, which this panel
           COMPOSES rather than redraws. Clicking it opens that asset's scale-deck popover, and the
           write goes through the badge's own <code>PATCH /api/work-items/[id]/estimate</code>. The
-          peek was simply the one issue surface that never composed it. <br /><br />
+          peek is the one issue surface that never composed it. <br /><br />
+          <strong>Correction (MOTIR-2592 close-out).</strong> An earlier revision of this note also
+          listed <em>the board card</em>. It does not render story points at all — not the chip and
+          not the number — although <code>BoardCardDto</code> carries the value and every
+          <code>design/boards/</code> asset draws a <code>.pts</code> chip for it. That gap is
+          MOTIR-2618, and it is why this note now names the call sites it grepped rather than
+          repeating the surface list in <code>EstimateBadge</code>'s own header comment, which is
+          where the wrong one came from. <br /><br />
           <strong>NO edit chevron on this row.</strong> The badge IS the affordance, so a chevron
           beside it would be a second one for a single field — which is exactly why the detail
           rail's <code>FieldCard</code> for this row is <code>editable={false}</code>. That flag
