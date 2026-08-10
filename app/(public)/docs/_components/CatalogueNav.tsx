@@ -17,6 +17,7 @@ import { SectionLabel } from '@/components/ui/SectionLabel';
 // because that mapping is a pinned, deliberate decision of its own.
 const RAIL_EYEBROW = 'text-(--el-text-secondary)';
 import type { ReferenceGroup } from '@/lib/apiDocs/reference';
+import { DOC_SURFACES, DOC_SURFACE_ROUTES, type DocsSurfaceKey } from '@/lib/apiDocs/surfaces';
 import { MethodPill } from './MethodPill';
 
 // The docs catalogue rail (Story 11.4 · Subtask 11.4.7 — MOTIR-2188; regrouped
@@ -50,28 +51,27 @@ import { MethodPill } from './MethodPill';
 // LIVES rather than only that it exists — and the count line is the honest
 // signal at 28 operations and rising.
 
-/** Which docs page is being read — the nav's `aria-current` target. */
-export type DocsPage =
-  | 'reference'
-  | 'gettingStarted'
-  | 'stability'
-  | 'sandbox'
-  | 'cli'
-  | 'mcp'
-  | 'mcpTools';
+/**
+ * Which docs page is being read — the nav's `aria-current` target.
+ *
+ * The four SURFACE keys come from `lib/apiDocs/surfaces.ts`, which both this
+ * rail and the `/docs` index read (Amendment 19 Q3); the three below them are
+ * pages INSIDE a surface, which only navigation cares about.
+ */
+export type DocsPage = DocsSurfaceKey | 'gettingStarted' | 'stability' | 'mcpTools';
 
 /**
  * Every docs page's route. This is the SINGLE fact the rail reads: which tier a
  * page sits in, and whether it shows the operation index, are both derived from
  * the prefix below rather than passed in alongside it.
+ *
+ * The surface routes are SPREAD from the shared list rather than re-typed, so a
+ * surface's address is stated exactly once in the repository.
  */
 const ROUTE_BY_PAGE: Record<DocsPage, string> = {
-  reference: '/docs/api',
+  ...DOC_SURFACE_ROUTES,
   gettingStarted: '/docs/api/getting-started',
   stability: '/docs/api/stability',
-  sandbox: '/docs/sandbox',
-  cli: '/docs/cli',
-  mcp: '/docs/mcp',
   mcpTools: '/docs/mcp/tools',
 };
 
@@ -180,23 +180,24 @@ export function CatalogueNav({
   // TIER 1 — the SURFACES. One row each, pointing at that surface's index page.
   // A surface with one page is one row and gets no second tier, which is why the
   // sandbox guide adds nothing below.
-  const surfaces: NavRow[] = [
-    { key: 'reference', href: ROUTE_BY_PAGE.reference, label: t('navReference') },
-    // Story MOTIR-2268's setup guide. This row is the page's ONLY entrance —
-    // nothing else in the product routes to it — and since MOTIR-2312 it is also
-    // the way BACK to the API for a reader standing on it (design Panel 10, ①).
-    { key: 'sandbox', href: ROUTE_BY_PAGE.sandbox, label: t('navSandbox') },
-    // Story MOTIR-2308's CLI guide. ONE page, so it is one row and adds no
-    // second tier (ADR Amendment 12 Q1) — and because tier 2 and the operation
-    // index are both gated on the `/docs/api` prefix, this row acquires neither
-    // by existing. Adding a surface really is one entry here plus a route.
-    { key: 'cli', href: ROUTE_BY_PAGE.cli, label: t('navCli') },
-    // Story MOTIR-2309's MCP documentation — the second sub-area, so it is both a
-    // row here and a second tier below (`design/mcp-server/` Panel 6). The two
-    // rows above and this one are the whole of "add a surface": an entry here
-    // plus a route, with the tier a surface earns derived from its prefix.
-    { key: 'mcp', href: ROUTE_BY_PAGE.mcp, label: t('navMcp') },
-  ];
+  //
+  // ⚠️ This list was four literals here until MOTIR-2522. It is now DERIVED from
+  // `lib/apiDocs/surfaces.ts`, because the `/docs` index renders the same four
+  // surfaces and two hand-maintained lists of one fact drift silently (Amendment
+  // 19 Q3). The rendered rows, their order and their labels are unchanged —
+  // `tests/api-docs/docs-rail-tiers.test.tsx` is the proof, and it did not move.
+  //
+  // What each row still is, for the reader of this file: the API reference; Story
+  // MOTIR-2268's sandbox guide, whose only entrance this is and whose way BACK to
+  // the API it also is (design Panel 10, ①); Story MOTIR-2308's CLI guide, ONE
+  // page so no second tier (Amendment 12 Q1); and Story MOTIR-2309's MCP
+  // documentation, the second sub-area, so both a row here and a tier below
+  // (`design/mcp-server/` Panel 6). Adding a surface is one entry in that module.
+  const surfaces: NavRow[] = DOC_SURFACES.map((surface) => ({
+    key: surface.key,
+    href: surface.route,
+    label: t(surface.labelKey),
+  }));
 
   // TIER 2 — the current sub-area's own pages, minus its index (which is tier 1's
   // row, so listing it twice would be two rows to the same place). Derived from

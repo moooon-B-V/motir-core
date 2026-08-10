@@ -6018,7 +6018,15 @@
     "mcpThScope": "权限范围",
     "mcpThGates": "管控范围",
     "mcpWhatNextBody": "全部 {count} 个工具、各自的作用，以及管控它的权限范围。",
-    "mcpForkApiLink": "查阅 REST API 参考文档"
+    "mcpForkApiLink": "查阅 REST API 参考文档",
+    "indexMetaTitle": "Motir 文档",
+    "indexMetaDescription": "REST API、Motir 命令行、MCP 服务器与代理沙箱——各自是什么、写给谁用，以及从哪里开始。",
+    "indexTitle": "Motir 文档",
+    "indexLede": "Motir 面向开发者公开的全部内容。从与你手头的事最匹配的那一个开始——下面每一项都可以单独读完。",
+    "surfaceReferenceDesc": "REST API 的全部接口，含权限范围与可直接运行的示例。写给你要交付出去、不能说变就变的客户端。",
+    "surfaceSandboxDesc": "用来运行无人值守编码代理的已发布容器：它只能访问你的工作区目录，碰不到机器上的其他任何东西。",
+    "surfaceCliDesc": "安装、登录，然后从终端把一个工作项交给你自己的编码 Agent——无需克隆任何代码库。",
+    "surfaceMcpDesc": "一个端点，把你掌控的智能体接入项目计划：读取就绪集、认领工作、流转状态、发表评论。"
   },
   "auditCoverage": {
     "count": "{count, plural, other {# 个仓库尚无代码健康度审计。}}",

@@ -6022,7 +6022,15 @@
     "mcpThScope": "Scope",
     "mcpThGates": "What it gates",
     "mcpWhatNextBody": "all {count} tools, what each does, and the scope that gates it.",
-    "mcpForkApiLink": "Read the API reference"
+    "mcpForkApiLink": "Read the API reference",
+    "indexMetaTitle": "Motir documentation",
+    "indexMetaDescription": "The REST API, the Motir CLI, the MCP server and the agent sandbox — what each one is, who it is for, and where to start.",
+    "indexTitle": "Motir documentation",
+    "indexLede": "Everything Motir publishes for people building on it. Start with the surface that matches what you are doing — each one below stands on its own.",
+    "surfaceReferenceDesc": "The REST API, operation by operation, with scopes and a working example. For a client you ship and cannot afford to break.",
+    "surfaceSandboxDesc": "The published container to run an unattended coding agent in, so it reaches your workspace tree and nothing else on your machine.",
+    "surfaceCliDesc": "Install it, sign in, and hand a work item to your own coding agent from the terminal — without cloning anything.",
+    "surfaceMcpDesc": "One endpoint that plugs an agent you control into the plan: read the ready set, claim work, move it, comment."
   },
   "auditCoverage": {
     "count": "{count, plural, one {# repository has no code-health audit.} other {# repositories have no code-health audit.}}",
