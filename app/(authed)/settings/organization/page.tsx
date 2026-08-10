@@ -9,6 +9,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { isCloudBilling } from '@/lib/billing/availability';
+import { hasAiEntitlement } from '@/lib/billing/aiEntitlement';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { buttonVariants } from '@/components/ui/Button';
 import { billingService } from '@/lib/services/billingService';
@@ -79,12 +80,22 @@ export default async function OrganizationSettingsPage() {
     limit: 1,
   });
 
-  // Acceptance-video card (MOTIR-1635): the toggle is only effective with a paid
-  // AI plan (cloud); off-cloud the feature is ungated, so treat it as planned.
-  const hasAcceptancePlan = isCloudBilling()
-    ? (await billingService.getAiAccess({ actorUserId: session.user.id, organizationId: org.id }))
-        .hasPaidAiPlan
-    : true;
+  // Acceptance-video card (MOTIR-1635): the toggle is only effective for an org
+  // ENTITLED to paid-AI features. That is not the same question as "does it hold
+  // a paid plan" (MOTIR-2545): `getAiAccess` returns the inert
+  // `notApplicableAiAccess()` sentinel for a self-hosted build AND for a `meta`
+  // organization, and reading `hasPaidAiPlan` off it answered "no" for an org
+  // the paywall explicitly does not apply to — showing moooon an Upgrade button
+  // and disabling its own toggle. `hasAiEntitlement` reads the DTO the way its
+  // contract says to, and is the same predicate `AiPaywall` gates on.
+  //
+  // No `isCloudBilling()` branch here: `getAiAccess` already short-circuits to
+  // that sentinel off-cloud, before any read, so the predicate returns true
+  // there exactly as the old `: true` arm did — one code path, one place the
+  // rule lives.
+  const hasAcceptancePlan = hasAiEntitlement(
+    await billingService.getAiAccess({ actorUserId: session.user.id, organizationId: org.id }),
+  );
 
   return (
     <div className="mx-auto flex max-w-[45rem] flex-col gap-6">
