@@ -1,4 +1,12 @@
-import { db } from '@/lib/db';
+import { adminDb as db } from './adminDb';
+
+// ⚠️ These reset helpers run through the ADMIN client, never `@/lib/db`
+// (MOTIR-2513). `TRUNCATE` requires table OWNERSHIP, which the non-bypass
+// runtime role does not have and must never be granted — under
+// `TEST_DB_APP_ROLE=1` the singleton is that role, so truncating through it
+// would fail. Routing resets to the owner keeps the privilege where it belongs
+// and leaves the code under test on the restricted connection. With the flag
+// unset both clients point at the same role and this is a no-op change.
 
 // Truncate every table the test suite touches, restarting identity counters
 // and cascading FK rows. Cheaper than `migrate reset` and idempotent — each

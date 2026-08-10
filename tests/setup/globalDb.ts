@@ -1,5 +1,7 @@
 import { Client } from 'pg';
 import {
+  TEST_APP_ROLE,
+  TEST_APP_ROLE_PASSWORD,
   TEST_DB_WORKERS,
   adminConnectionString,
   baseDbName,
@@ -41,11 +43,51 @@ async function dropWorkerDb(admin: Client, name: string): Promise<void> {
   await admin.query(`DROP DATABASE IF EXISTS "${name}"`);
 }
 
+/**
+ * Make the non-bypass runtime role LOGIN-able with a test-only password
+ * (MOTIR-2513), so `TEST_DB_APP_ROLE=1` works on any Postgres the suite is
+ * pointed at.
+ *
+ * The role is created by the workspace-RLS migration and granted LOGIN by
+ * `grant_prodect_app_login`, but deliberately carries NO password — a static
+ * password in git is a secret-management anti-pattern, so `scripts/db-up.sh`
+ * sets one out of band for local dev. CI never runs that script: the Postgres
+ * container is booted fresh by `.github/actions/postgres`. Rather than add a CI
+ * secret for a throwaway credential, the suite provisions its own here.
+ *
+ * Idempotent, and scoped to the test cluster. It is deliberately NOT the value
+ * any deployed environment uses — MOTIR-2515 generates a fresh secret for those.
+ */
+async function ensureAppRoleCanLogIn(admin: Client): Promise<void> {
+  const { rows } = await admin.query<{ rolname: string }>(
+    'SELECT rolname FROM pg_roles WHERE rolname = $1',
+    [TEST_APP_ROLE],
+  );
+  if (rows.length === 0) {
+    // No such role: this database was not built by our migrations. Say so
+    // plainly rather than failing later with a confusing auth error.
+    throw new Error(
+      `The test app role "${TEST_APP_ROLE}" does not exist. Run \`prisma migrate deploy\` ` +
+        `against the base database before the suite (it is created by the workspace-RLS migration).`,
+    );
+  }
+  // `ALTER ROLE` takes neither a parameterised identifier nor a parameterised
+  // password, and a DO block cannot take parameters at all — so let Postgres do
+  // the quoting: build the statement with `format(%I, %L)` in one parameterised
+  // round-trip, then execute the result. Safer than interpolating in JS.
+  const { rows: stmt } = await admin.query<{ sql: string }>(
+    'SELECT format($1::text, $2::text, $3::text) AS sql',
+    ['ALTER ROLE %I WITH LOGIN PASSWORD %L', TEST_APP_ROLE, TEST_APP_ROLE_PASSWORD],
+  );
+  await admin.query(stmt[0]!.sql);
+}
+
 export async function setup(): Promise<void> {
   const base = baseDbName();
   const admin = new Client({ connectionString: adminConnectionString() });
   await admin.connect();
   try {
+    await ensureAppRoleCanLogIn(admin);
     for (let i = 1; i <= TEST_DB_WORKERS; i++) {
       const name = workerDbName(i);
       await dropWorkerDb(admin, name);

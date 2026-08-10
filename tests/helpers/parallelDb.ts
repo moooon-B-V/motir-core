@@ -84,8 +84,66 @@ export function currentWorkerIndex(): number {
   return ((id - 1) % TEST_DB_WORKERS) + 1;
 }
 
-/** The DATABASE_URL pointing at the current worker's own database. */
+/**
+ * The TEST-ONLY credentials for the non-bypass runtime role (MOTIR-2513).
+ *
+ * `globalDb` provisions this password on the role itself, so a fresh CI Postgres
+ * needs no new secret and `scripts/db-up.sh` need not have run. It is a test
+ * credential and nothing else: no deployed environment reads it, and the
+ * deployed cutover (MOTIR-2515) generates its own into a secret store.
+ */
+export const TEST_APP_ROLE = process.env['TEST_APP_DB_ROLE'] ?? 'motir_app';
+export const TEST_APP_ROLE_PASSWORD = process.env['TEST_APP_DB_PASSWORD'] ?? 'motir_app';
+
+/**
+ * Whether this run exercises the code under test as the NON-BYPASS role.
+ *
+ * OPT-IN, and deliberately so. Under the app role the workspace RLS policies
+ * actually execute, which is the point — but the existing suite's fixtures seed
+ * and assert through `@/lib/db` with no workspace context, so they are denied
+ * wholesale (measured 2026-08-09: 299 of 421 tests failing across a 36-file
+ * sample, against 441 test files that import `db`). Migrating those is
+ * MOTIR-2514's to size, not this card's. Unset — the default, and what CI runs —
+ * every helper here resolves exactly as it did before this flag existed.
+ */
+export function isAppRoleTestMode(): boolean {
+  return process.env['TEST_DB_APP_ROLE'] === '1';
+}
+
+/** Rewrite a connection string's userinfo to the app role's test credentials. */
+function withAppRoleCredentials(raw: string): string {
+  const u = new URL(raw);
+  u.username = TEST_APP_ROLE;
+  u.password = TEST_APP_ROLE_PASSWORD;
+  return u.toString();
+}
+
+/**
+ * The DATABASE_URL pointing at the current worker's own database.
+ *
+ * Under the app-role flag this carries the NON-BYPASS role, so `@/lib/db` — the
+ * singleton every service and repository imports — connects as it and the RLS
+ * policies bite on the code under test. Fixtures and teardown do NOT go through
+ * this; they use `currentWorkerAdminUrl()` (see `tests/helpers/adminDb.ts`).
+ */
 export function currentWorkerUrl(): string {
+  const u = baseUrl();
+  u.pathname = `/${workerDbName(currentWorkerIndex())}`;
+  const url = u.toString();
+  return isAppRoleTestMode() ? withAppRoleCredentials(url) : url;
+}
+
+/**
+ * The current worker's database as the OWNER — the second half of the two-client
+ * model (MOTIR-2513).
+ *
+ * Fixtures and teardown need privileges the runtime role does not have and must
+ * never be granted: `TRUNCATE` requires ownership, and seeding across tenants is
+ * exactly what the policies exist to forbid. So the admin client keeps using the
+ * base URL's credentials whether or not the flag is set — which also means this
+ * is unaffected by the flag, by design.
+ */
+export function currentWorkerAdminUrl(): string {
   const u = baseUrl();
   u.pathname = `/${workerDbName(currentWorkerIndex())}`;
   return u.toString();
