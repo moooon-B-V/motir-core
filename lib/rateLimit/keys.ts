@@ -26,6 +26,7 @@ export type RateLimitScope =
   | 'auth:password-reset'
   | 'public-write'
   | 'ai:chat'
+  | 'ai:generate'
   | 'ai:internal'
   | 'account:change-password'
   | 'account:set-password-link'

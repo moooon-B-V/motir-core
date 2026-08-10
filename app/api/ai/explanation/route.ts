@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiExplanationService } from '@/lib/services/aiExplanationService';
 import { MotirAiError } from '@/lib/ai/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/explanation (Subtask 8.8.12) — submit a `generate_explanation`
 // job (8.8.11) for the active project from a work item's draft context, and
@@ -32,6 +33,13 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The AI ceiling, applied on the door that SUBMITS the job (MOTIR-2597). Its own
+  // `ai:generate` bucket, tighter than `ai:chat`, because a generation costs many
+  // chat turns. Spent here — after the two gates, before the body is read and long
+  // before the provider is called, since a 429 afterwards has already paid the bill.
+  const limited = await enforceAiRateLimit(ctx, 'ai:generate');
+  if (limited) return limited;
 
   let body: unknown;
   try {

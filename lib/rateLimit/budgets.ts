@@ -44,6 +44,25 @@ export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS = 60_000;
 export const DEFAULT_AI_RATE_LIMIT = 30;
 export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
 
+/**
+ * GENERATION: the same money, a much bigger unit of it (MOTIR-2597).
+ *
+ * A chat turn is one sentence in and one reply out. A plan generation, a story
+ * expansion, a re-plan, a repository audit is a long job at many times the token
+ * cost — so the two cannot honestly share a ceiling. Sharing `ai:chat`'s 30/min
+ * would mean the expensive door's allowance is set by what is comfortable for the
+ * cheap one.
+ *
+ * A third of the chat budget, over the same window: a person triggering ten
+ * generations in a minute is already going faster than any of them can finish
+ * (each takes tens of seconds and the UI streams it), while a loop pointed at
+ * `plan/generate` is stopped at ten rather than at whatever the provider will
+ * sell. Env-configurable like every other budget, and over the SAME shared
+ * counter — a separate scope is a separate bucket, not a separate store (ADR §6).
+ */
+export const DEFAULT_AI_GENERATE_RATE_LIMIT = 10;
+export const DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS = 60_000;
+
 function budget(
   limitEnv: string,
   windowEnv: string,
@@ -93,5 +112,15 @@ export function aiBudget(): RateLimitBudget {
     'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
     DEFAULT_AI_RATE_LIMIT,
     DEFAULT_AI_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The job-SUBMITTING `/api/ai/*` surfaces — generation, expansion, re-plan, audit. */
+export function aiGenerateBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_AI_GENERATE_RATE_LIMIT',
+    'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_AI_GENERATE_RATE_LIMIT,
+    DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS,
   );
 }
