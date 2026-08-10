@@ -631,9 +631,11 @@ against a near-black or near-white `--color-primary-fill`) the gap is larger.
 `console.mock.html` inlines a **subset** of the design system's Tier-0 + Tier-3
 layers so the asset renders standalone from a `file://` URL. That copy was taken by
 hand and does not update when `packages/design-system/theme.css` moves, so **every
-value in it is a claim about a past state of the design system.** Two corrections
-have already been needed (`--el-danger-text`, above; `--el-accent`, here), and both
-were invisible in the default light palette.
+value in it is a claim about a past state of the design system.** Three corrections
+have already been needed (`--el-danger-text`, above; `--el-accent`, here; and the
+Tier-0 set below). The first two were invisible in the default light palette; the
+third was not, which is the point — invisibility is not what makes drift worth
+finding, and neither is visibility what makes it safe to leave.
 
 Re-run this from the repo root before trusting the block — it parses every `--el-*`
 declaration out of both files and diffs them, so it reports drift the eye cannot
@@ -674,11 +676,22 @@ check the Tier-0 half the same way, change `pre='--el-'` to `pre='--color-'` **a
 the light theme-side selector to `r'(?m)^@theme\s*\{'` — Tier-0 lives in the
 `@theme` block, Tier-3 in the `:root, [data-appearance-scope]` one.
 
-**The Tier-0 half currently has four known drifts, tracked as MOTIR-2609** (they
-change rendered hues across every panel, so they are not a footnote in MOTIR-2595's
-diff): `--color-link` `#0075de` vs `#0070d2`, `--color-tint-yellow` `#fbf0c4` vs
-`#fef7d6` (light) and `#332d12` vs `#3a341a` (dark), plus a dark `--color-warning`
-override the mock still carries and `theme.css` no longer has.
+**The Tier-0 half prints `DISAGREEMENTS: 0` today too** — MOTIR-2609 corrected the
+four drifts it had (`--color-link` `#0075de`→`#0070d2`, `--color-tint-yellow`
+`#fbf0c4`→`#fef7d6` light and `#332d12`→`#3a341a` dark, plus a dark
+`--color-warning: #f08c3a` override the mock still carried and `theme.css` no longer
+has, DELETED rather than re-pinned — an override the system dropped is not a value to
+refresh). They were filed apart from MOTIR-2595 because they change rendered hues
+across the panels rather than only the swap layer, and the re-export proves it: the
+light PNG moved 289,487 pixels (0.745%), all of them the yellow-tint banner in the
+view-as-tenant panel plus the external links in the estate and health panels, and
+every one of the 1,311 distinct colour transitions traces to those two light values
+or to an antialiasing blend of them. Nothing else moved.
+
+The scan now covers the block completely: 33 light + 24 dark `--color-*`
+declarations, which is every `--color-*` line in the file, against `theme.css`'s
+37 + 28. The mock inlines no `--color-*` the system does not define, so there is no
+ONLY-IN-MOCK exception to name here.
 
 Whenever the block is corrected, re-export `console.png` after `prettier --write`:
 Playwright chromium, light theme, `deviceScaleFactor: 2`, viewport width 1200,
