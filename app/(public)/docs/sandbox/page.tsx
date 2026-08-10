@@ -7,6 +7,7 @@ import {
   SANDBOX_STEPS,
   SANDBOX_WHAT_NEXT,
   sandboxProfileRows,
+  sandboxPullCommand,
   sandboxRunCommand,
 } from '@/lib/apiDocs/sandbox';
 import { CatalogueNav } from '../_components/CatalogueNav';
@@ -130,14 +131,28 @@ export default async function SandboxGuidePage() {
               </>
             ) : null}
 
-            {step.rendersRunCommand && example ? (
-              <div className="mb-4">
-                <CodeBlock
-                  caption={t('sandboxRunCaption', { profile: example.id })}
-                  code={sandboxRunCommand(example)}
-                  copyable
-                />
-              </div>
+            {/* The pull and the run, in that order and from the SAME `example`
+                row — the pair a reader needs and the page rendered only half of
+                (MOTIR-2611). One row feeds both, so they cannot name different
+                tags; rendering the pull FIRST is the whole point, because
+                `docker run` will not fetch what the pull is there to get. */}
+            {step.rendersImageCommands && example ? (
+              <>
+                <div className="mb-4">
+                  <CodeBlock
+                    caption={t('sandboxPullCaption', { profile: example.id })}
+                    code={sandboxPullCommand(example)}
+                    copyable
+                  />
+                </div>
+                <div className="mb-4">
+                  <CodeBlock
+                    caption={t('sandboxRunCaption', { profile: example.id })}
+                    code={sandboxRunCommand(example)}
+                    copyable
+                  />
+                </div>
+              </>
             ) : null}
           </section>
         ))}
