@@ -32,6 +32,18 @@ export interface OrgControlProps {
    *  menu row (Story 8.1.7, design/billing panel 1). Off-cloud the commercial
    *  surface does not exist, so the row is hidden entirely (ADR §6). */
   cloudBilling: boolean;
+  /**
+   * The breakpoint from which the org's NAME is rendered; below it the control
+   * is its avatar + chevron alone. Omitted (the default) means the name is
+   * always shown — the drawer header, where there is room for it.
+   *
+   * `"xl"` is the bar's ladder (MOTIR-2556 · `design/shell/design-notes.md`
+   * § *The context row*): the org is the first tier to give up width, because
+   * a breadcrumb collapses its ANCESTORS and keeps the most specific crumb
+   * legible. The control stays a full menu button either way — only the name
+   * goes, so nothing becomes unreachable.
+   */
+  nameFrom?: 'xl';
 }
 
 // The organization control in the app shell (Story 6.10.5, design/org-admin
@@ -41,7 +53,7 @@ export interface OrgControlProps {
 // Billing & plans (cloud only, Story 8.1.7) · New workspace, then — only when the
 // account is in ≥2 orgs — a "Switch organization" section. The WORKSPACE switcher
 // (rendered alongside by the shell only at ≥2 workspaces) is a separate control.
-export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
+export function OrgControl({ activeOrg, orgs, cloudBilling, nameFrom }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const ts = useTranslations('shell');
   const router = useRouter();
@@ -92,7 +104,14 @@ export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
               {/* font-serif: the org name is a header IDENTITY label — it wears the
                   headline role so the `data-type` axis re-types the header chrome
                   too (see ProjectSwitcher). */}
-              <span className="max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
+              <span
+                className={cn(
+                  'max-w-[20ch] truncate font-serif',
+                  nameFrom === 'xl' && 'hidden xl:inline',
+                )}
+              >
+                {activeOrg.name}
+              </span>
             </span>
           </Button>
         </Popover.Trigger>

@@ -86,17 +86,21 @@ export function ProjectSwitcher({
             variant="ghost"
             size="md"
             aria-label={t('projectSwitcher.switch')}
-            // Full-width so it fills the ~216px sidebar-header slot (240px
-            // rail minus padding); the chevron pins to the right edge.
+            // A TIER of the top bar's context path, not the ~216px rail slot it
+            // used to fill (MOTIR-2556 · design/shell § *The ladder*). It is the
+            // row's ELASTIC element — every other control in the left cluster is
+            // fixed-width — so it shrinks instead of taking width: `min-w-0`
+            // lets a flex child go below its content width, and without it the
+            // label is OVERRUN by the next control rather than ellipsizing.
             // Open-state affordance mirrors WorkspaceSwitcher: primary
             // border + surface fill while the popover is open.
             className={cn(
-              'w-full',
+              'min-w-0 shrink [&>span]:min-w-0',
               open && 'bg-(--el-surface) border border-(--el-accent)',
               !active && 'text-(--el-text-secondary)',
             )}
           >
-            <span className="flex w-full items-center gap-2">
+            <span className="flex min-w-0 items-center gap-2">
               {active ? (
                 <ProjectAvatar
                   icon={active.avatarIcon}
@@ -105,12 +109,15 @@ export function ProjectSwitcher({
                   size={22}
                 />
               ) : null}
-              {/* font-serif: the project name is the left-nav IDENTITY label, so
-                  it wears the headline (`--font-serif`) role — the one role the
-                  `data-type` axis re-points — making the type axis visibly re-type
-                  the chrome, not just content (matches the StyleVignette nav
-                  brand). Nav ITEM labels stay sans. */}
-              <span className="min-w-0 flex-1 truncate text-left font-serif">
+              {/* font-serif: the project name is an IDENTITY label — the last
+                  tier of the context path — so it wears the headline
+                  (`--font-serif`) role, the one role the `data-type` axis
+                  re-points, making that axis visibly re-type the chrome and not
+                  just content (matches the StyleVignette nav brand and the org
+                  and workspace tiers beside it). Nav ITEM labels stay sans.
+                  `max-w-[22ch]` rather than `flex-1`: a tier sizes to its name
+                  and truncates, where the rail slot stretched to fill. */}
+              <span className="min-w-0 max-w-[22ch] truncate text-left font-serif">
                 {active?.name ?? t('projectSwitcher.none')}
               </span>
               {isArchived ? (
