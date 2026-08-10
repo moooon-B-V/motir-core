@@ -2521,36 +2521,6 @@
       "scopes": {
         "permissionsLabel": "Permissions",
         "permissionsHelper": "Choose what this token is allowed to do. You can grant less than your own access, never more.",
-        "groupLabels": {
-          "read": "Read",
-          "sprints": "Sprints",
-          "integrations": "Integrations",
-          "workItems": "Work items"
-        },
-        "read": {
-          "name": "Read everything",
-          "desc": "View work items, boards, sprints, comments, and reports."
-        },
-        "sprintsWrite": {
-          "name": "Manage sprints",
-          "desc": "Create sprints and move work items in and out of them."
-        },
-        "integration": {
-          "name": "Connect integrations",
-          "desc": "Link external tools and post activity back to Motir."
-        },
-        "workItemsWrite": {
-          "name": "Edit work items",
-          "desc": "Create and update work items, comments, links, and attachments."
-        },
-        "workItemsArchive": {
-          "name": "Archive work items",
-          "desc": "Archive and restore work items. This can be undone."
-        },
-        "workItemsDelete": {
-          "name": "Delete work items",
-          "desc": "Permanently delete a work item and its entire subtree. This can't be undone."
-        },
         "dangerTag": "· Danger",
         "emptyError": "Grant at least one permission to create a token.",
         "summary": {
@@ -2562,7 +2532,8 @@
         "canDelete": "Can delete",
         "detailLead": "This token can:",
         "showScopes": "Show scopes for {label}",
-        "hideScopes": "Hide scopes for {label}"
+        "hideScopes": "Hide scopes for {label}",
+        "lockedWhy": "You do not have this in this project."
       },
       "expiresIn": "in {days, plural, one {# day} other {# days}}",
       "expiresNever": "Never",
@@ -2591,7 +2562,9 @@
         "cancel": "Cancel",
         "errorTitle": "Couldn't create token",
         "errorGeneric": "Something went wrong. Please try again.",
-        "copyFailed": "Couldn't copy — select and copy the token manually."
+        "copyFailed": "Couldn't copy — select and copy the token manually.",
+        "projectField": "Project",
+        "projectHelper": "The token acts in this project only."
       },
       "created": {
         "title": "Token created",

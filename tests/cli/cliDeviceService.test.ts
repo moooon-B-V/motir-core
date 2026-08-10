@@ -275,7 +275,7 @@ describe('approve → poll — the mint', () => {
     const tokens = await db.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.label).toBe('CLI · workbox');
-    expect(tokens[0]!.scopes.sort()).toEqual([...CLI_TOKEN_GRANT].sort());
+    expect([...tokens[0]!.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
     expect(tokens[0]!.workspaceId).toBe(workspace.id);
     expect(tokens[0]!.userId).toBe(owner.id);
     const daysOut = (tokens[0]!.expiresAt!.getTime() - Date.now()) / DAY_MS;
@@ -1053,6 +1053,6 @@ describe('toDeviceGrantTokenDTO — the never-expiring token', () => {
 
     expect(mapped.expires_in).toBe(0);
     expect(mapped.access_token).toBe(token);
-    expect(mapped.scope).toBe(dto.scopes.join(' '));
+    expect(mapped.scope).toBe(dto.permissions.join(' '));
   });
 });

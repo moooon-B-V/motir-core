@@ -43,18 +43,21 @@ export interface ApiTokenDto {
    * a legacy string. The list row summarises these and the picker persists them.
    */
   permissions: PermissionKey[];
-  /**
-   * @deprecated SCAFFOLDING — the RAW `api_token.scopes` column, mixed
-   * vocabulary and all. Removed by MOTIR-2579, which replaces `scopeMeta.tsx`
-   * with the catalog-driven presenter and re-points the two read surfaces onto
-   * {@link ApiTokenDto.permissions}.
-   *
-   * It exists only because those surfaces render through the six-entry scope
-   * table, and replacing that table is 2579's job — behind the design card. Read
-   * `permissions` for anything new; a consumer that reads this is reading a
-   * legacy string.
-   */
-  scopes: string[];
+}
+
+/** One PROJECT a token can be bound to, with the permissions THIS actor may
+ * confer on it (MOTIR-2580).
+ *
+ * The offer travels WITH the option so the picker recomputes on a project change
+ * without a round-trip per keystroke — and so the offer the modal shows and the
+ * one `create` validates against come from the same service read. */
+export interface TokenScopeProjectDTO {
+  id: string;
+  key: string;
+  name: string;
+  /** What this actor may grant here — already intersected with the grantable
+   *  set. A row outside it renders DISABLED with its reason, never hidden. */
+  grantable: PermissionKey[];
 }
 
 /** One workspace a token can be scoped to (bug 7.21) — the create modal's
@@ -62,6 +65,10 @@ export interface ApiTokenDto {
 export interface TokenScopeWorkspaceDTO {
   id: string;
   name: string;
+  /** The projects in it this actor can browse. Empty means the workspace can
+   *  mint no hand-minted token at all — a grant of project permissions where no
+   *  project exists grants nothing — and the modal says so. */
+  projects: TokenScopeProjectDTO[];
 }
 
 /** One organization the user belongs to, with the workspaces of it they can

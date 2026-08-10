@@ -9,11 +9,8 @@ import {
   CircleCheckBig,
   CircleX,
   Clock,
-  Eye,
   KeyRound,
-  Plug,
   ShieldAlert,
-  SquarePen,
   Terminal,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/Button';

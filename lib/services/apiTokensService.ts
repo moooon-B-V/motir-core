@@ -17,7 +17,14 @@ import {
 import { IRREVERSIBLE_PERMISSIONS, expandStoredGrant, grantableFor } from '@/lib/tokens/grant';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
-import type { ApiTokenDto, CreateApiTokenResult, TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
+import type {
+  ApiTokenDto,
+  CreateApiTokenResult,
+  TokenScopeOrgDTO,
+  TokenScopeProjectDTO,
+  TokenScopeWorkspaceDTO,
+} from '@/lib/dto/apiTokens';
+import { projectsService } from '@/lib/services/projectsService';
 
 // API-token service (Story 7.8 · Subtask 7.8.1) — the auth substrate every
 // other 7.8 subtask rides. Owns transactions, token generation/hashing,
@@ -232,10 +239,22 @@ export const apiTokensService = {
       organizationsService.listUserOrganizations(userId),
       workspacesService.listUserWorkspaces(userId),
     ]);
-    const workspacesByOrg = new Map<string, { id: string; name: string }[]>();
+    const workspacesByOrg = new Map<string, TokenScopeWorkspaceDTO[]>();
     for (const w of workspaces) {
+      // Each project carries the OFFER for this actor (MOTIR-2580), resolved
+      // through the same read `create` validates against — so the picker can
+      // never show a switch the create call would refuse.
+      const projects = await projectsService.listProjects(w.id, userId);
+      const withGrants: TokenScopeProjectDTO[] = await Promise.all(
+        projects.map(async (p) => ({
+          id: p.id,
+          key: p.identifier,
+          name: p.name,
+          grantable: await apiTokensService.listGrantablePermissions(userId, w.id, p.id),
+        })),
+      );
       const list = workspacesByOrg.get(w.organizationId) ?? [];
-      list.push({ id: w.id, name: w.name });
+      list.push({ id: w.id, name: w.name, projects: withGrants });
       workspacesByOrg.set(w.organizationId, list);
     }
     return orgs

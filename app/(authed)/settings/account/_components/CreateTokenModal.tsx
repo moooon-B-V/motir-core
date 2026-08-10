@@ -10,9 +10,14 @@ import { Switch } from '@/components/ui/Switch';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { useToast } from '@/components/ui/Toast';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
-import { DEFAULT_TOKEN_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
+import {
+  permissionSlug,
+  type PermissionDomain,
+  type PermissionKey,
+} from '@/lib/permissions/catalog';
+import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 import { createToken, type ApiTokenDto, type ExpiryChoice } from './apiTokensClient';
-import { scopesInGroup, type ScopeGroup, type ScopeMeta } from './scopeMeta';
+import { permissionsByDomainForTokens, type PermissionMeta } from './permissionMeta';
 
 // Create + shown-once modal (Story 7.8 · Subtask 7.8.3, + bug 7.21 binding scope,
 // + Subtask 7.7.19 permission scopes) — design `account-settings.mock.html`
@@ -82,21 +87,53 @@ export function CreateTokenModal({
   activeWorkspaceId: string | null;
 }) {
   const t = useTranslations('settings.apiTokens');
+  // The permission LABELS + DESCRIPTIONS are the shipped catalogue copy, so the
+
+  // picker, the list row and the /device screen say the same words.
+
+  const tp = useTranslations('permissions');
+
+  const lockedWhy = t('scopes.lockedWhy');
+
+  // The domain groups, split 3/3 across the two columns (MOTIR-2578's measured
+
+  // composition). Computed once — the grantable set is static per build.
+
+  const domainGroups = permissionsByDomainForTokens();
+  const splitAt = Math.ceil(domainGroups.length / 2);
+  const leftColumn = domainGroups.slice(0, splitAt);
+  const rightColumn = domainGroups.slice(splitAt);
   const { toast } = useToast();
   const labelId = useId();
   const expiryId = useId();
   const orgFieldId = useId();
   const workspaceFieldId = useId();
+  const projectFieldId = useId();
   const permLabelId = useId();
 
   const [label, setLabel] = useState('');
   const [expiry, setExpiry] = useState<ExpiryValue>('90');
   const [scope, setScope] = useState(() => initialScope(scopeOrgs, activeWorkspaceId));
+  // The PROJECT the token binds to (MOTIR-2606). Required: a chosen grant must
+  // name the project it applies to, because permissions resolve per project.
+  const [projectId, setProjectId] = useState<string | null>(null);
   // The granted PERMISSION scopes (7.7.16) — default all-on-except-delete.
-  const [grantedScopes, setGrantedScopes] = useState<Set<TokenScope>>(
-    () => new Set(DEFAULT_TOKEN_SCOPES),
+  const [grantedScopes, setGrantedScopes] = useState<Set<PermissionKey>>(
+    () => new Set(DEFAULT_TOKEN_GRANT),
   );
   const [creating, setCreating] = useState(false);
+
+  // The projects in the chosen workspace, and the OFFER for the chosen one —
+  // shipped with the options, so switching project recomputes the picker with
+  // no round-trip and the offer can never disagree with what `create` accepts.
+  const projectsHere =
+    scopeOrgs.flatMap((o) => o.workspaces).find((w) => w.id === scope.workspaceId)?.projects ?? [];
+  const selectedProject = projectsHere.find((p) => p.id === projectId) ?? projectsHere[0] ?? null;
+  const conferrable = new Set<PermissionKey>(selectedProject?.grantable ?? []);
+  const projectOptions: ComboboxOption<string>[] = projectsHere.map((p) => ({
+    value: p.id,
+    label: `${p.key} — ${p.name}`,
+  }));
   // Non-null once the token is minted — flips the modal to the shown-once phase.
   const [secret, setSecret] = useState<string | null>(null);
 
@@ -131,7 +168,7 @@ export function CreateTokenModal({
   }
 
   // Toggle one permission scope on/off (immutable Set update for React).
-  function toggleScope(s: TokenScope) {
+  function toggleScope(s: PermissionKey) {
     setGrantedScopes((prev) => {
       const next = new Set(prev);
       if (next.has(s)) next.delete(s);
@@ -146,7 +183,7 @@ export function CreateTokenModal({
     setLabel('');
     setExpiry('90');
     setScope(initialScope(scopeOrgs, activeWorkspaceId));
-    setGrantedScopes(new Set(DEFAULT_TOKEN_SCOPES));
+    setGrantedScopes(new Set(DEFAULT_TOKEN_GRANT));
     setSecret(null);
     setCreating(false);
   }
@@ -154,14 +191,16 @@ export function CreateTokenModal({
   async function submit() {
     const trimmed = label.trim();
     // A token must grant at least one permission (7.7.18 Panel 3).
-    if (!trimmed || !scope.workspaceId || grantedScopes.size === 0 || creating) return;
+    if (!trimmed || !scope.workspaceId || !selectedProject || creating) return;
+    if (grantedScopes.size === 0) return;
     setCreating(true);
     try {
       const result = await createToken({
         label: trimmed,
         expiresInDays: EXPIRY_DAYS[expiry],
         workspaceId: scope.workspaceId,
-        scopes: [...grantedScopes],
+        permissions: [...grantedScopes].filter((k) => conferrable.has(k)),
+        projectId: selectedProject.id,
       });
       onCreated(result.dto);
       setSecret(result.token);
@@ -193,15 +232,22 @@ export function CreateTokenModal({
   // apart so granting irreversible deletion is a deliberate, visible act. These
   // are render helpers (plain functions, not nested components) so they close
   // over `grantedScopes` / `toggleScope` / `t` without remounting on each keystroke.
-  function renderScopeRow(meta: ScopeMeta) {
-    const checked = grantedScopes.has(meta.scope);
-    const name = t(`scopes.${meta.i18nKey}.name`);
-    const desc = t(`scopes.${meta.i18nKey}.desc`);
+  function renderScopeRow(meta: PermissionMeta) {
+    // A permission this actor cannot confer HERE is DISABLED with its reason,
+    // never hidden (MOTIR-2578 panel 1c): a vanished row reads as a missing
+    // feature and sends someone hunting, while a disabled one teaches the rule
+    // the helper text already states. A workspace owner sees none of these.
+    const locked = !conferrable.has(meta.key);
+    const checked = grantedScopes.has(meta.key) && !locked;
+    // ⚠️ The SHIPPED catalogue copy, not a table written for this screen — the
+    // same strings Roles & permissions renders (MOTIR-2579/-2580).
+    const name = tp(`${permissionSlug(meta.key)}.label`);
+    const desc = tp(`${permissionSlug(meta.key)}.description`);
     const Icon = meta.Icon;
     if (meta.danger) {
       return (
         <div
-          key={meta.scope}
+          key={meta.key}
           className="rounded-(--radius-card) border border-(--el-border-soft) bg-(--el-tint-rose) px-(--spacing-control-x) py-(--spacing-control-y)"
         >
           <div className="flex items-start gap-2.5">
@@ -217,23 +263,39 @@ export function CreateTokenModal({
             </div>
             <Switch
               checked={checked}
-              onCheckedChange={() => toggleScope(meta.scope)}
+              disabled={locked}
+              onCheckedChange={() => toggleScope(meta.key)}
               aria-label={name}
             />
           </div>
+          {locked ? (
+            <p className="mt-1 font-sans text-xs text-(--el-text-strong)">{lockedWhy}</p>
+          ) : null}
         </div>
       );
     }
     return (
-      <div key={meta.scope} className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
+      <div key={meta.key} className="flex items-start gap-2.5 py-2 first:pt-0 last:pb-0">
         <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-(--el-text-muted)" />
         <div className="min-w-0 flex-1">
-          <span className="font-sans text-sm font-medium text-(--el-text)">{name}</span>
-          <p className="mt-0.5 font-sans text-xs text-(--el-text-muted)">{desc}</p>
+          <span
+            className={`font-sans text-sm font-medium ${locked ? 'text-(--el-text-faint)' : 'text-(--el-text)'}`}
+          >
+            {name}
+          </span>
+          <p
+            className={`mt-0.5 font-sans text-xs ${locked ? 'text-(--el-text-faint)' : 'text-(--el-text-muted)'}`}
+          >
+            {desc}
+          </p>
+          {locked ? (
+            <p className="mt-0.5 font-sans text-xs text-(--el-text-secondary)">{lockedWhy}</p>
+          ) : null}
         </div>
         <Switch
           checked={checked}
-          onCheckedChange={() => toggleScope(meta.scope)}
+          disabled={locked}
+          onCheckedChange={() => toggleScope(meta.key)}
           aria-label={name}
         />
       </div>
@@ -242,14 +304,16 @@ export function CreateTokenModal({
 
   // One capability group — a mono/uppercase caption over its hairline-separated
   // safe rows, then any danger row (its own card) below.
-  function renderScopeGroup(group: ScopeGroup) {
-    const metas = scopesInGroup(group);
+  function renderScopeGroup(domain: PermissionDomain, metas: PermissionMeta[]) {
     const safe = metas.filter((m) => !m.danger);
     const danger = metas.filter((m) => m.danger);
     return (
-      <div key={group} className="flex flex-col gap-2">
+      // ⚠️ AA: the domain heading is INFORMATIONAL, so it takes
+      // `--el-text-secondary`, never `--el-text-faint` (2.61 on the white
+      // panel) — the correction MOTIR-2578 made in the asset.
+      <div key={domain} className="flex flex-col gap-2">
         <div className="font-mono text-[0.625rem] tracking-wide text-(--el-text-secondary) uppercase">
-          {t(`scopes.groupLabels.${group}`)}
+          {tp(`domain.${domain}`)}
         </div>
         {safe.length > 0 ? (
           <div className="divide-y divide-(--el-border-soft)">{safe.map(renderScopeRow)}</div>
@@ -376,6 +440,28 @@ export function CreateTokenModal({
                   {t('createModal.scopeHelper')}
                 </span>
               </div>
+              {/* The PROJECT binding (MOTIR-2606). Required, not optional: a
+                  chosen grant must name the project it applies to. Changing it
+                  recomputes the offer below, because a different project is a
+                  different set of permissions this actor can confer. */}
+              <div className="flex flex-col gap-1.5">
+                <label
+                  htmlFor={projectFieldId}
+                  className="font-sans text-sm font-medium text-(--el-text)"
+                >
+                  {t('createModal.projectField')}
+                </label>
+                <Combobox
+                  id={projectFieldId}
+                  label={t('createModal.projectField')}
+                  options={projectOptions}
+                  value={selectedProject?.id ?? ''}
+                  onChange={(pid) => setProjectId(pid)}
+                />
+                <span className="font-sans text-xs text-(--el-text-muted)">
+                  {t('createModal.projectHelper')}
+                </span>
+              </div>
               <div className="flex flex-col gap-1.5">
                 <label
                   htmlFor={expiryId}
@@ -411,12 +497,16 @@ export function CreateTokenModal({
                 aria-labelledby={permLabelId}
                 className="mt-1 grid grid-cols-2 gap-x-6 gap-y-4"
               >
+                {/* Two columns, split so neither drives the height alone — the
+                    design's 3/3 (MOTIR-2578). The GROUPS are the catalog's
+                    domains, derived, so a permission added to the grantable set
+                    lands in a column without an edit here. */}
                 <div className="flex flex-col gap-4">
-                  {renderScopeGroup('read')}
-                  {renderScopeGroup('sprints')}
-                  {renderScopeGroup('integrations')}
+                  {leftColumn.map((g) => renderScopeGroup(g.domain, g.permissions))}
                 </div>
-                <div className="flex flex-col gap-4">{renderScopeGroup('workItems')}</div>
+                <div className="flex flex-col gap-4">
+                  {rightColumn.map((g) => renderScopeGroup(g.domain, g.permissions))}
+                </div>
               </div>
               {grantedScopes.size === 0 ? (
                 <p

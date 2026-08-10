@@ -30,7 +30,5 @@ export function toApiTokenDto(row: ApiTokenWithScope): ApiTokenDto {
     workspace: { id: row.workspace.id, name: row.workspace.name },
     organization: { id: row.workspace.organization.id, name: row.workspace.organization.name },
     permissions: expandStoredGrant(row.scopes).grant,
-    // @deprecated scaffolding — removed by MOTIR-2579 with the DTO field.
-    scopes: row.scopes,
   };
 }
