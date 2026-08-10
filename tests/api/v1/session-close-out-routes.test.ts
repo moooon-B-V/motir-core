@@ -367,12 +367,12 @@ describe('POST /api/v1/work-items/{key}/implementation', () => {
   });
 
   it('refuses a BROWSE-ONLY token — 403', async () => {
-    // ⚠️ And this route is the ONE documented exception (ADR §3): its service
-    // asserts only `project:browse` before WRITING provenance, so the
-    // declaration deliberately names `work_item:edit` — matching its siblings
-    // and loosening nothing — while the gate gap is logged as its own bug. This
-    // test is what proves the DECLARATION is what refuses here, since the
-    // service alone would let a browse-only token through.
+    // The DECLARATION (`work_item:edit`) is what refuses here — the wrapper runs
+    // before the service does. Since MOTIR-2603 the service refuses a
+    // browse-only ACTOR too (`assertCanEdit` before the provenance write), so
+    // this is no longer the only thing standing between a read token and a
+    // write; the two gates are independent and both are asserted — the actor
+    // half in `tests/work-items/report-implementation-gate.test.ts`.
     const caller = await createV1ProjectCaller({ permissions: ['project:browse'] });
     const item = await readyToIntegrate(caller, 'wrong permission');
 

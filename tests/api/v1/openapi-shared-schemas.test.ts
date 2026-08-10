@@ -469,15 +469,12 @@ describe('the operation → permission map is checked against the CODE (MOTIR-25
     );
   });
 
-  it('reportWorkItemImplementation is the ONE documented exception (ADR §3)', () => {
-    // Its service asserts only `project:browse` and then WRITES provenance — a
-    // read permission gating a write, which is a defect in the gate rather than
-    // a fact the map should ratify. The declaration names `work_item:edit`,
-    // matching its siblings and loosening nothing, and the gate gap is logged as
-    // its own bug. If that bug is fixed, this test is what tells you to delete
-    // the exception rather than leave it drifting.
-    expect(
-      V1_OPERATIONS.find((o) => o.operationId === 'reportWorkItemImplementation')?.permission,
-    ).toBe('work_item:edit');
-  });
+  // ADR §3 had ONE exception pinned here by name —
+  // `reportWorkItemImplementation`, whose declaration said `work_item:edit`
+  // while its service asserted only `project:browse`. MOTIR-2603 fixed the gate
+  // instead of the declaration, so the row is no longer special and its pin is
+  // deleted rather than left drifting: the property it stood in for (the service
+  // refuses a browse-only ACTOR) is now asserted where it actually lives, in
+  // `tests/work-items/report-implementation-gate.test.ts`, against real
+  // Postgres. §3's rule is total again — no exception list.
 });

@@ -156,17 +156,24 @@ Three consequences are deliberate, and each is a real narrowing:
   narrowing for archive, and the honest one: the product already governs both
   with one key.
 
-**One exception, recorded rather than hidden.**
-`POST /api/v1/work-items/{key}/implementation` declares `work_item:edit`, and its
-service (`workItemsService.reportImplementation`) asserts only
-`project:browse` — it calls `getWorkItem` and then writes provenance. Declaring
-`project:browse` would match the service and would loosen a write from
-`integration` to any read token; declaring `work_item:edit` matches the
-operation's siblings and loosens nothing. **We declare `work_item:edit` and log
-the service's missing assertion as a bug** (a write gated by a read permission is
-a defect in the gate, not a fact the map should ratify). The equality guard in
-§7 carries this ONE row on an explicit, bug-linked exception list, so the
-exception is countable rather than silent.
+**No exceptions — the rule is total.** Every one of the 39 tool entries and 40
+operation declarations names the permission its own service asserts, with no row
+held on an exception list.
+
+> **There was ONE, and it is closed (MOTIR-2603, 2026-08-10).**
+> `POST /api/v1/work-items/{key}/implementation` declared `work_item:edit` while
+> its service (`workItemsService.reportImplementation`) asserted only
+> `project:browse` — it called `getWorkItem` and then wrote provenance. This ADR
+> declared `work_item:edit` anyway, because declaring `project:browse` would have
+> matched the service and LOOSENED a write from `integration` to any read token,
+> and logged the service's missing assertion as a bug rather than ratifying it in
+> the map. That bug is fixed: the service now asserts `work_item:edit` before the
+> provenance write, in the shape `markIntegrated` / `completeSession` use, so the
+> declaration and the gate agree and the exception list is empty rather than
+> one row long. It is recorded here because the reasoning — _a write gated by a
+> read permission is a defect in the gate, not a fact the map should ratify_ —
+> is the rule the next such row gets read against, and because an exception that
+> vanishes without a trace reads as one that was never noticed.
 
 ### 4. Composition is unchanged: the grant NARROWS, the role decides
 
