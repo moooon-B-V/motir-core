@@ -44,6 +44,25 @@ export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS = 60_000;
 export const DEFAULT_AI_RATE_LIMIT = 30;
 export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
 
+/**
+ * Attachment uploads, per signed-in user. The numbers are the ones the
+ * per-process throttle in `attachmentsService` advertised before MOTIR-2598
+ * moved it onto the shared store — carried over unchanged so the migration
+ * changes WHERE the count lives, not what it permits.
+ */
+export const DEFAULT_UPLOAD_RATE_LIMIT = 10;
+export const DEFAULT_UPLOAD_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * Public-project submissions, per submitting ACCOUNT — the second limb behind
+ * the IP-keyed public-write guard, over a much longer window because each
+ * accepted submission lands a row in someone else's triage queue.
+ *
+ * Also carried over unchanged from the per-process throttle MOTIR-2598 replaced.
+ */
+export const DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT = 5;
+export const DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS = 600_000;
+
 function budget(
   limitEnv: string,
   windowEnv: string,
@@ -93,5 +112,25 @@ export function aiBudget(): RateLimitBudget {
     'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
     DEFAULT_AI_RATE_LIMIT,
     DEFAULT_AI_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** Attachment uploads, keyed per signed-in user (`attachmentsService`). */
+export function uploadBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_UPLOAD_RATE_LIMIT',
+    'MOTIR_UPLOAD_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_UPLOAD_RATE_LIMIT,
+    DEFAULT_UPLOAD_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** Public-project submissions, keyed per submitting account (`publicProjectsService`). */
+export function publicSubmitBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_PUBLIC_SUBMIT_RATE_LIMIT',
+    'MOTIR_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT,
+    DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS,
   );
 }
