@@ -3,6 +3,7 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleDefinitionRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { readMembership, readOwnMembership } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { MemberRole, Project } from '@/generated/prisma/client';
 import {
@@ -55,9 +56,11 @@ import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions'
 //     RLS workspace GUC the enclosing `withWorkspaceContext` / `db.$transaction`
 //     bound — required under the non-bypass motir_app role.
 //   * A plain read path (getBoard, getProjectIssuesList, …) calls without `tx`;
-//     the reads go through the `db` singleton, exactly like the surrounding
-//     read does (RLS is bound by the request middleware in prod, inert under
-//     the dev/CI BYPASSRLS role).
+//     the gate then opens its OWN `withWorkspaceContext` for the resolution
+//     (MOTIR-2527). It used to fall through to the `db` singleton, which bound
+//     no GUCs — correct only under a BYPASSRLS role, and under `motir_app` it
+//     made every one of the gate's three rows invisible, so a member read as a
+//     non-member and the gate 404'd them out of their own project.
 
 /** The minimal actor context the gate needs — satisfied by both ServiceContext and WorkspaceContext. */
 export interface AccessActorContext {
@@ -76,17 +79,20 @@ async function resolveInputs(
   ctx: AccessActorContext,
   tx?: Prisma.TransactionClient,
 ): Promise<ProjectAccessInputs> {
+  // MOTIR-2527: when the caller has no bound transaction, this opens ONE for the
+  // whole resolution rather than binding only the membership read. All three rows
+  // the gate reads are RLS-gated on `app.workspace_id` — `project` by
+  // `project_active_workspace`, `project_membership` by
+  // `project_membership_active_workspace`, `workspace_membership` by
+  // `membership_visible_active_or_own` — so a per-read binding would leave two of
+  // them invisible under the non-bypass role and turn a member into a 404.
+  if (!tx) return withWorkspaceContext(ctx, (t) => resolveInputs(projectId, ctx, t));
+
   const project = await projectRepository.findById(projectId, tx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
     throw new ProjectNotFoundError(projectId);
   }
-  const workspaceMembership = tx
-    ? await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-        ctx.userId,
-        ctx.workspaceId,
-        tx,
-      )
-    : await workspaceMembershipRepository.findByUserAndWorkspace(ctx.userId, ctx.workspaceId);
+  const workspaceMembership = await readMembership(ctx.userId, ctx.workspaceId, tx);
   // ONE round trip for the membership AND the custom role it points at (Story
   // MOTIR-2257 · MOTIR-2470) — a `findUnique` with an `include` is a single
   // Prisma operation, so inside a transaction both tables are read on the same
@@ -139,13 +145,11 @@ async function resolvePublicInputs(
   if (!actorUserId) {
     return { accessLevel: project.accessLevel, workspaceRole: null, projectRole: null };
   }
-  const workspaceMembership = tx
-    ? await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-        actorUserId,
-        project.workspaceId,
-        tx,
-      )
-    : await workspaceMembershipRepository.findByUserAndWorkspace(actorUserId, project.workspaceId);
+  // MOTIR-2527: `readOwnMembership`, not `readMembership` — the actor here may be a
+  // CROSS-ORG viewer of a public project, so binding `app.workspace_id` to a workspace
+  // that is not theirs would presume exactly the membership this read is asking about.
+  // The policy's "or your own" arm is sufficient: the row sought is always the actor's.
+  const workspaceMembership = await readOwnMembership(actorUserId, project.workspaceId, tx);
   // Same ONE-round-trip read as `resolveInputs` (MOTIR-2470): an authenticated
   // actor who is ALSO a member of the public project's workspace keeps their
   // real capabilities, and if that membership is on a custom role, that role is
@@ -286,13 +290,15 @@ export const projectAccessService = {
     tx?: Prisma.TransactionClient,
   ): Promise<T[]> {
     if (projects.length === 0) return [];
-    const workspaceMembership = tx
-      ? await workspaceMembershipRepository.findByUserAndWorkspaceInTx(
-          ctx.userId,
-          ctx.workspaceId,
-          tx,
-        )
-      : await workspaceMembershipRepository.findByUserAndWorkspace(ctx.userId, ctx.workspaceId);
+    // MOTIR-2527: one bound transaction for both reads — `project_membership` is gated
+    // on `app.workspace_id` too, so binding only the membership read would silently
+    // demote every project member to their bare workspace role.
+    if (!tx) {
+      return withWorkspaceContext(ctx, (t) =>
+        projectAccessService.filterBrowsable(projects, ctx, t),
+      );
+    }
+    const workspaceMembership = await readMembership(ctx.userId, ctx.workspaceId, tx);
     const workspaceRole = workspaceMembership?.role ?? null;
     // Owner/admin always browse everything; a non-member never browses any.
     if (isWorkspaceManager(workspaceRole)) return projects;

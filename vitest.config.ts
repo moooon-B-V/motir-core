@@ -874,6 +874,18 @@ export default defineConfig({
         'lib/blob/uploader.ts',
         'lib/blob/s3.ts',
         'lib/blob/referencedUrls.ts',
+
+        // MOTIR-2527 — the membership READER every access gate now routes
+        // through. Small, and gated precisely because it is small: its whole job
+        // is choosing a BINDING, and a branch of it going untested is a gate
+        // silently reading with the wrong GUCs, which is the failure this file
+        // was written to remove. MEASURED first — 8/8 statements, 4/4 functions,
+        // 4/4 branches on this branch, from `tests/permissions/membershipGate.test.ts`.
+        //
+        // ⚠️ `lib/workspaces/**` would have been shorter and wrong, the same line
+        // `lib/blob/**` is held on above: `middleware.ts` sits at ~5% and
+        // `errors.ts` at ~21%, neither of them this card's code.
+        'lib/workspaces/membershipGate.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -889,6 +901,9 @@ export default defineConfig({
         // lines / branches / functions on this branch). The glob form matters for
         // the same reason as in `include` above: a literal `app/(authed)/…` key
         // matches no reported file, so the threshold would pass vacuously.
+        // MOTIR-2527 — the membership reader, measured at 100/100/100 on this
+        // branch before being pinned (see the `include` note above).
+        'lib/workspaces/membershipGate.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mappers/permissionMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/settings/projectSettingsNav.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2258 · Subtask MOTIR-2476 — both MEASURED before being
