@@ -89,7 +89,7 @@ export const story_10_4: SeedStory = {
     '≥90 % thresholds in `vitest.config.ts` with NO edits to the thresholds; a ' +
     'deliberately-dropped branch in a gated file still fails the run.\n' +
     '- **RLS / role survives cloning.** A worker DB still enforces the RLS ' +
-    'policies + the non-bypass `prodect_app` role + the structural triggers the ' +
+    'policies + the non-bypass `motir_app` role + the structural triggers the ' +
     'migrations create (cluster-level role persists across `CREATE DATABASE`); ' +
     'a per-worker smoke assertion proves it.\n' +
     '- **CI is green and faster.** The "Vitest (integration + coverage)" job ' +
@@ -141,7 +141,7 @@ export const story_10_4: SeedStory = {
         'per-file ≥90 % thresholds need ZERO changes. (This is the reason for ' +
         'in-job workers over CI-sharding — see the module header.)\n' +
         '5. **Prove the RLS surface survives cloning.** The migrations create ' +
-        'RLS policies + the non-bypass `prodect_app` role + structural ' +
+        'RLS policies + the non-bypass `motir_app` role + structural ' +
         'triggers. The role is CLUSTER-level so it persists across ' +
         '`CREATE DATABASE`; GRANTs/policies/triggers are copied by the ' +
         '`TEMPLATE`. Add a per-worker smoke assertion that a worker DB enforces ' +
@@ -165,7 +165,7 @@ export const story_10_4: SeedStory = {
         'file still fails the run).\n' +
         '- Two tests that would collide on shared rows pass under parallel ' +
         'workers (isolation proven); a per-worker smoke assertion proves a ' +
-        'cloned worker DB enforces the RLS policies + the `prodect_app` role + ' +
+        'cloned worker DB enforces the RLS policies + the `motir_app` role + ' +
         'the structural triggers.\n' +
         '- The per-test `truncate*` reset model is kept (only its DB is now ' +
         'per-worker); no test is silently skipped or quarantined to make the ' +
@@ -180,7 +180,7 @@ export const story_10_4: SeedStory = {
         'imports `db` (the import-ordering constraint for the URL override).\n' +
         '- `motir-core/lib/db.ts` — the Prisma singleton that reads ' +
         '`DATABASE_URL` at module-eval (per-worker override target).\n' +
-        '- `motir-core/prisma/` migrations — the RLS policies + `prodect_app` ' +
+        '- `motir-core/prisma/` migrations — the RLS policies + `motir_app` ' +
         'role + structural triggers the worker DBs must still enforce.\n' +
         '- `motir-core/CLAUDE.md` § tests-use-real-Postgres + § coverage gate; ' +
         'PRODECT_FINDINGS.md #101 (the originating finding); PR #882 (the E2E ' +

@@ -20,7 +20,7 @@ export type OrgMembershipWithUser = OrganizationMembership & {
 // is OrganizationMembership, not Organization. Mirrors
 // `workspaceMembershipRepository`: writes require `tx`, reads that guard a write
 // take `tx` so the RLS policy's org/user GUCs admit the row under the non-bypass
-// `prodect_app` role. The membership-gating logic + the cross-workspace roster
+// `motir_app` role. The membership-gating logic + the cross-workspace roster
 // pagination live in `organizationsService` (6.10.4).
 
 export const organizationMembershipRepository = {
@@ -37,7 +37,7 @@ export const organizationMembershipRepository = {
    * Same lookup as findByOrgAndUser, but inside the caller's transaction so the
    * organization_membership RLS policy (keyed off the per-transaction
    * `app.organization_id` / `app.user_id` GUCs) admits the row under the
-   * non-bypass `prodect_app` role. Used by the 6.10.4 access gate, whose result
+   * non-bypass `motir_app` role. Used by the 6.10.4 access gate, whose result
    * must be correct in production.
    */
   async findByOrgAndUserInTx(

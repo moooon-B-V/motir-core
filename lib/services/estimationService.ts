@@ -35,7 +35,7 @@ import type {
 //
 // 4-layer (CLAUDE.md): one service method = one transaction (writes run under
 // `withWorkspaceContext` so the FORCE-RLS WITH CHECK passes under the non-bypass
-// `prodect_app` role); repositories are single-op leaves; methods return DTOs,
+// `motir_app` role); repositories are single-op leaves; methods return DTOs,
 // never raw Prisma rows.
 //
 // TENANCY (finding #26): every repo read/write carries an explicit

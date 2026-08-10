@@ -126,7 +126,7 @@ export const ciAllowanceService = {
     // the correct context and `withSystemContext` would be a silent bug: the
     // `org_membership_visible_active_or_own` policy has NO system escape, so a
     // system-context read returns ZERO members in production (where the app
-    // connects as the non-BYPASSRLS `prodect_app` role) and every org would
+    // connects as the non-BYPASSRLS `motir_app` role) and every org would
     // silently collapse to the 1,000-minute floor. Same trap the meter documents
     // for `project_repository`.
     const org = await withOrgServiceWriteContext(organizationId, async (tx) => {

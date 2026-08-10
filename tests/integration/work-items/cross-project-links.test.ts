@@ -30,7 +30,7 @@ import { truncateAuthTables } from '../../helpers/db';
 //      link minted by the real service flow.)
 //
 // Real Postgres, no mocks. The RLS assertion drops to the non-bypass
-// prodect_app role (the dev/CI superuser has BYPASSRLS, so RLS is inert under
+// motir_app role (the dev/CI superuser has BYPASSRLS, so RLS is inert under
 // it — see work-item-rls.test.ts's header). asAppRole is a local copy of the
 // helper the RLS suites each carry.
 
@@ -63,7 +63,7 @@ async function asAppRole<T>(
     if (ctx.projectId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.project_id', ${ctx.projectId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }

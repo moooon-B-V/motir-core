@@ -63,7 +63,7 @@ import type { ProjectAccessDTO, ProjectMemberDTO } from '@/lib/dto/projectMember
 //
 // RLS: every method runs inside withWorkspaceContext(ctx) so the project +
 // project_membership RLS policies see the per-transaction workspace GUC under
-// the non-bypass prodect_app role. The project key is resolved INSIDE the same
+// the non-bypass motir_app role. The project key is resolved INSIDE the same
 // transaction (one service method = one transaction) so the gate read and the
 // write share a snapshot.
 //
@@ -98,7 +98,7 @@ function actorContext(input: ActorScopedInput): { userId: string; workspaceId: s
  * Assert the actor holds `key` on the project, inside the enclosing transaction.
  * A thin adapter onto `projectAccessService.assertPermission` — `tx` is threaded
  * so the gate's reads see the per-transaction workspace GUC the RLS policies
- * need under prodect_app, and share the snapshot the write will use.
+ * need under motir_app, and share the snapshot the write will use.
  */
 function assertPermission(
   input: ActorScopedInput,

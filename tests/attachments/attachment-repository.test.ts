@@ -198,7 +198,7 @@ describe('attachmentRepository.listOrphans', () => {
 // RLS proof for the 5.2.1 policy swap (attachment_active_workspace →
 // attachment_workspace_or_system_admin). The dev/CI DB connects as the
 // `prodect` superuser (BYPASSRLS — PRODECT_FINDINGS #5), so each assertion
-// runs under `SET LOCAL ROLE prodect_app` (NOSUPERUSER NOBYPASSRLS), the
+// runs under `SET LOCAL ROLE motir_app` (NOSUPERUSER NOBYPASSRLS), the
 // asAppRole idiom from tests/workspace-rls.test.ts.
 async function asAppRole<T>(
   guc: { workspaceId?: string; systemAdmin?: boolean },
@@ -211,7 +211,7 @@ async function asAppRole<T>(
     if (guc.systemAdmin) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }

@@ -14,7 +14,7 @@ import {
  * Each worker DB is a `CREATE DATABASE … TEMPLATE <base>` clone of the migrated
  * base database (the one CI's `prisma migrate deploy` just built, or the local
  * dev DB). The TEMPLATE clone is a fast file-copy that carries the full schema,
- * the RLS policies, and the per-DB GRANTs; the non-bypass `prodect_app` role is
+ * the RLS policies, and the per-DB GRANTs; the non-bypass `motir_app` role is
  * cluster-level so it is already present. We DROP+recreate so a re-run starts
  * from a clean clone.
  *

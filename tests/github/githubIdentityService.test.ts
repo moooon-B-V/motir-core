@@ -64,7 +64,7 @@ function countIdentities(): Promise<number> {
 
 /**
  * Run `fn` inside a transaction that binds the `app.user_id` GUC and drops to
- * the non-bypass `prodect_app` role — the role switch is what makes the RLS
+ * the non-bypass `motir_app` role — the role switch is what makes the RLS
  * policy actually bite (the default test superuser bypasses even FORCE). Mirrors
  * the local helper in tests/project-rls.test.ts.
  */
@@ -76,7 +76,7 @@ async function asAppRole<T>(
     if (ctx.userId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.user_id', ${ctx.userId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
@@ -210,7 +210,7 @@ describe('githubIdentityService.getIdentityForUser', () => {
     mockGithub({ token: 't', user: { id: 11, login: 'alice-gh', avatar_url: null } });
     await githubIdentityService.completeOAuthCallback({ code: 'c', userId: alice.id });
 
-    // Same `where user_id = alice` read, run as prodect_app: bound to BOB's GUC
+    // Same `where user_id = alice` read, run as motir_app: bound to BOB's GUC
     // the policy hides Alice's row; bound to Alice's GUC her own row is visible.
     const underBob = await asAppRole({ userId: bob.id }, (tx) =>
       githubIdentityRepository.findByUserId(alice.id, tx),

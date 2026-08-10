@@ -18,7 +18,7 @@ import { db } from '@/lib/db';
 //
 // TENANCY (finding #26): every read/write carries an explicit `workspaceId` —
 // primary even under the dev/CI BYPASSRLS `db` role; the table's FORCE-RLS
-// workspace policy is the backstop for the non-bypass `prodect_app` role the
+// workspace policy is the backstop for the non-bypass `motir_app` role the
 // `completeSprint` write runs under.
 
 /** The per-issue snapshot row `createSnapshot` inserts (the loader supplies the

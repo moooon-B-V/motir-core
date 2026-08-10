@@ -35,7 +35,7 @@ export const story_2_2: SeedStory = {
     '- **Manual UX check:** create a workspace + project, visit `/settings/project/[key]/workflow`: verify all six default statuses (To Do / Blocked / In Progress / In Review / Done / Cancelled) and the fifteen transitions, rename one, add a custom status, add/remove a transition, flip policy mode, attempt a restricted-mode illegal status change on a real issue → typed-error toast.\n' +
     '- **Cross-project blocker check (finding #21 resolution):** create two projects; create an issue in A blocked by an issue in B; mark the blocker "Cancelled" in B (legal per the default seed — no admin customization needed); A\'s issue\'s readiness flips to ready — proving the readiness predicate honors both `done` AND `cancelled` terminal categories.\n' +
     "- **Block-as-status vs. block-as-link parity check:** on one issue, set `status: 'blocked'` (the status flag); on another, leave status `todo` but add a `work_item_link.is_blocked_by` edge to an open blocker. Both should show up in a \"what's blocked?\" filter / view (when those surfaces ship in Epic 2.5 / Epic 6); for this Story, just confirm both signals coexist without conflict — `isReady` returns false for the link-blocked one, and the status-blocked one is filterable by status.\n" +
-    "- **RLS proof:** open a psql session as `prodect_app`, `SET app.workspace_id = '<workspace-A>'`, query `workflow_status` + `workflow_transition` — see only workspace A's rows.",
+    "- **RLS proof:** open a psql session as `motir_app`, `SET app.workspace_id = '<workspace-A>'`, query `workflow_status` + `workflow_transition` — see only workspace A's rows.",
   items: [
     {
       id: '2.2.1',
@@ -77,7 +77,7 @@ export const story_2_2: SeedStory = {
         'table covering all four, matching Story 1.6.4.\n\n' +
         "**What this does NOT do:** seed default rows (that's 2.2.2's job — done in " +
         'application code, not a SQL `INSERT` in the migration, so the seed runs under ' +
-        'the prodect_app role and gets the workspace_id GUC set correctly). Also does not change ' +
+        'the motir_app role and gets the workspace_id GUC set correctly). Also does not change ' +
         "`work_item.status`'s column type — it stays `String` for v1 " +
         'portability, with integrity enforced by the service layer (see 2.2.4).\n\n' +
         '## Acceptance criteria\n\n' +
@@ -85,7 +85,7 @@ export const story_2_2: SeedStory = {
         '- RLS policies created and FORCED on both tables; the `app.workspace_id` + `app.system_admin` GUC pattern mirrors `job_run` (finding #33).\n' +
         '- Partial unique index enforces exactly-one-initial-status-per-project; attempting a second initial-status insert fails with a constraint violation.\n' +
         '- `@@unique([projectId, key])` enforces stable per-project status keys.\n' +
-        "- An RLS proof test (mirroring `tests/jobs/rls.test.ts`) under `SET LOCAL ROLE prodect_app` demonstrates: workspace A's session sees only its own statuses; cross-workspace SELECT returns 0 rows; INSERT with a foreign `workspaceId` in the same row is rejected.\n" +
+        "- An RLS proof test (mirroring `tests/jobs/rls.test.ts`) under `SET LOCAL ROLE motir_app` demonstrates: workspace A's session sees only its own statuses; cross-workspace SELECT returns 0 rows; INSERT with a foreign `workspaceId` in the same row is rejected.\n" +
         '- No `SQL INSERT` in the migration for default rows (seeding is application-layer work in 2.2.2).\n\n' +
         '## Context refs\n\n' +
         '- `prisma/schema.prisma` — Story 1.3 `project`, Story 1.4 `work_item`\n' +

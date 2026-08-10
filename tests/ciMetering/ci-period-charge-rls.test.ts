@@ -23,7 +23,7 @@ import { truncateAuthTables } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE ROW
 // LEVEL SECURITY. Every assertion below therefore runs inside a transaction that
-// `SET LOCAL ROLE prodect_app`. WITHOUT the role switch each assertion would
+// `SET LOCAL ROLE motir_app`. WITHOUT the role switch each assertion would
 // assert the OPPOSITE of reality.
 
 const PERIOD = new Date('2026-07-01T00:00:00.000Z');
@@ -115,13 +115,13 @@ async function asAppRole<T>(
     if (ctx.systemAdmin === true) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('ci_period_charge RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero charge rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero charge rows', async () => {
     await makeChargeTenants();
     expect(await asAppRole({}, (tx) => tx.ciPeriodCharge.findMany())).toEqual([]);
   });

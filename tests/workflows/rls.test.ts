@@ -27,7 +27,7 @@ import { truncateAuthTables } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE
 // ROW LEVEL SECURITY. Every RLS assertion below runs inside a transaction
-// that `SET LOCAL ROLE prodect_app` (the NOSUPERUSER NOBYPASSRLS role). The
+// that `SET LOCAL ROLE motir_app` (the NOSUPERUSER NOBYPASSRLS role). The
 // asAppRole helper binds the same GUC withWorkspaceContext binds
 // (app.workspace_id) then drops the role so the policies bite; it reverts at
 // txn end. Local copy of the helper, per the convention each RLS suite carries
@@ -194,7 +194,7 @@ async function makeWorkflowTenants(): Promise<WorkflowTenantFixture> {
 
 /**
  * Run `fn` inside a transaction that (a) optionally binds app.workspace_id and
- * (b) drops to the non-bypass prodect_app role for the duration. The role
+ * (b) drops to the non-bypass motir_app role for the duration. The role
  * switch is what makes RLS bite; it reverts at txn end.
  */
 async function asAppRole<T>(
@@ -205,13 +205,13 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('workflow_status RLS — read isolation', () => {
-  it('with NO context, prodect_app sees zero workflow_status rows', async () => {
+  it('with NO context, motir_app sees zero workflow_status rows', async () => {
     await makeWorkflowTenants();
     const rows = await asAppRole({}, (tx) => tx.workflowStatus.findMany());
     expect(rows).toEqual([]);
@@ -238,7 +238,7 @@ describe('workflow_status RLS — read isolation', () => {
 });
 
 describe('workflow_transition RLS — read isolation', () => {
-  it('with NO context, prodect_app sees zero workflow_transition rows', async () => {
+  it('with NO context, motir_app sees zero workflow_transition rows', async () => {
     await makeWorkflowTenants();
     const rows = await asAppRole({}, (tx) => tx.workflowTransition.findMany());
     expect(rows).toEqual([]);

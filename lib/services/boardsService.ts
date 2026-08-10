@@ -77,7 +77,7 @@ import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 //
 // Like workflowsService, every write runs under the active workspace context so
 // the FORCE-RLS WITH CHECK on the board tables passes under the non-bypass
-// prodect_app role (the scalar-FK `Unchecked` creates avoid a relation
+// motir_app role (the scalar-FK `Unchecked` creates avoid a relation
 // connect's parent SELECT — finding #33). TENANCY (finding #26): every repo
 // read/write carries an explicit `workspaceId`; RLS is the structural backstop,
 // inert under the dev/CI BYPASSRLS superuser.

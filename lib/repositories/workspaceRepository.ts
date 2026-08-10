@@ -18,7 +18,7 @@ export const workspaceRepository = {
   /**
    * Same lookup as findById, but inside the caller's transaction so the
    * workspace RLS policy (which keys off the per-transaction app.workspace_id /
-   * app.user_id GUCs) admits the row under the non-bypass prodect_app role.
+   * app.user_id GUCs) admits the row under the non-bypass motir_app role.
    * Used by the Story 6.10 org access gate to resolve a workspace's
    * organizationId inside the bound context; the db-singleton variant returns
    * NULL under RLS when no context is bound.

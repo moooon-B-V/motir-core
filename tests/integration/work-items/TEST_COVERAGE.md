@@ -62,7 +62,7 @@ so test files run serially against the one local Postgres — the "passes under
 default concurrency" requirement is met by design, with no cross-file row races.
 
 Every RLS assertion runs **inside** a transaction that binds the GUCs via
-`set_config(..., true)` (transaction-local) and `SET LOCAL ROLE prodect_app`
+`set_config(..., true)` (transaction-local) and `SET LOCAL ROLE motir_app`
 (reverts at commit) — see `asAppRole` in `tests/work-item-rls.test.ts`,
 `revisions.test.ts`, and `cross-project-links.test.ts`, and `withWorkspaceContext`
 in `lib/workspaces/context.ts`. Because the binding is transaction-scoped, the

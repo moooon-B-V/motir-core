@@ -20,7 +20,7 @@ const { createWorkspace } = workspacesService;
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS does nothing under it regardless of
 // FORCE ROW LEVEL SECURITY. Every RLS assertion below therefore runs inside
-// a transaction that `SET LOCAL ROLE prodect_app` (the NOSUPERUSER
+// a transaction that `SET LOCAL ROLE motir_app` (the NOSUPERUSER
 // NOBYPASSRLS role created by the add_workspace_rls migration). Without that
 // role switch each assertion would assert the OPPOSITE of reality (a
 // superuser sees all rows). The role reverts at txn end. This mirrors
@@ -69,12 +69,12 @@ async function makeTenants(): Promise<TenantFixture> {
 /**
  * Run `fn` inside a transaction that (a) optionally pins the user +
  * workspace GUCs the RLS policies read and (b) drops to the non-bypass
- * `prodect_app` role for the duration of the transaction — the role switch
+ * `motir_app` role for the duration of the transaction — the role switch
  * is what makes RLS actually bite (the default superuser bypasses it). The
  * role reverts when the transaction ends.
  *
  * Mirrors tests/workspace-rls.test.ts's asAppRole. We do NOT fold the
- * role-switch into withWorkspaceContext: production connects as prodect_app
+ * role-switch into withWorkspaceContext: production connects as motir_app
  * via its DATABASE_URL, not via a per-query role switch — see
  * prodect_plan/PRODECT_FINDINGS.md #5.
  */
@@ -89,19 +89,19 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('multi-tenant RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero workspace rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero workspace rows', async () => {
     await makeTenants();
     const rows = await asAppRole({}, (tx) => tx.workspace.findMany());
     expect(rows).toEqual([]);
   });
 
-  it('with NO GUC set, the prodect_app role sees zero workspace_membership rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero workspace_membership rows', async () => {
     await makeTenants();
     const rows = await asAppRole({}, (tx) => tx.workspaceMembership.findMany());
     expect(rows).toEqual([]);
@@ -140,7 +140,7 @@ describe('multi-tenant RLS — read isolation', () => {
 });
 
 describe('multi-tenant RLS — write isolation', () => {
-  it('INSERT into workspace_membership is denied for prodect_app (no INSERT policy → 42501)', async () => {
+  it('INSERT into workspace_membership is denied for motir_app (no INSERT policy → 42501)', async () => {
     const fx = await makeTenants();
     // The add_workspace_rls migration deliberately defines NO INSERT policy
     // on workspace_membership (tenant-root inserts are gated at the app

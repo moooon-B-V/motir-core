@@ -13,7 +13,7 @@ import { truncateAuthTables } from '../helpers/db';
 // idempotency unique, and the unread-count partial-index semantics. Real
 // Postgres (no mocks), per CLAUDE.md. They run as the dev/CI superuser via the
 // `db` singleton (RLS is inert under BYPASSRLS — the policies are exercised
-// separately under the prodect_app role, the multi-tenant-rls suite's pattern);
+// separately under the motir_app role, the multi-tenant-rls suite's pattern);
 // what's proven here is the repository contract and the migration-built
 // constraints. Writes run inside a real `db.$transaction` to exercise the
 // required-`tx` path.

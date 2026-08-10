@@ -108,7 +108,7 @@ export const projectRepository = {
   /**
    * Read a project by id. Optionally takes `tx` when the caller is already
    * inside a transaction — required when running under the non-bypass
-   * prodect_app role with the project RLS policy in force, because the
+   * motir_app role with the project RLS policy in force, because the
    * policy keys on the per-transaction `app.workspace_id` GUC that
    * withWorkspaceContext binds. Outside withWorkspaceContext the policy
    * sees NULL and hides every row under the non-bypass role.
@@ -132,7 +132,7 @@ export const projectRepository = {
    * lookup is inherently workspace-scoped: a project living in another
    * workspace is simply not found (the no-existence-leak contract is enforced
    * one layer up, in the service). Optionally takes `tx` so the read sees the
-   * project RLS policy's workspace GUC under the non-bypass prodect_app role,
+   * project RLS policy's workspace GUC under the non-bypass motir_app role,
    * exactly like `findById`.
    */
   async findByIdentifier(
@@ -719,7 +719,7 @@ export const projectRepository = {
    * the whole project row. Returns null when the project doesn't exist; the
    * caller (`projectAiSettingsService`) owns the tenant gate + the not-found
    * error. Read-only path → `db` singleton unless a `tx` is supplied (needed
-   * under the non-bypass `prodect_app` role, where the project RLS policy keys on
+   * under the non-bypass `motir_app` role, where the project RLS policy keys on
    * the per-transaction workspace GUC — same contract as `findById`).
    */
   async findAiSettings(
@@ -761,7 +761,7 @@ export const projectRepository = {
    * (MOTIR-1621), whose two services each check their own switch before doing any
    * work. Returns null when the project doesn't exist; the caller owns the tenant
    * gate + the not-found error. Read-only path → `db` singleton unless a `tx` is
-   * supplied (needed under the non-bypass `prodect_app` role, where the project
+   * supplied (needed under the non-bypass `motir_app` role, where the project
    * RLS policy keys on the per-transaction workspace GUC — same contract as
    * `findById`).
    */

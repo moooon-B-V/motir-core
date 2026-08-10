@@ -13,12 +13,12 @@ import { truncateAuthTables } from './helpers/db';
 // file extends the same shape to the project table, the new tenant-scoped
 // entity Story 1.3 shipped. Two independent tenants (each with their own
 // workspace + one project) must never see or mutate each other's project
-// rows once we drop to the non-bypass prodect_app role.
+// rows once we drop to the non-bypass motir_app role.
 //
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of
 // FORCE ROW LEVEL SECURITY. Every RLS assertion below therefore runs inside
-// a transaction that `SET LOCAL ROLE prodect_app` (the non-bypass role
+// a transaction that `SET LOCAL ROLE motir_app` (the non-bypass role
 // installed by the add_workspace_rls migration). Without the role switch
 // each assertion would assert the OPPOSITE of reality. The role reverts at
 // txn end. The asAppRole helper here is intentionally a local copy of the
@@ -56,7 +56,7 @@ interface ProjectTenantFixture {
 // workspace, and the projects are created via the service so the
 // workspace context + identifier/slug derivation match production exactly.
 // Setup runs as the superuser (BYPASSRLS) — that's fine; the assertions
-// below are what runs as prodect_app and what RLS bites on.
+// below are what runs as motir_app and what RLS bites on.
 async function makeProjectTenants(): Promise<ProjectTenantFixture> {
   const userA = await usersService.createUser({
     email: 'project-tenant-a@example.com',
@@ -102,7 +102,7 @@ async function makeProjectTenants(): Promise<ProjectTenantFixture> {
 /**
  * Run `fn` inside a transaction that (a) optionally pins the user +
  * workspace GUCs the RLS policies read and (b) drops to the non-bypass
- * `prodect_app` role for the duration of the transaction. The role switch
+ * `motir_app` role for the duration of the transaction. The role switch
  * is what makes RLS actually bite (the default superuser bypasses it). The
  * role reverts when the transaction ends.
  *
@@ -120,13 +120,13 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('project RLS — read isolation', () => {
-  it('with NO GUC set, the prodect_app role sees zero project rows', async () => {
+  it('with NO GUC set, the motir_app role sees zero project rows', async () => {
     await makeProjectTenants();
     const rows = await asAppRole({}, (tx) => tx.project.findMany());
     expect(rows).toEqual([]);

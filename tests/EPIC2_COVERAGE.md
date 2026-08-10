@@ -157,7 +157,7 @@ runs `pnpm test:coverage`, so these thresholds now gate every future PR.
 `vitest.config.ts` sets `fileParallelism: false` + `sequence.concurrent: false`,
 so the 89 test files run serially against the one local Postgres (no cross-file
 row races). Every RLS assertion binds its GUCs transaction-locally
-(`set_config(..., true)` + `SET LOCAL ROLE prodect_app`), so the binding is
+(`set_config(..., true)` + `SET LOCAL ROLE motir_app`), so the binding is
 discarded at each transaction boundary — no cross-test GUC bleed. `beforeEach`
 truncates the touched tables (`tests/helpers/db.ts`), so row state never carries
 between cases. The only permitted `vi.mock` is `getSession()`; every DB/external

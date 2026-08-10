@@ -13,7 +13,7 @@
  *
  * The per-project actor is the workspace OWNER (the creator tier — roles.ts),
  * falling back to any member: `withWorkspaceContext` binds that user's GUC so
- * the FORCE-RLS board writes pass under the non-bypass prodect_app role. (Under
+ * the FORCE-RLS board writes pass under the non-bypass motir_app role. (Under
  * the dev/CI BYPASSRLS superuser the GUC is moot, but we bind a real member so
  * the path is production-correct.)
  */

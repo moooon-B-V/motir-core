@@ -14,7 +14,7 @@ import { truncateAuthTables } from './helpers/db';
 // propagation. Real Postgres, no mocks. Proves: the column round-trips, the
 // clear path resets to NULL, repeats are idempotent, an unknown org → typed
 // 404, AND the RLS contract the service relies on (the org-GUC-only write is
-// admitted under the non-bypass prodect_app role, and the GUC is load-bearing).
+// admitted under the non-bypass motir_app role, and the GUC is load-bearing).
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -122,9 +122,9 @@ describe('billingPropagationService.setScaledTrackerState', () => {
 });
 
 // The RLS contract the service leans on: the org UPDATE policy gates purely on
-// app.organization_id (no user). These run as the non-bypass prodect_app role to
+// app.organization_id (no user). These run as the non-bypass motir_app role to
 // actually exercise the policy (the superuser default would bypass it).
-describe('scaled-tracker write under RLS (prodect_app role)', () => {
+describe('scaled-tracker write under RLS (motir_app role)', () => {
   async function asAppRole<T>(
     organizationId: string | undefined,
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
@@ -133,7 +133,7 @@ describe('scaled-tracker write under RLS (prodect_app role)', () => {
       if (organizationId !== undefined) {
         await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
       }
-      await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+      await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return fn(tx);
     });
   }

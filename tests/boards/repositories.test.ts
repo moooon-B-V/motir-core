@@ -17,7 +17,7 @@ import { truncateAuthTables } from '../helpers/db';
 // singleton: under BYPASSRLS the RLS policy is inert, so a cross-workspace
 // read returning [] / null PROVES the repository's own WHERE-clause gate, not
 // the DB policy (the RLS policy itself is proven separately by the 3.1.1
-// tests/boards/rls.test.ts under the prodect_app role). The representative
+// tests/boards/rls.test.ts under the motir_app role). The representative
 // write runs inside a real `db.$transaction` to exercise the required-`tx`
 // write path.
 

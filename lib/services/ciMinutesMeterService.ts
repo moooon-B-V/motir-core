@@ -129,7 +129,7 @@ export const ciMinutesMeterService = {
     //   * `project_repository` / `workspace` — policy gates PURELY on
     //     `app.workspace_id` with NO system escape, so `withSystemContext` would
     //     read NOTHING here in production (where the app connects as the
-    //     non-BYPASSRLS `prodect_app` role) and the whole chain would silently
+    //     non-BYPASSRLS `motir_app` role) and the whole chain would silently
     //     resolve to "unattributed". They are read under
     //     `withWorkspaceServiceContext`, bound to the installation's workspace.
     //   * `organization` — `organization_active` gates purely on

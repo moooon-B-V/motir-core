@@ -149,7 +149,7 @@ function assign(fx: Fixture, userId: string, roleKey: string) {
 }
 
 /**
- * Run `fn` under the NON-BYPASS `prodect_app` role, with the workspace GUC bound
+ * Run `fn` under the NON-BYPASS `motir_app` role, with the workspace GUC bound
  * — the only way an RLS assertion means anything here, since the test connection
  * is the superuser and a superuser bypasses every policy. A local copy, per the
  * convention each RLS-touching suite in this repo carries its own.
@@ -160,7 +160,7 @@ async function asAppRole<T>(
 ): Promise<T> {
   return db.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
@@ -575,7 +575,7 @@ describe('GUARD · tenancy at the non-bypass app role', () => {
     // the superuser, and a superuser has BYPASSRLS — under it every policy is
     // inert regardless of FORCE, so a "tenancy" assertion made through the plain
     // `db` singleton proves nothing at all. `asAppRole` binds the GUC and then
-    // drops to `prodect_app` for the rest of the transaction, so what answers
+    // drops to `motir_app` for the rest of the transaction, so what answers
     // below is the POLICY and not a service-level filter.
     const [rows, counts] = await asAppRole(theirs.ownerCtx, (tx) =>
       Promise.all([

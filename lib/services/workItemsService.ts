@@ -1846,7 +1846,7 @@ export const workItemsService = {
    * Operator-shaped, so it takes an `actorUserId` rather than a `ServiceContext`
    * (there is no session) and binds the workspace GUC via `withWorkspaceContext`
    * exactly as `boardsService.backfillDefaultBoard` does — the RLS-correct path
-   * for a script's writes under the non-bypass `prodect_app` role.
+   * for a script's writes under the non-bypass `motir_app` role.
    */
   async backfillProvenanceForProject(
     projectId: string,

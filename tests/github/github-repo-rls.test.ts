@@ -16,7 +16,7 @@ import { truncateAuthTables } from '../helpers/db';
 // CRITICAL (PRODECT_FINDINGS #5): the dev/CI DB connects as the `prodect`
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE ROW
 // LEVEL SECURITY. Every assertion below therefore runs inside a transaction that
-// `SET LOCAL ROLE prodect_app`. WITHOUT the role switch each assertion would
+// `SET LOCAL ROLE motir_app`. WITHOUT the role switch each assertion would
 // assert the OPPOSITE of reality. The role reverts at txn end. `asAppRole` is
 // intentionally a local copy of the helper in project-rls.test.ts /
 // project-repo-rls.test.ts — see those files for why it is not hoisted yet.
@@ -60,7 +60,7 @@ interface SharedMirrorFixture {
 /**
  * Two independent tenants whose repos live behind ONE installation that belongs
  * to NEITHER of them — the provisioning-org shape. Setup runs as the superuser
- * (BYPASSRLS), which is fine: the assertions are what run as `prodect_app`.
+ * (BYPASSRLS), which is fine: the assertions are what run as `motir_app`.
  */
 async function makeSharedMirror(): Promise<SharedMirrorFixture> {
   const userA = await usersService.createUser({
@@ -144,7 +144,7 @@ async function asAppRole<T>(
     if (ctx.systemAdmin) {
       await tx.$executeRaw`SELECT set_config('app.system_admin', 'true', true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }

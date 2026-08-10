@@ -24,7 +24,7 @@
 // (workItemsService.getWorkItem / getLink, projectsService.assertProjectInWorkspace)
 // that returns 404 (NOT 403 — the no-existence-leak contract from 1.2.7) on a
 // tenant miss. RLS remains the structural backstop, proven directly under the
-// non-bypass prodect_app role in tests/work-item-rls.test.ts.
+// non-bypass motir_app role in tests/work-item-rls.test.ts.
 //
 // Speed: uses Playwright's `request` fixture (no browser) — sign-up + every
 // work-item op is a bare HTTP call. Auth via /api/auth/sign-up/email (the

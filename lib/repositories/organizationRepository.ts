@@ -48,7 +48,7 @@ export const organizationRepository = {
    * Find by id inside the caller's transaction so the organization RLS policy
    * (which keys off the per-transaction `app.organization_id` / `app.user_id`
    * GUCs bound by the 6.10.4 org-context layer) admits the row under the
-   * non-bypass `prodect_app` role. Used by role-gated reads that guard a
+   * non-bypass `motir_app` role. Used by role-gated reads that guard a
    * subsequent write; the `db`-singleton variant above returns NULL under RLS
    * when no context is bound.
    */
@@ -126,7 +126,7 @@ export const organizationRepository = {
    * or RLS-hidden; the service maps that to `OrganizationNotFoundError`. Must
    * run inside a tx whose `app.organization_id` GUC matches `id` (see
    * `withOrgServiceWriteContext`) so the `organization_mutate_active` RLS policy
-   * admits the UPDATE under the non-bypass `prodect_app` role.
+   * admits the UPDATE under the non-bypass `motir_app` role.
    */
   async updateScaledTrackerState(
     id: string,

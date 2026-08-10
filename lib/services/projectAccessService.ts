@@ -53,7 +53,7 @@ import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions'
 //   * A caller already inside a transaction (the write paths: createWorkItem,
 //     moveCard, …) passes its `tx` so the gate reads share the snapshot AND the
 //     RLS workspace GUC the enclosing `withWorkspaceContext` / `db.$transaction`
-//     bound — required under the non-bypass prodect_app role.
+//     bound — required under the non-bypass motir_app role.
 //   * A plain read path (getBoard, getProjectIssuesList, …) calls without `tx`;
 //     the reads go through the `db` singleton, exactly like the surrounding
 //     read does (RLS is bound by the request middleware in prod, inert under

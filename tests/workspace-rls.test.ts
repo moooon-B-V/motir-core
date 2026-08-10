@@ -17,10 +17,10 @@ import { truncateAuthTables } from './helpers/db';
 // (2) needs care because the dev container's `prodect` role is a
 // superuser, which unconditionally bypasses RLS regardless of FORCE.
 // We exercise RLS by opening a transaction and `SET LOCAL ROLE
-// prodect_app` (the non-bypass role created in the RLS migration). The
+// motir_app` (the non-bypass role created in the RLS migration). The
 // role reverts at txn end so subsequent tests run as `prodect` again.
 //
-// Production deploys should DATABASE_URL-connect as prodect_app so RLS
+// Production deploys should DATABASE_URL-connect as motir_app so RLS
 // is load-bearing without the per-query role-switch dance — see the
 // finding in prodect_plan/PRODECT_FINDINGS.md.
 
@@ -68,14 +68,14 @@ async function makeFixture(): Promise<RlsFixture> {
 
 /**
  * Run `fn` inside a transaction that (a) optionally pins the workspace +
- * user GUCs and (b) drops the connection to the non-bypass `prodect_app`
+ * user GUCs and (b) drops the connection to the non-bypass `motir_app`
  * role for the duration of the transaction. The role-switch is what
  * actually exercises RLS — without it, the superuser default would
  * bypass policies even with FORCE ROW LEVEL SECURITY.
  *
  * Mirrors withWorkspaceContext's shape but with the extra role-switch
  * test-suite needs. We intentionally don't fold this into
- * withWorkspaceContext: production should run as prodect_app by virtue
+ * withWorkspaceContext: production should run as motir_app by virtue
  * of its DATABASE_URL, not via a per-query role switch.
  */
 async function asAppRole<T>(
@@ -89,13 +89,13 @@ async function asAppRole<T>(
     if (ctx.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${ctx.workspaceId}, true)`;
     }
-    await tx.$executeRawUnsafe('SET LOCAL ROLE prodect_app');
+    await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
     return fn(tx);
   });
 }
 
 describe('workspace RLS — visibility', () => {
-  it('with no GUC set, the prodect_app role sees zero workspace rows', async () => {
+  it('with no GUC set, the motir_app role sees zero workspace rows', async () => {
     await makeFixture();
     const rows = await asAppRole({}, (tx) => tx.workspace.findMany());
     expect(rows).toEqual([]);

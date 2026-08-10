@@ -33,7 +33,7 @@ export const workspaceMembershipRepository = {
    * Same lookup as findByUserAndWorkspace, but inside the caller's
    * transaction so the membership_visible RLS policy (which keys off the
    * per-transaction app.user_id / app.workspace_id GUCs) admits the row under
-   * the non-bypass prodect_app role. Used by role-gated reads that MUST be
+   * the non-bypass motir_app role. Used by role-gated reads that MUST be
    * correct in production (e.g. workspacesService.getMemberRole → the 1.6.5
    * replay gate); the db-singleton variant above returns NULL under RLS when
    * no context is bound.
