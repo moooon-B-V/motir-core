@@ -430,3 +430,55 @@ describe('labels and components — the shared editing hooks', () => {
     expect(within(row('Labels')).getByRole('button', { name: 'Edit Labels' })).toBeTruthy();
   });
 });
+
+// ── Custom fields (MOTIR-2599) ───────────────────────────────────────────────
+describe('custom fields — per-type editors and the disclosure', () => {
+  const WITH_CF: QuickViewData = {
+    ...DATA,
+    customFields: [
+      {
+        id: 'f1',
+        key: 'team',
+        label: 'Team',
+        description: null,
+        fieldType: 'text',
+        options: [],
+        value: { text: 'Platform', number: null, date: null, option: null, user: null },
+      },
+      {
+        id: 'f2',
+        key: 'target_release',
+        label: 'Target release',
+        description: null,
+        fieldType: 'text',
+        options: [],
+        value: null,
+      },
+    ] as QuickViewData['customFields'],
+  };
+
+  it('makes a VALUED custom field editable in the rail', async () => {
+    render(<IssueQuickViewPanel state="ready" data={WITH_CF} />);
+
+    fireEvent.click(within(row('Team')).getByRole('button', { name: 'Edit Team' }));
+
+    // The per-type control comes from the shared hook — the same editor the
+    // detail page opens, not a second one.
+    expect(await within(row('Team')).findByRole('textbox')).toBeTruthy();
+  });
+
+  it('reaches an EMPTY field through the disclosure — the row it is the only route to', async () => {
+    render(<IssueQuickViewPanel state="ready" data={WITH_CF} />);
+
+    // Hidden until disclosed…
+    expect(screen.queryByText('Target release')).toBeNull();
+
+    // …and the label no longer merely promises to SHOW them.
+    fireEvent.click(screen.getByRole('button', { name: /more field/i }));
+
+    // Now reachable AND settable — a field you cannot reach is one you cannot set.
+    expect(
+      within(row('Target release')).getByRole('button', { name: 'Edit Target release' }),
+    ).toBeTruthy();
+  });
+});

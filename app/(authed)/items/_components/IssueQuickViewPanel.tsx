@@ -7,6 +7,7 @@ import {
   ArrowRight,
   Bot,
   Calendar,
+  ChevronDown,
   ChevronRight,
   Clock,
   Component as ComponentIcon,
@@ -42,6 +43,8 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
 import { useLabelEditing, useComponentEditing } from './fieldChipEditing';
+import { useCustomFieldEditing } from './customFieldEditing';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
 import { LABELS_PER_ISSUE_LIMIT } from '@/lib/labels/constants';
 import { WORK_ITEM_TYPE_META } from '@/lib/issues/workItemTypeMeta';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
@@ -127,6 +130,55 @@ function RailField({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+/**
+ * One custom-field rail row (MOTIR-2599). Its own chevron, because a custom
+ * field's editor is per-TYPE and lives in the shared hook — this is the peek's
+ * chrome around it, the way `FieldCard` is the detail page's. Read mode uses the
+ * peek's condensed value grammar, which is deliberately denser than the card's.
+ */
+function CustomRailRow({
+  field,
+  edit,
+  render,
+}: {
+  field: CustomFieldWithValueDto;
+  edit: ReturnType<typeof useCustomFieldEditing>;
+  render: (f: CustomFieldWithValueDto) => ReactNode;
+}) {
+  const t = useTranslations('issueViews');
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
+  const editing = edit.editingId === field.id;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <dt className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+        {field.label}
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={() => edit.onToggle(field, editing)}
+            aria-label={
+              editing
+                ? t('quickViewCloseField', { field: field.label })
+                : t('quickViewEditField', { field: field.label })
+            }
+            aria-expanded={editing}
+            className="ml-auto inline-flex rounded-(--radius-control) p-0.5 text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${editing ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
+          </button>
+        ) : null}
+      </dt>
+      <dd className="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)">
+        {editing ? edit.renderEditor(field) : render(field)}
+      </dd>
+    </div>
+  );
+}
+
 /** A pulsing skeleton bar (the loading state's placeholders). */
 function Sk({ className }: { className?: string }) {
   return (
@@ -156,6 +208,15 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
     projectKey: ready?.projectIdentifier ?? '',
     initialLabels: ready?.labels ?? [],
     active: edit.editing === 'labels',
+  });
+  // MOTIR-2599 — the SAME per-type editors and commit paths the detail rail
+  // runs, via the shared hook. This surface keeps its own condensed value
+  // grammar (`renderCustomValue`), which is deliberately denser than the
+  // detail card's.
+  const customEdit = useCustomFieldEditing({
+    workItemId: ready?.id ?? '',
+    fields: ready?.customFields ?? [],
+    members: ready?.members ?? [],
   });
   const componentEdit = useComponentEditing({
     workItemId: ready?.id ?? '',
@@ -296,8 +357,10 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   const view = edit.effective ?? data;
   // Custom fields split the detail-rail way (5.3.7): the VALUED ones render as
   // rows, the empty ones hide behind the read-only "Show more fields (N)".
-  const valuedCustom = data.customFields.filter((f) => f.value !== null);
-  const emptyCustom = data.customFields.filter((f) => f.value === null);
+  // Override-applied, so an optimistic commit moves a field from `empty` to
+  // `valued` immediately rather than after a re-read.
+  const valuedCustom = customEdit.valued;
+  const emptyCustom = customEdit.empty;
   // Type/Executor are leaf-only (epic/story have no work type — mirror the
   // detail rail). Sprint is omitted for epics (they span sprints, Jira-faithful);
   // its empty label is status-aware (a done/cancelled item is excluded from the
@@ -880,16 +943,17 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             )}
           </EditableRailField>
 
-          {/* Custom fields (5.3.7) — valued rows, then the empty ones behind a
-              read-only "Show more fields (N)" disclosure. A faint divider sets
-              the cluster off from the built-ins. */}
+          {/* Custom fields (5.3.7 · editable MOTIR-2599) — valued rows, then the
+              empty ones behind a disclosure. That disclosure was built READ-ONLY
+              in 8.8.8, purely to stop the rail being a wall of "None". Now the
+              rail edits, it is the ONLY route to an empty field someone wants to
+              fill, so its label says "N more fields" rather than promising only
+              to SHOW them — a field you cannot reach is a field you cannot set. */}
           {data.customFields.length > 0 ? (
             <>
               <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
               {valuedCustom.map((f) => (
-                <RailField key={f.id} label={f.label}>
-                  {renderCustomValue(f)}
-                </RailField>
+                <CustomRailRow key={f.id} field={f} edit={customEdit} render={renderCustomValue} />
               ))}
               {emptyCustom.length > 0 ? (
                 <>
@@ -905,13 +969,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     />
                     {showAllCustom
                       ? t('customFields.showFewer')
-                      : t('customFields.showMore', { count: emptyCustom.length })}
+                      : t('quickViewMoreFields', { count: emptyCustom.length })}
                   </button>
                   {showAllCustom
                     ? emptyCustom.map((f) => (
-                        <RailField key={f.id} label={f.label}>
-                          {renderCustomValue(f)}
-                        </RailField>
+                        <CustomRailRow
+                          key={f.id}
+                          field={f}
+                          edit={customEdit}
+                          render={renderCustomValue}
+                        />
                       ))
                     : null}
                 </>
