@@ -156,13 +156,15 @@ describe('the SPEC-UNAVAILABLE state', () => {
 });
 
 describe('THE PUBLIC DOOR — the shipped marketing chrome', () => {
-  it('renders `Docs` as a LINK to /docs/api, where it used to be a dead label', async () => {
+  it('renders `Docs` as a LINK to the AREA, where it used to be a dead label', async () => {
     const { ExploreTopBar } = await import('@/app/(public)/explore/_components/ExploreTopBar');
     render(await ExploreTopBar());
 
     const docs = screen.getByText('navDocs').closest('a');
     expect(docs, 'Docs is still a non-interactive label').not.toBeNull();
-    expect(docs?.getAttribute('href')).toBe('/docs/api');
+    // The AREA, not the API reference: MOTIR-2523 / Amendment 19 Q5 re-pointed
+    // this door once `/docs` became a page the reader can choose from.
+    expect(docs?.getAttribute('href')).toBe('/docs');
   });
 
   it('keeps Product and Pricing as labels — they still resolve to nothing', () => {
@@ -192,12 +194,12 @@ describe('THE PUBLIC DOOR — the shipped marketing chrome', () => {
     expect(screen.getByText('navDocs').closest('a')?.getAttribute('aria-current')).toBeNull();
   });
 
-  it('links API docs from the footer’s Product column — the crawl surface', async () => {
+  it('links the documentation area from the footer’s Product column — the crawl surface', async () => {
     const { ExploreFooter } = await import('@/app/(public)/explore/_components/ExploreFooter');
     render(await ExploreFooter({ topics: [{ slug: 'ai', label: 'AI' }] }));
 
-    const link = screen.getByText('footProductApiDocs').closest('a');
-    expect(link?.getAttribute('href')).toBe('/docs/api');
+    const link = screen.getByText('footProductDocs').closest('a');
+    expect(link?.getAttribute('href')).toBe('/docs');
     // The other Product entries stay labels.
     expect(screen.getByText('footProductOverview').closest('a')).toBeNull();
   });

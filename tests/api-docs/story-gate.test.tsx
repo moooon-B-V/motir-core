@@ -481,7 +481,9 @@ describe('the docs SHELL', () => {
     const { default: Layout } = await import('@/app/(public)/docs/layout');
     const html = await renderPageToHtml(await Layout({ children: <p>content</p> }));
 
-    expect(html).toContain('href="/docs/api"');
+    // The top bar's Docs item points at the AREA since MOTIR-2523 / Amendment 19
+    // Q5 — it used to point past the area at the API reference.
+    expect(html).toContain('href="/docs"');
     expect(html).toContain('aria-current="page"');
     expect(html).toContain('content');
   });

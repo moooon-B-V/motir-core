@@ -4,14 +4,15 @@ The authed shell: the top bar, the persistent sidebar rail, the off-canvas drawe
 overlays the bar summons. This is the area's first `design-notes.md`; the five `.pen` assets beside it
 predate the three-file convention and are indexed below rather than rewritten.
 
-| Surface                                    | Asset                                   | Card             | State                                                                             |
-| ------------------------------------------ | --------------------------------------- | ---------------- | --------------------------------------------------------------------------------- |
-| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                  | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship              |
-| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`        | MOTIR-53         | Same                                                                              |
-| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`            | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer |
-| ⌘K command palette                         | `cmd-k.pen` / `.png`                    | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                |
-| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                | MOTIR-53         | Current                                                                           |
-| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`** | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                   |
+| Surface                                    | Asset                                           | Card             | State                                                                                                |
+| ------------------------------------------ | ----------------------------------------------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| Desktop shell @1440 — bar + rail + content | `desktop.pen` / `.png`                          | MOTIR-53 (1.5.1) | Stale in the right cluster only: draws 3 controls of the 8 that ship                                 |
+| Desktop shell, rail collapsed              | `desktop-collapsed.pen` / `.png`                | MOTIR-53         | Same                                                                                                 |
+| Narrow width — bar closed, drawer open     | `mobile-drawer.pen` / `.png`                    | MOTIR-53         | **Superseded by `top-bar.mock.html`** for the right cluster + the drawer's footer                    |
+| ⌘K command palette                         | `cmd-k.pen` / `.png`                            | MOTIR-53         | Current (panels: _Empty query_, _Filtered: 'iss'_)                                                   |
+| Shortcuts cheatsheet                       | `shortcuts.pen` / `.png`                        | MOTIR-53         | Current                                                                                              |
+| **The top bar's control budget**           | **`top-bar.mock.html` / `top-bar.png`**         | **MOTIR-2374**   | **The design of record for what the bar carries at each width**                                      |
+| **The context row — the left cluster**     | **`context-row.mock.html` / `context-row.png`** | **MOTIR-2555**   | **The design of record for the `org › workspace › project` path, the rail head, and the brand tile** |
 
 ---
 
@@ -199,3 +200,209 @@ happy-dom drops a `background-image` whose value is a `linear-gradient()` over `
 pill's fill and its shimmer are restored verbatim from `PlanWithAILauncher.tsx`; and because every
 frame shares one document, the compiled `@media (width >= …)` blocks are re-emitted scoped to
 `[data-vw="…"]` so each frame resolves its own width. Both are properties of the board, not of the app.
+
+---
+
+## The context row — `org › workspace › project`, the rail head, and the brand tile (MOTIR-2555)
+
+The code changes are **MOTIR-2556** (the move) and **MOTIR-2557** (the brand tile). This asset —
+`context-row.mock.html` / `context-row.png` — decides what they build, and it AMENDS the control
+budget above: that section decided the RIGHT cluster, this one decides the LEFT.
+
+### What the ask was, and what the measurement made of it
+
+Put the organization, the workspace and the project in one row, most-specific last; keep the
+workspace tier hidden when the org has only one; give the brand mark a filled, rounded box with the
+glyph in the primary colour.
+
+The first two thirds of that already exist. `ShellTierNav.tsx` renders `OrgControl` always and
+`WorkspaceSwitcher` only when `workspaces.length >= 2` — _"below that threshold the middle tier is
+implicit and never shown"_ — so `org › project` is not a new rule, it is the rule the middle tier
+already follows with a third tier appended behind it. What is genuinely new is that **the row has no
+room**, and that is what this design is mostly about.
+
+### The measurement — and a finding the budget above did not have
+
+Every number below was measured, not estimated: the real `OrgControl`, `WorkspaceSwitcher`,
+`ProjectSwitcher`, `SidebarHeader`, `ShellTierNav` and `TopNav` were rendered through the repo's own
+vitest + RTL harness with the real `messages/en.json`, then laid out in Chromium against the build's
+own compiled Tailwind output. `room` is `viewport − gutters − right cluster − the left cluster's
+NATURAL (min-content) width`; negative means the elastic tier truncates. `ovf` is real horizontal
+overflow and must be zero.
+
+| viewport | ships today: left nat. · right · room · **ovf** | this design: left nat. · right · room · **ovf** |
+| -------- | ----------------------------------------------- | ----------------------------------------------- |
+| 320px    | 351 · 168 · −231 · **47**                       | 166 · 168 · −46 · **0**                         |
+| 375px    | 351 · 168 · −176 · **0**                        | 166 · 168 · +9 · **0**                          |
+| 768px    | 364 · 468 · −112 · **0**                        | 259 · 468 · −7 · **0**                          |
+| 1024px   | 364 · 733 · −121 · **0**                        | 259 · 733 · −16 · **0**                         |
+| 1280px   | 364 · 733 · +135 · **0**                        | 486 · 733 · +13 · **0**                         |
+
+Measured in the WIDEST right-cluster state — a public project with AI configured — because that is
+the state that sets the budget.
+
+> **⚠️ FINDING — the 68px tier-nav floor was never reachable, and the shipped bar STILL overflows at
+> 320px.** The budget above computes the below-`md` slot count from
+> `320 − 32 − 36 − 8 − 8 − 68 = 168px`, reserving **68px** for the tier nav. The two shipped tiers
+> cannot compress below **112px**: `OrgControl` and `WorkspaceSwitcher` are `inline-flex` ghost
+> buttons whose avatar, chevron and padding are all `flex-none`. So at 320px the row needs 348px of
+> a 320px viewport and **overflows by 47px** — on `main`, today, after MOTIR-2373. That is Panel A's
+> first frame. The arithmetic was right about the right cluster and wrong about the floor, because a
+> floor is a claim about what an element can compress TO, and nothing had measured it. This design
+> closes it as a side effect; the finding belongs to this pass and is recorded here rather than
+> quietly fixed.
+
+### The ladder — the design
+
+One elastic row, three things that want it. The answer is a LADDER, and it follows the breadcrumb
+convention every mature tool uses: **the most specific tier never leaves; ancestors collapse from
+the left.**
+
+| band                 | the bar's path                                         | measured at the band's narrowest |
+| -------------------- | ------------------------------------------------------ | -------------------------------- |
+| `< md` (0–767px)     | **project only** — hamburger + the project tier        | 166px natural, 0 overflow at 320 |
+| `md`–`xl` (768–1279) | **`org › project`**, the org as its MARK (name hidden) | 259px natural, −7 at 768         |
+| `≥ xl` (1280px)      | **`org › workspace › project`**, the full path         | 486px natural, +13 at 1280       |
+
+Three consequences worth stating plainly, because each is a decision and not a fallout:
+
+1. **The full three-tier path starts at `xl`, not at `md`.** At `md` the labelled-at-`lg` right
+   cluster leaves the left one about 220px, and `org-mark › workspace › project` needs ~330px. It
+   does not fit, and no amount of character-capping makes it fit without making all three names
+   unreadable. So the workspace tier — the tier that is ALREADY conditional — is the one that waits.
+2. **Below `md` the bar carries the PROJECT, not the org.** This inverts what ships today, and it is
+   the right way round: the project is the tier a person consults most, and the ancestors have a
+   drawn home at that width — the `SidebarDrawer` header, which renders `ShellTierNav` and keeps
+   `org › workspace` at every width. **The drawer header is UNCHANGED by this design.** What changes
+   is that the project is no longer _inside_ the drawer body; it is in the bar, one tap closer.
+3. **The project tier is the row's elastic element, so it SHRINKS.** `ProjectSwitcher`'s trigger
+   drops `w-full` (it is no longer a 216px rail slot) and takes `min-w-0 shrink`, with the name
+   `min-w-0 max-w-[22ch] truncate`. Without the `min-w-0` the button refuses to shrink and the label
+   is overrun by the next control instead of ellipsizing — which is exactly what the render shows
+   happening to today's bar at 768px, and is why this is specified rather than left to the code card.
+
+**The rule for the next tier.** The path is closed at ONE tier below `md`, TWO from `md`, THREE from
+`xl`. A tier added to the path is an `xl`-and-up tier by default; to appear earlier it must displace
+one, and the displaced one needs a drawn home — which is the drawer header, and the reason that
+header keeps the full ancestor path at every width.
+
+### The three states the project tier inherits
+
+`SidebarHeader.tsx` resolves three states no other rail row needs. All three move with the control:
+
+| state            | in the rail today                                    | in the bar                                                                                                                                |
+| ---------------- | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| active project   | `ProjectSwitcher` trigger, `w-full` in a 216px slot  | the same trigger, `min-w-0 shrink`, name capped at 22ch                                                                                   |
+| archived project | the same trigger + `Pill tone="archived"`            | unchanged — the pill is `shrink-0`, so the NAME truncates around it, never the pill                                                       |
+| **no project**   | a lavender `Card` CTA, full width, opening the modal | the same action in the ghost-button grammar the other tiers use: the accent `+` square + the label, opening the same `CreateProjectModal` |
+
+A full-width tinted card cannot be a tier in a horizontal row; the ghost button can, and it keeps
+the door in the same place a person now looks for project context.
+
+### The rail head, after the project leaves
+
+The rail answers _where inside this project can I go_. Its head was answering a different question,
+which is why it needed three states nothing else in the rail needs. **The default-area rail head is
+REMOVED** — the rail starts at its first nav section — in both the expanded and the collapsed rail
+(the collapsed 32px `ProjectAvatar` goes with the rest), and in the drawer body. The settings and
+account areas keep their own headers (`SettingsSidebarHeader`, `AccountSidebarHeader`) untouched;
+`SidebarNav` still reads `activeProject` for its nav sections and its settings-area swap.
+
+### The brand tile
+
+The 32px box already exists in `TopNav.tsx` and is simply unpainted:
+`hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex`.
+
+| element       | token                                    | measured                                                   |
+| ------------- | ---------------------------------------- | ---------------------------------------------------------- |
+| the field     | `--el-surface`                           | #f6f5f4 light · #1a1a1a dark                               |
+| its edge      | `--el-border` hairline                   | the tile's outline at both themes                          |
+| the glyph     | `--el-accent-on-surface` — **unchanged** | #5645d4 light · #7b6ce5 dark                               |
+| glyph on fill | —                                        | **6.03:1** light · **4.24:1** dark (WCAG 1.4.11 needs 3:1) |
+| the shape     | `--radius-control` — unchanged           | —                                                          |
+
+Three things this pins, each for a reason:
+
+- **The glyph token does NOT change.** `.brand-glyph` in `app/globals.css` is the colour of EVERY
+  brand surface — auth, `ExploreTopBar`, `PublicTopBar`, the OG images, the specimen — and that block
+  is a verbatim copy of the approved artwork's own CSS. `--el-accent-on-surface` is the token whose
+  name is literally this composition, and it clears 1.4.11 on `--el-surface` in both themes, so this
+  story touches no other brand surface at all.
+- **Not a tint.** `--el-tint-lavender` was the obvious candidate and is wrong here: `OrgControl`'s
+  `OrgAvatar` is already a 20px `--el-tint-lavender` tile and `ProjectAvatar` is an
+  `--el-avatar-lavender` one. A third lavender square 20px away would read as a third tier chip,
+  which is the opposite of what a brand anchor is for. The neutral field is what makes the tile read
+  as identity rather than as a control.
+- **The hairline DIVIDER is removed.** §7a introduced it to say the brand sits outside the tier
+  hierarchy; the tile's own edge now says that, and dropping it returns 9px to the row.
+
+`design/brand/design-notes.md` §7a is amended in the same PR. **A field BEHIND the mark is not a
+recolour OF the mark** — §9's _"one token, never a hex, never a second hue"_ still holds exactly, and
+the glyph still takes one token, the same one it took before.
+
+### The element split with MOTIR-2546
+
+Two designs legitimately touch this row and they own different ELEMENTS.
+`MOTIR-2546` owns what the ORG tier's MARK is (an uploaded avatar, or nothing
+at all, plus the switch-org rows' chips). This asset owns the CLUSTER around it — how many tiers
+there are, their separators, their truncation order, and the project tier. Neither redraws the
+other's element. If that card changes the org tier's WIDTH, the budget table above is measured
+against the current 20px chip and must be re-measured; whichever asset merges second rebases onto the
+first.
+
+### What this design overrides
+
+1. **`design/shell/design-notes.md` § _The top bar's control budget_ (this file, above)** — its
+   below-`md` arithmetic reserves a **68px tier-nav floor**. **Amended**: the floor is unreachable by
+   the shipped tiers (112px min-content), and the fix is not a bigger floor but ONE tier below `md`.
+   The right-cluster half of that budget — four slots, the `lg` label breakpoint, the drawer utility
+   strip — is untouched and still binding.
+2. **`design/brand/design-notes.md` §7a** — _"mark only, 24px … with a hairline divider separating it
+   from `ShellTierNav`"_. **Amended**: the mark keeps its size and its slot, gains a field, and loses
+   the divider. Recorded in that file in this PR.
+3. **`TopNav.tsx`'s docstring** — _"The project switcher MOVED to the sidebar header in Subtask
+   1.5.3 … so the project switcher … is gone from here."_ That decision is deliberately REVERSED
+   (Yue, 2026-08-10). MOTIR-2556 rewrites the docstring; it is a deliverable, not a fact to preserve.
+
+### How the render was produced
+
+Same method as the control budget above, so the asset cannot drift from the app:
+
+1. **The dump.** A THROWAWAY vitest file — written under `tests/`, run, and deleted, so nothing in the
+   repo cites it — renders `OrgControl`, `WorkspaceSwitcher`, `ProjectSwitcher` (active / archived /
+   open popover), `SidebarHeader` (all three states), `ShellTierNav` (one and two workspaces) and
+   `TopNav` (every optional slot live) and writes each `container.innerHTML` to a temp directory. To
+   reproduce it, the shape is:
+
+   ```tsx
+   // @vitest-environment happy-dom
+   vi.mock('next-intl/server', () => ({ getTranslations: … })); // resolve from messages/en.json
+   vi.mock('next/navigation', () => ({ useRouter: …, usePathname: () => '/dashboard' }));
+   // CreateIssueModal / CreateProjectModal / BuildInPublicDialog stubbed to null
+   renderWithIntl(
+     <ThemeProvider><ToastProvider><CommandPaletteProvider><CreateIssueProvider hasProject canEdit>
+       <ProjectAccessProvider permissions={['work_item:edit', 'project:administer']}>
+         <ReportProvider projectKey="MOTIR" canEdit>{node}</ReportProvider>
+       </ProjectAccessProvider>
+     </CreateIssueProvider></CommandPaletteProvider></ToastProvider></ThemeProvider>,
+   );
+   // TopNav is async: `const bar = await TopNav(props)` first, then render it.
+   ```
+
+   Run it with the LOCAL binary (`./node_modules/.bin/vitest run <that file>`) — `pnpm exec` re-runs a
+   dependency check that fights the shared pnpm store in a fresh worktree.
+
+2. The TARGET cluster is composed from those dumps: the real buttons, in the arrangement and with the
+   responsive prefixes this design decides — which is exactly what MOTIR-2556 ships. The three edits
+   are isolated and named in the ladder section above.
+3. `app/globals.css` is compiled by the repo's own `@tailwindcss/postcss` over that markup, so the
+   mock's stylesheet is the build's output rather than a retyped token block.
+4. The frames are laid out and MEASURED in Chromium (`@playwright/test`'s chromium) at 320 / 375 /
+   640 / 700 / 768 / 1024 / 1280 / 1440, and the PNG is a full-page `deviceScaleFactor: 2` shot of
+   the finished board.
+
+Two harness artefacts, both corrected in the asset and named here so nobody reads them as design:
+happy-dom drops a `background-image` whose value is a `linear-gradient()` over `color-mix()`, so the
+Plan-with-AI pill's fill is restored verbatim from `PlanWithAILauncher.tsx:61-62`; and because every
+frame shares one document, the compiled `@media (width >= …)` blocks are re-emitted scoped to
+`[data-vw="…"]` so each frame resolves its OWN width. Both are properties of the board, not of the app.

@@ -844,7 +844,8 @@
       "helper": "选择一种关系 · 关联将与工作项一同创建。"
     },
     "commandPalette": {
-      "search": "搜索",
+      "search": "快捷键",
+      "placeholder": "搜索快捷键",
       "createHeading": "创建",
       "navigationHeading": "导航",
       "workspaceHeading": "工作区",
@@ -2670,7 +2671,10 @@
         "choosePlaceholder": "选择一个角色…",
         "confirm": "删除角色"
       },
-      "toast": { "created": "角色已创建", "saved": "角色已保存" },
+      "toast": {
+        "created": "角色已创建",
+        "saved": "角色已保存"
+      },
       "error": {
         "nameTaken": "本项目中已存在名为“{name}”的角色。",
         "capReached": "每个项目最多可定义 {limit} 个自定义角色。",
@@ -4379,7 +4383,7 @@
     "topicEmptyTitle": "暂无公开的 {topic} 项目",
     "topicEmptyBody": "尚无团队在此主题下公开项目。先去浏览整个广场吧。",
     "backToSquare": "返回项目广场",
-    "footProductApiDocs": "API 文档"
+    "footProductDocs": "文档"
   },
   "aiUsage": {
     "title": "用量与费用",
@@ -5921,8 +5925,8 @@
     "connectWhy": "Motir 要把仓库迁给你，只需要一样东西：它该归属的那个 GitHub 账号。这和邀请你访问代码用的是同一个账号——你会看到是哪一个。"
   },
   "apiDocs": {
-    "metaTitle": "Motir API 参考手册",
-    "metaDescription": "Motir 公开 REST API 的全部接口，含权限范围、参数、响应以及可直接复制的鉴权示例。",
+    "metaTitle": "Motir 文档",
+    "metaDescription": "REST API、Motir 命令行、MCP 服务器与代理沙箱——各自是什么、写给谁用，以及从哪里开始。",
     "navLabel": "文档",
     "navDocumentation": "文档",
     "navReference": "API 参考",
@@ -6018,7 +6022,27 @@
     "mcpThScope": "权限范围",
     "mcpThGates": "管控范围",
     "mcpWhatNextBody": "全部 {count} 个工具、各自的作用，以及管控它的权限范围。",
-    "mcpForkApiLink": "查阅 REST API 参考文档"
+    "mcpForkApiLink": "查阅 REST API 参考文档",
+    "indexTitle": "Motir 文档",
+    "indexLede": "Motir 面向开发者公开的全部内容。从与你手头的事最匹配的那一个开始——下面每一项都可以单独读完。",
+    "surfaceReferenceDesc": "REST API 的全部接口，含权限范围与可直接运行的示例。写给你要交付出去、不能说变就变的客户端。",
+    "surfaceSandboxDesc": "用来运行无人值守编码代理的已发布容器：它只能访问你的工作区目录，碰不到机器上的其他任何东西。",
+    "surfaceCliDesc": "安装、登录，然后从终端把一个工作项交给你自己的编码 Agent——无需克隆任何代码库。",
+    "surfaceMcpDesc": "一个端点，把你掌控的智能体接入项目计划：读取就绪集、认领工作、流转状态、发表评论。",
+    "metaTitleReference": "API 参考 · Motir 文档",
+    "metaDescriptionReference": "Motir 公开 REST API 的全部接口，含权限范围、参数、响应以及可直接复制的鉴权示例。",
+    "metaTitleGuide": "快速上手 · API 参考 · Motir 文档",
+    "metaDescriptionGuide": "五步走完从注册账号到成功发出第一个 Motir REST API 请求：令牌、首次调用，以及报错的含义。",
+    "metaTitleStability": "稳定性与弃用 · API 参考 · Motir 文档",
+    "metaDescriptionStability": "Motir v1 REST API 承诺不变的部分、可能随时调整的部分，以及弃用的流程。",
+    "metaTitleSandbox": "代理沙箱 · Motir 文档",
+    "metaDescriptionSandbox": "配置那个已发布的容器：让无人值守的编码代理只能访问你的工作区目录，碰不到机器上的其他任何东西。",
+    "metaTitleCli": "Motir 命令行 · Motir 文档",
+    "metaDescriptionCli": "安装 Motir 命令行、登录、指向你的项目，然后把一个工作项交给你自己的编码 Agent——无需克隆任何代码库。",
+    "metaTitleMcp": "MCP 服务器 · Motir 文档",
+    "metaDescriptionMcp": "用个人访问令牌把任意 Model Context Protocol 客户端指向 Motir 的项目计划，并弄清该用 MCP 服务器还是 REST API。",
+    "metaTitleMcpTools": "工具列表 · MCP 服务器 · Motir 文档",
+    "metaDescriptionMcpTools": "Motir MCP 服务器暴露的全部工具、各自的作用，以及管控它的令牌权限范围。"
   },
   "auditCoverage": {
     "count": "{count, plural, other {# 个仓库尚无代码健康度审计。}}",

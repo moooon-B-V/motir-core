@@ -92,6 +92,18 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     const docs = page.getByRole('link', { name: 'Docs', exact: true });
     await expect(docs).toBeVisible();
     await docs.click();
+    // ⚠️ Re-pointed by MOTIR-2523: the door now opens on the AREA, not on the
+    // API reference (ADR Amendment 19 Q1/Q5 — `/docs` renders an index and its
+    // redirect is deleted). This spec's subject is still the API reference, so
+    // it picks that surface from the index and carries on. The index's OWN
+    // coverage is MOTIR-2525's; nothing new is asserted here.
+    await page.waitForURL(/\/docs$/);
+    await beat();
+
+    await page
+      .getByRole('link', { name: /API reference/ })
+      .first()
+      .click();
     await page.waitForURL('**/docs/api');
     await beat();
 
@@ -141,6 +153,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     await expect(section.getByRole('button', { name: 'Copied' })).toBeVisible();
 
     const copied = await page.evaluate(() => navigator.clipboard.readText());
+    await beat();
     // It is the curl for THIS operation, with the bearer header — not a
     // generic sample a reader would have to rewrite.
     expect(copied).toContain('/api/v1/work-items/MOTIR-1854');
@@ -267,6 +280,7 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     // Anonymous: the marketing bar's sign-in is still on offer, so nothing
     // about this surface assumes a session.
     await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
+    await beat();
   });
 
   await chapter('Find the agent sandbox in the rail — by CLICKING it', async () => {
@@ -279,6 +293,7 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
       'aria-current',
       'page',
     );
+    await beat();
   });
 
   await chapter('See which agents the sandbox supports', async () => {
@@ -288,6 +303,7 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     // spec must fail when the page stops deriving, not when someone adds a
     // ninth agent.
     await expect(matrix.locator('tbody tr')).toHaveCount(AGENT_PROFILES.length);
+    await beat();
 
     // …and each row shows the credential directory that agent keeps its sign-in
     // in, which is the fact a reader is choosing on.
@@ -296,10 +312,6 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
         matrix.getByRole('cell', { name: profile.sandboxMounts[0]!, exact: false }).first(),
       ).toBeVisible();
     }
-
-    // The matrix is the fact a reader is CHOOSING on — it earns more than the
-    // chapter hold. (Pacing, not synchronisation: every assertion above has
-    // already resolved. See MOTIR-2542 for why this clip needed it.)
     await beat();
   });
 
@@ -317,8 +329,6 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     expect(copied).toContain('-v "$PWD:/workspace"');
     // It sets the container UP; it does not start a work loop.
     expect(copied).not.toContain('motir auto');
-
-    // The command IS the thing this reader came for; let it sit on screen.
     await beat();
   });
 
@@ -334,6 +344,7 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     // draws. If this ever stops working, the regrouping has stranded the reader.
     await rail.getByRole('link', { name: 'API reference' }).click();
     await page.waitForURL('**/docs/api');
+    await beat();
 
     // …and from inside it, its own pages are reachable, and lead back.
     for (const [label, url] of [
@@ -342,12 +353,14 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
     ] as const) {
       await rail.getByRole('link', { name: label }).click();
       await page.waitForURL(url);
+      await beat();
     }
 
     // The sandbox row is in the top tier, so it is reachable from anywhere in
     // the area — including from two levels inside the API.
     await rail.getByRole('link', { name: 'Agent sandbox' }).click();
     await page.waitForURL('**/docs/sandbox');
+    await beat();
   });
 });
 
