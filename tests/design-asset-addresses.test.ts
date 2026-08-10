@@ -265,6 +265,25 @@ const KNOWN: { file: string; address: string; why: string }[] = [
       'here turns the guard red.',
   },
   {
+    file: 'design/cli-connect/cli-connect.mock.html',
+    address: '/settings/account/tokens',
+    why:
+      'FORWARD-LOOKING, the same state as the `docs-index.mock.html` row above: MOTIR-2533 ' +
+      'renames the reader-facing noun "API tokens" to **Tokens** across the design assets of ' +
+      'record, and the address moves with the label — but the route itself moves in ' +
+      'MOTIR-2534, so today `/settings/account/tokens` resolves to nothing and the guard ' +
+      'reads it correctly. ⚠️ DELETE THIS ROW in MOTIR-2534, in the same commit that renames ' +
+      '`app/(authed)/settings/account/api-tokens/` to `.../tokens/` and adds the ' +
+      '`SETTINGS_REDIRECTS` rule: from that commit on the address resolves, the row stops ' +
+      'firing, and this table is asserted TIGHT in both directions, so leaving it here turns ' +
+      'the guard red.',
+  },
+  {
+    file: 'design/cli-connect/design-notes.md',
+    address: '/settings/account/tokens',
+    why: 'The same MOTIR-2533 rename in the notes beside the mock — the RENDERED-first record names the pane it screenshotted. ⚠️ DELETE THIS ROW in MOTIR-2534 alongside its sibling above.',
+  },
+  {
     file: 'design/roadmap/design-notes.md',
     address: '/roadmap/sprint',
     why: 'A counterfactual the design REJECTED ("a query param on one route, not a distinct /roadmap/sprint path").',

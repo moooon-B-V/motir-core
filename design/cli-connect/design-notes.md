@@ -4,10 +4,10 @@ Design reference for the **`cli-connect`** area: the two BROWSER surfaces the
 `motir login` device grant needs. Asset: **`cli-connect.mock.html`** →
 **`cli-connect.png`** (one full-page export, 12 panels).
 
-| Surface                                                                        | Panels  | Built by                                |
-| ------------------------------------------------------------------------------ | ------- | --------------------------------------- |
-| **`/device`** — verification + approval, **all six states**                    | 0–8     | **MOTIR-1867** (`blocked_by` this card) |
-| **The “Connect the CLI” panel**, composed into Settings → Account → API tokens | 0, 9–11 | **MOTIR-1869** (`blocked_by` this card) |
+| Surface                                                                    | Panels  | Built by                                |
+| -------------------------------------------------------------------------- | ------- | --------------------------------------- |
+| **`/device`** — verification + approval, **all six states**                | 0–8     | **MOTIR-1867** (`blocked_by` this card) |
+| **The “Connect the CLI” panel**, composed into Settings → Account → Tokens | 0, 9–11 | **MOTIR-1869** (`blocked_by` this card) |
 
 Story: **MOTIR-1863** — Connect the CLI (the three-tier login). Sibling specs
 this design DEPICTS rather than invents: the ADR **MOTIR-1864** (tiers, what
@@ -17,7 +17,7 @@ approval exchanges, scopes, label, expiry, workspace binding) and the substrate
 cites them, and does not wait on their code.
 
 **Scope:** pixels and copy only. No React, no route, no restyle of the
-API-tokens table / create modal / revoke dialog (`design/settings/` owns those),
+Tokens table / create modal / revoke dialog (`design/settings/` owns those),
 and **no terminal output** — `packages/cli/src/render.ts` states the
 design-system rules do not apply to terminal text, and MOTIR-1868 owns the CLI’s
 wording. The terminal block in Panel 0 is labelled in the mock as illustrative
@@ -35,7 +35,7 @@ for exactly this reason.
   rather than improvised at build time.
 - **The host surfaces were RENDERED first, not read from source** (the
   design-against-shipped-reality rule; `notes.html` #73): the repo was built and
-  served, and `/settings/account/api-tokens` (populated **and** empty) plus
+  served, and `/settings/account/tokens` (populated **and** empty) plus
   `/sign-in` were screenshotted and designed against. That is why the mock’s pane
   carries the **TopNav**, the five real rail entries, the serif page head, the
   shipped subtitle copy, and the tokens table’s **eight** shipped columns
@@ -63,7 +63,7 @@ for exactly this reason.
 | The signed-out hand-off `/sign-in?next=…`                                       | The shipped `?next=` convention (`app/(auth)/sign-in/page.tsx`: `searchParams.get('next') ?? '/dashboard'`).                                                                               |
 | The carried-context banner                                                      | The shipped `IdeaCarried` surface in `app/(auth)/_components/AuthShell.tsx` — already the app’s way of carrying context across the auth boundary.                                          |
 | The `(auth)` card chrome                                                        | `app/(auth)/layout.tsx` — `--el-auth-wash` page, centred card, `--radius-card` + `--shadow-elevated`.                                                                                      |
-| The pane, rail, TopNav, tokens card + table, empty state, toast                 | The RENDERED `/settings/account/api-tokens` + `ApiTokensManager.tsx` / `EmptyState` / `Toast`, and `lib/settings/accountSettingsNav.ts` for the rail order.                                |
+| The pane, rail, TopNav, tokens card + table, empty state, toast                 | The RENDERED `/settings/account/tokens` + `ApiTokensManager.tsx` / `EmptyState` / `Toast`, and `lib/settings/accountSettingsNav.ts` for the rail order.                                    |
 | The avatar-menu door                                                            | `app/(authed)/_components/UserMenu.tsx` — identity block, **Account settings** (`UserCog`), Workspace settings, Sign out.                                                                  |
 
 ---
@@ -99,7 +99,7 @@ for exactly this reason.
 | --- | ----- | ---------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | 1   | 1 + 2 | **Code entry**         | Hand-typed (the sandbox / SSH path — **not** an edge case) **and** the pre-filled variant, drawn separately.      |
 | 2   | 3 + 4 | **Confirm**            | The phishing defence — see below. Multi-workspace (picker) and single-workspace (picker absent) both drawn.       |
-| 3   | 5     | **Approved**           | “Go back to your terminal”, names the workspace, names the token that now exists, offers **View API tokens**.     |
+| 3   | 5     | **Approved**           | “Go back to your terminal”, names the workspace, names the token that now exists, offers **View tokens**.         |
 | 4   | 6     | **Denied**             | States that nothing was connected and **no token was created**, and how to start over.                            |
 | 5   | 7     | **Expired / unknown**  | One screen, two copies. Expired names the 30-minute lifetime; unknown keeps the field so a typo is one edit away. |
 | 6   | 8     | **Signed-out arrival** | Carries the code across sign-in and comes BACK to the confirm step — never a dropped flow, never a re-entry.      |
@@ -136,7 +136,7 @@ keeping:
   columns; do not let the card grow past ~560 px.
 - **The scope rows are NAMES only** on this screen — "Read everything" · "Edit work
   items" · "Connect integrations" — plus the one-line **Not:** exclusion. The
-  per-scope descriptions live in the API-tokens scopes UI that owns them
+  per-scope descriptions live in the Tokens scopes UI that owns them
   (`token-scopes.mock.html`). Fewer words on a security screen people skim is the
   point, and it is what bought the last 50 px.
 - **Never put the CTAs in a sticky footer.** A pinned Approve could sit on screen
@@ -191,7 +191,7 @@ destructive acts).
 The entrance that makes the CLI **exist** for a user who never read the repo.
 
 **It COMPOSES the shipped pane; it does not redraw it.** The panel is the **first
-`Card` of the existing Security → API tokens pane** (`page.tsx` +
+`Card` of the existing Security → Tokens pane** (`page.tsx` +
 `ApiTokensManager.tsx`), above “Your tokens”. Ground it in
 `design/settings/account-settings.mock.html` (Panels 3–8) and the render of the
 live pane. **The tokens table, create modal, shown-once state and revoke dialog
@@ -201,12 +201,14 @@ removed as an unrequested change to a surface this card doesn’t own).
 
 **Access path (drawn, not described — Panel 0):** the **avatar menu → Account
 settings** hop from the shipped `UserMenu`, then the account rail with **Security
-→ API tokens** active. **No new primary-nav entry, no new route, no new pane.**
+→ Tokens** active. **No new primary-nav entry, no new route, no new pane.**
 
-- **The rail label stays “API tokens.”** Renaming it (e.g. “API tokens & CLI”)
-  would churn the `accountSettingsNav` registry, its i18n keys and the
+- **The rail label does not gain a second subject.** Widening it (e.g. “Tokens &
+  CLI”) would churn the `accountSettingsNav` registry, its i18n keys and the
   route↔registry totality test for no user gain. The panel carries the CLI naming
-  inside the pane.
+  inside the pane. _(Amended 2026-08-10, MOTIR-2533: the label itself moved from
+  “API tokens” to **Tokens** with the rest of the rename — this clause was about
+  ADDING “& CLI” to it, and that decision is unchanged.)_
 - **Panel order matters, and the empty case is why:** a first-time user has NO
   tokens, so the pane is the shipped `EmptyState`. The CLI route must read
   **before** “Create token”, or the person who could have run two commands is

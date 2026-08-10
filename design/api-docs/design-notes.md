@@ -24,7 +24,7 @@ designs and would otherwise read as a redesign of them.
 | Element                                                        | Owned by                                                                             | What THIS design does                                                                           |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
 | The marketing top bar and footer                               | `design/project-square/` (Story 6.13 · 6.13.6, Panel 1)                              | Changes ONE nav item's TREATMENT (`Docs`: label → link) and adds ONE footer link. Nothing else. |
-| The API-tokens settings page header + CLI panel                | `design/settings/` (`account-settings.mock.html` Panels 3–8) · `design/cli-connect/` | Places ONE link row above them. Redraws neither.                                                |
+| The Tokens settings page header + CLI panel                    | `design/settings/` (`account-settings.mock.html` Panels 3–8) · `design/cli-connect/` | Places ONE link row above them. Redraws neither.                                                |
 | The token manager (list, create modal, scopes)                 | `design/settings/` (`account-settings.mock.html` · `token-scopes.mock.html`)         | Nothing. Drawn at 55% opacity in Panel 8 purely as position context.                            |
 | The sandbox guide's CONTENT (its procedure, its profile table) | `design/agent-sandbox/` (Story MOTIR-2268 · MOTIR-2270)                              | Draws its ROW in the rail's first tier and the rail it sees. Redraws none of its page.          |
 | The `/docs` area ROOT (an index page)                          | nobody yet — MOTIR-2315                                                              | Nothing. Amendment 11 records it as open; `/docs` still 308s to `/docs/api`.                    |
@@ -198,7 +198,7 @@ view, so the surface owes them a visible way back. **Panel 10 marks it ①**: th
 `API reference` row in tier 1, on the sandbox guide, above the fold and without
 scrolling. It is the only affordance a sandbox reader needs in order to reach the
 API, and it is drawn rather than described. The area's outer entrances are
-unchanged and remain Panel 7 (the marketing top bar) and Panel 8 (the API-tokens
+unchanged and remain Panel 7 (the marketing top bar) and Panel 8 (the Tokens
 settings page).
 
 ### Drawn against a RENDER, not from the source

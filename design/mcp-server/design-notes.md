@@ -23,7 +23,7 @@ else and this asset must not be read as re-deciding any of it.
   tiers, their headings, the active-row treatment or the operation index.
 - **The docs shell chrome is 11.4's** — the `(public)/docs` layout, the shipped
   `ExploreTopBar` and `ExploreFooter`, `DocBlocks`, `CodeBlock`. Unchanged.
-- **The API-token minting flow is `design/settings/`'s.** Panel 7 draws the
+- **The token minting flow is `design/settings/`'s.** Panel 7 draws the
   empty state as it ships today and changes one link's destination. It does not
   redraw the create modal, the token list, or anything else on that surface.
 - **The route set, the page count and the derivation are
@@ -216,7 +216,7 @@ reader on another surface really sees.
 
 ### Panel 7 — THE ACCESS PATH ②: the in-app door
 
-Settings → Account → API tokens, empty state, as it ships. **One thing changes:
+Settings → Account → Tokens, empty state, as it ships. **One thing changes:
 where _"Read the MCP setup guide"_ goes.**
 
 It points at **`/docs/mcp`** — the wiring page, not the catalogue. This reader

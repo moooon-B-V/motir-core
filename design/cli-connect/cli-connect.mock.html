@@ -14,7 +14,7 @@
         SURFACE 1 — `/device`, the verification + approval page, in all SIX states.
                     Built by MOTIR-1867.
         SURFACE 2 — the "Connect the CLI" panel COMPOSED INTO the shipped
-                    Settings → Account → API tokens pane. Built by MOTIR-1869.
+                    Settings → Account → Tokens pane. Built by MOTIR-1869.
 
       Neither exists today (verified at design time, not assumed): `GET /device`
       on a production build of `origin/main` returns **404**, and
@@ -23,7 +23,7 @@
 
       GROUNDED IN SHIPPED REALITY, RENDERED FIRST (notes.html #73). Before drawing
       anything, the host surfaces were built (`next build`) and screenshotted from
-      a running server: `/settings/account/api-tokens` (populated + empty) and
+      a running server: `/settings/account/tokens` (populated + empty) and
       `/sign-in`. Every repro below mirrors what those renders actually show — the
       TopNav, the account rail with its five real entries, the serif page head, the
       "Your tokens" Card and its EIGHT-column table (Label · Token · Scopes ·
@@ -49,7 +49,7 @@
       PANELS — review EVERY one (mistake #31):
         0   The ENTRANCE — both doors, drawn: the CLI's own hand-off into the
             browser (two URL forms), and the in-app path (avatar menu → Account
-            settings → Security → API tokens).
+            settings → Security → Tokens).
         1   /device · code entry (hand-typed — the sandbox / SSH path).
         2   /device · code entry, PRE-FILLED from `verification_uri_complete`.
         3   /device · CONFIRM, multi-workspace (the workspace picker present).
@@ -58,7 +58,7 @@
         6   /device · denied.
         7   /device · expired · and unknown code.
         8   /device · signed-out arrival + the sign-in hand-off that returns.
-        9   Settings → Account → API tokens WITH the "Connect the CLI" panel in
+        9   Settings → Account → Tokens WITH the "Connect the CLI" panel in
             place (populated list, incl. the CLI-minted row).
         10  The same pane for a first-time user (empty token list) + the
             copy-confirmation toast.
@@ -1357,7 +1357,7 @@
       }
 
       /* ═══ The authed APP SHELL repro (Panels 9–11) — mirrors the RENDERED
-           /settings/account/api-tokens: TopNav + account rail + content ═════ */
+           /settings/account/tokens: TopNav + account rail + content ═════ */
       .stage {
         border: 1px solid var(--el-border);
         border-radius: var(--radius-card);
@@ -1913,9 +1913,9 @@
           MOTIR-1866 (design) for MOTIR-1867 (the page) and MOTIR-1869 (the panel). Both surfaces
           are new: <code class="mono">/device</code> 404s on a production build of
           <code class="mono">origin/main</code>
-          today. The hosts they land in — the API-tokens pane and the sign-in card — were RENDERED
-          first and are mirrored here, not redrawn from source. Every state, code format and error
-          name is cited in design-notes.md. Multi-panel — review each.
+          today. The hosts they land in — the Tokens pane and the sign-in card — were RENDERED first
+          and are mirrored here, not redrawn from source. Every state, code format and error name is
+          cited in design-notes.md. Multi-panel — review each.
         </p>
       </div>
       <button
@@ -2377,7 +2377,7 @@
         <p class="dsub">
           The panel is the entrance that makes the CLI EXIST for someone who never read the repo. It
           adds NO new primary-nav entry and NO new route: it is the first card of the existing
-          Security → API tokens pane, reached the way every account pane is — the avatar menu.
+          Security → Tokens pane, reached the way every account pane is — the avatar menu.
         </p>
         <div style="position: relative">
           <div
@@ -2422,7 +2422,7 @@
         </div>
         <div class="step-note" style="margin-top: 200px">
           <svg class="ic" viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>
-          then, in the account rail: Security → API tokens (Panel 9)
+          then, in the account rail: Security → Tokens (Panel 9)
         </div>
         <div style="max-width: 232px">
           <div class="grp">
@@ -2431,12 +2431,12 @@
               <span class="ni"
                 ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
               ></span>
-              <span class="nl">API tokens</span>
+              <span class="nl">Tokens</span>
             </div>
           </div>
         </div>
         <p class="tie" style="margin-top: 14px">
-          The rail label stays <b>API tokens</b> — the panel is titled “Connect the CLI” inside the
+          The rail label stays <b>Tokens</b> — the panel is titled “Connect the CLI” inside the
           pane. Renaming the entry would churn the <code class="mono">accountSettingsNav</code>
           registry, its i18n keys and the route↔registry totality test for no user gain.
         </p>
@@ -2593,7 +2593,7 @@
                 <div class="dblock">
                   <span class="dk">Expires</span>
                   <span class="dstrong">In 90 days</span>
-                  <span class="sub">Revoke it in API tokens to disconnect.</span>
+                  <span class="sub">Revoke it in Tokens to disconnect.</span>
                 </div>
               </div>
             </div>
@@ -2698,7 +2698,7 @@
                 <div class="dblock">
                   <span class="dk">Expires</span>
                   <span class="dstrong">In 90 days</span>
-                  <span class="sub">Revoke it in API tokens to disconnect.</span>
+                  <span class="sub">Revoke it in Tokens to disconnect.</span>
                 </div>
               </div>
             </div>
@@ -2760,7 +2760,7 @@
               workspace. It expires in 90 days; revoking it disconnects that terminal.
             </p>
             <button class="btn btn-secondary full">
-              <svg class="ic" viewBox="0 0 24 24"><use href="#i-key-round" /></svg>View API tokens
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-key-round" /></svg>View tokens
             </button>
           </div>
           <p class="ac-foot">You can close this page.</p>
@@ -2948,7 +2948,7 @@
       Panel 9 —
       <span
         >Surface 2 · the “Connect the CLI” panel IN PLACE as the first card of the shipped Settings
-        → Account → API tokens pane · the CLI-minted row sits in the SAME list below, which is not
+        → Account → Tokens pane · the CLI-minted row sits in the SAME list below, which is not
         re-specified here</span
       >
     </div>
@@ -3023,7 +3023,7 @@
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
                   ></span>
-                  <span class="nl">API tokens</span>
+                  <span class="nl">Tokens</span>
                 </div>
               </div>
             </div>
@@ -3031,7 +3031,7 @@
 
           <div class="content">
             <div class="page-head">
-              <h2>API tokens</h2>
+              <h2>Tokens</h2>
               <p class="sub">
                 Personal access tokens let your coding agents reach Motir over the MCP server. Each
                 token acts as you — give every agent its own, and revoke any you no longer use.
@@ -3251,7 +3251,7 @@
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
                   ></span>
-                  <span class="nl">API tokens</span>
+                  <span class="nl">Tokens</span>
                 </div>
               </div>
             </div>
@@ -3259,7 +3259,7 @@
 
           <div class="content">
             <div class="page-head">
-              <h2>API tokens</h2>
+              <h2>Tokens</h2>
               <p class="sub">
                 Personal access tokens let your coding agents reach Motir over the MCP server. Each
                 token acts as you — give every agent its own, and revoke any you no longer use.
@@ -3331,9 +3331,9 @@
                   <span class="ic-wrap"
                     ><svg viewBox="0 0 24 24"><use href="#i-key-round" /></svg
                   ></span>
-                  <h3>No API tokens yet</h3>
+                  <h3>No tokens yet</h3>
                   <p>
-                    API tokens let your coding agents talk to Motir over the MCP server — list ready
+                    Tokens let your coding agents talk to Motir over the MCP server — list ready
                     work, open work items, move them, and comment, all as you.
                     <span class="link">Read the MCP setup guide</span> to connect your first agent.
                   </p>
@@ -3447,7 +3447,7 @@
                 <div class="dblock">
                   <span class="dk">Expires</span>
                   <span class="dstrong">In 90 days</span>
-                  <span class="sub">Revoke it in API tokens to disconnect.</span>
+                  <span class="sub">Revoke it in Tokens to disconnect.</span>
                 </div>
               </div>
             </div>

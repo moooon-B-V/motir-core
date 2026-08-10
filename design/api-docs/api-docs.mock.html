@@ -20,7 +20,7 @@
              no page (`app/(public)/explore/_components/ExploreTopBar.tsx`). This
              design does not invent a nav pattern: it turns that existing label
              into a real link. Plus the footer's Product column, same treatment.
-           * the IN-APP door — a link row on the shipped API-tokens settings page
+           * the IN-APP door — a link row on the shipped Tokens settings page
              (`app/(authed)/settings/account/api-tokens/page.tsx`), for the reader
              with the sharpest need: someone who has just minted a PAT.
         C. The states the real product has rather than the happy path: an
@@ -29,7 +29,7 @@
 
       ⚠️ WHAT THIS DESIGN DOES **NOT** OWN — see design-notes.md, which says the
       same on both counts:
-        * The API-tokens settings page and its token manager belong to
+        * The Tokens settings page and its token manager belong to
           `design/settings/` (account-settings + token-scopes). Panel 8 places ONE
           affordance on it and redraws nothing else.
         * The marketing top bar and footer belong to `design/project-square/`
@@ -60,7 +60,7 @@
         (5) Stability & deprecation — the short prose page.
         (6) The SPEC-UNAVAILABLE failure state.
         (7) The PUBLIC DOOR, in the shipped marketing top bar + footer.
-        (8) The IN-APP DOOR, on the shipped API-tokens settings page.
+        (8) The IN-APP DOOR, on the shipped Tokens settings page.
         (9) Mobile (390px) — the catalogue drawer and the scrolling code block.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
@@ -1364,8 +1364,8 @@ curl -X PATCH https://app.motir.co/api/v1/work-items/MOTIR-1854 \
 
             <h2>1 · Mint a token</h2>
             <p>
-              Settings → API tokens → <strong>New token</strong>. Choose the workspace it is bound
-              to and the scopes it carries. The secret is shown <strong>once</strong>.
+              Settings → Account → Tokens → <strong>New token</strong>. Choose the workspace it is
+              bound to and the scopes it carries. The secret is shown <strong>once</strong>.
             </p>
             <div class="callout">
               <span aria-hidden="true">◆</span>
@@ -1730,7 +1730,7 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
 
     <!-- ════════ PANEL 8 — the IN-APP door ════════ -->
     <div class="panel-label">
-      Panel 8 · THE IN-APP DOOR — on the shipped API-tokens settings page
+      Panel 8 · THE IN-APP DOOR — on the shipped Tokens settings page
       <span class="note">
         The reader with the sharpest need is someone who has just minted a PAT and is holding a
         secret with nothing to do with it. The affordance is a single link row placed directly under
@@ -1747,7 +1747,7 @@ X-Request-Id:          c7771231-e18c-48bc-90c9-c1a9720436a4</pre
     <div class="panel">
       <div class="stage" style="padding: 28px 36px 34px">
         <div class="settings-head" style="margin-bottom: 18px">
-          <h2>API tokens</h2>
+          <h2>Tokens</h2>
           <p>
             Personal access tokens authenticate the CLI, the MCP server and anything you build
             against the public API.

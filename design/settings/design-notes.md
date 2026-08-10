@@ -9,15 +9,57 @@ the same primitives — no Pencil→code gap.
 
 | Surface                   | Asset                                                  | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | ------------------------- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Account settings area** | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/API tokens) + the API-token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (API tokens).                                                                                                                                                                                                                                                                     |
-| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the API-tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                                                                                     |
+| **Account settings area** | **`account-settings.mock.html`** (HTML mock)           | The account-settings area: the rail grouped nav + the **real** panes (Language · Notifications · Security/Tokens) + the token create / shown-once / revoke / empty / toast flows. Multi-panel. **Gates 7.8.3** (Tokens).                                                                                                                                                                                                                                                                                 |
+| **Token scope selection** | **`token-scopes.mock.html`** (HTML mock)               | EXTENDS the Tokens surface: the create-modal **permission-scope picker** (grouped Switch toggles, default all-on except delete) + the token-LIST **granted-scope display** (summary Pill + "Can delete" chip + expandable detail). Multi-panel. **Gates 7.7.19** (token scopes).                                                                                                                                                                                                                         |
 | **Appearance pane**       | **`appearance.mock.html`** (HTML mock)                 | Motir dogfoods its own 3-axis design system: theme the Motir app itself — **Theme × Style × Palette × Type**. Applies instantly, so the whole page re-skins — the page itself is the showcase (controls + a real Motir slice), no separate preview. Reuses the area shell + onboarding picker language; flips the rail's "Soon" Appearance slot to active. Multi-panel (default · changed · dark). **Gates 7.3.58** (the pane + route).                                                                  |
-| **Connect the CLI**       | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → API tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                     |
+| **Connect the CLI**       | **`../cli-connect/cli-connect.mock.html`** (HTML mock) | Lives in its OWN area (`design/cli-connect/`) because it also owns the `/device` approval page, but its second surface COMPOSES INTO this area: the "Connect the CLI" panel is the first `Card` of the Security → Tokens pane, above "Your tokens". It re-specifies nothing here — the table / create modal / shown-once / revoke flows are unchanged. **Gates MOTIR-1869** (the panel); the page is MOTIR-1867.                                                                                         |
 | **Profile pane**          | **`profile.mock.html`** (HTML mock)                    | The `General › Profile` personal-details pane (Linear-style Profile + Security): edit **name** (inline), **avatar** (upload / remove), **email** (change-with-confirmation), and **password** (Change-password modal for credential users · Send-a-reset-link for OAuth-only). Flips the rail's last "Soon" slot (Profile) to active. Multi-panel (resting · editing/pending/errors · change-password modal + toast · change-email + OAuth + loading · dark). **Gates the 8.8.x Profile build subtask.** |
+
+## ✏️ Amendment — 2026-08-10 · MOTIR-2533: the pane is called **Tokens**
+
+**A NAME change, not a design change.** Story [MOTIR-2532] settles the product on
+ONE reader-facing noun for this object. The rail row, the pane heading, the
+create-modal title and the empty state all said "API tokens"; the subtitle said
+"Personal access tokens" and the card inside said "Your tokens" — four names for
+one thing, on one screen. From this amendment the surface is **Tokens**:
+
+| where                | was                 | now                |
+| -------------------- | ------------------- | ------------------ |
+| rail row (Security)  | API tokens          | **Tokens**         |
+| pane heading         | API tokens          | **Tokens**         |
+| create-modal title   | Create API token    | **Create token**   |
+| empty-state heading  | No API tokens yet   | **No tokens yet**  |
+| `/device` approved   | View API tokens     | **View tokens**    |
+| address              | `/settings/account/api-tokens` | `/settings/account/tokens` |
+
+**The INTERACTION MODEL is unchanged.** No layout, panel, primitive, `--el-*`
+colour or shape token moved. The pane keeps the 7.8.2 shape exactly — Card +
+eight-column table + create modal + shown-once + revoke confirm + empty state —
+and the "Connect the CLI" panel still composes in above "Your tokens"
+(`../cli-connect/`). Every panel count in this file still holds; only strings and
+`href`s changed, and the `.png` exports were re-rendered from the amended source.
+
+**What deliberately did NOT change**, so a reader does not "fix" it later:
+
+- The **subtitle** still reads "Personal access tokens let your coding agents…".
+  That sentence DEFINES the object; the heading NAMES it. A heading of "Tokens"
+  over a sentence saying what tokens are is the shape we want.
+- The **mirror citation** below still reads "Atlassian API tokens" — that is
+  Atlassian's own product name, and rung-1 evidence is quoted, not renamed.
+- The i18n KEYS (`settings.apiTokens.*`) and every internal identifier
+  (`ApiTokensManager`, `accountSettingsNav`'s `apiTokens` entry id / labelKey,
+  the `api_token` table, the `motir_pat_…` prefix) are UNCHANGED. Keys and
+  symbols are not surfaces.
+- The **address in this asset leads its route.** `/settings/account/tokens` does
+  not resolve until MOTIR-2534 moves the directory and adds the redirect; until
+  then the two pairs that name it carry a forward-looking row in
+  `tests/design-asset-addresses.test.ts`'s `KNOWN` table, to be deleted by that
+  card. Source-path citations (`app/(authed)/settings/account/api-tokens/…`) are
+  left correct-as-of-today and move with the file in MOTIR-2534.
 
 ## Why the whole area (the corner that was cut, then fixed)
 
-The first pass designed **only** the API-tokens card, bolted onto the existing
+The first pass designed **only** the Tokens card, bolted onto the existing
 flat account page. That was a corner cut: the account surface is about to hold
 more personal settings, and a flat card stack does not scale. So 7.8.2 designs
 the account-settings **area architecture** — but only the panes we will actually
@@ -45,9 +87,9 @@ settings adopts the **same** pattern (Yue's call, 2026-06-14):
     Automation slot.
   - **Preferences → Language** (real), **Notifications** (real), **Appearance**
     (reserved **"Soon"** — see the scope guard).
-  - **Security → API tokens** — the 7.8.3 page.
+  - **Security → Tokens** — the 7.8.3 page.
 - Each REAL sub-section is its own route under `app/(authed)/settings/account/…`
-  (Language / Notifications / API tokens). The existing flat account page's
+  (Language / Notifications / Tokens). The existing flat account page's
   `LanguageCard` / `NotificationPreferencesCard` move into their panes.
 
 ### ✅ Scope update — Appearance IS now designed (Story 7.3 · 7.3.57 / MOTIR-1074)
@@ -73,7 +115,7 @@ WHY it waited.
 
 So the surfaces designed **in `account-settings.mock.html` (7.8.2)** are exactly:
 the **area shell**, the **Language** pane, the **Notifications** pane, and the
-**Security/API tokens** pane + flows. The **Appearance** pane is designed in
+**Security/Tokens** pane + flows. The **Appearance** pane is designed in
 **`appearance.mock.html` (7.3.57)** — it flips the rail's "Soon" Appearance slot
 to a real, active entry.
 
@@ -81,7 +123,7 @@ to a real, active entry.
 
 1. **The account-settings AREA shell** — the `accountSettingsNav` registry, the
    rail-swap wiring, the `settings/account` layout, the route split (Language /
-   Notifications / API tokens pages), the totality test. It is a prerequisite
+   Notifications / Tokens pages), the totality test. It is a prerequisite
    bigger than 7.8.3's original "API tokens settings UI" scope. **Recommend a new
    shell subtask under Story 7.8, with 7.8.3 `dependsOn` it** (or re-scope 7.8.3
    to "API tokens page _inside_ the new account area").
@@ -118,7 +160,7 @@ The shipped **`NotificationPreferencesCard`** matrix inside the area — a
 (`--el-text-faint` uppercase) with a `--el-border` rule; rows hairline-separated.
 Each switch carries an `aria-label`. No redesign — it just moves into its pane.
 
-## Panel 3 — Security & access pane (API tokens) — the 7.8.3 surface
+## Panel 3 — Security & access pane (Tokens) — the 7.8.3 surface
 
 The human face of the **PAT substrate** (7.8.1) the MCP bearer gate (7.8.4)
 consumes. A PAT is **generated once, shown once, stored only as a hash,
@@ -159,7 +201,7 @@ initial list via `apiTokensService.listForUser`.
 
 ## Panel 4 — Create modal
 
-A `Modal` (`size="md"`, `title="Create API token"`, description "The token will
+A `Modal` (`size="md"`, `title="Create token"`, description "The token will
 be shown once…"): a label `Input` (`helperText` "A name to recognise this token
 by…", autofocus) + an expiry `Combobox` ("Expires" — 30 / 90 / 365 days / Never,
 default **90 days**). Footer: ghost **Cancel** + primary **Create token**
@@ -265,7 +307,7 @@ a code workaround.
 # Token scope selection — `token-scopes.mock.html` (Story 7.7 · 7.7.18)
 
 The reference the **7.7.19** code subtask builds against. It EXTENDS the
-API-tokens surface designed in 7.7.2 (Panels 3–8 of `account-settings.mock.html`,
+Tokens surface designed in 7.7.2 (Panels 3–8 of `account-settings.mock.html`,
 which cover list / create / shown-once / revoke / empty) by adding the one thing
 that design lacked: **permission-scope selection**. Nothing else in the
 create→shown-once→revoke flow changes. Built from the SAME token block + shipped
@@ -725,7 +767,7 @@ input`/`-btn-sm`/`-btn-md`; `--shadow-subtle`/`-modal`/`-elevated`). No Tier-0
 Implements this pane + the `settings/account/profile` route, flipping the
 `accountSettingsNav` `profile` entry from `placeholder: true` to a real route
 (keeps the route↔registry totality test green by construction, exactly as 7.8.3
-did for API tokens and 7.3.58 for Appearance). Backend to add, per the table
+did for Tokens and 7.3.58 for Appearance). Backend to add, per the table
 above: `updateUser(name, image)` + avatar-upload route (over `putAttachment`) +
 Better-Auth `changeEmail` enablement + a confirmation-email template; the
 password change/reset paths reuse shipped Better-Auth. The name/email inline

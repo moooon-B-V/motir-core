@@ -10,14 +10,14 @@
       stack into a settings AREA with a grouped nav in the rail — the SAME shape as
       the shipped project-settings area (Story 6.5, `design/projects/settings-area`),
       so the surface scales as it grows to hold Appearance (theme · accent · font ·
-      display style · language), Notifications, and Security (API tokens), plus a
+      display style · language), Notifications, and Security (Tokens), plus a
       reserved Profile slot.
 
-      WHY the whole area, not one card: the API-tokens card was originally going to
+      WHY the whole area, not one card: the Tokens card was originally going to
       bolt onto the flat account page. But the account surface is about to hold many
       more personal settings (font, colour palette, display style, …); a flat card
       stack doesn't scale and would lock in the wrong architecture. So 7.8.2 is the
-      whole account-settings redesign, with API tokens as its Security section.
+      whole account-settings redesign, with Tokens as its Security section.
 
       Built FROM the real design system: the token block is copied 1:1 from
       app/globals.css (Tier-0 --color-* + shape tokens + Tier-3 --el-*); the markup
@@ -29,21 +29,21 @@
       "Soon" placeholder + totality-guard mechanism).
 
       DESIGNED HERE = only what we'll actually build now: the AREA shell + the real
-      panes (Language · Notifications · API tokens). APPEARANCE IS NOT DESIGNED — it
+      panes (Language · Notifications · Tokens). APPEARANCE IS NOT DESIGNED — it
       is only a reserved "Soon" nav slot. Mocking concrete appearance controls
       (theme/accent/font/display-style) would be misleading: we are not going to
       implement appearance like that, and it gets its own future story (Yue,
-      2026-06-14). Profile is likewise a "Soon" slot. API tokens is 7.8.3.
+      2026-06-14). Profile is likewise a "Soon" slot. Tokens is 7.8.3.
 
       Covers (multi-panel — review EACH, mistake #31):
         (1)  Language pane — the area shell (account rail + grouped nav) + the
              shipped Language preference inside the area.
         (2)  Notifications pane — the shipped preference matrix inside the area.
-        (3)  Security & access pane — the API tokens card + table inside the area.
+        (3)  Security & access pane — the Tokens card + table inside the area.
         (4)  Create-token modal.
         (5)  Shown-once secret state.
         (6)  Revoke confirm (destructive).
-        (7)  API tokens empty state.
+        (7)  Tokens empty state.
         (8)  Copy-confirmation toast.
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
@@ -1366,7 +1366,7 @@
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
                   ></span>
-                  <span class="nl">API tokens</span>
+                  <span class="nl">Tokens</span>
                 </div>
               </div>
             </nav>
@@ -1471,7 +1471,7 @@
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
                   ></span>
-                  <span class="nl">API tokens</span>
+                  <span class="nl">Tokens</span>
                 </div>
               </div>
             </nav>
@@ -1551,10 +1551,10 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 3 — Security & access pane (API tokens) ════════════ -->
+    <!-- ════════════ PANEL 3 — Security & access pane (Tokens) ════════════ -->
     <div class="panel-label">
-      3 · Security &amp; access pane — the API tokens card + table inside the area (a live token, an
-      expiring-soon token with the peach chip, and a revoked token shown muted). Rail: API tokens
+      3 · Security &amp; access pane — the Tokens card + table inside the area (a live token, an
+      expiring-soon token with the peach chip, and a revoked token shown muted). Rail: Tokens
       active. This is the 7.8.3 surface.
     </div>
     <div class="panel">
@@ -1613,7 +1613,7 @@
                   <span class="ni"
                     ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
                   ></span>
-                  <span class="nl">API tokens</span>
+                  <span class="nl">Tokens</span>
                 </div>
               </div>
             </nav>
@@ -1621,7 +1621,7 @@
 
           <div class="content">
             <div class="page-head">
-              <h2>API tokens</h2>
+              <h2>Tokens</h2>
               <p class="sub">
                 Personal access tokens let your coding agents reach Motir over the MCP server. Each
                 token acts as you — give every agent its own, and revoke any you no longer use.
@@ -1703,7 +1703,7 @@
         <div class="overlay-tint"></div>
         <div class="modal">
           <div class="modal-head">
-            <h3 class="modal-title">Create API token</h3>
+            <h3 class="modal-title">Create token</h3>
             <p class="modal-desc">
               The token will be shown once, right after you create it. Store it somewhere safe.
             </p>
@@ -1818,17 +1818,17 @@
     <!-- ════════════ PANEL 7 — empty state ════════════ -->
     <div class="panel-label">
       7 · Empty state — no tokens yet. The shipped EmptyState primitive (Card + key glyph + title +
-      description with a docs link + the create action), shown in the API tokens pane content.
+      description with a docs link + the create action), shown in the Tokens pane content.
     </div>
     <div class="panel">
       <div class="card empty">
         <span class="ic-wrap"
           ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
         ></span>
-        <h2>No API tokens yet</h2>
+        <h2>No tokens yet</h2>
         <p>
-          API tokens let your coding agents talk to Motir over the MCP server — list ready work,
-          open work items, move them, and comment, all as you.
+          Tokens let your coding agents talk to Motir over the MCP server — list ready work, open
+          work items, move them, and comment, all as you.
           <a href="#">Read the MCP setup guide</a> to connect your first agent.
         </p>
         <div class="action">

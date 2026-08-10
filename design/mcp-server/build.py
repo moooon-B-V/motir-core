@@ -373,7 +373,7 @@ WIRING_MAIN = '''          <main class="docs-main doc">
 
             <h2><span class="stepnum">1</span> Mint a token</h2>
             <p>
-              In the app: <strong>Settings → Account → API tokens → Create</strong>. Give it a label
+              In the app: <strong>Settings → Account → Tokens → Create</strong>. Give it a label
               and an expiry. The plaintext is shown <strong>once</strong> — copy it then; Motir keeps
               only a hash.
             </p>
@@ -663,7 +663,7 @@ PANEL6 = f'''      <div class="row2">
 # ── PANEL 7 — THE ACCESS PATH ②: the in-app door ────────────────────────────
 PANEL7 = '''      <div class="doorframe">
         <div class="settings-head">
-          <h2>API tokens</h2>
+          <h2>Tokens</h2>
           <p>Personal access tokens let your coding agents talk to Motir over the MCP server.</p>
         </div>
         <div class="card" style="max-width: 720px">
@@ -795,7 +795,7 @@ doc = f'''<!doctype html>
 {PANEL6}
     </div>
 
-{label(7, 'THE ACCESS PATH ② — the in-app door', 'Settings &rarr; Account &rarr; API tokens, empty state')}
+{label(7, 'THE ACCESS PATH ② — the in-app door', 'Settings &rarr; Account &rarr; Tokens, empty state')}
     <div class="panel">
 {PANEL7}
     </div>
