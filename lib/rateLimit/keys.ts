@@ -39,6 +39,7 @@ export type RateLimitScope =
   | 'public-write'
   | 'public-submit'
   | 'ai:chat'
+  | 'ai:generate'
   | 'ai:internal'
   | 'account:change-password'
   | 'account:set-password-link'

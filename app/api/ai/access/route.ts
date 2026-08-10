@@ -27,6 +27,9 @@ const NOT_APPLICABLE: AiAccessDTO = {
   renewsAt: null,
 };
 
+// NOT rate-limited, deliberately (MOTIR-2597): this reads the workspace's AI entitlement, so no
+// model job is submitted and no provider money is spent on this path. The AI ceiling guards the
+// doors that SUBMIT; adding one here would only cap a database read.
 export async function GET(): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json(NOT_APPLICABLE);

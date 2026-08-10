@@ -71,6 +71,10 @@
         --color-primary: #5645d4;
         --color-primary-pressed: #4534b3;
         --color-primary-foreground: #ffffff;
+        /* Accent FILL behind white text. Equals --color-primary in the light
+           default palette; the dark theme darkens it so white label text clears
+           AA (MOTIR-757). --el-accent aliases THIS, not --color-primary. */
+        --color-primary-fill: #5645d4;
         --color-background: #ffffff;
         --color-foreground: #1a1a1a;
         --color-surface: #f6f5f4;
@@ -152,7 +156,7 @@
         --el-border-strong: var(--color-hairline-strong);
         --el-link: var(--color-link);
         --el-link-pressed: var(--color-link-pressed);
-        --el-accent: var(--color-primary);
+        --el-accent: var(--color-primary-fill);
         --el-accent-pressed: var(--color-primary-pressed);
         --el-accent-text: var(--color-primary-foreground);
         --el-accent-on-surface: var(--color-primary);
@@ -191,6 +195,9 @@
         --color-hairline-strong: #3a3a3a;
         --color-primary: #7b6ce5;
         --color-primary-pressed: #5645d4;
+        /* Darker than the ink value above — white label text on #6c5cdd is
+           4.99:1 (AA), where the brighter ink is only 4.10:1 as a fill. */
+        --color-primary-fill: #6c5cdd;
         --color-tint-peach: #3a2a1a;
         --color-tint-rose: #3a1f2a;
         --color-tint-mint: #1a2f25;

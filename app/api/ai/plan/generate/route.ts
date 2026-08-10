@@ -4,6 +4,7 @@ import { getActiveProject } from '@/lib/projects';
 import { aiGenerationService } from '@/lib/services/aiGenerationService';
 import { MotirAiError, MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/plan/generate (Subtask 7.4.4 · MOTIR-846) — open a `Plan`
 // (status `generating`) for the active project and submit the `generate_tree`
@@ -37,6 +38,13 @@ export async function POST(req: Request): Promise<Response> {
       { status: 404 },
     );
   }
+
+  // The AI ceiling, applied on the door that SUBMITS the job (MOTIR-2597). Its own
+  // `ai:generate` bucket, tighter than `ai:chat`, because a generation costs many
+  // chat turns. Spent here — after the two gates, before the body is read and long
+  // before the provider is called, since a 429 afterwards has already paid the bill.
+  const limited = await enforceAiRateLimit(ctx, 'ai:generate');
+  if (limited) return limited;
 
   // The body is optional; an unparseable body is treated as an empty one (no
   // required fields — generation seeds from the project's pre-plan context).

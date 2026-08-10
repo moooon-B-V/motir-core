@@ -1,6 +1,6 @@
 import type { NextResponse } from 'next/server';
 import { presentedBearerToken } from '@/lib/api/v1/bearer';
-import { aiBudget } from '@/lib/rateLimit/budgets';
+import { aiBudget, aiGenerateBudget } from '@/lib/rateLimit/budgets';
 import { enforceRateLimit } from '@/lib/rateLimit/guard';
 import { rateLimitKey, type RateLimitScope } from '@/lib/rateLimit/keys';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -29,6 +29,10 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
  * Refusing BEFORE the job is submitted is the whole point: a 429 after the
  * provider call has been made would have already spent the money it exists to
  * protect.
+ *
+ * `ai:generate` (MOTIR-2597) draws its own, tighter budget: same guard, same
+ * store, same key axis — a generation simply costs several chat turns, so it
+ * cannot be metered by the chat allowance. Every other scope keeps `aiBudget()`.
  */
 export async function enforceAiRateLimit(
   ctx: ServiceContext,
@@ -38,7 +42,7 @@ export async function enforceAiRateLimit(
     {
       scope,
       key: rateLimitKey(scope, ctx.workspaceId, ctx.userId),
-      budget: aiBudget(),
+      budget: scope === 'ai:generate' ? aiGenerateBudget() : aiBudget(),
     },
   ]);
   return response;

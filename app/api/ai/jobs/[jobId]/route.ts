@@ -23,6 +23,10 @@ import { MotirAiError, MotirAiJobNotFoundError } from '@/lib/ai/errors';
 // jobId held by an actor who can plan somewhere is still readable across
 // projects, and saying so here is cheaper than someone re-deriving it later.
 
+// NOT rate-limited, deliberately (MOTIR-2597): this route READS a job whose cost was already
+// paid at submit time, where the `ai:generate` ceiling was spent. A limiter here would refuse a
+// caller mid-generation — cutting off the answer they have already been charged for — without
+// ever preventing a single provider call.
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ jobId: string }> },

@@ -15,6 +15,9 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 // SUMMARY cheaply while fetching findings for the selected repo alone
 // (MOTIR-2207 · Panel 7 §3) — a passthrough to a param the boundary already
 // takes, not a change to the 7.1 contract.
+// NOT rate-limited, deliberately (MOTIR-2597): this reads a finished audit back, so no model job
+// is submitted and no provider money is spent on this path. The AI ceiling guards the doors that
+// SUBMIT; adding one here would only cap a database read.
 export async function GET(req: Request): Promise<Response> {
   const resolved = await resolveActiveProjectContext();
   if ('response' in resolved) return resolved.response;
