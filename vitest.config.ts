@@ -139,6 +139,21 @@ export default defineConfig({
         'lib/permissions/**',
         'lib/services/projectAccessService.ts',
 
+        // Story MOTIR-2554 · Subtask MOTIR-2558 — the shell's CONTEXT PATH.
+        // `ShellTierNav` decides which tiers a person sees at which width (the
+        // ladder in `design/shell/design-notes.md` § *The context row*) and
+        // `ProjectTier` decides which of three states the last tier is in. Both
+        // are new decision code on the one row every authed screen renders, and
+        // neither was in the report before this story. `TopNav` joins them
+        // because it is the host whose props the two now depend on.
+        //
+        // The glob form is the `app/**/…` one for the reason the block comment
+        // above gives: a literal `app/(authed)/…` key matches no reported file
+        // and would gate nothing.
+        'app/**/_components/ShellTierNav.tsx',
+        'app/**/_components/ProjectTier.tsx',
+        'app/**/_components/TopNav.tsx',
+
         // Story MOTIR-2258 · Subtask MOTIR-2476 — the permission-gated shell.
         // The two registries are the load-bearing new code (one decides which
         // settings rooms exist for an actor, the other which nav destinations
@@ -895,6 +910,14 @@ export default defineConfig({
         // pinned, on this branch, with the story's own suites: the nav map at
         // 100/100/100 and the provider at 100/100/100.
         'lib/settings/projectNavAccess.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2554 · Subtask MOTIR-2558 — MEASURED before being pinned,
+        // on this branch, with the story's own suites: all three at 100/100/100
+        // (branches / functions / lines). Pinned at 90 rather than 100 so a
+        // future branch of the ladder can land with its test in the same PR
+        // without the gate turning into a ratchet nobody can move.
+        'app/**/_components/ShellTierNav.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/_components/ProjectTier.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/_components/TopNav.tsx': { branches: 90, functions: 90, lines: 90 },
         'app/**/_components/ProjectAccessProvider.tsx': {
           branches: 90,
           functions: 90,
