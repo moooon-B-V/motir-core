@@ -316,10 +316,28 @@ test('a reader with no session finds the sandbox guide from the rail and leaves 
   });
 
   await chapter('Copy the command it came for', async () => {
-    const block = page.locator('#start-the-container pre').first();
-    await expect(block).toBeVisible();
+    // Step 2 renders TWO commands since MOTIR-2611 — a `docker pull` and then
+    // the `docker run` it makes current — so each block is named by the command
+    // it holds rather than by position. `.first()` would copy the PULL and fail
+    // the `docker run` assertions below against a page that is working
+    // perfectly, which is the least useful way a test can go red (MOTIR-2620).
+    const blockFor = (command: string) =>
+      page.locator('#start-the-container pre').filter({ hasText: command }).locator('xpath=..');
 
-    await page.locator('#start-the-container').getByRole('button', { name: 'Copy' }).click();
+    // The pull comes first on the page, and it is the whole point of step 2:
+    // `docker run` never returns to the registry for a tag this machine already
+    // has, so a guide that renders only the run leaves a returning reader on a
+    // stale image. Assert it copies, or the next edit can drop it silently.
+    const pullBlock = blockFor('docker pull');
+    await expect(pullBlock).toBeVisible();
+    await pullBlock.getByRole('button', { name: 'Copy' }).click();
+    expect(await page.evaluate(() => navigator.clipboard.readText())).toContain(
+      'docker pull ghcr.io/moooon-b-v/motir-sandbox:',
+    );
+
+    const runBlock = blockFor('docker run');
+    await expect(runBlock).toBeVisible();
+    await runBlock.getByRole('button', { name: 'Copy' }).click();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
 
     // The whole command, not a truncated or placeholder string — a copy button
