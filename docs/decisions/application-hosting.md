@@ -955,3 +955,159 @@ record precisely because they were not there.
   presigned-GET only.
 - **Any code or anything on the platform.** MOTIR-2404 shipped the change this
   cell now reflects; no bucket, object or ACL is touched here.
+
+---
+
+## Amendment 5 (2026-08-10) — Q9's premise was wrong: one ORG is not one 6PN. The seam is applied, and it now depends on motir-ai never scaling to zero
+
+> **Written by Story MOTIR-2384 · Subtask MOTIR-2426.** Amendment 1 recorded the
+> decision to move the core→ai seam onto private networking. **This amendment
+> records what happened when it was applied**, and corrects the premise that
+> amendment rested on. **Q9's decision STANDS and is now in force** —
+> `MOTIR_AI_URL` is `http://motir-ai.internal:8080` in production. What changes is
+> the _reason it works_, and a new operational constraint that came with it.
+>
+> **Numbered 5.** Amendment 4 was the highest heading in this file, re-read at
+> edit time from `origin/main` rather than taken from the card; no unmerged branch
+> and no sibling worktree carries a higher one, and the repository has no open pull
+> requests. All clock times below are the platform's own, in UTC.
+
+**Amends:** Amendment 1's _"The facts this rests on"_ table and the sentence that
+generalises it. It adds no Q and withdraws no decision. §1's Q1, Q3 and Q7 are
+untouched, as are Amendments 2, 3 and 4.
+
+### The premise that was wrong
+
+Amendment 1 says, of Q9:
+
+> private networking works **because both apps are in one org**
+
+Both apps are in one org — that reading was correct, and Amendment 2 corrected the
+org's name to `moooon`. **The inference from it was not.** Being in one
+organisation does not put two apps on one 6PN, and — the case actually
+encountered — it does not guarantee that machines in one organisation hold
+addresses from the **same allocation**.
+
+When MOTIR-2426 ran, `http://motir-ai.internal:8080` **timed out at TCP connect**
+from inside a motir-core machine. Not a redirect, not a refusal: no route at all.
+The private addresses were:
+
+| machine                        | created    | private /48    |
+| ------------------------------ | ---------- | -------------- |
+| motir-gateway `1850e6ef954d98` | 2026-06-17 | `fdaa:79:c4a6` |
+| motir-ai `3d8d5d20b37348`      | 2026-07-10 | `fdaa:79:c4a6` |
+| motir-core `7817663f103648`    | 2026-08-09 | `fdaa:ab:2cdf` |
+| motir-core `83d1300b7460e8`    | 2026-08-09 | `fdaa:ab:2cdf` |
+
+**The split followed machine creation date, not the app.** A 6PN address is
+allocated at _machine_ creation and survives `fly deploy`, which updates machines
+in place — motir-ai's machine was created on 2026-07-10 and merely updated on
+2026-08-07, so it still carried a July address after every deploy since.
+
+Four control-plane views said all three apps were in one network (Machines API
+`network: "default"`; GraphQL `networkId` identical; `_apps.internal` listing all
+three; `motir-ai.internal` resolving). Only `_instances.internal` — the registry
+of actual machine membership — omitted the June/July machines. **A name that
+resolves is not a route.**
+
+### What the fact table should have said
+
+Replace the reasoning behind the first row, not the row itself. The determinant is
+not organisation membership but this:
+
+- **Two apps can reach each other over `.internal` when their MACHINES hold
+  addresses from the same 6PN allocation.** Same org is necessary and not
+  sufficient.
+- **The check is a comparison, not a lookup**: `fly machine list -a <app> --json`
+  → `private_ip`, and compare the `/48` on both sides. `_instances.internal`, read
+  from inside a machine, is the authoritative membership list; `<app>.internal`
+  resolving proves nothing.
+- **The probe that isolates the layer** is a TCP connect to **port 22** of the
+  target's private address: Fly's hallpass always listens there, so `TIMEOUT`
+  means no route (a network problem) and `ECONNREFUSED` means routed with nothing
+  listening (an application-bind problem).
+
+### The remedy, and why it was cheap
+
+**Recreating the machine is the whole fix.** `fly scale count 2 -a motir-ai`
+created a machine on `fdaa:ab:2cdf` — same app, same `fly.toml`, same image, same
+guest; only the creation date differed. The stale machine was destroyed and the
+pair restored, both now on the current allocation. No Flycast, no app recreation,
+no `fly.toml` change.
+
+⚠️ **`fly deploy` will NOT do this.** It updates machines in place and preserves
+their addresses. Only creating a machine allocates a new one.
+
+Had the apps genuinely been on separate 6PNs, the remedy would have been far more
+expensive, and it is worth recording why so nobody re-derives it: an app's 6PN is
+fixed **at app creation and cannot be changed**, so the only supported path is
+Flycast — which routes through the Fly **proxy** rather than machine-to-machine,
+and whose documentation says _"Don't use `force_https`; Flycast is HTTP-only."_
+That would have forced a change to motir-ai's public listener, not a secret flip.
+
+### The `force_https` question is SETTLED, by observation
+
+Amendment 1 left deliberately unasserted whether motir-ai's `force_https = true`
+would redirect plain-HTTP 6PN traffic. It does not, and the reason is structural:
+**`.internal` is machine-to-machine and never traverses the proxy that
+`force_https` configures.**
+
+Measured from motir-core machine `83d1300b7460e8`:
+`GET http://motir-ai.internal:8080/health` → **200**, `{"status":"ok"}`, **no
+`location` header**, served by motir-ai machine `8d1020fee34298`. `/` returns 404
+on both the internal and public origins alike — motir-ai has no route at root.
+
+### ⚠️ NEW CONSTRAINT — the seam now depends on `min_machines_running`
+
+The same property that makes `force_https` irrelevant has a cost: **no proxy is
+involved, so nothing can autostart a stopped machine for `.internal` traffic.**
+motir-ai runs `auto_stop_machines = true`, and it does stop machines — the platform
+log during this work reads _"App motir-ai has excess capacity, autostopping
+machine … 1 out of 2 machines left running"_.
+
+**This is safe today, and that was measured rather than assumed.** Fly
+**deregisters stopped machines from `.internal` DNS**: with one motir-ai machine
+stopped, `motir-ai.internal` resolved to the started machine only, and ten
+consecutive name-based requests all returned 200.
+
+**It is safe because `min_machines_running = 1` guarantees one machine is always
+up.** If motir-ai is ever set to scale to zero, `motir-ai.internal` resolves to
+nothing and there is no proxy to wake it — the seam fails with no fallback. That
+constraint did not exist while `MOTIR_AI_URL` was the public origin, and it is the
+real price of Q9.
+
+### Rollback — proven, not merely written down
+
+`fly secrets set -a motir-core MOTIR_AI_URL=https://motir-ai.fly.dev`. It was not
+recorded and left untested: it was **executed and reversed** during MOTIR-2426, as
+the control for an unrelated ambiguity, so its validity is an observation. The
+public origin answered `/health` with 200 before the switch, while rolled back,
+and again at the end. Nothing in this Story decommissions motir-ai's public
+listener.
+
+### A related fact this record should carry
+
+**motir-core does not listen on IPv6.** Its Dockerfile sets `ENV HOSTNAME=0.0.0.0`
+deliberately — the comment there warns that omitting it fails silently — and
+`0.0.0.0` is IPv4-only. The Fly proxy reaches it; `.internal` cannot. Measured:
+motir-core → its own private address on port 8080 gives ECONNREFUSED while port 22
+on that same address is OPEN.
+
+This does not affect Q9, whose direction is core→ai. **It means the reverse
+direction is not available without a bind change**, which is worth knowing before
+anyone proposes one. motir-ai has no such problem: it binds via Hono's
+`serve({ fetch, port })` with no hostname, which Node defaults to `::`.
+
+### What this amendment does NOT touch
+
+- **Any decision.** Q9 stands and is in force; Q1, Q3 and Q7 stand as Amendment 1
+  left them.
+- **`MOTIR_BASE_URL`.** Still the public `https://app.motir.co` — verified
+  unchanged, by digest, across the switch. The callback direction stays public
+  because those links appear in mail users click.
+- **Authentication.** `MOTIR_AI_SERVICE_TOKEN` still gates every request.
+  Amendment 1's last row was not filler then and is not now: a private address
+  removes public reachability, it does not confer trust.
+- **Any application code**, `.env.example`, any Playwright config, or any
+  workflow. `grep -n 'motir-ai.internal'` over all of them returns no hits; the
+  internal address exists only as a deployed secret.
