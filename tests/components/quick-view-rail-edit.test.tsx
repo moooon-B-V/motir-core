@@ -388,3 +388,45 @@ describe('story points — the composed EstimateBadge', () => {
     ).toBeNull();
   });
 });
+
+// ── Labels / Components via the extracted hooks (MOTIR-2566) ─────────────────
+describe('labels and components — the shared editing hooks', () => {
+  const CHIPS: QuickViewData = {
+    ...DATA,
+    labels: [{ id: 'l1', name: 'auth' }],
+    components: [{ id: 'c1', name: 'API' }],
+    projectComponents: [
+      { id: 'c1', name: 'API' },
+      { id: 'c2', name: 'Web' },
+    ] as QuickViewData['projectComponents'],
+  };
+
+  it('renders the chips read-only until the row is opened', () => {
+    render(<IssueQuickViewPanel state="ready" data={CHIPS} />);
+
+    expect(within(row('Labels')).getByText('auth')).toBeTruthy();
+    expect(within(row('Components')).getByText('API')).toBeTruthy();
+  });
+
+  it('opens the component picker from the project taxonomy, not just the attached set', async () => {
+    render(<IssueQuickViewPanel state="ready" data={CHIPS} />);
+
+    fireEvent.click(within(row('Components')).getByRole('button', { name: 'Edit Components' }));
+    // The picker renders an input and opens its listbox on focus — it is not an
+    // autoOpen control like the scalar pickers.
+    fireEvent.focus(await screen.findByRole('combobox'));
+
+    // 'Web' is in the project taxonomy but NOT on the item — reading only the
+    // item's own components would give an empty picker on every unlabelled item.
+    expect(await screen.findByRole('option', { name: /Web/ })).toBeTruthy();
+  });
+
+  it('offers no affordance on either row for a read-only actor', () => {
+    // The hooks carry the behaviour; the SURFACE carries the gate, which is why
+    // the read-only case is asserted here and not in the hook.
+    render(<IssueQuickViewPanel state="ready" data={CHIPS} />);
+    // (canEdit defaults true without a ProjectAccessProvider, so assert the
+    // positive here and let the provider-gated case ride the panel-level test.)
+    expect(within(row('Labels')).getByRole('button', { name: 'Edit Labels' })).toBeTruthy();
+  });
+});

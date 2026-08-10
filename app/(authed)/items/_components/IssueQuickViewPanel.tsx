@@ -23,7 +23,7 @@ import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
 import { Pill } from '@/components/ui/Pill';
-import { ValueChip } from '@/components/ui/MultiSelectPicker';
+import { MultiSelectPicker, ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
 import { StatusPicker } from '@/components/issues/StatusPicker';
@@ -41,10 +41,11 @@ import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { Input } from '@/components/ui/Input';
 import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
+import { useLabelEditing, useComponentEditing } from './fieldChipEditing';
+import { LABELS_PER_ISSUE_LIMIT } from '@/lib/labels/constants';
 import { WORK_ITEM_TYPE_META } from '@/lib/issues/workItemTypeMeta';
 import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { showsReadiness } from '@/lib/issues/readinessVisibility';
-import { labelTint } from '@/lib/labels/labelTint';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
 import type { ExecutorDto } from '@/lib/dto/workItems';
@@ -145,6 +146,27 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // Called above the early returns — hooks cannot be conditional, so the rail's
   // edit state takes a nullable payload and is inert until the peek is `ready`.
   const edit = useQuickViewRailEdit(props.state === 'ready' ? props.data : null, props.onEdited);
+  // MOTIR-2566 — the SAME hooks the detail rail's Labels / Components cards use.
+  // Called above the early returns (hooks cannot be conditional) and inert until
+  // the peek is `ready`. `active` is this surface's own open/closed state, which
+  // is why the hook takes it rather than owning it.
+  const ready = props.state === 'ready' ? props.data : null;
+  const labelEdit = useLabelEditing({
+    workItemId: ready?.id ?? '',
+    projectKey: ready?.projectIdentifier ?? '',
+    initialLabels: ready?.labels ?? [],
+    active: edit.editing === 'labels',
+  });
+  const componentEdit = useComponentEditing({
+    workItemId: ready?.id ?? '',
+    initialComponents: ready?.components ?? [],
+    projectComponents: ready?.projectComponents ?? [],
+    toOption: (c: { id: string; name: string }) => ({
+      id: c.id,
+      label: c.name,
+      glyph: ComponentIcon,
+    }),
+  });
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
     [locale],
@@ -630,36 +652,89 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               labelTint (5.4.8), NOT a fixed lavender: the labelTint decision
               (product owner, 2026-06-10) guarantees a label renders the SAME
               colour on every surface, so the peek and the detail rail match. */}
-          <RailField label={t('labelsField')}>
-            {data.labels.length > 0 ? (
+          {/* Labels + Components (MOTIR-2566) — the SAME behaviour the detail
+              cards run, via the shared hooks, behind the rail's chip grammar.
+              A collection row has no single commit moment, so it does not swap
+              its value for one control: it stays a chip stack and the picker
+              opens beneath it, staying open across several adds and removes. */}
+          <EditableRailField
+            label={t('labelsField')}
+            fieldKey="labels"
+            edit={edit}
+            control={
+              <MultiSelectPicker
+                values={labelEdit.chips}
+                options={labelEdit.options}
+                onToggle={labelEdit.toggle}
+                onRemove={labelEdit.remove}
+                onCreate={labelEdit.create}
+                query={labelEdit.query}
+                onQueryChange={labelEdit.setQuery}
+                cap={LABELS_PER_ISSUE_LIMIT}
+                label={t('labelsField')}
+                placeholder={t('labelsPlaceholder')}
+                createLabel={(q) => t('labelsCreate', { name: q })}
+                removeLabel={(label) => t('labelsRemove', { label })}
+                hint={
+                  labelEdit.atCap
+                    ? t('labelsLimitReached', { limit: LABELS_PER_ISSUE_LIMIT })
+                    : undefined
+                }
+                error={labelEdit.error}
+                disabled={labelEdit.isPending}
+              />
+            }
+          >
+            {labelEdit.chips.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {data.labels.map((l) => (
-                  <ValueChip
-                    key={l.id}
-                    option={{ id: l.id, label: l.name, tint: labelTint(l.name) }}
-                  />
+                {labelEdit.chips.map((c) => (
+                  <ValueChip key={c.id} option={c} />
                 ))}
               </div>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noLabels')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
-          {/* Components — neutral chips with the component glyph (5.4.8). */}
-          <RailField label={t('componentsField')}>
-            {data.components.length > 0 ? (
+          {/* Components — neutral chips with the component glyph (5.4.8).
+              The detail card's empty-taxonomy state offers a project admin a
+              "Manage components" link to the settings hub. That link is NOT
+              carried here: following it from a peek would navigate the page out
+              from under the modal, discarding the user's place in the list —
+              the exact loss the peek exists to prevent. An admin with no
+              taxonomy yet sees the same "none defined" text and manages it from
+              the detail page or settings. */}
+          <EditableRailField
+            label={t('componentsField')}
+            fieldKey="components"
+            edit={edit}
+            control={
+              <MultiSelectPicker
+                values={componentEdit.chips}
+                options={componentEdit.options}
+                onToggle={componentEdit.toggle}
+                onRemove={componentEdit.remove}
+                query={componentEdit.query}
+                onQueryChange={componentEdit.setQuery}
+                label={t('componentsField')}
+                placeholder={t('componentsPlaceholder')}
+                removeLabel={(label) => t('componentsRemove', { label })}
+                emptyText={t('componentsNoneDefined')}
+                error={componentEdit.error}
+                disabled={componentEdit.isPending}
+              />
+            }
+          >
+            {componentEdit.chips.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {data.components.map((c) => (
-                  <ValueChip
-                    key={c.id}
-                    option={{ id: c.id, label: c.name, glyph: ComponentIcon }}
-                  />
+                {componentEdit.chips.map((c) => (
+                  <ValueChip key={c.id} option={c} />
                 ))}
               </div>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noComponents')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
           {/* Due date + Estimate carry BOTH axes, so an optimistic write updates
               the raw value AND its display label together — the payload's

@@ -96,7 +96,18 @@ export function IssueQuickViewController() {
       ) : showing.status === 'notfound' ? (
         <IssueQuickViewPanel state="notfound" peekKey={peek} />
       ) : (
-        <IssueQuickViewPanel state="ready" data={showing.data} onEdited={markEdited} />
+        // KEYED BY THE ITEM (MOTIR-2566). A blocker link inside the peek SWAPS the
+        // peeked item without unmounting this panel, and the rail's editors seed
+        // their state from the payload once (`useState(initial)`), so an unkeyed
+        // panel would carry the previous item's chips, overrides and
+        // acknowledged `updatedAt` onto the new one. The key makes a swap a
+        // remount, which is what the seeded state assumes.
+        <IssueQuickViewPanel
+          key={showing.data.identifier}
+          state="ready"
+          data={showing.data}
+          onEdited={markEdited}
+        />
       )}
     </IssueQuickView>
   );
