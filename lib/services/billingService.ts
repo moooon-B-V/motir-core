@@ -211,19 +211,37 @@ export const billingService = {
       input.organizationId,
     );
 
-    const [org, usage, subscription] = await Promise.all([
-      withOrgContext({ userId: input.actorUserId, organizationId: input.organizationId }, (tx) =>
-        organizationRepository.findByIdInTx(input.organizationId, tx),
-      ),
-      getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
-      getOrgSubscription({ coreOrganizationId: input.organizationId }),
-    ]);
-
     // The META org (moooon B.V.) is exempt from the AI paywall: `applicable:
     // false` makes the upsell never render (the same shape as a self-host build —
     // useAiAccess only blocks when `applicable === true`). The motir-ai credit
     // gate is bypassed in parallel (the org's `isMeta` rides the job envelope).
+    //
+    // The exemption is decided by a LOCAL column, so the row is read FIRST and
+    // the method short-circuits on it (MOTIR-2594, shape (a)). This read used to
+    // sit inside the `Promise.all` below, which made a meta org — whose answer
+    // needs nothing across the boundary — pay two motir-ai round trips it then
+    // discarded, and, worse, made its answer DEPEND on them: `aiFetch` maps both
+    // a transport failure and its MOTIR_AI_REQUEST_TIMEOUT_MS (30s) deadline to
+    // MotirAiUnavailableError, so a motir-ai outage failed `/settings/organization`
+    // for the one organization most likely to be reading it during one.
+    //
+    // The common (non-meta) path pays one serialised local read for that.
+    // MEASURED rather than assumed, per the card: 100 `withOrgContext` +
+    // `findByIdInTx` reads against a real Postgres → p50 1.06ms, p95 3.58ms,
+    // against a cross-service call bounded at 30_000ms. Shape (b) (keeping the
+    // parallel group and making the remote reads tolerant) was rejected: it costs
+    // more code AND still issues both requests, which the card's first acceptance
+    // criterion — zero calls for a meta org — forbids.
+    const org = await withOrgContext(
+      { userId: input.actorUserId, organizationId: input.organizationId },
+      (tx) => organizationRepository.findByIdInTx(input.organizationId, tx),
+    );
     if (org?.isMeta) return notApplicableAiAccess();
+
+    const [usage, subscription] = await Promise.all([
+      getOrgUsage({ coreOrganizationId: input.organizationId, scope: 'org' }),
+      getOrgSubscription({ coreOrganizationId: input.organizationId }),
+    ]);
 
     return {
       applicable: true,
