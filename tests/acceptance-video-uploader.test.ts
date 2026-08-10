@@ -1210,6 +1210,123 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     });
   });
 
+  // ── EVERY RECEIPT STILL PUBLISHES, EXACTLY ONCE, ACROSS SHARDS (MOTIR-2600) ─
+  //
+  // The lane stopped being one serial job: `.github/workflows/acceptance-video.yml`
+  // now runs `--shard=i/4` on four legs, each with its OWN
+  // `out/playwright-output-acceptance` and its OWN publish step. Sharding reads
+  // like a config change and is not — the receipts are this lane's product, and
+  // the publish step has already been the source of two separate defects
+  // (MOTIR-1734: one clip per run; MOTIR-1937: every PR republishing unrelated
+  // stories). Splitting the job N ways means each leg holds a DIFFERENT subset of
+  // the videos, so the invariant has to hold ACROSS legs and not merely within
+  // one.
+  //
+  // It is asserted here, against the uploader, rather than by reading a run:
+  // there is nothing to eyeball until a multi-story PR happens to be sharded the
+  // wrong way, which is exactly how MOTIR-1734 stayed invisible.
+  //
+  // Each leg is one `main()` over its own output dir, sharing ONE
+  // `ACCEPTANCE_CHANGED_SPECS` (the diff is the same on every leg — it is the
+  // recordings that differ).
+  describe('across shards', () => {
+    /** Run the publish step for one leg, over `dir`, and return the stories it
+     *  registered. The env is the same on every leg by construction — only the
+     *  output dir changes, which is the whole point. */
+    async function publishLeg(dir: string): Promise<string[]> {
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const fetchMock = stubFetch();
+      await main();
+      const stories = publishedStories(fetchMock);
+      vi.unstubAllGlobals();
+      return stories;
+    }
+
+    it('two legs each recording one owned spec publish one receipt each — never both, never twice', async () => {
+      // The card's own case: "including the case where two shards each record
+      // one". A PR changing two acceptance specs, and `--shard` putting them on
+      // different legs.
+      const shard1 = tmpDir();
+      const shard2 = tmpDir();
+      writeRecording(shard1, 'acceptance-cadence-chromium', { storyKey: 'MOTIR-813' });
+      writeRecording(shard2, 'acceptance-plan-change-chromium', { storyKey: 'MOTIR-1726' });
+
+      const first = await publishLeg(shard1);
+      const second = await publishLeg(shard2);
+
+      expect(first).toEqual(['MOTIR-813']);
+      expect(second).toEqual(['MOTIR-1726']);
+      // The union is the whole set, and no story appears twice — the property
+      // the pre-shard lane got for free from running everything in one job.
+      const all = [...first, ...second];
+      expect(all.sort()).toEqual(['MOTIR-1726', 'MOTIR-813']);
+      expect(new Set(all).size).toBe(all.length);
+    });
+
+    it('a leg that recorded NONE of the changed specs publishes nothing and does not fail', async () => {
+      // THE hazard sharding introduces. Ownership is a property of the RUN's
+      // diff, so every leg is told the same owned set — but only the leg that
+      // actually ran a spec holds its recording. If "I own a spec I did not
+      // record" were fatal, three legs out of four would red-light the lane on a
+      // single-spec PR, which is the ordinary case.
+      const owning = tmpDir();
+      const other = tmpDir();
+      writeRecording(owning, 'acceptance-cadence-chromium', { storyKey: 'MOTIR-813' });
+      // This leg ran a DIFFERENT spec, which this PR did not change.
+      writeRecording(other, 'acceptance-video-dogfood-chromium', {
+        storyKey: 'MOTIR-1627',
+        owned: false,
+      });
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+
+      const otherStories = await publishLeg(other);
+      const owningStories = await publishLeg(owning);
+
+      expect(otherStories).toEqual([]);
+      expect(owningStories).toEqual(['MOTIR-813']);
+      expect(exit).not.toHaveBeenCalled();
+    });
+
+    it('an EMPTY leg (its shard recorded nothing at all) is a no-op, not a failure', async () => {
+      // A leg can legitimately produce no video: every test on it may be a
+      // non-chaptered assertion spec. Before sharding this state only occurred on
+      // a red run, where the publish step never ran at all (`if: success()`).
+      const empty = tmpDir();
+      const recording = tmpDir();
+      writeRecording(recording, 'acceptance-cadence-chromium', { storyKey: 'MOTIR-813' });
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+
+      expect(await publishLeg(empty)).toEqual([]);
+      expect(exit).not.toHaveBeenCalled();
+      // …and the leg that DID record it still publishes, so the empty leg's
+      // silence cost the story nothing.
+      expect(await publishLeg(recording)).toEqual(['MOTIR-813']);
+    });
+
+    it('a story whose spec was NOT changed is left alone on every leg', async () => {
+      // MOTIR-1937 across shards: the gate must not weaken just because the
+      // recordings are spread out. Each leg sees fewer recordings than before, so
+      // a per-RUN ("did this run publish anything?") reading of ownership would
+      // now be wrong four times over.
+      const shard1 = tmpDir();
+      const shard2 = tmpDir();
+      writeRecording(shard1, 'acceptance-cadence-chromium', { storyKey: 'MOTIR-813' });
+      writeRecording(shard1, 'acceptance-augment-replan-chromium', {
+        storyKey: 'MOTIR-811',
+        owned: false,
+      });
+      writeRecording(shard2, 'acceptance-video-dogfood-chromium', {
+        storyKey: 'MOTIR-1627',
+        owned: false,
+      });
+
+      const first = await publishLeg(shard1);
+      const second = await publishLeg(shard2);
+
+      expect([...first, ...second]).toEqual(['MOTIR-813']);
+    });
+  });
+
   // ── THE STEP CANNOT GO GREEN ON A LOST RECEIPT (MOTIR-2499) ────────────────
   //
   // The fail-open this card exists to close had two halves. The workflow half is

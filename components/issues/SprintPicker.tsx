@@ -16,9 +16,24 @@ import type { SprintDto } from '@/lib/dto/sprints';
 
 const BACKLOG = '__backlog__';
 
+/**
+ * A sprint as this picker reads it: `id`, `name`, `state` and `sequence` (which
+ * orders the planned ones) — and nothing else. See `sprints` below for why the
+ * full `SprintDto` is the wrong prop type here.
+ */
+export type SprintOption = Pick<SprintDto, 'id' | 'name' | 'state' | 'sequence'>;
+
 export interface SprintPickerProps {
-  /** The project's sprints (the page's `sprintsService.listByProject`). */
-  sprints: SprintDto[];
+  /**
+   * The project's sprints. Typed as the THREE fields this picker actually reads,
+   * not the full `SprintDto` — a strictly safe generalisation (every existing
+   * caller passes a superset and keeps compiling) that lets the quick-view peek
+   * supply a cheap option list. The full DTO's `issueCount` is only produced by
+   * `sprintsService.listByProject`, which runs one count query PER SPRINT; on the
+   * peek's `no-store` payload, fetched on every row click, that is a 1+N fan-out
+   * for a field nothing here renders (MOTIR-2562 / MOTIR-2564).
+   */
+  sprints: SprintOption[];
   /** The item's current sprintId, or null for the backlog. */
   value: string | null;
   onChange: (sprintId: string | null) => void;
@@ -59,11 +74,11 @@ export function SprintPicker({
   const selectable = sprints
     .filter((s) => s.state !== 'complete' || s.id === value)
     .sort((a, b) => {
-      const rank = (s: SprintDto) => (s.state === 'active' ? 0 : s.state === 'planned' ? 1 : 2);
+      const rank = (s: SprintOption) => (s.state === 'active' ? 0 : s.state === 'planned' ? 1 : 2);
       return rank(a) - rank(b) || a.sequence - b.sequence;
     });
 
-  const secondaryFor = (s: SprintDto): string =>
+  const secondaryFor = (s: SprintOption): string =>
     t(
       s.state === 'active'
         ? 'sprintPicker.active'

@@ -1,19 +1,16 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useState } from 'react';
+import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import { useLocale, useTranslations } from 'next-intl';
 import { Calendar, ChevronDown } from 'lucide-react';
-import type { CustomFieldValueDto, CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { Locale } from '@/lib/i18n/locales';
 import { cn } from '@/lib/utils/cn';
-import { Input } from '@/components/ui/Input';
-import { DatePicker } from '@/components/ui/DatePicker';
-import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { formatDate } from '@/lib/utils/datetime';
 import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { Avatar, FieldCard } from './FieldCard';
-import { setCustomFieldValueAction } from '../customFieldActions';
+import { useCustomFieldEditing } from '../../_components/customFieldEditing';
 
 // Custom-field values on the detail rail (Story 5.3 · Subtask 5.3.7), per
 // design/work-items/custom-fields.mock.html: each field renders as a FieldCard
@@ -31,29 +28,10 @@ import { setCustomFieldValueAction } from '../customFieldActions';
 // error. With no definitions the section renders nothing — the rail is
 // byte-identical to a pre-5.3 build.
 
-const NONE = '__none__';
-// Long option sets get the type-ahead filter; a short set opens straight to
-// the list (the ParentPicker precedent — custom-fields.mock.html panel 2).
-const SEARCHABLE_AT = 8;
-
 export interface CustomFieldsSectionProps {
   workItemId: string;
   fields: CustomFieldWithValueDto[];
   members: WorkspaceMemberDTO[];
-}
-
-// The 2.4.9-family inline error: hue in the tint background, strong text
-// (finding #35), announced via role="alert". Rendered below the open editor;
-// the Input editors render the same box through their own error slot.
-function ErrorBox({ children }: { children: string }) {
-  return (
-    <p
-      role="alert"
-      className="bg-(--el-tint-rose) text-(--el-text-strong) mt-1.5 rounded-(--radius-control) px-(--spacing-tooltip-x) py-(--spacing-tooltip-y) font-sans text-xs"
-    >
-      {children}
-    </p>
-  );
 }
 
 export function CustomFieldsSection({ workItemId, fields, members }: CustomFieldsSectionProps) {
@@ -62,17 +40,14 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
   // MOTIR-2473 — the key this control's own write asserts:
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
   const { can } = useProjectAccess();
-  const canEdit = can('work_item:edit');
-  const readOnly = !canEdit;
-  const [isPending, startTransition] = useTransition();
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [draft, setDraft] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const readOnly = !can('work_item:edit');
   const [showAll, setShowAll] = useState(false);
-  // Per-field optimistic overrides, keyed by field id. A key present here wins
-  // over the server prop until a re-read (a fresh navigation) supplies a new
-  // prop set — the success-keeps-optimistic half of the inline-edit pattern.
-  const [overrides, setOverrides] = useState<Record<string, CustomFieldValueDto | null>>({});
+  // The editors, the commits and the optimistic overrides are SHARED with the
+  // quick-view peek's rail (MOTIR-2599). This component keeps only its own
+  // chrome — the FieldCards, the disclosure — and its own read-mode value
+  // grammar, which is deliberately denser in the peek.
+  const cf = useCustomFieldEditing({ workItemId, fields, members });
+  const { valued, empty, editingId } = cf;
 
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
@@ -80,127 +55,6 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
   );
 
   if (fields.length === 0) return null;
-
-  const effFields = fields.map((f) =>
-    Object.prototype.hasOwnProperty.call(overrides, f.id)
-      ? { ...f, value: overrides[f.id] ?? null }
-      : f,
-  );
-  const valued = effFields.filter((f) => f.value !== null);
-  const empty = effFields.filter((f) => f.value === null);
-
-  function openEditor(field: CustomFieldWithValueDto) {
-    setError(null);
-    setDraft(
-      field.fieldType === 'text'
-        ? (field.value?.text ?? '')
-        : field.value?.number != null
-          ? String(field.value.number)
-          : '',
-    );
-    setEditingId(field.id);
-  }
-
-  function closeEditor() {
-    setEditingId(null);
-    setError(null);
-  }
-
-  // Build the display-ready value a raw commit input resolves to, so the card
-  // can render the new value optimistically without a re-read. `null` clears;
-  // select/user resolve their label from the field's own option set / member
-  // list (the same data the picker drew from).
-  function optimisticValue(
-    field: CustomFieldWithValueDto,
-    next: string | null,
-  ): CustomFieldValueDto | null {
-    if (next === null) return null;
-    const base: CustomFieldValueDto = {
-      text: null,
-      number: null,
-      date: null,
-      option: null,
-      user: null,
-    };
-    switch (field.fieldType) {
-      case 'text':
-        return { ...base, text: next };
-      case 'number': {
-        const n = Number(next);
-        return { ...base, number: Number.isFinite(n) ? n : null };
-      }
-      case 'date':
-        return { ...base, date: next };
-      case 'select':
-        return { ...base, option: field.options.find((o) => o.id === next) ?? null };
-      case 'user': {
-        const m = members.find((mm) => mm.userId === next);
-        return { ...base, user: m ? { id: m.userId, name: m.name, image: null } : null };
-      }
-    }
-  }
-
-  // One commit path for every type: null clears, a string carries the raw
-  // input (the service is the validation authority — a bad number or an
-  // archived option comes back as the inline 422). The commit is optimistic:
-  // close the editor, show the new value at once via an override, and KEEP it
-  // on success (the 200 is the confirmation — no router.refresh()). A failure
-  // snaps the override back and reopens the editor with the inline error.
-  function commit(field: CustomFieldWithValueDto, next: string | null) {
-    setError(null);
-    closeEditor();
-    setOverrides((o) => ({ ...o, [field.id]: optimisticValue(field, next) }));
-    startTransition(async () => {
-      const res = await setCustomFieldValueAction({ workItemId, fieldId: field.id, value: next });
-      if (!res.ok) {
-        setOverrides((o) => {
-          const nextOverrides = { ...o };
-          delete nextOverrides[field.id];
-          return nextOverrides;
-        });
-        setError(res.error);
-        setEditingId(field.id);
-      }
-    });
-  }
-
-  // text / number commit on blur or chevron collapse (the Estimate grammar);
-  // an unchanged draft just closes, an emptied one clears.
-  function commitDraft(field: CustomFieldWithValueDto) {
-    const current =
-      field.fieldType === 'text'
-        ? (field.value?.text ?? '')
-        : field.value?.number != null
-          ? String(field.value.number)
-          : '';
-    const next = draft.trim();
-    if (next === current.trim()) {
-      closeEditor();
-      return;
-    }
-    commit(field, next === '' ? null : next);
-  }
-
-  // date commits as soon as the DatePicker fires (a day picked or cleared) —
-  // the Due-date card's grammar; an unchanged pick just closes.
-  function commitDate(field: CustomFieldWithValueDto, next: string | null) {
-    const current = field.value?.date ? field.value.date.slice(0, 10) : null;
-    if (next === current) {
-      closeEditor();
-      return;
-    }
-    commit(field, next);
-  }
-
-  // select / user commit on pick; the None row clears.
-  function commitPick(field: CustomFieldWithValueDto, picked: string, current: string | null) {
-    const next = picked === NONE ? null : picked;
-    if (next === current) {
-      closeEditor();
-      return;
-    }
-    commit(field, next);
-  }
 
   const muted = (text: string) => <span className="text-(--el-text-secondary) italic">{text}</span>;
   const archivedMark = (
@@ -248,102 +102,6 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
     }
   }
 
-  function renderEditor(field: CustomFieldWithValueDto) {
-    switch (field.fieldType) {
-      case 'text':
-      case 'number':
-        return (
-          <Input
-            aria-label={field.label}
-            inputMode={field.fieldType === 'number' ? 'decimal' : undefined}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={() => commitDraft(field)}
-            disabled={isPending}
-            autoFocus
-            error={error ?? undefined}
-            errorVariant="box"
-          />
-        );
-      case 'date':
-        return (
-          <>
-            <DatePicker
-              aria-label={field.label}
-              value={field.value?.date ? field.value.date.slice(0, 10) : null}
-              onChange={(next) => commitDate(field, next)}
-              disabled={isPending}
-              autoOpen
-            />
-            {error ? <ErrorBox>{error}</ErrorBox> : null}
-          </>
-        );
-      case 'select': {
-        const currentOption = field.value?.option ?? null;
-        // Archived options are excluded from new selection; a CURRENT archived
-        // value stays visible on the trigger (via the placeholder slot, with
-        // its archived mark) without re-entering the menu.
-        const options: ComboboxOption<string>[] = [
-          { value: NONE, label: t('none') },
-          ...field.options.filter((o) => !o.archived).map((o) => ({ value: o.id, label: o.label })),
-        ];
-        return (
-          <>
-            <Combobox
-              options={options}
-              // A current ARCHIVED value is not in the menu, so it can't be the
-              // Combobox `value`; it stays visible on the trigger through the
-              // placeholder slot, carrying its archived mark.
-              value={currentOption ? (currentOption.archived ? null : currentOption.id) : NONE}
-              onChange={(v) => commitPick(field, v, currentOption?.id ?? null)}
-              label={field.label}
-              placeholder={
-                currentOption?.archived
-                  ? `${currentOption.label} ${t('customFields.archivedMark')}`
-                  : t('customFields.selectOption')
-              }
-              searchable={options.length - 1 >= SEARCHABLE_AT}
-              searchPlaceholder={t('customFields.searchOptions')}
-              emptyText={t('customFields.noOptions')}
-              disabled={isPending}
-              autoOpen
-            />
-            {error ? <ErrorBox>{error}</ErrorBox> : null}
-          </>
-        );
-      }
-      case 'user': {
-        const currentUserId = field.value?.user?.id ?? null;
-        const options: ComboboxOption<string>[] = [
-          { value: NONE, label: t('none') },
-          ...members.map((m) => ({
-            value: m.userId,
-            label: m.name,
-            secondary: m.email,
-            keywords: m.email,
-          })),
-        ];
-        return (
-          <>
-            <Combobox
-              options={options}
-              value={currentUserId ?? NONE}
-              onChange={(v) => commitPick(field, v, currentUserId)}
-              label={field.label}
-              placeholder={t('customFields.selectMember')}
-              searchable
-              searchPlaceholder={t('customFields.searchMembers')}
-              emptyText={t('customFields.noMembers')}
-              disabled={isPending}
-              autoOpen
-            />
-            {error ? <ErrorBox>{error}</ErrorBox> : null}
-          </>
-        );
-      }
-    }
-  }
-
   function renderCard(field: CustomFieldWithValueDto) {
     const editing = editingId === field.id;
     return (
@@ -352,19 +110,9 @@ export function CustomFieldsSection({ workItemId, fields, members }: CustomField
         label={field.label}
         editable={!readOnly}
         editing={editing}
-        onToggle={() => {
-          if (!editing) {
-            openEditor(field);
-          } else if (field.fieldType === 'text' || field.fieldType === 'number') {
-            // The chevron collapse commits free-text fields (the Estimate
-            // grammar); picker types commit on pick, so collapse just closes.
-            commitDraft(field);
-          } else {
-            closeEditor();
-          }
-        }}
+        onToggle={() => cf.onToggle(field, editing)}
       >
-        {editing ? renderEditor(field) : renderValue(field)}
+        {editing ? cf.renderEditor(field) : renderValue(field)}
       </FieldCard>
     );
   }

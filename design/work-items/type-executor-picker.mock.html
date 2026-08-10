@@ -159,6 +159,20 @@
         --el-type-decision: var(--color-charcoal); /* ink    — decision record */
         --el-type-manual: var(--color-stone); /* stone  — human provisioning */
         --el-type-chore: var(--color-slate); /* slate  — housekeeping */
+
+        /* ── PROPOSED by THIS design (MOTIR-2633 adds these to
+           packages/design-system/theme.css Tier 3 — NOT app/globals.css; the
+           design system was extracted since 2.7.4 wrote the block above) ──
+           The four members admitted by ADR Amendment 1 (MOTIR-2629). All seven
+           saturated Tier-0 hues and all three greys were spent at ten, and
+           inventing an eighth is forbidden — so each newcomer POINTS AT the
+           Tier-0 hue of the member the amendment named as its nearest
+           neighbour. Its own token, so a future palette can split them; the
+           glyph, not the hue, is what distinguishes it today. */
+        --el-type-copy: var(--color-accent-teal); /* teal     — with content */
+        --el-type-translate: var(--color-accent-teal); /* teal     — with content */
+        --el-type-verification: var(--color-accent-orange); /* orange   — with review */
+        --el-type-legal: var(--color-charcoal); /* ink      — with decision */
       }
       [data-theme='dark'] {
         --color-background: #0f0f0f;
@@ -446,8 +460,32 @@
         border-radius: var(--radius-card);
         box-shadow: var(--shadow-elevated);
         padding: 4px;
-        max-height: 320px;
+        /* The SHIPPED ceiling. Combobox's listbox is `max-h-64 overflow-y-auto`
+           and its inline (in-dialog) branch clamps to
+           `Math.max(80, Math.min(256, avail - 12))` — so 256px is a CAP the
+           menu never grows past, in either host. This asset previously said
+           320px, which is why ten rows looked like they fit. They never did. */
+        max-height: 256px;
         overflow-y: auto;
+      }
+      /* Same menu with the cap lifted — NOT a state the product renders; it
+         exists so a reader of the PNG can read all fourteen rows at once. */
+      .cbx-menu.is-unrolled {
+        max-height: none;
+        position: static;
+        box-shadow: var(--shadow-card);
+      }
+      /* The Combobox's shipped group header (a role="presentation" row):
+         px-(--spacing-control-x) pt-2 pb-1 font-mono text-[11px] font-semibold
+         tracking-wider text-(--el-text-eyebrow) uppercase. */
+      .cbx-group {
+        padding: 8px var(--spacing-control-x) 4px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        color: var(--el-text-eyebrow);
       }
       .cbx-opt {
         display: flex;
@@ -520,6 +558,23 @@
       .t-chore {
         color: var(--el-type-chore);
       }
+      /* The four members admitted by ADR Amendment 1 (MOTIR-2629). Each takes
+         the hue of the member the amendment named as its NEAREST NEIGHBOUR —
+         the seven saturated Tier-0 hues were already exhausted at ten, so hue
+         names the FAMILY and the glyph names the member. No new Tier-0 colour,
+         and no existing mapping moved. */
+      .t-copy {
+        color: var(--el-type-copy);
+      }
+      .t-translate {
+        color: var(--el-type-translate);
+      }
+      .t-verification {
+        color: var(--el-type-verification);
+      }
+      .t-legal {
+        color: var(--el-type-legal);
+      }
 
       /* ── Type CHIP — Pill recipe: hue in the TINT background (a color-mix of
            the type hue) + --el-text-strong label (AA, finding #35) + the
@@ -570,6 +625,18 @@
       }
       .tchip.chore {
         background: color-mix(in srgb, var(--el-type-chore) 18%, var(--el-page-bg));
+      }
+      .tchip.copy {
+        background: color-mix(in srgb, var(--el-type-copy) 14%, var(--el-page-bg));
+      }
+      .tchip.translate {
+        background: color-mix(in srgb, var(--el-type-translate) 14%, var(--el-page-bg));
+      }
+      .tchip.verification {
+        background: color-mix(in srgb, var(--el-type-verification) 14%, var(--el-page-bg));
+      }
+      .tchip.legal {
+        background: color-mix(in srgb, var(--el-type-legal) 18%, var(--el-page-bg));
       }
 
       /* ── Segmented executor control (components/ui/Segmented.tsx) ────────── */
@@ -729,6 +796,94 @@
         z-index: 20;
       }
 
+      /* ── Panel 5 — the measurement table + the filter bar + entrances ───── */
+      .measure {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 0;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        font-size: 12.5px;
+        min-width: 320px;
+      }
+      .measure-row {
+        display: contents;
+      }
+      .measure-row > span {
+        padding: 6px 10px;
+        border-top: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+      }
+      .measure-row > span + span {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        color: var(--el-text);
+      }
+      .measure-row.head > span {
+        border-top: 0;
+        background: var(--el-surface);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .measure-row.is-verdict > span {
+        background: var(--el-surface-soft);
+        font-weight: 600;
+        color: var(--el-text-strong);
+      }
+      .filterbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: var(--spacing-control-y) var(--spacing-control-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        min-width: 320px;
+      }
+      .fb-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-surface);
+        border: 1px solid var(--el-border);
+        font-size: 12px;
+        color: var(--el-text);
+        white-space: nowrap;
+      }
+      .fb-chip b {
+        color: var(--el-text-secondary);
+        font-weight: 500;
+      }
+      .fb-chip.is-active {
+        border-color: var(--el-border-strong);
+      }
+      .fb-x {
+        display: inline-flex;
+        color: var(--el-text-muted);
+      }
+      .fb-add {
+        font-size: 12px;
+        color: var(--el-link);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+      }
+      .entrances {
+        margin: 0;
+        padding-left: 18px;
+        font-size: 13px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+        max-width: 420px;
+      }
+      .entrances b {
+        color: var(--el-text-strong);
+      }
+      .legend-row.is-new-member .tok b {
+        color: var(--el-accent-on-surface);
+      }
       /* ── Legend (panel 4) ───────────────────────────────────────────────── */
       .legend {
         width: 100%;
@@ -884,7 +1039,7 @@
         >
           <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </g>
-        <!-- the ten TYPE glyphs -->
+        <!-- the fourteen TYPE glyphs -->
         <g
           id="t-code"
           fill="none"
@@ -1013,6 +1168,60 @@
             d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"
           />
         </g>
+        <g
+          id="t-copy"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 4v16" />
+          <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+          <path d="M9 20h6" />
+        </g>
+        <g
+          id="t-translate"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="t-verification"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="t-legal"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381" />
+          <path d="m16 16 6-6" />
+          <path d="m21.5 10.5-8-8" />
+          <path d="m8 8 6-6" />
+          <path d="m8.5 7.5 8 8" />
+        </g>
         <!-- executor glyphs -->
         <g
           id="e-agent"
@@ -1044,7 +1253,8 @@
       <!-- ═══════════════ PANEL 1 — type picker OPEN on the create modal ═══════════════ -->
       <div class="panel-band">
         <div class="band-title">
-          Panel 1 · <b>Create modal — the type picker open</b> · the ten members, leaf-only
+          Panel 1 · <b>Create modal — the type picker open</b> · fourteen members, grouped,
+          leaf-only
         </div>
         <div class="panel-row">
           <div class="panel">
@@ -1089,6 +1299,7 @@
                       </span>
                     </div>
                     <div class="cbx-menu" role="listbox" aria-label="Type">
+                      <div class="cbx-group" role="presentation">Build</div>
                       <div class="cbx-opt is-active" role="option" aria-selected="true">
                         <span class="tglyph t-code"
                           ><svg width="16" height="16" viewBox="0 0 24 24">
@@ -1114,6 +1325,7 @@
                         ></span>
                         <span class="opt-label">Test</span>
                       </div>
+                      <div class="cbx-group" role="presentation">Author</div>
                       <div class="cbx-opt" role="option">
                         <span class="tglyph t-content"
                           ><svg width="16" height="16" viewBox="0 0 24 24">
@@ -1121,6 +1333,21 @@
                         ></span>
                         <span class="opt-label">Content</span>
                       </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-copy"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-copy" /></svg
+                        ></span>
+                        <span class="opt-label">Copy</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-translate"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-translate" /></svg
+                        ></span>
+                        <span class="opt-label">Translate</span>
+                      </div>
+                      <div class="cbx-group" role="presentation">Investigate</div>
                       <div class="cbx-opt" role="option">
                         <span class="tglyph t-research"
                           ><svg width="16" height="16" viewBox="0 0 24 24">
@@ -1135,6 +1362,14 @@
                         ></span>
                         <span class="opt-label">Review</span>
                       </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-verification"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-verification" /></svg
+                        ></span>
+                        <span class="opt-label">Verification</span>
+                      </div>
+                      <div class="cbx-group" role="presentation">Govern &amp; operate</div>
                       <div class="cbx-opt" role="option">
                         <span class="tglyph t-decision"
                           ><svg width="16" height="16" viewBox="0 0 24 24">
@@ -1157,6 +1392,13 @@
                         <span class="opt-label">Manual</span>
                       </div>
                       <div class="cbx-opt" role="option">
+                        <span class="tglyph t-legal"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-legal" /></svg
+                        ></span>
+                        <span class="opt-label">Legal</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
                         <span class="tglyph t-chore"
                           ><svg width="16" height="16" viewBox="0 0 24 24">
                             <use href="#t-chore" /></svg
@@ -1167,7 +1409,7 @@
                   </div>
                 </div>
                 <!-- the executor control sits right under Type; seeded from the picked type -->
-                <div class="field is-new" style="margin-top: 296px">
+                <div class="field is-new" style="margin-top: 268px">
                   <label>Executor</label>
                   <div class="seg" role="group" aria-label="Executor">
                     <button type="button" aria-pressed="true">
@@ -1546,7 +1788,7 @@
       <!-- ═══════════════ PANEL 4 — the ten-type legend + hue + executor-default map ═══════════════ -->
       <div class="panel-band">
         <div class="band-title">
-          Panel 4 · <b>The ten-type legend</b> · chip hue + gloss + token + executor default
+          Panel 4 · <b>The fourteen-type legend</b> · chip hue + gloss + token + executor default
         </div>
         <div class="legend">
           <div class="legend-row head">
@@ -1609,6 +1851,36 @@
               >Coding agent <span class="either">· either</span></span
             >
           </div>
+          <div class="legend-row is-new-member">
+            <span class="tchip copy"
+              ><span class="tglyph t-copy"
+                ><svg viewBox="0 0 24 24"><use href="#t-copy" /></svg></span
+              >Copy</span
+            >
+            <span class="gloss"
+              >Product-facing words — UI strings, labels, marketing body copy</span
+            >
+            <span class="tok"><b>copy</b> → --color-accent-teal</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
+            >
+          </div>
+          <div class="legend-row is-new-member">
+            <span class="tchip translate"
+              ><span class="tglyph t-translate"
+                ><svg viewBox="0 0 24 24"><use href="#t-translate" /></svg></span
+              >Translate</span
+            >
+            <span class="gloss">A locale twin of existing copy — no new meaning authored</span>
+            <span class="tok"><b>translate</b> → --color-accent-teal</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
+            >
+          </div>
           <div class="legend-row">
             <span class="tchip research"
               ><span class="tglyph t-research"
@@ -1635,6 +1907,22 @@
               ><span class="seg-ic"
                 ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
               >Human</span
+            >
+          </div>
+          <div class="legend-row is-new-member">
+            <span class="tchip verification"
+              ><span class="tglyph t-verification"
+                ><svg viewBox="0 0 24 24"><use href="#t-verification" /></svg></span
+              >Verification</span
+            >
+            <span class="gloss"
+              >Establishing a stated fact is true, and producing the evidence</span
+            >
+            <span class="tok"><b>verification</b> → --color-accent-orange</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-agent" /></svg></span
+              >Coding agent <span class="either">· either</span></span
             >
           </div>
           <div class="legend-row">
@@ -1679,6 +1967,20 @@
               >Human</span
             >
           </div>
+          <div class="legend-row is-new-member">
+            <span class="tchip legal"
+              ><span class="tglyph t-legal"
+                ><svg viewBox="0 0 24 24"><use href="#t-legal" /></svg></span
+              >Legal</span
+            >
+            <span class="gloss">A binding artifact — ToS, privacy, licence, DPA</span>
+            <span class="tok"><b>legal</b> → --color-charcoal</span>
+            <span class="exec"
+              ><span class="seg-ic"
+                ><svg width="15" height="15" viewBox="0 0 24 24"><use href="#e-human" /></svg></span
+              >Human</span
+            >
+          </div>
           <div class="legend-row">
             <span class="tchip chore"
               ><span class="tglyph t-chore"
@@ -1703,6 +2005,476 @@
           <code>--el-type-*</code> token yields both the glyph hue and the chip tint. "Either" types
           default to <code>coding_agent</code> but flip freely.
         </p>
+        <p class="panel-note" style="max-width: 1120px">
+          <b>The four admitted members SHARE a hue, and that is the decision, not a shortfall.</b>
+          The palette holds exactly <b>seven</b> mutually distinct saturated hues and three greys —
+          the note above says so, and all ten were spent at ten members. There is no eighth. So
+          rather than invent one (forbidden) or reshuffle the ten (churn for no gain), each newcomer
+          takes the hue of the member ADR Amendment 1 named as its <b>nearest neighbour</b>:
+          <code>copy</code> and <code>translate</code> join <code>content</code> on teal,
+          <code>verification</code> joins <code>review</code> on orange, and
+          <code>legal</code> joins <code>decision</code> on charcoal.
+          <b>Hue names the family; the glyph names the member.</b> Colour was never the sole carrier
+          here — every chip renders its label, so a shared hue costs a reader nothing they were
+          relying on (finding #35). Each still gets its OWN <code>--el-type-*</code> token pointing
+          at the shared Tier-0 var, so a future palette can split them without touching a component.
+        </p>
+      </div>
+
+      <!-- ═══════════ PANEL 5 — the two HOSTS, the full list, the filter entrance ═══════════ -->
+      <div class="panel-band">
+        <div class="band-title">
+          Panel 5 · <b>The fit, MEASURED</b> · both hosts at fourteen · the unrolled list · the
+          third entrance
+        </div>
+        <div class="panel-row">
+          <!-- 5a — host 2: the detail rail (a side panel, not a dialog) -->
+          <div class="panel">
+            <div class="panel-label">5a · Host 2 — detail rail, picker open (portaled branch)</div>
+            <div class="rail">
+              <div class="rail-row">
+                <span class="rk">Status</span>
+                <span class="rail-val"><span class="fb-chip">In&nbsp;Progress</span></span>
+              </div>
+              <div class="rail-row is-new">
+                <span class="rk">Type</span>
+                <span class="rail-val">
+                  <div class="cbx">
+                    <div class="cbx-trigger is-open" role="combobox" aria-expanded="true">
+                      <span class="tglyph t-code"
+                        ><svg width="16" height="16" viewBox="0 0 24 24">
+                          <use href="#t-code" /></svg
+                      ></span>
+                      <span class="val">Code</span>
+                      <span class="updown"
+                        ><svg width="16" height="16" viewBox="0 0 24 24">
+                          <use href="#i-updown" /></svg
+                      ></span>
+                    </div>
+                    <div class="cbx-menu" role="listbox" aria-label="Type">
+                      <div class="cbx-group" role="presentation">Build</div>
+                      <div class="cbx-opt is-active" role="option" aria-selected="true">
+                        <span class="tglyph t-code"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-code" /></svg
+                        ></span>
+                        <span class="opt-label">Code</span>
+                        <span class="opt-check"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#i-check" /></svg
+                        ></span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-design"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-design" /></svg
+                        ></span>
+                        <span class="opt-label">Design</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-test"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-test" /></svg
+                        ></span>
+                        <span class="opt-label">Test</span>
+                      </div>
+                      <div class="cbx-group" role="presentation">Author</div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-content"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-content" /></svg
+                        ></span>
+                        <span class="opt-label">Content</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-copy"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-copy" /></svg
+                        ></span>
+                        <span class="opt-label">Copy</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-translate"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-translate" /></svg
+                        ></span>
+                        <span class="opt-label">Translate</span>
+                      </div>
+                      <div class="cbx-group" role="presentation">Investigate</div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-research"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-research" /></svg
+                        ></span>
+                        <span class="opt-label">Research</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-review"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-review" /></svg
+                        ></span>
+                        <span class="opt-label">Review</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-verification"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-verification" /></svg
+                        ></span>
+                        <span class="opt-label">Verification</span>
+                      </div>
+                      <div class="cbx-group" role="presentation">Govern &amp; operate</div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-decision"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-decision" /></svg
+                        ></span>
+                        <span class="opt-label">Decision</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-deploy"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-deploy" /></svg
+                        ></span>
+                        <span class="opt-label">Deploy</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-manual"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-manual" /></svg
+                        ></span>
+                        <span class="opt-label">Manual</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-legal"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-legal" /></svg
+                        ></span>
+                        <span class="opt-label">Legal</span>
+                      </div>
+                      <div class="cbx-opt" role="option">
+                        <span class="tglyph t-chore"
+                          ><svg width="16" height="16" viewBox="0 0 24 24">
+                            <use href="#t-chore" /></svg
+                        ></span>
+                        <span class="opt-label">Chore</span>
+                      </div>
+                    </div>
+                  </div>
+                </span>
+              </div>
+              <div class="rail-row" style="margin-top: 268px">
+                <span class="rk">Assignee</span>
+                <span class="rail-val">Zhu Yue</span>
+              </div>
+            </div>
+            <p class="panel-note">
+              The rail is <b>not</b> a dialog, so the Combobox takes its <b>portaled</b> branch and
+              measures against the <b>viewport</b> — but the clamp is the same expression,
+              <code>Math.min(256, …)</code>, so the menu is the identical 256&nbsp;px box. The two
+              hosts differ in how the ceiling is computed and <b>not</b> in what it is. That is why
+              this design does not draw two different menus.
+            </p>
+          </div>
+
+          <!-- 5b — the same menu, cap lifted, so a reader can see all fourteen -->
+          <div class="panel">
+            <div class="panel-label">5b · The full fourteen, unrolled (NOT a product state)</div>
+            <div class="cbx-menu is-unrolled" role="listbox" aria-label="Type">
+              <div class="cbx-group" role="presentation">Build</div>
+              <div class="cbx-opt is-active" role="option" aria-selected="true">
+                <span class="tglyph t-code"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-code" /></svg
+                ></span>
+                <span class="opt-label">Code</span>
+                <span class="opt-check"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-check" /></svg
+                ></span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-design"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-design" /></svg
+                ></span>
+                <span class="opt-label">Design</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-test"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-test" /></svg
+                ></span>
+                <span class="opt-label">Test</span>
+              </div>
+              <div class="cbx-group" role="presentation">Author</div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-content"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-content" /></svg
+                ></span>
+                <span class="opt-label">Content</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-copy"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-copy" /></svg
+                ></span>
+                <span class="opt-label">Copy</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-translate"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-translate" /></svg
+                ></span>
+                <span class="opt-label">Translate</span>
+              </div>
+              <div class="cbx-group" role="presentation">Investigate</div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-research"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-research" /></svg
+                ></span>
+                <span class="opt-label">Research</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-review"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-review" /></svg
+                ></span>
+                <span class="opt-label">Review</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-verification"
+                  ><svg width="16" height="16" viewBox="0 0 24 24">
+                    <use href="#t-verification" /></svg
+                ></span>
+                <span class="opt-label">Verification</span>
+              </div>
+              <div class="cbx-group" role="presentation">Govern &amp; operate</div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-decision"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-decision" /></svg
+                ></span>
+                <span class="opt-label">Decision</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-deploy"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-deploy" /></svg
+                ></span>
+                <span class="opt-label">Deploy</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-manual"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-manual" /></svg
+                ></span>
+                <span class="opt-label">Manual</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-legal"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-legal" /></svg
+                ></span>
+                <span class="opt-label">Legal</span>
+              </div>
+              <div class="cbx-opt" role="option">
+                <span class="tglyph t-chore"
+                  ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-chore" /></svg
+                ></span>
+                <span class="opt-label">Chore</span>
+              </div>
+            </div>
+            <p class="panel-note">
+              The product never renders this. It is here so the PNG shows every row, and so the
+              <b>canonical order</b> can be read straight down: the four groups are contiguous runs
+              of ADR Amendment 1 §1b's single list, not a second ordering laid over it. A picker
+              that ignored the group headers entirely would still show the same sequence.
+            </p>
+          </div>
+
+          <!-- 5c — the measurement -->
+          <div class="panel">
+            <div class="panel-label">
+              5c · The measurement — why grouping, and why NOT scrolling
+            </div>
+            <div class="measure">
+              <div class="measure-row head">
+                <span>quantity</span><span>at ten</span><span>at fourteen</span>
+              </div>
+              <div class="measure-row">
+                <span>option row</span><span>28&nbsp;px</span><span>28&nbsp;px</span>
+              </div>
+              <div class="measure-row">
+                <span>group headers</span><span>none</span><span>4 × 25&nbsp;px</span>
+              </div>
+              <div class="measure-row">
+                <span>list content</span><span>288&nbsp;px</span><span>502&nbsp;px</span>
+              </div>
+              <div class="measure-row">
+                <span>menu ceiling (shipped)</span><span>256&nbsp;px</span><span>256&nbsp;px</span>
+              </div>
+              <div class="measure-row is-verdict">
+                <span>rows visible</span><span>8 of 10</span><span>8 of 14</span>
+              </div>
+              <div class="measure-row is-verdict">
+                <span>hidden below the fold</span><span>14%</span><span>51%</span>
+              </div>
+            </div>
+            <p class="panel-note">
+              <b>The picker did not stop fitting at fourteen. It stopped fitting at ten.</b> The
+              Combobox listbox is <code>max-h-64 overflow-y-auto</code> and its in-dialog branch
+              clamps to <code>Math.max(80, Math.min(256, avail − 12))</code> — a <b>cap</b>, in both
+              hosts, that the list length cannot raise. Ten rows already overflowed it by
+              32&nbsp;px. Every number above is read off the rendered DOM by
+              <code>scripts/render-work-item-types.mjs</code>, which prints them beside the PNG it
+              exports, so this table cannot drift from the asset it describes.
+            </p>
+            <p class="panel-note">
+              So <b>no scroll container is added</b>: there already is one, it is the shipped
+              Combobox's, and a second would be a bug. What the row count justifies is the
+              <b>grouping</b> — the visible window stays 8 rows while the hidden fraction doubles,
+              and a scanner with no landmarks in an 8-of-14 window is the thing that actually got
+              worse. The group header is <b>already shipped</b> (<code>ComboboxOption.group</code>
+              renders a <code>role="presentation"</code> row);
+              <code>WorkItemTypePicker</code> simply never set it. So the fix is one field per
+              option, not a new component.
+            </p>
+          </div>
+        </div>
+
+        <div class="panel-row">
+          <!-- 5d — entrance 3: the /items filter facet -->
+          <div class="panel">
+            <div class="panel-label">5d · Entrance 3 — the /items filter bar, Type facet open</div>
+            <div class="filterbar">
+              <span class="fb-chip is-active"
+                ><span class="tglyph t-code"
+                  ><svg width="14" height="14" viewBox="0 0 24 24"><use href="#t-code" /></svg
+                ></span>
+                Type <b>is any of</b> Code, Translate
+                <span class="fb-x"
+                  ><svg width="12" height="12" viewBox="0 0 24 24"><use href="#i-x" /></svg
+                ></span>
+              </span>
+              <span class="fb-chip">Status <b>is</b> In Progress</span>
+              <span class="fb-add">+ Add filter</span>
+            </div>
+            <div class="cbx" style="margin-top: 8px; width: 260px">
+              <div class="cbx-menu is-unrolled" role="listbox" aria-label="Type">
+                <div class="cbx-group" role="presentation">Build</div>
+                <div class="cbx-opt is-active" role="option" aria-selected="true">
+                  <span class="tglyph t-code"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-code" /></svg
+                  ></span>
+                  <span class="opt-label">Code</span>
+                  <span class="opt-check"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#i-check" /></svg
+                  ></span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-design"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-design" /></svg
+                  ></span>
+                  <span class="opt-label">Design</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-test"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-test" /></svg
+                  ></span>
+                  <span class="opt-label">Test</span>
+                </div>
+                <div class="cbx-group" role="presentation">Author</div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-content"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-content" /></svg
+                  ></span>
+                  <span class="opt-label">Content</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-copy"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-copy" /></svg
+                  ></span>
+                  <span class="opt-label">Copy</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-translate"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-translate" /></svg
+                  ></span>
+                  <span class="opt-label">Translate</span>
+                </div>
+                <div class="cbx-group" role="presentation">Investigate</div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-research"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-research" /></svg
+                  ></span>
+                  <span class="opt-label">Research</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-review"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-review" /></svg
+                  ></span>
+                  <span class="opt-label">Review</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-verification"
+                    ><svg width="16" height="16" viewBox="0 0 24 24">
+                      <use href="#t-verification" /></svg
+                  ></span>
+                  <span class="opt-label">Verification</span>
+                </div>
+                <div class="cbx-group" role="presentation">Govern &amp; operate</div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-decision"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-decision" /></svg
+                  ></span>
+                  <span class="opt-label">Decision</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-deploy"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-deploy" /></svg
+                  ></span>
+                  <span class="opt-label">Deploy</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-manual"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-manual" /></svg
+                  ></span>
+                  <span class="opt-label">Manual</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-legal"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-legal" /></svg
+                  ></span>
+                  <span class="opt-label">Legal</span>
+                </div>
+                <div class="cbx-opt" role="option">
+                  <span class="tglyph t-chore"
+                    ><svg width="16" height="16" viewBox="0 0 24 24"><use href="#t-chore" /></svg
+                  ></span>
+                  <span class="opt-label">Chore</span>
+                </div>
+              </div>
+            </div>
+            <p class="panel-note">
+              The facet is a multi-select over the SAME closed set, so it inherits the same order
+              and the same group headers — one vocabulary, drawn once. The chip summarises the
+              selection as text (<code>Code, Translate</code>), so a shared hue is never what a
+              reader is relying on here either.
+            </p>
+          </div>
+
+          <!-- 5e — the three entrances, named -->
+          <div class="panel">
+            <div class="panel-label">5e · The access path — where the control is reached</div>
+            <ol class="entrances">
+              <li>
+                <b>Create modal</b> — the Type field, below Title (panel 1). Reached from the
+                <code>+</code> button in the top bar, or <kbd>c</kbd>.
+              </li>
+              <li>
+                <b>Work-item detail, core-fields rail</b> — the Type row, inline-edit on click
+                (panel 5a). Reached by opening any work item.
+              </li>
+              <li><b>The work-item list filter bar</b> — <b>+ Add filter → Type</b> (panel 5d).</li>
+            </ol>
+            <p class="panel-note">
+              All three mount the same <code>WorkItemTypePicker</code>, so the grouping decision
+              lands in one component and reaches every entrance. Nothing in this design adds a
+              route, a page, or a nav affordance — the control already exists in all three places
+              and this card changes what is <b>inside</b> it.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   </body>

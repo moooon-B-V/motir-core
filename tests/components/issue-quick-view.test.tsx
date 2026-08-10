@@ -66,6 +66,26 @@ const DATA: QuickViewData = {
   pullRequests: [],
   hasChildren: false,
   canPlan: true,
+  // MOTIR-2562 — the editor inputs the widened payload carries. The peek's rail
+  // is a write surface, so a QuickViewData now also names the item's internal id,
+  // the raw current values each control selects against, and the option sources.
+  id: 'cmqvitem00000000000000p7',
+  status: 'in_progress',
+  assigneeId: null,
+  parentId: null,
+  sprintId: null,
+  dueDate: null,
+  estimateMinutes: null,
+  workflow: { statuses: [], transitions: [], policyMode: 'restricted' },
+  members: [],
+  sprints: [],
+  projectComponents: [],
+  estimation: {
+    estimationStatistic: 'story_points' as const,
+    pointScale: 'fibonacci' as const,
+    customScaleValues: [],
+    canEdit: true,
+  },
 };
 
 // The /items row peek-on-click (the per-row eye `QuickViewTrigger` was removed
@@ -226,12 +246,16 @@ describe('IssueQuickViewPanel — expanded field set (Subtask 8.8.8)', () => {
     expect(screen.getByText('5')).toBeTruthy();
   });
 
-  it('shows valued custom fields and hides empty ones behind "Show more fields (N)"', () => {
+  it('shows valued custom fields and hides empty ones behind the disclosure', () => {
     render(<IssueQuickViewPanel state="ready" data={FULL} />);
     // The valued custom field is visible; the empty one is hidden until expand.
     expect(screen.getByText('Platform')).toBeTruthy();
     expect(screen.queryByText('Tier')).toBeNull();
-    const more = screen.getByRole('button', { name: /Show more fields \(1\)/ });
+    // ⚠️ The label changed in MOTIR-2599, deliberately. 8.8.8 built this
+    // disclosure READ-ONLY, so "Show more fields (N)" was accurate. Now the rail
+    // edits, it is the only ROUTE to an empty field someone wants to fill, and a
+    // label promising only to "show" them understates what it does.
+    const more = screen.getByRole('button', { name: /1 more field/ });
     fireEvent.click(more);
     expect(screen.getByText('Tier')).toBeTruthy();
   });

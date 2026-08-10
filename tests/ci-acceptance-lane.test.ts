@@ -96,6 +96,16 @@ describe('the acceptance-video lane is story-scoped (MOTIR-1949)', () => {
     expect(acceptanceWorkflow).toMatch(
       /on:\s*\n\s*pull_request:\s*\n\s*paths:\s*\n\s*- ['"]tests\/e2e\/acceptance\*\.spec\.ts['"]/,
     );
+    // …and the lane's OWN definition is a trigger too (MOTIR-2600), or a PR that
+    // restructures the lane changes no spec and never runs it. An ordinary
+    // feature PR still matches nothing here, so MOTIR-1949's requirement holds.
+    for (const path of [
+      '.github/workflows/acceptance-video.yml',
+      'playwright.acceptance.config.ts',
+      'tests/e2e/_helpers/acceptance-video.ts',
+    ]) {
+      expect(acceptanceWorkflow).toContain(`      - '${path}'`);
+    }
     // A JOB-level key sits at exactly four spaces (`jobs:` → id → keys); the
     // step-level `if: success()` / `if: always()` below are at eight and fine.
     expect(acceptanceJob).not.toMatch(/^ {4}if:/m);
@@ -163,6 +173,73 @@ describe('the acceptance-video lane is story-scoped (MOTIR-1949)', () => {
   });
 });
 
+// ── MOTIR-2600 ───────────────────────────────────────────────────────────────
+//
+// The lane used to run every acceptance spec in ONE serial job and was
+// lengthening with each story that added a spec (22.2 → 23.1 → 26.7 → 29.1 min
+// across the runs on record). These assertions guard the shape that replaced it.
+// They are here for the same reason the ones above are: workflow files are not
+// type-checked, linted, or executed by any suite, so a regression in them is
+// invisible until a lane behaves wrongly in production.
+describe('the acceptance lane is SHARDED (MOTIR-2600)', () => {
+  const acceptanceBuildJob = jobsOf(acceptanceWorkflow).get('build');
+
+  it('builds `.next/` once, in its own job, and the test legs depend on it', () => {
+    // One build for the whole fan-out. Without this every shard would pay a full
+    // `next build`, which is most of what sharding was supposed to buy back.
+    expect(acceptanceBuildJob).toBeDefined();
+    expect(acceptanceBuildJob).toContain('pnpm build');
+    expect(acceptanceBuildJob).toMatch(/name:\s*next-build/);
+    expect(acceptanceJob).toMatch(/^\s*needs:\s*build\s*$/m);
+  });
+
+  it('runs the suite as a shard matrix, passing the leg through to Playwright', () => {
+    // The matrix and the CLI flag have to agree: a matrix that never reaches
+    // `--shard` would run the WHOLE suite four times and publish each receipt
+    // four times over.
+    expect(acceptanceJob).toMatch(/shard:\s*\[1, 2, 3, 4\]/);
+    expect(acceptanceJob).toMatch(/total:\s*\[4\]/);
+    expect(acceptanceJob).toContain(
+      'pnpm test:e2e --config playwright.acceptance.config.ts ' +
+        '--shard=${{ matrix.shard }}/${{ matrix.total }}',
+    );
+  });
+
+  it('lets every leg finish — a red shard does not cancel the others', () => {
+    // `fail-fast: true` (the default) would cancel the sibling legs, and a
+    // cancelled leg uploads no report: the run would lose the artifact a red
+    // lane is read from, on exactly the runs that need it (MOTIR-1706).
+    expect(acceptanceJob).toMatch(/fail-fast:\s*false/);
+  });
+
+  it('gives each leg its OWN report artifact name', () => {
+    // upload-artifact v4+ REJECTS a second upload under an existing name, so a
+    // single name would red-light three of the four legs at their last step.
+    expect(acceptanceJob).toContain(
+      'name: playwright-report-acceptance-video-shard-${{ matrix.shard }}',
+    );
+  });
+
+  it('still resolves the owned specs and hands them to the uploader on EVERY leg', () => {
+    // The receipts are the lane's product, and the publish step has been the
+    // source of two separate defects already (MOTIR-1734 / MOTIR-1937). Each leg
+    // publishes the recordings IT produced that this PR owns; the legs' sets are
+    // disjoint by `--shard` and cover the suite, so every receipt publishes
+    // exactly once. That holds only if every leg still gets the owned list —
+    // a leg without it would silently rehearse its share.
+    //
+    // (The uploader half of this — a leg that recorded none of the changed specs
+    // exits 0 rather than failing for another leg's receipt — is asserted
+    // against the uploader itself in `tests/acceptance-video-uploader.test.ts`.)
+    const steps = acceptanceJob!.split(/^ {6}- /m).slice(1);
+    const publish = steps.find((s) => s.includes('node scripts/upload-acceptance-video.mjs'));
+    expect(publish).toContain('ACCEPTANCE_CHANGED_SPECS: ${{ steps.owned-specs.outputs.specs }}');
+    // Nothing gates the publish on a particular shard — that would make one leg
+    // responsible for receipts recorded on another, which it cannot see.
+    expect(publish).not.toMatch(/matrix\.shard/);
+  });
+});
+
 describe('the shared E2E setup composite (MOTIR-1949)', () => {
   const action = readFileSync(SETUP_ACTION_PATH, 'utf8');
 
@@ -173,13 +250,16 @@ describe('the shared E2E setup composite (MOTIR-1949)', () => {
     expect(acceptanceJob).toContain(SETUP_ACTION_REF);
   });
 
-  it('lets the acceptance lane BUILD `.next/` instead of downloading it', () => {
-    // A separate workflow cannot read another workflow's artifacts, so the
-    // download path would silently fail there.
+  it('offers both `.next/` sources, and each lane takes the one it can reach', () => {
+    // A separate workflow cannot read ANOTHER workflow's artifacts — which is
+    // why the `build` input exists at all. It can read its OWN run's, so since
+    // MOTIR-2600 the acceptance lane builds once in its own `build` job and its
+    // four shards download that, rather than each compiling `.next/` itself.
     expect(action).toMatch(/^\s*next-build:/m);
     expect(action).toContain("if: inputs.next-build == 'download'");
     expect(action).toContain("if: inputs.next-build == 'build'");
-    expect(acceptanceJob).toMatch(/next-build:\s*build/);
+    expect(acceptanceJob).toMatch(/next-build:\s*download/);
+    expect(acceptanceJob).not.toMatch(/next-build:\s*build/);
     expect(codeOf(e2eBody!)).not.toMatch(/next-build:/); // the default: download
   });
 

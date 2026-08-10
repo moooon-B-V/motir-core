@@ -398,6 +398,65 @@ correctly discard them. Paid on every `subtask/*` PR and every push to `main`.
 
 The starter (MOTIR-1941) shipped this shape from day one; motir-core now matches it.
 
+#### Amendment 2026-08-10 (MOTIR-2600) — the lane is SHARDED, and it triggers on its own definition
+
+Two clauses of the amendment above are superseded in shape, not in principle. Both
+changes are structural; nothing about who may publish, or when, moves.
+
+**1 · One serial job becomes one build + four sharded legs.** The lane ran
+`workers: 1` over every acceptance spec and was lengthening with each story that
+added one — **22.2 → 23.1 → 26.7 → 29.1 minutes** across the runs on record. It now
+runs `--shard=i/4` on four legs, with `.next/` compiled ONCE in this workflow's own
+`build` job and downloaded by each leg. (The "it compiles `.next/` itself" clause
+above still holds for the WORKFLOW — it just no longer holds four times: a workflow
+cannot read another workflow's artifacts, but it can read its own run's.)
+
+Measured against the real per-test durations of run `31387950195`, whose 73 tests
+sum to 25.7 min: the four legs are **8.0 / 8.9 / 4.6 / 4.2 min** of test time, so
+the long pole is ~9 min plus ~2–3 min of setup — comfortably inside the ~15 min
+this card asked for, and one build instead of four.
+
+**⚠️ The parallelism is the easy half; the receipts are the load-bearing half.**
+Publishing SUPERSEDES a story's current evidence, and the publish step has already
+been the source of two separate defects (MOTIR-1734: one clip per run; MOTIR-1937:
+every PR republishing unrelated stories). Split N ways, each leg holds a DIFFERENT
+subset of the videos. **Every receipt still publishes exactly once, by construction
+rather than by coordination** — which is why each leg keeps its own publish step
+instead of a fan-in job collecting gigabytes of video:
+
+- `--shard` PARTITIONS the suite (Playwright keeps a spec FILE whole within one
+  leg), so a recording exists in exactly ONE leg's output dir, and the uploader
+  publishes what it finds there;
+- ownership is per RECORDING, not per run — `isOwnedRecording` matches the
+  recording's own `specFile` sidecar against the changed-spec list — so a leg that
+  ran none of the changed specs finds nothing owned, logs "Nothing to publish", and
+  exits 0 rather than failing for a receipt that is another leg's to write.
+
+Both halves are asserted against the uploader itself, over two shard-shaped output
+dirs, in `tests/acceptance-video-uploader.test.ts` (`across shards`); the workflow
+half is in `tests/ci-acceptance-lane.test.ts`. Each leg also uploads its report
+under a shard-scoped artifact NAME — `upload-artifact` v4+ rejects a duplicate, so
+one name would have cost the lane three of its four reports.
+
+**2 · The lane's own definition is a trigger.** `paths:` was the spec glob alone,
+so a PR that RESTRUCTURED the lane — the workflow, the Playwright config, the
+fixture harness — changed no acceptance spec and never ran it. Those four paths are
+now triggers too. This does not weaken the requirement above (a PR that does not own
+an acceptance spec shows no acceptance check): an ordinary PR matches none of them,
+and a PR that matches only them changes no spec, so the run REHEARSES — it records
+and checks every clip and publishes nothing, exactly as MOTIR-1937 specified.
+
+**3 · A red lane now leaves the client's own account of the failure.** Independent
+of sharding, and the reason MOTIR-2600 exists: the lane's failures surface as a
+locator that found nothing, several steps downstream of whatever went wrong, and the
+`⚠️ THERE IS NO main BASELINE` note above says why that is expensive here. Every
+failing test in this lane now attaches a `client-diagnostics.json` — the console,
+the page errors, the request ledger, and the renderer's own idle time — carrying a
+one-line verdict that separates _the page threw_, _a request failed_, _nothing was
+in flight_ and _the page was genuinely still working_. The first three were
+indistinguishable before, which is how the same red check got two opposite verdicts
+on consecutive runs of one PR.
+
 ---
 
 ## Consequences
