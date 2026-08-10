@@ -2,6 +2,8 @@ import type { IssueDetailDto, WorkItemRefMap } from '@/lib/dto/workItems';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { QuickViewData } from '@/lib/dto/quickView';
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import type { QuickViewSprintOption } from '@/lib/dto/quickView';
+import type { ComponentDto } from '@/lib/dto/components';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -34,12 +36,17 @@ export function toQuickViewData(
   projectIdentifier: string,
   pullRequests: LinkedPullRequestDto[],
   canPlan: boolean,
+  // MOTIR-2562 — the two option sources that do NOT ride the detail aggregate.
+  // The service reads them and hands them in; this mapper stays pure.
+  sprints: QuickViewSprintOption[],
+  projectComponents: ComponentDto[],
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
   const status = workflow.statuses.find((s) => s.key === item.status);
 
   return {
+    id: item.id,
     identifier: item.identifier,
     title: item.title,
     projectIdentifier,
@@ -89,5 +96,18 @@ export function toQuickViewData(
     // the service resolves (this mapper stays pure).
     hasChildren: detail.children.length > 0,
     canPlan,
+    // MOTIR-2562 — the editor inputs. Raw values ALONGSIDE the display strings
+    // above (never instead of them): the strings keep the panel presentational,
+    // these make its controls selectable.
+    status: item.status,
+    assigneeId: item.assigneeId,
+    parentId: item.parentId,
+    sprintId: item.sprintId,
+    dueDate: item.dueDate,
+    estimateMinutes: item.estimateMinutes,
+    workflow,
+    members,
+    sprints,
+    projectComponents,
   };
 }

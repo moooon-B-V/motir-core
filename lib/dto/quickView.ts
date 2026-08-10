@@ -8,6 +8,10 @@ import type {
 } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
+import type { WorkflowDto } from '@/lib/dto/workflows';
+import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
+import type { SprintDto } from '@/lib/dto/sprints';
+import type { ComponentDto } from '@/lib/dto/components';
 
 // The quick-view (peek) payload (Subtask 2.5.19; bug 8.8.2). A serializable,
 // already-shaped slice of the detail read that the /api/work-items/peek route
@@ -24,9 +28,44 @@ import type { LinkedPullRequestDto } from '@/lib/dto/github';
 // Still read-only (one write path: Open full page); the heavier sections
 // (Explanation, children, the full relationships panel, attachments, comments)
 // stay detail-only.
+//
+// MOTIR-2562 (Story MOTIR-2560) makes the rail a WRITE surface, so the payload
+// gained the EDITOR INPUTS block at the foot of this interface — the item's
+// internal `id` (both Server Actions are keyed by it), the raw current values
+// each control needs as its selection, and the option sources (workflow /
+// members / sprints / project components). They are ADDED ALONGSIDE the display
+// strings above, never in place of them: resolving names server-side is what
+// keeps the panel presentational, and the raw values are what make it editable.
+//
+// They ride the payload rather than a React context ON PURPOSE. The peek panel
+// is mounted from SIX places — /items, /ready, /boards, the item detail page and
+// its edit page (all via IssueQuickViewController) plus the planning canvas
+// (components/planning/WorkItemQuickView) — and only /items mounts
+// IssueInlineEditProvider. One self-sufficient read keeps the modal identical
+// everywhere; a provider would have to be threaded through five more hosts and
+// would make the route-agnostic canvas learn which project it is standing in.
+
+/**
+ * A sprint as the peek's Sprint picker needs it (MOTIR-2562) — the three fields
+ * `SprintPicker` actually reads, and no more. See the `sprints` field below for
+ * why the full `SprintDto` is the wrong shape on this payload.
+ *
+ * `SprintPicker`'s prop is typed `SprintDto[]` today. The card that mounts the
+ * picker in the peek (MOTIR-2564) widens that prop to this shape — a strictly
+ * safe generalisation, since every existing caller passes a superset.
+ */
+export type QuickViewSprintOption = Pick<SprintDto, 'id' | 'name' | 'state'>;
 
 /** The serializable payload the peek renders (a condensed slice of the detail read). */
 export interface QuickViewData {
+  /**
+   * The work item's INTERNAL id (cuid) — not the `identifier`. Both write paths
+   * the editable rail uses are keyed by it: `updateIssueAction` and
+   * `changeStatusAction` (app/(authed)/items/[key]/edit/actions.ts) take `id` as
+   * their first input. Without this the peek can render every field and write
+   * none of them.
+   */
+  id: string;
   identifier: string;
   title: string;
   /**
@@ -133,4 +172,61 @@ export interface QuickViewData {
    * than one that errors on the first turn.
    */
   canPlan: boolean;
+
+  // ── EDITOR INPUTS (MOTIR-2562) ─────────────────────────────────────────────
+  // The raw current values + option sources the editable rail's controls need.
+  // Everything here rides the SAME detail aggregate the display strings above
+  // are derived from, EXCEPT `sprints` and `projectComponents`, which are two
+  // additional project-scoped reads the service performs (see getQuickView).
+
+  /**
+   * The current status KEY (e.g. `in_progress`) — `StatusPicker`'s `value`.
+   * `statusLabel` / `statusCategory` above stay the DISPLAY pair; a picker
+   * cannot select against a label.
+   */
+  status: string;
+  /** `AssigneePicker`'s current selection; `assigneeName` above is its display. */
+  assigneeId: string | null;
+  /** `ParentPicker`'s current selection; `parent` above is its display. */
+  parentId: string | null;
+  /** `SprintPicker`'s current selection; `sprintName` above is its display. */
+  sprintId: string | null;
+  /** The raw ISO due date — `DatePicker`'s value; `dueLabel` is its display. */
+  dueDate: string | null;
+  /** The raw minutes — the numeric input's value; `estimateLabel` is its display. */
+  estimateMinutes: number | null;
+  /**
+   * The project's workflow — statuses, transitions and `policyMode`, the exact
+   * three props `StatusPicker` takes so it can offer only the LEGAL targets from
+   * the current status. Rides `detail.workflow`, which the mapper already
+   * receives and today reads only to resolve one label.
+   */
+  workflow: WorkflowDto;
+  /**
+   * The assignable workspace members — `AssigneePicker`'s options. Already
+   * resolved by the service (it uses them to build the name lookup); this
+   * exposes the list the picker needs rather than re-reading it.
+   */
+  members: WorkspaceMemberDTO[];
+  /**
+   * The project's sprints — `SprintPicker`'s options. One of the two NEW reads
+   * this payload costs; the service already resolved the committed sprint's
+   * NAME, and this widens that to the list.
+   *
+   * ⚠️ Deliberately a `QuickViewSprintOption[]`, NOT `SprintDto[]`. The full DTO
+   * carries `issueCount`, and the only way to produce it —
+   * `sprintsService.listByProject` — runs ONE count query PER SPRINT (MOTIR has
+   * 45). That is a 1+N fan-out on a `no-store` payload fetched on every row
+   * click, to fill a field `SprintPicker` never reads: it uses `id`, `name` and
+   * `state` and nothing else. So the peek reads the sprint rows off the leaf and
+   * projects exactly those three.
+   */
+  sprints: QuickViewSprintOption[];
+  /**
+   * The project's component taxonomy — the `MultiSelectPicker`'s option source
+   * for the Components row. The second NEW read. (Labels need no list: the
+   * label control autocompletes per keystroke against the project route, which
+   * `projectIdentifier` above already scopes.)
+   */
+  projectComponents: ComponentDto[];
 }

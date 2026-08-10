@@ -66,6 +66,20 @@ const DATA: QuickViewData = {
   pullRequests: [],
   hasChildren: false,
   canPlan: true,
+  // MOTIR-2562 — the editor inputs the widened payload carries. The peek's rail
+  // is a write surface, so a QuickViewData now also names the item's internal id,
+  // the raw current values each control selects against, and the option sources.
+  id: 'cmqvitem00000000000000p7',
+  status: 'in_progress',
+  assigneeId: null,
+  parentId: null,
+  sprintId: null,
+  dueDate: null,
+  estimateMinutes: null,
+  workflow: { statuses: [], transitions: [], policyMode: 'restricted' },
+  members: [],
+  sprints: [],
+  projectComponents: [],
 };
 
 // The /items row peek-on-click (the per-row eye `QuickViewTrigger` was removed
