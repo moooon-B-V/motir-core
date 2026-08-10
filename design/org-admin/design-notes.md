@@ -187,10 +187,17 @@ is what scales.)
 
 A `stack` of three `Card`s on the org-scoped settings page:
 
-- **General** — `Input` fields: **Organization name**, **Organization URL**
-  (`motir.co/` prefix + slug, with the lowercase/hyphen hint), **Contact email**.
+- **General** — `Input` fields: **Organization name**, **Contact email**.
   A header `Pill pill-owner` ("You're an owner"). Card foot: a "{n} workspaces ·
   {n} members" summary + a primary **Save changes** button.
+  > **Amended 2026-08-10 (MOTIR-2548).** This card also drew an **Organization
+  > URL** row — `motir.co/` + the slug, read-only, with a lowercase/hyphen hint.
+  > It is removed. `docs/decisions/organization-url.md` records why: Motir does
+  > not adopt organization-addressable URLs, nothing in the product resolves
+  > `motir.co/<slug>`, and the row's own helper text ("used in links to this
+  > organization") described a capability that does not exist.
+  > `Organization.slug` survives as an internal column — it is simply no longer
+  > a value anyone is shown.
 - **Billing & usage** — the **PASSIVE placeholder** (a "Coming soon" neutral
   `Pill` + a dashed `note` reading that billing/credits/usage land later — org
   usage view 7.12.5, checkout Epic 8 — with **no active control**). This card
@@ -329,7 +336,8 @@ to confirm token parity (every colour flips through Tier-0 under `--el-*`).
 - Settings: **"Organization settings"** (title); **"Manage the {org}
   organization — the account your workspaces live under. Only organization owners
   and admins can change these."** (subtitle); fields **"Organization name"**,
-  **"Organization URL"**, **"Contact email"**; **"Save changes"**; billing card
+  **"Contact email"** (the **"Organization URL"** field and its hint were removed
+  by MOTIR-2548 — see the amendment under Panel 2); **"Save changes"**; billing card
   **"Billing & usage"** / **"Coming soon"** / the 7.12.5 + Epic 8 placeholder
   note; **"Danger zone"** / **"Delete organization"**.
 - Members: **"Members"** (title); **"Everyone in the {org} organization, across

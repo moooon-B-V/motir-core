@@ -250,6 +250,11 @@ export default defineConfig({
         'components/ui/charts/ChartFrame.tsx',
         'components/ui/charts/ChartLegend.tsx',
         'components/ui/charts/ChartDataTable.tsx',
+        // Story MOTIR-2542 · Subtask MOTIR-2550 — the AI entitlement predicates.
+        // Two one-line pure functions, and the reason they are gated is that the
+        // defect they fix was a surface reading a raw DTO field instead of
+        // asking them. Gated in `thresholds` below.
+        'lib/billing/aiEntitlement.ts',
         'lib/repositories/commentRepository.ts',
         'lib/repositories/commentMentionRepository.ts',
         'lib/services/commentsService.ts',
@@ -1366,6 +1371,7 @@ export default defineConfig({
         'components/ui/charts/ChartFrame.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/ui/charts/ChartLegend.tsx': { branches: 90, functions: 90, lines: 90 },
         'components/ui/charts/ChartDataTable.tsx': { branches: 90, functions: 90, lines: 90 },
+        'lib/billing/aiEntitlement.ts': { branches: 90, functions: 90, lines: 90 },
         // Story 5.1 (comments): the repo leaves land gated from day one
         // (Subtask 5.1.1); commentsService joins the list with 5.1.2.
         'lib/repositories/commentRepository.ts': { branches: 90, functions: 90, lines: 90 },
