@@ -464,6 +464,29 @@ Its two behaviours are part of the contract:
 That pair is what makes the binding legible to an agent at the moment it asks
 what it can reach, in both shapes.
 
+### A.8 OPEN — a workspace with NO project (not settled)
+
+A.2 makes the binding required wherever the grant is chosen. It says nothing
+about the workspace that has no project to bind to, and that case is real: a
+freshly created workspace has none until someone makes one.
+
+**What happens today, recorded rather than decided:** the modal renders, the
+project picker is empty, and `submit`'s guard (`!selectedProject`) returns — a
+fillable form whose Create button does nothing, with no empty state and no
+message. `tests/components/create-token-modal.test.tsx` pins this and labels it
+_RECORDED, NOT ENDORSED_, so whichever way it is settled the change is visible in
+a diff rather than silent.
+
+The two candidate resolutions, neither chosen here:
+
+- give the modal an EMPTY STATE that names the reason and points at project
+  creation; or
+- decide that a project-less workspace offers only the DEVICE credential, and
+  say so on the pane.
+
+The device flow is unaffected either way: a fixed grant binds to no project
+(A.3), so `motir login` works in a workspace with nothing in it.
+
 ## Consequences
 
 - The picker offers six switches today and grows when an operation's permission
@@ -477,6 +500,9 @@ what it can reach, in both shapes.
 - **From Amendment 1:** a hand-minted token now names a project, and the token
   list shows two credential shapes side by side. Nothing a `motir login` user
   does changes, and no existing token is migrated.
+- **Left open by Amendment 1 (A.8):** a workspace with no project cannot mint a
+  hand-minted token, and the modal does not yet say so. Pinned by a test, not
+  resolved by this document.
 
 ## Superseded / related
 
