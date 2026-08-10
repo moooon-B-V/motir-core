@@ -45,13 +45,13 @@ afterEach(() => {
 describe('SidebarNav — Resume onboarding row', () => {
   it('is hidden when no onboarding is in progress', () => {
     resumeRef.value = false;
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />);
     expect(screen.queryByRole('link', { name: /Resume onboarding/ })).toBeNull();
   });
 
   it('renders a labeled row to the resume surface when onboarding is in progress', () => {
     resumeRef.value = true;
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />);
     const row = screen.getByRole('link', { name: /Resume onboarding/ });
     // Routes to the discovery surface (which resumes), NOT the entrance fork (MOTIR-1556).
     expect(row.getAttribute('href')).toBe('/onboarding/discovery');
@@ -59,7 +59,7 @@ describe('SidebarNav — Resume onboarding row', () => {
 
   it('leads the primary nav (sits above Dashboard)', () => {
     resumeRef.value = true;
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />);
     const nav = screen.getByRole('navigation');
     const links = within(nav).getAllByRole('link');
     const labels = links.map((l) => l.textContent);
@@ -71,14 +71,14 @@ describe('SidebarNav — Resume onboarding row', () => {
 
   it('is not shown when there is no active project', () => {
     resumeRef.value = true;
-    renderWithIntl(<SidebarNav activeProject={null} projects={[]} user={USER} />);
+    renderWithIntl(<SidebarNav activeProject={null} user={USER} />);
     // No primary project section renders at all, so no resume row.
     expect(screen.queryByRole('link', { name: /Resume onboarding/ })).toBeNull();
   });
 
   it('renders the localized label (zh)', () => {
     resumeRef.value = true;
-    renderWithIntl(<SidebarNav activeProject={PROJECT} projects={[PROJECT]} user={USER} />, {
+    renderWithIntl(<SidebarNav activeProject={PROJECT} user={USER} />, {
       locale: 'zh',
       messages: zhMessages,
     });
