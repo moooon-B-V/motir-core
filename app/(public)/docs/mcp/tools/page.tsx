@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
 import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { MCP_REFERENCE_URL, mcpCatalogue, mcpToolCount } from '@/lib/apiDocs/mcp';
 import { CatalogueNav } from '../../_components/CatalogueNav';
@@ -24,6 +25,12 @@ import { DocBlock } from '../../_components/DocBlocks';
 // The page holds NO tool fact of its own — every row comes from
 // `lib/apiDocs/mcp.ts`, and the count below is the length of what was derived
 // rather than a literal that could disagree with the list under it.
+
+// This page's OWN title and description, so it does not publish the area's
+// default (Bug MOTIR-2526 — every page in the tree used to inherit the API
+// reference's). The pattern lives in `lib/apiDocs/pageMetadata.ts`.
+export const generateMetadata = () =>
+  docsPageMetadata('metaTitleMcpTools', 'metaDescriptionMcpTools');
 
 export default async function McpToolsPage() {
   const t = await getTranslations('apiDocs');

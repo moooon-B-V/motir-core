@@ -2246,6 +2246,11 @@ the area ROOT to `/docs/api` because a four-page area whose root is one of the
 four pages cannot grow a fifth without the same argument again; `/docs` itself
 redirects to `/docs/api` until an index page earns its place.
 
+> ⚠️ **Amended by [Amendment 19](#amendment-19-2026-08-09--docs-is-an-index-page-the-surface-list-has-one-home-and-the-roots-redirect-is-retired).**
+> The index page earned its place: `/docs` now RENDERS one, and the
+> `/docs` → `/docs/api` redirect is deleted. The address itself, and the
+> addresses-move rule this section states, are untouched.
+
 ##### Why now, and not "when it hurts"
 
 `/api-docs` shipped on **2026-08-05** — one day before this amendment — and is
@@ -2868,6 +2873,13 @@ the pages that exist. **It is filed as its own card rather than left as a
 sentence** — the disposition this ADR gives every deferral. What would reopen it:
 the first `/docs` sub-area that is not the API reference and not a single page,
 i.e. whichever of MOTIR-2308 or MOTIR-2309 ships more than one page.
+
+> ⚠️ **DECIDED by [Amendment 19](#amendment-19-2026-08-09--docs-is-an-index-page-the-surface-list-has-one-home-and-the-roots-redirect-is-retired) (2026-08-09).**
+> **The reopening condition fired**: MOTIR-2309 shipped the MCP as a TWO-page
+> sub-area (`/docs/mcp` + `/docs/mcp/tools`), which is exactly the case named
+> above. `/docs` now renders an index page, rule 7 is deleted, and both entrances
+> point at it. The card this deferral filed is the card that closed it — which is
+> the argument for filing deferrals as cards, made in one line.
 
 **Whether a sub-area other than the API gets a second-tier index** (a CLI command
 list, an MCP tool list). Q2 states that a sub-area's second tier is that
@@ -4087,3 +4099,277 @@ the same row.
   the rejected fix too. What that fix breaks is `sessionBranch` and readiness, so
   those are what the suite reads: the branch still null, dependents still
   blocked, and the close-out still not finding the item.
+
+### Amendment 19 (2026-08-09) — `/docs` is an INDEX PAGE; the surface list has one home, and the root's redirect is retired
+
+**Amends:** **Amendment 11's** § _"What this amendment deliberately does NOT
+decide"_ → **The area ROOT**, whose reopening condition has fired; and
+**Amendment 9 Q1's** clause holding `/docs` as a redirect _"until an index page
+earns its place"_. Amendment 11's route table gains one row and its redirect map
+loses rule 7.
+**Leaves unchanged:** §1–§9 in full; **Amendment 4 Q3** — the spec stays at
+`/api/openapi/v1.json`; **Amendment 11 Q1's two-tier rail, Q2's route-prefix
+rule and Q4's placement rule**, which this amendment APPLIES rather than
+re-opens; **Amendment 9 Q1's `/docs` address and its addresses-move rule**;
+Amendments 12 and 13 — the CLI stays one page at `/docs/cli`, the MCP stays a
+sub-area. **No `/api/v1` shape, path, scope or status changes here, and no §8
+clause moves** — so `/docs/api/stability`, whose content is bound to §8's
+clauses, needs no edit.
+**Card:** MOTIR-2520, under MOTIR-2315.
+
+#### The problem — the condition Amendment 11 wrote down has fired
+
+Amendment 11 declined to decide the area root and named exactly what would
+reopen it: _"the first `/docs` sub-area that is not the API reference and not a
+single page, i.e. whichever of MOTIR-2308 or MOTIR-2309 ships more than one
+page."_
+
+MOTIR-2309 shipped the MCP documentation as **two** pages — `/docs/mcp` and
+`/docs/mcp/tools` — and `app/(public)/docs/_components/CatalogueNav.tsx` now
+carries `/docs/mcp` as the second entry of its `SUB_AREAS` array. MOTIR-2308
+shipped the CLI as one page, per Amendment 12. So the area is:
+
+| Surface       | Routes                                                          | Pages |
+| ------------- | --------------------------------------------------------------- | ----- |
+| API reference | `/docs/api`, `/docs/api/getting-started`, `/docs/api/stability` | 3     |
+| Agent sandbox | `/docs/sandbox`                                                 | 1     |
+| Motir CLI     | `/docs/cli`                                                     | 1     |
+| MCP server    | `/docs/mcp`, `/docs/mcp/tools`                                  | 2     |
+
+Four surfaces, two of them multi-page — and `DOCS_REDIRECTS` rule 7 still sends
+`/docs` to `/docs/api`, while both shipped entrances
+(`app/(public)/explore/_components/ExploreTopBar.tsx`'s `Docs` nav item and
+`ExploreFooter.tsx`'s _"API docs"_ link) point at `/docs/api` directly. A
+visitor who clicks **Docs** is told, by the first page they see, that this area
+is the REST API.
+
+That is Amendment 11's own complaint one level up, and it is now the loudest
+thing left on this surface: the rail correctly presents four peers, and the
+front door still opens onto one of them.
+
+---
+
+#### Q1 — `/docs` is a real INDEX PAGE, not a redirect to some other section
+
+##### Rung 1 — three shipped documentation roots, READ on 2026-08-09
+
+Amendment 11 Q1 answered its question by reading what shipped developer
+documentation actually does rather than by reasoning from taste. The same three
+surfaces answer this one, and they agree:
+
+| Product        | Root URL                     | What the ROOT does                                                                                                                                                                   | Does an entry say what it is / who it is for?                                                                                                                       |
+| -------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stripe**     | `docs.stripe.com/`           | **Renders its own index.** An `h1` _"Documentation"_, the lede _"Explore our guides and examples to integrate Stripe."_, then _"Browse by product"_ — the product surfaces, grouped. | Rows are product names under category headings; the grouping carries the orientation.                                                                               |
+| **GitHub**     | `docs.github.com/en`         | **Renders its own index** — ~40 top-level sections.                                                                                                                                  | **Yes, one line each.** Verbatim: _"GitHub Actions documentation — Automate, customize, and execute your software development workflows right in your repository."_ |
+| **Cloudflare** | `developers.cloudflare.com/` | **Renders its own index** — four top-level categories.                                                                                                                               | **Yes, one line each.** Verbatim: _"Compute: Deploy with one command — Build and deploy serverless functions and full-stack apps on Cloudflare's global network."_  |
+
+**Not one of the three redirects its documentation root into a section.** All
+three treat the root as the page whose job is to route a reader who does not yet
+know which surface they want — which is precisely the reader Motir's root
+currently fails.
+
+##### The decision
+
+**`/docs` renders an index page.** It is a real route,
+`app/(public)/docs/page.tsx`, inside the shell every page in the area already
+shares (`app/(public)/docs/layout.tsx`), public by construction, making **no
+database read** — the constraint `tests/public-docs-db-imports.test.ts` guards
+and `layout.tsx`'s own comment records.
+
+##### Rejected alternatives
+
+| Rejected                                                                         | Why                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Keep rule 7 — the rail already names all four surfaces** (the cheapest option) | This is the option this decision is most likely to drift into, so it is named first. The rail lists the four, but a reader meets the DESTINATION before the rail: the page title, the `h1` and the lede all say REST API. It also leaves the root's address lying to anyone who reads, quotes or links a URL — the same argument Amendment 11 rejected the flat-rail option on, one level up. |
+| **Redirect `/docs` to the CLI page** (or to any other single surface)            | Trades one wrong answer for another. The area has four peers and no evidence that any one of them is where an unknown reader should start; picking one is a preference dressed as routing, and it has to be re-litigated the moment a fifth surface lands.                                                                                                                                    |
+| **Redirect `/docs` to a "getting started" page written for the whole product**   | There is no such page, and inventing one is a different story with different content. It also re-creates the defect at one remove: a getting-started page is a surface, so the root would again be one of its rooms.                                                                                                                                                                          |
+| **Serve the index AT `/docs/index` and keep `/docs` redirecting there**          | Two addresses for one page, and the redirect is the thing being retired. `/docs` is the address strangers already have.                                                                                                                                                                                                                                                                       |
+
+---
+
+#### Q2 — the index lists ONE ROW PER SURFACE, each with a line saying what it is and who it is for
+
+##### The decision
+
+**The page is a title, a short lede, and one row per documented surface. Each
+row carries the surface's name, a one-line description of what it is and who it
+is for, and a link to that surface's index.** Nothing else.
+
+The one-line description is the whole point and is not decoration: the reader
+this page exists for cannot choose between _"MCP server"_ and _"API reference"_
+from the labels alone — those name implementations, and the reader has a need.
+GitHub and Cloudflare both carry exactly this line per entry (the table above);
+it is the single element that converts a list of links into a routing decision.
+
+**The rows are NOT grouped into categories.** Stripe groups because it has
+dozens of products; four rows grouped into categories is a heading per one-and-a-
+half rows, which adds a hierarchy a reader has to parse before reading four
+lines.
+
+**The ORDER is the shipped rail's order** — API reference, Agent sandbox, CLI,
+MCP server. This amendment deliberately does not re-order it: the list is now
+shared with the rail (Q3), so a re-order would silently re-order the navigation
+of every page in the area, and it would be a UX judgement smuggled into a
+structural change. Re-ordering is available to a later card with its own reason.
+
+##### Rejected alternatives
+
+| Rejected                                                              | Why                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Link labels only, no descriptions**                                 | Reproduces the rail on a bigger canvas. If the four labels were enough, the rail would already have solved this and the root's destination would not matter.                                                                  |
+| **A "Start here" block above the rows** (Stripe has one)              | Stripe's start-here funnels toward one integration path. Motir's four surfaces serve four different intents with no dominant one, so a start-here would have to pick a favourite — which is Q1's rejected redirect, in prose. |
+| **One row per PAGE rather than per surface** (all seven pages listed) | Contradicts Amendment 11 Q1's tier rule (the top level lists SURFACES, not their pages) and re-creates the flat list Amendment 11 removed, at the front door.                                                                 |
+
+---
+
+#### Q3 — the surface list has ONE home: a module both the index and the rail read
+
+##### The conflict
+
+`CatalogueNav.tsx` already hard-codes the four surfaces — a `surfaces` array of
+rows built from `ROUTE_BY_PAGE` plus the `apiDocs` `nav*` keys. An index page
+that lists the same four surfaces would be the **second** place that fact lives,
+and the two can disagree with nothing failing: a fifth surface added to whichever
+file its author happened to open renders in one and not the other, and the front
+door is quietly incomplete.
+
+##### The decision
+
+**One exported list, in `lib/apiDocs/`, read by BOTH the index page and the
+rail's first tier.** Each entry carries the surface's route, its label key and
+its description key. `lib/apiDocs/` is the content-module home Amendment 9 Q1's
+addresses-move rule keeps by name, and where `guide.ts`, `sandbox.ts`, `cli.ts`
+and `mcp.ts` already live; the module is data only — no JSX, no database reach.
+
+Two properties this must preserve, and they are the acceptance of the card that
+performs it:
+
+- **The rail's rendered output does not change.** Same four rows, same order,
+  same labels, same `aria-current` behaviour. The change is where tier 1's rows
+  come FROM, nothing else — so the shipped rail specs
+  (`tests/api-docs/docs-rail-tiers.test.tsx`, `story-gate.test.tsx`) are the
+  proof, and they pass unchanged.
+- **`ROUTE_BY_PAGE` and `SUB_AREAS` stay in the rail.** They describe every page
+  and every sub-area's second tier — facts about navigation, not about the
+  surface set. Only the surface list moves.
+
+##### Rejected alternatives
+
+| Rejected                                                            | Why                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Let the index keep its own list, and add a test that they match** | A test that compares two hand-maintained lists still requires both to be edited, and it fails AFTER someone has already shipped the asymmetry. Deriving both from one list makes adding a surface a single edit and the asymmetry unrepresentable. |
+| **Derive the list from the route tree** (filesystem or a manifest)  | A route is not a surface: `/docs/api/stability` is a route and not a surface, `/docs/mcp/tools` likewise. The surface set is an editorial fact about what Motir documents, and it needs a description per entry that no route can supply.          |
+| **Put the list in `CatalogueNav.tsx` and import it from the page**  | Makes a client component the source of a server page's data and puts an editorial list inside a navigation component. `lib/apiDocs/` is where this area's content already lives.                                                                   |
+
+---
+
+#### Q4 — the index renders NO navigation rail
+
+##### The decision
+
+**The index page does not render `CatalogueNav`.** Its body IS the navigation.
+
+The rail's first tier is _one row per surface_ (Amendment 11 Q1). The index's
+body is _one row per surface, with a description_. Rendering both puts the same
+four destinations on one screen twice, with the shorter, less informative copy
+in the more prominent position. All three surfaces read for Q1 agree here too:
+each shows a section sidebar on its section pages and none shows one on the
+documentation root.
+
+Two consequences fall out rather than being decided separately:
+
+- **Amendment 11 Q2's route-prefix rule needs no exception.** The operation
+  index renders if and only if a page's route is `/docs/api` or below; `/docs`
+  is not, so the index carries no operation rows. That is the prefix rule
+  working, not a case it fails to cover.
+- **`aria-current` is moot on the index** — there is no rail on which to mark a
+  row, and the index is not a surface that could be marked. Every OTHER page in
+  the area keeps the rail and the marking it has today.
+
+##### Rejected alternatives
+
+| Rejected                                                                | Why                                                                                                                                                                                |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Render the rail, with no row marked current**                         | The duplication above, plus a rail that answers "where am I" with nothing — the one page in the area where the rail cannot do its job.                                             |
+| **Render the rail and add the index as a fifth row** (_"Overview"_)     | The index is the area, not a surface within it. A row pointing at the page you are on is the two-rows-to-one-place problem Amendment 11 Q1 already rejected for sub-area indexes.  |
+| **Give the index a rail listing each surface's PAGES** (a full sitemap) | Amendment 11 Q1's tier rule exists precisely to keep pages out of the top level. A sitemap is a different artifact with a different job, and nothing in the area asks for one yet. |
+
+---
+
+#### Q5 — rule 7 is DELETED, and both entrances point at `/docs`
+
+##### The redirect map, in full and in order
+
+**`DOCS_REDIRECTS` loses rule 7 and keeps every other rule, unchanged and in
+order.** `tests/api-docs/docs-redirects.test.ts` compares the array exactly and
+is updated to this map — never loosened.
+
+| #     | Source                      | Destination                 | Status | Origin                        |
+| ----- | --------------------------- | --------------------------- | ------ | ----------------------------- |
+| 1     | `/api-docs/getting-started` | `/docs/api/getting-started` | 308    | Amendment 11                  |
+| 2     | `/api-docs/stability`       | `/docs/api/stability`       | 308    | Amendment 11                  |
+| 3     | `/api-docs`                 | `/docs/api`                 | 308    | Amendment 9 Q1                |
+| 4     | `/api-docs/:path*`          | `/docs/:path*`              | 308    | Amendment 9 Q1                |
+| 5     | `/docs/getting-started`     | `/docs/api/getting-started` | 308    | Amendment 11                  |
+| 6     | `/docs/stability`           | `/docs/api/stability`       | 308    | Amendment 11                  |
+| ~~7~~ | ~~`/docs`~~                 | ~~`/docs/api`~~             | —      | **DELETED by this amendment** |
+
+**Rule 3 is deliberately NOT re-pointed at `/docs`.** `/api-docs` was the API
+reference's address when the area was API-only, so `/docs/api` remains the
+truthful destination for it; an old bookmark to the reference must keep landing
+on the reference. Only the CURRENT root changes meaning, and it has no legacy
+readers to protect — it has never rendered anything of its own.
+
+**⚠️ Deleting rule 7 is a PRECONDITION of the page, not a tidy-up.** A Next.js
+redirect resolves before routing, so `app/(public)/docs/page.tsx` cannot render
+while rule 7 exists — the file would sit there, fully tested and unreachable.
+The two ship in one change.
+
+##### The two entrances
+
+Both point at **`/docs`**:
+
+- `ExploreTopBar.tsx` — the `Docs` nav item's `href`. Its label is already
+  `projectSquare.navDocs` = _"Docs"_ and does not change; its `current === 'docs'`
+  marking is unchanged and still marks the whole area.
+- `ExploreFooter.tsx` — the product-column link. Its **label changes**, because
+  a link reading _"API docs"_ that opens the documentation area is the same
+  mismatch this amendment is fixing, one layer down. The value becomes
+  _"Documentation"_ (`zh`: 文档), and the key is renamed
+  `projectSquare.footProductApiDocs` → `projectSquare.footProductDocs`.
+
+**On renaming the key:** Amendment 9 Q1's addresses-move rule keeps INTERNAL
+identifiers still, and enumerates them — the `apiDocs` namespace, `lib/apiDocs/`,
+`design/api-docs/`, `tests/api-docs/`. This key is in the `projectSquare`
+namespace, is not on that list, and has four in-repo consumers (both catalogs,
+the footer, one vitest). A key named `…ApiDocs` holding _"Documentation"_ is the
+stale-label trap that rule exists to avoid elsewhere, so it moves with its value.
+
+---
+
+#### Consequences of this amendment
+
+- **MOTIR-2521** (design) draws the index in `design/api-docs/` — the area's
+  asset of record, which owns this shell and rail — at desktop and below `lg`,
+  including the rail-less treatment Q4 decides and the access path from the top
+  bar and footer Q5 re-points.
+- **MOTIR-2522** (content) writes the lede and the four one-line descriptions in
+  both catalogs, and ships Q3's shared surface list under `lib/apiDocs/`,
+  re-pointing the rail's tier 1 at it with no change to what the rail renders.
+- **MOTIR-2523** (code) builds `app/(public)/docs/page.tsx`, deletes rule 7,
+  re-points both entrances, and updates
+  `tests/api-docs/docs-redirects.test.ts` to the six-rule map above.
+- **MOTIR-2524** (vitest gate) holds Q3's single-list property as a test: the
+  index and the rail render the same surface set from the same module, and a
+  surface added to one without the other fails.
+- **MOTIR-2525** (E2E + acceptance video) drives the recipe with no session —
+  click **Docs**, land on the area, cross to a non-API surface and back, and
+  resolve every legacy address in one hop.
+- **MOTIR-2526** (bug, found while planning this) is NOT this amendment's: every
+  page in the area currently publishes the API reference's `<title>` because
+  `layout.tsx` holds the only `generateMetadata` in the tree. It is recorded here
+  only so the next reader knows the index sets its own and the other six are
+  fixed separately.
+- **Amendment 11's `/docs` route table** gains the root as a rendered page; its
+  tier rules, prefix rule and placement rule are quoted and applied above, not
+  re-opened.

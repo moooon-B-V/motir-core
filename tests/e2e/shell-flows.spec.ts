@@ -139,7 +139,7 @@ test.describe('@smoke shell journeys', () => {
     await expect(rail.getByRole('link', { name: 'Settings' })).toBeVisible();
 
     // The global top bar carries the org control (the always-present tenancy
-    // anchor), the ⌘K search trigger, the tri-state theme toggle, and the
+    // anchor), the ⌘K shortcut trigger, the tri-state theme toggle, and the
     // account menu. With a single workspace the workspace switcher is NOT
     // rendered (Story 6.10.5 progressive disclosure — it reveals at ws #2), so
     // the org control is the tenancy chrome here.
@@ -147,7 +147,7 @@ test.describe('@smoke shell journeys', () => {
     await expect(topNav).toBeVisible();
     await expect(topNav.getByRole('button', { name: 'Organization menu' })).toBeVisible();
     await expect(topNav.getByRole('button', { name: 'Switch workspace' })).toBeHidden();
-    await expect(topNav.getByRole('button', { name: /Search/ })).toBeVisible();
+    await expect(topNav.getByRole('button', { name: 'Shortcut', exact: true })).toBeVisible();
     await expect(topNav.getByRole('button', { name: /^Theme:/ })).toBeVisible();
     await expect(topNav.getByRole('button', { name: 'Account menu' })).toBeVisible();
   });

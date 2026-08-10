@@ -356,10 +356,20 @@ test.describe('@a11y widened route coverage', () => {
     await expect(page.getByText('Open Roadmap').first()).toBeVisible();
     await sweep(page, '/explore (populated square)', reports);
 
-    // ── /docs — a PERMANENT redirect to /docs/api (next.config.ts), which is
-    //    the catalogue's entry pane; `goto` follows it. ────────────────────
+    // ── /docs — the area INDEX, a route of its own ───────────────────────────
+    // ⚠️ It used to be a PERMANENT redirect to /docs/api, and this sweep used to
+    // follow it with a `waitForURL`. MOTIR-2523 deleted that rule (ADR
+    // Amendment 19 Q5) and `/docs` now renders the documentation area's front
+    // door: a title, a lede and one row per documented surface, with no
+    // catalogue rail. So it is a NEW public route, and this spec's subject is
+    // exactly "the public routes are axe-clean" — it gets its own sweep rather
+    // than being folded into the reference's.
     await page.goto('/docs');
-    await page.waitForURL('**/docs/api');
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await sweep(page, '/docs (the area index)', reports);
+
+    // ── /docs/api — the catalogue's entry pane, now reached directly ─────────
+    await page.goto('/docs/api');
     await expect(page.getByRole('heading', { name: 'API reference', level: 1 })).toBeVisible();
     // MOTIR-2494 removed this route's carve-out (`scrollable-region-focusable`,
     // 20+ code panes with nothing focusable in them) by measuring each pane and
@@ -368,7 +378,7 @@ test.describe('@a11y widened route coverage', () => {
     // page is indistinguishable from an unfixed one, and would fail this sweep
     // intermittently rather than honestly.
     await expect(page.locator('pre[tabindex="0"]').first()).toBeAttached();
-    await sweep(page, '/docs (→ /docs/api)', reports);
+    await sweep(page, '/docs/api (the reference)', reports);
 
     // ── /p/[identifier] — the public project overview ────────────────────────
     await page.goto(`/p/${tenant.projectKey}`);

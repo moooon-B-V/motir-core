@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
 import {
   MCP_FORK_STEER,
   MCP_REFERENCE_URL,
@@ -33,6 +34,11 @@ import { DocBlock, DocInline } from '../_components/DocBlocks';
 // ⚠️ It passes NO operation groups and does not build the spec to get them
 // (Amendment 11 Q2). It is outside `/docs/api`, so the rail's prefix gate is what
 // decides it renders no `/api/v1` index — not a prop this page could get wrong.
+
+// This page's OWN title and description, so it does not publish the area's
+// default (Bug MOTIR-2526 — every page in the tree used to inherit the API
+// reference's). The pattern lives in `lib/apiDocs/pageMetadata.ts`.
+export const generateMetadata = () => docsPageMetadata('metaTitleMcp', 'metaDescriptionMcp');
 
 export default async function McpGuidePage() {
   const t = await getTranslations('apiDocs');

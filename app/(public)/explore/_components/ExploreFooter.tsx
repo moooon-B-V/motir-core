@@ -81,8 +81,8 @@ export async function ExploreFooter({
           <li>{t('footProductPlanning')}</li>
           <li>{t('footProductBoards')}</li>
           <li>
-            <Link href="/docs/api" className="text-(--el-text-secondary) hover:text-(--el-link)">
-              {t('footProductApiDocs')}
+            <Link href="/docs" className="text-(--el-text-secondary) hover:text-(--el-link)">
+              {t('footProductDocs')}
             </Link>
           </li>
           <li>{t('footProductPricing')}</li>

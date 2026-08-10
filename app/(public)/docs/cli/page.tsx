@@ -1,4 +1,5 @@
 import { getTranslations } from 'next-intl/server';
+import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
 import {
   CLI_FILES,
   CLI_INTRO,
@@ -43,6 +44,11 @@ function StepHeading({ index, title }: { index: number; title: string }) {
     </h2>
   );
 }
+
+// This page's OWN title and description, so it does not publish the area's
+// default (Bug MOTIR-2526 — every page in the tree used to inherit the API
+// reference's). The pattern lives in `lib/apiDocs/pageMetadata.ts`.
+export const generateMetadata = () => docsPageMetadata('metaTitleCli', 'metaDescriptionCli');
 
 export default async function CliGuidePage() {
   const t = await getTranslations('apiDocs');
