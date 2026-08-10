@@ -365,23 +365,36 @@ project** (`lib/permissions/resolve.ts`: `accessLevel` + `workspaceRole` +
 single "the user's role" — an admin in project A can be a viewer in project B of
 the same workspace.
 
-**The decision: a token may ALSO bind to one project, and `project_id` is
-NULLABLE.**
+**The decision: the project binding is REQUIRED where the GRANT IS CHOSEN, and
+absent where it is fixed.**
 
-- **NULL** — workspace-scoped, today's behaviour. Every already-minted row, and
-  every credential `motir login` mints. The offer is then the UNION of the
-  actor's per-project sets across the workspace's browsable projects.
-- **SET** — project-scoped. The offer is exactly that project's set for that
-  actor, and dispatch refuses a cross-project call as a NOT-FOUND.
+| Credential                           | Grant                                             | Binding                           |
+| ------------------------------------ | ------------------------------------------------- | --------------------------------- |
+| Hand-minted (the create-token modal) | **chosen** from that project's set for that actor | **project** — required            |
+| Device (`motir login` → `/device`)   | **fixed** `CLI_TOKEN_GRANT`, unconfigurable       | **workspace** — `project_id` NULL |
 
-Nullable is load-bearing, not caution: the CLI's device grant calls
-`list_projects` and runs `motir auto` across the workspace, so a mandatory
-binding breaks it on day one.
+The incoherence was never the binding; it was the PICKER. A chosen grant on a
+workspace-bound token asks _"may this token edit work items?"_ with no project to
+answer for — permissions resolve per project, so the switch means nothing until
+one is named. A FIXED grant asks nothing: `motir login`'s screen shows
+`CLI_TOKEN_GRANT` and cannot edit it, so `grant ∩ role` resolves per project at
+dispatch and there is no question on screen to be wrong.
+
+`api_token.project_id` is therefore **nullable, and NULL is a MEANING** — the
+device-credential shape — not a tolerance. Write it that way in the schema: a
+column documented as "optional" becomes `NOT NULL` in six months with no correct
+backfill; one documented as a shape does not.
+
+**Two things this rules OUT, because earlier revisions of this note said
+otherwise:** `list_projects` is NOT retired (it serves the device credential, and
+`motir link` / `autoLinkAfterLogin` call it to bind a folder), and there is no
+`NOT NULL` migration and no token cutover.
 
 ### What the picker draws
 
-- **The Project picker sits beside Workspace**, labelled _Optional. Narrows the
-  token to one project._ Panels 1 and 1b.
+- **The Project picker sits beside Workspace**, labelled _The token acts in this
+  project only_ — REQUIRED, because this modal is where the grant is chosen.
+  Panels 1 and 1b.
 - **A row the actor cannot confer is DISABLED with its reason** (`.scope-row.locked`
   - `.locked-why`), never hidden. A vanished row reads as a missing feature and
     sends someone hunting; a disabled one teaches the composition rule the helper
@@ -404,7 +417,7 @@ binding breaks it on day one.
 
 ### GIVES / TAKES for the binding
 
-- **TAKES from [MOTIR-2605]** the nullable axis and the refusal shape.
+- **TAKES from [MOTIR-2605]** the required-where-chosen rule and the refusal shape.
 - **GIVES to [MOTIR-2606]** the requirement that ONE service read feeds both the
   offer and `create`'s validation — two implementations would agree the day they
   are written and drift the first time an access level changed.
@@ -461,7 +474,13 @@ disclosure, and the binding-scope picker.
 3. **Empty / invalid** — nothing granted; inline `.scope-error` + disabled CTA.
    The refusal is the SURFACE's: the service accepts an empty grant and mints a
    do-nothing token, so nothing below the UI would stop you.
-4. **Token list** — the column is now **Permissions**. Summary Pill (Full access /
+4. **Token list** — the columns are now **Permissions** and **Acts in**. The
+   second is what makes the two credential shapes legible side by side: a
+   hand-minted token names its PROJECT, the `motir login` credential names its
+   WORKSPACE and adds _"Every project your roles reach"_. Without that line the
+   column reads as an inconsistency rather than two kinds of credential — and
+   every pre-change token is the workspace shape, so the revoked legacy row
+   reads correctly too. Summary Pill (Full access /
    Standard / Read only / Custom) and the "Can delete" chip are **kept, not
    re-decided**: at six keys a cell could nearly list them, but a cell that grows
    with the catalog breaks the day the catalog grows, and the four words read
