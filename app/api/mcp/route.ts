@@ -1,6 +1,6 @@
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { MCP_SERVER_INFO, registerMcpTools } from '@/lib/mcp/registry';
-import { contextFromExtra, scopesFromExtra } from '@/lib/mcp/context';
+import { contextFromExtra, grantFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 
 // The Motir MCP server (Story 7.8 · Subtask 7.8.4) — one streamable-HTTP
@@ -44,7 +44,7 @@ const baseHandler = createMcpHandler(
   // and the per-token scope gate (reads the token's granted scopes off the same
   // authInfo) — so every tool call is narrowed to the scopes the token holds
   // (Subtask 7.7.17) before the unchanged 6.4 role checks run in the service.
-  (server) => registerMcpTools(server, contextFromExtra, scopesFromExtra),
+  (server) => registerMcpTools(server, contextFromExtra, grantFromExtra),
   { serverInfo: MCP_SERVER_INFO },
   { basePath: '/api', disableSse: true },
 );

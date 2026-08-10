@@ -21,7 +21,7 @@ const { auth } = await import('@/lib/auth');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
 const { CLI_TOKEN_SCOPES, isTokenScope } = await import('@/lib/mcp/scopes');
-const { SCOPE_NOT_GRANTED_CODE } = await import('@/lib/mcp/scopeGate');
+const { PERMISSION_NOT_GRANTED_CODE } = await import('@/lib/mcp/permissionGate');
 const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
 const route = await import('@/app/api/mcp/route');
 const { makeWorkItemFixture } = await import('../fixtures/workItemFixtures');
@@ -200,7 +200,7 @@ function structured(res: unknown): Record<string, unknown> {
 
 function isScopeDenied(res: unknown): boolean {
   const r = res as { isError?: boolean; content?: unknown };
-  return r.isError === true && JSON.stringify(r.content ?? '').includes(SCOPE_NOT_GRANTED_CODE);
+  return r.isError === true && JSON.stringify(r.content ?? '').includes(PERMISSION_NOT_GRANTED_CODE);
 }
 
 describe('the grant → mint → bearer seam, read back through the CONSUMER', () => {

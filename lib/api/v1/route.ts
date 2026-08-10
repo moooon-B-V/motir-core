@@ -17,6 +17,7 @@ import {
   RateLimitExceededError,
   retryAfterSeconds,
 } from '@/lib/api/v1/rateLimit';
+import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). EVERY public endpoint composes this one helper, which is what
@@ -150,7 +151,14 @@ export function withV1Route<P = Record<string, never>>(
     try {
       // ── 1. Authenticate, BEFORE any parsing or reading ──────────────────
       const presentedToken = presentedBearerToken(req);
-      const auth = await authenticateApiToken(req, options.scope);
+      // ⚠️ BRIDGE — removed by MOTIR-2577, the very next commit, which replaces
+      // `V1Operation.scope` with a per-operation `permission` and passes it
+      // straight through. Until then the wrapper forward-maps the declared
+      // scope and requires its PRIMARY key, so the seam compiles and stays on
+      // the tighter side of the change (a `work_items:write` operation asks for
+      // `work_item:edit`; the operations whose real gate is `comment:add` or
+      // `ai:plan` get their own key when 2577 declares it).
+      const auth = await authenticateApiToken(req, LEGACY_SCOPE_PERMISSIONS[options.scope][0]!);
 
       // 401 exits here, WITHOUT touching the limiter. The budget belongs to a
       // credential, so a request we could not identify must not be able to

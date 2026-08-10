@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { McpContextResolver, McpScopesResolver } from './context';
-import { scopeGatedServer } from './scopeGate';
+import type { McpContextResolver, McpGrantResolver } from './context';
+import { permissionGatedServer } from './permissionGate';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import {
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
@@ -121,7 +121,7 @@ export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 /**
  * Register every MCP tool, wiring each to `resolveContext`.
  *
- * When `resolveScopes` is supplied (production passes `scopesFromExtra`), the
+ * When `resolveGrant` is supplied (production passes `grantFromExtra`), the
  * server is wrapped in the per-token SCOPE GATE (Subtask 7.7.17): every tool
  * call is rejected with a typed scope-denied error unless the token's granted
  * scopes include the tool's scope — an ADDITIONAL gate in front of the
@@ -131,9 +131,9 @@ export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 export function registerMcpTools(
   server: McpServer,
   resolveContext: McpContextResolver,
-  resolveScopes?: McpScopesResolver,
+  resolveGrant?: McpGrantResolver,
 ): void {
-  const target = resolveScopes ? scopeGatedServer(server, resolveScopes) : server;
+  const target = resolveGrant ? permissionGatedServer(server, resolveGrant) : server;
   // Read + dispatch tools (7.8.4).
   registerGetWorkItem(target, resolveContext);
   // The DISCUSSION read (MOTIR-1999) — a card's comments + change trail, the
@@ -222,16 +222,16 @@ export function registerMcpTools(
  * request (stateless streamable HTTP); tests build one and connect it to an
  * in-memory client. `resolveContext` supplies each tool's actor — production
  * passes `contextFromExtra` (reads the bearer-resolved `AuthInfo`); tests pass a
- * fixed-context resolver. `resolveScopes`, when given, enables the per-token
- * scope gate (Subtask 7.7.17) — production passes `scopesFromExtra`; a test
+ * fixed-context resolver. `resolveGrant`, when given, enables the per-token
+ * permission gate — production passes `grantFromExtra`; a test
  * passes a fixed-scope resolver to exercise scope narrowing, and omits it to run
  * a tool unnarrowed.
  */
 export function buildMcpServer(
   resolveContext: McpContextResolver,
-  resolveScopes?: McpScopesResolver,
+  resolveGrant?: McpGrantResolver,
 ): McpServer {
   const server = new McpServer(MCP_SERVER_INFO);
-  registerMcpTools(server, resolveContext, resolveScopes);
+  registerMcpTools(server, resolveContext, resolveGrant);
   return server;
 }

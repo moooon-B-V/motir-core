@@ -2,7 +2,8 @@ import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js';
 import type { ServerRequest, ServerNotification } from '@modelcontextprotocol/sdk/types.js';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { isTokenScope, type TokenScope } from './scopes';
+import { isGrantable } from '@/lib/tokens/grant';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // The MCP layer's actor plumbing (Story 7.8 · Subtask 7.8.4).
 //
@@ -45,11 +46,11 @@ export interface McpAuthExtra {
   workspaceId: string;
   /** The token owner's display name — carried for log/diagnostic context only. */
   userName: string | null;
-  /** The token's granted capability scopes (Story 7.7 · Subtask 7.7.16) —
-   * carried so the dispatch gate (7.7.17) can narrow the owner's 6.4 role to
-   * the operations these scopes permit. Each entry is a `TokenScope`
-   * (`lib/mcp/scopes.ts`); validated at mint time. */
-  scopes: string[];
+  /** The token's resolved GRANT (MOTIR-2572) — carried so the dispatch gate can
+   * narrow the owner's role to the operations the grant permits. Each entry is a
+   * `PermissionKey`; `apiTokensService.verify` has ALREADY expanded any legacy
+   * scope string in the stored row, so nothing downstream ever sees one. */
+  grant: string[];
 }
 
 /**
@@ -73,15 +74,15 @@ function readAuthExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
   const { userId, workspaceId } = extra as Record<string, unknown>;
   if (typeof userId !== 'string' || typeof workspaceId !== 'string') return null;
   const userName = (extra as Record<string, unknown>).userName;
-  const rawScopes = (extra as Record<string, unknown>).scopes;
-  const scopes = Array.isArray(rawScopes)
-    ? rawScopes.filter((s): s is string => typeof s === 'string')
+  const rawGrant = (extra as Record<string, unknown>).grant;
+  const grant = Array.isArray(rawGrant)
+    ? rawGrant.filter((g): g is string => typeof g === 'string')
     : [];
   return {
     userId,
     workspaceId,
     userName: typeof userName === 'string' ? userName : null,
-    scopes,
+    grant,
   };
 }
 
@@ -97,27 +98,26 @@ export function contextFromExtra(extra: McpRequestExtra): ServiceContext {
 }
 
 /**
- * Resolves the GRANTED token scopes for one MCP tool call from the request
- * `extra` — the source the dispatch gate (Story 7.7 · Subtask 7.7.17) narrows
- * the owner's 6.4 role against. Production wiring: {@link scopesFromExtra}.
- * The registry takes it as a SEPARATE injectable resolver from
- * {@link McpContextResolver} so a test can vary the granted set independently of
- * the acting context — and so a server built WITHOUT one applies no scope
- * narrowing (the pre-7.7.17 behaviour the tool round-trip tests rely on).
+ * Resolves the token's GRANT for one MCP tool call from the request `extra` —
+ * the source the dispatch gate narrows the owner's role against. Production
+ * wiring: {@link grantFromExtra}. The registry takes it as a SEPARATE injectable
+ * resolver from {@link McpContextResolver} so a test can vary the grant
+ * independently of the acting context — and so a server built WITHOUT one
+ * applies no narrowing (the pre-7.7.17 behaviour the tool round-trip tests rely
+ * on).
  */
-export type McpScopesResolver = (extra: McpRequestExtra) => TokenScope[];
+export type McpGrantResolver = (extra: McpRequestExtra) => PermissionKey[];
 
 /**
- * Production {@link McpScopesResolver}: lift the token's granted scopes the auth
- * gate stashed in `extra.authInfo.extra.scopes` (Subtask 7.7.16) into a typed
- * {@link TokenScope} list, dropping any unknown string defensively. Throws
- * {@link McpMissingContextError} if the actor is absent (a gate
- * misconfiguration) — the same contract {@link contextFromExtra} holds, so the
- * two resolvers fail identically rather than the scope check silently passing on
- * an empty set.
+ * Production {@link McpGrantResolver}: lift the grant the auth gate stashed in
+ * `extra.authInfo.extra.grant` into a typed {@link PermissionKey} list, dropping
+ * any non-grantable string defensively. Throws {@link McpMissingContextError} if
+ * the actor is absent (a gate misconfiguration) — the same contract
+ * {@link contextFromExtra} holds, so the two resolvers fail identically rather
+ * than the permission check silently passing on an empty set.
  */
-export function scopesFromExtra(extra: McpRequestExtra): TokenScope[] {
+export function grantFromExtra(extra: McpRequestExtra): PermissionKey[] {
   const authExtra = readAuthExtra(extra.authInfo);
   if (!authExtra) throw new McpMissingContextError();
-  return authExtra.scopes.filter(isTokenScope);
+  return authExtra.grant.filter(isGrantable);
 }

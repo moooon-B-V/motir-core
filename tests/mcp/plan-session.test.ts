@@ -20,8 +20,9 @@ import { db } from '@/lib/db';
 import { getJob, streamJob, submitJob } from '@/lib/ai/motirAiClient';
 import { MotirAiOutOfCreditsError } from '@/lib/ai/errors';
 import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
-import { toolScope, TOKEN_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
-import { SCOPE_NOT_GRANTED_CODE } from '@/lib/mcp/scopeGate';
+import { toolPermission } from '@/lib/mcp/toolPermissions';
+import { GRANTABLE_PERMISSIONS, type TokenGrant } from '@/lib/tokens/grant';
+import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import {
   APPEND_PLAN_TURN_TOOL_NAME,
   OPEN_PLAN_SESSION_TOOL_NAME,
@@ -68,12 +69,12 @@ const struct = (r: CallToolResult) => r.structuredContent as Record<string, unkn
 const session = (r: CallToolResult) => r.structuredContent as unknown as PlanChangeSessionDto;
 const text = (r: CallToolResult) => JSON.stringify(r.content);
 
-/** Connect an in-memory client to a server bound to `ctx` (no scope gate). */
-async function connectClient(ctx: ServiceContext, scopes?: TokenScope[]): Promise<Client> {
-  const server = scopes
+/** Connect an in-memory client to a server bound to `ctx` (no permission gate). */
+async function connectClient(ctx: ServiceContext, grant?: TokenGrant): Promise<Client> {
+  const server = grant
     ? buildMcpServer(
         () => ctx,
-        () => scopes,
+        () => [...grant],
       )
     : buildMcpServer(() => ctx);
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -120,16 +121,22 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-describe('plan-session tools — registration + scope + advertised contracts', () => {
-  it('all three are registered; opening is a read, appending and submitting are writes', () => {
+describe('plan-session tools — registration + permission + advertised contracts', () => {
+  it('all three are registered and all three ask for ai:plan', () => {
     expect(MCP_TOOL_NAMES).toContain(OPEN_PLAN_SESSION_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(APPEND_PLAN_TURN_TOOL_NAME);
     expect(MCP_TOOL_NAMES).toContain(SUBMIT_PLAN_SESSION_TOOL_NAME);
-    // Opening a thread spends nothing and changes no plan; extending one and
-    // firing it are the acts a read-only token must not be able to perform.
-    expect(toolScope(OPEN_PLAN_SESSION_TOOL_NAME)).toBe('read');
-    expect(toolScope(APPEND_PLAN_TURN_TOOL_NAME)).toBe('work_items:write');
-    expect(toolScope(SUBMIT_PLAN_SESSION_TOOL_NAME)).toBe('work_items:write');
+    // ⚠️ THE SPLIT MOVED, deliberately (MOTIR-2576; ADR §3, §5). Under the six
+    // scopes these were `read` / `work_items:write` / `work_items:write` — and
+    // the `read` on OPEN was WRONG relative to its own gate:
+    // `planChangeSessionsService.getOrCreateForScope` asserts `ai:plan`, so a
+    // read-only token only ever got as far as a role check. The map now names
+    // what the services actually assert, which withdraws opening from a
+    // browse-only grant and — the point of the story — lets a token that files
+    // work items withhold all three.
+    expect(toolPermission(OPEN_PLAN_SESSION_TOOL_NAME)).toBe('ai:plan');
+    expect(toolPermission(APPEND_PLAN_TURN_TOOL_NAME)).toBe('ai:plan');
+    expect(toolPermission(SUBMIT_PLAN_SESSION_TOOL_NAME)).toBe('ai:plan');
   });
 
   it('the descriptions carry BOTH load-bearing contracts in as many words', async () => {
@@ -478,25 +485,32 @@ describe('submit_plan_session — one job for the whole thread', () => {
   });
 });
 
-describe('plan-session tools — token scope narrowing', () => {
-  it('a READ-ONLY token can open a thread but can neither extend nor fire one', async () => {
+describe('plan-session tools — grant narrowing', () => {
+  it('a grant WITHOUT ai:plan can reach none of the three, even to open', async () => {
     const fx = await makeWorkItemFixture();
-    // Seed a turn through a full-scope client so the read-only open has
-    // something to resume — and so the "no write happened" check has a baseline.
-    const full = await connectClient(fx.ctx, [...TOKEN_SCOPES]);
+    // Seed a turn through a fully-granted client so the denied opens have
+    // something they WOULD have resumed — and so "no write happened" has a
+    // baseline.
+    const full = await connectClient(fx.ctx, GRANTABLE_PERMISSIONS);
     await call(full, APPEND_PLAN_TURN_TOOL_NAME, { projectKey: 'PROD', body: 'Seeded turn.' });
     await full.close();
 
-    const readOnly = await connectClient(fx.ctx, ['read']);
+    // Everything a token can hold EXCEPT planning — the shape someone wires for
+    // an agent that files work items and must not spend their AI credits.
+    const noPlanning = await connectClient(
+      fx.ctx,
+      GRANTABLE_PERMISSIONS.filter((k) => k !== 'ai:plan'),
+    );
 
-    const opened = await call(readOnly, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' });
-    expect(opened.isError).toBeFalsy();
-    expect(session(opened).turnCount).toBe(1);
-
-    for (const name of [APPEND_PLAN_TURN_TOOL_NAME, SUBMIT_PLAN_SESSION_TOOL_NAME]) {
-      const denied = await call(readOnly, name, { projectKey: 'PROD', body: 'sneaky' });
-      expect(denied.isError, `${name} must be scope-denied`).toBe(true);
-      expect(text(denied)).toContain(SCOPE_NOT_GRANTED_CODE);
+    for (const name of [
+      OPEN_PLAN_SESSION_TOOL_NAME,
+      APPEND_PLAN_TURN_TOOL_NAME,
+      SUBMIT_PLAN_SESSION_TOOL_NAME,
+    ]) {
+      const denied = await call(noPlanning, name, { projectKey: 'PROD', body: 'sneaky' });
+      expect(denied.isError, `${name} must be permission-denied`).toBe(true);
+      expect(text(denied)).toContain(PERMISSION_NOT_GRANTED_CODE);
+      expect(text(denied)).toContain('ai:plan');
     }
 
     // The gate fired BEFORE the service: no second turn, no job, no plan.
@@ -504,6 +518,21 @@ describe('plan-session tools — token scope narrowing', () => {
     expect(after.turnCount).toBe(1);
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
     expect(await db.plan.count()).toBe(0);
-    await readOnly.close();
+    await noPlanning.close();
+  });
+
+  it('a grant WITH ai:plan can open, extend and fire', async () => {
+    const fx = await makeWorkItemFixture();
+    const planner = await connectClient(fx.ctx, ['project:browse', 'ai:plan']);
+    const opened = await call(planner, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' });
+    expect(opened.isError).toBeFalsy();
+    expect(session(opened).turnCount).toBe(0);
+
+    const appended = await call(planner, APPEND_PLAN_TURN_TOOL_NAME, {
+      projectKey: 'PROD',
+      body: 'A real turn.',
+    });
+    expect(appended.isError).toBeFalsy();
+    await planner.close();
   });
 });

@@ -7,7 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
 import { TOKEN_SCOPES, DEFAULT_TOKEN_SCOPES, toolScope, type TokenScope } from '@/lib/mcp/scopes';
-import { SCOPE_NOT_GRANTED_CODE } from '@/lib/mcp/scopeGate';
+import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import { decodeFilterEnvelope, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
@@ -26,7 +26,7 @@ import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 //
 // THIS suite is the story's acceptance contract: it drives the ACTUAL
 // `/api/mcp` route — the real `createMcpHandler` + `withMcpAuth` +
-// `verifyMcpToken` + the production `contextFromExtra` / `scopesFromExtra`
+// `verifyMcpToken` + the production `contextFromExtra` / `grantFromExtra`
 // resolvers — with the official `@modelcontextprotocol/sdk` CLIENT over a
 // real bearer PAT, `initialize → tools/list → tools/call`. Real Postgres, no
 // mocks (the repo testing contract). Three pillars:
@@ -110,7 +110,7 @@ async function scopedToken(
  * raw result (the same shape `structured` reads). */
 function isScopeDenied(res: unknown): boolean {
   const r = res as { isError?: boolean; content?: unknown };
-  return r.isError === true && JSON.stringify(r.content ?? '').includes(SCOPE_NOT_GRANTED_CODE);
+  return r.isError === true && JSON.stringify(r.content ?? '').includes(PERMISSION_NOT_GRANTED_CODE);
 }
 
 /** Create a task via the service (the create-modal write) and return its key. */
@@ -558,7 +558,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
   // the 6.4 ROLE check by handing the non-member a FULL-scope token; this pillar
   // isolates the per-token SCOPE gate (Subtask 7.7.17) by handing the OWNER
   // (whose role allows everything) a token with a RESTRICTED scope set, and
-  // drives it through the SAME real `/api/mcp` route + `scopesFromExtra`
+  // drives it through the SAME real `/api/mcp` route + `grantFromExtra`
   // resolver. The pure decision + in-memory wiring live in `scope-gate.test.ts`
   // / `scopes.test.ts` (the totality + registry-loop guards that fail CI when a
   // tool is added without a scope); THIS proves the gate end-to-end over a real

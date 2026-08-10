@@ -1,4 +1,5 @@
-import type { TokenScope } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+import { grantAllows } from '@/lib/tokens/grant';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { TOKEN_PREFIX } from '@/lib/apiTokens/token';
 import {
@@ -13,12 +14,13 @@ import {
  * publish endpoint is the first REST route a CI/service token (not a session
  * cookie) may call, so it authenticates the `Authorization: Bearer motir_pat_…`
  * header the same way: resolve the token to its bound `{ userId, workspaceId }`
- * and require a specific capability scope.
+ * and require a specific PERMISSION (MOTIR-2576 — it took a `TokenScope` until
+ * the vocabularies merged).
  *
  * Returns a discriminated result the route maps to a status: `unauthenticated`
  * → 401 (missing / malformed / unknown / revoked / expired — never
- * distinguished, matching the MCP gate), `forbidden` → 403 (valid token, but the
- * granted scopes don't include the required one). A real outage propagates so it
+ * distinguished, matching the MCP gate), `forbidden` → 403 (valid token, but its
+ * grant does not hold the required permission). A real outage propagates so it
  * surfaces as a 500, not a masked auth failure.
  */
 export type ApiTokenAuthResult =
@@ -35,16 +37,16 @@ function bearerFromHeader(header: string | null): string | undefined {
 
 export async function authenticateApiToken(
   req: Request,
-  requiredScope: TokenScope,
+  requiredPermission: PermissionKey,
 ): Promise<ApiTokenAuthResult> {
   const token = bearerFromHeader(req.headers.get('authorization'));
   if (!token || !token.startsWith(TOKEN_PREFIX)) return { ok: false, reason: 'unauthenticated' };
 
   let user;
   let workspaceId: string;
-  let scopes: string[];
+  let grant: PermissionKey[];
   try {
-    ({ user, workspaceId, scopes } = await apiTokensService.verify(token));
+    ({ user, workspaceId, grant } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -56,6 +58,6 @@ export async function authenticateApiToken(
     throw err;
   }
 
-  if (!scopes.includes(requiredScope)) return { ok: false, reason: 'forbidden' };
+  if (!grantAllows(grant, requiredPermission)) return { ok: false, reason: 'forbidden' };
   return { ok: true, userId: user.id, workspaceId };
 }
