@@ -95,7 +95,7 @@ export function ProjectSwitcher({
             // Open-state affordance mirrors WorkspaceSwitcher: primary
             // border + surface fill while the popover is open.
             className={cn(
-              'min-w-0 shrink',
+              'min-w-0 shrink [&>span]:min-w-0',
               open && 'bg-(--el-surface) border border-(--el-accent)',
               !active && 'text-(--el-text-secondary)',
             )}

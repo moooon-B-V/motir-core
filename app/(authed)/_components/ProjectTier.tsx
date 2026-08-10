@@ -57,7 +57,7 @@ export function ProjectTier({ activeProject, projects, aiConfigured = false }: P
           size="md"
           aria-label={t('project.createFirst')}
           onClick={() => setCreateOpen(true)}
-          className="min-w-0 shrink"
+          className="min-w-0 shrink [&>span]:min-w-0"
         >
           <span className="flex min-w-0 items-center gap-2">
             <span
