@@ -1058,6 +1058,11 @@ model Project {
   /// the same reason: real money was spent, and deleting the project must not
   /// erase what it cost.
   ciContainerUsages           CiContainerUsage[]
+  /// The API tokens BOUND to this project (MOTIR-2605 Amendment 1). Modelled on
+  /// both sides per the FK-`@relation` rule: a raw-SQL-only FK puts the datamodel
+  /// and the migration-built DB in permanent drift. Cascade — a token bound to a
+  /// deleted project has nothing left to act on.
+  apiTokens                   ApiToken[]
 
   @@unique([workspaceId, slug])
   @@unique([workspaceId, identifier])
@@ -3624,14 +3629,36 @@ model ApiToken {
   /// A token minted without an explicit choice gets `DEFAULT_TOKEN_GRANT`,
   /// applied by `apiTokensService.create`.
   scopes      String[]  @default([])
+  /// The PROJECT this token is bound to, or NULL (MOTIR-2605 Amendment 1).
+  ///
+  /// ⚠️ NULL IS A MEANING, NOT AN OPTION. It is the DEVICE-CREDENTIAL SHAPE —
+  /// what `motir login` mints — and a permanent legal state. Do NOT make this
+  /// column `NOT NULL`: there is no project a device credential should be
+  /// pinned to, so the backfill has no correct value, and `list_projects` +
+  /// `motir link` depend on that credential spanning the projects its holder's
+  /// roles reach.
+  ///
+  /// The rule the column encodes: **the binding is REQUIRED where the GRANT IS
+  /// CHOSEN, and absent where it is fixed.** A chosen grant (the create-token
+  /// modal) needs a project, because "may this token edit work items?" has no
+  /// answer until one is named — permissions resolve per project. A fixed grant
+  /// (`CLI_TOKEN_GRANT`, which the approval screen shows and cannot edit) asks
+  /// nothing, so `grant ∩ role` resolves per project at dispatch instead.
+  ///
+  /// When set, dispatch refuses an operation resolving to a DIFFERENT project as
+  /// a NOT-FOUND, never a 403 — so a narrowed credential cannot be used to
+  /// enumerate the workspace. Cascade: a deleted project takes its tokens.
+  projectId   String?   @map("project_id")
   createdAt   DateTime  @default(now()) @map("created_at")
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   // The settings-surface read: a user's tokens in a workspace, newest first.
   @@index([userId])
   @@index([workspaceId])
+  @@index([projectId])
   @@map("api_token")
 }
 

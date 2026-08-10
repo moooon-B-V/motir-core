@@ -378,7 +378,7 @@ describe('GET /api/cli/device/grant — the approval screen’s read', () => {
     const { token } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'probe',
       expiresAt: null,
-      permissions: grantForLegacyScopes(['read']),
+      fixedGrant: grantForLegacyScopes(['read']),
     });
     const withPat = await GRANT(grantReq(grant.user_code, { authorization: `Bearer ${token}` }));
     expect(withPat.status).toBe(401);

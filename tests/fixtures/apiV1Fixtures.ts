@@ -71,11 +71,20 @@ export async function createV1Caller(
 export async function withTokenFor(
   user: User,
   workspace: Workspace,
-  opts: { scopes?: TokenScope[]; permissions?: TokenGrant; label?: string } = {},
+  opts: {
+    scopes?: TokenScope[];
+    permissions?: TokenGrant;
+    label?: string;
+    /** Bind the token to a project (MOTIR-2606). A CHOSEN grant requires one;
+     *  without it the fixture mints the FIXED shape instead, which is what a
+     *  workspace-scoped test credential actually is. */
+    projectId?: string;
+  } = {},
 ): Promise<V1Caller> {
+  const grant = grantFrom({ scopes: opts.scopes ?? ['read'], permissions: opts.permissions });
   const { token, dto } = await apiTokensService.create(user.id, workspace.id, {
     label: opts.label ?? 'v1 test token',
-    permissions: grantFrom({ scopes: opts.scopes ?? ['read'], permissions: opts.permissions }),
+    ...(opts.projectId ? { permissions: grant, projectId: opts.projectId } : { fixedGrant: grant }),
   });
   return { user, workspace, token, tokenId: dto.id, headers: bearer(token) };
 }
@@ -119,7 +128,10 @@ export async function createV1ProjectCaller(
     ...(opts.workspaceName ? { name: opts.workspaceName } : {}),
     ...(opts.identifier ? { identifier: opts.identifier } : {}),
   });
+  // A project caller BINDS to its fixture project — that is the shape the
+  // create-token modal produces, and the one MOTIR-2607's dispatch check reads.
   const caller = await withTokenFor(fixture.owner, fixture.workspace, {
+    projectId: fixture.projectId,
     ...(opts.scopes || opts.permissions ? { permissions: grantFrom(opts) } : {}),
   });
   return {

@@ -112,6 +112,30 @@ export const DEFAULT_TOKEN_GRANT: readonly PermissionKey[] = GRANTABLE_PERMISSIO
   (key) => !IRREVERSIBLE_PERMISSIONS.includes(key),
 );
 
+/**
+ * The permissions THIS actor may confer on a token bound to THIS project
+ * (MOTIR-2606; `docs/decisions/token-permissions.md` Amendment 1 §A.4).
+ *
+ * `held` is what `projectAccessService.getPermissions` resolved for the actor in
+ * the bound project. Intersecting it with {@link GRANTABLE_PERMISSIONS} is the
+ * whole rule — *you can grant less than your own access, never more* — expressed
+ * once, so the picker's OFFER and `create`'s VALIDATION cannot disagree. Two
+ * implementations of this would agree the day they were written and drift the
+ * first time an access level changed, and the drift would be invisible: an offer
+ * the create call rejects, or worse, one it should have.
+ *
+ * ⚠️ ONE ARM, deliberately. A union-across-the-workspace arm was considered and
+ * is dead: the only tokens without a project are the ones whose grant is FIXED
+ * (`CLI_TOKEN_GRANT`, which the approval screen shows and cannot edit), and a
+ * fixed grant is never chosen from an offer. Amendment 1 §A.4 records why, so a
+ * reader does not re-derive it as a missing case.
+ *
+ * Returns catalog order, so every surface renders the same sequence.
+ */
+export function grantableFor(held: ReadonlySet<PermissionKey>): PermissionKey[] {
+  return GRANTABLE_PERMISSIONS.filter((key) => held.has(key));
+}
+
 /** Whether `value` is a permission a token may actually be granted. */
 export function isGrantable(value: unknown): value is PermissionKey {
   return isPermissionKey(value) && GRANTABLE_PERMISSIONS.includes(value);

@@ -76,7 +76,7 @@ async function tenant(): Promise<{ fx: WorkItemFixture; token: string }> {
   const fx = await makeWorkItemFixture();
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label: 'cli',
-    permissions: grantForLegacyScopes([...TOKEN_SCOPES]),
+    fixedGrant: grantForLegacyScopes([...TOKEN_SCOPES]),
   });
   return { fx, token };
 }
@@ -228,7 +228,7 @@ describe('the BUILT binary, in the states a happy path skips', () => {
     // what a 403 looks like.
     const { token: writeOnly } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'write-only',
-      permissions: ['work_item:edit'],
+      fixedGrant: ['work_item:edit'],
     });
 
     const result = await ws.run(['ready'], { env: { MOTIR_TOKEN: writeOnly } });

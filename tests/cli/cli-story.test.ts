@@ -111,7 +111,7 @@ async function mintToken(
 ): Promise<{ token: string; id: string }> {
   const { token, dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label,
-    permissions: grantForLegacyScopes([...TOKEN_SCOPES]),
+    fixedGrant: grantForLegacyScopes([...TOKEN_SCOPES]),
   });
   return { token, id: dto.id };
 }
@@ -716,7 +716,7 @@ describe('motir show --activity / --comments — the discussion, from a real ten
     const item = await argumentativeItem(fx);
     const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'read-only',
-      permissions: grantForLegacyScopes(['read']),
+      fixedGrant: grantForLegacyScopes(['read']),
     });
     const env = { MOTIR_TOKEN: token, MOTIR_SERVER: server.url };
 

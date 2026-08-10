@@ -361,7 +361,10 @@ async function mintForGrant(grant: {
     minted = await apiTokensService.create(grant.userId, grant.workspaceId, {
       label: cliTokenLabel(grant.hostname),
       expiresAt: new Date(Date.now() + CLI_TOKEN_EXPIRY_DAYS * DAY_MS),
-      permissions: [...CLI_TOKEN_GRANT],
+      // FIXED, not chosen — so it binds to no project and is not capped against
+      // the approver's own access. `motir login` is the one credential the
+      // product picks the grant for (ADR Amendment 1 §A.2).
+      fixedGrant: CLI_TOKEN_GRANT,
     });
   } catch (err) {
     // The approver lost access to the bound workspace between approving and the

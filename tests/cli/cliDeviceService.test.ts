@@ -1045,7 +1045,7 @@ describe('toDeviceGrantTokenDTO — the never-expiring token', () => {
     const { owner, workspace } = await createTestWorkspace();
     const { dto, token } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'never expires',
-      permissions: [...CLI_TOKEN_GRANT],
+      fixedGrant: [...CLI_TOKEN_GRANT],
     });
     expect(dto.expiresAt).toBeNull();
 

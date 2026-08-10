@@ -204,7 +204,7 @@ describe('the tie line’s promise — a CLI token is listed in the table below'
     // the shipped label reaches the shipped row, not a string typed into a fixture.
     await apiTokensService.create(owner.id, workspace.id, {
       label: cliTokenLabel('workbox'),
-      permissions: grantForLegacyScopes(CLI_TOKEN_SCOPES),
+      fixedGrant: grantForLegacyScopes(CLI_TOKEN_SCOPES),
     });
     const tokens = await apiTokensService.listForUser(owner.id);
 

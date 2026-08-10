@@ -20,6 +20,14 @@ export interface ApiTokenDto {
   lastUsedAt: string | null;
   /** Non-null = soft-revoked (the muted "Revoked" row). */
   revokedAt: string | null;
+  /** The PROJECT this token is bound to, or NULL (MOTIR-2606).
+   *
+   * NULL is the DEVICE-CREDENTIAL SHAPE — what `motir login` mints — not a
+   * missing value. The list renders the two differently on purpose: a bound
+   * token names its project, a device credential names its workspace and says
+   * it reaches every project the holder's roles allow. Rendering them the same
+   * reads as an inconsistency rather than two kinds of credential. */
+  project: { id: string; name: string } | null;
   /** The workspace this token is BOUND to (bug 7.21) + its organization — the
    * account-level list labels each row with its `org → workspace` scope, and the
    * MCP gate resolves the request workspace from it. */

@@ -26,6 +26,7 @@ export function toApiTokenDto(row: ApiTokenWithScope): ApiTokenDto {
     expiresAt: row.expiresAt?.toISOString() ?? null,
     lastUsedAt: row.lastUsedAt?.toISOString() ?? null,
     revokedAt: row.revokedAt?.toISOString() ?? null,
+    project: row.project ? { id: row.project.id, name: row.project.name } : null,
     workspace: { id: row.workspace.id, name: row.workspace.name },
     organization: { id: row.workspace.organization.id, name: row.workspace.organization.name },
     permissions: expandStoredGrant(row.scopes).grant,

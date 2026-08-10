@@ -17,6 +17,7 @@ import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Story-CLOSING suite for the Motir MCP server (Story 7.7 · Subtask 7.7.12).
 //
@@ -86,7 +87,7 @@ async function connect(token?: string): Promise<Client> {
 async function fullToken(fx: WorkItemFixture, label = 'full'): Promise<string> {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label,
-    permissions: [...GRANTABLE_PERMISSIONS],
+    fixedGrant: [...GRANTABLE_PERMISSIONS],
   });
   return token;
 }
@@ -97,12 +98,12 @@ async function fullToken(fx: WorkItemFixture, label = 'full'): Promise<string> {
  * capability is narrowed, so a denial here isolates SCOPE from the 6.4 role. */
 async function grantedToken(
   fx: WorkItemFixture,
-  permissions: readonly string[],
+  permissions: readonly PermissionKey[],
   label = 'granted',
 ): Promise<string> {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label,
-    permissions: [...permissions],
+    fixedGrant: [...permissions],
   });
   return token;
 }
@@ -189,7 +190,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(await whoamiSucceeds('motir_pat_deadbeefdeadbeefdeadbeef')).toBe(false);
 
       // revoked
-      const revoked = await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'rev' });
+      const revoked = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+        label: 'rev',
+        fixedGrant: DEFAULT_TOKEN_GRANT,
+      });
       await apiTokensService.revoke(fx.ownerId, revoked.dto.id);
       expect(await whoamiSucceeds(revoked.token)).toBe(false);
 
@@ -197,6 +201,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const expired = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'exp',
         expiresAt: new Date(Date.now() - 60_000),
+        fixedGrant: DEFAULT_TOKEN_GRANT,
       });
       expect(await whoamiSucceeds(expired.token)).toBe(false);
     });
@@ -500,7 +505,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       // the service runs — the cross-check on 7.7.17 scope enforcement.
       expect(DEFAULT_TOKEN_GRANT).not.toContain('work_item:delete');
       const defaultToken = (
-        await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'default' })
+        await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+          label: 'default',
+          fixedGrant: DEFAULT_TOKEN_GRANT,
+        })
       ).token;
       const defClient = await connect(defaultToken);
       const denied = await defClient.callTool({
@@ -687,6 +695,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(DEFAULT_TOKEN_GRANT).not.toContain('work_item:delete');
       const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'default',
+        fixedGrant: DEFAULT_TOKEN_GRANT,
       });
       const client = await connect(token);
 
@@ -714,6 +723,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const key = await makeTask(fx, 'Default does work');
       const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'default-does',
+        fixedGrant: DEFAULT_TOKEN_GRANT,
       });
       const client = await connect(token);
 

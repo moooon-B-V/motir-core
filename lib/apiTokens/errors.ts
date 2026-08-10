@@ -27,6 +27,31 @@ export class InvalidApiTokenLabelError extends Error {
 }
 
 /**
+ * A create request whose SHAPE is illegal (MOTIR-2606; ADR Amendment 1 §A.5).
+ *
+ * There are exactly two legal calls, and the rule they encode is *the binding is
+ * required where the grant is CHOSEN*:
+ *
+ *   * `{ permissions, projectId }` — a chosen grant, bound to a project.
+ *   * `{ }` — the device path: `CLI_TOKEN_GRANT` and no project.
+ *
+ * A chosen grant with no project is refused because "may this token edit work
+ * items?" has no answer until a project is named — permissions resolve per
+ * project. A fixed grant WITH a project is refused because the device flow must
+ * not quietly acquire a binding it never asked for.
+ *
+ * Four combinations of which two are bugs is a shape worth designing out rather
+ * than testing around, so this error exists to make the other two unreachable.
+ */
+export class InvalidTokenBindingError extends Error {
+  readonly code = 'API_TOKEN_INVALID_BINDING' as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidTokenBindingError';
+  }
+}
+
+/**
  * A create request named a permission that is not in the catalog, or is in the
  * catalog but is not GRANTABLE — no token-reachable operation asserts it
  * (`GRANTABLE_PERMISSIONS`, `lib/tokens/grant.ts`).

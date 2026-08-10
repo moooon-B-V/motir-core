@@ -84,7 +84,7 @@ beforeEach(async () => {
   token = (
     await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'ci',
-      permissions: grantForLegacyScopes(['integration']),
+      fixedGrant: grantForLegacyScopes(['integration']),
     })
   ).token;
 });
@@ -162,7 +162,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     const readOnly = (
       await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'ro',
-        permissions: grantForLegacyScopes(['read']),
+        fixedGrant: grantForLegacyScopes(['read']),
       })
     ).token;
     const res = await publishVia(readOnly, story, {});

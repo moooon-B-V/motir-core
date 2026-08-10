@@ -11,9 +11,11 @@ import {
   ApiTokenRevokedError,
   InvalidApiTokenError,
   InvalidApiTokenLabelError,
+  InvalidTokenBindingError,
   InvalidTokenGrantError,
 } from '@/lib/apiTokens/errors';
-import { DEFAULT_TOKEN_GRANT, expandStoredGrant, isGrantable } from '@/lib/tokens/grant';
+import { IRREVERSIBLE_PERMISSIONS, expandStoredGrant, grantableFor } from '@/lib/tokens/grant';
+import { projectAccessService } from '@/lib/services/projectAccessService';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ApiTokenDto, CreateApiTokenResult, TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 
@@ -51,10 +53,32 @@ export interface CreateApiTokenInput {
    * derives this from its 30/90/365-day-or-never select. */
   expiresAt?: Date | null;
   /** The GRANT — the permission keys this token may exercise (MOTIR-2572).
-   * Omit/undefined = `DEFAULT_TOKEN_GRANT` (every grantable permission except
-   * the irreversible one); an explicit list narrows it. Every entry must be
-   * GRANTABLE or create rejects with `InvalidTokenGrantError` (422). */
+   *
+   * ⚠️ SUPPLYING THIS REQUIRES {@link CreateApiTokenInput.projectId} (MOTIR-2606;
+   * ADR Amendment 1 §A.5). A CHOSEN grant is meaningless without a project —
+   * permissions resolve per project, so "may this token edit work items?" has no
+   * answer until one is named. Each key is validated against what the CALLER can
+   * confer IN THAT PROJECT, not against the static grantable set.
+   *
+   * Omit it for the DEVICE path, which supplies the fixed `CLI_TOKEN_GRANT` and
+   * no project; the default is then `DEFAULT_TOKEN_GRANT`. */
   permissions?: string[];
+  /** The PROJECT this token is bound to (MOTIR-2606). Required with
+   * `permissions`, forbidden without — the two legal shapes, see
+   * {@link InvalidTokenBindingError}. A project the caller cannot browse
+   * resolves to "you may confer nothing", never a 403 that confirms it exists. */
+  projectId?: string;
+  /** A FIXED grant, for the one path that does not choose one: `motir login`'s
+   * device approval, which mints `CLI_TOKEN_GRANT` and shows it without letting
+   * anyone edit it.
+   *
+   * ⚠️ NOT validated against the actor, and that is the point — there is no
+   * offer to cap, because the product picked this set, not a person. It is also
+   * why such a token binds to no project: with nothing chosen there is no
+   * per-project question to answer, and `grant ∩ role` settles it at dispatch.
+   *
+   * Mutually exclusive with {@link CreateApiTokenInput.permissions}. */
+  fixedGrant?: readonly PermissionKey[];
 }
 
 function normalizeLabel(label: string): string {
@@ -66,20 +90,71 @@ function normalizeLabel(label: string): string {
 }
 
 /**
- * Resolve the GRANT a `create` call persists: {@link DEFAULT_TOKEN_GRANT} when
- * the caller passes none, else the explicit list — validated so every entry is
- * GRANTABLE, rejecting anything else with {@link InvalidTokenGrantError} (422).
- * Returns a de-duplicated list.
+ * Enforce the TWO legal call shapes (ADR Amendment 1 §A.5) before anything else.
  *
- * An EMPTY explicit list is allowed through to persistence and yields a token
- * that can do nothing. That is a legitimate thing to mint (and the surface
- * refuses it with its own copy before it gets here); refusing it in the service
- * would make "grant nothing" un-expressible through the API for no safety gain —
- * the failure direction is already the harmless one.
+ *   * `{ permissions, projectId }` — a chosen grant, bound to a project.
+ *   * `{ }` — the device path: the fixed `CLI_TOKEN_GRANT`, no project.
+ *
+ * Checked FIRST so the other two combinations never reach a DB round-trip, and
+ * so the rule reads in one place rather than as two scattered guards.
  */
-function resolveGrant(requested: string[] | undefined): PermissionKey[] {
-  if (requested === undefined) return [...DEFAULT_TOKEN_GRANT];
-  const invalid = requested.filter((key) => !isGrantable(key));
+function assertLegalBinding(input: CreateApiTokenInput): void {
+  // The rule, in one line: `fixedGrant` XOR `projectId`.
+  //
+  // A CHOSEN grant is identified by its PROJECT, not by whether the caller
+  // typed the permissions out — the modal legitimately omits them to mean "the
+  // default for this project", which is still a choice made against that
+  // project's offer. A FIXED grant chooses nothing and so binds to nothing.
+  const fixed = input.fixedGrant !== undefined;
+  const bound = input.projectId !== undefined;
+
+  if (fixed && bound) {
+    throw new InvalidTokenBindingError(
+      'A fixed grant chooses nothing, so it binds to no project — it is workspace-scoped.',
+    );
+  }
+  if (!fixed && !bound) {
+    throw new InvalidTokenBindingError(
+      'A token needs a grant: name the project it applies to, or supply the fixed device grant.',
+    );
+  }
+  if (input.permissions !== undefined && fixed) {
+    throw new InvalidTokenBindingError(
+      'A grant is either CHOSEN by a person or FIXED by the product — never both.',
+    );
+  }
+}
+
+/**
+ * Resolve the GRANT a `create` call persists.
+ *
+ * The device path (no `permissions`) takes {@link DEFAULT_TOKEN_GRANT}. A CHOSEN
+ * grant is validated against `conferrable` — what the CALLER holds in the bound
+ * project ∩ the grantable set — not against the static set. That is the whole
+ * point of MOTIR-2606: before it, a project VIEWER could mint `work_item:delete`
+ * and hold a grant they cannot exercise anywhere, which is a token whose stated
+ * authority is a fiction.
+ *
+ * An EMPTY explicit list is allowed through and yields a token that can do
+ * nothing. That is a legitimate thing to mint (and the surface refuses it with
+ * its own copy first); refusing it here would make "grant nothing"
+ * un-expressible for no safety gain — the failure direction is already harmless.
+ */
+function resolveGrant(
+  input: CreateApiTokenInput,
+  conferrable: readonly PermissionKey[],
+): PermissionKey[] {
+  if (input.fixedGrant !== undefined) return [...input.fixedGrant];
+  // Omitted with a project = "the default for THIS project": everything the
+  // caller can confer there, minus the irreversible key. Resolved server-side
+  // rather than defaulted to the static `DEFAULT_TOKEN_GRANT`, so the default
+  // can never exceed the offer the picker would have shown them.
+  if (input.permissions === undefined) {
+    return conferrable.filter((key) => !IRREVERSIBLE_PERMISSIONS.includes(key));
+  }
+  const requested = input.permissions;
+  const allowed = new Set<string>(conferrable);
+  const invalid = requested.filter((key) => !allowed.has(key));
   if (invalid.length > 0) throw new InvalidTokenGrantError(invalid);
   // Validated above, so every entry is a grantable PermissionKey.
   return [...new Set(requested as PermissionKey[])];
@@ -99,14 +174,22 @@ export const apiTokensService = {
     input: CreateApiTokenInput,
   ): Promise<CreateApiTokenResult> {
     const label = normalizeLabel(input.label);
-    // Validate + default the grant BEFORE the membership round-trip, so a bad
-    // permission list fails fast (422) without touching the DB — and, since the
-    // whole create is one write, nothing partial is ever persisted.
-    const permissions = resolveGrant(input.permissions);
+    // The SHAPE first, so an illegal combination never reaches the DB.
+    assertLegalBinding(input);
     // The token BINDS to `workspaceId` (bug 7.21), so the user must be a member
     // of it — the create UI only offers the user's own workspaces, but the
     // server is the authority (a forged id throws NotAMemberError → 403).
     await workspacesService.assertMembership(userId, workspaceId);
+    // What the CALLER may confer in the bound project. `getPermissions` resolves
+    // the actor's real set there (level + workspace role + project role + custom
+    // role). A project they cannot browse throws `ProjectNotFoundError`, which
+    // propagates to a 404 — never a 403 that would confirm the project exists.
+    const conferrable = input.projectId
+      ? grantableFor(
+          await projectAccessService.getPermissions(input.projectId, { userId, workspaceId }),
+        )
+      : [];
+    const permissions = resolveGrant(input, conferrable);
     const token = generateToken();
     const row = await withUserContext(userId, (tx) =>
       apiTokenRepository.create(
@@ -120,6 +203,7 @@ export const apiTokensService = {
           // The column's name is historical; it stores the grant. See its
           // schema doc-comment and `docs/decisions/token-permissions.md` §5.
           scopes: permissions,
+          projectId: input.projectId ?? null,
         },
         tx,
       ),
@@ -157,6 +241,32 @@ export const apiTokensService = {
     return orgs
       .map((org) => ({ id: org.id, name: org.name, workspaces: workspacesByOrg.get(org.id) ?? [] }))
       .filter((org) => org.workspaces.length > 0);
+  },
+
+  /**
+   * What this actor may confer on a token bound to `projectId` (MOTIR-2606).
+   *
+   * The ONE read both the create-token modal's OFFER and {@link create}'s
+   * VALIDATION consult. Two implementations of "what may this person grant"
+   * would agree the day they were written and drift the first time an access
+   * level changed — and the drift is invisible from either side: a switch the
+   * create call rejects, or one it should have.
+   *
+   * A project the actor cannot browse throws `ProjectNotFoundError` from
+   * `getPermissions` and it is allowed to PROPAGATE — the route maps it to a
+   * 404. That is the 404-not-403 contract itself rather than an imitation of
+   * it: swallowing the error to return an empty set would answer "you may
+   * confer nothing", which is a different sentence and a slightly worse one
+   * (it confirms the request was well-formed).
+   */
+  async listGrantablePermissions(
+    userId: string,
+    workspaceId: string,
+    projectId: string,
+  ): Promise<PermissionKey[]> {
+    return grantableFor(
+      await projectAccessService.getPermissions(projectId, { userId, workspaceId }),
+    );
   },
 
   /**

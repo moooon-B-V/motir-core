@@ -71,7 +71,7 @@ describe('withV1Route — authentication', () => {
     // expired — minted with an expiry already in the past
     const expiring = await apiTokensService.create(caller.user.id, caller.workspace.id, {
       label: 'expired',
-      permissions: grantForLegacyScopes(['read']),
+      fixedGrant: grantForLegacyScopes(['read']),
       expiresAt: new Date(Date.now() - 60_000),
     });
 

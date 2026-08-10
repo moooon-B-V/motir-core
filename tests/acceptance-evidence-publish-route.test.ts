@@ -80,7 +80,7 @@ const videoPathname = () => `acceptance/${fx.workspaceId}/${story.id}/uuid-accep
 async function integrationToken(fx: WorkItemFixture, scopes: TokenScope[] = ['integration']) {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label: 'ci',
-    permissions: grantForLegacyScopes(scopes),
+    fixedGrant: grantForLegacyScopes(scopes),
   });
   return token;
 }
