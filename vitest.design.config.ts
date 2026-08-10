@@ -41,7 +41,16 @@ export default defineConfig({
     // Every spec that reads the `design/**` asset tree. Nothing else: this lane
     // runs on branches where the rest of the suite is deliberately skipped, so
     // an entry that needs a database or a browser would wedge it.
-    include: ['tests/design-asset-addresses.test.ts', 'tests/brand/waveBand.test.ts'],
+    // `reader-facing-noun` (MOTIR-2540) reads `design/**` for the opposite
+    // reason to its neighbour: the design tree is EXCLUDED from its scan, and it
+    // opens `design/settings/design-notes.md` to prove that exclusion is
+    // load-bearing rather than vacuous. That still makes it a spec a design-only
+    // PR can break, which is exactly what this lane exists to catch.
+    include: [
+      'tests/design-asset-addresses.test.ts',
+      'tests/reader-facing-noun.test.ts',
+      'tests/brand/waveBand.test.ts',
+    ],
   },
   resolve: {
     // The root config gets `@/…` from `vite-tsconfig-paths` via the Next plugin
