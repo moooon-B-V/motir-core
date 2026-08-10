@@ -50,7 +50,7 @@ export class ScopeError extends CliError {
   constructor(scope: string, operationId: string) {
     super(`This token lacks the '${scope}' scope required for ${operationId}.`, {
       exitCode: 1,
-      hint: `Create a token with the '${scope}' scope: Settings → Account → API tokens.`,
+      hint: `Create a token with the '${scope}' scope: Settings → Account → Tokens.`,
     });
     this.name = 'ScopeError';
   }

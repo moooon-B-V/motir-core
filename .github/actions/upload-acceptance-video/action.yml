@@ -37,7 +37,7 @@ inputs:
     default: ''
   token:
     description: >
-      (Fallback) A Motir API token with the `integration` scope, for a repo NOT
+      (Fallback) A Motir token with the `integration` scope, for a repo NOT
       connected via the Motir GitHub App. Store it as a secret. Leave empty to use
       keyless GitHub OIDC (requires `permissions: id-token: write` on the job).
     required: false

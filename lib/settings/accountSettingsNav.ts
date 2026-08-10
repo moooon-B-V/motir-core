@@ -119,13 +119,21 @@ export const ACCOUNT_SETTINGS_NAV: AccountSettingsNavEntry[] = [
   {
     id: 'apiTokens',
     group: 'security',
-    href: '/settings/account/api-tokens',
+    href: '/settings/account/tokens',
     icon: KeyRound,
     labelKey: 'apiTokens',
-    // Lit up by Story 7.8.3 (the API-tokens pane + its route page): 7.8.12
-    // reserved this as a "Soon" placeholder, and flipping it to a real entry
-    // here keeps the route↔registry totality test green by construction (the new
-    // pane has an on-disk route now).
+    // Lit up by Story 7.8.3 (the tokens pane + its route page): 7.8.12 reserved
+    // this as a "Soon" placeholder, and flipping it to a real entry here keeps
+    // the route↔registry totality test green by construction (the new pane has
+    // an on-disk route now).
+    //
+    // MOTIR-2534 moved the ROUTE from `/settings/account/api-tokens` to
+    // `/settings/account/tokens` (the reader-facing rename, Story MOTIR-2532),
+    // with a permanent redirect in `next.config.ts`'s `SETTINGS_REDIRECTS`. The
+    // `id` and `labelKey` deliberately did NOT move: the `id` is also the
+    // command-palette action id (`account-settings-apiTokens`), the `labelKey`
+    // indexes `settings.account.nav.apiTokens`, and neither is a surface a
+    // reader ever sees — that story renames the LABEL, not the key.
   },
 ];
 

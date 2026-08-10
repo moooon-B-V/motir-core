@@ -15,7 +15,7 @@ import type { ApiTokenDto } from './apiTokensClient';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 import { grantedScopeMeta, grantsDelete, summarizeScopes } from './scopeMeta';
 
-// The API tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
+// The Tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
 // `account-settings.mock.html` Panels 3 + 7. It owns the token-list state
 // (`useState(initialTokens)`) and does its OWN optimistic insert (on create) /
 // mark-revoked (on revoke) from the route responses — the

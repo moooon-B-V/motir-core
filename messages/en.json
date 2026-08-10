@@ -103,7 +103,7 @@
       "cant": "Not: archive or delete work items, members, billing.",
       "expires": "Expires",
       "expiresValue": "In {days} days",
-      "expiresHelp": "Revoke it in API tokens to disconnect.",
+      "expiresHelp": "Revoke it in Tokens to disconnect.",
       "warning": "Approve only if you just ran <cmd>motir login</cmd> on {hostname} yourself. If someone sent you this code — a chat, an email, a support ticket — <strong>deny it</strong>: approving hands THEIR terminal everything above, as you.",
       "warningUnknownHost": "Approve only if you just ran <cmd>motir login</cmd> yourself. If someone sent you this code — a chat, an email, a support ticket — <strong>deny it</strong>: approving hands THEIR terminal everything above, as you.",
       "actions": "Approve or deny this terminal",
@@ -115,7 +115,7 @@
       "bodyUnknownHost": "Go back to your terminal — <cmd>motir login</cmd> has finished and it is signed in to <strong>{workspace}</strong>.",
       "bodyAlready": "This code was already approved. Go back to your terminal — <cmd>motir login</cmd> has finished and it is connected.",
       "tokenNote": "We created a token called <chip>{label}</chip> in this workspace. It expires in {days} days; revoking it disconnects that terminal.",
-      "viewTokens": "View API tokens"
+      "viewTokens": "View tokens"
     },
     "denied": {
       "body": "Nothing was connected and no token was created. That terminal will report that the request was denied.",
@@ -2072,7 +2072,7 @@
         "language": "Language",
         "notifications": "Notifications",
         "appearance": "Appearance",
-        "apiTokens": "API tokens",
+        "apiTokens": "Tokens",
         "soon": "Soon"
       },
       "notifications": {
@@ -2493,7 +2493,7 @@
       "notConnectedBody": "AI planning runs on Motir's cloud service. These settings are saved but stay inactive until this deployment is connected to Motir AI."
     },
     "apiTokens": {
-      "heading": "API tokens",
+      "heading": "Tokens",
       "subtitle": "Personal access tokens let your coding agents reach Motir over the MCP server. Each token acts as you — give every agent its own, and revoke any you no longer use.",
       "cli": {
         "title": "Connect the CLI",
@@ -2586,7 +2586,7 @@
         "never": "Never"
       },
       "createModal": {
-        "title": "Create API token",
+        "title": "Create token",
         "description": "The token will be shown once, right after you create it. Store it somewhere safe.",
         "labelField": "Label",
         "labelHelper": "A name to recognise this token by — e.g. the agent or machine using it.",
@@ -2620,8 +2620,8 @@
         "errorGeneric": "Something went wrong. Please try again."
       },
       "empty": {
-        "title": "No API tokens yet",
-        "body": "API tokens let your coding agents talk to Motir over the MCP server — list ready work, open work items, move them, and comment, all as you.",
+        "title": "No tokens yet",
+        "body": "Tokens let your coding agents talk to Motir over the MCP server — list ready work, open work items, move them, and comment, all as you.",
         "guideLink": "Read the MCP setup guide",
         "bodyAfterLink": " to connect your first agent."
       },
@@ -6007,7 +6007,7 @@
     "mcpThMcp": "The MCP server",
     "mcpThRest": "The REST API",
     "mcpStepToken": "Mint a token",
-    "mcpStepTokenBody": "In the app: **Settings → Account → API tokens → Create**. Give it a label and an expiry. The plaintext is shown **once** — copy it then; Motir keeps only a hash.",
+    "mcpStepTokenBody": "In the app: **Settings → Account → Tokens → Create**. Give it a label and an expiry. The plaintext is shown **once** — copy it then; Motir keeps only a hash.",
     "mcpStepWire": "Point your client at the endpoint",
     "mcpStepWireBody": "Every client needs the same four facts. They are Motir’s, they are the same for every agent, and everything below this table is one of them transcribed into a vendor’s file format.",
     "mcpSecretCallout": "Don’t paste the token into a file your repository tracks. Where your client can read it from somewhere else, the block below does that instead.",

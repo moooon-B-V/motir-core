@@ -6,6 +6,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import { readMembership } from '@/lib/workspaces/membershipGate';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
   AliasNotFoundError,
@@ -526,9 +527,15 @@ export const projectsService = {
    * Asserts the user is a member of the workspace, throwing NotAMemberError
    * otherwise. Reuses the workspaces-domain error rather than duplicating a
    * project-specific one.
+   *
+   * The hottest of the twelve gates MOTIR-2527 re-routed — every one of the 1048
+   * measured `NotAMemberError`s came through this line. `readMembership` binds the
+   * GUCs `membership_visible_active_or_own` reads; the `db`-singleton lookup it
+   * replaces bound none, so under `motir_app` the row was invisible and a workspace
+   * OWNER was told they were not a member of their own workspace.
    */
   async assertMembership(userId: string, workspaceId: string): Promise<void> {
-    const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
+    const m = await readMembership(userId, workspaceId);
     if (!m) throw new NotAMemberError(userId, workspaceId);
   },
 

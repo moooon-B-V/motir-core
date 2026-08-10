@@ -48,6 +48,7 @@ import {
 } from '@/lib/workItems/quickSearch';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { readMembership } from '@/lib/workspaces/membershipGate';
 import {
   CANCELLED_STATUS_KEY,
   MOTIR_SEED_BURST_END,
@@ -201,14 +202,30 @@ import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 // Convention at the call sites: assertValidParent(parentKind, childKind) — a
 // null parent is top-level placement.
 
-/** Membership gate — distinct typed error per role so routes map them apart. */
-async function assertReporterMember(userId: string, workspaceId: string): Promise<void> {
-  const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
+/**
+ * Membership gate — distinct typed error per role so routes map them apart.
+ *
+ * MOTIR-2527: both read through `readMembership`, which binds the GUCs the
+ * `membership_visible_active_or_own` policy reads. `tx` is OPTIONAL and deliberately
+ * NOT threaded from `updateWorkItem`'s transaction: that one is a bare
+ * `db.$transaction` binding no GUCs, so handing it over would reproduce exactly the
+ * false denial being fixed. Omitting it lets the gate open its own bound read.
+ */
+async function assertReporterMember(
+  userId: string,
+  workspaceId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  const m = await readMembership(userId, workspaceId, tx);
   if (!m) throw new ReporterNotInWorkspaceError();
 }
 
-async function assertAssigneeMember(userId: string, workspaceId: string): Promise<void> {
-  const m = await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
+async function assertAssigneeMember(
+  userId: string,
+  workspaceId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<void> {
+  const m = await readMembership(userId, workspaceId, tx);
   if (!m) throw new AssigneeNotInWorkspaceError();
 }
 

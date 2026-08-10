@@ -114,7 +114,7 @@ locally — so a refusal reads as _the token lacks `read`_ rather than as
 ```
 $ motir ready
 Error: This token lacks the 'read' scope required for getProjectReadySet.
-Hint: Create a token with the 'read' scope: Settings → Account → API tokens.
+Hint: Create a token with the 'read' scope: Settings → Account → Tokens.
 ```
 
 The remedy is a new token, not a retry: scopes are fixed when a token is minted
@@ -124,7 +124,7 @@ you are holding actually carries.
 The grant cannot **widen** that set, and cannot **narrow** it either — a
 hand-narrowed grant would fail somewhere in the middle of an unattended
 `motir auto` run, which is the worst place to discover a missing scope. If you
-want a different grant, mint one by hand in **Settings → Account → API tokens →
+want a different grant, mint one by hand in **Settings → Account → Tokens →
 Create** (which keeps its full scope choice and its 30/90/365/never expiry) and
 supply it with the `--token` tier below. Reasoning:
 [`docs/decisions/cli-login.md`](./decisions/cli-login.md); per-scope detail:
@@ -167,9 +167,9 @@ motir auth login --server https://app.motir.co --token motir_pat_…
 `GET /api/v1/me`, so an invalid or revoked one is rejected there rather than
 halfway through a dispatch — and a good one answers with the user and workspace
 the success line prints back to you. Mint the PAT it wants in the web
-app — **Settings → Account → API tokens → Create** — and copy it immediately;
+app — **Settings → Account → Tokens → Create** — and copy it immediately;
 Motir stores only a hash, so the plaintext is shown exactly once
-([`docs/mcp.md` § Creating an API token](./mcp.md#creating-an-api-token)).
+([`docs/mcp.md` § Creating a token](./mcp.md#creating-a-token)).
 
 ```sh
 motir auth status     # server, token prefix, owning user, active workspace
@@ -181,7 +181,7 @@ Two different actions, and only one of them is a kill switch:
 
 - **`motir logout` forgets the local copy.** It removes the credential from
   **this machine** only; the token itself keeps working anywhere else it is held.
-- **Revoking the token in Settings → Account → API tokens is the disconnect.**
+- **Revoking the token in Settings → Account → Tokens is the disconnect.**
   That kills the credential server-side, everywhere, immediately. A terminal
   connected by `motir login` appears in that list as `CLI · <hostname>`, which is
   what makes "disconnect that machine" a single obvious row.

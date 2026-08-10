@@ -96,6 +96,7 @@
         --color-success: #1aae39;
         --color-warning: #dd5b00;
         --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
         --color-info: #0075de;
         --color-link: #0075de;
         --color-link-pressed: #005bab;
@@ -159,7 +160,7 @@
         --el-success: var(--color-success);
         --el-warning: var(--color-warning);
         --el-danger: var(--color-destructive);
-        --el-danger-text: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
         --el-info: var(--color-info);
         --el-tint-peach: var(--color-tint-peach);
         --el-tint-rose: var(--color-tint-rose);
@@ -1616,7 +1617,7 @@
       }
       .state.err .ico {
         background: var(--el-tint-rose);
-        color: var(--el-danger-text);
+        color: var(--el-danger);
       }
       .state.notfound .ico {
         background: var(--el-surface);
@@ -1704,6 +1705,137 @@
         .states-grid {
           grid-template-columns: 1fr;
         }
+      }
+
+      /* ══ Day-1 operator panels (8.5.10 · MOTIR-1166) ══════════════════════
+         Two panels the 10.1.1 console deferred: the read-only health glance
+         and the minimal audited support action. Everything below composes the
+         primitives already defined above; these rules add only the three
+         health TONES, the link-out, the destructive button and the confirm
+         dialog. Colour is --el-*; shape is the element-semantic tokens. */
+      .ico.sig-ok {
+        background: var(--el-tint-mint);
+        color: var(--el-success);
+      }
+      .ico.sig-warn {
+        background: var(--el-tint-yellow);
+        color: var(--el-warning);
+      }
+      .ico.sig-down {
+        background: var(--el-tint-rose);
+        color: var(--el-danger);
+      }
+      .pill-warn {
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+      }
+      .pill-down {
+        background: var(--el-tint-rose);
+        color: var(--el-text-strong);
+      }
+      .dot.ok {
+        background: var(--el-success);
+      }
+      .dot.warn {
+        background: var(--el-warning);
+      }
+      .dot.down {
+        background: var(--el-danger);
+      }
+      .health-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .hcard .card-body {
+        padding: 14px var(--spacing-card-padding) 16px;
+      }
+      .hcard .hval {
+        font-size: 14px;
+        color: var(--el-text);
+        line-height: 1.45;
+      }
+      .hcard .hmeta {
+        font-size: 12px;
+        color: var(--el-text-secondary);
+        margin-top: 4px;
+        line-height: 1.45;
+      }
+      .linkout {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 12px;
+        font-size: 12.5px;
+        font-weight: 500;
+        color: var(--el-link);
+      }
+      .linkout svg {
+        width: 13px;
+        height: 13px;
+      }
+      .btn-danger {
+        background: var(--el-danger);
+        color: var(--el-danger-text);
+      }
+      .confirm {
+        width: 460px;
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-modal);
+        box-shadow: var(--shadow-modal);
+        padding: var(--spacing-card-padding);
+      }
+      .confirm h4 {
+        font-family: ui-serif, Georgia, 'Times New Roman', serif;
+        font-size: 17px;
+        color: var(--el-text);
+        margin: 0 0 8px;
+      }
+      .confirm p {
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.5;
+        margin: 0;
+      }
+      .field {
+        margin-top: 14px;
+      }
+      .field label {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--el-text);
+        margin-bottom: 6px;
+      }
+      .field .req {
+        color: var(--el-text-secondary);
+        font-weight: 400;
+      }
+      .field .input {
+        min-height: var(--height-input);
+        padding: var(--spacing-input-y) var(--spacing-input-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        font-size: 13px;
+        color: var(--el-text);
+        line-height: 1.45;
+      }
+      .field .hint {
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        margin-top: 6px;
+      }
+      .confirm-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-top: 18px;
+      }
+      .act-col {
+        display: flex;
+        gap: 8px;
       }
     </style>
   </head>
@@ -3355,6 +3487,561 @@
       </div>
     </div>
 
+    <!-- ════════════════ PANEL 8 — DAY-1 SYSTEM HEALTH GLANCE (8.5.10) ════════════════ -->
+    <div class="panel-label">
+      8 · Day-1 system health (8.5.10) — left-nav “Monitoring” ACTIVE. The launch-critical glance
+      that answers “is the machinery running?”: one card per signal, a tone per state, and a
+      link-out to the provider’s own dashboard for the deep dive. Motir READS and LINKS; it never
+      remediates. This panel OCCUPIES the Operations → Monitoring row that Panels 2–6 draw as a
+      reserved “10.2” stub — 10.2.1 supersedes it with the full ops board.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <!-- THE DOOR: the day-1 glance takes the Monitoring row (reserved “10.2” elsewhere). -->
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <span class="crumb"><b>Platform</b> · Monitoring</span>
+              <h2>System health</h2>
+              <p class="sub">
+                Is the machinery running? Six signals, read-only, refreshed on load. Each card links
+                OUT to the provider’s own dashboard — Motir shows the state and never redeploys,
+                cancels or replays. The deeper per-provider board is Story 10.2.
+              </p>
+
+              <div class="stack">
+                <div class="health-grid">
+                  <!-- HEALTHY -->
+                  <div class="card hcard">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico sig-ok" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-layers" /></svg
+                        ></span>
+                        <div><h3>Database</h3></div>
+                      </div>
+                      <span class="pill pill-active"><span class="dot ok"></span>Healthy</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="hval">Reachable · 8 ms</div>
+                      <div class="hmeta">Neon Postgres · region iad, alongside the app.</div>
+                      <span class="linkout"
+                        >Neon console<svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                      ></span>
+                    </div>
+                  </div>
+
+                  <!-- HEALTHY -->
+                  <div class="card hcard">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico sig-ok" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-server" /></svg
+                        ></span>
+                        <div><h3>Hosting</h3></div>
+                      </div>
+                      <span class="pill pill-active"><span class="dot ok"></span>Healthy</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="hval">2 machines running</div>
+                      <div class="hmeta">
+                        Fly app <strong>motir-core</strong> · org moooon · iad — last deploy 2h ago.
+                      </div>
+                      <span class="linkout"
+                        >Fly dashboard<svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                      ></span>
+                    </div>
+                  </div>
+
+                  <!-- DEGRADED -->
+                  <div class="card hcard">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico sig-warn" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                        ></span>
+                        <div><h3>Scheduled jobs</h3></div>
+                      </div>
+                      <span class="pill pill-warn"><span class="dot warn"></span>Degraded</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="hval">1 of 4 crons overdue</div>
+                      <div class="hmeta">
+                        From the 09:00 daily health check’s schedule probe — a cron that stopped
+                        firing. Listed below.
+                      </div>
+                      <span class="linkout"
+                        >Inngest functions<svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                      ></span>
+                    </div>
+                  </div>
+
+                  <!-- DEGRADED -->
+                  <div class="card hcard">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico sig-warn" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-flame" /></svg
+                        ></span>
+                        <div><h3>Failed jobs</h3></div>
+                      </div>
+                      <span class="pill pill-warn"><span class="dot warn"></span>Degraded</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="hval">12 dead-lettered · 24h</div>
+                      <div class="hmeta">
+                        Failed after their retries. Inngest has no literal DLQ — this is the
+                        failed-set, and replay happens there.
+                      </div>
+                      <span class="linkout"
+                        >Inngest runs<svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                      ></span>
+                    </div>
+                  </div>
+
+                  <!-- UNREACHABLE — the state that must NOT read as zero -->
+                  <div class="card hcard">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico sig-down" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-alert" /></svg
+                        ></span>
+                        <div><h3>Errors</h3></div>
+                      </div>
+                      <span class="pill pill-down"><span class="dot down"></span>Can’t reach</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="hval">No response from Sentry</div>
+                      <div class="hmeta">
+                        The probe failed — this is <strong>not</strong> an error count of zero. Last
+                        good reading 41m ago.
+                      </div>
+                      <span class="linkout"
+                        >Sentry issues<svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                      ></span>
+                    </div>
+                  </div>
+
+                  <!-- HEALTHY -->
+                  <div class="card hcard">
+                    <div class="card-head">
+                      <div class="ttl">
+                        <span class="ico sig-ok" style="width: 30px; height: 30px"
+                          ><svg viewBox="0 0 24 24"><use href="#i-check" /></svg
+                        ></span>
+                        <div><h3>Last health check</h3></div>
+                      </div>
+                      <span class="pill pill-active"><span class="dot ok"></span>Ran</span>
+                    </div>
+                    <div class="card-body">
+                      <div class="hval">Today 09:00 · 3 probes</div>
+                      <div class="hmeta">
+                        Schedules, runner image, indexer image. Runs once daily and does not retry,
+                        so a miss shows up here as a stale timestamp.
+                      </div>
+                      <span class="linkout"
+                        >Job runs<svg viewBox="0 0 24 24"><use href="#i-external" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- The one list the glance owns: WHICH schedules are overdue. -->
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico sig-warn" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-clock" /></svg
+                      ></span>
+                      <div>
+                        <h3>Overdue schedules</h3>
+                        <p class="hsub">
+                          Crons that missed more than one consecutive tick, newest miss first.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-warn">1 overdue</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>Job</th>
+                          <th>Cron</th>
+                          <th>Last fired</th>
+                          <th>Expected</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="muted">system.code-graph-refresh</span></td>
+                          <td><span class="muted">0 3 * * *</span></td>
+                          <td><span class="when">3d ago</span></td>
+                          <td><span class="when">today 03:00</span></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1 of 1 overdue ·
+                      4 schedules checked</span
+                    >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 1</span>
+                      <span class="pbtn is-disabled"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="note">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  <span
+                    ><strong>Scope of this glance (8.5.10 / 8.5.11).</strong> Six signals, one list,
+                    link-outs. It does NOT rebuild the providers’ dashboards — no trace timeline, no
+                    log search, no per-run viewer, and no remediation control (redeploy / cancel /
+                    replay all live in the provider).
+                    <strong>Story 10.2 SUPERSEDES this panel</strong> with the full ops board
+                    (per-provider panels, thresholds, error-rate and traffic); when it lands, this
+                    Monitoring row is its row. The per-WORKSPACE view of the same job data already
+                    ships at Settings → Workspace → Jobs (runs / DLQ / system tabs) — the code card
+                    reads the platform-wide equivalent, it does not fork that surface.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════ PANEL 9 — DAY-1 SUPPORT ACTION (8.5.10) ════════════════ -->
+    <div class="panel-label">
+      9 · Day-1 support action (8.5.10) — the USER drill-down Panel 3’s “Users” results group drills
+      into, and the only WRITE the day-1 console has. Two actions, each one confirm step with a
+      REQUIRED reason, and the audit row the write produces rendered straight back underneath. The
+      governance toolkit (credits, tiers, write-level impersonation, the hash-chained audit log) is
+      Story 10.3 and is NOT drawn here.
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <div class="shell">
+          <aside class="admin-nav">
+            <div class="brand">
+              <span class="logo">M</span>
+              <div>
+                <div class="bt">Motir</div>
+                <div class="bs">Platform admin</div>
+              </div>
+            </div>
+            <div class="nav-group">Platform</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-activity" /></svg>Overview
+            </div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-coins" /></svg>Usage &amp; cost
+            </div>
+            <div class="nav-item active">
+              <svg viewBox="0 0 24 24"><use href="#i-building" /></svg>Tenants
+            </div>
+            <div class="nav-group">Operations</div>
+            <div class="nav-item">
+              <svg viewBox="0 0 24 24"><use href="#i-server" /></svg>Monitoring
+            </div>
+            <div class="nav-item muted">
+              <svg viewBox="0 0 24 24"><use href="#i-shield" /></svg>Governance<span class="soon"
+                >10.3</span
+              >
+            </div>
+            <div class="spacer"></div>
+            <div class="navfoot">
+              <div class="who">
+                <span class="pava">OP</span>
+                <div>
+                  <div class="wt">Platform staff</div>
+                  <div class="ws">ops@moooon.net</div>
+                </div>
+              </div>
+              <div class="nav-item">
+                <svg viewBox="0 0 24 24"><use href="#i-logout" /></svg>Exit to app
+              </div>
+            </div>
+          </aside>
+
+          <div class="shell-main">
+            <div class="adminbar">
+              <span class="staff-mark">
+                <span class="sm-ico"
+                  ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                ></span>
+                <span
+                  ><span class="sm-t">Platform staff</span><br /><span class="sm-s"
+                    >all reads audited</span
+                  ></span
+                >
+              </span>
+              <div class="searchbar">
+                <svg viewBox="0 0 24 24"><use href="#i-search" /></svg>Search organizations,
+                workspaces, projects, users…<span class="kbd">⌘K</span>
+              </div>
+              <span class="op"
+                ><span class="op-ava">OP</span
+                ><svg viewBox="0 0 24 24"><use href="#i-chevdown" /></svg
+              ></span>
+            </div>
+            <div class="page">
+              <!-- THE DOOR: the same breadcrumb grammar as Panel 6, scoped to a USER. -->
+              <div class="scope">
+                <span class="seg">Platform</span>
+                <span class="sep">›</span>
+                <span class="seg">Users</span>
+                <span class="sep">›</span>
+                <span class="seg active"
+                  ><span class="tenant"><span class="ava ent-user">J</span>Jess Whitfield</span
+                  ><svg viewBox="0 0 24 24"><use href="#i-updown" /></svg
+                ></span>
+              </div>
+
+              <div class="audit-banner">
+                <svg viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                <span
+                  >You are viewing <strong>Jess Whitfield</strong>’s account as platform staff. This
+                  cross-tenant read is recorded in the audit log (operator
+                  <strong>OP · ops@moooon.net</strong>, just now).</span
+                >
+              </div>
+
+              <div class="row-between" style="margin-top: 16px">
+                <div class="tenant" style="gap: 12px">
+                  <span class="ava ent-user" style="width: 36px; height: 36px; font-size: 14px"
+                    >J</span
+                  >
+                  <div>
+                    <h2 style="margin: 0; font-size: 19px">Jess Whitfield</h2>
+                    <div style="display: flex; gap: 6px; margin-top: 6px">
+                      <span class="pill pill-active">● Active</span>
+                      <span class="pill pill-neutral">jess@northwind.io</span>
+                      <span class="pill pill-tier">Northwind Labs</span>
+                      <span class="pill pill-neutral">Joined Mar 2026</span>
+                    </div>
+                  </div>
+                </div>
+                <!-- THE TWO DAY-1 WRITES. Everything else about this account is read-only. -->
+                <div class="act-col">
+                  <span class="btn btn-secondary"
+                    ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg>Send password reset</span
+                  >
+                  <span class="btn btn-danger"
+                    ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Suspend account</span
+                  >
+                </div>
+              </div>
+
+              <div class="stack">
+                <div class="grid-2">
+                  <!-- THE CONFIRM STEP — a reason is REQUIRED before the write is possible. -->
+                  <div class="confirm">
+                    <h4>Suspend Jess Whitfield?</h4>
+                    <p>
+                      They are signed out of every session immediately and cannot sign back in.
+                      Their workspaces, projects and work items are untouched, and another platform
+                      operator can lift the suspension. Northwind Labs keeps running for its other 5
+                      members.
+                    </p>
+                    <div class="field">
+                      <label
+                        >Reason <span class="req">— required, written to the audit log</span></label
+                      >
+                      <div class="input">
+                        Abuse report #3149 — bulk spam invites from this account
+                      </div>
+                      <div class="hint">
+                        Shown to any operator reading this account later, and to Jess if they ask.
+                      </div>
+                    </div>
+                    <div class="confirm-actions">
+                      <span class="btn btn-secondary">Cancel</span>
+                      <span class="btn btn-danger"
+                        ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Suspend account</span
+                      >
+                    </div>
+                  </div>
+
+                  <div class="note" style="align-self: start">
+                    <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                    <span
+                      ><strong>Why a reason is mandatory.</strong> These are the only two writes a
+                      day-1 operator has, and both are visible to the person on the other end. The
+                      reason is what makes the row underneath readable months later — an audit row
+                      that says only “suspended by OP” answers nothing. The
+                      <strong>Send password reset</strong> action takes the same confirm step with
+                      the same required reason; it mails the account’s own reset link and grants the
+                      operator no access to the account.</span
+                    >
+                  </div>
+                </div>
+
+                <!-- THE RESULT: the write's own audit row, rendered back on the account. -->
+                <div class="card">
+                  <div class="card-head">
+                    <div class="ttl">
+                      <span class="ico ent-user" style="width: 30px; height: 30px"
+                        ><svg viewBox="0 0 24 24"><use href="#i-shield" /></svg
+                      ></span>
+                      <div>
+                        <h3>Support actions</h3>
+                        <p class="hsub">
+                          Every operator write on this account, newest first. Append-only.
+                        </p>
+                      </div>
+                    </div>
+                    <span class="pill pill-neutral">This account</span>
+                  </div>
+                  <div class="card-body flush">
+                    <table class="tbl">
+                      <thead>
+                        <tr>
+                          <th>When</th>
+                          <th>Action</th>
+                          <th>Operator</th>
+                          <th>Reason</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td><span class="when">just now</span></td>
+                          <td>
+                            <span class="pill pill-down"
+                              ><svg viewBox="0 0 24 24"><use href="#i-ban" /></svg>Suspended</span
+                            >
+                          </td>
+                          <td><span class="muted">ops@moooon.net</span></td>
+                          <td>
+                            <span class="muted"
+                              >Abuse report #3149 — bulk spam invites from this account</span
+                            >
+                          </td>
+                        </tr>
+                        <tr>
+                          <td><span class="when">6d ago</span></td>
+                          <td>
+                            <span class="pill pill-readonly"
+                              ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg>Password reset
+                              sent</span
+                            >
+                          </td>
+                          <td><span class="muted">ops@moooon.net</span></td>
+                          <td>
+                            <span class="muted">Support #2871 — locked out after SSO change</span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div class="card-foot">
+                    <span class="fnote"
+                      ><svg viewBox="0 0 24 24"><use href="#i-info" /></svg>Showing 1–2 of 2
+                      actions</span
+                    >
+                    <div class="pager">
+                      <span class="pbtn is-disabled"
+                        ><svg viewBox="0 0 24 24"><use href="#i-chevleft" /></svg>Prev</span
+                      >
+                      <span>Page 1 of 1</span>
+                      <span class="pbtn is-disabled"
+                        >Next<svg viewBox="0 0 24 24"><use href="#i-chevright" /></svg
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="note">
+                  <svg viewBox="0 0 24 24"><use href="#i-info" /></svg>
+                  <span
+                    ><strong>Scope of the day-1 write slice (8.5.10 / 8.5.11).</strong> Two actions,
+                    on a USER: send password reset, suspend / unsuspend. Nothing else about the
+                    account is editable from here. <strong>Story 10.3 owns</strong> credit and plan
+                    governance, tier changes, per-org feature flags, time-boxed WRITE-level
+                    impersonation, and the tamper-evident hash-chained audit log — the table above
+                    is the plain append-only row 8.5.11 writes, deliberately not that. Suspending an
+                    ORGANIZATION rather than a person is 10.3 as well; the day-1 answer to an
+                    abusive tenant is to suspend the account behind it.</span
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ── lucide symbol sprite (viewBox 0 0 24 24; stroke currentColor) ─────── -->
     <svg width="0" height="0" style="position: absolute" aria-hidden="true">
       <defs>
@@ -3657,6 +4344,54 @@
         >
           <circle cx="12" cy="12" r="10" />
           <path d="m4.9 4.9 14.2 14.2" />
+        </g>
+        <g
+          id="i-external"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M15 3h6v6" key="1q9fwt" />
+          <path d="M10 14 21 3" key="gplh6r" />
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" key="a6xqqp" />
+        </g>
+        <g
+          id="i-key"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"
+            key="1s6t7t"
+          />
+          <circle cx="16.5" cy="7.5" r=".5" fill="currentColor" key="w0ekpg" />
+        </g>
+        <g
+          id="i-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" key="1mglay" />
+          <path d="m9 12 2 2 4-4" key="dzmm74" />
+        </g>
+        <g
+          id="i-clock"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <circle cx="12" cy="12" r="10" key="1mglay" />
+          <path d="M12 6v6l4 2" key="mmk7yg" />
         </g>
       </defs>
     </svg>

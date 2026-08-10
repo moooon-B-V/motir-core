@@ -15,6 +15,8 @@ import { userRepository } from '@/lib/repositories/userRepository';
 import { verificationRepository } from '@/lib/repositories/verificationRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { readMembership } from '@/lib/workspaces/membershipGate';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import { isEmailShape } from '@/lib/utils/email';
@@ -148,10 +150,7 @@ export const workspaceInvitesService = {
     if (!isEmailShape(email)) throw new InvalidEmailError();
 
     // Inviter must be a workspace member.
-    const inviterMembership = await workspaceMembershipRepository.findByUserAndWorkspace(
-      args.inviterUserId,
-      args.workspaceId,
-    );
+    const inviterMembership = await readMembership(args.inviterUserId, args.workspaceId);
     if (!inviterMembership) {
       throw new NotAMemberError(args.inviterUserId, args.workspaceId);
     }
@@ -161,10 +160,10 @@ export const workspaceInvitesService = {
     // — an invite to a brand-new email is fine.
     const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
-      const targetMembership = await workspaceMembershipRepository.findByUserAndWorkspace(
-        existingUser.id,
-        args.workspaceId,
-      );
+      // MOTIR-2527: an unbound read here fails OPEN, not closed — a `null` reads as
+      // "not a member yet", so the already-a-member guard stops firing and the invite
+      // is sent to someone who is already in the workspace.
+      const targetMembership = await readMembership(existingUser.id, args.workspaceId);
       if (targetMembership) {
         throw new InviteTargetAlreadyMemberError(email, args.workspaceId);
       }
@@ -181,7 +180,15 @@ export const workspaceInvitesService = {
       throw new InviteRateLimitedError(INVITE_RATE_LIMIT.max);
     }
 
-    const workspace = await workspaceRepository.findById(args.workspaceId);
+    // MOTIR-2527: bound, like the gate above it. This read RE-RAISES `NotAMemberError`
+    // on a null, so leaving it on the `db` singleton would have handed back exactly the
+    // error the gate was fixed to stop producing — a member admitted by the gate and
+    // then refused, four statements later, by an invisible `workspace` row
+    // (`workspace_active` reads the same per-transaction GUCs).
+    const workspace = await withWorkspaceContext(
+      { userId: args.inviterUserId, workspaceId: args.workspaceId },
+      (tx) => workspaceRepository.findByIdInTx(args.workspaceId, tx),
+    );
     if (!workspace) {
       // Race: workspace deleted between the membership check and now.
       // Treat as NotAMember — the inviter no longer has membership.

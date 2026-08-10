@@ -121,7 +121,7 @@ function oauthErrorCode(body: unknown): string | undefined {
  *
  * `hostname` is reported so the approval screen can answer "WHAT is connecting",
  * which the ADR leans on as the device grant's phishing mitigation, and so the
- * minted token is labelled `CLI · <hostname>` in Settings → Account → API tokens.
+ * minted token is labelled `CLI · <hostname>` in Settings → Account → Tokens.
  * It is display-only on the server and never interpreted.
  */
 export async function startDeviceGrant(input: {
