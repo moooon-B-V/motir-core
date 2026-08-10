@@ -7,6 +7,8 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { escapeRegExp } from '@/lib/utils/regexp';
 import {
+  SANDBOX_DEVCONTAINER_JSON,
+  SANDBOX_DEVCONTAINER_WRITE_COMMAND,
   SANDBOX_IMAGE,
   SANDBOX_STEPS,
   sandboxProfileRows,
@@ -287,8 +289,7 @@ describe('a profile that declares NO binaries falls back to its id', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// The PULL, and the fact that makes it necessary (MOTIR-2611)
+// ─────────────────────────────────────────────────────────────────────────────// The PULL, and the fact that makes it necessary (MOTIR-2611)
 //
 // The defect this family guards was invisible to every check above for the same
 // reason 2608's was: nothing on the page was FALSE. The image was real, the tag
@@ -515,6 +516,165 @@ describe('the derivation seam feeds BOTH commands — read off the RENDERED page
       expect(caption, `${locale} has no sandboxPullCaption`).toBeDefined();
       expect(caption, `${locale}'s caption does not name the profile`).toContain('{profile}');
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The VS Code sub-step, checked as a PROCEDURE rather than as prose (MOTIR-2608)
+//
+// The three defects this guards were all invisible to every check above,
+// because none of them was a false fact: the page named a real palette, a real
+// filename and a real command. What it never said was how to open the palette,
+// how to produce a file whose name a GUI file manager refuses, or which of the
+// two attach commands works from the state the procedure actually leaves the
+// reader in. A step can be true in every particular and still be unfollowable,
+// so these assert the instructions a cold-start reader needs are PRESENT.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The prose side reuses MOTIR-2611's `textOf(VS_CODE_SUB_STEP)` rather than a
+// second extractor of its own — two families reading the same step through two
+// helpers is how they come to disagree about what the step contains. Only the
+// CODE side is new here: `textOf` deliberately returns prose and callouts, and
+// these checks are about a command block.
+const vsCodeCode = () =>
+  VS_CODE_SUB_STEP.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));
+
+/**
+ * (7) The palette is named at FIRST use, not at the second mention.
+ *
+ * Aimed at the first block that tells the reader to use the palette at all —
+ * asserting "the step mentions ⇧⌘P somewhere" would pass on a page that
+ * introduces the chord two sub-steps after it first sends the reader there,
+ * which is exactly the defect.
+ */
+function assertPaletteIsOpenableAtFirstUse(prose: string[]): void {
+  const first = prose.find((text) => /command palette/i.test(text));
+  expect(first, 'no block tells the reader to use the command palette').toBeDefined();
+  expect(first, 'the macOS chord is missing at first use').toContain('⇧⌘P');
+  expect(first, 'the Windows/Linux chord is missing at first use').toContain('Ctrl+Shift+P');
+  expect(first, 'the discoverable menu route is missing at first use').toMatch(
+    /View → Command Palette/,
+  );
+}
+
+/**
+ * (8) The step hands over a runnable way to produce the dot-named file — with
+ * the heredoc delimiter QUOTED, and with the reason a reader needs it.
+ */
+function assertTheFileCanBeProduced(prose: string[], code: string[]): void {
+  const write = code.find((snippet) => /devcontainer\.json/.test(snippet) && /<</.test(snippet));
+  expect(write, 'the step gives no command that writes the file').toBeDefined();
+  expect(write, 'the folder is never created').toMatch(/mkdir -p \.devcontainer/);
+  // The whole point: an UNQUOTED heredoc eats both substitutions silently.
+  expect(write, 'the heredoc delimiter is not quoted').toContain("<<'JSON'");
+  expect(write, 'the Dev Containers substitutions did not survive').toContain(
+    '${localWorkspaceFolder}',
+  );
+  expect(write).toContain('${localEnv:HOME}');
+
+  // A GUI route that accepts a dot-prefixed path, so a reader who will not open
+  // a terminal is not stranded either.
+  expect(
+    prose.some(
+      (text) => /New File/.test(text) || /Add Dev Container Configuration Files/.test(text),
+    ),
+    'no GUI route that accepts a dot-name is named',
+  ).toBe(true);
+  // …and WHY the snippet is there at all. Without the reason a reader does not
+  // know the workaround is aimed at them.
+  expect(
+    prose.some((text) => /refuse[sd]? a name beginning with a dot/i.test(text)),
+    'the step never says a GUI file manager refuses the name',
+  ).toBe(true);
+}
+
+/**
+ * (9) The attach command is the one that works from where this procedure
+ * actually leaves the reader — with no folder open, or the wrong one.
+ */
+function assertTheAttachCommandFitsTheState(prose: string[]): void {
+  const step3 = prose.find((text) => /Dev Containers: (Re)?[Oo]pen/.test(text));
+  expect(step3, 'no block names an attach command').toBeDefined();
+  expect(step3, 'the folder-prompting command is not named').toContain(
+    'Dev Containers: Open Folder in Container',
+  );
+  if (/Reopen in Container/.test(step3!)) {
+    expect(step3, '“Reopen in Container” appears without its precondition').toMatch(
+      /already open in VS Code/i,
+    );
+  }
+}
+
+describe('the VS Code sub-step is followable from a cold start', () => {
+  it('says how to open the command palette where it first tells you to use it', () => {
+    assertPaletteIsOpenableAtFirstUse(textOf(VS_CODE_SUB_STEP));
+  });
+
+  it('gives a runnable way to create the dot-named file, and says why one is needed', () => {
+    assertTheFileCanBeProduced(textOf(VS_CODE_SUB_STEP), vsCodeCode());
+  });
+
+  it('leads with the command that works when no folder is open yet', () => {
+    assertTheAttachCommandFitsTheState(textOf(VS_CODE_SUB_STEP));
+  });
+
+  it('FALSIFIABLE: each of the three defects this replaced still fails', () => {
+    // A · the palette named only at its SECOND mention.
+    expect(() =>
+      assertPaletteIsOpenableAtFirstUse([
+        'Install the Dev Containers extension. From the command palette’s Extensions: Install Extensions.',
+        'Reopen in Container. Command palette (⇧⌘P / Ctrl+Shift+P, or View → Command Palette…).',
+      ]),
+    ).toThrow();
+
+    // B · a filename with no command behind it — and an UNQUOTED heredoc, which
+    // is the silent variant: it writes a file, just not the right one.
+    expect(() => assertTheFileCanBeProduced(textOf(VS_CODE_SUB_STEP), [])).toThrow();
+    expect(() =>
+      assertTheFileCanBeProduced(
+        textOf(VS_CODE_SUB_STEP),
+        vsCodeCode().map((snippet) => snippet.replace("<<'JSON'", '<<JSON')),
+      ),
+    ).toThrow();
+    expect(() =>
+      assertTheFileCanBeProduced(
+        textOf(VS_CODE_SUB_STEP).filter((text) => !/refuse/i.test(text)),
+        vsCodeCode(),
+      ),
+    ).toThrow();
+
+    // C · “Reopen in Container” as the sole instruction, and with its
+    // precondition dropped.
+    expect(() =>
+      assertTheAttachCommandFitsTheState([
+        '**3 · Reopen in Container.** Command palette → **Dev Containers: Reopen in Container**.',
+      ]),
+    ).toThrow();
+    expect(() =>
+      assertTheAttachCommandFitsTheState([
+        'Dev Containers: Open Folder in Container…, or Dev Containers: Reopen in Container.',
+      ]),
+    ).toThrow();
+  });
+});
+
+describe('the dev-container config is published ONCE', () => {
+  it('is the same object in the file listing and in the command that writes it', () => {
+    // Acceptance criterion 6. Both code blocks are built from
+    // `SANDBOX_DEVCONTAINER_JSON`, so this cannot drift by construction — this
+    // asserts that the construction is what the page actually renders, which is
+    // the part a refactor can quietly undo.
+    const listings = vsCodeCode().filter((snippet) => snippet.trimStart().startsWith('{'));
+    expect(listings, 'the file listing is gone').toContain(SANDBOX_DEVCONTAINER_JSON);
+
+    const heredocBody = SANDBOX_DEVCONTAINER_WRITE_COMMAND.split("<<'JSON'\n")[1]?.replace(
+      /\nJSON$/,
+      '',
+    );
+    expect(heredocBody, 'the write command carries a second, drifting copy').toBe(
+      SANDBOX_DEVCONTAINER_JSON,
+    );
+    expect(SANDBOX_DEVCONTAINER_JSON).toContain(`${SANDBOX_IMAGE}:claude`);
   });
 });
 
