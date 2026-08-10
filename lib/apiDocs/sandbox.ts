@@ -82,6 +82,29 @@ export function sandboxProfileRows(): SandboxProfileRow[] {
   }));
 }
 
+/**
+ * The `docker pull` for one profile — the command the guide never had.
+ *
+ * ⚠️ It takes the SAME `SandboxProfileRow` as `sandboxRunCommand` below, and the
+ * page renders the two from the SAME row, because the one thing this pair must
+ * never do is name two different tags: a reader who pulls `:claude` and then
+ * starts `:codex` is worse off than one who never pulled at all. Deriving both
+ * from one argument is what makes that unrepresentable rather than merely
+ * unlikely.
+ *
+ * Why the guide needs it at all (MOTIR-2611): `:<profile>` is a MOVING tag, and
+ * `docker run` does not go back to the registry for an image the machine already
+ * has — nor does `docker start -ai`, which this page explicitly recommends for
+ * coming back to the container. So the moving tag only ever reaches a reader who
+ * pulls, and someone who followed this guide before a release is pinned to that
+ * older CLI permanently, with the page describing a newer one. Step 1's prose has
+ * said "there is no build step — you pull" since it shipped; nothing rendered the
+ * pull.
+ */
+export function sandboxPullCommand(row: SandboxProfileRow): string {
+  return `docker pull ${SANDBOX_IMAGE}:${row.id}`;
+}
+
 /** The `docker run` for one profile, as the page prints it filled in. */
 export function sandboxRunCommand(row: SandboxProfileRow): string {
   const mounts = row.mounts.map(
@@ -96,6 +119,48 @@ export function sandboxRunCommand(row: SandboxProfileRow): string {
   ].join('\n');
 }
 
+/**
+ * The dev-container config the VS Code sub-step tells the reader to write, as
+ * the ONE source both of that step's code blocks are built from.
+ *
+ * Two blocks show this object: the file listing a reader may create by hand,
+ * and the heredoc inside `SANDBOX_DEVCONTAINER_WRITE_COMMAND`. They were a
+ * drift waiting to happen — a `mounts` entry corrected in one and not the
+ * other publishes two different configs under one caption — so neither is
+ * typed twice (MOTIR-2608, acceptance criterion 6).
+ *
+ * The `\${…}` escapes are template-literal escapes, not shell ones: what this
+ * constant HOLDS is the literal text `${localWorkspaceFolder}`, which is a Dev
+ * Containers substitution the editor resolves and nothing before it may.
+ */
+export const SANDBOX_DEVCONTAINER_JSON = `{
+  "name": "Motir sandbox (Claude Code)",
+  "image": "${SANDBOX_IMAGE}:claude",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=\${localWorkspaceFolder},target=/workspace,type=bind",
+  "mounts": [
+    "source=\${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
+  ],
+  "remoteUser": "node",
+  "overrideCommand": true
+}`;
+
+/**
+ * The command that PRODUCES that file, because naming a filename is not an
+ * instruction a reader can carry out: macOS Finder and most GUI file pickers
+ * refuse a name beginning with `.`, and refuse it without saying why.
+ *
+ * ⚠️ The heredoc delimiter is QUOTED — `<<'JSON'`. Unquoted, the shell expands
+ * `${localWorkspaceFolder}` and `${localEnv:HOME}` to empty strings on the way
+ * into the file, and the reader gets a container that mounts nothing and finds
+ * no credential — a silent failure strictly worse than being stuck, which is
+ * why the truth test greps for the quoted form rather than trusting review.
+ */
+export const SANDBOX_DEVCONTAINER_WRITE_COMMAND = `mkdir -p .devcontainer
+cat > .devcontainer/devcontainer.json <<'JSON'
+${SANDBOX_DEVCONTAINER_JSON}
+JSON`;
+
 /** One numbered step of the setup. */
 export interface SandboxStep {
   id: string;
@@ -108,8 +173,15 @@ export interface SandboxStep {
   cliCommands?: string[];
   /** `true` when the step renders the derived profile table. */
   rendersProfileTable?: boolean;
-  /** `true` when the step renders the `docker run`. */
-  rendersRunCommand?: boolean;
+  /**
+   * `true` when the step renders the `docker pull` + `docker run` pair.
+   *
+   * ONE flag for two commands, deliberately: they are a single instruction
+   * ("get this image, then start it") and a page that could render either
+   * without the other is a page that can tell a reader to run a tag they were
+   * never told to fetch — which is the defect MOTIR-2611 fixed.
+   */
+  rendersImageCommands?: boolean;
   blocks: GuideBlock[];
 }
 
@@ -196,16 +268,29 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
   {
     id: 'start-the-container',
     title: 'Start the container',
-    rendersRunCommand: true,
+    rendersImageCommands: true,
     blocks: [
       {
         kind: 'prose',
-        text: 'Two of its parts come from the row you just picked; everything else is the same for every profile. It drops you into a shell in `/workspace`.',
+        text: '**Two commands: pull the image, then start it.** The pull is what makes the second one a **current** sandbox. `docker run` never goes back to the registry for an image this machine already has — and neither does `docker start -ai`, which is how this page tells you to come back to the container later.',
+      },
+      {
+        kind: 'prose',
+        text: '**That matters because the profile tags move.** `:claude` and its siblings always point at the newest release, so a copy pulled weeks ago is out of date and nothing on your machine will say so — you get an older `motir` with fewer commands than this guide describes. **Returning to a container you set up earlier? A pull on its own is not enough**: the container was made from the old image and keeps it. Pull, then `docker rm motir-sandbox` and run the command again (or give the run a new `--name`). The sign-in from step 4 lives in the old container, so expect to do that step once more.',
+      },
+      {
+        kind: 'prose',
+        text: 'Two of the run command’s parts come from the row you just picked; everything else is the same for every profile. It drops you into a shell in `/workspace`.',
       },
       {
         kind: 'callout',
         tone: 'warning',
         text: 'Note there is **no `--rm`**, and the container has a name. The sign-in in step 4 is written inside the container, so a `--rm` run would throw it away the moment you exit. Set it up once and come back to it with `docker start -ai motir-sandbox`.',
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        text: '**Want a sandbox you can re-enter exactly?** Every profile publishes an immutable `:<profile>-<version>` tag beside the moving one — `<version>` is the `@motir/cli` release the image was cut from — and pulling that name gets the same bytes every time. Take it when you are pinning a CI runner or reproducing a run, and the moving tag when you would rather have the newest. The published list, with the digest for each, lives beside the image in `packages/cli/sandbox/README.md`.',
       },
       {
         kind: 'callout',
@@ -224,35 +309,39 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: '**1 · Install the Dev Containers extension.** From the Extensions view, or the command palette’s **Extensions: Install Extensions**. It is what starts the container on your behalf, and it drives the same Docker engine step 2 uses.',
+        text: '**1 · Install the Dev Containers extension.** From the Extensions view, or from the command palette — **⇧⌘P** on macOS, **Ctrl+Shift+P** on Windows and Linux, **F1** on all three, or **View → Command Palette…** if you would rather not hold a chord — then **Extensions: Install Extensions**. The palette is where two of these three sub-steps happen, so it is worth pinning now. The extension is what starts the container on your behalf, and it drives the same Docker engine step 2 uses.',
       },
       {
         kind: 'prose',
-        text: '**2 · Add `.devcontainer/devcontainer.json`** to the folder you are mounting — the same one step 2 would have started from. It pins the published image and passes the mount your profile needs:',
+        text: '**2 · Add `.devcontainer/devcontainer.json`** to the folder you are mounting — the same one step 2 would have started from. It pins the published image and passes the mount your profile needs. Write it from that folder in one command, because a GUI file manager will not do it for you: macOS Finder and most file pickers **refuse a name beginning with a dot**, and they refuse it without saying why.',
+      },
+      {
+        kind: 'code',
+        caption: 'your machine — in the folder you are mounting',
+        copyable: true,
+        code: SANDBOX_DEVCONTAINER_WRITE_COMMAND,
+      },
+      {
+        kind: 'prose',
+        text: "The quotes around `<<'JSON'` are load-bearing: they are what stops your shell from expanding `${localWorkspaceFolder}` and `${localEnv:HOME}` before they reach the file. Those are Dev Containers substitutions, and the editor is what resolves them. That command writes exactly this — the same file, if you would rather create it by hand:",
       },
       {
         kind: 'code',
         caption: '.devcontainer/devcontainer.json',
         copyable: true,
-        code: `{
-  "name": "Motir sandbox (Claude Code)",
-  "image": "${SANDBOX_IMAGE}:claude",
-  "workspaceFolder": "/workspace",
-  "workspaceMount": "source=\${localWorkspaceFolder},target=/workspace,type=bind",
-  "mounts": [
-    "source=\${localEnv:HOME}/.claude,target=/home/node/.claude,type=bind,readonly"
-  ],
-  "remoteUser": "node",
-  "overrideCommand": true
-}`,
+        code: SANDBOX_DEVCONTAINER_JSON,
       },
       {
         kind: 'prose',
-        text: 'Swap `:claude` and the `mounts` entry for your row from step 1. A dev container is not torn down when you close the window, so the sign-in in step 4 persists here without any extra flag.',
+        text: 'Two routes inside VS Code do accept the dot-name where Finder will not: **Explorer → New File**, typing the whole path `.devcontainer/devcontainer.json` — it creates the `.devcontainer` folder for you — or the palette’s **Dev Containers: Add Dev Container Configuration Files…**, then replace what it scaffolds with the above.',
       },
       {
         kind: 'prose',
-        text: '**3 · Reopen in Container.** Command palette → **Dev Containers: Reopen in Container**. VS Code pulls the image and attaches; its terminal is the same shell step 2 would have dropped you into.',
+        text: 'Swap `:claude` and the `mounts` entry for your row from step 1. A dev container is not torn down when you close the window, so the sign-in in step 4 persists here without any extra flag — and for exactly that reason it also keeps the image it was first created from. **Dev Containers reuses a local image just as `docker run` does**, so step 2’s `docker pull` is still yours to run, in a terminal on your machine, before you reopen; an existing container then needs the palette’s **Dev Containers: Rebuild Container** to pick the new image up. Pin the immutable `:<profile>-<version>` tag here instead if you would rather this folder stay on a known image.',
+      },
+      {
+        kind: 'prose',
+        text: '**3 · Open the folder in the container.** Command palette → **Dev Containers: Open Folder in Container…**, and pick the folder you just wrote the file into. VS Code pulls the image and attaches; its terminal is the same shell step 2 would have dropped you into. **If that folder is already open in VS Code**, **Dev Containers: Reopen in Container** does the same attach without asking which folder — that precondition is the entire difference between the two commands, and it is why the sub-step does not lead with the one that begins “Re”.',
       },
       {
         kind: 'callout',

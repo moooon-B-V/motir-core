@@ -7,8 +7,12 @@ import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
 import { escapeRegExp } from '@/lib/utils/regexp';
 import {
+  SANDBOX_DEVCONTAINER_JSON,
+  SANDBOX_DEVCONTAINER_WRITE_COMMAND,
   SANDBOX_IMAGE,
+  SANDBOX_STEPS,
   sandboxProfileRows,
+  sandboxPullCommand,
   sandboxRunCommand,
   type SandboxProfileRow,
 } from '@/lib/apiDocs/sandbox';
@@ -282,6 +286,395 @@ describe('a profile that declares NO binaries falls back to its id', () => {
     } finally {
       (live as unknown as unknown[]).pop();
     }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────// The PULL, and the fact that makes it necessary (MOTIR-2611)
+//
+// The defect this family guards was invisible to every check above for the same
+// reason 2608's was: nothing on the page was FALSE. The image was real, the tag
+// was real, the run command was correct, and the reader still ended up on a CLI
+// eleven commits older than the page describes — because `:<profile>` moves,
+// `docker run` does not re-fetch, and no rendered command anywhere told anyone
+// to pull. A page can be true in every particular and still leave the reader on
+// last month's software.
+//
+// So these assert two things a fact-check cannot: that the pull is PRESENT and
+// derived from the same row as the run (they can never name different tags), and
+// that the prose tells the reader WHY the pull is not optional — before the
+// command, where it is still actionable.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CONTAINER_STEP = SANDBOX_STEPS.find((step) => step.id === 'start-the-container')!;
+const VS_CODE_SUB_STEP = SANDBOX_STEPS.find((step) => step.id === 'or-from-vs-code')!;
+const textOf = (step: (typeof SANDBOX_STEPS)[number]) =>
+  step.blocks.flatMap((block) =>
+    block.kind === 'prose' || block.kind === 'callout' ? [block.text] : [],
+  );
+
+/**
+ * (5) The step warns that the tag MOVES and that neither start path refreshes it.
+ *
+ * All three clauses, because any two of them leave a reader who acts wrongly:
+ * "the tag moves" without "`docker run` will not fetch it" reads as someone
+ * else's problem, and both of those without `docker start -ai` miss the reader
+ * this defect actually reaches — the one coming back to a container they already
+ * have.
+ *
+ * The three patterns are NAMED and shared with the falsifiable case below, so
+ * the negative strips exactly what the positive looks for. A hand-written mutant
+ * regex drifts from the assertion it is meant to break — and a negative case that
+ * has drifted passes for the wrong reason, which is the one thing a falsifiable
+ * check may not do.
+ */
+const STALE_IMAGE_CLAUSES: [RegExp, string][] = [
+  [/tags? move|moving tag|points? at the newest|always point/i, 'the profile tag moves'],
+  [
+    /docker run.*(never|not) go(es)? back to the registry|`docker run`[^.]*already has/i,
+    '`docker run` skips the registry',
+  ],
+  [/docker start -ai/, '`docker start -ai` — the returning reader’s path'],
+];
+
+function assertStaleImageIsExplained(prose: string[]): void {
+  const joined = prose.join('\n');
+  for (const [pattern, what] of STALE_IMAGE_CLAUSES) {
+    expect(joined, `the step never says ${what}`).toMatch(pattern);
+  }
+}
+
+/**
+ * (6) The immutable form is offered WITH the reason to prefer it.
+ *
+ * Naming `:<profile>-<version>` and leaving the reader to guess when to want it
+ * is the shape of a footnote; the criterion is a stated reason, so the assertion
+ * is one. The schematic spelling is also checked against the workflow that
+ * publishes it — a page offering a tag form the release lane does not push is
+ * the MOTIR-2010 shape all over again.
+ */
+function assertImmutableTagIsOffered(prose: string[]): void {
+  const joined = prose.join('\n');
+  expect(joined, 'the immutable tag form is not documented').toContain('`:<profile>-<version>`');
+  expect(joined, 'no reason to prefer it is stated').toMatch(
+    /same bytes|reproduc|re-enter exactly|pinning/i,
+  );
+  // …and that form is the one the release lane actually pushes.
+  expect(RELEASE_WORKFLOW).toContain(
+    '${{ env.IMAGE }}:${{ matrix.profile.id }}-${{ steps.ver.outputs.version }}',
+  );
+}
+
+describe('the guide renders the pull it has always told readers to do', () => {
+  it('names an image the release lane publishes, for every profile', () => {
+    for (const row of sandboxProfileRows()) assertImageReferenceIsReal(sandboxPullCommand(row));
+  });
+
+  it('pulls exactly the reference the run command starts — same row, same tag', () => {
+    for (const row of sandboxProfileRows()) {
+      const pulled = sandboxPullCommand(row).match(/ghcr\.io\/\S+/)![0];
+      expect(sandboxRunCommand(row), `${row.id}: run does not start the pulled image`).toContain(
+        pulled,
+      );
+      expect(sandboxPullCommand(row)).toBe(`docker pull ${SANDBOX_IMAGE}:${row.id}`);
+    }
+  });
+
+  it('FALSIFIABLE: a pull of an unpublished tag fails the same check the run does', () => {
+    expect(() =>
+      assertImageReferenceIsReal(
+        sandboxPullCommand(sandboxProfileRows()[0]!).replace(/:.+$/, ':x'),
+      ),
+    ).toThrow();
+  });
+});
+
+describe('step 2 says WHY the pull is not optional, before the command', () => {
+  it('explains the moving tag, `docker run`, and `docker start -ai`', () => {
+    assertStaleImageIsExplained(textOf(CONTAINER_STEP));
+  });
+
+  it('offers the immutable tag with a reason to prefer it', () => {
+    assertImmutableTagIsOffered(textOf(CONTAINER_STEP));
+  });
+
+  it('puts every word of it BEFORE the commands — the step has no prose after them', () => {
+    // Not a stylistic preference: `blocks` render in full before the derived
+    // command pair (the page appends them), so a warning authored as a block is
+    // structurally ahead of the `docker run` it is warning about. This asserts
+    // the property the criterion actually wants — that there is no way to author
+    // this caveat as a footnote under the command.
+    expect(CONTAINER_STEP.rendersImageCommands).toBe(true);
+    expect(CONTAINER_STEP.blocks.some((block) => block.kind === 'code')).toBe(false);
+  });
+
+  it('FALSIFIABLE: dropping any one of the three clauses fails', () => {
+    const prose = textOf(CONTAINER_STEP);
+    for (const [pattern] of STALE_IMAGE_CLAUSES) {
+      // Globally — a non-global strip leaves the second phrasing of the same
+      // clause standing in the same paragraph, and the check passes on the very
+      // text the mutant was supposed to have removed.
+      const strip = new RegExp(pattern.source, 'gi');
+      expect(() =>
+        assertStaleImageIsExplained(prose.map((text) => text.replace(strip, '—'))),
+      ).toThrow();
+    }
+    // …and an immutable tag named with no reason to want it fails too.
+    expect(() => assertImmutableTagIsOffered(['Also `:<profile>-<version>` exists.'])).toThrow();
+    expect(() => assertImmutableTagIsOffered(['Pin it — the same bytes every time.'])).toThrow();
+  });
+});
+
+describe('the VS Code sub-step says how to get a newer image too', () => {
+  it('names the reuse, the pull, and the command that makes an existing container take it', () => {
+    const joined = textOf(VS_CODE_SUB_STEP).join('\n');
+    expect(joined, 'never says Dev Containers reuses a local image').toMatch(
+      /reuses a local image|already (has|created)|keeps the image/i,
+    );
+    expect(joined, 'never sends the reader to a pull').toMatch(/pull/i);
+    expect(joined, 'no way to make an EXISTING dev container take the new image').toMatch(
+      /Rebuild Container/,
+    );
+  });
+
+  it('FALSIFIABLE: the pre-MOTIR-2611 wording — persistence without the image it implies — fails', () => {
+    const before =
+      'Swap `:claude` and the `mounts` entry for your row from step 1. A dev container is ' +
+      'not torn down when you close the window, so the sign-in in step 4 persists here ' +
+      'without any extra flag.';
+    expect(before).not.toMatch(/Rebuild Container/);
+    expect(before).not.toMatch(/reuses a local image/i);
+  });
+});
+
+describe('the derivation seam feeds BOTH commands — read off the RENDERED page', () => {
+  it('changes the pull AND the run when the CLI’s first profile changes, with no edit to the page', async () => {
+    // The proof AC 1 asks for, and the one assertion that can distinguish a pull
+    // DERIVED from the profile row from a pull typed to match today's first
+    // profile. The worked example is `profiles[0]`, so the injection goes at the
+    // FRONT — a push (what the table's derivation test does) would leave both
+    // commands on the real head and pass vacuously.
+    //
+    // ⚠️ Same module-identity discipline as that test: page and profiles both
+    // come from ONE fresh graph, or the array being mutated is not the array the
+    // page reads.
+    const { default: Page } = await import('@/app/(public)/docs/sandbox/page');
+    const { AGENT_PROFILES: live } = await import('../../packages/cli/src/agentProfiles');
+
+    const head = {
+      ...live[0]!,
+      id: 'zzz-head-profile',
+      label: 'Head profile',
+      binaries: ['zzz-head'] as const,
+      sandboxMounts: ['~/.zzz-head'] as const,
+    };
+    (live as unknown as (typeof head)[]).unshift(head);
+    try {
+      renderWithIntl(await Page());
+
+      const panes = [
+        ...(document.getElementById('start-the-container')?.querySelectorAll('pre') ?? []),
+      ].map((pane) => pane.textContent ?? '');
+      expect(panes, 'step 2 renders two commands: the pull, then the run').toHaveLength(2);
+
+      const [pull, run] = panes as [string, string];
+      expect(pull).toBe(`docker pull ${SANDBOX_IMAGE}:zzz-head-profile`);
+      expect(run, 'the run did not follow the profile').toContain(
+        `${SANDBOX_IMAGE}:zzz-head-profile`,
+      );
+      // The ORDER is the deliverable: a pull under the run it is meant to
+      // precede instructs nothing.
+      expect(pull.startsWith('docker pull')).toBe(true);
+      expect(run.startsWith('docker run')).toBe(true);
+      // …and the injected profile's mount reached the run, so this is the same
+      // row feeding both rather than two lookups that happen to agree.
+      expect(run).toContain('/home/node/.zzz-head');
+    } finally {
+      (live as unknown as unknown[]).shift();
+    }
+  });
+
+  it('captions the pull from the CATALOG, and names the profile it pulls', async () => {
+    // The caption is page CHROME, so unlike the guide's prose it IS localized
+    // (ADR Amendment 4 Q4) — and a caption that never interpolates the profile
+    // is how the pull and the run come to look like commands for two different
+    // things.
+    //
+    // ⚠️ `getTranslations` is mocked to `key => key` at the top of this file, so
+    // what the server render puts on the page is the KEY. That is exactly the
+    // assertion worth making here — a hardcoded English caption would NOT appear
+    // as a key — and the interpolation is asserted against the catalogs
+    // themselves, which is where it lives.
+    const { default: Page } = await import('@/app/(public)/docs/sandbox/page');
+    renderWithIntl(await Page());
+    expect(screen.getAllByText('sandboxPullCaption')).toHaveLength(1);
+
+    for (const locale of ['en', 'zh']) {
+      const catalog = JSON.parse(read(`messages/${locale}.json`)) as {
+        apiDocs: Record<string, string>;
+      };
+      const caption = catalog.apiDocs['sandboxPullCaption'];
+      expect(caption, `${locale} has no sandboxPullCaption`).toBeDefined();
+      expect(caption, `${locale}'s caption does not name the profile`).toContain('{profile}');
+    }
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The VS Code sub-step, checked as a PROCEDURE rather than as prose (MOTIR-2608)
+//
+// The three defects this guards were all invisible to every check above,
+// because none of them was a false fact: the page named a real palette, a real
+// filename and a real command. What it never said was how to open the palette,
+// how to produce a file whose name a GUI file manager refuses, or which of the
+// two attach commands works from the state the procedure actually leaves the
+// reader in. A step can be true in every particular and still be unfollowable,
+// so these assert the instructions a cold-start reader needs are PRESENT.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// The prose side reuses MOTIR-2611's `textOf(VS_CODE_SUB_STEP)` rather than a
+// second extractor of its own — two families reading the same step through two
+// helpers is how they come to disagree about what the step contains. Only the
+// CODE side is new here: `textOf` deliberately returns prose and callouts, and
+// these checks are about a command block.
+const vsCodeCode = () =>
+  VS_CODE_SUB_STEP.blocks.flatMap((block) => (block.kind === 'code' ? [block.code] : []));
+
+/**
+ * (7) The palette is named at FIRST use, not at the second mention.
+ *
+ * Aimed at the first block that tells the reader to use the palette at all —
+ * asserting "the step mentions ⇧⌘P somewhere" would pass on a page that
+ * introduces the chord two sub-steps after it first sends the reader there,
+ * which is exactly the defect.
+ */
+function assertPaletteIsOpenableAtFirstUse(prose: string[]): void {
+  const first = prose.find((text) => /command palette/i.test(text));
+  expect(first, 'no block tells the reader to use the command palette').toBeDefined();
+  expect(first, 'the macOS chord is missing at first use').toContain('⇧⌘P');
+  expect(first, 'the Windows/Linux chord is missing at first use').toContain('Ctrl+Shift+P');
+  expect(first, 'the discoverable menu route is missing at first use').toMatch(
+    /View → Command Palette/,
+  );
+}
+
+/**
+ * (8) The step hands over a runnable way to produce the dot-named file — with
+ * the heredoc delimiter QUOTED, and with the reason a reader needs it.
+ */
+function assertTheFileCanBeProduced(prose: string[], code: string[]): void {
+  const write = code.find((snippet) => /devcontainer\.json/.test(snippet) && /<</.test(snippet));
+  expect(write, 'the step gives no command that writes the file').toBeDefined();
+  expect(write, 'the folder is never created').toMatch(/mkdir -p \.devcontainer/);
+  // The whole point: an UNQUOTED heredoc eats both substitutions silently.
+  expect(write, 'the heredoc delimiter is not quoted').toContain("<<'JSON'");
+  expect(write, 'the Dev Containers substitutions did not survive').toContain(
+    '${localWorkspaceFolder}',
+  );
+  expect(write).toContain('${localEnv:HOME}');
+
+  // A GUI route that accepts a dot-prefixed path, so a reader who will not open
+  // a terminal is not stranded either.
+  expect(
+    prose.some(
+      (text) => /New File/.test(text) || /Add Dev Container Configuration Files/.test(text),
+    ),
+    'no GUI route that accepts a dot-name is named',
+  ).toBe(true);
+  // …and WHY the snippet is there at all. Without the reason a reader does not
+  // know the workaround is aimed at them.
+  expect(
+    prose.some((text) => /refuse[sd]? a name beginning with a dot/i.test(text)),
+    'the step never says a GUI file manager refuses the name',
+  ).toBe(true);
+}
+
+/**
+ * (9) The attach command is the one that works from where this procedure
+ * actually leaves the reader — with no folder open, or the wrong one.
+ */
+function assertTheAttachCommandFitsTheState(prose: string[]): void {
+  const step3 = prose.find((text) => /Dev Containers: (Re)?[Oo]pen/.test(text));
+  expect(step3, 'no block names an attach command').toBeDefined();
+  expect(step3, 'the folder-prompting command is not named').toContain(
+    'Dev Containers: Open Folder in Container',
+  );
+  if (/Reopen in Container/.test(step3!)) {
+    expect(step3, '“Reopen in Container” appears without its precondition').toMatch(
+      /already open in VS Code/i,
+    );
+  }
+}
+
+describe('the VS Code sub-step is followable from a cold start', () => {
+  it('says how to open the command palette where it first tells you to use it', () => {
+    assertPaletteIsOpenableAtFirstUse(textOf(VS_CODE_SUB_STEP));
+  });
+
+  it('gives a runnable way to create the dot-named file, and says why one is needed', () => {
+    assertTheFileCanBeProduced(textOf(VS_CODE_SUB_STEP), vsCodeCode());
+  });
+
+  it('leads with the command that works when no folder is open yet', () => {
+    assertTheAttachCommandFitsTheState(textOf(VS_CODE_SUB_STEP));
+  });
+
+  it('FALSIFIABLE: each of the three defects this replaced still fails', () => {
+    // A · the palette named only at its SECOND mention.
+    expect(() =>
+      assertPaletteIsOpenableAtFirstUse([
+        'Install the Dev Containers extension. From the command palette’s Extensions: Install Extensions.',
+        'Reopen in Container. Command palette (⇧⌘P / Ctrl+Shift+P, or View → Command Palette…).',
+      ]),
+    ).toThrow();
+
+    // B · a filename with no command behind it — and an UNQUOTED heredoc, which
+    // is the silent variant: it writes a file, just not the right one.
+    expect(() => assertTheFileCanBeProduced(textOf(VS_CODE_SUB_STEP), [])).toThrow();
+    expect(() =>
+      assertTheFileCanBeProduced(
+        textOf(VS_CODE_SUB_STEP),
+        vsCodeCode().map((snippet) => snippet.replace("<<'JSON'", '<<JSON')),
+      ),
+    ).toThrow();
+    expect(() =>
+      assertTheFileCanBeProduced(
+        textOf(VS_CODE_SUB_STEP).filter((text) => !/refuse/i.test(text)),
+        vsCodeCode(),
+      ),
+    ).toThrow();
+
+    // C · “Reopen in Container” as the sole instruction, and with its
+    // precondition dropped.
+    expect(() =>
+      assertTheAttachCommandFitsTheState([
+        '**3 · Reopen in Container.** Command palette → **Dev Containers: Reopen in Container**.',
+      ]),
+    ).toThrow();
+    expect(() =>
+      assertTheAttachCommandFitsTheState([
+        'Dev Containers: Open Folder in Container…, or Dev Containers: Reopen in Container.',
+      ]),
+    ).toThrow();
+  });
+});
+
+describe('the dev-container config is published ONCE', () => {
+  it('is the same object in the file listing and in the command that writes it', () => {
+    // Acceptance criterion 6. Both code blocks are built from
+    // `SANDBOX_DEVCONTAINER_JSON`, so this cannot drift by construction — this
+    // asserts that the construction is what the page actually renders, which is
+    // the part a refactor can quietly undo.
+    const listings = vsCodeCode().filter((snippet) => snippet.trimStart().startsWith('{'));
+    expect(listings, 'the file listing is gone').toContain(SANDBOX_DEVCONTAINER_JSON);
+
+    const heredocBody = SANDBOX_DEVCONTAINER_WRITE_COMMAND.split("<<'JSON'\n")[1]?.replace(
+      /\nJSON$/,
+      '',
+    );
+    expect(heredocBody, 'the write command carries a second, drifting copy').toBe(
+      SANDBOX_DEVCONTAINER_JSON,
+    );
+    expect(SANDBOX_DEVCONTAINER_JSON).toContain(`${SANDBOX_IMAGE}:claude`);
   });
 });
 

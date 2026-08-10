@@ -44,6 +44,69 @@ export const DEFAULT_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS = 60_000;
 export const DEFAULT_AI_RATE_LIMIT = 30;
 export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
 
+/**
+ * GENERATION: the same money, a much bigger unit of it (MOTIR-2597).
+ *
+ * A chat turn is one sentence in and one reply out. A plan generation, a story
+ * expansion, a re-plan, a repository audit is a long job at many times the token
+ * cost — so the two cannot honestly share a ceiling. Sharing `ai:chat`'s 30/min
+ * would mean the expensive door's allowance is set by what is comfortable for the
+ * cheap one.
+ *
+ * A third of the chat budget, over the same window: a person triggering ten
+ * generations in a minute is already going faster than any of them can finish
+ * (each takes tens of seconds and the UI streams it), while a loop pointed at
+ * `plan/generate` is stopped at ten rather than at whatever the provider will
+ * sell. Env-configurable like every other budget, and over the SAME shared
+ * counter — a separate scope is a separate bucket, not a separate store (ADR §6).
+ */
+export const DEFAULT_AI_GENERATE_RATE_LIMIT = 10;
+export const DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * The MCP transport (`POST /api/mcp`, MOTIR-2610) — a VOLUME ceiling on a
+ * surface whose legitimate caller is itself a script.
+ *
+ * ⚠️ Read this next to `ai:generate`, because the two are doing different jobs
+ * on the same endpoint. `/api/mcp` multiplexes every tool through ONE address,
+ * so a guard at the transport cannot tell a `get_work_item` from an
+ * `expand_item` — and the money is not in the request count, it is in the two
+ * tools that submit a model job. Those draw `ai:generate` at the DISPATCH seam
+ * (`lib/mcp/rateLimitGate.ts`), keyed identically to the browser's own door. So
+ * what is left for the transport is the cheap-but-not-free class the other
+ * scopes cover: reads, transitions, sprint writes, an agent's polling loop.
+ *
+ * Hence a ceiling far above `/api/v1`'s 60: an agent is EXPECTED to loop. One
+ * logical CLI operation is already several POSTs (an `initialize`, an
+ * `initialized` notification, then the call), a `motir run` makes tens of them,
+ * and a 429 in the middle of an unattended run is an outage of the product, not
+ * a defence of it. 300/min (5/s sustained) leaves every real client an order of
+ * magnitude of headroom while still bounding a runaway retry loop — which is a
+ * different number from "what is comfortable for a human", because no human is
+ * on this surface at all.
+ */
+export const DEFAULT_MCP_RATE_LIMIT = 300;
+export const DEFAULT_MCP_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * Attachment uploads, per signed-in user. The numbers are the ones the
+ * per-process throttle in `attachmentsService` advertised before MOTIR-2598
+ * moved it onto the shared store — carried over unchanged so the migration
+ * changes WHERE the count lives, not what it permits.
+ */
+export const DEFAULT_UPLOAD_RATE_LIMIT = 10;
+export const DEFAULT_UPLOAD_RATE_LIMIT_WINDOW_MS = 60_000;
+
+/**
+ * Public-project submissions, per submitting ACCOUNT — the second limb behind
+ * the IP-keyed public-write guard, over a much longer window because each
+ * accepted submission lands a row in someone else's triage queue.
+ *
+ * Also carried over unchanged from the per-process throttle MOTIR-2598 replaced.
+ */
+export const DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT = 5;
+export const DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS = 600_000;
+
 function budget(
   limitEnv: string,
   windowEnv: string,
@@ -93,5 +156,45 @@ export function aiBudget(): RateLimitBudget {
     'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
     DEFAULT_AI_RATE_LIMIT,
     DEFAULT_AI_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The job-SUBMITTING `/api/ai/*` surfaces — generation, expansion, re-plan, audit. */
+export function aiGenerateBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_AI_GENERATE_RATE_LIMIT',
+    'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_AI_GENERATE_RATE_LIMIT,
+    DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The MCP transport — every `POST /api/mcp`, per token owner + workspace. */
+export function mcpBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_MCP_RATE_LIMIT',
+    'MOTIR_MCP_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_MCP_RATE_LIMIT,
+    DEFAULT_MCP_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** Attachment uploads, keyed per signed-in user (`attachmentsService`). */
+export function uploadBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_UPLOAD_RATE_LIMIT',
+    'MOTIR_UPLOAD_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_UPLOAD_RATE_LIMIT,
+    DEFAULT_UPLOAD_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** Public-project submissions, keyed per submitting account (`publicProjectsService`). */
+export function publicSubmitBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_PUBLIC_SUBMIT_RATE_LIMIT',
+    'MOTIR_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT,
+    DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS,
   );
 }

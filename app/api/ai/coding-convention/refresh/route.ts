@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { aiConventionService } from '@/lib/services/aiConventionService';
 import { resolveActiveProjectContext, mapCodeHealthError, parseRepoScopeBody } from '../_shared';
 import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
+import { enforceAiRateLimit } from '@/lib/rateLimit/aiGuard';
 
 // POST /api/ai/coding-convention/refresh — the "Re-audit now" trigger of the
 // "Deepen this audit" affordance (MOTIR-1592) over the MOTIR-928 refresh seam.
@@ -23,6 +24,13 @@ export async function POST(req: Request): Promise<Response> {
   const resolved = await resolveActiveProjectContext();
   if ('response' in resolved) return resolved.response;
   const { ctx } = resolved;
+
+  // The AI ceiling, applied on the door that SUBMITS the job (MOTIR-2597). Its own
+  // `ai:generate` bucket, tighter than `ai:chat`, because a generation costs many
+  // chat turns. Spent here — after the two gates, before the body is read and long
+  // before the provider is called, since a 429 afterwards has already paid the bill.
+  const limited = await enforceAiRateLimit(ctx, 'ai:generate');
+  if (limited) return limited;
 
   const scope = await parseRepoScopeBody(req);
   if (!scope.ok) {

@@ -45,7 +45,8 @@ const { githubInstallationService } = await import('@/lib/services/githubInstall
 const { parseRepoScopeBody, parseOffsetParam, parseLimitParam, mapCodeHealthError } =
   await import('@/app/api/ai/coding-convention/_shared');
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
-const { truncateAuthTables } = await import('./helpers/db');
+const { truncateAuthTables, truncateRateLimitCounters } = await import('./helpers/db');
+const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
 
 const BASE = 'http://localhost:3000/api/ai/coding-convention';
 
@@ -206,6 +207,33 @@ describe('POST /api/ai/coding-convention/refresh', () => {
       repos: [{ repoKey: null, auditJobId: 'job_a', conventionJobId: 'job_c' }],
     });
     expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses the over-budget re-audit with a 429 BEFORE it submits (MOTIR-2597)', async () => {
+    // The route-level half of the AI ceiling: the refusal has to happen while the
+    // provider has not been called yet, so the assertion that matters is not the
+    // status — it is that `refreshCodeAudit` was called ONCE across two requests.
+    // A 429 returned after the submit would have already spent the money.
+    await signInAtProject();
+    await truncateRateLimitCounters();
+    __resetSharedRateLimitStoreForTest();
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    try {
+      refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
+      expect((await refreshPOST(bodylessRequest())).status).toBe(202);
+
+      const refused = await refreshPOST(bodylessRequest());
+      expect(refused.status).toBe(429);
+      expect(Number(refused.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+      expect(refused.headers.get('x-ratelimit-limit')).toBe('1');
+      expect(refused.headers.get('x-ratelimit-remaining')).toBe('0');
+      await expect(refused.json()).resolves.toMatchObject({ code: 'RATE_LIMITED' });
+      expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
+    } finally {
+      delete process.env['MOTIR_AI_GENERATE_RATE_LIMIT'];
+      __resetSharedRateLimitStoreForTest();
+      await truncateRateLimitCounters();
+    }
   });
 
   it('maps a motir-ai outage to 502', async () => {

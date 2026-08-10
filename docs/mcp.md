@@ -114,6 +114,56 @@ sprint + integration, with the single irreversible cascade-delete opt-in only.
 Archive stays on by default (it is recoverable); only `delete_work_item`, which
 cascades to the whole subtree, must be granted deliberately.
 
+## Rate limits
+
+`POST /api/mcp` is metered on **two** budgets, keyed on the token owner **+ the
+token's workspace** — not on the token itself. Minting a second token does not
+buy a second allowance; that is the point, because the expensive half of this
+surface shares its counter with Motir's own UI.
+
+| What is spent                      | On                                                                    | Default        | Env                                           |
+| ---------------------------------- | --------------------------------------------------------------------- | -------------- | --------------------------------------------- |
+| **Requests** (`mcp:call`)          | every request, whatever it asks for                                   | 300 per minute | `MOTIR_MCP_RATE_LIMIT` / `_WINDOW_MS`         |
+| **AI generations** (`ai:generate`) | `expand_item`, `submit_plan_session` — the tools that run a model job | 10 per minute  | `MOTIR_AI_GENERATE_RATE_LIMIT` / `_WINDOW_MS` |
+
+Reads, transitions and sprint writes only ever spend the first budget: an agent
+polling `next_ready` is not metered as if it were generating a plan. The two
+job-submitting tools spend **both**, and their generation budget is the same one
+the "Expand" and plan buttons in the Motir UI draw from.
+
+**How a refusal arrives**, in the two shapes:
+
+- **Over the request budget** — HTTP **429** with `Retry-After` and the
+  `X-RateLimit-Limit` / `-Remaining` / `-Reset` triple, and a JSON-RPC error body:
+
+  ```json
+  {
+    "jsonrpc": "2.0",
+    "id": null,
+    "error": {
+      "code": -32029,
+      "message": "Too many requests. Retry in 27 seconds.",
+      "data": {
+        "code": "RATE_LIMITED",
+        "retryAfterSeconds": 27,
+        "limit": 300,
+        "remaining": 0,
+        "resetAt": 1754835600
+      }
+    }
+  }
+  ```
+
+  An SDK client surfaces this as a transport error carrying the 429; a client
+  posting JSON-RPC directly can read `error.data` and back off precisely.
+
+- **Over the generation budget** — an ordinary tool **error result**
+  (`isError: true`) whose text carries `RATE_LIMITED` and the retry seconds. The
+  request itself succeeded, so it comes back as a normal `tools/call` response.
+
+The `X-RateLimit-*` headers ride **every** response, not only the refusals, so a
+client can pace itself before it hits the wall.
+
 ## Wiring an agent
 
 Use the endpoint URL for your deployment. In **local development** it is:
@@ -1147,7 +1197,11 @@ Errors: a leaf target (or one outside the caller's project) returns
 `INVALID_TARGET` / `NOT_FOUND`; a refused job returns the motir-ai code verbatim
 — `MOTIR_AI_OUT_OF_CREDITS` (buy credits; do not retry) or
 `MOTIR_AI_UNAVAILABLE` (retryable). The job runs on the **token owner's** AI
-credits. Scope token: `work_items:write`.
+credits, and draws the shared **`ai:generate`** budget (see
+[Rate limits](#rate-limits)) — the same one the "Expand" button in Motir spends,
+so a loop here cannot be paid for out of a looser allowance. Over budget returns
+a `RATE_LIMITED` tool error _before_ the job is submitted; retry after the
+seconds it names. Scope token: `work_items:write`.
 
 #### `get_plan_status`
 
@@ -1280,7 +1334,12 @@ first); an empty body returns `PLAN_CHANGE_EMPTY_TURN`; more than 20 anchors
 returns `PLAN_CHANGE_TOO_MANY_TARGETS`. A refused job returns the motir-ai code
 verbatim — `MOTIR_AI_OUT_OF_CREDITS` (do not retry) or `MOTIR_AI_UNAVAILABLE`
 (retryable) — and **leaves the thread intact**, so your turns are never lost and
-no orphan `Plan` is opened. The job runs on the **token owner's** AI credits.
+no orphan `Plan` is opened. The job runs on the **token owner's** AI credits, and
+`submit_plan_session` — alone among these three — draws the shared
+**`ai:generate`** budget (see [Rate limits](#rate-limits)): opening a thread and
+appending turns cost nothing at the provider, submitting one does. Over budget
+returns a `RATE_LIMITED` tool error before the job is submitted, and likewise
+leaves the thread intact.
 
 > **Fresh projects.** These tools drive plan CHANGE (augment / contextual
 > re-plan) against an existing tree. Generating a plan for an empty project is

@@ -11,6 +11,18 @@ import {
 } from '@/lib/rateLimit/authGuard';
 import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 import { enforceAiRateLimit, enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
+import {
+  enforceMcpRateLimit,
+  MCP_RATE_LIMITED_JSONRPC_CODE,
+  mcpRateLimitedResponse,
+} from '@/lib/rateLimit/mcpGuard';
+import { billableToolDenial, isBillableTool, MCP_BILLABLE_TOOLS } from '@/lib/mcp/rateLimitGate';
+import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
+import {
+  DEFAULT_AI_RATE_LIMIT,
+  DEFAULT_AI_GENERATE_RATE_LIMIT,
+  DEFAULT_MCP_RATE_LIMIT,
+} from '@/lib/rateLimit/budgets';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { JobAuthError, JobRateLimitedError } from '@/lib/ai/jobAuth';
 import { rateLimitedResponse } from '@/lib/rateLimit/guard';
@@ -30,6 +42,10 @@ const ENVS = [
   'MOTIR_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS',
   'MOTIR_AI_RATE_LIMIT',
   'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
+  'MOTIR_AI_GENERATE_RATE_LIMIT',
+  'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS',
+  'MOTIR_MCP_RATE_LIMIT',
+  'MOTIR_MCP_RATE_LIMIT_WINDOW_MS',
   RATE_LIMIT_DISABLE_ENV,
 ];
 
@@ -266,6 +282,57 @@ describe('the AI surface', () => {
     expect(await enforceAiRateLimit(ctx, 'ai:internal')).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).not.toBeNull();
   });
+
+  // ── GENERATION (MOTIR-2597) ────────────────────────────────────────────────
+  // The job-SUBMITTING routes draw `ai:generate`, which is both a separate bucket
+  // and a separate CEILING — a plan generation costs many chat turns, so metering
+  // it by the chat allowance would set the expensive door's limit from the cheap
+  // one.
+
+  it('generation takes its OWN budget, not the chat one', async () => {
+    process.env['MOTIR_AI_RATE_LIMIT'] = '100';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    const refused = await enforceAiRateLimit(ctx, 'ai:generate');
+    expect(refused!.status).toBe(429);
+    expect(refused!.headers.get('x-ratelimit-limit')).toBe('1');
+    expect(Number(refused!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+  });
+
+  it('spending the generation budget leaves the chat budget alone', async () => {
+    // The reason the two are separate scopes at all: a user who has run out of
+    // plan generations can still ask a question, and a chat-box loop cannot
+    // consume the generation allowance.
+    process.env['MOTIR_AI_RATE_LIMIT'] = '2';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
+  });
+
+  it('generation is keyed per user + workspace like every other AI scope', async () => {
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w1' }, 'ai:generate')).toBeNull();
+    expect(await enforceAiRateLimit({ userId: 'u2', workspaceId: 'w1' }, 'ai:generate')).toBeNull();
+    expect(
+      await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w1' }, 'ai:generate'),
+    ).not.toBeNull();
+  });
+
+  it('defaults to a TIGHTER ceiling than chat when neither env is set', async () => {
+    // The relationship is the point, not either number: if a future edit raises
+    // the generation default past the chat one, the expensive door is again
+    // metered more loosely than the cheap one.
+    expect(DEFAULT_AI_GENERATE_RATE_LIMIT).toBeLessThan(DEFAULT_AI_RATE_LIMIT);
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = 'not a number';
+    const refusedAt = DEFAULT_AI_GENERATE_RATE_LIMIT;
+    for (let i = 0; i < refusedAt; i += 1) {
+      expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    }
+    // A malformed value falls back to the documented default rather than
+    // disabling the limiter.
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
+  });
 });
 
 describe('the tenant-LESS internal routes (service-bearer gated)', () => {
@@ -341,6 +408,177 @@ describe('the internal-AI error mapper', () => {
   });
 });
 
+// ── MCP (MOTIR-2610) ─────────────────────────────────────────────────────────
+// `/api/mcp` is ONE route multiplexing every tool, so it is metered TWICE: the
+// transport spends a generous `mcp:call` volume budget on every request, and the
+// two tools that submit a model job additionally spend `ai:generate` at the
+// dispatch seam. These cases pin that split — including the thing the split
+// exists for, that neither budget can be spent through the other.
+
+describe('the MCP transport surface', () => {
+  const ctx = { userId: 'mcp_user', workspaceId: 'mcp_ws' };
+
+  it('refuses the (N+1)-th request with a 429 + Retry-After + X-RateLimit-*', async () => {
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '2';
+    expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
+
+    const { refusal } = await enforceMcpRateLimit(ctx);
+    expect(refusal).not.toBeNull();
+    expect(refusal!.status).toBe(429);
+    expect(Number(refusal!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+    expect(refusal!.headers.get('x-ratelimit-limit')).toBe('2');
+    expect(refusal!.headers.get('x-ratelimit-remaining')).toBe('0');
+  });
+
+  it('shapes the refusal as a JSON-RPC error envelope a client can parse', async () => {
+    // The AC's "not a bare HTTP body a client cannot parse". `mcp-handler` pairs a
+    // non-2xx status with a JSON-RPC envelope for its own transport refusal (the
+    // GET/DELETE 405), and the SDK client surfaces a non-2xx body as TEXT
+    // (`StreamableHTTPError(status, text)`), so a parseable envelope serves both.
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
+    await enforceMcpRateLimit(ctx);
+    const { refusal } = await enforceMcpRateLimit(ctx);
+
+    expect(refusal!.headers.get('content-type')).toContain('application/json');
+    const body = await refusal!.json();
+    expect(body).toMatchObject({
+      jsonrpc: '2.0',
+      id: null,
+      error: {
+        code: MCP_RATE_LIMITED_JSONRPC_CODE,
+        data: { code: 'RATE_LIMITED', limit: 1, remaining: 0 },
+      },
+    });
+    expect(body.error.message).toMatch(/Retry in \d+ seconds?\./);
+    expect(body.error.data.retryAfterSeconds).toBeGreaterThanOrEqual(1);
+  });
+
+  it('uses a JSON-RPC code inside the implementation-defined range, clear of the SDK', () => {
+    // -32000..-32099 is JSON-RPC 2.0's server-error range; the SDK reserves
+    // -32000 / -32001 / -32042 inside it, and mcp-handler emits -32000 for its
+    // own 405. Colliding would make a rate-limit refusal indistinguishable from a
+    // dropped connection.
+    expect(MCP_RATE_LIMITED_JSONRPC_CODE).toBeLessThanOrEqual(-32000);
+    expect(MCP_RATE_LIMITED_JSONRPC_CODE).toBeGreaterThanOrEqual(-32099);
+    expect([-32000, -32001, -32042]).not.toContain(MCP_RATE_LIMITED_JSONRPC_CODE);
+  });
+
+  it('stamps the budget headers on an ALLOWED request too, so a client can pace itself', async () => {
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '5';
+    const { refusal, headers } = await enforceMcpRateLimit(ctx);
+    expect(refusal).toBeNull();
+    expect(headers['x-ratelimit-limit']).toBe('5');
+    expect(headers['x-ratelimit-remaining']).toBe('4');
+    // Not refused, so nothing to retry after.
+    expect(headers['Retry-After']).toBeUndefined();
+  });
+
+  it('keys on USER + WORKSPACE, not on the PAT fingerprint', async () => {
+    // The AC's axis check, and the reason for it: a token fingerprint would hand
+    // every newly-minted PAT a fresh budget, and minting one is self-service. The
+    // guard is not even given a token, so a fingerprint cannot leak into the key.
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
+    expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w1' })).refusal).toBeNull();
+    expect((await enforceMcpRateLimit({ userId: 'u2', workspaceId: 'w1' })).refusal).toBeNull();
+    expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w2' })).refusal).toBeNull();
+    expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w1' })).refusal).not.toBeNull();
+  });
+
+  it('is its OWN bucket — an exhausted MCP budget leaves chat and generation alone', async () => {
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
+    process.env['MOTIR_AI_RATE_LIMIT'] = '5';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '5';
+    expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
+    expect((await enforceMcpRateLimit(ctx)).refusal).not.toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+  });
+
+  it('defaults FAR looser than the browser budgets — the caller here is a script', async () => {
+    // The relationship is the assertion, not the number: an agent legitimately
+    // loops (an initialize + a notification + the call, per CLI operation), so a
+    // ceiling tuned for a human clicking buttons would be an outage of the
+    // product rather than a defence of it. Generation stays scarce regardless —
+    // that ceiling is enforced per TOOL, below.
+    expect(DEFAULT_MCP_RATE_LIMIT).toBeGreaterThan(DEFAULT_AI_RATE_LIMIT);
+    expect(DEFAULT_MCP_RATE_LIMIT).toBeGreaterThan(DEFAULT_AI_GENERATE_RATE_LIMIT);
+  });
+
+  it('honours the shared E2E disable flag rather than a second switch of its own', async () => {
+    process.env[RATE_LIMIT_DISABLE_ENV] = '1';
+    process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
+    for (let i = 0; i < 4; i += 1) {
+      expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
+    }
+  });
+
+  it('builds a refusal from any decision, degraded flag included', async () => {
+    // `mcpRateLimitedResponse` is the only place the envelope is shaped, so it is
+    // exercised directly too — a fail-open (degraded) decision never reaches it,
+    // but a hand-built one proves the shape does not depend on the store.
+    const built = mcpRateLimitedResponse({
+      allowed: false,
+      limit: 7,
+      remaining: 0,
+      resetAt: Math.floor(Date.now() / 1000) + 1,
+      degraded: false,
+    });
+    expect(built.status).toBe(429);
+    expect(built.headers.get('Retry-After')).toBe('1');
+    await expect(built.json()).resolves.toMatchObject({
+      error: { message: 'Too many requests. Retry in 1 second.' },
+    });
+  });
+});
+
+describe('the MCP BILLABLE tools', () => {
+  const ctx = { userId: 'agent_1', workspaceId: 'ws_1' };
+
+  it('a job-submitting tool draws the ai:generate bucket', async () => {
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await billableToolDenial('expand_item', ctx)).toBeNull();
+
+    const refused = await billableToolDenial('expand_item', ctx);
+    expect(refused).toMatchObject({ isError: true });
+    expect(JSON.stringify(refused)).toContain('RATE_LIMITED');
+  });
+
+  it('shares ONE counter with the browser door — the whole point of the card', async () => {
+    // MOTIR-2597 capped `POST /api/ai/expand`; this tool reaches the same
+    // `aiPlanEditsService.submitExpand`. If the two kept separate counters, the
+    // agent door would simply be a second allowance for the same spend.
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    expect(await billableToolDenial('expand_item', ctx)).not.toBeNull();
+  });
+
+  it('and in the other direction — a tool call spends the browser route’s budget', async () => {
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await billableToolDenial('submit_plan_session', ctx)).toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
+  });
+
+  it('never meters a NON-billable tool on the generation budget', async () => {
+    // "An agent polling next_ready must not be metered as if it were generating a
+    // plan." Its ceiling is the transport's `mcp:call`, spent one layer out.
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    for (const tool of ['next_ready', 'get_work_item', 'transition_status', 'get_plan_status']) {
+      for (let i = 0; i < 4; i += 1) {
+        expect(await billableToolDenial(tool, ctx)).toBeNull();
+      }
+    }
+    // And nothing above touched the generation budget.
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+  });
+
+  it('classifies only names the registry actually exposes', () => {
+    for (const tool of MCP_BILLABLE_TOOLS) expect(MCP_TOOL_NAMES).toContain(tool);
+    expect(isBillableTool('expand_item')).toBe(true);
+    expect(isBillableTool('get_work_item')).toBe(false);
+  });
+});
+
 // ── WIRING ───────────────────────────────────────────────────────────────────
 
 describe('the routes are actually WIRED to the guards', () => {
@@ -354,11 +592,118 @@ describe('the routes are actually WIRED to the guards', () => {
     ['app/api/public-requests/[id]/comments/route.ts', 'enforcePublicWriteRateLimit'],
     ['app/api/public-requests/[id]/upvote/route.ts', 'enforcePublicWriteRateLimit'],
     ['app/api/ai/chat/route.ts', 'enforceAiRateLimit'],
+    // The MCP transport's own guard (MOTIR-2610). Deleting the call from the
+    // route is exactly how this surface came to be unlimited in the first place,
+    // so it fails HERE now rather than in production.
+    ['app/api/mcp/route.ts', 'enforceMcpRateLimit'],
+    // …and the dispatch-seam half: the route asks for it, the registry applies it.
+    ['app/api/mcp/route.ts', 'registerMcpTools(server, contextFromExtra, scopesFromExtra, true)'],
+    ['lib/mcp/registry.ts', 'rateLimitedServer'],
   ];
 
   it.each(wiring)('%s calls %s', (file, symbol) => {
     const source = readFileSync(file, 'utf8');
     expect(source).toContain(symbol);
+  });
+
+  // ⚠️ The BROWSER AI surface, enumerated from the filesystem (MOTIR-2597).
+  //
+  // 8.5.9 limited `/api/ai/chat` and `/api/internal/ai/*` because those were the
+  // two surfaces its acceptance criteria named — which left the routes that cost
+  // the most (plan generation, expansion, re-plan, audit) uncapped. A hand list
+  // would have the same shape as that gap, so this reads the directory instead:
+  // every `app/api/ai/**/route.ts` must land in EXACTLY ONE of the two sets
+  // below, and both are asserted TIGHT IN BOTH DIRECTIONS. A new AI route is a
+  // failing test until somebody classifies it — and a route that leaves its set
+  // (a guard deleted, an unlimited read that starts submitting) fails too, which
+  // a one-directional allowlist would not catch.
+  //
+  // The line between the sets is the MONEY, not the HTTP verb: a route belongs in
+  // `LIMITED` when it causes motir-ai to run a model job (`submitJob`, or the
+  // upstream re-audit `refreshCodeAudit` queues). Everything else — reading a job
+  // back, streaming one already paid for, appending a conversation turn to our own
+  // database, materializing a plan that was already generated — spends nothing at
+  // the provider, and a ceiling there would only refuse a caller the answer they
+  // have already been charged for.
+  const LIMITED: ReadonlyArray<string> = [
+    'app/api/ai/augment/route.ts',
+    'app/api/ai/chat/route.ts',
+    'app/api/ai/coding-convention/refresh/route.ts',
+    'app/api/ai/expand/route.ts',
+    'app/api/ai/explanation/route.ts',
+    'app/api/ai/plan-change/session/submit/route.ts',
+    'app/api/ai/plan/generate/route.ts',
+    'app/api/ai/plan/sprint/route.ts',
+    'app/api/ai/replan/route.ts',
+  ];
+
+  // Each of these submits NO model job. The reason is in the route's own header
+  // comment (asserted below), so the classification cannot drift out of the code
+  // it describes.
+  const UNLIMITED_BY_DESIGN: ReadonlyArray<string> = [
+    'app/api/ai/access/route.ts',
+    'app/api/ai/augment/[jobId]/stream/route.ts',
+    'app/api/ai/chat/[jobId]/stream/route.ts',
+    'app/api/ai/coding-convention/audit-coverage/route.ts',
+    'app/api/ai/coding-convention/audit/route.ts',
+    'app/api/ai/coding-convention/convention/route.ts',
+    'app/api/ai/expand/[jobId]/stream/route.ts',
+    'app/api/ai/explanation/[jobId]/stream/route.ts',
+    'app/api/ai/jobs/[jobId]/route.ts',
+    'app/api/ai/plan-change/session/planner-turn/route.ts',
+    'app/api/ai/plan-change/session/route.ts',
+    'app/api/ai/plan-change/session/turns/route.ts',
+    'app/api/ai/plan/generate/[jobId]/stream/route.ts',
+    'app/api/ai/plan/sprint/[jobId]/review/route.ts',
+    'app/api/ai/plan/sprint/[jobId]/stream/route.ts',
+    'app/api/ai/plan/sprint/approve/route.ts',
+    'app/api/ai/pre-plan/route.ts',
+    'app/api/ai/replan/[jobId]/stream/route.ts',
+  ];
+
+  async function aiRoutes(): Promise<string[]> {
+    const { globSync } = await import('node:fs');
+    return globSync('app/api/ai/**/route.ts').sort();
+  }
+
+  it('EVERY /api/ai route is classified — the directory holds these files and no others', async () => {
+    // The membership check that makes the two lists below binding: a route added
+    // to `app/api/ai/**` and to NEITHER list fails here, before anyone has to
+    // notice it is unlimited in production.
+    expect(await aiRoutes()).toEqual([...LIMITED, ...UNLIMITED_BY_DESIGN].sort());
+  });
+
+  it('every job-SUBMITTING /api/ai route calls the limiter', async () => {
+    const routes = await aiRoutes();
+    const limited = routes.filter((file) =>
+      /\benforceAiRateLimit\(/.test(readFileSync(file, 'utf8')),
+    );
+    // Tight in both directions: a missing guard AND a guard that appeared on a
+    // route nobody classified as submitting are both failures.
+    expect(limited).toEqual([...LIMITED].sort());
+  });
+
+  it('every submitting route spends the GENERATION budget (chat aside)', async () => {
+    for (const file of LIMITED) {
+      if (file === 'app/api/ai/chat/route.ts') continue;
+      const source = readFileSync(file, 'utf8');
+      expect(source, `${file} must draw the ai:generate bucket`).toContain(
+        "enforceAiRateLimit(ctx, 'ai:generate')",
+      );
+    }
+  });
+
+  it('every unlimited AI route SAYS why, in its own source', async () => {
+    // The acceptance criterion the streams and polls owe: the next reader must be
+    // able to tell "deliberately unlimited" from "nobody got to it" without
+    // finding this test.
+    for (const file of UNLIMITED_BY_DESIGN) {
+      const source = readFileSync(file, 'utf8');
+      expect(source, `${file} must explain why it carries no limit`).toContain(
+        'NOT rate-limited, deliberately',
+      );
+      expect(source, `${file} must not call the limiter`).not.toMatch(/\benforceAiRateLimit\(/);
+    }
   });
 
   it('EVERY authenticated /api/internal/ai route is limited, by one of the two gates', async () => {
@@ -400,5 +745,104 @@ describe('the routes are actually WIRED to the guards', () => {
     // no-op seam. Named explicitly so a second unauthenticated route cannot slip
     // in behind a passing test.
     expect(unlimited).toEqual(['app/api/internal/ai/dev/noop/route.ts']);
+  });
+
+  // ⚠️ The MCP tool surface, enumerated from the FILESYSTEM (MOTIR-2610).
+  //
+  // The defect this card fixes was a hand-drawn boundary: MOTIR-2597 capped the
+  // doors its acceptance criteria named and the MCP door to the identical job
+  // stayed open. `MCP_BILLABLE_TOOLS` is a hand list too, so it is re-derived
+  // here from the tool modules' own source rather than trusted — the same move
+  // the `/api/ai/**` block above makes, one surface over.
+  //
+  // The line is the MONEY: a tool is billable when calling it causes motir-ai to
+  // run a model job. Both such calls today are one hop from `submitJob`, and the
+  // hop is asserted rather than described, so a comment cannot go stale against
+  // the code it claims to summarise.
+  const JOB_SUBMITTING_CALLS: ReadonlyArray<{ call: string; service: string; reaches: string }> = [
+    {
+      call: 'aiPlanEditsService.submitExpand(',
+      service: 'lib/services/aiPlanEditsService.ts',
+      reaches: 'submitJob',
+    },
+    {
+      call: 'planChangeSessionsService.submit(',
+      service: 'lib/services/planChangeSessionsService.ts',
+      reaches: 'aiPlanEditsService.submit',
+    },
+  ];
+
+  it('each named job-submitting call really does reach a model job', () => {
+    for (const { service, reaches } of JOB_SUBMITTING_CALLS) {
+      expect(readFileSync(service, 'utf8'), `${service} must reach ${reaches}`).toContain(reaches);
+    }
+  });
+
+  it('EVERY tool module that submits a model job declares a billable tool — and vice versa', async () => {
+    const { globSync } = await import('node:fs');
+    const modules = globSync('lib/mcp/tools/*.ts').sort();
+    // The registry has ~39 tools across these modules; a glob that matched a
+    // handful would make every assertion below vacuously true.
+    expect(modules.length).toBeGreaterThan(20);
+
+    for (const file of modules) {
+      const source = readFileSync(file, 'utf8');
+      const submits = JOB_SUBMITTING_CALLS.filter(({ call }) => source.includes(call)).length;
+      // Every tool module names its tools as `export const X_TOOL_NAME = '…'`.
+      const declared = [...source.matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].map((m) => m[1] as string);
+      const billable = declared.filter((name) => isBillableTool(name));
+
+      // Tight in BOTH directions, per module: a new tool that submits a job and
+      // was never classified fails on the left; a tool classified billable whose
+      // module stopped submitting (or never did) fails on the right.
+      expect(
+        billable.length,
+        `${file} has ${submits} job-submitting call(s) but ${billable.length} billable tool(s): ` +
+          `${JSON.stringify(declared)}`,
+      ).toBe(submits);
+    }
+  });
+
+  it('no tool module reaches a job-submitting SERVICE without declaring a billable tool', async () => {
+    // The check above is only as complete as `JOB_SUBMITTING_CALLS`, which is a
+    // hand list of call expressions — so this one derives the danger set from the
+    // services themselves: every `lib/services/*.ts` whose own source calls
+    // `submitJob`. A tool module that imports one of those and classifies nothing
+    // is the exact shape of the next occurrence of this bug, and it fails here.
+    //
+    // (It reaches the FIRST hop. `submit_plan_session` is a second hop —
+    // `planChangeSessionsService` wraps `aiPlanEditsService` — which is why the
+    // enumerated call list above exists alongside this.)
+    const { globSync } = await import('node:fs');
+    const submitters = globSync('lib/services/*.ts')
+      .filter((file) => readFileSync(file, 'utf8').includes('submitJob'))
+      .map((file) => (file.split('/').pop() as string).replace(/\.ts$/, ''));
+    expect(submitters.length).toBeGreaterThan(5);
+
+    for (const file of globSync('lib/mcp/tools/*.ts')) {
+      const source = readFileSync(file, 'utf8');
+      const reaches = submitters.filter((service) =>
+        new RegExp(`\\b${service}\\s*\\.`).test(source),
+      );
+      if (reaches.length === 0) continue;
+      const billable = [...source.matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].filter((m) =>
+        isBillableTool(m[1] as string),
+      );
+      expect(
+        billable.length,
+        `${file} calls ${reaches.join(', ')} — which submit model jobs — but declares no billable tool`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('every billable tool is registered by a module the glob above actually reached', async () => {
+    // The per-module check cannot see a billable name that belongs to NO module —
+    // a typo in `MCP_BILLABLE_TOOLS` would pass it silently while metering
+    // nothing at all.
+    const { globSync } = await import('node:fs');
+    const declaredEverywhere = globSync('lib/mcp/tools/*.ts').flatMap((file) =>
+      [...readFileSync(file, 'utf8').matchAll(/_TOOL_NAME = '([a-z_]+)'/g)].map((m) => m[1]),
+    );
+    for (const tool of MCP_BILLABLE_TOOLS) expect(declaredEverywhere).toContain(tool);
   });
 });

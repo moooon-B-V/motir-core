@@ -503,6 +503,83 @@ describe('the release lane that publishes the images (7.9.7e)', () => {
       expect(documented).toContain('ghcr.io/moooon-b-v/motir-sandbox:claude');
     });
   });
+
+  // ── And whether what it pulled CONTAINS the documented commands (MOTIR-2612) ─
+  // The gap the two jobs above leave between them: one asks the publisher's
+  // question of a version number, the other asks the consumer's question of a
+  // pull. Neither reads the command set, so `/docs/sandbox` could — and for five
+  // days did — instruct a command the image did not have.
+  describe('and whether the CLI inside carries every command the docs name', () => {
+    /** The `sandbox-commands:` job window. Same cut as `publicJob`, and for the
+     *  same reason: "this job contains no login" is a claim about THIS job. */
+    const commandsJob = (() => {
+      const lines = images.split('\n').filter((line) => !line.trim().startsWith('#'));
+      const start = lines.findIndex((line) => line === '  sandbox-commands:');
+      if (start === -1) {
+        throw new Error('sandbox-images.yml has no `sandbox-commands:` job — MOTIR-2612 regressed');
+      }
+      const after = lines.slice(start + 1);
+      const end = after.findIndex((line) => /^ {2}[A-Za-z0-9_-]+:$/.test(line));
+      return [lines[start], ...(end === -1 ? after : after.slice(0, end))].join('\n');
+    })();
+
+    it('runs on the release lane only, after everything has been published', () => {
+      expect(commandsJob).toContain('if: ${{ inputs.publish }}');
+      expect(commandsJob).toContain(
+        'needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]',
+      );
+    });
+
+    it('holds NO credential — no login, and no `packages:` scope to log in with', () => {
+      // The load-bearing assertion. The absence of a login step reads as an
+      // oversight to anyone tidying this file later — logging in is what the
+      // neighbouring job does and it would make this one marginally simpler —
+      // and re-crediting it would turn the check back into one we run on
+      // ourselves, which is how the same question got asked from the wrong side
+      // in MOTIR-2010 and answered from the wrong ref in MOTIR-2611.
+      expect(commandsJob).not.toContain('docker/login-action');
+      expect(commandsJob).not.toContain('packages:');
+      expect(commandsJob).not.toContain('secrets.');
+      expect(commandsJob).toMatch(/permissions:\n\s+contents: read\n/);
+    });
+
+    it('checks every published DIGEST, via the script rather than YAML logic', () => {
+      // Every profile's image, not just `:claude` — a profile whose build picked
+      // up a different CLI is exactly the kind of thing one tag cannot show.
+      expect(commandsJob).toContain(
+        'node packages/cli/sandbox/smoke/assert-commands.mjs --image "$IMAGE" --digests digests',
+      );
+      expect(commandsJob).toContain('pattern: sandbox-digest-*');
+      expect(existsSync(join(SMOKE_DIR, 'assert-commands.mjs'))).toBe(true);
+      expect(existsSync(join(SMOKE_DIR, 'assert-commands.d.mts'))).toBe(true);
+    });
+
+    it('needs no Docker daemon, so it can check EVERY platform in the index', () => {
+      // A `docker run` tests the runner's own architecture and nothing else,
+      // while the index publishes amd64 and arm64 and every reader on an
+      // M-series Mac gets the second. The registry-API route is also what lets a
+      // human run this mid-investigation, which is the tool MOTIR-2611's
+      // diagnosis did not have.
+      expect(commandsJob).not.toContain('docker run');
+      expect(commandsJob).not.toContain('docker/setup-qemu-action');
+    });
+
+    it('derives its expectation from the GUIDE, with no second list to drift', () => {
+      // The property that makes the check maintenance-free: adding a
+      // `cliCommands` entry to a guide step changes what the job asserts. A
+      // hand-kept copy would eventually disagree with the page, and a check that
+      // confidently asserts the wrong thing is worse than no check.
+      const script = read(join(SMOKE_DIR, 'assert-commands.mjs'));
+      expect(script).toContain("export const DEFAULT_GUIDE_PATH = 'lib/apiDocs/sandbox.ts'");
+      const guide = read(join(CLI_DIR, '..', '..', 'lib', 'apiDocs', 'sandbox.ts'));
+      expect(guide).toMatch(/cliCommands:\s*\['login'\]/);
+      // The commands must NOT be restated in the script or the workflow — that
+      // is the whole point, and it is a one-line diff away from being lost.
+      expect(commandsJob).not.toMatch(/--(commands|expect)\b/);
+      const derivation = script.slice(script.indexOf('export function parseCliCommands'));
+      expect(derivation).not.toMatch(/'(login|link|doctor)'/);
+    });
+  });
 });
 
 // ── The tripwire for the gap BETWEEN releases (MOTIR-2131) ─────────────────

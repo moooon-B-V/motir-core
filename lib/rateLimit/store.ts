@@ -77,9 +77,12 @@ let override: RateLimitStore | undefined;
  * re-reading the env on every request would let a mid-flight change split one
  * window across two backends.
  *
- * ⚠️ `/api/v1` still reads its store from its own `setRateLimitStore` seam,
- * which MOTIR-2037 (8.5.10) installs THIS implementation into — the second card
- * reuses the store, it does not add a parallel one.
+ * ⚠️ `/api/v1` reads THIS function as its default too (MOTIR-2037 / 8.5.10) —
+ * the second card reused the store rather than adding a parallel one, so there
+ * is one counter, one backend choice and one place to change it. It keeps its
+ * own budget, not its own store. `setRateLimitStore` survives in
+ * `lib/api/v1/rateLimit.ts` as a test override; nothing in production calls it,
+ * because a default needs no wiring step to forget.
  */
 export function sharedRateLimitStore(): RateLimitStore {
   if (override) return override;

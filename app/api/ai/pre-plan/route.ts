@@ -25,6 +25,9 @@ import { aiPlanGateErrorResponse } from '@/lib/ai/planGateResponse';
 // route serializes it as a 200. Only a motir-ai transport / upstream failure
 // maps to 502 (the dependency failed, not the caller) — never a misleading empty.
 
+// NOT rate-limited, deliberately (MOTIR-2597): this reads and writes the project's own pre-plan
+// state, so no model job is submitted and no provider money is spent on this path. The AI
+// ceiling guards the doors that SUBMIT; adding one here would only cap a database read.
 export async function GET(): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });

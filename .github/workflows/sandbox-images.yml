@@ -350,3 +350,51 @@ jobs:
           set -euo pipefail
           digest=$(cat digests/claude)
           docker run --rm "${IMAGE}@${digest}" motir --version
+
+  # ── Does the command on the PAGE exist in the image? (MOTIR-2612) ──────────
+  # `sandbox-published` runs `motir --version` as the publisher. `sandbox-public`
+  # above proves a stranger can pull the bytes and that the documented `docker
+  # run` works. Neither reads what is INSIDE: `--version` is a number, and a
+  # successful pull says nothing about the command set. So the question
+  # `/docs/sandbox` raises — "does the command this page tells you to type exist
+  # in the image it tells you to pull?" — was asked by nothing, and was answered
+  # wrongly twice: MOTIR-2131 (true: the image predated `motir login` for five
+  # days) and MOTIR-2611 (false: a whole card dispatched on the belief, because
+  # confirming it meant reading the artifact and nobody could).
+  #
+  # The expected set is DERIVED from `lib/apiDocs/sandbox.ts`'s `cliCommands`, the
+  # same data the page renders, so a step that names a new command is covered the
+  # day it is written and there is no second list to drift. A derivation that
+  # produced nothing is exit 2, never a green 0-of-0.
+  #
+  # Modelled on `sandbox-public`, NOT on `sandbox-published`: same three
+  # structural guarantees of anonymity — no `docker/login-action`, no `packages:`
+  # scope, and a script that reads no docker config and holds no credential of
+  # ours. `packages/cli/test/sandboxCi.test.ts` asserts all three, because the
+  # absence of a login step reads as an oversight to anyone tidying this file
+  # later and that is exactly how the last version of this question got asked
+  # from the wrong side.
+  #
+  # It needs no Docker daemon at all: it reads the layers over the registry API,
+  # which is what lets it check EVERY platform in the index (a `docker run` tests
+  # only the runner's own architecture, and half our readers are on arm64) and
+  # what lets a human run it mid-investigation from any shell.
+  sandbox-commands:
+    name: Verify the published CLI has every command the docs name
+    if: ${{ inputs.publish }}
+    needs: [sandbox-smoke, sandbox-profiles-matrix, sandbox-profiles, sandbox-published]
+    runs-on: ubuntu-latest
+    # `contents: read` and nothing else — it needs the checkout for the guide
+    # source it derives the expectation from, and no registry scope whatsoever.
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download the published digests
+        uses: actions/download-artifact@v7
+        with:
+          pattern: sandbox-digest-*
+          merge-multiple: true
+          path: digests
+      - name: Assert every documented command is IN the published images
+        run: node packages/cli/sandbox/smoke/assert-commands.mjs --image "$IMAGE" --digests digests

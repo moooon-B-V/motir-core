@@ -39,6 +39,10 @@ import {
   InvalidRoadmapCursorError,
   PUBLIC_ROADMAP_PAGE_SIZE,
 } from '@/lib/publicProjects/roadmapCursor';
+import { publicSubmitBudget } from '@/lib/rateLimit/budgets';
+import { rateLimitKey } from '@/lib/rateLimit/keys';
+import { consumeSharedRateLimit } from '@/lib/rateLimit/limiter';
+import { retryAfterSeconds } from '@/lib/api/v1/rateLimit';
 import type { PublicRoadmapCursor, PublicRoadmapRow } from '@/lib/repositories/workItemRepository';
 import type { WorkflowStatusDto } from '@/lib/dto/workflows';
 import type {
@@ -309,36 +313,39 @@ async function countRoadmapColumn(
 // load-all; the UI shows the top matches as "upvote this instead").
 const DUPLICATE_MATCH_LIMIT = 5;
 
-// Per-account submission throttle (the ADR §6 abuse guard for an
-// internet-facing write). In-memory sliding window keyed by the submitting
-// account — same shape as `attachmentsService`'s upload throttle, and the same
-// caveat: it is PER-PROCESS (pre-Epic-8), a first-line abuse guard, not a
-// distributed rate limiter. A real edge/Redis limiter is a later hardening.
-const SUBMISSION_RATE_LIMIT = 5;
-const SUBMISSION_RATE_WINDOW_MS = 10 * 60_000; // 10 minutes
-const submissionLog = new Map<string, number[]>();
-
 /**
- * Throttle a submitting account: throw {@link PublicSubmissionRateLimitedError}
- * when it has already made {@link SUBMISSION_RATE_LIMIT} submissions inside the
- * window, otherwise record this attempt. Mirrors `attachmentsService`'s
+ * Throttle a submitting ACCOUNT — counted through the SHARED store
+ * (MOTIR-2598): throw {@link PublicSubmissionRateLimitedError} once the account
+ * has spent its {@link publicSubmitBudget}, otherwise let the submission
+ * through. The second limb behind the IP-keyed `enforcePublicWriteRateLimit`
+ * the route already runs; the two are additive by design.
+ *
+ * ⚠️ IT NO LONGER OWNS A COUNTER. This was a module-level
+ * `Map<string, number[]>` sliding window and therefore per Node PROCESS: on
+ * Fly's `machine_count: 2` an advertised 5 submissions per 10 minutes was
+ * really 10. Subtask 8.5.9 (MOTIR-1165) landed one shared counter and left this
+ * surface behind; this is the part that was skipped. The sliding→fixed-window
+ * consequences are the same two documented on `attachmentsService`'s
  * `checkRateLimit`.
+ *
+ * **`Retry-After` now names the window's END, not the oldest attempt's expiry.**
+ * The sliding window could answer "wait until your oldest of five ages out";
+ * a fixed window has no per-attempt timestamps to derive that from, so the
+ * answer is the seconds left in the current cell — computed by `/api/v1`'s
+ * shipped `retryAfterSeconds`, the same helper every other 429 in the app uses.
+ * Both are bounded by the window and never below 1, so the header stays a
+ * truthful "wait at least this long"; only the shape of its value changes (it
+ * ticks down to the same instant for every caller in a cell, rather than being
+ * personal to each caller's history).
  */
-function checkSubmissionRateLimit(userId: string): void {
-  const now = Date.now();
-  const recent = (submissionLog.get(userId) ?? []).filter(
-    (t) => now - t < SUBMISSION_RATE_WINDOW_MS,
+async function checkSubmissionRateLimit(userId: string): Promise<void> {
+  const decision = await consumeSharedRateLimit(
+    rateLimitKey('public-submit', userId),
+    publicSubmitBudget(),
   );
-  if (recent.length >= SUBMISSION_RATE_LIMIT) {
-    const oldest = recent[0]!;
-    const retryAfterSeconds = Math.max(
-      1,
-      Math.ceil((oldest + SUBMISSION_RATE_WINDOW_MS - now) / 1000),
-    );
-    throw new PublicSubmissionRateLimitedError(retryAfterSeconds);
+  if (!decision.allowed) {
+    throw new PublicSubmissionRateLimitedError(retryAfterSeconds(decision));
   }
-  recent.push(now);
-  submissionLog.set(userId, recent);
 }
 
 export const publicProjectsService = {
@@ -928,7 +935,7 @@ export const publicProjectsService = {
     // Gate FIRST (a non-public project / denied grant rejects before any quota
     // is consumed), then throttle the legit public submitter.
     await projectAccessService.assertCanSubmitToTriage(projectId, submitterUserId);
-    checkSubmissionRateLimit(submitterUserId);
+    await checkSubmissionRateLimit(submitterUserId);
 
     // Resolve the project row for its workspace + identifier (the gate proved it
     // exists and is public). The intake reporter is the workspace OWNER — a

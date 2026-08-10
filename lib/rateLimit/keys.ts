@@ -19,17 +19,33 @@ import { hashToken } from '@/lib/apiTokens/token';
 // accident. It is not personal data and hashing it would only make the table
 // unreadable to us.
 
-/** The limiter classes, one per surface family the card covers. */
+/**
+ * The limiter classes, one per surface family.
+ *
+ * ⚠️ A SCOPE IS A BUCKET. Two surfaces that should not share an allowance must
+ * not share a scope, even when they key on the same component — which is why
+ * `public-submit` is its own entry rather than reusing `public-write`. The
+ * public-write guard keys on the caller's IP at the route edge and covers every
+ * unauthenticated public write; `public-submit` keys on the SUBMITTING ACCOUNT
+ * inside the service, and the two limbs are deliberately additive (a submitter
+ * spends both). Folding them into one scope would not collide today (an account
+ * id and an IP hash to different strings) but would make one budget silently
+ * govern two policies the moment either changed.
+ */
 export type RateLimitScope =
   | 'auth:sign-in'
   | 'auth:sign-up'
   | 'auth:password-reset'
   | 'public-write'
+  | 'public-submit'
   | 'ai:chat'
+  | 'ai:generate'
   | 'ai:internal'
+  | 'mcp:call'
   | 'account:change-password'
   | 'account:set-password-link'
-  | 'idea-draft';
+  | 'idea-draft'
+  | 'upload';
 
 /**
  * A stable, non-reversible key for `scope` + the caller components.
