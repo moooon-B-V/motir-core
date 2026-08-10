@@ -7,7 +7,7 @@ import { commentRepository } from '@/lib/repositories/commentRepository';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
+import { readMembership } from '@/lib/workspaces/membershipGate';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -715,9 +715,13 @@ async function resolveSubmitter(item: WorkItem): Promise<TriageSubmitterDto> {
   if (submitterId === null) {
     return { kind: 'public', userId: null, name: null, email: null, image: null };
   }
+  // MOTIR-2527: the membership read is what SEPARATES `member` from `public` here, so
+  // an unbound read does not merely deny — it silently re-labels every member submitter
+  // as an outside public one. `readMembership` binds the item's own workspace, which is
+  // the context this detail read is already operating in.
   const [submitter, membership] = await Promise.all([
     userRepository.findById(submitterId),
-    workspaceMembershipRepository.findByUserAndWorkspace(submitterId, item.workspaceId),
+    readMembership(submitterId, item.workspaceId),
   ]);
   return {
     kind: membership !== null ? 'member' : 'public',

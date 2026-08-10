@@ -84,3 +84,28 @@ export async function withOrgServiceWriteContext<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Bind `app.organization_id` on a transaction that is ALREADY open — the one case the
+ * `with*Context` wrappers above cannot serve, because the org id is not known until
+ * partway through the transaction.
+ *
+ * The caller is `workspacesService.addMember` (MOTIR-2527): it opens a
+ * `withWorkspaceContext` transaction to insert the workspace membership, learns the
+ * workspace's organization from the row it then reads, and only THEN performs the
+ * upward org auto-join — whose INSERT is gated by `org_membership_insert_active_or_bootstrap`
+ * on this GUC. Splitting that into two transactions would break the atomicity the
+ * upward-membership invariant depends on (6.10.2 §5i: you cannot be in a workspace
+ * without being in its org), so the binding moves instead.
+ *
+ * `set_config(..., true)` is transaction-LOCAL, so the binding dies with `tx` exactly as
+ * the wrappers' do. SECURITY: same constraint as `withOrgServiceWriteContext` — the id
+ * must come from a TRUSTED resolution (here, the workspace row's own `organizationId`),
+ * never from request input.
+ */
+export async function bindOrganizationContext(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+): Promise<void> {
+  await tx.$executeRaw`SELECT set_config('app.organization_id', ${organizationId}, true)`;
+}

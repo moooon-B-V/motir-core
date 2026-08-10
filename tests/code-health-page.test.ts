@@ -119,7 +119,23 @@ describe('/code-health initial read — one convention surface PER connected rep
       REPOS.map((r) => `# ${r} house rules`),
     );
     expect(getConventionMock).toHaveBeenCalledTimes(3);
-    expect(getConventionMock.mock.calls.map((call) => call[0].repoKey)).toEqual(REPOS);
+    // ORDER-INSENSITIVE, matching how the two sibling fan-out assertions in this
+    // file already read (`arrayContaining` below, `.sort()` in the two-phase test).
+    // `readConventions` is a `Promise.all` over the repo set and each branch runs
+    // its own `ai:configure` gate first, so which branch reaches the boundary
+    // client first is a scheduling detail, not behaviour. It became observable in
+    // MOTIR-2527: the gate now resolves inside a bound transaction rather than on
+    // the `db` singleton, so N concurrent gates queue for pool connections and no
+    // longer finish in dispatch order. Reproduced 3/5 runs with that change and
+    // 0/5 without it.
+    //
+    // What MOTIR-2123 guards is untouched — ONE scoped read PER repo, never
+    // `repoRefs[0]` alone — and the ORDERED assertion that matters is two lines
+    // up, on `conventions`, which `Promise.all` keeps in argument order however
+    // the branches interleave.
+    expect(getConventionMock.mock.calls.map((call) => call[0].repoKey).sort()).toEqual(
+      [...REPOS].sort(),
+    );
   });
 
   it('reads the AUDIT for EVERY connected repo, not just the first (MOTIR-2207)', async () => {
