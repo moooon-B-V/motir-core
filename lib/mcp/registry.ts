@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { McpContextResolver, McpScopesResolver } from './context';
 import { scopeGatedServer } from './scopeGate';
+import { rateLimitedServer } from './rateLimitGate';
 import { GET_WORK_ITEM_TOOL_NAME, registerGetWorkItem } from './tools/getWorkItem';
 import {
   GET_WORK_ITEM_ACTIVITY_TOOL_NAME,
@@ -127,13 +128,26 @@ export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
  * scopes include the tool's scope — an ADDITIONAL gate in front of the
  * unchanged 6.4 role checks. Omitting it (the tool round-trip tests) applies no
  * scope narrowing, preserving the pre-7.7.17 behaviour.
+ *
+ * When `meterBillableTools` is set (production, from `app/api/mcp/route.ts`),
+ * the job-SUBMITTING tools additionally spend the `ai:generate` budget before
+ * they run (MOTIR-2610 · `rateLimitGate.ts`). Off for the in-process tool tests,
+ * which have no request — and no rate-limit store — behind them.
+ *
+ * ⚠️ ORDER: the rate-limit wrapper goes OUTSIDE the scope gate, which makes its
+ * check run SECOND at dispatch. Each wrapper registers the callback the next one
+ * wraps, so the outermost wrapper's check ends up innermost — and what we want
+ * is scope-denied FIRST, so a token that may not call `expand_item` cannot drain
+ * its owner's generation budget by calling it anyway.
  */
 export function registerMcpTools(
   server: McpServer,
   resolveContext: McpContextResolver,
   resolveScopes?: McpScopesResolver,
+  meterBillableTools = false,
 ): void {
-  const target = resolveScopes ? scopeGatedServer(server, resolveScopes) : server;
+  const scoped = resolveScopes ? scopeGatedServer(server, resolveScopes) : server;
+  const target = meterBillableTools ? rateLimitedServer(scoped, resolveContext) : scoped;
   // Read + dispatch tools (7.8.4).
   registerGetWorkItem(target, resolveContext);
   // The DISCUSSION read (MOTIR-1999) — a card's comments + change trail, the
@@ -225,13 +239,16 @@ export function registerMcpTools(
  * fixed-context resolver. `resolveScopes`, when given, enables the per-token
  * scope gate (Subtask 7.7.17) — production passes `scopesFromExtra`; a test
  * passes a fixed-scope resolver to exercise scope narrowing, and omits it to run
- * a tool unnarrowed.
+ * a tool unnarrowed. `meterBillableTools` enables the `ai:generate` gate on the
+ * job-submitting tools (MOTIR-2610) — on in production, off for the in-process
+ * tool tests, which have no rate-limit store behind them.
  */
 export function buildMcpServer(
   resolveContext: McpContextResolver,
   resolveScopes?: McpScopesResolver,
+  meterBillableTools = false,
 ): McpServer {
   const server = new McpServer(MCP_SERVER_INFO);
-  registerMcpTools(server, resolveContext, resolveScopes);
+  registerMcpTools(server, resolveContext, resolveScopes, meterBillableTools);
   return server;
 }

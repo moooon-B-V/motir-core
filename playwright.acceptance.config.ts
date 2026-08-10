@@ -37,9 +37,31 @@ import {
 // A failing run leaves no video, so the uploader is a no-op — a red acceptance
 // E2E publishes nothing.
 //
-// Runs OFF-CLOUD (no MOTIR_CLOUD): acceptance video is ungated off-cloud
-// (applicable:false ⇒ eligible), so the panel renders the player with no billing
-// chrome — the simplest surface for the spec + the self-test dogfood.
+// ── Cloud posture: this lane runs CLOUD-ON ──────────────────────────────────
+//
+// `MOTIR_CLOUD` is set below on BOTH the runner process and the webServer, like
+// playwright.billing.config.ts. This is the file's ONE statement of its
+// posture; the assignment sites point back here rather than restate it. Two
+// reasons, and the second is why the paragraph is at the TOP of the file:
+//
+//  1. REACHABILITY. Acceptance video branches on the paid-AI-plan gate
+//     (MOTIR-1630), which is inert off-cloud — an off-cloud run renders the
+//     ungated player and can never reach the toggle-off / no-plan panel states
+//     these specs are here to record.
+//  2. FALSIFIABILITY. Entitlement paths short-circuit to the SAME inert value
+//     off-cloud that they return for an EXEMPT organization
+//     (`billingService.getAiAccess` → `applicable: false`). So off-cloud, an
+//     assertion that a meta org sees no paywall passes because billing does not
+//     exist, not because the exemption works — permanently green, and green for
+//     a reason it is not testing. Cloud-on is what lets that assertion fail.
+//
+// The motir-ai side is the E2E_TEST_BILLING boundary mock — no live Stripe, no
+// live motir-ai.
+//
+// (MOTIR-2601: this block used to open by saying the lane ran OFF-cloud. That
+// was true for the 77 minutes between the lane landing and the flip to
+// cloud-on; it then sat here as the file's first sentence about itself and
+// misled a spec author into writing exactly the assertion reason 2 describes.)
 
 loadEnv();
 
@@ -58,11 +80,10 @@ const INNGEST_CLI_BIN = 'node_modules/inngest-cli/bin/inngest';
 process.env['INNGEST_DEV'] ??= '1';
 process.env['INNGEST_BASE_URL'] ??= INNGEST_BASE_URL;
 
-// CLOUD-ON, like playwright.billing.config.ts: acceptance video branches on the
-// paid-AI-plan gate (MOTIR-1630), which is inert off-cloud — so the E2E must run
-// cloud-on to exercise the toggle-off / no-plan panel states. The motir-ai side
-// is the E2E_TEST_BILLING boundary mock (no live Stripe / motir-ai). Set on the
-// runner too so seed-side reads (setOrgBillingState) match the server.
+// The cloud posture and the two reasons for it: the "Cloud posture" block in
+// this file's header. What follows is that block's mechanics — the boundary
+// mock's origin, and the runner-side sets below (MOTIR_CLOUD is set on the
+// runner too so seed-side reads like setOrgBillingState match the server).
 const MOTIR_AI_URL = 'http://motir-ai.e2e.local';
 // The code-health boundary fixture (MOTIR-2253): the audit-coverage spec drives
 // the SERVER-rendered /code-health page, whose motir-ai reads no browser
