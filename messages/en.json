@@ -5982,7 +5982,7 @@
     "mcpScopeHeading": "What your token can call",
     "mcpToolsTitle": "MCP tools",
     "mcpToolsLede": "Every tool the Motir MCP server exposes, and the scope that gates it. Grouped by scope, because that is the choice you make when you mint the token — leave a scope off and its whole group refuses.",
-    "mcpToolsMeta": "{tools} tools · {scopes} scopes · derived from the server’s own scope map",
+    "mcpToolsMeta": "{tools} tools · {permissions} permissions · derived from the server’s own permission map",
     "mcpToolsSummaryNote": "These are the summaries. For a tool’s exact arguments and response shape, see the reference — it is kept beside the code because those facts change most.",
     "mcpThTool": "Tool",
     "mcpThDoes": "What it does",

@@ -110,10 +110,13 @@ export function permissionLabelKeys(key: PermissionKey): { label: string; descri
  * settled that the token screen must not teach a second way to organise the
  * same permissions the Roles & permissions screen already groups.
  */
-export function permissionsByDomainForTokens(): {
+/** One domain heading and the grantable permissions under it. */
+export interface PermissionDomainGroup {
   domain: PermissionDomain;
   permissions: PermissionMeta[];
-}[] {
+}
+
+export function permissionsByDomainForTokens(): PermissionDomainGroup[] {
   const groups = new Map<PermissionDomain, PermissionMeta[]>();
   for (const meta of PERMISSION_META) {
     const list = groups.get(meta.domain) ?? [];
@@ -121,6 +124,35 @@ export function permissionsByDomainForTokens(): {
     groups.set(meta.domain, list);
   }
   return [...groups.entries()].map(([domain, permissions]) => ({ domain, permissions }));
+}
+
+/**
+ * The picker's TWO COLUMNS — the domain groups split so each column carries
+ * (near-)half the ROWS, not half the groups.
+ *
+ * ⚠️ ROWS, and that distinction is the whole function. Splitting the five
+ * domains by COUNT puts three groups left and two right — but because
+ * `work_item` holds two permissions, that is 4 rows against 2: a visibly
+ * lopsided picker, and taller than the 938px MOTIR-2578 measured the modal
+ * against. Balancing by rows reproduces the asset's 3/3 and keeps the measured
+ * height honest as the grantable set grows.
+ *
+ * Groups are never broken across columns — a domain heading with its rows
+ * stranded in the other column is worse than one row of imbalance.
+ */
+export function permissionColumnsForTokens(): [PermissionDomainGroup[], PermissionDomainGroup[]] {
+  const groups = permissionsByDomainForTokens();
+  const total = groups.reduce((n, g) => n + g.permissions.length, 0);
+  let taken = 0;
+  let splitAt = groups.length;
+  for (const [index, group] of groups.entries()) {
+    taken += group.permissions.length;
+    if (taken * 2 >= total) {
+      splitAt = index + 1;
+      break;
+    }
+  }
+  return [groups.slice(0, splitAt), groups.slice(splitAt)];
 }
 
 /** A granted permission's metadata, in catalog order — the list detail's chips. */

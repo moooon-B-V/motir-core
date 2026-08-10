@@ -17,7 +17,7 @@ import {
 } from '@/lib/permissions/catalog';
 import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 import { createToken, type ApiTokenDto, type ExpiryChoice } from './apiTokensClient';
-import { permissionsByDomainForTokens, type PermissionMeta } from './permissionMeta';
+import { permissionColumnsForTokens, type PermissionMeta } from './permissionMeta';
 
 // Create + shown-once modal (Story 7.8 · Subtask 7.8.3, + bug 7.21 binding scope,
 // + Subtask 7.7.19 permission scopes) — design `account-settings.mock.html`
@@ -95,14 +95,13 @@ export function CreateTokenModal({
 
   const lockedWhy = t('scopes.lockedWhy');
 
-  // The domain groups, split 3/3 across the two columns (MOTIR-2578's measured
+  // The domain groups, split so each column carries half the ROWS — MOTIR-2578's
 
-  // composition). Computed once — the grantable set is static per build.
+  // measured 3/3 composition. Balancing by group COUNT instead would put 4 rows
 
-  const domainGroups = permissionsByDomainForTokens();
-  const splitAt = Math.ceil(domainGroups.length / 2);
-  const leftColumn = domainGroups.slice(0, splitAt);
-  const rightColumn = domainGroups.slice(splitAt);
+  // against 2 and make the modal taller than the asset was measured at.
+
+  const [leftColumn, rightColumn] = permissionColumnsForTokens();
   const { toast } = useToast();
   const labelId = useId();
   const expiryId = useId();

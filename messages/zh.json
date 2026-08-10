@@ -5978,7 +5978,7 @@
     "mcpScopeHeading": "你的令牌能调用什么",
     "mcpToolsTitle": "MCP 工具",
     "mcpToolsLede": "Motir MCP 服务器提供的全部工具，以及各自受哪个权限范围管控。按权限范围分组，因为这正是你创建令牌时要做的选择——不勾选某个范围，该组工具就会被拒绝。",
-    "mcpToolsMeta": "{tools} 个工具 · {scopes} 个权限范围 · 由服务器自身的权限映射推导而来",
+    "mcpToolsMeta": "{tools} 个工具 · {permissions} 项权限 · 由服务器自身的权限映射推导而来",
     "mcpToolsSummaryNote": "这里是简介。工具的完整参数和返回结构请查阅参考文档——它与代码放在一起，因为这部分变动最频繁。",
     "mcpThTool": "工具",
     "mcpThDoes": "作用",
