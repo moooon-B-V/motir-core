@@ -309,33 +309,107 @@ with nothing. **Rejected, with the reason: not enough rows.**
 
 Modal panel heights, natural (unclipped), from the render script:
 
-| Panel | Shape                                                                                                                                   | Height    |
-| ----- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| 1     | resting, single-org account (Workspace reads `Default`)                                                                                 | **734px** |
-| 1b    | **tallest reachable**: ≥2 orgs + ≥2 workspaces (discloses the Organization Combobox as a third metadata row) + every permission granted | **836px** |
+| Panel | Shape                                                                                                                                | Height    |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| 1     | resting, single-org account + the optional Project picker                                                                            | **836px** |
+| 1b    | **tallest reachable**: ≥2 orgs + ≥2 workspaces (discloses the Organization Combobox) + the Project picker + every permission granted | **938px** |
+| 1c    | a viewer's capped offer — two grantable rows, four locked                                                                            | 646px     |
 
 Against the shipped `max-h-[90vh]` ceiling:
 
-| Viewport             | Ceiling | 836px verdict        |
-| -------------------- | ------- | -------------------- |
-| 720px (short window) | 648px   | scrolls              |
-| 800px (13" laptop)   | 720px   | scrolls              |
-| 900px (15" laptop)   | 810px   | **scrolls, by 26px** |
-| 1080px               | 972px   | fits                 |
+| Viewport             | Ceiling | 938px verdict                |
+| -------------------- | ------- | ---------------------------- |
+| 720px (short window) | 648px   | scrolls                      |
+| 800px (13" laptop)   | 720px   | scrolls                      |
+| 900px (15" laptop)   | 810px   | scrolls                      |
+| 1080px               | 972px   | **fits, with 34px to spare** |
+
+⚠️ **The Project picker cost 102px, not 34.** It is a third field in a
+`1fr 1fr` metadata grid, so it does not slot in beside Workspace — it WRAPS the
+grid onto a second row. Worth knowing before anyone adds a fourth field: the
+next one is free, the one after that costs another row.
 
 **Decision: the body SCROLLS at the tallest shape, and that is the shipped
 contract working, not a failure.** MOTIR-2488 already moved the fields into
 `Modal.Body` with the footer PINNED beside it, precisely so a tall form scrolls
 its body while Cancel / Create token stay reachable. The pre-change modal was
-718px resting and already over the 13" ceiling at the two-org shape, so this is
-not a regression the new vocabulary introduces — it is the same behaviour, 16px
-taller, because five domain groups carry one more group label than the old four.
+718px resting and already over the 13" ceiling at the two-org shape, so scrolling
+is not a regression the new vocabulary introduces. What the vocabulary itself
+costs is 16px (five domain groups carry one more label than the old four); the
+Project picker costs the other 102px, and that is a binding-axis decision
+(MOTIR-2605), not a picker one.
 
 **What the code card must therefore check** (MOTIR-2580): at the ≥2-org /
 ≥2-workspace shape, with every permission on, BOTH footer buttons are visible and
 reachable and the scroll is inside `Modal.Body`. That is the shape the
 single-tenant fixture never renders — and the one the clipped-footer bug appeared
 on.
+
+## ⚠️ THE OFFER IS PER-ACTOR — and the token may bind to a PROJECT (Yue, 2026-08-10)
+
+**This amends the section above, and overturns story MOTIR-2572's own scope
+boundary** (_"a token is still BOUND to one workspace and the binding picker is
+untouched"_). Recorded, not implied. The decision is MOTIR-2605's ADR section;
+this is what it means for the pixels.
+
+**What was wrong with the first pass.** The picker offered the same six rows to
+everyone, and `apiTokensService.create` validates only against the STATIC
+grantable set. So a viewer could tick _Delete work items_, mint the token, and
+hold a grant they cannot exercise anywhere — the switch-that-gates-nothing lie,
+one level up, on a screen that promises _"You can grant less than your own
+access, never more."_
+
+**Why it needed a decision and not a filter.** Permissions resolve **per
+project** (`lib/permissions/resolve.ts`: `accessLevel` + `workspaceRole` +
+`projectRole` + custom role) while a token binds to a **workspace**. There is no
+single "the user's role" — an admin in project A can be a viewer in project B of
+the same workspace.
+
+**The decision: a token may ALSO bind to one project, and `project_id` is
+NULLABLE.**
+
+- **NULL** — workspace-scoped, today's behaviour. Every already-minted row, and
+  every credential `motir login` mints. The offer is then the UNION of the
+  actor's per-project sets across the workspace's browsable projects.
+- **SET** — project-scoped. The offer is exactly that project's set for that
+  actor, and dispatch refuses a cross-project call as a NOT-FOUND.
+
+Nullable is load-bearing, not caution: the CLI's device grant calls
+`list_projects` and runs `motir auto` across the workspace, so a mandatory
+binding breaks it on day one.
+
+### What the picker draws
+
+- **The Project picker sits beside Workspace**, labelled _Optional. Narrows the
+  token to one project._ Panels 1 and 1b.
+- **A row the actor cannot confer is DISABLED with its reason** (`.scope-row.locked`
+  - `.locked-why`), never hidden. A vanished row reads as a missing feature and
+    sends someone hunting; a disabled one teaches the composition rule the helper
+    text already states. At six rows this is never a wall — which is the second
+    time the row COUNT decides the design.
+- **The danger row stays rose even when locked.** The row a viewer most needs to
+  understand they cannot grant is the destructive one.
+- **Faint ink is correct here and only here.** `.scope-row.locked` uses
+  `--el-text-faint`, which 1.4.3 exempts for disabled controls, and the REASON
+  beside it carries the meaning at `--el-text-secondary`. This is the one place
+  in the asset where faint on informational-looking text is right, and it is
+  right because the control is disabled.
+- **The offer RECOMPUTES when the Project picker changes.** A different project
+  is a different set. Panel 1c pins this for MOTIR-2580.
+- **A workspace owner sees no locked rows at all** — `resolvePermissions` layer 2
+  hands them the whole role-gated catalog in every project. So this panel never
+  appears for most people who mint tokens, and everything for members and
+  viewers. Say it out loud, or the next reader will think the filtering is dead
+  code.
+
+### GIVES / TAKES for the binding
+
+- **TAKES from [MOTIR-2605]** the nullable axis and the refusal shape.
+- **GIVES to [MOTIR-2606]** the requirement that ONE service read feeds both the
+  offer and `create`'s validation — two implementations would agree the day they
+  are written and drift the first time an access level changed.
+- **GIVES to [MOTIR-2580]** the recompute-on-project-change and the locked-row
+  treatment.
 
 ## What CHANGED from the 7.7.18 design, and what did not
 
@@ -374,9 +448,13 @@ disclosure, and the binding-scope picker.
 
 ## The panels
 
-1. **Create token, resting** — single-org shape, default grant applied. 734px.
-   1b. **Dense / tallest** — ≥2 orgs, ≥2 workspaces, every permission on. 836px. The
-   panel the height decision is made against.
+1. **Create token, resting** — single-org shape, default grant applied, with the
+   optional Project picker. 836px.
+   1b. **Dense / tallest** — ≥2 orgs, ≥2 workspaces, the Project picker, every
+   permission on. **938px.** The panel the height decision is made against.
+   1c. **A viewer's capped offer** — the same modal for someone holding only
+   `project:browse` and `comment:add` in the bound project: four rows DISABLED
+   with their reason. See § THE OFFER IS PER-ACTOR.
 2. **The Work items group, Delete ON** — the danger close-up. Rose
    `--el-tint-rose` block, `· Danger` tag, trash icon, and the cascade caption
    that now names archiving too.
@@ -419,7 +497,7 @@ this pass, because the AC asks for it and the AST ink guard cannot see CSS:
 
 - **GIVES to [MOTIR-2579]** — the group order, the summary vocabulary, the danger
   treatment, and the rule that no raw key is rendered.
-- **GIVES to [MOTIR-2580]** — the composition, the default grant, and the 836px /
+- **GIVES to [MOTIR-2580]** — the composition, the default grant, and the 938px /
   ≥2-org footer-reachability check.
 - **GIVES to [MOTIR-2586]** — the access path to walk, and the empty-grant refusal
   to assert.
