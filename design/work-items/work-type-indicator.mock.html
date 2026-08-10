@@ -13,7 +13,8 @@
       UI code subtask 8.8.9 (MOTIR-1093), which carries 8.8.5 in dependsOn.
 
       WHAT THIS ADDS — a "Type" column surfacing each leaf's work TYPE
-      (code / design / test / content / research / review / decision / deploy /
+      (code / design / test / content / copy / translate / research / review /
+      verification / decision / deploy /
       manual / chore) via the SHIPPED `WorkItemTypeChip` primitive
       (components/issues/WorkItemTypeChip.tsx) — DISTINCT from the kind icon
       (epic/story/task/bug/subtask) already shown in the Title cell. Both the
@@ -33,7 +34,7 @@
             null-type containers (epic/story) show the muted "—".
         (2) the TREE view — the same Type column, aligned regardless of the
             title's per-depth indent; a collapsed parent + nested leaves.
-        (3) a legend of all ten type chips (the WorkItemTypeChip set).
+        (3) a legend of all fourteen type chips (the WorkItemTypeChip set).
       Toggle dark mode to confirm token parity. See design-notes.md for the spec.
     -->
     <style>
@@ -122,6 +123,15 @@
         --el-type-manual: var(--color-stone);
         --el-type-chore: var(--color-slate);
         --el-type-deploy: var(--color-destructive);
+        /* The four admitted by ADR Amendment 1 (MOTIR-2629). The palette's seven
+           saturated hues and three greys were all spent at ten, so each takes
+           the Tier-0 hue of its nearest neighbour and the GLYPH carries the
+           difference; own token so a palette can split them later. Lands in
+           packages/design-system/theme.css (MOTIR-2633), not app/globals.css. */
+        --el-type-copy: var(--color-accent-teal); /* with content */
+        --el-type-translate: var(--color-accent-teal); /* with content */
+        --el-type-verification: var(--color-accent-orange); /* with review */
+        --el-type-legal: var(--color-charcoal); /* with decision */
         --el-sidebar-bg: var(--color-surface);
         --focus-ring-color: var(--color-primary);
       }
@@ -418,6 +428,30 @@
       }
       .wt-chore {
         background: color-mix(in srgb, var(--el-type-chore) 18%, var(--el-page-bg));
+      }
+      .wt-copy {
+        background: color-mix(in srgb, var(--el-type-copy) 14%, var(--el-page-bg));
+      }
+      .wt-copy svg {
+        color: var(--el-type-copy);
+      }
+      .wt-translate {
+        background: color-mix(in srgb, var(--el-type-translate) 14%, var(--el-page-bg));
+      }
+      .wt-translate svg {
+        color: var(--el-type-translate);
+      }
+      .wt-verification {
+        background: color-mix(in srgb, var(--el-type-verification) 14%, var(--el-page-bg));
+      }
+      .wt-verification svg {
+        color: var(--el-type-verification);
+      }
+      .wt-legal {
+        background: color-mix(in srgb, var(--el-type-legal) 18%, var(--el-page-bg));
+      }
+      .wt-legal svg {
+        color: var(--el-type-legal);
       }
       .wt-chore svg {
         color: var(--el-type-chore);
@@ -839,6 +873,60 @@
             d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"
           />
         </g>
+        <g
+          id="i-type"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 4v16" />
+          <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
+          <path d="M9 20h6" />
+        </g>
+        <g
+          id="i-languages"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m5 8 6 6" />
+          <path d="m4 14 6-6 2-3" />
+          <path d="M2 5h12" />
+          <path d="M7 2h1" />
+          <path d="m22 22-5-10-5 10" />
+          <path d="M14 18h6" />
+        </g>
+        <g
+          id="i-badge-check"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          />
+          <path d="m9 12 2 2 4-4" />
+        </g>
+        <g
+          id="i-gavel"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="m14 13-8.381 8.38a1 1 0 0 1-3.001-3l8.384-8.381" />
+          <path d="m16 16 6-6" />
+          <path d="m21.5 10.5-8-8" />
+          <path d="m8 8 6-6" />
+          <path d="m8.5 7.5 8 8" />
+        </g>
       </defs>
     </svg>
 
@@ -1011,8 +1099,8 @@
             ><span class="ttl">Password-reset email — copy + template</span></span
           >
           <span
-            ><span class="wtchip wt-content"
-              ><svg viewBox="0 0 24 24"><use href="#i-filetext" /></svg>Content</span
+            ><span class="wtchip wt-copy"
+              ><svg viewBox="0 0 24 24"><use href="#i-type" /></svg>Copy</span
             ></span
           >
           <span
@@ -1024,6 +1112,54 @@
             ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
           >
           <span><span class="pill pill--done">Done</span></span>
+        </a>
+
+        <!-- task leaf — translate (an admitted member, at row density) -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-task"
+              ><svg viewBox="0 0 24 24"><use href="#i-task" /></svg></span
+            ><span class="lr-id">PROD-35</span
+            ><span class="ttl">zh twins for the password-reset strings</span></span
+          >
+          <span
+            ><span class="wtchip wt-translate"
+              ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg>Translate</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">R</span><span class="nm">Riya Shah</span></span
+          >
+          <span><span class="pill pill--neutral">To Do</span></span>
+        </a>
+
+        <!-- subtask leaf — verification: the LONGEST label in the set (12ch) -->
+        <a class="lt-grid lt-row" role="row" href="#">
+          <span class="cell-title"
+            ><span class="kind-icon t-subtask"
+              ><svg viewBox="0 0 24 24"><use href="#i-subtask" /></svg></span
+            ><span class="lr-id">PROD-51</span
+            ><span class="ttl">Pull the runner image by digest as the consumer</span></span
+          >
+          <span
+            ><span class="wtchip wt-verification"
+              ><svg viewBox="0 0 24 24"><use href="#i-badge-check" /></svg>Verification</span
+            ></span
+          >
+          <span
+            ><span class="pill pill--neutral"
+              ><svg class="pic" viewBox="0 0 24 24"><use href="#i-minus" /></svg>Medium</span
+            ></span
+          >
+          <span class="cell-person"
+            ><span class="avatar">D</span><span class="nm">Dana Kim</span></span
+          >
+          <span><span class="pill pill--neutral">To Do</span></span>
         </a>
 
         <!-- bug leaf — code -->
@@ -1218,7 +1354,7 @@
     </div>
 
     <!-- ════════════════════════ PANEL 3 — LEGEND ════════════════════════ -->
-    <div class="panel-label">3 · The ten work-type chips (WorkItemTypeChip set)</div>
+    <div class="panel-label">3 · The fourteen work-type chips (WorkItemTypeChip set)</div>
     <div class="panel">
       <div class="legend">
         <span class="wtchip wt-code"
@@ -1233,11 +1369,20 @@
         <span class="wtchip wt-content"
           ><svg viewBox="0 0 24 24"><use href="#i-filetext" /></svg>Content</span
         >
+        <span class="wtchip wt-copy"
+          ><svg viewBox="0 0 24 24"><use href="#i-type" /></svg>Copy</span
+        >
+        <span class="wtchip wt-translate"
+          ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg>Translate</span
+        >
         <span class="wtchip wt-research"
           ><svg viewBox="0 0 24 24"><use href="#i-lightbulb" /></svg>Research</span
         >
         <span class="wtchip wt-review"
           ><svg viewBox="0 0 24 24"><use href="#i-clipboard-check" /></svg>Review</span
+        >
+        <span class="wtchip wt-verification"
+          ><svg viewBox="0 0 24 24"><use href="#i-badge-check" /></svg>Verification</span
         >
         <span class="wtchip wt-decision"
           ><svg viewBox="0 0 24 24"><use href="#i-scale" /></svg>Decision</span
@@ -1247,6 +1392,9 @@
         >
         <span class="wtchip wt-manual"
           ><svg viewBox="0 0 24 24"><use href="#i-hand" /></svg>Manual</span
+        >
+        <span class="wtchip wt-legal"
+          ><svg viewBox="0 0 24 24"><use href="#i-gavel" /></svg>Legal</span
         >
         <span class="wtchip wt-chore"
           ><svg viewBox="0 0 24 24"><use href="#i-wrench" /></svg>Chore</span
@@ -1259,6 +1407,24 @@
         <code>WorkItemTypeIcon</code> glyph — the <code>workItemTypeChipBackground()</code> recipe,
         unchanged. AA holds via charcoal-on-tint (finding #35); meaning never rides hue alone (icon
         + label).
+      </p>
+      <p class="note">
+        <strong>At fourteen the chip set is unchanged in recipe and grown by four.</strong> The four
+        admitted members (ADR Amendment 1, MOTIR-2629) SHARE a hue with the neighbour the amendment
+        named — <em>copy</em> and <em>translate</em> with <em>content</em> on teal,
+        <em>verification</em> with <em>review</em> on orange, <em>legal</em> with <em>decision</em>
+        on charcoal — because the palette holds exactly seven mutually distinct saturated hues and
+        three greys, all ten of which were already spent. Inventing an eighth is forbidden; the
+        glyph carries the difference, and it can, because the chip always renders its label too.
+        <strong>Density:</strong> <em>Verification</em> is the longest label in the set at 12
+        characters, one more than <em>Translate</em>'s 9 and two more than the previous longest,
+        <em>Research</em> (8) — panel 1's rows PROD-35 and PROD-51 above draw both at real list
+        density, and the chip column absorbs them without wrapping or pushing the priority column
+        (the chip sizes to its content and the grid column is content-width).
+        <strong>PROD-34 also changed type in this pass</strong> — its title is "copy + template",
+        which under the narrowed <em>content</em> and the specific-beats-general precedence rule is
+        a <em>copy</em> card. It is drawn that way so the rule is visible in a row rather than only
+        described in a note. (No existing WORK ITEM is re-typed by this story; this is a mock.)
       </p>
     </div>
   </body>
