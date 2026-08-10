@@ -58,6 +58,7 @@ describe('presentMe', () => {
       workspaceId: 'ws_1',
       scopes: [],
       grant: ['project:browse', 'work_item:edit'],
+      projectId: null,
     } as Parameters<typeof presentMe>[0]);
 
     expect(payload).toEqual({
@@ -76,6 +77,7 @@ describe('presentMe', () => {
       workspaceId: 'ws_1',
       scopes: ['read'],
       grant: [],
+      projectId: null,
     } as Parameters<typeof presentMe>[0]);
 
     expect(Object.keys(payload.user).sort()).toEqual(['email', 'id', 'name']);
@@ -92,6 +94,7 @@ describe('presentMe', () => {
       workspaceId: 'ws_1',
       scopes: [],
       grant: [],
+      projectId: null,
     } as Parameters<typeof presentMe>[0]);
 
     expect(() => meSchema.parse(payload)).not.toThrow();

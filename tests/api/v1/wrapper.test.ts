@@ -10,6 +10,8 @@ import { createV1Caller, bearer } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import { createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+const { GET: GET_PROJECT } = await import('@/app/api/v1/projects/[projectKey]/route');
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). Real Postgres, real PATs minted through the shipped service —
@@ -392,5 +394,40 @@ describe('presented bearer credential', () => {
     expect(fp).toBe(tokenFingerprint('motir_pat_abc'));
     expect(fp).not.toBe(tokenFingerprint('motir_pat_abd'));
     expect(fp).not.toContain('motir_pat_');
+  });
+});
+
+describe('the token PROJECT binding, over the v1 seam (MOTIR-2607)', () => {
+  // The same enforcement the MCP seam gets, inherited from the same place:
+  // `projectAccessService.resolveInputs`. Asserted HERE too because "one seam,
+  // both surfaces" is a claim about two surfaces, and a wiring that reached
+  // only one would pass every MCP test.
+  it('a bound token is NOT-FOUND on another project — never a 403', async () => {
+    const mine = await createV1ProjectCaller();
+    const theirs = await createV1ProjectCaller({ identifier: 'OTHR' });
+
+    // `mine`'s token is bound to `mine`'s project (the fixture binds it), so
+    // reaching for `theirs` must read as not-found rather than forbidden.
+    const res = await GET_PROJECT(
+      new Request(`http://localhost:3000/api/v1/projects/${theirs.fixture.projectIdentifier}`, {
+        headers: mine.headers,
+      }),
+      { params: Promise.resolve({ projectKey: theirs.fixture.projectIdentifier }) },
+    );
+
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(JSON.stringify(body)).not.toContain('INSUFFICIENT_PERMISSION');
+  });
+
+  it('…and reaches its OWN project normally', async () => {
+    const mine = await createV1ProjectCaller();
+    const res = await GET_PROJECT(
+      new Request(`http://localhost:3000/api/v1/projects/${mine.fixture.projectIdentifier}`, {
+        headers: mine.headers,
+      }),
+      { params: Promise.resolve({ projectKey: mine.fixture.projectIdentifier }) },
+    );
+    expect(res.status).toBe(200);
   });
 });

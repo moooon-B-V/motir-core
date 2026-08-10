@@ -317,6 +317,11 @@ export const apiTokensService = {
     user: User;
     workspaceId: string;
     grant: PermissionKey[];
+    /** The PROJECT this token is bound to, or null (MOTIR-2607). Null is the
+     * DEVICE-CREDENTIAL SHAPE and means "every project the holder's roles
+     * reach" — it is the specification of how `motir login` works, not a
+     * compatibility arm to tighten later. */
+    projectId: string | null;
     /** @deprecated SCAFFOLDING — the raw column, for the two gates that have
      * not moved yet. Removed by MOTIR-2576 (MCP) / MOTIR-2577 (`/api/v1`). */
     scopes: string[];
@@ -341,7 +346,13 @@ export const apiTokensService = {
           `[apiTokens] token ${row.id} carries ${unrecognised.length} unrecognised grant value(s); ignoring them: ${unrecognised.map((u) => JSON.stringify(u.value)).join(', ')}`,
         );
       }
-      return { user: row.user, workspaceId: row.workspaceId, grant, scopes: row.scopes };
+      return {
+        user: row.user,
+        workspaceId: row.workspaceId,
+        projectId: row.projectId,
+        grant,
+        scopes: row.scopes,
+      };
     });
   },
 };

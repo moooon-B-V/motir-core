@@ -24,7 +24,14 @@ import {
  * surfaces as a 500, not a masked auth failure.
  */
 export type ApiTokenAuthResult =
-  | { ok: true; userId: string; workspaceId: string }
+  | {
+      ok: true;
+      userId: string;
+      workspaceId: string;
+      /** The token's project binding, or null (MOTIR-2607). The wrapper puts it
+       *  on the ServiceContext, where `projectAccessService` enforces it. */
+      projectId: string | null;
+    }
   | { ok: false; reason: 'unauthenticated' | 'forbidden' };
 
 function bearerFromHeader(header: string | null): string | undefined {
@@ -45,8 +52,9 @@ export async function authenticateApiToken(
   let user;
   let workspaceId: string;
   let grant: PermissionKey[];
+  let projectId: string | null;
   try {
-    ({ user, workspaceId, grant } = await apiTokensService.verify(token));
+    ({ user, workspaceId, grant, projectId } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -59,5 +67,5 @@ export async function authenticateApiToken(
   }
 
   if (!grantAllows(grant, requiredPermission)) return { ok: false, reason: 'forbidden' };
-  return { ok: true, userId: user.id, workspaceId };
+  return { ok: true, userId: user.id, workspaceId, projectId };
 }

@@ -64,8 +64,9 @@ export async function verifyMcpToken(
   let user;
   let workspaceId: string;
   let grant: string[];
+  let projectId: string | null;
   try {
-    ({ user, workspaceId, grant } = await apiTokensService.verify(token));
+    ({ user, workspaceId, grant, projectId } = await apiTokensService.verify(token));
   } catch (err) {
     if (
       err instanceof InvalidApiTokenError ||
@@ -83,7 +84,13 @@ export async function verifyMcpToken(
   // dispatch gate can narrow the role to the permitted operations. It is already
   // expanded (`apiTokensService.verify`), so a legacy scope string never reaches
   // the gate.
-  const extra: McpAuthExtra = { userId: user.id, workspaceId, userName: user.name, grant };
+  const extra: McpAuthExtra = {
+    userId: user.id,
+    workspaceId,
+    userName: user.name,
+    projectId,
+    grant,
+  };
   return {
     token,
     clientId: user.id,

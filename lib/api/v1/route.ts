@@ -193,7 +193,14 @@ export function withV1Route<P = Record<string, never>>(
         params,
         userId: auth.userId,
         workspaceId: auth.workspaceId,
-        service: { userId: auth.userId, workspaceId: auth.workspaceId },
+        service: {
+          userId: auth.userId,
+          workspaceId: auth.workspaceId,
+          // The token's project binding (MOTIR-2607). Absent when the token
+          // names none, which is every device credential — so an unbound token
+          // behaves exactly as it did before this card.
+          ...(auth.projectId ? { tokenProjectId: auth.projectId } : {}),
+        },
         requestId,
         presentedToken,
         responseHeaders,

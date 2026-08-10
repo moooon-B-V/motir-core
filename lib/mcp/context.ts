@@ -46,6 +46,10 @@ export interface McpAuthExtra {
   workspaceId: string;
   /** The token owner's display name — carried for log/diagnostic context only. */
   userName: string | null;
+  /** The PROJECT the token is bound to, or null (MOTIR-2607). Null is the
+   * device-credential shape and means "every project the holder's roles reach"
+   * — the specification of how `motir login` works, not a shim. */
+  projectId: string | null;
   /** The token's resolved GRANT (MOTIR-2572) — carried so the dispatch gate can
    * narrow the owner's role to the operations the grant permits. Each entry is a
    * `PermissionKey`; `apiTokensService.verify` has ALREADY expanded any legacy
@@ -74,6 +78,7 @@ function readAuthExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
   const { userId, workspaceId } = extra as Record<string, unknown>;
   if (typeof userId !== 'string' || typeof workspaceId !== 'string') return null;
   const userName = (extra as Record<string, unknown>).userName;
+  const rawProjectId = (extra as Record<string, unknown>).projectId;
   const rawGrant = (extra as Record<string, unknown>).grant;
   const grant = Array.isArray(rawGrant)
     ? rawGrant.filter((g): g is string => typeof g === 'string')
@@ -82,6 +87,7 @@ function readAuthExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
     userId,
     workspaceId,
     userName: typeof userName === 'string' ? userName : null,
+    projectId: typeof rawProjectId === 'string' ? rawProjectId : null,
     grant,
   };
 }
@@ -94,7 +100,13 @@ function readAuthExtra(authInfo: AuthInfo | undefined): McpAuthExtra | null {
 export function contextFromExtra(extra: McpRequestExtra): ServiceContext {
   const authExtra = readAuthExtra(extra.authInfo);
   if (!authExtra) throw new McpMissingContextError();
-  return { userId: authExtra.userId, workspaceId: authExtra.workspaceId };
+  return {
+    userId: authExtra.userId,
+    workspaceId: authExtra.workspaceId,
+    // Only when the token names one — an absent key means "no binding", which
+    // is what every cookie-session caller and every device credential is.
+    ...(authExtra.projectId ? { tokenProjectId: authExtra.projectId } : {}),
+  };
 }
 
 /**
