@@ -13,22 +13,26 @@ import { BuildingInPublicHeaderLink } from './build-in-public/BuildingInPublicHe
 import { ReportButton } from './ReportButton';
 import { SidebarToggle } from '@/components/ui/SidebarToggle';
 import type { WorkspaceSummaryDTO } from '@/lib/dto/workspaces';
+import type { ProjectDTO } from '@/lib/dto/projects';
 import type { OrganizationDTO } from '@/lib/dto/organizations';
 import type { OrgControlActiveOrg } from './OrgControl';
 
 // Top-nav shell for every (authed)/* route, spanning the full width above
 // the sidebar+content grid. Left cluster: the mobile hamburger (<md, opens
-// the off-canvas SidebarDrawer) + the tenancy-tier nav (the org control,
-// always shown, then the workspace switcher only at ≥2 workspaces — Story
-// 6.10.5 progressive disclosure, in ShellTierNav). Right cluster: the cmd-K
-// "Search" trigger + the tri-state theme toggle (both wired in Subtask 1.5.4) +
-// the notification bell (Subtask 5.7.5, per-workspace — only when a workspace
-// is active) + the user menu.
+// the off-canvas SidebarDrawer) + the CONTEXT PATH (ShellTierNav). Right
+// cluster: the cmd-K "Search" trigger + the tri-state theme toggle (both wired
+// in Subtask 1.5.4) + the notification bell (Subtask 5.7.5, per-workspace —
+// only when a workspace is active) + the user menu.
 //
-// The project switcher MOVED to the sidebar header in Subtask 1.5.3 — the
-// "Story 1.5 will move project nav into a left sidebar" promise from the
-// 1.3.4 minimal form is now fulfilled, so the project switcher (and its
-// workspace-gated hairline divider) is gone from here.
+// ⚠️ THE PROJECT IS BACK IN THE BAR, and that REVERSES 1.5.3 deliberately
+// (Yue, 2026-08-10 · MOTIR-2556 · `design/shell/design-notes.md` § *The context
+// row*). This docstring used to record the opposite — that the switcher had
+// moved OUT to the sidebar header, fulfilling a 1.3.4 promise — and that is no
+// longer true of the file beneath it. The bar now carries the whole path,
+// `org › workspace › project`, because where you are is one question and it
+// was being answered in two places, in two visual languages, a hundred pixels
+// apart. `ShellTierNav` owns the ladder that makes three tiers fit a row that
+// measured 69px of slack; read its docstring before changing any of it.
 //
 // The brand slot this file's docstring used to defer ("No wordmark slot
 // (brand-mark deferral)") is now FILLED — MOTIR-1150, design/brand/
@@ -83,6 +87,16 @@ export interface TopNavProps {
   orgs: OrganizationDTO[];
   workspaces: WorkspaceSummaryDTO[];
   activeWorkspaceId: string | null;
+  /** The active project — the LAST tier of the bar's context path (MOTIR-2556).
+   *  Null when the workspace has none, which the tier renders as its
+   *  create-first door. */
+  activeProject: ProjectDTO | null;
+  /** Non-archived projects in the workspace — the project tier's switch
+   *  targets. */
+  projects: ProjectDTO[];
+  /** Whether AI planning is configured — gates the project tier's "Plan a new
+   *  project with AI" door, the same gate the launcher uses. */
+  aiConfigured: boolean;
   user: { name: string; email: string };
   /** The session user's unread notification count for the active workspace —
    * the bell's initial badge value (resolved once in the layout, then polled by
@@ -118,6 +132,9 @@ export async function TopNav({
   orgs,
   workspaces,
   activeWorkspaceId,
+  activeProject,
+  projects,
+  aiConfigured,
   user,
   initialUnreadCount,
   buildInPublicProjectKey,
@@ -171,11 +188,27 @@ export async function TopNav({
           <Link
             href="/dashboard"
             aria-label={t('topNav.brandHome')}
-            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex"
+            // The tile (MOTIR-2557 · design/shell § *The brand tile*). The box
+            // was always here and simply unpainted; it now takes an
+            // `--el-surface` field and an `--el-border` hairline, and the
+            // hairline DIVIDER that used to follow it is gone — the tile's own
+            // edge says what the divider said, and that returns 9px to a row
+            // measured at 69px of slack.
+            //
+            // Deliberately NOT a tint: OrgControl's avatar is a 20px
+            // `--el-tint-lavender` tile and ProjectAvatar an
+            // `--el-avatar-lavender` one, so a third lavender square 20px away
+            // would read as another tier chip instead of as the brand. The
+            // glyph keeps `--el-accent-on-surface` — the token whose name is
+            // literally this composition — so `.brand-glyph`'s GLOBAL rule,
+            // shared with auth / explore / public / OG / the specimen, is not
+            // touched. 6.03:1 light, 4.24:1 dark; asserted in
+            // tests/theme/brand-tile-contrast.test.ts, because the ink guard
+            // cannot see a pair whose ink lives in a stylesheet.
+            className="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) border border-(--el-border) bg-(--el-surface) md:flex"
           >
             <BrandMark variant="mark" size={24} />
           </Link>
-          <span aria-hidden className="mx-1 hidden h-5 w-px flex-none bg-(--el-border) md:block" />
           {/* Mobile-only: opens the off-canvas SidebarDrawer. Hidden ≥md,
               where the persistent rail takes over. */}
           <div className="md:hidden">
@@ -187,6 +220,10 @@ export async function TopNav({
             workspaces={workspaces}
             activeWorkspaceId={activeWorkspaceId}
             cloudBilling={cloudBilling}
+            placement="bar"
+            activeProject={activeProject}
+            projects={projects}
+            aiConfigured={aiConfigured}
           />
         </div>
         {/* `flex-none`: the right cluster may no longer take width from the

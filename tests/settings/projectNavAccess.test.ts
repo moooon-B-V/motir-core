@@ -78,11 +78,35 @@ describe('the map is TOTAL over both surfaces', () => {
     const known = new Set(PROJECT_NAV_ACCESS.map((e) => e.href));
     // The onboarding resume row is deliberately outside the map — it is gated on
     // there BEING a session of the actor's own, which is a state, not a permission.
-    const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace']);
+    //
+    // `/docs` (MOTIR-2570) is outside it for a different reason: the map gates
+    // PROJECT-scoped destinations, and only `primaryItems` is filtered through
+    // `canOfferNavDestination`. The Docs row lives in the footer group, which is
+    // not gated at all, and its destination is a `(public)` page readable with no
+    // session — so there is no project permission that could sensibly gate it and
+    // a map entry would be a claim nothing enforces. It is the first footer row
+    // not under `/settings/`, which is the only reason it is named here rather
+    // than swept up by the prefix skip below.
+    const exempt = new Set(['/onboarding', '/settings/project', '/settings/workspace', '/docs']);
     for (const href of hrefsIn(SIDEBAR)) {
       if (exempt.has(href) || href.startsWith('/settings/')) continue;
       expect(known.has(href), `SidebarNav offers ${href}, which the map does not carry`).toBe(true);
     }
+  });
+
+  it('the exempt `/docs` row sits in the UNGATED footer group, not the gated primary one', () => {
+    // The exemption above is only sound while the row is outside the gate. Move
+    // it into `primaryItems` and `canOfferNavDestination` answers false for an
+    // href the map does not carry — the row would vanish for EVERY actor. That
+    // is the right failure direction for a project surface and exactly the wrong
+    // one for public documentation, so pin the section rather than trusting the
+    // exemption to stay true.
+    const bottom = SIDEBAR.indexOf("id: 'bottom'");
+    expect(bottom, "the footer section marker moved — re-check /docs's group").toBeGreaterThan(-1);
+    expect(SIDEBAR.indexOf("href: '/docs'"), '/docs left the ungated footer group').toBeGreaterThan(
+      bottom,
+    );
+    expect(canOfferNavDestination('/docs', ADMIN)).toBe(false);
   });
 
   it('every palette navigation goes through offerNav or an explicit requirement', () => {
