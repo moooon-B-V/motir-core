@@ -325,16 +325,23 @@ Postgres is a denial-of-service surface.
 - **A limiter-store failure MUST NOT fail the request.** Degrade to allowing the
   call and log it. An outage in the limiter must not take the API down.
 
-**Recorded limitation — the first cut's store is per-process.** The counter lives
-behind a small store interface with an **in-process** default, because Story 11.1
-deliberately ships no migration and no new repository. On a multi-instance
-deployment each instance therefore enforces its own window, so the effective
-ceiling is `60 × instances` rather than 60. This is a real weakening and is
-recorded rather than glossed: the enforcement seam, the headers, the 429 and the
-atomicity are all correct and permanent; only the store is provisional. Swapping
-in a shared store (Postgres or Redis) is an implementation of the same interface
-and changes no route, no header and no status — tracked as its own card, not
-deferred silently.
+**The counter is SHARED across instances** (closed 2026-08-10 by MOTIR-2037).
+`60` means 60 on the whole deployment, not 60 per machine. The counter lives
+behind a small store interface whose default is the **Postgres counter table**
+pinned in `docs/decisions/production-service-stack.md` §6 — the same store the
+app-level limiters (MOTIR-1165) write to, so the product has one counter and one
+backend choice rather than two implementations of the same idea. Sharing the
+store is not sharing the ceiling: `/api/v1` keeps its own budget above.
+`MOTIR_RATE_LIMIT_STORE=memory` selects the in-process counter instead, for a
+single-instance self-host (where per-process and shared are the same thing) and
+for tests.
+
+_Story 11.1 originally shipped the in-process counter as the default, because it
+deliberately carried no migration and no new repository — so the effective
+ceiling was `60 × instances` (`× 2` on the Fly pool). That was recorded here
+rather than glossed, and tracked as its own card rather than deferred silently.
+The swap cost no route, no header and no status change, which is what the store
+interface was for._
 
 ### 7. Resource naming
 
@@ -457,9 +464,10 @@ epic — not something v1 invents at the edge.
   pagination and rate limiting all live in one composed helper, "did this route
   follow the conventions?" is answered by "did it use the wrapper?" — which
   MOTIR-1861 checks mechanically rather than by review.
-- **The rate limiter's per-process store is a known, recorded gap** (§6), not an
-  omission: correct in a single-instance deployment, weakened proportionally to
-  instance count, and swappable without touching a route.
+- **The rate limiter's store was swappable, and it got swapped** (§6). Story 11.1
+  shipped a per-process counter as a recorded gap rather than an omission;
+  MOTIR-2037 replaced the default with the shared Postgres counter without
+  touching a route, a header or a status — the interface paid for itself.
 
 ---
 

@@ -82,6 +82,29 @@ export function sandboxProfileRows(): SandboxProfileRow[] {
   }));
 }
 
+/**
+ * The `docker pull` for one profile — the command the guide never had.
+ *
+ * ⚠️ It takes the SAME `SandboxProfileRow` as `sandboxRunCommand` below, and the
+ * page renders the two from the SAME row, because the one thing this pair must
+ * never do is name two different tags: a reader who pulls `:claude` and then
+ * starts `:codex` is worse off than one who never pulled at all. Deriving both
+ * from one argument is what makes that unrepresentable rather than merely
+ * unlikely.
+ *
+ * Why the guide needs it at all (MOTIR-2611): `:<profile>` is a MOVING tag, and
+ * `docker run` does not go back to the registry for an image the machine already
+ * has — nor does `docker start -ai`, which this page explicitly recommends for
+ * coming back to the container. So the moving tag only ever reaches a reader who
+ * pulls, and someone who followed this guide before a release is pinned to that
+ * older CLI permanently, with the page describing a newer one. Step 1's prose has
+ * said "there is no build step — you pull" since it shipped; nothing rendered the
+ * pull.
+ */
+export function sandboxPullCommand(row: SandboxProfileRow): string {
+  return `docker pull ${SANDBOX_IMAGE}:${row.id}`;
+}
+
 /** The `docker run` for one profile, as the page prints it filled in. */
 export function sandboxRunCommand(row: SandboxProfileRow): string {
   const mounts = row.mounts.map(
@@ -150,8 +173,15 @@ export interface SandboxStep {
   cliCommands?: string[];
   /** `true` when the step renders the derived profile table. */
   rendersProfileTable?: boolean;
-  /** `true` when the step renders the `docker run`. */
-  rendersRunCommand?: boolean;
+  /**
+   * `true` when the step renders the `docker pull` + `docker run` pair.
+   *
+   * ONE flag for two commands, deliberately: they are a single instruction
+   * ("get this image, then start it") and a page that could render either
+   * without the other is a page that can tell a reader to run a tag they were
+   * never told to fetch — which is the defect MOTIR-2611 fixed.
+   */
+  rendersImageCommands?: boolean;
   blocks: GuideBlock[];
 }
 
@@ -238,16 +268,29 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
   {
     id: 'start-the-container',
     title: 'Start the container',
-    rendersRunCommand: true,
+    rendersImageCommands: true,
     blocks: [
       {
         kind: 'prose',
-        text: 'Two of its parts come from the row you just picked; everything else is the same for every profile. It drops you into a shell in `/workspace`.',
+        text: '**Two commands: pull the image, then start it.** The pull is what makes the second one a **current** sandbox. `docker run` never goes back to the registry for an image this machine already has — and neither does `docker start -ai`, which is how this page tells you to come back to the container later.',
+      },
+      {
+        kind: 'prose',
+        text: '**That matters because the profile tags move.** `:claude` and its siblings always point at the newest release, so a copy pulled weeks ago is out of date and nothing on your machine will say so — you get an older `motir` with fewer commands than this guide describes. **Returning to a container you set up earlier? A pull on its own is not enough**: the container was made from the old image and keeps it. Pull, then `docker rm motir-sandbox` and run the command again (or give the run a new `--name`). The sign-in from step 4 lives in the old container, so expect to do that step once more.',
+      },
+      {
+        kind: 'prose',
+        text: 'Two of the run command’s parts come from the row you just picked; everything else is the same for every profile. It drops you into a shell in `/workspace`.',
       },
       {
         kind: 'callout',
         tone: 'warning',
         text: 'Note there is **no `--rm`**, and the container has a name. The sign-in in step 4 is written inside the container, so a `--rm` run would throw it away the moment you exit. Set it up once and come back to it with `docker start -ai motir-sandbox`.',
+      },
+      {
+        kind: 'callout',
+        tone: 'info',
+        text: '**Want a sandbox you can re-enter exactly?** Every profile publishes an immutable `:<profile>-<version>` tag beside the moving one — `<version>` is the `@motir/cli` release the image was cut from — and pulling that name gets the same bytes every time. Take it when you are pinning a CI runner or reproducing a run, and the moving tag when you would rather have the newest. The published list, with the digest for each, lives beside the image in `packages/cli/sandbox/README.md`.',
       },
       {
         kind: 'callout',
@@ -294,7 +337,7 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       },
       {
         kind: 'prose',
-        text: 'Swap `:claude` and the `mounts` entry for your row from step 1. A dev container is not torn down when you close the window, so the sign-in in step 4 persists here without any extra flag.',
+        text: 'Swap `:claude` and the `mounts` entry for your row from step 1. A dev container is not torn down when you close the window, so the sign-in in step 4 persists here without any extra flag — and for exactly that reason it also keeps the image it was first created from. **Dev Containers reuses a local image just as `docker run` does**, so step 2’s `docker pull` is still yours to run, in a terminal on your machine, before you reopen; an existing container then needs the palette’s **Dev Containers: Rebuild Container** to pick the new image up. Pin the immutable `:<profile>-<version>` tag here instead if you would rather this folder stay on a known image.',
       },
       {
         kind: 'prose',

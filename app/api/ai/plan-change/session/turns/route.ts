@@ -17,6 +17,9 @@ import { mapPlanChangeError, noActiveProject } from '../../_errors';
 //
 // HTTP only (CLAUDE.md 4-layer): parse the body, call ONE service method, map
 // typed errors. The service owns the row lock + `seq` allocation.
+// NOT rate-limited, deliberately (MOTIR-2597): this appends the user's typed turn to that row,
+// so no model job is submitted and no provider money is spent on this path. The AI ceiling
+// guards the doors that SUBMIT; adding one here would only cap a database read.
 export async function POST(req: Request): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });

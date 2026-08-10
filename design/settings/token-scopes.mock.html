@@ -341,7 +341,9 @@
         font-size: 11px;
         font-weight: 600;
         letter-spacing: 0.02em;
-        color: var(--el-text-faint);
+        color: var(
+          --el-text-secondary
+        ); /* AA: an eyebrow naming the AREA is informational, not decoration. */
         padding: 0 var(--spacing-control-x);
         text-transform: uppercase;
       }
@@ -361,7 +363,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.07em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary); /* AA: same — a nav SECTION heading names where you are. */
         padding: 0 var(--spacing-control-x);
         margin-bottom: 2px;
       }
@@ -428,6 +430,87 @@
         background: var(--el-tint-yellow);
         padding: 1px 7px;
         border-radius: var(--radius-badge);
+      }
+
+      /* The ENTRANCE highlight (Panel 7 only). A design-asset annotation, not a
+         shipped state: it rings the one control that opens the picker so a
+         reader SEES the door rather than reading its route in prose. Ring
+         colour is the accent token, so it swaps with the palette like
+         everything else. */
+      .door {
+        /* offset ring so the button's own accent fill and the ring stay
+           distinguishable — a flush ring on a filled button reads as a border */
+        box-shadow:
+          0 0 0 3px var(--el-page-bg),
+          0 0 0 6px var(--el-accent-on-surface);
+        position: relative;
+      }
+      .door-caption {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 14px;
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--el-accent-on-surface);
+      }
+
+      /* A permission the ACTOR cannot confer in the bound project (MOTIR-2578,
+         amended). DISABLED rather than hidden: a row that vanishes reads as a
+         missing feature and sends someone hunting, while a disabled row with a
+         reason teaches the composition rule the screen already promises — you
+         can grant less than your own access, never more. At six rows this is
+         never a wall. Faint ink is CORRECT here and only here: 1.4.3 exempts
+         disabled controls, and the REASON beside it carries the meaning at
+         secondary. */
+      .scope-row.locked .scope-name,
+      .scope-row.locked .scope-desc {
+        color: var(--el-text-faint);
+      }
+      .scope-row.locked .scope-main > .ic {
+        color: var(--el-text-faint);
+      }
+      .locked-why {
+        font-family: var(--font-sans);
+        font-size: 11.5px;
+        color: var(--el-text-secondary);
+        line-height: 1.3;
+      }
+      .sw.locked {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+
+      /* WHERE a token acts — the column that makes the two credential shapes
+         legible side by side (MOTIR-2578, amended). A hand-minted token names a
+         PROJECT (its grant was chosen, so a project was required); a device
+         credential names a WORKSPACE and says so, because its grant is fixed and
+         resolves against the holder's role in each project it reaches. Without
+         the distinction the column reads as an inconsistency rather than two
+         kinds of credential. */
+      .acts {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-family: var(--font-sans);
+        font-size: 12.5px;
+        color: var(--el-text-secondary);
+      }
+      .acts .ic {
+        width: 14px;
+        height: 14px;
+        flex: none;
+        color: var(--el-text-muted);
+      }
+      .acts-note {
+        font-family: var(--font-sans);
+        font-size: 11px;
+        color: var(--el-text-secondary);
+        display: block;
+        margin-top: 2px;
       }
 
       /* content area */
@@ -576,7 +659,9 @@
       }
       .sw.on .kn {
         transform: translateX(16px);
-        background: #fff;
+        /* The knob rides ON the accent-filled track, so it takes the
+           on-accent ink token — a raw #fff would not flip with the theme. */
+        background: var(--el-text-inverted);
       }
       .sw.dis {
         opacity: 0.5;
@@ -634,7 +719,7 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--el-text-faint);
+        color: var(--el-text-secondary); /* AA: a column heading names what the column holds. */
         padding: 0 12px 8px;
         border-bottom: 1px solid var(--el-border);
         white-space: nowrap;
@@ -1129,7 +1214,9 @@
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.07em;
-        color: var(--el-text-faint);
+        color: var(
+          --el-text-secondary
+        ); /* AA: faint is 2.61 on the white modal — and a DOMAIN heading is informational, not decoration. secondary clears AA on every surface in both themes. */
         margin-bottom: 6px;
       }
       /* one scope row: icon + label/desc on the left, Switch on the right */
@@ -1348,7 +1435,7 @@
         <div class="overlay-tint"></div>
         <div class="modal wide">
           <div class="modal-head">
-            <h3 class="modal-title">Create API token</h3>
+            <h3 class="modal-title">Create token</h3>
             <p class="modal-desc">
               The token will be shown once, right after you create it. Store it somewhere safe.
             </p>
@@ -1377,6 +1464,13 @@
                 <span class="helper">Only reaches work in this workspace.</span>
               </div>
               <div class="field">
+                <label for="m-proj">Project</label>
+                <div class="select full" id="m-proj">
+                  Motir<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <span class="helper">The token acts in this project only.</span>
+              </div>
+              <div class="field">
                 <label for="m-exp">Expires</label>
                 <div class="select full" id="m-exp">
                   90 days<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
@@ -1395,14 +1489,15 @@
               <div class="scope-cols" role="group" aria-labelledby="perm-label">
                 <div class="scope-col">
                   <div class="scope-grp">
-                    <div class="scope-grp-label">Read</div>
+                    <div class="scope-grp-label">Project</div>
                     <div class="scope-row">
                       <div class="scope-main">
                         <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
                         <div class="scope-text">
-                          <span class="scope-name">Read everything</span>
+                          <span class="scope-name">View project</span>
                           <span class="scope-desc"
-                            >View work items, boards, sprints, comments, and reports.</span
+                            >Open the project and read its work items, boards, backlog and
+                            reports.</span
                           >
                         </div>
                       </div>
@@ -1410,56 +1505,11 @@
                         class="sw on"
                         role="switch"
                         aria-checked="true"
-                        aria-label="Read everything"
+                        aria-label="View project"
                         ><span class="kn"></span
                       ></span>
                     </div>
                   </div>
-                  <div class="scope-grp">
-                    <div class="scope-grp-label">Sprints</div>
-                    <div class="scope-row">
-                      <div class="scope-main">
-                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
-                        <div class="scope-text">
-                          <span class="scope-name">Manage sprints</span>
-                          <span class="scope-desc"
-                            >Create sprints and move work items in and out of them.</span
-                          >
-                        </div>
-                      </div>
-                      <span
-                        class="sw on"
-                        role="switch"
-                        aria-checked="true"
-                        aria-label="Manage sprints"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                  </div>
-                  <div class="scope-grp">
-                    <div class="scope-grp-label">Integrations</div>
-                    <div class="scope-row">
-                      <div class="scope-main">
-                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>
-                        <div class="scope-text">
-                          <span class="scope-name">Connect integrations</span>
-                          <span class="scope-desc"
-                            >Link external tools and post activity back to Motir.</span
-                          >
-                        </div>
-                      </div>
-                      <span
-                        class="sw on"
-                        role="switch"
-                        aria-checked="true"
-                        aria-label="Connect integrations"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                  </div>
-                </div>
-
-                <div class="scope-col">
                   <div class="scope-grp">
                     <div class="scope-grp-label">Work items</div>
                     <div class="scope-row">
@@ -1468,7 +1518,8 @@
                         <div class="scope-text">
                           <span class="scope-name">Edit work items</span>
                           <span class="scope-desc"
-                            >Create and update work items, comments, links, and attachments.</span
+                            >Create, update, assign and move work items, and transition them on the
+                            board.</span
                           >
                         </div>
                       </div>
@@ -1480,25 +1531,6 @@
                         ><span class="kn"></span
                       ></span>
                     </div>
-                    <div class="scope-row">
-                      <div class="scope-main">
-                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
-                        <div class="scope-text">
-                          <span class="scope-name">Archive work items</span>
-                          <span class="scope-desc"
-                            >Archive and restore work items. This can be undone.</span
-                          >
-                        </div>
-                      </div>
-                      <span
-                        class="sw on"
-                        role="switch"
-                        aria-checked="true"
-                        aria-label="Archive work items"
-                        ><span class="kn"></span
-                      ></span>
-                    </div>
-                    <!-- DANGER row — distinct rose treatment, OFF by default -->
                     <div class="scope-danger">
                       <div class="scope-row">
                         <div class="scope-main">
@@ -1508,8 +1540,8 @@
                               >Delete work items <span class="tag">· Danger</span></span
                             >
                             <span class="scope-desc"
-                              >Permanently delete a work item and its entire subtree. This can't be
-                              undone.</span
+                              >Archive or delete a work item and everything beneath it. The delete
+                              cascades to the whole subtree and can't be undone.</span
                             >
                           </div>
                         </div>
@@ -1524,6 +1556,72 @@
                     </div>
                   </div>
                 </div>
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Comments</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-msg" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Add comments</span>
+                          <span class="scope-desc"
+                            >Post comments on work items, and edit or delete your own.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Add comments"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Sprints &amp; backlog</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-desc"
+                            >Start and complete Sprints, and rank the backlog.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Manage sprints"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">AI planning</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Run AI planning</span>
+                          <span class="scope-desc"
+                            >Submit a planning job that spends the workspace’s AI credits and
+                            proposes plan changes.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Run AI planning"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1535,18 +1633,452 @@
       </div>
     </div>
     <p class="note">
-      <strong>Width, not scroll.</strong> The wider panel + 2-column grid shows all six scopes at
-      once — no hidden overflow, nothing the user has to scroll to discover.
-      <strong>Default = all on except Delete:</strong> a token made without touching the picker can
-      read, edit, manage sprints, archive, and connect integrations, but not delete. Granting Delete
-      is a deliberate flip.
+      <strong>SIX rows, five groups — counted, not assumed.</strong> The grantable set is the
+      permissions some token-reachable operation actually asserts: <code>project:browse</code>,
+      <code>work_item:edit</code>, <code>work_item:delete</code>, <code>comment:add</code>,
+      <code>sprint:manage</code>, <code>ai:plan</code>. That is 6 of the catalog's 31 keys — the
+      other 25 govern UI-administration surfaces no API caller can reach, and offering one would be
+      a switch that gates nothing. <strong>So the composition does not change.</strong> Six rows is
+      the same count the six retired scopes had, the 2-column grid still shows every row at once,
+      and there is nothing to scroll, collapse or hide behind presets. What changes is the GROUPING
+      (the catalog's domains, not invented buckets), the COPY (the shipped
+      <code>permissions.*</code> strings the Roles &amp; permissions screen renders), and the
+      <code>resource:action</code> KEY under each row.
+      <strong>Default = every grantable permission except Delete.</strong> Note what that now
+      excludes: archiving asserts <code>work_item:delete</code> too, so a default-granted token can
+      neither archive nor delete.
     </p>
 
-    <!-- ════════════ PANEL 2 — Work-items group, Delete turned ON ════════════ -->
+    <!-- ════════════ PANEL 1b — the DENSE state: tallest account shape ════════════ -->
     <div class="panel-label">
-      2 · The Work-items group with Delete turned ON — a close-up of the deliberate grant. The rose
-      danger row, the "Danger" tag, the trash icon, and the "can't be undone" caption stay; only the
-      Switch flips on.
+      1b · The same modal at its <strong>tallest reachable shape</strong> — a ≥2-organization,
+      ≥2-workspace account (which discloses the Organization Combobox as a THIRD metadata row) with
+      every permission granted, Delete included. This is the panel the height decision is made
+      against, because it is the one a single-tenant fixture never renders and the one MOTIR-2488's
+      clipped-footer bug appeared on.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal wide" id="dense-modal">
+          <div class="modal-head">
+            <h3 class="modal-title">Create token</h3>
+            <p class="modal-desc">
+              The token will be shown once, right after you create it. Store it somewhere safe.
+            </p>
+          </div>
+          <button class="modal-close" aria-label="Close">
+            <svg class="ic" viewBox="0 0 24 24"><use href="#i-x" /></svg>
+          </button>
+          <div class="modal-body">
+            <div class="field">
+              <label for="m-label">Label</label>
+              <div class="input"><input id="m-label" value="claude-code" /></div>
+              <span class="helper"
+                >A name to recognise this token by — e.g. the agent or machine using it.</span
+              >
+            </div>
+            <div class="field">
+              <label for="m-org">Organization</label>
+              <div class="select full" id="m-org">
+                moooon<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </div>
+              <span class="helper">Only shown when you belong to more than one.</span>
+            </div>
+            <div class="meta-cols">
+              <div class="field">
+                <label for="m-ws2">Workspace</label>
+                <div class="select full" id="m-ws2">
+                  Motir<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <span class="helper">Only reaches work in this workspace.</span>
+              </div>
+              <div class="field">
+                <label for="m-proj2">Project</label>
+                <div class="select full" id="m-proj2">
+                  Motir<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <span class="helper">The token acts in this project only.</span>
+              </div>
+              <div class="field">
+                <label for="m-exp">Expires</label>
+                <div class="select full" id="m-exp">
+                  90 days<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+                <span class="helper">After this the token stops working.</span>
+              </div>
+            </div>
+
+            <!-- the PERMISSIONS picker (7.7.18) — 2-column grid, all visible -->
+            <div class="field">
+              <label id="perm-label">Permissions</label>
+              <span class="helper"
+                >Choose what this token is allowed to do. You can grant less than your own access,
+                never more.</span
+              >
+              <div class="scope-cols" role="group" aria-labelledby="perm-label">
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Project</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">View project</span>
+                          <span class="scope-desc"
+                            >Open the project and read its work items, boards, backlog and
+                            reports.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="View project"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Work items</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Edit work items</span>
+                          <span class="scope-desc"
+                            >Create, update, assign and move work items, and transition them on the
+                            board.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Edit work items"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="scope-danger">
+                      <div class="scope-row">
+                        <div class="scope-main">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          <div class="scope-text">
+                            <span class="scope-name"
+                              >Delete work items <span class="tag">· Danger</span></span
+                            >
+                            <span class="scope-desc"
+                              >Archive or delete a work item and everything beneath it. The delete
+                              cascades to the whole subtree and can't be undone.</span
+                            >
+                          </div>
+                        </div>
+                        <span
+                          class="sw on"
+                          role="switch"
+                          aria-checked="true"
+                          aria-label="Delete work items"
+                          ><span class="kn"></span
+                        ></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Comments</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-msg" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Add comments</span>
+                          <span class="scope-desc"
+                            >Post comments on work items, and edit or delete your own.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Add comments"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Sprints &amp; backlog</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-desc"
+                            >Start and complete Sprints, and rank the backlog.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Manage sprints"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">AI planning</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Run AI planning</span>
+                          <span class="scope-desc"
+                            >Submit a planning job that spends the workspace’s AI credits and
+                            proposes plan changes.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Run AI planning"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create token</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note" id="dense-note">
+      <strong>Measured, not eyeballed</strong> — see the notes for the numbers and the viewports.
+    </p>
+
+    <!-- ═══════ PANEL 1c — the SAME picker, for a VIEWER: the grant is capped ═══════ -->
+    <div class="panel-label">
+      1c · <strong>The same modal, for a different person.</strong> The offer is not a fixed list —
+      it is what THIS actor can confer in the bound project. Here the actor is a
+      <strong>viewer</strong> in <em>Motir</em>: they hold <code>project:browse</code> and
+      <code>comment:add</code>, so the other four rows are DISABLED with the reason, not hidden. A
+      hidden row reads as a missing feature; a disabled one teaches the rule the screen already
+      promises.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="overlay-tint"></div>
+        <div class="modal wide">
+          <div class="modal-head">
+            <h3 class="modal-title">Create token</h3>
+            <p class="modal-desc">
+              The token will be shown once, right after you create it. Store it somewhere safe.
+            </p>
+          </div>
+          <div class="modal-body">
+            <div class="meta-cols">
+              <div class="field">
+                <label>Workspace</label>
+                <div
+                  class="input"
+                  style="color: var(--el-text-secondary); background: var(--el-muted)"
+                >
+                  Default
+                </div>
+              </div>
+              <div class="field">
+                <label>Project</label>
+                <div class="select full">
+                  Motir<svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                </div>
+              </div>
+            </div>
+            <div class="field">
+              <label id="perm-label-v">Permissions</label>
+              <span class="helper"
+                >Choose what this token is allowed to do. You can grant less than your own access,
+                never more.</span
+              >
+              <div class="scope-cols" role="group" aria-labelledby="perm-label-v">
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Project</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">View project</span>
+                          <span class="scope-desc"
+                            >Open the project and read its work items, boards, backlog and
+                            reports.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="View project"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Work items</div>
+                    <div class="scope-row locked">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Edit work items</span>
+                          <span class="scope-desc"
+                            >Create, update, assign and move work items, and transition them on the
+                            board.</span
+                          >
+                          <span class="locked-why">You do not have this in Motir.</span>
+                        </div>
+                      </div>
+                      <span
+                        class="sw locked"
+                        role="switch"
+                        aria-checked="false"
+                        aria-disabled="true"
+                        aria-label="Edit work items — you do not have this in Motir"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                    <div class="scope-danger">
+                      <div class="scope-row locked">
+                        <div class="scope-main">
+                          <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                          <div class="scope-text">
+                            <span class="scope-name"
+                              >Delete work items <span class="tag">· Danger</span></span
+                            >
+                            <span class="scope-desc"
+                              >Archive or delete a work item and everything beneath it.</span
+                            >
+                            <span class="locked-why">You do not have this in Motir.</span>
+                          </div>
+                        </div>
+                        <span
+                          class="sw locked"
+                          role="switch"
+                          aria-checked="false"
+                          aria-disabled="true"
+                          aria-label="Delete work items — you do not have this in Motir"
+                          ><span class="kn"></span
+                        ></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="scope-col">
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Comments</div>
+                    <div class="scope-row">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-msg" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Add comments</span>
+                          <span class="scope-desc"
+                            >Post comments on work items, and edit or delete your own.</span
+                          >
+                        </div>
+                      </div>
+                      <span
+                        class="sw on"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="Add comments"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">Sprints &amp; backlog</div>
+                    <div class="scope-row locked">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Manage sprints</span>
+                          <span class="scope-desc"
+                            >Start and complete Sprints, and rank the backlog.</span
+                          >
+                          <span class="locked-why">You do not have this in Motir.</span>
+                        </div>
+                      </div>
+                      <span
+                        class="sw locked"
+                        role="switch"
+                        aria-checked="false"
+                        aria-disabled="true"
+                        aria-label="Manage sprints — you do not have this in Motir"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                  <div class="scope-grp">
+                    <div class="scope-grp-label">AI planning</div>
+                    <div class="scope-row locked">
+                      <div class="scope-main">
+                        <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>
+                        <div class="scope-text">
+                          <span class="scope-name">Run AI planning</span>
+                          <span class="scope-desc"
+                            >Submit a planning job that spends the workspace’s AI credits and
+                            proposes plan changes.</span
+                          >
+                          <span class="locked-why">You do not have this in Motir.</span>
+                        </div>
+                      </div>
+                      <span
+                        class="sw locked"
+                        role="switch"
+                        aria-checked="false"
+                        aria-disabled="true"
+                        aria-label="Run AI planning — you do not have this in Motir"
+                        ><span class="kn"></span
+                      ></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-primary">Create token</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <strong>The danger row is disabled, not absent</strong> — and it keeps its rose block, because
+      the row a viewer most needs to understand they cannot grant is the destructive one. Two things
+      this panel pins for the code card: the offer RECOMPUTES when the Project picker changes (a
+      different project is a different set), and a workspace OWNER sees no locked rows at all —
+      `resolvePermissions` layer 2 hands them the whole role-gated catalog in every project, so for
+      most people minting tokens this panel never appears.
+    </p>
+
+    <!-- ════════════ PANEL 2 — the Work items group, Delete turned ON ════════════ -->
+    <div class="panel-label">
+      2 · The <strong>Work items</strong> group with Delete turned ON — a close-up of the deliberate
+      grant. The rose danger row, the "Danger" tag, the trash icon and the cascade caption all stay.
+      What changed is the SCOPE OF THE WARNING: this one switch now governs archiving as well as
+      deleting, because both assert <code>work_item:delete</code> in shipped code. The caption says
+      so, so nobody flips it expecting only the recoverable half — and nobody hunts for a separate
+      archive switch that no longer exists.
     </div>
     <div class="panel">
       <div class="mstage">
@@ -1564,29 +2096,12 @@
                     <div class="scope-text">
                       <span class="scope-name">Edit work items</span>
                       <span class="scope-desc"
-                        >Create and update work items, comments, links, and attachments.</span
+                        >Create, update, assign and move work items, and transition them on the
+                        board.</span
                       >
                     </div>
                   </div>
                   <span class="sw on" role="switch" aria-checked="true" aria-label="Edit work items"
-                    ><span class="kn"></span
-                  ></span>
-                </div>
-                <div class="scope-row">
-                  <div class="scope-main">
-                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>
-                    <div class="scope-text">
-                      <span class="scope-name">Archive work items</span>
-                      <span class="scope-desc"
-                        >Archive and restore work items. This can be undone.</span
-                      >
-                    </div>
-                  </div>
-                  <span
-                    class="sw on"
-                    role="switch"
-                    aria-checked="true"
-                    aria-label="Archive work items"
                     ><span class="kn"></span
                   ></span>
                 </div>
@@ -1599,8 +2114,8 @@
                           >Delete work items <span class="tag">· Danger</span></span
                         >
                         <span class="scope-desc"
-                          >Permanently delete a work item and its entire subtree. This can't be
-                          undone.</span
+                          >Archive or delete a work item and everything beneath it. The delete
+                          cascades to the whole subtree and can't be undone.</span
                         >
                       </div>
                     </div>
@@ -1619,11 +2134,22 @@
         </div>
       </div>
     </div>
+    <p class="note">
+      <strong>One switch, one key — and the archive row is GONE.</strong> The retired vocabulary had
+      <code>work_items:archive</code> and <code>work_items:delete</code> as separate scopes, and the
+      picker drew them as separate rows. The gates never made that distinction:
+      <code>archiveWorkItem</code>, <code>unarchiveWorkItem</code> and
+      <code>deleteWorkItem</code> all assert <code>work_item:delete</code>. Drawing two rows over
+      one key would put a switch on the screen that cannot be flipped independently of its neighbour
+      — the same lie in a new costume. One row, and a caption that names both acts.
+    </p>
 
-    <!-- ════════════ PANEL 3 — disabled / error state (every scope off) ════════════ -->
+    <!-- ════════════ PANEL 3 — empty / invalid state (nothing granted) ════════════ -->
     <div class="panel-label">
-      3 · Error / disabled state — every scope off. A token must grant at least one permission, so
-      the inline error shows and the "Create token" CTA is disabled.
+      3 · Empty / invalid state — nothing granted. A token must grant at least one permission, so
+      the inline error shows and the "Create token" CTA is disabled. The rows are the same rows, in
+      the same groups, with every Switch off — the empty state is the picker, not a different
+      screen.
     </div>
     <div class="panel">
       <div class="mstage">
@@ -1635,18 +2161,19 @@
           <div class="modal-body">
             <div class="scopes">
               <div class="scope-grp">
-                <div class="scope-grp-label">Read</div>
+                <div class="scope-grp-label">Project</div>
                 <div class="scope-row">
                   <div class="scope-main">
                     <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
                     <div class="scope-text">
-                      <span class="scope-name">Read everything</span>
+                      <span class="scope-name">View project</span>
                       <span class="scope-desc"
-                        >View work items, boards, sprints, comments, and reports.</span
+                        >Open the project and read its work items, boards, backlog and
+                        reports.</span
                       >
                     </div>
                   </div>
-                  <span class="sw" role="switch" aria-checked="false" aria-label="Read everything"
+                  <span class="sw" role="switch" aria-checked="false" aria-label="View project"
                     ><span class="kn"></span
                   ></span>
                 </div>
@@ -1659,7 +2186,8 @@
                     <div class="scope-text">
                       <span class="scope-name">Edit work items</span>
                       <span class="scope-desc"
-                        >Create and update work items, comments, links, and attachments.</span
+                        >Create, update, assign and move work items, and transition them on the
+                        board.</span
                       >
                     </div>
                   </div>
@@ -1683,13 +2211,24 @@
         </div>
       </div>
     </div>
+    <p class="note">
+      <strong>The refusal is the SURFACE's, not the server's.</strong> An empty grant is a legal
+      thing to persist — the service accepts it and mints a token that can do nothing — so nothing
+      below the UI will stop you. That is exactly why the CTA is disabled here: minting a do-nothing
+      credential is almost never what someone meant, and the cheapest place to say so is before the
+      secret exists.
+    </p>
 
     <!-- ════════════ PANEL 4 — token list with the granted-scope column ════════════ -->
     <div class="panel-label">
-      4 · Token list — the new Scopes column. A compact summary Pill (Full access / Standard / Read
-      only / Custom); whenever Delete is granted, a persistent rose "Can delete" chip rides
-      alongside it so the dangerous grant is never hidden behind a summary. The chevron expands the
-      detail.
+      4 · Token list — the <strong>Permissions</strong> column, and the <strong>Acts in</strong>
+      column that makes the TWO CREDENTIAL SHAPES legible side by side. A hand-minted token names a
+      <strong>project</strong> (its grant was chosen, so a project was required); the
+      <code>motir login</code> credential names a <strong>workspace</strong> and says
+      <em>"Every project your roles reach"</em>, because its grant is FIXED and resolves against the
+      holder'"'"'s role in each project. Without that line the column reads as an inconsistency
+      rather than two kinds of credential. The summary Pill and the rose "Can delete" chip are KEPT,
+      not re-decided.
     </div>
     <div class="panel" style="max-width: 1180px">
       <div class="card">
@@ -1708,8 +2247,8 @@
               <tr>
                 <th>Label</th>
                 <th>Token</th>
-                <th>Scopes</th>
-                <th>Workspace</th>
+                <th>Permissions</th>
+                <th>Acts in</th>
                 <th>Created</th>
                 <th>Expires</th>
                 <th class="right">Actions</th>
@@ -1735,7 +2274,11 @@
                     </button>
                   </span>
                 </td>
-                <td><span class="meta">Default</span></td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-key" /></svg>Motir</span
+                  >
+                </td>
                 <td><span class="meta">12 Jun 2026</span></td>
                 <td><span class="meta">in 90 days</span></td>
                 <td class="right">
@@ -1759,7 +2302,11 @@
                     </button>
                   </span>
                 </td>
-                <td><span class="meta">Default</span></td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-key" /></svg>Motir</span
+                  >
+                </td>
                 <td><span class="meta">28 May 2026</span></td>
                 <td><span class="pill pill--warning">in 5 days</span></td>
                 <td class="right">
@@ -1783,11 +2330,45 @@
                     </button>
                   </span>
                 </td>
-                <td><span class="meta">Default</span></td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-key" /></svg>Motir</span
+                  >
+                </td>
                 <td><span class="meta">03 Jun 2026</span></td>
                 <td><span class="meta">Never</span></td>
                 <td class="right">
                   <button class="icon-btn" aria-label="Revoke token readonly-dash">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
+                  </button>
+                </td>
+              </tr>
+              <tr>
+                <td><span class="label">CLI · workbox</span></td>
+                <td><span class="code-chip">motir_pat_Kx9M…</span></td>
+                <td>
+                  <span class="scope-cell">
+                    <span class="pill pill--neutral">Standard</span>
+                    <button
+                      class="disclose"
+                      aria-label="Show permissions for CLI · workbox"
+                      aria-expanded="false"
+                    >
+                      <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+                    </button>
+                  </span>
+                </td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-user" /></svg>moooon ·
+                    Default</span
+                  >
+                  <span class="acts-note">Every project your roles reach</span>
+                </td>
+                <td><span class="meta">18 Jun 2026</span></td>
+                <td><span class="meta">in 74 days</span></td>
+                <td class="right">
+                  <button class="icon-btn" aria-label="Revoke token CLI · workbox">
                     <svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>
                   </button>
                 </td>
@@ -1800,7 +2381,12 @@
                     <span class="pill pill--neutral">Custom</span>
                   </span>
                 </td>
-                <td><span class="meta muted">Default</span></td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-user" /></svg>moooon ·
+                    Default</span
+                  >
+                </td>
                 <td><span class="meta muted">02 Apr 2026</span></td>
                 <td><span class="meta muted">—</span></td>
                 <td class="right"><span class="pill pill--neutral">Revoked</span></td>
@@ -1824,8 +2410,8 @@
               <tr>
                 <th>Label</th>
                 <th>Token</th>
-                <th>Scopes</th>
-                <th>Workspace</th>
+                <th>Permissions</th>
+                <th>Acts in</th>
                 <th>Created</th>
                 <th>Expires</th>
                 <th class="right">Actions</th>
@@ -1851,7 +2437,11 @@
                     </button>
                   </span>
                 </td>
-                <td><span class="meta">Default</span></td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-key" /></svg>Motir</span
+                  >
+                </td>
                 <td><span class="meta">12 Jun 2026</span></td>
                 <td><span class="meta">in 90 days</span></td>
                 <td class="right">
@@ -1865,24 +2455,24 @@
                   <div class="scope-detail-inner">
                     <span class="scope-detail-lead">This token can:</span>
                     <span class="scope-chip"
-                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>Read
-                      everything</span
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>View
+                      project</span
                     >
                     <span class="scope-chip"
                       ><svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>Edit work
                       items</span
                     >
                     <span class="scope-chip"
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-msg" /></svg>Add
+                      comments</span
+                    >
+                    <span class="scope-chip"
                       ><svg class="ic" viewBox="0 0 24 24"><use href="#i-zap" /></svg>Manage
                       sprints</span
                     >
                     <span class="scope-chip"
-                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-archive" /></svg>Archive
-                      work items</span
-                    >
-                    <span class="scope-chip"
-                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-plug" /></svg>Connect
-                      integrations</span
+                      ><svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>Run AI
+                      planning</span
                     >
                     <span class="scope-chip danger"
                       ><svg class="ic" viewBox="0 0 24 24"><use href="#i-trash" /></svg>Delete work
@@ -1906,7 +2496,11 @@
                     </button>
                   </span>
                 </td>
-                <td><span class="meta">Default</span></td>
+                <td>
+                  <span class="acts"
+                    ><svg class="ic" viewBox="0 0 24 24"><use href="#i-key" /></svg>Motir</span
+                  >
+                </td>
                 <td><span class="meta">28 May 2026</span></td>
                 <td><span class="pill pill--warning">in 5 days</span></td>
                 <td class="right">
@@ -1917,6 +2511,171 @@
               </tr>
             </tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════ PANEL 6 — /device approval, the CLI's FIXED grant ════════════ -->
+    <div class="panel-label">
+      6 · The <code>/device</code> approval screen. It shows what approval WILL grant and cannot
+      edit it — neither widen (a Delete control on a socially-engineerable screen turns a phishing
+      success into a destructive one) nor narrow (a hand-narrowed grant fails mid-way through an
+      unattended <code>motir auto</code> run). It buys its one-screen fit by showing NAMES only, and
+      that still holds: the CLI's fixed grant is FOUR permissions, one fewer row than the picker.
+      Names carry the <code>resource:action</code> key beneath them here too, because this is the
+      screen where someone decides whether to trust a machine they are looking at.
+    </div>
+    <div class="panel">
+      <div class="mstage">
+        <div class="modal" style="max-width: 27rem">
+          <div class="modal-head">
+            <h3 class="modal-title">Connect the CLI</h3>
+            <p class="modal-desc">
+              <strong>workbox</strong> is asking to connect to Motir. Approving mints a token for
+              that machine.
+            </p>
+          </div>
+          <div class="modal-body">
+            <div class="field">
+              <label>It can</label>
+              <div class="scopes">
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-eye" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">View project</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-pen" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Edit work items</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-msg" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Add comments</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="scope-row">
+                  <div class="scope-main">
+                    <svg class="ic" viewBox="0 0 24 24"><use href="#i-sparkle" /></svg>
+                    <div class="scope-text">
+                      <span class="scope-name">Run AI planning</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="callout">
+              <svg class="ic" viewBox="0 0 24 24"><use href="#i-shield-alert" /></svg>
+              <span
+                >It <strong>cannot</strong> delete or archive work items, and cannot manage sprints.
+                Expires in 90 days. Revoke it any time from Settings → Account → Tokens.</span
+              >
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button class="btn btn-ghost">Deny</button>
+            <button class="btn btn-primary">Approve</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="note">
+      <strong>What it CANNOT do is drawn, not left to inference.</strong> The four granted rows are
+      the whole grant, so the omissions are invisible unless the screen names them — and the two
+      that matter to someone approving a remote machine are exactly the two withheld. The old screen
+      could leave this implicit because "archive" was a separate scope a reader might notice
+      missing; now archiving rides on the delete key, so the absence has to be said out loud.
+    </p>
+
+    <!-- ════════════ PANEL 7 — the ACCESS PATH (the entrance, drawn) ════════════ -->
+    <div class="panel-label">
+      7 · The <strong>access path</strong> — the door, drawn rather than described. Avatar menu →
+      <strong>Settings</strong> → the <strong>Account</strong> rail → <strong>Tokens</strong> → the
+      <strong>Create token</strong> button in the "Your tokens" card header. Drawn against the
+      post-rename label and address (MOTIR-2532): the pane is "Tokens", not "API tokens", and it
+      lives at <code>/settings/account/tokens</code>.
+    </div>
+    <div class="panel" style="max-width: 1180px">
+      <div class="shell">
+        <div class="rail">
+          <div class="rail-head">
+            <div class="back">
+              <svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>
+              Back to Motir
+            </div>
+            <span class="settings-eyebrow">Account settings</span>
+          </div>
+          <nav aria-label="Account settings">
+            <div class="grp">
+              <div class="grp-label">General</div>
+              <div class="nav-row">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-user" /></svg
+                ></span>
+                <span class="nl">Profile</span>
+              </div>
+            </div>
+            <div class="grp">
+              <div class="grp-label">Preferences</div>
+              <div class="nav-row">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-languages" /></svg
+                ></span>
+                <span class="nl">Language</span>
+              </div>
+              <div class="nav-row">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-bell" /></svg
+                ></span>
+                <span class="nl">Notifications</span>
+              </div>
+              <div class="nav-row">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-palette" /></svg
+                ></span>
+                <span class="nl">Appearance</span>
+              </div>
+            </div>
+            <div class="grp">
+              <div class="grp-label">Developer</div>
+              <div class="nav-row active">
+                <span class="ni"
+                  ><svg viewBox="0 0 24 24"><use href="#i-key" /></svg
+                ></span>
+                <span class="nl">Tokens</span>
+              </div>
+            </div>
+          </nav>
+        </div>
+        <div class="content">
+          <div class="card">
+            <div class="card-head">
+              <div>
+                <h3>Your tokens</h3>
+                <p class="hsub">Shown once at creation, then stored only as a hash.</p>
+              </div>
+              <span style="display: inline-flex; align-items: center">
+                <span class="door-caption">The entrance →</span>
+                <button class="btn btn-primary btn-sm door">
+                  <svg class="ic" viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create token
+                </button>
+              </span>
+            </div>
+            <p class="hsub" style="padding: 0 var(--spacing-card-padding) 16px">
+              The <strong>Create token</strong> button above is the only entrance to the permission
+              picker in Panel 1. There is no other route to it — no command palette entry, no deep
+              link from the API docs.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -2183,6 +2942,29 @@
           <path
             d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
           />
+        </g>
+        <g
+          id="i-msg"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </g>
+        <g
+          id="i-sparkle"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path
+            d="M9.94 13.5a2 2 0 0 0-1.44-1.44L3.1 10.5l5.4-1.56A2 2 0 0 0 9.94 7.5L11.5 2.1l1.56 5.4a2 2 0 0 0 1.44 1.44l5.4 1.56-5.4 1.56a2 2 0 0 0-1.44 1.44L11.5 18.9z"
+          />
+          <path d="M18 16.5 18.6 18.4 20.5 19 18.6 19.6 18 21.5 17.4 19.6 15.5 19 17.4 18.4z" />
         </g>
         <g
           id="i-plug"

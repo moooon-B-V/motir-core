@@ -25,6 +25,9 @@ import { mapPlanChangeError, noActiveProject } from '../../_errors';
 //
 // HTTP only (CLAUDE.md 4-layer): parse, call ONE service method, map typed
 // errors — including the motir-ai read's (404 unknown job / 502 transport).
+// NOT rate-limited, deliberately (MOTIR-2597): this narrates a job that was already submitted,
+// so no model job is submitted and no provider money is spent on this path. The AI ceiling
+// guards the doors that SUBMIT; adding one here would only cap a database read.
 export async function POST(req: Request): Promise<Response> {
   const session = await getSession();
   if (!session) return NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 });

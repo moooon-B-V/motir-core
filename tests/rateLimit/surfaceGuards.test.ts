@@ -11,6 +11,7 @@ import {
 } from '@/lib/rateLimit/authGuard';
 import { enforcePublicWriteRateLimit } from '@/lib/rateLimit/publicWriteGuard';
 import { enforceAiRateLimit, enforceInternalServiceRateLimit } from '@/lib/rateLimit/aiGuard';
+import { DEFAULT_AI_RATE_LIMIT, DEFAULT_AI_GENERATE_RATE_LIMIT } from '@/lib/rateLimit/budgets';
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { JobAuthError, JobRateLimitedError } from '@/lib/ai/jobAuth';
 import { rateLimitedResponse } from '@/lib/rateLimit/guard';
@@ -30,6 +31,8 @@ const ENVS = [
   'MOTIR_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS',
   'MOTIR_AI_RATE_LIMIT',
   'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
+  'MOTIR_AI_GENERATE_RATE_LIMIT',
+  'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS',
   RATE_LIMIT_DISABLE_ENV,
 ];
 
@@ -266,6 +269,57 @@ describe('the AI surface', () => {
     expect(await enforceAiRateLimit(ctx, 'ai:internal')).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).not.toBeNull();
   });
+
+  // ── GENERATION (MOTIR-2597) ────────────────────────────────────────────────
+  // The job-SUBMITTING routes draw `ai:generate`, which is both a separate bucket
+  // and a separate CEILING — a plan generation costs many chat turns, so metering
+  // it by the chat allowance would set the expensive door's limit from the cheap
+  // one.
+
+  it('generation takes its OWN budget, not the chat one', async () => {
+    process.env['MOTIR_AI_RATE_LIMIT'] = '100';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    const refused = await enforceAiRateLimit(ctx, 'ai:generate');
+    expect(refused!.status).toBe(429);
+    expect(refused!.headers.get('x-ratelimit-limit')).toBe('1');
+    expect(Number(refused!.headers.get('Retry-After'))).toBeGreaterThanOrEqual(1);
+  });
+
+  it('spending the generation budget leaves the chat budget alone', async () => {
+    // The reason the two are separate scopes at all: a user who has run out of
+    // plan generations can still ask a question, and a chat-box loop cannot
+    // consume the generation allowance.
+    process.env['MOTIR_AI_RATE_LIMIT'] = '2';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
+    expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
+  });
+
+  it('generation is keyed per user + workspace like every other AI scope', async () => {
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    expect(await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w1' }, 'ai:generate')).toBeNull();
+    expect(await enforceAiRateLimit({ userId: 'u2', workspaceId: 'w1' }, 'ai:generate')).toBeNull();
+    expect(
+      await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w1' }, 'ai:generate'),
+    ).not.toBeNull();
+  });
+
+  it('defaults to a TIGHTER ceiling than chat when neither env is set', async () => {
+    // The relationship is the point, not either number: if a future edit raises
+    // the generation default past the chat one, the expensive door is again
+    // metered more loosely than the cheap one.
+    expect(DEFAULT_AI_GENERATE_RATE_LIMIT).toBeLessThan(DEFAULT_AI_RATE_LIMIT);
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = 'not a number';
+    const refusedAt = DEFAULT_AI_GENERATE_RATE_LIMIT;
+    for (let i = 0; i < refusedAt; i += 1) {
+      expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
+    }
+    // A malformed value falls back to the documented default rather than
+    // disabling the limiter.
+    expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
+  });
 });
 
 describe('the tenant-LESS internal routes (service-bearer gated)', () => {
@@ -359,6 +413,106 @@ describe('the routes are actually WIRED to the guards', () => {
   it.each(wiring)('%s calls %s', (file, symbol) => {
     const source = readFileSync(file, 'utf8');
     expect(source).toContain(symbol);
+  });
+
+  // ⚠️ The BROWSER AI surface, enumerated from the filesystem (MOTIR-2597).
+  //
+  // 8.5.9 limited `/api/ai/chat` and `/api/internal/ai/*` because those were the
+  // two surfaces its acceptance criteria named — which left the routes that cost
+  // the most (plan generation, expansion, re-plan, audit) uncapped. A hand list
+  // would have the same shape as that gap, so this reads the directory instead:
+  // every `app/api/ai/**/route.ts` must land in EXACTLY ONE of the two sets
+  // below, and both are asserted TIGHT IN BOTH DIRECTIONS. A new AI route is a
+  // failing test until somebody classifies it — and a route that leaves its set
+  // (a guard deleted, an unlimited read that starts submitting) fails too, which
+  // a one-directional allowlist would not catch.
+  //
+  // The line between the sets is the MONEY, not the HTTP verb: a route belongs in
+  // `LIMITED` when it causes motir-ai to run a model job (`submitJob`, or the
+  // upstream re-audit `refreshCodeAudit` queues). Everything else — reading a job
+  // back, streaming one already paid for, appending a conversation turn to our own
+  // database, materializing a plan that was already generated — spends nothing at
+  // the provider, and a ceiling there would only refuse a caller the answer they
+  // have already been charged for.
+  const LIMITED: ReadonlyArray<string> = [
+    'app/api/ai/augment/route.ts',
+    'app/api/ai/chat/route.ts',
+    'app/api/ai/coding-convention/refresh/route.ts',
+    'app/api/ai/expand/route.ts',
+    'app/api/ai/explanation/route.ts',
+    'app/api/ai/plan-change/session/submit/route.ts',
+    'app/api/ai/plan/generate/route.ts',
+    'app/api/ai/plan/sprint/route.ts',
+    'app/api/ai/replan/route.ts',
+  ];
+
+  // Each of these submits NO model job. The reason is in the route's own header
+  // comment (asserted below), so the classification cannot drift out of the code
+  // it describes.
+  const UNLIMITED_BY_DESIGN: ReadonlyArray<string> = [
+    'app/api/ai/access/route.ts',
+    'app/api/ai/augment/[jobId]/stream/route.ts',
+    'app/api/ai/chat/[jobId]/stream/route.ts',
+    'app/api/ai/coding-convention/audit-coverage/route.ts',
+    'app/api/ai/coding-convention/audit/route.ts',
+    'app/api/ai/coding-convention/convention/route.ts',
+    'app/api/ai/expand/[jobId]/stream/route.ts',
+    'app/api/ai/explanation/[jobId]/stream/route.ts',
+    'app/api/ai/jobs/[jobId]/route.ts',
+    'app/api/ai/plan-change/session/planner-turn/route.ts',
+    'app/api/ai/plan-change/session/route.ts',
+    'app/api/ai/plan-change/session/turns/route.ts',
+    'app/api/ai/plan/generate/[jobId]/stream/route.ts',
+    'app/api/ai/plan/sprint/[jobId]/review/route.ts',
+    'app/api/ai/plan/sprint/[jobId]/stream/route.ts',
+    'app/api/ai/plan/sprint/approve/route.ts',
+    'app/api/ai/pre-plan/route.ts',
+    'app/api/ai/replan/[jobId]/stream/route.ts',
+  ];
+
+  async function aiRoutes(): Promise<string[]> {
+    const { globSync } = await import('node:fs');
+    return globSync('app/api/ai/**/route.ts').sort();
+  }
+
+  it('EVERY /api/ai route is classified — the directory holds these files and no others', async () => {
+    // The membership check that makes the two lists below binding: a route added
+    // to `app/api/ai/**` and to NEITHER list fails here, before anyone has to
+    // notice it is unlimited in production.
+    expect(await aiRoutes()).toEqual([...LIMITED, ...UNLIMITED_BY_DESIGN].sort());
+  });
+
+  it('every job-SUBMITTING /api/ai route calls the limiter', async () => {
+    const routes = await aiRoutes();
+    const limited = routes.filter((file) =>
+      /\benforceAiRateLimit\(/.test(readFileSync(file, 'utf8')),
+    );
+    // Tight in both directions: a missing guard AND a guard that appeared on a
+    // route nobody classified as submitting are both failures.
+    expect(limited).toEqual([...LIMITED].sort());
+  });
+
+  it('every submitting route spends the GENERATION budget (chat aside)', async () => {
+    for (const file of LIMITED) {
+      if (file === 'app/api/ai/chat/route.ts') continue;
+      const source = readFileSync(file, 'utf8');
+      expect(source, `${file} must draw the ai:generate bucket`).toContain(
+        "enforceAiRateLimit(ctx, 'ai:generate')",
+      );
+    }
+  });
+
+  it('every unlimited AI route SAYS why, in its own source', async () => {
+    // The acceptance criterion the streams and polls owe: the next reader must be
+    // able to tell "deliberately unlimited" from "nobody got to it" without
+    // finding this test.
+    for (const file of UNLIMITED_BY_DESIGN) {
+      const source = readFileSync(file, 'utf8');
+      expect(source, `${file} must explain why it carries no limit`).toContain(
+        'NOT rate-limited, deliberately',
+      );
+      expect(source, `${file} must not call the limiter`).not.toMatch(/\benforceAiRateLimit\(/);
+    }
   });
 
   it('EVERY authenticated /api/internal/ai route is limited, by one of the two gates', async () => {
