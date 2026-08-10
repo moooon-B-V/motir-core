@@ -158,8 +158,11 @@ test.describe('the top bar’s four-slot budget below md', () => {
     const bar = page.getByRole('navigation', { name: 'Global' });
     // The four that stay. Each is icon-only here, which is why each carries an
     // aria-label rather than relying on a now-`lg`-gated visible label.
-    for (const name of ['Search', 'Create work item', /^Notifications,/, 'Account menu']) {
-      await expect(bar.getByRole('button', { name }), `slot: ${name}`).toBeVisible();
+    // `exact` because 'Shortcut' is a SUBSTRING of the untouched "Keyboard
+    // shortcuts" cheatsheet copy and `name` matching is substring +
+    // case-insensitive by default; it is ignored for the RegExp entry.
+    for (const name of ['Shortcut', 'Create work item', /^Notifications,/, 'Account menu']) {
+      await expect(bar.getByRole('button', { name, exact: true }), `slot: ${name}`).toBeVisible();
     }
     // The three that leave. `hidden` removes them from the a11y tree, so a role
     // query is the right instrument — and it is the same instrument that would

@@ -393,5 +393,17 @@ export function AppCommandPalette({
     ],
   });
 
-  return <CommandPalette open={open} onOpenChange={setOpen} groups={groups} />;
+  // The primitive's own default placeholder is deliberately generic ("Type a
+  // command or search…") because /tokens mounts it as a specimen. The APP's
+  // palette names what a person is actually looking for, so the copy is passed
+  // in from the catalog — and passing it is also the only way the string is
+  // translatable at all (MOTIR-2552).
+  return (
+    <CommandPalette
+      open={open}
+      onOpenChange={setOpen}
+      groups={groups}
+      placeholder={t('commandPalette.placeholder')}
+    />
+  );
 }

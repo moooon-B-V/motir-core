@@ -844,7 +844,8 @@
       "helper": "选择一种关系 · 关联将与工作项一同创建。"
     },
     "commandPalette": {
-      "search": "搜索",
+      "search": "快捷键",
+      "placeholder": "搜索快捷键",
       "createHeading": "创建",
       "navigationHeading": "导航",
       "workspaceHeading": "工作区",

@@ -135,7 +135,7 @@ describe('CreateIssueModal — entry points', () => {
   it('the ⌘K palette "Create issue" command opens the modal', async () => {
     render(<Shell />);
     // Open the palette via its trigger (deterministic — no platform-key path).
-    fireEvent.click(screen.getByRole('button', { name: /search/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Shortcut' }));
     const command = await screen.findByText('Create work item');
     fireEvent.click(command);
     await waitFor(() => expect(modalHeading()).not.toBeNull());
