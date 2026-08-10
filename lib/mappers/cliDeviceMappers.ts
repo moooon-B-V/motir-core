@@ -6,7 +6,7 @@ import type {
   DeviceGrantStatus,
   DeviceGrantTokenDTO,
 } from '@/lib/dto/cliDevice';
-import { CLI_TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { InvalidDeviceGrantError } from '@/lib/cliDevice/errors';
 
 // Prisma/plugin → DTO conversion for the CLI device-authorization surface (Story
@@ -55,7 +55,11 @@ export function toDeviceGrantTokenDTO(input: {
   return {
     access_token: input.token,
     token_type: 'Bearer',
-    scope: input.dto.scopes.join(' '),
+    // RFC 6749's `scope` response parameter reports WHAT WAS GRANTED. Since
+    // MOTIR-2572 that is a permission set, so the field keeps its protocol name
+    // and carries the grant — reporting the retired strings would describe an
+    // authority the token does not have.
+    scope: input.dto.permissions.join(' '),
     expires_in:
       expiresAtMs === null ? 0 : Math.max(0, Math.floor((expiresAtMs - Date.now()) / 1000)),
     user: { id: input.user.id, name: input.user.name, email: input.user.email },
@@ -85,7 +89,7 @@ function toGrantStatus(raw: string): DeviceGrantStatus {
  * The grant as the `/device` page reads it (Subtask MOTIR-1888).
  *
  * `scopes` comes from the CONSTANT, not from `row.scope`: the grant is unconfigurable
- * (ADR Q2), so what approval will grant is `CLI_TOKEN_SCOPES` regardless of what the
+ * (ADR Q2), so what approval will grant is `CLI_TOKEN_GRANT` regardless of what the
  * request asked for. Mapping the row's requested string here would let a widened
  * `scope` on the wire change what the approval screen PROMISES without changing what
  * the mint actually does — the one drift that would make the screen lie.
@@ -101,7 +105,7 @@ export function toDeviceGrantDescriptionDTO(row: DeviceCode): DeviceGrantDescrip
     hostname: row.hostname,
     askedAt: row.createdAt.toISOString(),
     expiresAt: row.expiresAt.toISOString(),
-    scopes: CLI_TOKEN_SCOPES,
+    permissions: [...CLI_TOKEN_GRANT],
     clientId: row.clientId,
   };
 }

@@ -160,7 +160,10 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
   it('a token WITHOUT the integration scope cannot publish (403)', async () => {
     const story = await inReviewStory(fx);
     const readOnly = (
-      await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'ro', permissions: grantForLegacyScopes(['read']) })
+      await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+        label: 'ro',
+        permissions: grantForLegacyScopes(['read']),
+      })
     ).token;
     const res = await publishVia(readOnly, story, {});
     expect(res.status).toBe(403);

@@ -13,7 +13,7 @@ import {
 } from '@/lib/api/v1/workLoop/schema';
 import { WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
 import { DOMAIN_ERROR_STATUS } from '@/lib/api/v1/errors';
-import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { runCompleteSession } from '@/lib/mcp/tools/completeSession';
 import { runMarkIntegrated } from '@/lib/mcp/tools/markIntegrated';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -201,13 +201,31 @@ describe('POST /api/v1/work-items/{key}/integration', () => {
     expect(JSON.stringify(body)).not.toContain(viaV1.id);
   });
 
-  it('refuses a token with `work_items:write` but not `integration` — 403', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['work_items:write'] });
-    const item = await readyToIntegrate(caller, 'wrong scope');
+  it('refuses a BROWSE-ONLY token — 403', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse'] });
+    const item = await readyToIntegrate(caller, 'wrong permission');
 
     const res = await integrate(caller, item.identifier, { sessionBranch: 'session/MOTIR-1' });
 
     expect(res.status).toBe(403);
+  });
+
+  it('ADMITS a work-item-edit token — the merge MOTIR-2572 makes deliberately', async () => {
+    // ⚠️ THIS ASSERTION IS THE REVERSE OF THE ONE IT REPLACES, on purpose. The
+    // old test refused a `work_items:write` token here, because `integration`
+    // was a separate scope. It is not a separate GATE: `markIntegrated` reaches
+    // `applyStatusTransition → assertCanEdit`, the same gate `transition_status`
+    // reaches, so the two scopes merge at `work_item:edit`. ADR §5 records the
+    // merge, its direction and why it is accepted; this is where it is checked
+    // rather than assumed.
+    const caller = await createV1ProjectCaller({
+      permissions: ['project:browse', 'work_item:edit'],
+    });
+    const item = await readyToIntegrate(caller, 'merged permission');
+
+    const res = await integrate(caller, item.identifier, { sessionBranch: 'session/MOTIR-1' });
+
+    expect(res.status).not.toBe(403);
   });
 
   it('answers 404 for a key in another workspace — never 403', async () => {
@@ -348,9 +366,15 @@ describe('POST /api/v1/work-items/{key}/implementation', () => {
     expect(body.implementationModel).toBe('gpt-5-codex');
   });
 
-  it('refuses a token with `work_items:write` but not `integration` — 403', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['work_items:write'] });
-    const item = await readyToIntegrate(caller, 'wrong scope');
+  it('refuses a BROWSE-ONLY token — 403', async () => {
+    // ⚠️ And this route is the ONE documented exception (ADR §3): its service
+    // asserts only `project:browse` before WRITING provenance, so the
+    // declaration deliberately names `work_item:edit` — matching its siblings
+    // and loosening nothing — while the gate gap is logged as its own bug. This
+    // test is what proves the DECLARATION is what refuses here, since the
+    // service alone would let a browse-only token through.
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse'] });
+    const item = await readyToIntegrate(caller, 'wrong permission');
 
     const res = await reportImplementation(caller, item.identifier, {
       implementationSource: 'byok',
@@ -495,8 +519,8 @@ describe('POST /api/v1/sessions/complete', () => {
     );
   });
 
-  it('refuses a token with `work_items:write` but not `integration` — 403', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['work_items:write'] });
+  it('refuses a BROWSE-ONLY token — 403', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse'] });
 
     const res = await complete(caller, { sessionBranch: 'session/anything' });
 
@@ -512,12 +536,16 @@ describe('POST /api/v1/sessions/complete', () => {
 });
 
 describe('the close-out contract', () => {
-  it('gates both on the scope their MCP counterparts carry, not on a copy', () => {
+  it('gates both on the permission their MCP counterparts carry, not on a copy', () => {
     const byId = new Map(WORK_LOOP_OPERATIONS.map((op) => [op.operationId, op]));
-    expect(byId.get('recordWorkItemIntegration')?.scope).toBe(TOOL_SCOPES.mark_integrated);
-    expect(byId.get('completeSession')?.scope).toBe(TOOL_SCOPES.complete_session);
-    // …and that scope is `integration`, whose own definition names these two.
-    expect(TOOL_SCOPES.mark_integrated).toBe('integration');
+    expect(byId.get('recordWorkItemIntegration')?.permission).toBe(
+      TOOL_PERMISSIONS.mark_integrated,
+    );
+    expect(byId.get('completeSession')?.permission).toBe(TOOL_PERMISSIONS.complete_session);
+    // …and that permission is `work_item:edit`, because both reach
+    // `applyStatusTransition → assertCanEdit` — the same gate `transition_status`
+    // reaches. The old `integration` scope drew a line the gates do not (ADR §5).
+    expect(TOOL_PERMISSIONS.mark_integrated).toBe('work_item:edit');
   });
 
   it('omits provenance ENTIRELY when the caller reported none', () => {

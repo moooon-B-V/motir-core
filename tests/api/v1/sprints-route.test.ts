@@ -166,8 +166,8 @@ describe('GET /api/v1/projects/{projectKey}/sprints', () => {
     expect(await res.json()).toEqual({ code: 'PROJECT_NOT_FOUND', error: expect.any(String) });
   });
 
-  it('refuses a token without the read scope', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+  it('refuses a token without project:browse', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['work_item:edit'] });
 
     const res = await GET_LIST(listReq(caller), projectParams(caller.projectKey));
 
@@ -291,8 +291,8 @@ describe('GET /api/v1/sprints/{sprintId}', () => {
     expect(res.status).toBe(404);
   });
 
-  it('refuses a token without the read scope', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+  it('refuses a token without project:browse', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['work_item:edit'] });
     const readCaller = await createV1ProjectCaller({ scopes: ['read'] });
     const sprint = await makeSprint(readCaller, 'Sprint 1');
 

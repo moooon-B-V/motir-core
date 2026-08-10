@@ -31,7 +31,7 @@ const GRANT: DeviceGrantDescriptionDTO = {
   // — here the fix is to pin the input, not to widen the expectation).
   askedAt: '2026-07-30T12:00:00.000Z',
   expiresAt: '2026-07-30T12:15:00.000Z',
-  scopes: ['read', 'work_items:write', 'integration'],
+  permissions: ['project:browse', 'work_item:edit', 'comment:add', 'ai:plan'],
   clientId: 'motir-cli',
 };
 

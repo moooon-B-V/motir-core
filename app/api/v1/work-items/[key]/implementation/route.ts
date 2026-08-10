@@ -40,7 +40,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // is exactly the actor here: an agent runner reporting what it ran as. A token
 // with `work_items:write` and not `integration` is refused, as on both siblings.
 
-export const POST = withV1Route<{ key: string }>({ scope: 'integration' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, implementationReportBodySchema);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);

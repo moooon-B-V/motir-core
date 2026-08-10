@@ -20,7 +20,8 @@ const { db } = await import('@/lib/db');
 const { auth } = await import('@/lib/auth');
 const { cliDeviceService } = await import('@/lib/services/cliDeviceService');
 const { apiTokensService } = await import('@/lib/services/apiTokensService');
-const { CLI_TOKEN_SCOPES, isTokenScope } = await import('@/lib/mcp/scopes');
+const { CLI_TOKEN_GRANT } = await import('@/lib/mcp/toolPermissions');
+const { isGrantable } = await import('@/lib/tokens/grant');
 const { PERMISSION_NOT_GRANTED_CODE } = await import('@/lib/mcp/permissionGate');
 const { CLI_CLIENT_ID } = await import('@/lib/cliDevice/constants');
 const route = await import('@/app/api/mcp/route');
@@ -58,7 +59,7 @@ import type { CliWorkspace } from '../helpers/cliHarness';
 //      invisible to both sides' units.
 //   2. THE SCOPE SEAM. The ADR claims the narrowed grant is exactly sufficient for
 //      the CLI's work. Asserted BOTH ways: statically, every tool the shipped
-//      client calls maps into `CLI_TOKEN_SCOPES`; and dynamically, a real
+//      client calls maps into `CLI_TOKEN_GRANT`; and dynamically, a real
 //      `work_items:write` call succeeds on a device-minted token while the three
 //      scopes the ADR withholds are denied by the real route.
 //   3. THE BUILT BINARY. `motir login --no-browser`, spawned as a child process,
@@ -200,7 +201,9 @@ function structured(res: unknown): Record<string, unknown> {
 
 function isScopeDenied(res: unknown): boolean {
   const r = res as { isError?: boolean; content?: unknown };
-  return r.isError === true && JSON.stringify(r.content ?? '').includes(PERMISSION_NOT_GRANTED_CODE);
+  return (
+    r.isError === true && JSON.stringify(r.content ?? '').includes(PERMISSION_NOT_GRANTED_CODE)
+  );
 }
 
 describe('the grant → mint → bearer seam, read back through the CONSUMER', () => {
@@ -243,7 +246,7 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
   //
   // This described the ADR's central claim — every MCP tool `packages/cli` calls
   // is gated by a scope the device grant carries — by reading the shipped client
-  // and checking each tool name against `CLI_TOKEN_SCOPES`, with a floor so a
+  // and checking each tool name against `CLI_TOKEN_GRANT`, with a floor so a
   // regex that stopped matching could not pass vacuously. The floor fell once
   // per porting card (14, 12, 7, 6, 1) until MOTIR-2398 moved the last method
   // and it was INVERTED to assert the absence: the client names no tool at all.
@@ -257,10 +260,10 @@ describe('the scope seam — the narrowed grant is EXACTLY sufficient', () => {
   // the server's MCP surface, both of which are untouched.
 
   it('every scope in the grant is a real scope, and the destructive ones are withheld', () => {
-    for (const scope of CLI_TOKEN_SCOPES) expect(isTokenScope(scope)).toBe(true);
-    expect(CLI_TOKEN_SCOPES).not.toContain('work_items:archive');
-    expect(CLI_TOKEN_SCOPES).not.toContain('work_items:delete');
-    expect(CLI_TOKEN_SCOPES).not.toContain('sprints:write');
+    for (const key of CLI_TOKEN_GRANT) expect(isGrantable(key)).toBe(true);
+    expect(CLI_TOKEN_GRANT).not.toContain('work_items:archive');
+    expect(CLI_TOKEN_GRANT).not.toContain('work_items:delete');
+    expect(CLI_TOKEN_GRANT).not.toContain('sprints:write');
   });
 
   it('the real route lets a device token WRITE work items and denies the three withheld scopes', async () => {
@@ -369,7 +372,7 @@ describe('architecture guards — asserted against the migrated database, not th
     const listed = await apiTokensService.listForUser(fx.ownerId);
     expect(listed).toHaveLength(1);
     expect(listed[0]!.label).toBe('CLI · workbox');
-    expect([...listed[0]!.scopes].sort()).toEqual([...CLI_TOKEN_SCOPES].sort());
+    expect([...listed[0]!.permissions].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
 
     // The grant itself left nothing behind — the single-use row is gone, so the
     // token row is the ONLY artifact of the login.
@@ -464,7 +467,7 @@ describe('the BUILT binary — terminal → browser grant → bearer → work', 
     const verified = await apiTokensService.verify(entry!.token);
     expect(verified.user.id).toBe(fx.ownerId);
     expect(verified.workspaceId).toBe(fx.workspaceId);
-    expect([...verified.scopes].sort()).toEqual([...CLI_TOKEN_SCOPES].sort());
+    expect([...verified.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
     const tokens = await db.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.label.startsWith('CLI · ')).toBe(true);

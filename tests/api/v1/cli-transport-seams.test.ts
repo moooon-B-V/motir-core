@@ -409,21 +409,22 @@ describe('the error path, end to end from a real refusal', () => {
     resetRateLimitStore();
   });
 
-  it('a real 403 becomes a ScopeError NAMING the scope the operation needs', async () => {
-    // A token with a write scope and no `read`: the routes below all gate on
-    // `read`, so the refusal comes from the shipped scope gate rather than from
-    // anything arranged here.
-    const scopeless = await createV1ProjectCaller({ scopes: ['work_items:write'] });
+  it('a real 403 becomes a ScopeError NAMING the permission the operation needs', async () => {
+    // A token that can edit work items and cannot browse: the routes below all
+    // gate on `project:browse`, so the refusal comes from the shipped permission
+    // gate rather than from anything arranged here.
+    const scopeless = await createV1ProjectCaller({ permissions: ['work_item:edit'] });
 
     const failure = await clientFor(scopeless)
       .whoami()
       .catch((err: unknown) => err);
 
     expect(failure).toBeInstanceOf(ScopeError);
-    // The CLI reads the scope off its OWN operation table rather than parsing
-    // the server's sentence — ADR Q5's instruction, and what makes the message
-    // actionable ("this token lacks X") instead of "forbidden".
-    expect((failure as ScopeError).message).toContain('read');
+    // The CLI reads the requirement off its OWN operation table rather than
+    // parsing the server's sentence — ADR Q5's instruction, and what makes the
+    // message actionable ("this token lacks X") instead of "forbidden". Since
+    // MOTIR-2577 that table names a PERMISSION.
+    expect((failure as ScopeError).message).toContain('project:browse');
   });
 
   it('a real 429 becomes a RateLimitError carrying the reset the server sent', async () => {

@@ -365,7 +365,9 @@ export class V1Transport {
     if (response.status === 401) return new AuthError();
 
     if (response.status === 403) {
-      return new ScopeError(V1_OPERATIONS[operationId].scope, operationId);
+      // MOTIR-2577 renamed the generated field. The ERROR class, its message
+      // and the drift check against the emitted document are MOTIR-2583's.
+      return new ScopeError(V1_OPERATIONS[operationId].permission, operationId);
     }
 
     if (response.status === 429) {

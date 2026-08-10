@@ -22,7 +22,7 @@ export interface paths {
          * List a project’s work items
          * @description A cursor-paged collection of a project’s work items, optionally narrowed by a filter expression. Ordered by `(createdAt, id)` ascending — the position the cursor encodes.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listProjectWorkItems"];
         put?: never;
@@ -30,7 +30,7 @@ export interface paths {
          * Create a work item
          * @description Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `work_item:edit` permission.
          */
         post: operations["createWorkItem"];
         delete?: never;
@@ -50,7 +50,7 @@ export interface paths {
          * Count a project’s work items
          * @description How many work items match a filter, in ONE request and without paging the match set. Takes the same `filter` the collection takes, and counts exactly what that collection would page. Exact, never capped.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["countProjectWorkItems"];
         put?: never;
@@ -72,7 +72,7 @@ export interface paths {
          * Read a work item
          * @description The full work item: its own fields, its parent and children, its five link groups, its readiness verdict and its comment count. The response carries an `ETag` for use as an `If-Match` on a later update.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getWorkItem"];
         put?: never;
@@ -84,7 +84,7 @@ export interface paths {
          * Update a work item
          * @description Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `work_item:edit` permission.
          */
         patch: operations["updateWorkItem"];
         trace?: never;
@@ -100,7 +100,7 @@ export interface paths {
          * List the statuses a work item can move to
          * @description The workflow-legal targets from the item’s current status. An `open`-policy project permits every other status; a `restricted` one permits only the declared edges.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listWorkItemTransitions"];
         put?: never;
@@ -108,7 +108,7 @@ export interface paths {
          * Move a work item to a new status
          * @description Apply a workflow transition. A status the workflow does not define and a status not reachable from here are DIFFERENT errors, because a client can fix only one of them.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `work_item:edit` permission.
          */
         post: operations["transitionWorkItem"];
         delete?: never;
@@ -128,7 +128,7 @@ export interface paths {
          * Read a work item’s relationship edges
          * @description All five edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listWorkItemLinks"];
         put?: never;
@@ -136,14 +136,14 @@ export interface paths {
          * Create a relationship edge
          * @description Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `work_item:edit` permission.
          */
         post: operations["createWorkItemLink"];
         /**
          * Remove a relationship edge
          * @description Remove the edge named by its ENDPOINTS — the same pair that created it. Idempotent: 204 whether or not an edge was there, because the post-condition holds either way.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `work_item:edit` permission.
          */
         delete: operations["deleteWorkItemLink"];
         options?: never;
@@ -162,7 +162,7 @@ export interface paths {
          * List a work item’s comments
          * @description Root comments with their single-level reply threads, cursor-paged. This collection DOES report a total, because the shipped read computes it as a bounded aggregate.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listWorkItemComments"];
         put?: never;
@@ -170,7 +170,7 @@ export interface paths {
          * Comment on a work item
          * @description Add a root comment, or a reply by naming a root comment as its parent. Replies are single-level: a reply to a reply is a 422.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `comment:add` permission.
          */
         post: operations["createWorkItemComment"];
         delete?: never;
@@ -192,7 +192,7 @@ export interface paths {
          * Archive a work item
          * @description A recoverable soft-remove. Does NOT cascade to children — the irreversible subtree delete is not exposed by this API at all (ADR §3).
          *
-         *     Requires the `work_items:archive` scope.
+         *     Requires the `work_item:delete` permission.
          */
         post: operations["archiveWorkItem"];
         delete?: never;
@@ -214,7 +214,7 @@ export interface paths {
          * Restore an archived work item
          * @description The inverse of archiving. Idempotent on an item that is not archived.
          *
-         *     Requires the `work_items:archive` scope.
+         *     Requires the `work_item:delete` permission.
          */
         post: operations["restoreWorkItem"];
         delete?: never;
@@ -234,7 +234,7 @@ export interface paths {
          * Who this token is
          * @description The token owner, the workspace the token is bound to, and the scopes it was granted. Call this first: the scope list is how a client discovers what its own credential may do without probing endpoints and collecting 403s.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getMe"];
         put?: never;
@@ -256,7 +256,7 @@ export interface paths {
          * List the workspaces this token’s owner belongs to
          * @description A discovery read, and the ONE place v1 answers at the account level rather than the bound workspace: it returns the workspaces the token OWNER is a member of, so a client holding a fresh token can learn which workspace ids exist for it. Every resource endpoint stays scoped to the bound workspace.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listWorkspaces"];
         put?: never;
@@ -278,7 +278,7 @@ export interface paths {
          * List the projects in this token’s workspace
          * @description Every project the token owner may browse in the bound workspace, ordered by key ascending — a total order the page addressing owns, so a cursor can never skip or duplicate a row.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listProjects"];
         put?: never;
@@ -300,7 +300,7 @@ export interface paths {
          * Read a project
          * @description One project by key. A project the caller may not browse answers 404, not 403 — a 403 would confirm the project exists and let a caller enumerate which keys are real.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getProject"];
         put?: never;
@@ -322,7 +322,7 @@ export interface paths {
          * List a project’s sprints
          * @description The project’s sprints in sequence order, cursor-paged.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listProjectSprints"];
         put?: never;
@@ -330,7 +330,7 @@ export interface paths {
          * Create a planned sprint
          * @description Create a sprint in the `planned` state. ⚠️ TWO gates apply: the token needs `sprints:write`, AND its OWNER must be a sprint admin — a scope narrows a role and never widens it, so an ordinary member’s token is refused with the distinct `NOT_SPRINT_ADMIN` code rather than `INSUFFICIENT_SCOPE`. The `Location` header names the created sprint.
          *
-         *     Requires the `sprints:write` scope.
+         *     Requires the `sprint:manage` permission.
          */
         post: operations["createSprint"];
         delete?: never;
@@ -350,7 +350,7 @@ export interface paths {
          * Read a project’s backlog
          * @description The to-be-planned pile, in backlog-rank order. ⚠️ Done-category items are EXCLUDED — a finished unsprinted item does not belong in the backlog. (A sprint’s members are deliberately NOT filtered that way; see `listSprintWorkItems`.) Reports a total, because the read behind it already computes one.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getProjectBacklog"];
         put?: never;
@@ -374,7 +374,7 @@ export interface paths {
          * Move work items out of their sprint and back to the backlog
          * @description An atomic batch move. An EMPTY array is a deliberate 200 no-op, not an error: a script that computed an empty batch has nothing to do rather than a mistake to fix. An over-cap batch is refused WHOLE, never partially applied.
          *
-         *     Requires the `sprints:write` scope.
+         *     Requires the `sprint:manage` permission.
          */
         post: operations["moveWorkItemsToBacklog"];
         delete?: never;
@@ -394,7 +394,7 @@ export interface paths {
          * Read a project’s READY set
          * @description The work items whose every `blocked_by` dependency is done — what an agent loop claims from. Each row carries its dependency edges. Reports no total: unlike the backlog, this read has no cheap bounded count.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getProjectReadySet"];
         put?: never;
@@ -416,7 +416,7 @@ export interface paths {
          * Read a sprint
          * @description One sprint by id. A sprint in another workspace and one that never existed are the same 404 — the existence-oracle rule.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getSprint"];
         put?: never;
@@ -428,7 +428,7 @@ export interface paths {
          * Update a sprint
          * @description Patch a sprint’s name, goal or window. A COMPLETED sprint is frozen: the body is fine, the state is not, so the refusal is a 409 rather than a 422.
          *
-         *     Requires the `sprints:write` scope.
+         *     Requires the `sprint:manage` permission.
          */
         patch: operations["updateSprint"];
         trace?: never;
@@ -446,7 +446,7 @@ export interface paths {
          * Start a sprint
          * @description Move a planned sprint to active. ⚠️ Losing the race to activate is a 409, not a 422: the request was valid when it was sent and another one committed first, so the right instruction is re-read-and-retry rather than fix-your-body. Starting a sprint that is not planned is a 422 — a state the caller can see from a read.
          *
-         *     Requires the `sprints:write` scope.
+         *     Requires the `sprint:manage` permission.
          */
         post: operations["startSprint"];
         delete?: never;
@@ -468,7 +468,7 @@ export interface paths {
          * Complete a sprint
          * @description Close an active sprint, optionally carrying its unfinished items over to a named target. Completing a sprint that is not active is a 422.
          *
-         *     Requires the `sprints:write` scope.
+         *     Requires the `sprint:manage` permission.
          */
         post: operations["completeSprint"];
         delete?: never;
@@ -488,7 +488,7 @@ export interface paths {
          * List a sprint’s members
          * @description The items in a sprint, in rank order. ⚠️ Deliberately asymmetric with the backlog: done items STAY in their sprint, because that is what makes a completed sprint a historical record. Reports a total, because the read behind it already computes one.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["listSprintWorkItems"];
         put?: never;
@@ -496,7 +496,7 @@ export interface paths {
          * Move work items into a sprint
          * @description An atomic batch move into this sprint. An empty array is a 200 no-op; an item belonging to another project rejects the WHOLE batch before any write, so a partial move cannot happen.
          *
-         *     Requires the `sprints:write` scope.
+         *     Requires the `sprint:manage` permission.
          */
         post: operations["moveWorkItemsToSprint"];
         delete?: never;
@@ -516,7 +516,7 @@ export interface paths {
          * Read the canonical coding-agent prompt for a work item
          * @description Return the server-assembled prompt for one work item — the CONTEXT / WHAT TO DO / ACCEPTANCE CRITERIA / GIT WORKFLOW sections built from the item, its parent, its dependencies and its repo — plus the repo to run it in and which git workflow it carries. A PURE READ: it does not claim the item, move its status, or change its recorded session branch, so fetching a prompt to look at it is always safe. The text is deliberately identical for every agent harness; do not rewrite it. `advisories` is never a gate — it changes what you are told, never what you may do.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getWorkItemDispatchPrompt"];
         put?: never;
@@ -540,7 +540,7 @@ export interface paths {
          * Record a work item as integrated on a session branch
          * @description Record that a work item’s work has been integrated onto a session branch: it moves to “In review” and records the branch, in ONE transaction, which unblocks its dependents while the session pull request awaits a human merge. Optionally self-report the implementation harness and model (`implementationSource` defaults to `byok`); omit all three to leave the item’s recorded provenance untouched. Honors the project’s workflow rules — an item with no legal path to “In review” is refused and its branch is left unchanged.
          *
-         *     Requires the `integration` scope.
+         *     Requires the `work_item:edit` permission.
          */
         post: operations["recordWorkItemIntegration"];
         delete?: never;
@@ -562,7 +562,7 @@ export interface paths {
          * Record what BUILT a work item
          * @description Record implementation provenance — the harness and model an agent ran as, and whether the run was `byok` or `manual` — WITHOUT asserting anything about where the work is integrated. Use this on the per-item pull-request path, where there is no session branch to report; use `POST …/integration` when there is one. It moves NO status and leaves the item’s session branch untouched, both of which are echoed back so a client can see it. A field you omit is left exactly as it is — omitting all of them changes nothing.
          *
-         *     Requires the `integration` scope.
+         *     Requires the `work_item:edit` permission.
          */
         post: operations["reportWorkItemImplementation"];
         delete?: never;
@@ -584,7 +584,7 @@ export interface paths {
          * Close out a merged session branch
          * @description Close out a session branch after its pull request is merged: every work item recorded on the branch moves to “Done” and its recorded branch is cleared. Returns a PER-ITEM outcome (`completed` / `already_done` / `failed`) — a partial close-out is a real result, not an error: the items that could close DID, and the ones that could not are named with a reason. Read the results; do not infer an outcome from their count. A branch nothing is recorded on returns an empty list, not a 404. The branch travels in the BODY because a git ref routinely contains `/`.
          *
-         *     Requires the `integration` scope.
+         *     Requires the `work_item:edit` permission.
          */
         post: operations["completeSession"];
         delete?: never;
@@ -606,7 +606,7 @@ export interface paths {
          * Submit an AI expansion of a container work item
          * @description Submit an AI expansion of one CONTAINER work item (epic / story / task / bug): the planner drafts the children it should have. Returns `202` with `{ jobId, planId, statusUrl }` the moment the job is ACCEPTED — it does not wait for the planner, and the body carries no result because there is none yet. ⚠️ IMPORTANT: this does NOT create work items. The job produces a PLAN of proposals, and approving that plan in Motir is the only thing that turns a proposal into a work item. Do not report expanded children as created. ⚠️ A submit SPENDS the token owner’s AI credits, so wrapping this call in a blind retry-on-timeout costs real money — poll `statusUrl` instead of resubmitting. A leaf (subtask) cannot be expanded.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `ai:plan` permission.
          */
         post: operations["submitWorkItemExpansion"];
         delete?: never;
@@ -626,7 +626,7 @@ export interface paths {
          * Read what became of a submitted planning job
          * @description Read a plan’s status (`generating` / `planned` / `approved` / `declined`), how many PROPOSALS it bundles, and — while it is still generating — whether the producing job is alive or already FAILED. That last distinction is the point of this endpoint: a failed job leaves its plan `generating` forever, so the plan status alone cannot tell you to stop polling. `job.reachable: false` means motir-ai could not be asked, not that the job died. A pure read; the proposal count is NOT a count of created work items.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getPlanStatus"];
         put?: never;
@@ -648,7 +648,7 @@ export interface paths {
          * Read a plan with the proposals it bundles
          * @description Read a plan WITH its proposals — what a planning pass actually proposed, not just how many. Each proposal carries its `op` (`add` / `modify` / `remove`), the `proposedFields` of an `add`, the `patch` of a `modify`, and the `parentRef` / `blockedByRefs` that let you rebuild the proposed tree and its dependency edges. ⚠️ These are PROPOSALS, not work items: an `add`’s `workItemKey` is `null` and stays null until the plan is approved in Motir, which is the only path from a proposal to a work item. A plan still generating returns the proposals that have arrived so far.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getPlan"];
         put?: never;
@@ -672,7 +672,7 @@ export interface paths {
          * Open or resume the planning conversation for a scope
          * @description Open — or RESUME — the planning conversation for a project, and read its thread. Changing a plan in Motir is a multi-turn CONVERSATION: add turns, then send the accumulated intent. There is ONE thread per project per anchor set, so calling this again returns the SAME conversation, with every turn already on it — including the one the Motir web app shows. Pass `targetKeys` to anchor the conversation at specific work items ("re-plan these two"); omit it for the project-wide thread. The anchor set is the thread’s identity: order and duplicates do not matter. Opening submits nothing and costs nothing — which is why it is `read`-scoped despite being a POST (a GET that creates a row would not be safe).
          *
-         *     Requires the `read` scope.
+         *     Requires the `ai:plan` permission.
          */
         post: operations["openPlanSession"];
         delete?: never;
@@ -694,7 +694,7 @@ export interface paths {
          * Add one turn to the planning conversation
          * @description Add ONE turn — what you want changed about the plan. ⚠️ IMPORTANT: appending does NOT submit. The turn is persisted immediately, but no job starts, no credits are spent and no work item changes; turns ACCUMULATE until you post a submission, which is what sends them to the planner. That separation is the point — a later turn REFINES the earlier ones rather than replacing them, so "add auth to the billing epic" then "keep them under 3 points" go out as ONE coherent change. Addresses the thread by scope, so it always extends the same conversation.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `ai:plan` permission.
          */
         post: operations["appendPlanTurn"];
         delete?: never;
@@ -716,7 +716,7 @@ export interface paths {
          * Send the thread’s accumulated intent to the planner
          * @description Send this conversation’s accumulated intent to the planner: every turn on the thread, in order, as ONE change. Returns `202` with `{ jobId, planId, statusUrl }` the moment the job is accepted — it does not wait, and the body carries no result because there is none yet. The thread stays INTACT and can be refined with another turn. ⚠️ This is the act that SPENDS the token owner’s AI credits, and it produces a PLAN of proposals: approving that plan in Motir is the only thing that turns a proposal into a work item. Submitting a thread with no turns is refused.
          *
-         *     Requires the `work_items:write` scope.
+         *     Requires the `ai:plan` permission.
          */
         post: operations["submitPlanSession"];
         delete?: never;
@@ -736,7 +736,7 @@ export interface paths {
          * Read a work item’s activity — changes, comments, or both
          * @description Read a work item’s activity in one of three views: `all` (default — comments and the change trail interleaved in timestamp order), `comments` (the discussion), or `history` (the change trail only). Every entry carries a `type` so one renderer serves all three. The `cursor` is OPAQUE and SCOPED TO ITS VIEW: echo it back verbatim, never construct or parse one, and never hand a cursor from one view to another — that is a 422, not a silent restart. A page may be SHORTER than you expect while more remains (the change scan is noise-filtered and a comment page drags whole reply threads along), so walk until `nextCursor` is `null`, never until a page looks short. `GET /api/v1/work-items/{key}/comments` still exists and is unchanged — this view is the same data through the same read, offered so one code path can walk all three.
          *
-         *     Requires the `read` scope.
+         *     Requires the `project:browse` permission.
          */
         get: operations["getWorkItemActivity"];
         put?: never;
@@ -1072,7 +1072,7 @@ export interface components {
                 email: string;
             };
             workspaceId: string;
-            scopes: string[];
+            permissions: string[];
         };
         WorkspaceSummary: {
             id: string;

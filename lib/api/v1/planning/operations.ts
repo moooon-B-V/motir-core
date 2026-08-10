@@ -105,7 +105,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Who this token is',
     description:
       'The token owner, the workspace the token is bound to, and the scopes it was granted. Call this first: the scope list is how a client discovers what its own credential may do without probing endpoints and collecting 403s.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [],
     response: {
       status: 200,
@@ -123,7 +123,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'List the workspaces this token’s owner belongs to',
     description:
       'A discovery read, and the ONE place v1 answers at the account level rather than the bound workspace: it returns the workspaces the token OWNER is a member of, so a client holding a fresh token can learn which workspace ids exist for it. Every resource endpoint stays scoped to the bound workspace.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: pageParameters(),
     response: {
       status: 200,
@@ -139,7 +139,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'List the projects in this token’s workspace',
     description:
       'Every project the token owner may browse in the bound workspace, ordered by key ascending — a total order the page addressing owns, so a cursor can never skip or duplicate a row.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: pageParameters(),
     response: {
       status: 200,
@@ -155,7 +155,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Read a project',
     description:
       'One project by key. A project the caller may not browse answers 404, not 403 — a 403 would confirm the project exists and let a caller enumerate which keys are real.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [projectKeyParameter],
     response: {
       status: 200,
@@ -170,7 +170,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     operationId: 'listProjectSprints',
     summary: 'List a project’s sprints',
     description: 'The project’s sprints in sequence order, cursor-paged.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [projectKeyParameter, ...pageParameters()],
     response: {
       status: 200,
@@ -186,7 +186,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Create a planned sprint',
     description:
       'Create a sprint in the `planned` state. ⚠️ TWO gates apply: the token needs `sprints:write`, AND its OWNER must be a sprint admin — a scope narrows a role and never widens it, so an ordinary member’s token is refused with the distinct `NOT_SPRINT_ADMIN` code rather than `INSUFFICIENT_SCOPE`. The `Location` header names the created sprint.',
-    scope: 'sprints:write',
+    permission: 'sprint:manage',
     parameters: [projectKeyParameter],
     requestBody: { schema: createSprintBodySchema, description: 'The sprint to create.' },
     response: {
@@ -203,7 +203,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Read a project’s backlog',
     description:
       'The to-be-planned pile, in backlog-rank order. ⚠️ Done-category items are EXCLUDED — a finished unsprinted item does not belong in the backlog. (A sprint’s members are deliberately NOT filtered that way; see `listSprintWorkItems`.) Reports a total, because the read behind it already computes one.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [projectKeyParameter, ...pageParameters(), filterParameter()],
     response: {
       status: 200,
@@ -219,7 +219,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Move work items out of their sprint and back to the backlog',
     description:
       'An atomic batch move. An EMPTY array is a deliberate 200 no-op, not an error: a script that computed an empty batch has nothing to do rather than a mistake to fix. An over-cap batch is refused WHOLE, never partially applied.',
-    scope: 'sprints:write',
+    permission: 'sprint:manage',
     parameters: [projectKeyParameter],
     requestBody: { schema: membershipMoveBodySchema, description: 'The work items to move.' },
     response: {
@@ -236,7 +236,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Read a project’s READY set',
     description:
       'The work items whose every `blocked_by` dependency is done — what an agent loop claims from. Each row carries its dependency edges. Reports no total: unlike the backlog, this read has no cheap bounded count.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       projectKeyParameter,
       ...pageParameters(),
@@ -285,7 +285,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Read a sprint',
     description:
       'One sprint by id. A sprint in another workspace and one that never existed are the same 404 — the existence-oracle rule.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [sprintIdParameter],
     response: {
       status: 200,
@@ -301,7 +301,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Update a sprint',
     description:
       'Patch a sprint’s name, goal or window. A COMPLETED sprint is frozen: the body is fine, the state is not, so the refusal is a 409 rather than a 422.',
-    scope: 'sprints:write',
+    permission: 'sprint:manage',
     parameters: [sprintIdParameter],
     requestBody: { schema: updateSprintBodySchema, description: 'The fields to change.' },
     response: {
@@ -318,7 +318,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Start a sprint',
     description:
       'Move a planned sprint to active. ⚠️ Losing the race to activate is a 409, not a 422: the request was valid when it was sent and another one committed first, so the right instruction is re-read-and-retry rather than fix-your-body. Starting a sprint that is not planned is a 422 — a state the caller can see from a read.',
-    scope: 'sprints:write',
+    permission: 'sprint:manage',
     parameters: [sprintIdParameter],
     requestBody: {
       schema: startSprintBodySchema,
@@ -338,7 +338,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Complete a sprint',
     description:
       'Close an active sprint, optionally carrying its unfinished items over to a named target. Completing a sprint that is not active is a 422.',
-    scope: 'sprints:write',
+    permission: 'sprint:manage',
     parameters: [sprintIdParameter],
     requestBody: {
       schema: completeSprintBodySchema,
@@ -358,7 +358,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'List a sprint’s members',
     description:
       'The items in a sprint, in rank order. ⚠️ Deliberately asymmetric with the backlog: done items STAY in their sprint, because that is what makes a completed sprint a historical record. Reports a total, because the read behind it already computes one.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [sprintIdParameter, ...pageParameters(), filterParameter()],
     response: {
       status: 200,
@@ -374,7 +374,7 @@ export const PLANNING_OPERATIONS: readonly V1Operation[] = [
     summary: 'Move work items into a sprint',
     description:
       'An atomic batch move into this sprint. An empty array is a 200 no-op; an item belonging to another project rejects the WHOLE batch before any write, so a partial move cannot happen.',
-    scope: 'sprints:write',
+    permission: 'sprint:manage',
     parameters: [sprintIdParameter],
     requestBody: { schema: membershipMoveBodySchema, description: 'The work items to move.' },
     response: {

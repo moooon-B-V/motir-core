@@ -25,7 +25,7 @@ import {
   type V1PlanJobHandle,
   type V1PlanOutcome,
 } from '@/lib/api/v1/workLoop/schema';
-import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { runGetPlan } from '@/lib/mcp/tools/getPlan';
 import { runGetPlanStatus } from '@/lib/mcp/tools/expandItem';
 import { plansService } from '@/lib/services/plansService';
@@ -498,14 +498,15 @@ describe('GET /api/v1/plans/{planId}', () => {
 });
 
 describe('the plan operations’ contract', () => {
-  it('carries the scope each MCP counterpart holds, read off the shipped map', () => {
+  it('carries the permission each MCP counterpart holds, read off the shipped map', () => {
     const byId = new Map(WORK_LOOP_OPERATIONS.map((op) => [op.operationId, op]));
-    expect(byId.get('submitWorkItemExpansion')?.scope).toBe(TOOL_SCOPES.expand_item);
-    expect(byId.get('getPlanStatus')?.scope).toBe(TOOL_SCOPES.get_plan_status);
-    expect(byId.get('getPlan')?.scope).toBe(TOOL_SCOPES.get_plan);
-    // …and the submit is a WRITE scope because it spends credits, which the map
-    // reasons out at its own entry.
-    expect(TOOL_SCOPES.expand_item).toBe('work_items:write');
+    expect(byId.get('submitWorkItemExpansion')?.permission).toBe(TOOL_PERMISSIONS.expand_item);
+    expect(byId.get('getPlanStatus')?.permission).toBe(TOOL_PERMISSIONS.get_plan_status);
+    expect(byId.get('getPlan')?.permission).toBe(TOOL_PERMISSIONS.get_plan);
+    // …and the submit asks for `ai:plan` because it SPENDS THE OWNER'S CREDITS.
+    // Under the six scopes it hid inside `work_items:write` for want of anything
+    // narrower (MOTIR-2577); withholding it is now a thing a token can express.
+    expect(TOOL_PERMISSIONS.expand_item).toBe('ai:plan');
   });
 
   it('tells an integrator, in the endpoint’s own description, that a submit spends credits', () => {

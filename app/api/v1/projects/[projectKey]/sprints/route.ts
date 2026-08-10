@@ -40,19 +40,22 @@ import { sprintsService } from '@/lib/services/sprintsService';
 // route therefore breaks the tie with the row id, over rows already in hand —
 // Amendment 1's permitted "ORDER BY as page addressing". The shipped read's own
 // order is untouched.
-export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async (ctx) => {
-  const page = parseCollectionPageRequest(ctx.req, 'sprints', readRowIdPosition);
+export const GET = withV1Route<{ projectKey: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    const page = parseCollectionPageRequest(ctx.req, 'sprints', readRowIdPosition);
 
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
-  const sprints = await sprintsService.listByProject(project.id, ctx.service);
-  const ordered = [...sprints].sort((a, b) =>
-    a.sequence !== b.sequence ? a.sequence - b.sequence : a.id.localeCompare(b.id),
-  );
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+    const sprints = await sprintsService.listByProject(project.id, ctx.service);
+    const ordered = [...sprints].sort((a, b) =>
+      a.sequence !== b.sequence ? a.sequence - b.sequence : a.id.localeCompare(b.id),
+    );
 
-  return NextResponse.json(
-    paginateAtPosition(ordered, page, 'sprints', (sprint) => sprint.id, presentSprint),
-  );
-});
+    return NextResponse.json(
+      paginateAtPosition(ordered, page, 'sprints', (sprint) => sprint.id, presentSprint),
+    );
+  },
+);
 
 // POST /api/v1/projects/{projectKey}/sprints (Story 11.3 · Subtask 11.3.5 —
 // MOTIR-2062) — create a PLANNED sprint. The first `sprints:write` operation.
@@ -75,23 +78,26 @@ export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async 
 // `endDate` ≥ `startDate`. The route forwards the strings. Re-checking here
 // would be a second implementation of one rule — the first place the API and the
 // product start disagreeing about what a valid sprint window is.
-export const POST = withV1Route<{ projectKey: string }>({ scope: 'sprints:write' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, createSprintBodySchema);
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+export const POST = withV1Route<{ projectKey: string }>(
+  { permission: 'sprint:manage' },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, createSprintBodySchema);
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
 
-  const created = await sprintsService.createSprint(
-    project.id,
-    // Only the keys the caller actually SUPPLIED: `exactOptionalPropertyTypes`
-    // makes `{ goal: undefined }` and `{}` different types, and the service
-    // distinguishes absent from null, so a wholesale spread would turn every
-    // omitted field into an explicit `undefined`.
-    pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
-    ctx.service,
-  );
+    const created = await sprintsService.createSprint(
+      project.id,
+      // Only the keys the caller actually SUPPLIED: `exactOptionalPropertyTypes`
+      // makes `{ goal: undefined }` and `{}` different types, and the service
+      // distinguishes absent from null, so a wholesale spread would turn every
+      // omitted field into an explicit `undefined`.
+      pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
+      ctx.service,
+    );
 
-  ctx.responseHeaders.set('Location', `/api/v1/sprints/${created.id}`);
-  return NextResponse.json(presentSprint(created), { status: 201 });
-});
+    ctx.responseHeaders.set('Location', `/api/v1/sprints/${created.id}`);
+    return NextResponse.json(presentSprint(created), { status: 201 });
+  },
+);
 
 /** Copy only the keys a caller actually supplied — see the POST's note. */
 function pickSupplied<T extends object, K extends keyof T>(

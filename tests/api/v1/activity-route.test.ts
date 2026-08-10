@@ -7,7 +7,7 @@ import {
   presentActivityChange,
   type V1ActivityEntry,
 } from '@/lib/api/v1/workLoop/schema';
-import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { runGetWorkItemActivity } from '@/lib/mcp/tools/getWorkItemActivity';
 import { activityService } from '@/lib/services/activityService';
 import { COMMENT_PAGE_SIZE, commentsService } from '@/lib/services/commentsService';
@@ -470,10 +470,10 @@ describe('the activity entry shape is LOOSE where the DTO is loose', () => {
 });
 
 describe('the activity operation’s contract', () => {
-  it('carries the scope its MCP counterpart holds, read off the shipped map', () => {
+  it('carries the permission its MCP counterpart holds, read off the shipped map', () => {
     const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === 'getWorkItemActivity');
-    expect(op?.scope).toBe(TOOL_SCOPES.get_work_item_activity);
-    expect(TOOL_SCOPES.get_work_item_activity).toBe('read');
+    expect(op?.permission).toBe(TOOL_PERMISSIONS.get_work_item_activity);
+    expect(TOOL_PERMISSIONS.get_work_item_activity).toBe('project:browse');
   });
 
   it('tells a client to walk until `nextCursor` is null, not until a page is short', () => {

@@ -14,7 +14,6 @@ import {
 import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { PERMISSIONS, isPermissionKey, type PermissionKey } from '@/lib/permissions/catalog';
 import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
-import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 
 // The GRANT model guard (Story MOTIR-2572 · Subtask MOTIR-2574), decided in
 // `docs/decisions/token-permissions.md`. Pure model: no DB, no I/O.
@@ -50,27 +49,17 @@ describe('GRANTABLE_PERMISSIONS is DERIVED, in both directions', () => {
     // stops at the MCP map + the publish route (see V1_ONLY_PERMISSIONS). THIS
     // is what closes the v1 half — at test time, where the import is free.
     //
-    // ⚠️ Reads the declarations through the FORWARD MAP because MOTIR-2577 has
-    // not re-pointed `V1Operation.scope` → `.permission` yet. That card replaces
-    // the two lines below with a direct `operation.permission` read; until then
-    // this still proves the property that matters — no v1 operation needs a
-    // permission a token cannot be granted.
     for (const operation of V1_OPERATIONS) {
-      const required = LEGACY_SCOPE_PERMISSIONS[operation.scope];
-      for (const key of required) {
-        expect(
-          GRANTABLE_PERMISSIONS,
-          `${operation.method} ${operation.path} requires "${key}", which no token can be granted`,
-        ).toContain(key);
-      }
+      expect(
+        GRANTABLE_PERMISSIONS,
+        `${operation.method} ${operation.path} requires "${operation.permission}", which no token can be granted`,
+      ).toContain(operation.permission);
     }
   });
 
   it('keeps V1_ONLY_PERMISSIONS honest — every entry is a v1 need no MCP tool asserts', () => {
     const mcp = new Set<PermissionKey>(Object.values(TOOL_PERMISSIONS));
-    const v1 = new Set<PermissionKey>(
-      V1_OPERATIONS.flatMap((o) => [...LEGACY_SCOPE_PERMISSIONS[o.scope]]),
-    );
+    const v1 = new Set<PermissionKey>(V1_OPERATIONS.map((o) => o.permission));
     for (const key of V1_ONLY_PERMISSIONS) {
       expect(v1.has(key), `"${key}" is listed v1-only but no v1 operation asserts it`).toBe(true);
       expect(mcp.has(key), `"${key}" is listed v1-only but an MCP tool asserts it too`).toBe(false);

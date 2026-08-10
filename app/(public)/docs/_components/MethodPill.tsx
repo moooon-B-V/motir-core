@@ -73,10 +73,10 @@ export function StatusPill({ status }: { status: V1Status }) {
  * is still distinct from all four verb tints — the property the lavender was
  * for — and the monospace face carries the rest of the distinction.
  */
-export function ScopePill({ scope }: { scope: string }) {
+export function PermissionPill({ permission }: { permission: string }) {
   return (
     <Pill tone="neutral" className="font-mono text-[11px]">
-      {scope}
+      {permission}
     </Pill>
   );
 }

@@ -25,7 +25,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 // return. No `db.*`, no `$transaction`. Rows are `presentWorkspaceSummary`'s
 // output — shaped field by field, never spread; that mapper's header records
 // why (ADR Amendment 5 §4: a v1 route MAPS THROUGH its schema).
-export const GET = withV1Route({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route({ permission: 'project:browse' }, async (ctx) => {
   const page = parsePageRequest(ctx.req);
   const workspaces = await workspacesService.listUserWorkspaces(ctx.userId);
 

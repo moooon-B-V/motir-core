@@ -119,13 +119,13 @@ describe('POST /api/v1/projects/{projectKey}/sprints', () => {
     expect(readBackSprint.committedPoints).toBeNull();
   });
 
-  it('refuses a read-only token with 403 INSUFFICIENT_SCOPE', async () => {
+  it('refuses a read-only token with 403 INSUFFICIENT_PERMISSION', async () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
 
     const res = await post(caller, caller.projectKey, {});
 
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { code: string }).code).toBe('INSUFFICIENT_SCOPE');
+    expect(((await res.json()) as { code: string }).code).toBe('INSUFFICIENT_PERMISSION');
   });
 
   it('refuses a SCOPED token whose owner is not a sprint admin — 403 NOT_SPRINT_ADMIN', async () => {
@@ -251,14 +251,14 @@ describe('PATCH /api/v1/sprints/{sprintId}', () => {
     expect(((await res.json()) as { code: string }).code).toBe('SPRINT_WINDOW_INVALID');
   });
 
-  it('refuses a read-only token with 403 INSUFFICIENT_SCOPE', async () => {
+  it('refuses a read-only token with 403 INSUFFICIENT_PERMISSION', async () => {
     const { sprintId } = await seed();
     const readOnly = await createV1ProjectCaller({ scopes: ['read'] });
 
     const res = await patch(readOnly, sprintId, { name: 'nope' });
 
     expect(res.status).toBe(403);
-    expect(((await res.json()) as { code: string }).code).toBe('INSUFFICIENT_SCOPE');
+    expect(((await res.json()) as { code: string }).code).toBe('INSUFFICIENT_PERMISSION');
   });
 
   it('refuses a SCOPED token whose owner is not a sprint admin — 403 NOT_SPRINT_ADMIN', async () => {

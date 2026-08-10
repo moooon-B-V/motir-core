@@ -220,7 +220,9 @@ describe('rate limiting — the wrapper', () => {
   it('limits a brand-new route that adds no limiter code of its own', async () => {
     budget(1, ALIGNED_WINDOW_MS);
     const caller = await createV1Caller();
-    const newRoute = withV1Route({ scope: 'read' }, async () => NextResponse.json({ ok: true }));
+    const newRoute = withV1Route({ permission: 'project:browse' }, async () =>
+      NextResponse.json({ ok: true }),
+    );
     await waitForWindowBoundary(ALIGNED_WINDOW_MS);
 
     expect((await newRoute(req(caller.headers))).status).toBe(200);

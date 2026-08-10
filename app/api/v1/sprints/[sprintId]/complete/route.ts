@@ -25,12 +25,15 @@ import { sprintsService } from '@/lib/services/sprintsService';
 // DONE-category issues always STAY on the completed sprint — that is the
 // sprint's historical record, and the response says so implicitly by reporting
 // `issueCount` as what remains rather than as what the sprint once held.
-export const POST = withV1Route<{ sprintId: string }>({ scope: 'sprints:write' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, completeSprintBodySchema);
-  const completed = await sprintsService.completeSprint(
-    ctx.params.sprintId,
-    body.carryOverTo !== undefined ? { carryOverTo: body.carryOverTo } : {},
-    ctx.service,
-  );
-  return NextResponse.json(presentSprint(completed));
-});
+export const POST = withV1Route<{ sprintId: string }>(
+  { permission: 'sprint:manage' },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, completeSprintBodySchema);
+    const completed = await sprintsService.completeSprint(
+      ctx.params.sprintId,
+      body.carryOverTo !== undefined ? { carryOverTo: body.carryOverTo } : {},
+      ctx.service,
+    );
+    return NextResponse.json(presentSprint(completed));
+  },
+);

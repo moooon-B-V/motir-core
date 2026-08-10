@@ -41,7 +41,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // a resource, and "nothing was recorded on it" is a true answer to the question
 // asked. The service returns exactly that without opening a transaction.
 
-export const POST = withV1Route({ scope: 'integration' }, async (ctx) => {
+export const POST = withV1Route({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, sessionCloseOutBodySchema);
 
   const provenance = toProvenanceInput(body);

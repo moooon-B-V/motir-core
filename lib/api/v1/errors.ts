@@ -66,14 +66,14 @@ export class UnauthenticatedError extends ApiV1Error {
  * validity) and never a 200 with an empty body: a silent empty result would
  * make a permission problem look like missing data.
  */
-export class InsufficientScopeError extends ApiV1Error {
-  constructor(requiredScope: string) {
+export class InsufficientPermissionError extends ApiV1Error {
+  constructor(requiredPermission: string) {
     super(
-      'INSUFFICIENT_SCOPE',
+      'INSUFFICIENT_PERMISSION',
       403,
-      `This token lacks the '${requiredScope}' scope required for this operation.`,
+      `This token is not granted the '${requiredPermission}' permission required for this operation.`,
     );
-    this.name = 'InsufficientScopeError';
+    this.name = 'InsufficientPermissionError';
   }
 }
 

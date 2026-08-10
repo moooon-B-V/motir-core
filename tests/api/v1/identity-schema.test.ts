@@ -52,20 +52,20 @@ function workspaceRow(extra: Record<string, unknown> = {}) {
 }
 
 describe('presentMe', () => {
-  it('emits exactly the identity contract — user.{id,name,email}, workspaceId, scopes', () => {
+  it('emits exactly the identity contract — user.{id,name,email}, workspaceId, permissions', () => {
     const payload = presentMe({
       user: userRow(),
       workspaceId: 'ws_1',
-      scopes: ['read', 'work_items:write'],
-      grant: [],
+      scopes: [],
+      grant: ['project:browse', 'work_item:edit'],
     } as Parameters<typeof presentMe>[0]);
 
     expect(payload).toEqual({
       user: { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com' },
       workspaceId: 'ws_1',
-      scopes: ['read', 'work_items:write'],
+      permissions: ['project:browse', 'work_item:edit'],
     });
-    expect(Object.keys(payload).sort()).toEqual(['scopes', 'user', 'workspaceId']);
+    expect(Object.keys(payload).sort()).toEqual(['permissions', 'user', 'workspaceId']);
     expect(Object.keys(payload.user).sort()).toEqual(['email', 'id', 'name']);
   });
 
@@ -103,9 +103,9 @@ describe('presentMe', () => {
   // not taken stayed not taken — `meSchema` still has exactly its three keys,
   // and `.strict()` still refuses a fourth.
   it('is UNCHANGED — exactly three keys, and a version field is refused', () => {
-    expect(Object.keys(meSchema.shape).sort()).toEqual(['scopes', 'user', 'workspaceId']);
+    expect(Object.keys(meSchema.shape).sort()).toEqual(['permissions', 'user', 'workspaceId']);
 
-    const valid = { user: { id: 'u', name: 'n', email: 'e' }, workspaceId: 'ws', scopes: [] };
+    const valid = { user: { id: 'u', name: 'n', email: 'e' }, workspaceId: 'ws', permissions: [] };
     expect(meSchema.safeParse(valid).success).toBe(true);
     expect(meSchema.safeParse({ ...valid, version: '1.1.0' }).success).toBe(false);
     expect(meSchema.safeParse({ ...valid, apiVersion: '1.1.0' }).success).toBe(false);

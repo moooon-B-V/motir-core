@@ -216,28 +216,28 @@ describe('the socket harness dispatches /api/v1 by PATTERN', () => {
 });
 
 describe('the BUILT binary, in the states a happy path skips', () => {
-  it('a SCOPE-refused call reports the scope, and exits 1', async () => {
+  it('a PERMISSION-refused call names the permission, and exits 1', async () => {
     const { fx, token } = await tenant();
     expect(
       (await ws.run(['auth', 'login', '--server', server.url, '--token', token])).exitCode,
     ).toBe(0);
     expect((await ws.run(['link', '--project', fx.projectIdentifier])).exitCode).toBe(0);
 
-    // A PAT that can WRITE work items and cannot READ anything. The refusal is
-    // the shipped scope gate's, over a real socket — not a fixture's idea of
+    // A PAT that can EDIT work items and cannot BROWSE. The refusal is the
+    // shipped permission gate's, over a real socket — not a fixture's idea of
     // what a 403 looks like.
     const { token: writeOnly } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'write-only',
-      permissions: grantForLegacyScopes(['work_items:write']),
+      permissions: ['work_item:edit'],
     });
 
     const result = await ws.run(['ready'], { env: { MOTIR_TOKEN: writeOnly } });
 
     expect(result.exitCode).toBe(1);
-    // The CLI names the scope from its OWN operation table rather than parsing
-    // the server's sentence (ADR Q5), which is what makes the message
+    // The CLI names the requirement from its OWN operation table rather than
+    // parsing the server's sentence (ADR Q5), which is what makes the message
     // actionable instead of "forbidden".
-    expect(result.stderr).toContain('read');
+    expect(result.stderr).toContain('project:browse');
     expect(result.stderr).not.toContain('undefined');
   });
 
