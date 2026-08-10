@@ -45,14 +45,32 @@
 
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'motir_app') THEN
-    -- (c) Already renamed -- by this migration running against a SIBLING database
-    -- on the same cluster. The grants below still re-run for THIS database.
-    NULL;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'motir_app')
+     AND EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'prodect_app') THEN
+    -- (c) BOTH exist, which is not a corrupt state but a routine one, and it is
+    -- the case a naive no-op gets wrong. Roles are cluster-level; migrations are
+    -- per-database. So once this migration has renamed the role for ONE database,
+    -- creating a SECOND database on the same cluster replays the whole history --
+    -- and 20260527134009_add_workspace_rls, seeing no `prodect_app`, dutifully
+    -- CREATEs it again. Left alone it would linger with live grants in this
+    -- database, and the suite would find two roles where the RLS tests name one.
+    --
+    -- Strip what the replay just granted it HERE (DROP OWNED BY is
+    -- current-database-scoped: privileges and default-ACL entries, and it owns no
+    -- objects), then drop the role itself. That last step fails while ANY other
+    -- database on the cluster still grants to it, which is fine and expected --
+    -- whichever database runs this last succeeds, and until then the role is inert.
+    DROP OWNED BY prodect_app;
+    BEGIN
+      DROP ROLE prodect_app;
+    EXCEPTION
+      WHEN dependent_objects_still_exist THEN
+        RAISE NOTICE 'prodect_app still holds privileges in another database on this cluster; left in place.';
+    END;
   ELSIF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'prodect_app') THEN
     -- (a) The normal path.
     ALTER ROLE prodect_app RENAME TO motir_app;
-  ELSE
+  ELSIF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'motir_app') THEN
     -- (b) A cluster that has never seen the old role. Mirror the attributes the
     -- two originating migrations produced between them: LOGIN (20260528175528),
     -- NOSUPERUSER + NOBYPASSRLS (20260527134009). No password is set here, for
