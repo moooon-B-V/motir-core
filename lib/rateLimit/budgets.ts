@@ -63,6 +63,31 @@ export const DEFAULT_AI_RATE_LIMIT_WINDOW_MS = 60_000;
 export const DEFAULT_AI_GENERATE_RATE_LIMIT = 10;
 export const DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS = 60_000;
 
+/**
+ * The MCP transport (`POST /api/mcp`, MOTIR-2610) — a VOLUME ceiling on a
+ * surface whose legitimate caller is itself a script.
+ *
+ * ⚠️ Read this next to `ai:generate`, because the two are doing different jobs
+ * on the same endpoint. `/api/mcp` multiplexes every tool through ONE address,
+ * so a guard at the transport cannot tell a `get_work_item` from an
+ * `expand_item` — and the money is not in the request count, it is in the two
+ * tools that submit a model job. Those draw `ai:generate` at the DISPATCH seam
+ * (`lib/mcp/rateLimitGate.ts`), keyed identically to the browser's own door. So
+ * what is left for the transport is the cheap-but-not-free class the other
+ * scopes cover: reads, transitions, sprint writes, an agent's polling loop.
+ *
+ * Hence a ceiling far above `/api/v1`'s 60: an agent is EXPECTED to loop. One
+ * logical CLI operation is already several POSTs (an `initialize`, an
+ * `initialized` notification, then the call), a `motir run` makes tens of them,
+ * and a 429 in the middle of an unattended run is an outage of the product, not
+ * a defence of it. 300/min (5/s sustained) leaves every real client an order of
+ * magnitude of headroom while still bounding a runaway retry loop — which is a
+ * different number from "what is comfortable for a human", because no human is
+ * on this surface at all.
+ */
+export const DEFAULT_MCP_RATE_LIMIT = 300;
+export const DEFAULT_MCP_RATE_LIMIT_WINDOW_MS = 60_000;
+
 function budget(
   limitEnv: string,
   windowEnv: string,
@@ -122,5 +147,15 @@ export function aiGenerateBudget(): RateLimitBudget {
     'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS',
     DEFAULT_AI_GENERATE_RATE_LIMIT,
     DEFAULT_AI_GENERATE_RATE_LIMIT_WINDOW_MS,
+  );
+}
+
+/** The MCP transport — every `POST /api/mcp`, per token owner + workspace. */
+export function mcpBudget(): RateLimitBudget {
+  return budget(
+    'MOTIR_MCP_RATE_LIMIT',
+    'MOTIR_MCP_RATE_LIMIT_WINDOW_MS',
+    DEFAULT_MCP_RATE_LIMIT,
+    DEFAULT_MCP_RATE_LIMIT_WINDOW_MS,
   );
 }

@@ -28,6 +28,7 @@ export type RateLimitScope =
   | 'ai:chat'
   | 'ai:generate'
   | 'ai:internal'
+  | 'mcp:call'
   | 'account:change-password'
   | 'account:set-password-link'
   | 'idea-draft';
