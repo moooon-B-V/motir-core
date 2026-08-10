@@ -4188,3 +4188,186 @@ The three-file set under `design/work-items/`: this `design-notes.md` section ·
 `child-panel-graph.mock.html` (the source of truth) · `child-panel-graph.png`
 (full-page export, Playwright chromium, `deviceScaleFactor: 2`, 1720px wide — the
 board pairs each panel light/dark side by side). Gates MOTIR-2287 and MOTIR-2288.
+
+---
+
+## ⭐ The work-item TYPE vocabulary at FOURTEEN (Story MOTIR-2622 · MOTIR-2631)
+
+The set the type picker, chip, icon and filter facet render grew from ten members
+to fourteen. **ADR `docs/decisions/work-item-type-taxonomy.md` Amendment 1
+(MOTIR-2629) is the authority for WHICH members and in WHAT order** — this section
+is the authority for how they LOOK and how the surfaces absorb four more.
+
+The admitted four are `copy` · `translate` · `legal` · `verification`. The story
+was authored expecting six and sixteen; the amendment collapsed `doc` into
+`content` and `spike` into `research` (neither has an authoring bar of its own in
+`plan-rules.md` — each shares one with the member it names), so this asset is
+drawn for **fourteen**. The canonical order, verbatim from Amendment 1 §1b:
+
+```
+code · design · test · content · copy · translate · research · review ·
+verification · decision · deploy · manual · legal · chore
+```
+
+### Q1 — does the picker still fit? MEASURED, and the answer reframes the question
+
+`scripts/render-work-item-types.mjs` reads these off the rendered DOM and prints
+them beside the PNG it exports, so the table and the asset cannot drift apart:
+
+| quantity               | at ten  | at fourteen |
+| ---------------------- | ------- | ----------- |
+| option row             | 28 px   | 28 px       |
+| group headers          | none    | 4 × 25 px   |
+| list content           | 288 px  | **502 px**  |
+| menu ceiling (shipped) | 256 px  | 256 px      |
+| rows visible           | 8 of 10 | **8 of 14** |
+| hidden below the fold  | 14%     | **51%**     |
+
+**The picker did not stop fitting at fourteen — it stopped fitting at ten.**
+`components/ui/Combobox.tsx` renders its listbox `max-h-64 overflow-y-auto`
+(256 px), and its in-dialog branch clamps to
+`Math.max(80, Math.min(256, avail - 12))`. That `min` makes 256 px a **cap** the
+list length cannot raise, in _both_ hosts. Ten rows already overflowed it by
+32 px.
+
+So the two hosts the card asked to measure separately turn out to differ only in
+**how** the ceiling is computed, not in **what** it is:
+
+| host                           | Combobox branch                                                        | ceiling          |
+| ------------------------------ | ---------------------------------------------------------------------- | ---------------- |
+| create modal (`role="dialog"`) | inline, clamped to the modal's `overflow-hidden max-h-[90vh]` clip box | `min(256, …)`    |
+| detail rail / filter bar       | body-portaled, clamped to the viewport                                 | `max-h-64` = 256 |
+
+That is why this asset draws one menu box and not two (panels 1 and 5a).
+
+### Q1 answer — grouping YES, a scroll container NO
+
+- **No scroll container is added.** There already is one; it is the shipped
+  Combobox's, and a second would be a bug. AC 4's "only if the count demonstrably
+  does not fit" is satisfied in the _other_ direction: it demonstrably did not fit
+  before this story either.
+- **Grouping IS added**, and the row count is the justification. The visible
+  window stays at 8 rows while the hidden fraction goes 14% → 51%; scanning an
+  8-of-14 window with no landmarks is what actually got worse. The four groups are
+  **contiguous runs of Amendment 1's single ordered list**, not a second ordering:
+  Build (`code`–`test`) · Author (`content`–`translate`) · Investigate
+  (`research`–`verification`) · Govern & operate (`decision`–`chore`). A picker
+  that ignored the headers entirely would still show the same sequence.
+- **The affordance is already shipped.** `ComboboxOption.group` renders a
+  non-interactive `role="presentation"` header at each group transition
+  (`px-(--spacing-control-x) pt-2 pb-1 font-mono text-[11px] font-semibold
+tracking-wider text-(--el-text-eyebrow) uppercase`), and keyboard nav is
+  unaffected because the header is not an option row. `WorkItemTypePicker` simply
+  never set the field. **MOTIR-2633's change is one property per option, not a new
+  component.**
+
+### Q2 — hues: fourteen distinct is IMPOSSIBLE, so hue names the FAMILY
+
+The palette holds exactly **seven** mutually distinct saturated hues and three
+greys, and 2.7.4 spent all ten (its own token-block comment says so). There is no
+eighth, and inventing one is forbidden by the colour rule. Reshuffling the ten
+would be churn that regresses nothing into nothing.
+
+So each newcomer takes the Tier-0 hue of the member **Amendment 1 named as its
+nearest neighbour**, and the glyph carries the difference:
+
+| member         | `--el-type-*` → Tier-0                             | shares with | glyph (lucide) |
+| -------------- | -------------------------------------------------- | ----------- | -------------- |
+| `copy`         | `--el-type-copy` → `--color-accent-teal`           | `content`   | `Type`         |
+| `translate`    | `--el-type-translate` → `--color-accent-teal`      | `content`   | `Languages`    |
+| `verification` | `--el-type-verification` → `--color-accent-orange` | `review`    | `BadgeCheck`   |
+| `legal`        | `--el-type-legal` → `--color-charcoal`             | `decision`  | `Gavel`        |
+
+Each gets its **own** `--el-type-*` token pointing at the shared Tier-0 var — so a
+future palette can split them without touching a component, and
+`WORK_ITEM_TYPE_META`'s per-member `hueVar` shape is preserved. The tokens land in
+**`packages/design-system/theme.css`** (Tier 3), _not_ `app/globals.css`: the
+design system was extracted after 2.7.4 wrote the original block.
+
+**Why a shared hue costs nothing here:** colour was never the sole carrier. Every
+chip renders its label and its glyph (finding #35), the filter chip summarises the
+selection as text, and the picker row is label-first. A shared hue removes a
+redundancy, not a signal.
+
+### Q3 — the fourteen glyphs
+
+The ten existing glyphs are unchanged. The four new ones are lucide 1.16.0 node
+data copied verbatim into the mocks' `<defs>`, so the asset and
+`WORK_ITEM_TYPE_META` cannot drift: `Type` (copy — a text cursor over a baseline),
+`Languages` (translate), `BadgeCheck` (verification — "certified", distinct from
+`review`'s `ClipboardCheck` at chip size), `Gavel` (legal). All four are verified
+present in the installed `lucide-react`.
+
+### Q4 — the chip at density: DRAWN, not asserted
+
+`Verification` is the longest label in the set at 12 characters (previous longest:
+`Research`, 8). `work-type-indicator.mock.html` panel 1 draws it in a real list
+row (**PROD-51**) alongside `Translate` (**PROD-35**); the chip sizes to its
+content with `white-space: nowrap` and the grid's chip column is content-width, so
+neither wraps nor displaces the priority column.
+
+The same panel re-types **PROD-34** ("Password-reset email — copy + template")
+from `content` to `copy`, so Amendment 1's **specific-beats-general** precedence
+rule is visible in a row rather than only described in a note. (That is a mock
+row; no real work item is re-typed — MOTIR-2622's boundary excludes backfill.)
+
+### The access path — three entrances, all drawn
+
+1. **Create modal** — the Type field below Title (panel 1). Reached from the `+`
+   in the top bar, or `c`.
+2. **Work-item detail, core-fields rail** — the Type row, inline-edit on click
+   (panel 5a). Reached by opening any work item.
+3. **The work-item list filter bar** — **+ Add filter → Type** (panel 5d), the same
+   facet `backlog-filter` and `board-filter` draw.
+
+All three mount the same `WorkItemTypePicker`, so the grouping decision lands in
+one component and reaches every entrance. **This design adds no route, page or nav
+affordance** — the control already exists in all three places; what changes is
+what is inside it.
+
+### AC 7 — the measurement over `design/`, and every hit file's disposition
+
+**The command in the card was wrong, and wrong in the direction that hides the
+scope behind noise.** `grep -rc -- '--el-type-' design/` returns **119** files,
+because `--el-type-{epic,story,task,bug,subtask}` are the **KIND** hues — a
+different token family this story does not touch. The work-TYPE tokens are the ten
+named after the enum members:
+
+```bash
+grep -rlE -- '--el-type-(code|design|test|content|research|review|decision|deploy|manual|chore)\b' design/
+# → 22 files
+```
+
+22 is close to the 21 the card estimated, so the estimate was right and only the
+command was wrong. Splitting those 22 by whether they **render** the set or merely
+**declare** the tokens is what makes the disposition decidable:
+
+```bash
+# renders it:  var(--el-type-<member>)      declares it:  --el-type-<member>:
+```
+
+| #     | file                                                                                                                                                                                                                                                                                                                              | renders       | disposition                                                                                                                                                         |
+| ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | `work-items/type-executor-picker.mock.html`                                                                                                                                                                                                                                                                                       | all 10        | **REDRAWN HERE** — the picker; now 14, grouped, both hosts, + panel 5                                                                                               |
+| 2     | `work-items/work-type-indicator.mock.html`                                                                                                                                                                                                                                                                                        | all 10        | **REDRAWN HERE** — the chip/icon/legend; now 14 + two density rows                                                                                                  |
+| 3     | `backlog/backlog-filter.mock.html`                                                                                                                                                                                                                                                                                                | all 10        | **REDRAWN HERE** — its Work-type facet enumerates the set and would have gone stale                                                                                 |
+| 4     | `boards/board-filter.mock.html`                                                                                                                                                                                                                                                                                                   | all 10        | **REDRAWN HERE** — same facet, same reason                                                                                                                          |
+| 5     | `ai-chat/onboarding.mock.html`                                                                                                                                                                                                                                                                                                    | 6 of 10       | **no change** — renders a SAMPLE of types in a generated tree, not the set; a sample stays true at 14                                                               |
+| 6     | `ready/work-type-manual.mock.html`                                                                                                                                                                                                                                                                                                | 5 of 10       | **no change** — same; a sample of cards on the ready queue                                                                                                          |
+| 7     | `roadmap/node-worktype.mock.html`                                                                                                                                                                                                                                                                                                 | 1 of 10       | **no change** — one `manual` node, a sample                                                                                                                         |
+| 8     | `roadmap/design-notes.md`                                                                                                                                                                                                                                                                                                         | 1 (prose)     | **no change** — names `--el-type-manual` as an example token in prose                                                                                               |
+| 9     | `shell/context-row.mock.html`                                                                                                                                                                                                                                                                                                     | 10 (CSS shim) | **no change** — a `.text-\(--el-type-*\)` Tailwind-utility shim block, no markup enumerates the set                                                                 |
+| 10–22 | `ai-chat/ai-callout-menu` · `ai-chat/plan-change-planner-speaks` · `brand/brand-mark` · `cli-connect/cli-connect` · `cli-guide/cli-guide` · `github/github` · `repository-set/{repository-set,takeover,team-access}` · `roadmap/planning-origin-drill` · `settings/appearance` · `shell/top-bar` · `work-items/child-panel-graph` | **0**         | **no change** — each copies the Tier-3 token block into its own `:root` for self-containment but renders no work-type chip. Nothing in them goes stale at fourteen. |
+
+Nothing is left unaccounted for: 4 redrawn, 18 explicitly unchanged with a reason
+each. **The four that render the set are exactly the four the render script
+exports**, so the next person to change this vocabulary has one script to run and
+one table to check.
+
+### Deliverable
+
+Four assets under `design/`, each a complete three-file set — this
+`design-notes.md` section · the `*.mock.html` source · the `*.png` full-page export
+(Playwright chromium, light theme, `deviceScaleFactor: 2`, 1200 px wide) — plus
+`scripts/render-work-item-types.mjs`, which renders all four and prints the Q1
+measurement. Gates MOTIR-2633.
