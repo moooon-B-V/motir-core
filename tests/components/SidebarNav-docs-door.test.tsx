@@ -45,12 +45,11 @@ const VIEWER = [...BUILTIN_ROLE_PERMISSIONS.viewer];
 
 function renderRail(permissions?: readonly PermissionKey[], project: ProjectDTO | null = PROJECT) {
   return renderWithIntl(
-    <SidebarNav
-      activeProject={project}
-      projects={project ? [project] : []}
-      settingsPermissions={permissions}
-      user={USER}
-    />,
+    // No `projects` prop: MOTIR-2554 moved the project SWITCHER out of the rail
+    // and into the top bar, so the rail no longer takes the project LIST. It
+    // still takes `activeProject` — the settings door and its permission gate
+    // read it — which is what the "no active project" case below exercises.
+    <SidebarNav activeProject={project} settingsPermissions={permissions} user={USER} />,
   );
 }
 
