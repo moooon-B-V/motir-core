@@ -68,7 +68,7 @@ the CLI has anywhere else — the resolution ladder is
 1. **`-e MOTIR_TOKEN -e MOTIR_SERVER`** — pass them through from your shell.
    `GH_TOKEN` / `GH_HOST` one-for-one. Nothing is mounted, nothing is written to
    disk, and it is the only tier a CI runner or a brand-new machine can use.
-   Mint the token in Motir under **Settings → Account → API tokens**.
+   Mint the token in Motir under **Settings → Account → Tokens**.
 2. **`motir login`, inside the container** — a device grant: it prints a code and
    a URL, you approve it in a browser on any device, and the container polls
    until the token is minted. Headless by construction, which is exactly what a

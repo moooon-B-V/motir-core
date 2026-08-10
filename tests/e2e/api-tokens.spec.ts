@@ -1,4 +1,4 @@
-// E2E: the Settings → Account → API tokens pane (Story 7.8 · Subtask 7.8.3) —
+// E2E: the Settings → Account → Tokens pane (Story 7.8 · Subtask 7.8.3) —
 // the human half of the PAT lifecycle, proven end-to-end over the real stack.
 // It drives the acceptance recipe: create → shown-once copy → revoke → the
 // muted revoked-state render, plus the secret-never-reappears guarantee.
@@ -31,18 +31,21 @@ test.afterAll(async () => {
 test('create → shown-once copy → revoke → revoked render', async ({ page }) => {
   await signUp(page, 'tokens-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
-  // `exact` — "API tokens" is a substring of the empty-state heading "No API
-  // tokens yet", which is also an <h2>; the page-head is the exact match.
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await page.goto('/settings/account/tokens');
+  // `exact` — "Tokens" is a substring of the empty-state heading "No tokens
+  // yet", which is also an <h2>; the page-head is the exact match. (The
+  // substring hazard survived the MOTIR-2532 rename: it was "API tokens"
+  // inside "No API tokens yet" before, and is "Tokens" inside "No tokens yet"
+  // now — so the matcher stays exact.)
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   // Empty state — no tokens yet.
-  await expect(page.getByRole('heading', { name: 'No API tokens yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No tokens yet' })).toBeVisible();
 
   // CREATE — open the modal from the empty state, name the token, submit.
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const createDialog = page.getByRole('dialog');
-  await expect(createDialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(createDialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await createDialog.getByLabel('Label').fill('claude-code');
 
   const createResp = page.waitForResponse(
@@ -93,12 +96,12 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
 test('create with a chosen expiry → the list shows the expiry', async ({ page }) => {
   await signUp(page, 'tokens-expiry-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await page.goto('/settings/account/tokens');
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('ci-token');
 
   // Pick a non-default expiry via the Expires combobox (default is 90 days).
@@ -132,12 +135,12 @@ test('create with a custom scope selection → shown-once + the list shows the g
 }) => {
   await signUp(page, 'tokens-scopes-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await page.goto('/settings/account/tokens');
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('scoped-custom');
 
   // The Permissions picker opens on the default grant (all-on-except-delete):
@@ -193,12 +196,12 @@ test('create with a custom scope selection → shown-once + the list shows the g
 test('create a default token → "Standard", and delete is off', async ({ page }) => {
   await signUp(page, 'tokens-default-e2e@example.com');
 
-  await page.goto('/settings/account/api-tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await page.goto('/settings/account/tokens');
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('scoped-default');
 
   // Delete is off by default — the deliberate one-scope opt-in.
@@ -272,12 +275,12 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   // Shorter than the 720 default and than any laptop the suite has run on.
   await page.setViewportSize({ width: 1280, height: 700 });
 
-  await page.goto('/settings/account/api-tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await page.goto('/settings/account/tokens');
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
 
   // The tall variant: the Organization picker only renders at ≥2 orgs.
   await expect(dialog.getByRole('combobox', { name: 'Organization' })).toBeVisible();
@@ -305,4 +308,57 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('row', { name: /short-viewport/ })).toBeVisible();
+});
+
+// ── The MOTIR-2532 rename: the DOOR and the old address (Subtask MOTIR-2541) ──
+//
+// Everything above reaches the pane with `page.goto`, which is the right shape
+// for testing the pane. It is the wrong shape for testing a RENAME: what
+// MOTIR-2532 changed is the way IN — a row in the account rail — and the
+// address that row points at. A spec that jumps straight to the URL exercises
+// the room and skips the door.
+
+test('the account rail says Tokens, and the row opens the pane', async ({ page }) => {
+  await signUp(page, 'tokens-rail-e2e@example.com');
+
+  // In through the shell, the way a person gets here. The avatar button carries
+  // the only door to account settings — it is a Popover, not a menu, so the
+  // trigger is a `button` labelled "Account menu" and the item inside is a
+  // plain `link`, not a `menuitem` (`app/(authed)/_components/UserMenu.tsx`).
+  await page.getByRole('button', { name: 'Account menu' }).click();
+  await page.getByRole('link', { name: 'Account settings' }).click();
+
+  // The rail is the `<nav aria-label="Account settings">` landmark; scoping to
+  // it keeps the row assertion off the page content, which repeats the label
+  // (the same collision `profile.spec.ts` scopes around).
+  const rail = page.getByRole('navigation', { name: 'Account settings' });
+  const railRow = rail.getByRole('link', { name: 'Tokens', exact: true });
+  await expect(railRow).toBeVisible();
+
+  await railRow.click();
+  await expect(page).toHaveURL(/\/settings\/account\/tokens$/);
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
+});
+
+test('the OLD address still lands on the pane — the redirect is a promise to strangers', async ({
+  page,
+}) => {
+  await signUp(page, 'tokens-redirect-e2e@example.com');
+
+  // `/settings/account/api-tokens` is quoted in shipped docs, in a published
+  // @motir/cli's help text, in two design assets kept as point-in-time records,
+  // and in whatever readers bookmarked. MOTIR-2534's permanent redirect is what
+  // keeps every one of those working — asserted here through a REAL request,
+  // because the redirect map's own unit test proves the configuration and not
+  // the outcome.
+  const response = await page.goto('/settings/account/api-tokens');
+
+  await expect(page).toHaveURL(/\/settings\/account\/tokens$/);
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
+
+  // The chain really was a redirect, and a PERMANENT one: a 307 would tell a
+  // crawler and a bookmark to keep asking the old address forever.
+  const chain = response?.request().redirectedFrom();
+  expect(chain).not.toBeNull();
+  expect((await chain!.response())?.status()).toBe(308);
 });

@@ -279,7 +279,7 @@ export const SANDBOX_STEPS: readonly SandboxStep[] = [
       {
         kind: 'callout',
         tone: 'info',
-        text: '**Two other ways in, for the machines that need them.** A CI runner or a brand-new box has no browser to approve anything, so pass a token straight through: `-e MOTIR_TOKEN` on step 2’s command, minted under Settings → Account → API tokens. And a laptop that has already run `motir login` can mount its credential read-only — but then `motir login` has nowhere to write, and says so.',
+        text: '**Two other ways in, for the machines that need them.** A CI runner or a brand-new box has no browser to approve anything, so pass a token straight through: `-e MOTIR_TOKEN` on step 2’s command, minted under Settings → Account → Tokens. And a laptop that has already run `motir login` can mount its credential read-only — but then `motir login` has nowhere to write, and says so.',
       },
     ],
   },

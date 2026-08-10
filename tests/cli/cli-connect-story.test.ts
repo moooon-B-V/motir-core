@@ -363,7 +363,7 @@ describe('architecture guards — asserted against the migrated database, not th
     const fx = await makeWorkItemFixture();
     const token = await loginAsDevice(fx, 'workbox');
 
-    // It appears in the same Settings → Account → API tokens list every other PAT
+    // It appears in the same Settings → Account → Tokens list every other PAT
     // does — which is what makes "disconnect that machine" a complete action, and
     // proves there is no second, device-only registry.
     const listed = await apiTokensService.listForUser(fx.ownerId);

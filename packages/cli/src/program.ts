@@ -118,7 +118,7 @@ export function buildProgram(): Command {
       [
         '',
         'This removes the credential from THIS machine only. The server-side kill',
-        'switch is revoking the token in Settings → Account → API tokens — a terminal',
+        'switch is revoking the token in Settings → Account → Tokens — a terminal',
         'connected by `motir login` appears there as `CLI · <hostname>`.',
       ].join('\n'),
     )
