@@ -1111,3 +1111,125 @@ anyone proposes one. motir-ai has no such problem: it binds via Hono's
 - **Any application code**, `.env.example`, any Playwright config, or any
   workflow. `grep -n 'motir-ai.internal'` over all of them returns no hits; the
   internal address exists only as a deployed secret.
+
+---
+
+## Amendment 6 (2026-08-10) — hosting stays in `iad`, and this is now a RESIDENCY decision rather than only a latency one
+
+> **Numbered 6.** Amendments 1–5 were checked on `origin/main` and on every
+> unmerged `parent/*`, `subtask/*`, `design/*` and `docs/*` branch before this
+> number was taken; none carried a sixth. Authored on
+> `docs/MOTIR-1122-production-service-stack` (MOTIR-1122).
+
+**This record chose `iad` twice — in Q1 and again in Q6 — and both times argued it
+from co-location and latency.** Neither mention asks where the personal data of a
+Dutch company's users is allowed to rest. That question was put to this record on
+2026-08-10 while MOTIR-1122 was deciding the production service stack, and the
+answer belongs here rather than in that card, because it governs the platform and
+not the vendors.
+
+**It re-opens nothing.** Q1 still chooses Fly, Q6 still chooses two machines, and
+the region is still `iad`. What changes is that `iad` is now a decision with a
+recorded reason and a named reversal trigger, instead of a value inherited from
+`motir-ai/fly.toml`.
+
+### Q10 — may moooon B.V. host the application and its database in the US?
+
+#### The decision
+
+**Yes, and it does. Production stays in `iad` (us-east-1): motir-core, motir-ai
+and motir-gateway on Fly, the Neon database, and the two Tigris buckets.**
+
+#### The regulation, stated once so nobody re-derives it
+
+|                                                             |                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GDPR** applies, and hosting location does not change that | Art. 3(1) covers processing in the context of an EU establishment's activities **"regardless of whether the processing takes place in the Union or not."** moooon B.V. is established in the Netherlands, so GDPR applies to Motir in Virginia exactly as it would in Amsterdam                           |
+| **There is no data-localisation requirement**               | Nothing in GDPR requires an EU controller to store data in the EU. Chapter V regulates _transfers_; it does not prohibit them                                                                                                                                                                             |
+| **Dutch specifics**                                         | The `UAVG` implements GDPR nationally; the supervisory authority is the **Autoriteit Persoonsgegevens**. Cookies/tracking are governed by **Telecommunicatiewet art. 11.7a**, not by GDPR — which is why the analytics choice in `production-service-stack.md` §5 matters and the hosting region does not |
+| **NIS2**                                                    | Out of scope at current size (medium-enterprise threshold). Re-check on growth                                                                                                                                                                                                                            |
+
+**A US transfer needs one of two bases**, and which one is a per-vendor fact:
+
+- **Adequacy** — the EU-US Data Privacy Framework (Commission Implementing
+  Decision (EU) 2023/1795). A transfer to a **DPF-certified** US organisation
+  needs nothing further.
+- **Standard Contractual Clauses** — Decision 2021/914, plus the transfer impact
+  assessment _Schrems II_ (C-311/18) requires, for any recipient that is not
+  certified.
+
+⚠️ **Do not architect as though adequacy is permanent.** The DPF is the third
+attempt: Safe Harbour fell in 2015, Privacy Shield in 2020, both at the CJEU. The
+insurance is cheap and is therefore required — **every processor's DPA must also
+offer SCCs**, so an adequacy collapse is a paperwork event and not a migration.
+Verifying this per vendor is MOTIR-1160's, against the public DPF list rather
+than against a vendor's marketing page.
+
+#### Why STAY, given the move to the EU is technically available
+
+Fly has `ams` / `fra`, Neon has EU regions, Tigris is region-configurable. The
+argument is not that EU hosting is hard; it is that it is not worth buying today.
+
+1. **The switching cost was just spent.** MOTIR-2391 created the Neon project in
+   `us-east-1` and dumped-and-restored into it on 2026-08-07. Moving now means
+   doing that again, plus re-regioning three Fly apps that **cannot** be split
+   (Amendment 1's private-networking seam and Q7's free same-region transfer both
+   assume co-location), plus re-copying two Tigris buckets — a second platform
+   migration landing on top of one that has not finished retiring its predecessor.
+2. **Self-hosting is Motir's residency answer, and it is a better one than a
+   region.** A buyer who requires EU residency runs the GPL-3.0 core in their own
+   datacentre. That is what the open-core split in Q1's sibling record is for. The
+   segment EU hosting would additionally unlock is _"requires EU residency AND
+   will not self-host"_ — real, but narrow.
+3. **Sovereignty is not the product's pitch.** The three pillars are AI planning,
+   project management and agent orchestration. Infrastructure should not be spent
+   on a differentiator that is not being sold.
+4. **`iad` is the better neutral default** for a product with an undecided market:
+   Amsterdam is better for Europe and worse for the US and Asia.
+
+#### What would reverse it — one trigger, and it is commercial
+
+**The first prospect with a contractual EU-residency requirement who will not
+self-host.** Then the migration is funded by a deal, which is the only condition
+under which it should happen. Not a preference, not a feeling about where a Dutch
+company ought to keep its data — a signed requirement.
+
+**Two obligations keep that reversal cheap, and they are the price of this
+decision:**
+
+- **Adopt nothing region-locked.** Every element of the stack has an EU region
+  today; a dependency that does not is a decision to re-open this one.
+- **MOTIR-2391's runbook is the migration script for move #2.** Its acceptance
+  criteria already required recording the database size and the dump/restore
+  duration. That is what makes a second move a replay rather than a rediscovery,
+  and it is why waiting is safe rather than merely cheaper.
+
+#### Rejected alternatives
+
+| Alternative                              | Why not                                                                                                                                                                                 |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Move everything to `ams` / `fra` now** | A full repeat of a migration completed three days ago, for a benefit no customer has asked for and that self-hosting already answers                                                    |
+| **Compute in `iad`, database in the EU** | The worst of both: a cross-Atlantic round trip on every query, and the processing still happens in the US — so it does not even buy the residency claim it looks like it buys           |
+| **A Neon read replica in the EU**        | A replica is not residency. The primary still holds the data and the writes still land in it. Naming this so nobody later mistakes one for the other                                    |
+| **Defer, and decide when asked**         | What this amendment refuses. "No decision" reads identically to "`iad` because motir-ai was there", which is how the question went unasked through Q1, Q6 and an entire migration Story |
+
+#### What this amendment does NOT touch
+
+- **Any existing decision.** Q1 (Fly, `iad`), Q6 (two machines), Q7 (egress) and
+  Amendment 1's private-networking seam all stand exactly as written.
+- **The vendor choices.** Those are `production-service-stack.md`'s. This record
+  governs only where the application and its database run — which is the input
+  that record's §3 reads when it picks a monitoring region.
+- **Any code, workflow or config.** `fly.toml`'s `primary_region` is already
+  `iad`; this amendment records why, and changes no line.
+
+#### Sources — additions
+
+| Claim                                                                 | Source                                                                                       |
+| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| GDPR applies regardless of where processing occurs                    | Regulation (EU) 2016/679, Art. 3(1)                                                          |
+| Transfers to DPF-certified US organisations need no further mechanism | Commission Implementing Decision (EU) 2023/1795 (10 July 2023)                               |
+| SCCs as the non-adequacy route; TIA required                          | Commission Decision 2021/914; CJEU C-311/18 (_Schrems II_)                                   |
+| Dutch implementation and supervisory authority                        | `Uitvoeringswet AVG`; Autoriteit Persoonsgegevens                                            |
+| Cookie/tracking consent is ePrivacy, not GDPR                         | Telecommunicatiewet art. 11.7a                                                               |
+| The database is in `us-east-1`, moved 2026-08-07                      | MOTIR-2391, `done` — its own acceptance criteria record the project identity and the restore |

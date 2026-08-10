@@ -15,7 +15,9 @@
   record and the reason it exists in this shape. motir-core runs as ONE
   long-running Node process on Fly, not as per-request serverless functions, and
   that changes both **where a value lives** and **which store is the cheap
-  answer**.
+  answer**. **Its Amendment 6 (Q10) — authored alongside this record — decides
+  that hosting and the database stay in `iad` (us-east-1), and §3 below reads that
+  as its input** when it picks a monitoring region.
 - **Supersedes / superseded by:** nothing. This is the first record in this
   directory that names an outside service the running application depends on.
 
@@ -74,15 +76,16 @@ argument about a deployment Motir no longer has, and §6 is where that matters.
 
 ## §1 — The decisions, in one table
 
-| #      | Question                              | Decision                                                                                                    |
-| ------ | ------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| **Q1** | Who sends transactional email?        | **Resend**, one of the two arms `lib/email.ts` already accepts. `EMAIL_PROVIDER=resend`, runtime Fly secret |
-| **Q2** | Who catches production errors?        | **Sentry** (`@sentry/nextjs`), org created in the **EU data region** — an irreversible choice at creation   |
-| **Q3** | What identifies a Sentry RELEASE?     | The **commit SHA**, carried in as a build argument. The **environment** is a separate runtime secret        |
-| **Q4** | Who counts visitors?                  | **Plausible** — cookieless, EU-hosted, and it needs **no build-time public value at all**                   |
-| **Q5** | Where does the rate-limit tally live? | **A Postgres counter table** on the database the app already holds open. Redis is the named alternative     |
-| **Q6** | Is that table tenant-scoped?          | **No** — deliberately no `workspace_id`, no RLS, and the migration must say so in its own header            |
-| **Q7** | Who builds the build-argument seam?   | **MOTIR-1162** (Sentry wiring), once, for the one value that needs it. No second card reuses it             |
+| #      | Question                              | Decision                                                                                                                             |
+| ------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Q1** | Who sends transactional email?        | **Resend**, one of the two arms `lib/email.ts` already accepts. `EMAIL_PROVIDER=resend`, runtime Fly secret                          |
+| **Q2** | Who catches production errors?        | **Sentry** (`@sentry/nextjs`), org in the **US data region** — following the data, not the company address; irreversible at creation |
+| **Q3** | What identifies a Sentry RELEASE?     | The **commit SHA**, carried in as a build argument. The **environment** is a separate runtime secret                                 |
+| **Q4** | Who counts visitors?                  | **Plausible** — cookieless, EU-hosted, and it needs **no build-time public value at all**                                            |
+| **Q5** | Where does the rate-limit tally live? | **A Postgres counter table** on the database the app already holds open. Redis is the named alternative                              |
+| **Q6** | Is that table tenant-scoped?          | **No** — deliberately no `workspace_id`, no RLS, and the migration must say so in its own header                                     |
+| **Q7** | Who builds the build-argument seam?   | **MOTIR-1162** (Sentry wiring), once, for the one value that needs it. No second card reuses it                                      |
+| **Q8** | What makes each vendor lawful to use? | A **DPF certification or SCCs**, read per vendor and recorded on MOTIR-1160. Not assumed, and not optional                           |
 
 **Every choice stays env-configurable.** A self-hoster swaps or omits any of the
 four without a code change; the abstraction in `lib/email.ts` — a provider
@@ -141,12 +144,12 @@ the one choice of the four that the platform change does not touch.
 
 ---
 
-## §3 — Q2: error monitoring is Sentry, in the EU region
+## §3 — Q2: error monitoring is Sentry, in the region the DATA is in
 
 ### The decision
 
-**Sentry**, via `@sentry/nextjs`, with the org created in Sentry's **EU data
-region**.
+**Sentry**, via `@sentry/nextjs`, with the org created in the **US data region** —
+because that is where Motir's primary data store is.
 
 `grep 'sentry' package.json` returns nothing (read 2026-08-10) — there is no
 partial installation to reconcile, and nothing in the repo constrains the choice.
@@ -155,14 +158,35 @@ and the browser, source-map upload so a minified stack trace is readable, a tunn
 route so an ad-blocker does not silently swallow client reports, and a Next.js
 integration that understands Server Components and Route Handlers.
 
-**⚠️ The EU region is chosen at ORG CREATION and cannot be changed afterwards.**
-This is the sentence in this record most likely to cost real money if skipped.
-moooon B.V. is a Dutch entity, MOTIR-1160 must publish a subprocessor list naming
-where each processor holds data, and an error payload routinely carries user email
-addresses, request URLs and IDs. Moving regions later means a new org, new DSN,
-new tokens, and the loss of the issue history — the same class of
-irreversible-dashboard-flip that MOTIR-2009 recorded for GHCR visibility. It is
-called out here, not left for the provisioning agent to discover.
+**The rule is: the monitoring region FOLLOWS the primary data store. It does not
+follow the company's registered address.** An error payload is a _subset_ of what
+the application database already holds — the same emails, the same ids, the same
+URLs, arriving by a different road. Putting that subset in a different
+jurisdiction from its superset produces two processor jurisdictions to document
+and defends nothing.
+
+Motir's data is in the US: motir-core, motir-ai and motir-gateway all run in Fly's
+`iad`, and the Neon database was created in `us-east-1` by MOTIR-2391 on
+2026-08-07. **So the Sentry org is US.**
+
+**⚠️ This paragraph replaces an earlier draft of this section that chose the EU
+region, and the reasoning it replaces was wrong in a way worth recording.** That
+draft argued _"moooon B.V. is a Dutch entity, therefore EU."_ GDPR does not work
+that way: Art. 3(1) binds the controller by **establishment**, expressly
+_"regardless of whether the processing takes place in the Union or not"_, and
+nothing in it requires an EU controller to store data in the EU. The residency
+question is answered for the whole platform in `application-hosting.md`
+**Amendment 6 (Q10)**, which decides that hosting stays in `iad` and names the one
+trigger that would move it. This section is a consequence of that decision, not an
+independent one — **if Q10 ever reverses, this region reverses with it.**
+
+**⚠️ The region is still chosen at ORG CREATION and still cannot be changed
+afterwards.** That has not stopped being true; only the correct value changed. A
+later move means a new org, a new DSN, new tokens and the loss of the issue
+history — the same class of irreversible flip MOTIR-2009 recorded for GHCR
+visibility. Two things make picking now safe rather than reckless: the value
+follows a decision that is itself recorded with a reversal trigger, and Motir is
+pre-launch, so there is no issue history to lose if that trigger ever fires.
 
 ### Where each Sentry value lives
 
@@ -180,13 +204,13 @@ does its work.
 
 ### Rejected alternatives
 
-| Alternative                               | Why not                                                                                                                                            |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Sentry in the US region (the default)** | Cheaper in effort by one dropdown, and wrong for a Dutch controller publishing a subprocessor list. Irreversible, so the default is not neutral    |
-| **GlitchTip / self-hosted Sentry**        | Removes a subprocessor and adds an operational surface — a service to run, upgrade and page on — to a team of one. Reconsider when there is a team |
-| **Fly logs + `console.error` only**       | Logs are not an error tracker: no grouping, no release attribution, no source maps, no alert on a spike, nothing at all from the browser           |
-| **Highlight / Bugsnag / Rollbar**         | Peers on features; none of them wins by enough to outweigh Sentry's Next.js integration being the one with source-map + tunnel support built in    |
-| **Defer monitoring until after launch**   | Inverted: the window where nobody is watching is exactly the window where the first real users arrive                                              |
+| Alternative                             | Why not                                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Sentry in the EU region**             | What an earlier draft of this section chose, from _"Dutch controller ⇒ EU storage"_ — which is not what GDPR says (Art. 3(1)). It would put a subset of the data in a different jurisdiction from the database holding all of it: two processor jurisdictions, no protection bought. Correct only if `application-hosting.md` Q10 reverses, and then it follows automatically |
+| **GlitchTip / self-hosted Sentry**      | Removes a subprocessor and adds an operational surface — a service to run, upgrade and page on — to a team of one. Reconsider when there is a team                                                                                                                                                                                                                            |
+| **Fly logs + `console.error` only**     | Logs are not an error tracker: no grouping, no release attribution, no source maps, no alert on a spike, nothing at all from the browser                                                                                                                                                                                                                                      |
+| **Highlight / Bugsnag / Rollbar**       | Peers on features; none of them wins by enough to outweigh Sentry's Next.js integration being the one with source-map + tunnel support built in                                                                                                                                                                                                                               |
+| **Defer monitoring until after launch** | Inverted: the window where nobody is watching is exactly the window where the first real users arrive                                                                                                                                                                                                                                                                         |
 
 ---
 
@@ -423,19 +447,57 @@ vendor, it kept a piece of build plumbing at one consumer instead of two.
 
 ---
 
+## §8 — Q8: every vendor here is a processor, and each needs a transfer basis
+
+Three of the four choices are US organisations receiving personal data from a
+Dutch controller. That is lawful, and it is lawful **conditionally** — the
+condition is a mechanism under GDPR Chapter V, which is a per-vendor fact rather
+than a property of the stack. `application-hosting.md` **Amendment 6 (Q10)**
+carries the full reasoning and the citations; what belongs here is the checklist
+this record's four choices generate.
+
+**For each vendor, exactly one of these must be true, and which one must be
+written down:**
+
+- the organisation is **DPF-certified** — verified against the public list at
+  `dataprivacyframework.gov`, by looking it up, not by reading the vendor's own
+  marketing page; **or**
+- its DPA incorporates **SCCs** (Decision 2021/914), with the transfer impact
+  assessment _Schrems II_ requires.
+
+**⚠️ And the second must be available even when the first is true.** The DPF is
+the third attempt at US adequacy — Safe Harbour fell in 2015, Privacy Shield in
+2020, both at the CJEU. A stack whose entire lawfulness rests on the current
+adequacy decision has a single point of failure with a track record. Requiring
+SCCs in the DPA as well turns an adequacy collapse into a paperwork event.
+
+| processor                  | what it receives                                 | who reads its basis                                                                                                                                          |
+| -------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Resend** (US)            | email addresses and message bodies               | MOTIR-1123 at provisioning; MOTIR-1160 records it                                                                                                            |
+| **Sentry** (US)            | error payloads — emails, ids, URLs, stack frames | MOTIR-1161 at provisioning; MOTIR-1160 records it                                                                                                            |
+| **Plausible** (EU)         | aggregate usage, no personal data, EU-hosted     | **no transfer** — the one choice here that generates no Chapter V question at all, which is a point in its favour beyond §5's                                |
+| **the rate-limit counter** | hashed keys, in Motir's own database             | **not a processor.** Adding no vendor is the whole argument of §6, and this row is where that shows up as a legal saving rather than only an operational one |
+
+The platform processors Motir already uses — **Fly**, **Neon**, **Tigris** — need
+the same treatment. They are not this record's choices, but they land on the same
+subprocessor list, so MOTIR-1160's check covers all six rather than only the two
+added here.
+
+---
+
 ## Consequences — what this record binds on Story 8.5's cards
 
-| card                                         | what changes                                                                                                                                                                                             |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **MOTIR-1123** — email provisioning          | Provision **Resend**. `RESEND_API_KEY` → Fly runtime secret. **Read and record the sending region before creating anything**, and whether it is fixed at creation                                        |
-| **MOTIR-1127** — email wiring                | Implement the `resend` arm of `getEmailProvider()`; it is a stub throwing today. Owns the From-address env name — `lib/email.ts` has none                                                                |
-| **MOTIR-1161** — Sentry + analytics accounts | Create the Sentry org **in the EU region (irreversible)**. Analytics is **Plausible** — capture the domain, not a key. **Drop the "analytics public site id → build argument" row: there is no such id** |
-| **MOTIR-1162** — Sentry wiring               | Owns the build-argument seam (§7): the `Dockerfile` `ARG`s and `flyctl deploy --build-arg`. Tags releases with the commit SHA; environment stays runtime (§4)                                            |
-| **MOTIR-1163** — analytics wiring            | Plausible script behind ONE `analyticsEnabled()` seam; unset env = no analytics. **No build argument needed.** No cookie banner is required, and none is planned (§5)                                    |
-| **MOTIR-1165** — app-level rate limiting     | **Not Upstash.** Build against the shared Postgres store; hash IP and identifier into the key (§7). There is no vendor env to leave unset — the escape hatch is `MOTIR_RATE_LIMIT_STORE=memory`          |
-| **MOTIR-2037** — `/api/v1`'s shared counter  | Build the Postgres arm of `RateLimitStore` — the exact shape in §6. Whichever of 2037 / 1165 lands first writes the store and the migration; the second reuses it                                        |
-| **MOTIR-1160** — DPA + subprocessor list     | The processors are now named: **Resend** (email content), **Sentry** (error payloads, EU region), **Plausible** (aggregate usage). Rate limiting adds **none** — that is a point in its favour           |
-| **MOTIR-1124** — production go-live          | The prod secret set on `app.motir.co` is the union of the runtime rows in §2–§4, plus the Actions/build-arg half being present before the image is built                                                 |
+| card                                         | what changes                                                                                                                                                                                                                                                                                                                 |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **MOTIR-1123** — email provisioning          | Provision **Resend**. `RESEND_API_KEY` → Fly runtime secret. **Read and record the sending region before creating anything**, and whether it is fixed at creation                                                                                                                                                            |
+| **MOTIR-1127** — email wiring                | Implement the `resend` arm of `getEmailProvider()`; it is a stub throwing today. Owns the From-address env name — `lib/email.ts` has none                                                                                                                                                                                    |
+| **MOTIR-1161** — Sentry + analytics accounts | Create the Sentry org **in the US region (irreversible)** — §3, following the data. Analytics is **Plausible** — capture the domain, not a key. **Drop the "analytics public site id → build argument" row: there is no such id.** Record each vendor's transfer basis (§8)                                                  |
+| **MOTIR-1162** — Sentry wiring               | Owns the build-argument seam (§7): the `Dockerfile` `ARG`s and `flyctl deploy --build-arg`. Tags releases with the commit SHA; environment stays runtime (§4)                                                                                                                                                                |
+| **MOTIR-1163** — analytics wiring            | Plausible script behind ONE `analyticsEnabled()` seam; unset env = no analytics. **No build argument needed.** No cookie banner is required, and none is planned (§5)                                                                                                                                                        |
+| **MOTIR-1165** — app-level rate limiting     | **Not Upstash.** Build against the shared Postgres store; hash IP and identifier into the key (§7). There is no vendor env to leave unset — the escape hatch is `MOTIR_RATE_LIMIT_STORE=memory`                                                                                                                              |
+| **MOTIR-2037** — `/api/v1`'s shared counter  | Build the Postgres arm of `RateLimitStore` — the exact shape in §6. Whichever of 2037 / 1165 lands first writes the store and the migration; the second reuses it                                                                                                                                                            |
+| **MOTIR-1160** — DPA + subprocessor list     | The processors are now named: **Resend** (email, US), **Sentry** (error payloads, US), **Plausible** (aggregate usage, EU — no transfer). Rate limiting adds **none**. **Per §8, look up each one's DPF certification or SCCs — including Fly, Neon and Tigris — and record which.** `blocked_by` this card as of 2026-08-10 |
+| **MOTIR-1124** — production go-live          | The prod secret set on `app.motir.co` is the union of the runtime rows in §2–§4, plus the Actions/build-arg half being present before the image is built                                                                                                                                                                     |
 
 **MOTIR-1160 was not previously blocked on this decision, and now is.** A
 subprocessor list is a legal artifact that names third parties who process
