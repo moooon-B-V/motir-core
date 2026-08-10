@@ -27,6 +27,22 @@ name: Acceptance video
 #     the decision: the PR published the receipt while its story was in review,
 #     and re-publishing post-merge would only supersede it with an identical clip
 #     (`docs/decisions/acceptance-video.md`, amendments MOTIR-1937 / MOTIR-1949).
+#   • ⚠️ A CHANGE TO A PAGE AN ACCEPTANCE SPEC READS DOES NOT RUN THIS LANE, and
+#     that is deliberate (MOTIR-2620). The specs here assert against real product
+#     surfaces, so the `paths:` filter cuts between a page and the only test that
+#     reads it: MOTIR-2611 added a second command to `/docs/sandbox` step 2,
+#     `acceptance-api-docs.spec.ts` went red on the two Copy buttons, and the
+#     lane never ran on the PR that caused it — it surfaced on the next unrelated
+#     PR to touch a spec. Widening the filter was considered and REJECTED: the
+#     set of sources these specs read is most of the app, so any honest widening
+#     runs a ~30-minute lane on nearly every PR, and covering one page
+#     (`lib/apiDocs/**`) would close one instance while leaving the class.
+#     THIS LANE IS THE RECEIPT LANE, NOT A REGRESSION GATE. Behaviour a page owes
+#     on every PR belongs in a bulk-shard spec, which `ci.yml` already runs
+#     unconditionally; an acceptance spec is what a REVIEWER WATCHES. So: if you
+#     change a surface an acceptance spec drives, run this lane yourself before
+#     merging (`pnpm test:e2e --config playwright.acceptance.config.ts <spec>`),
+#     or expect the next spec-touching PR to find it for you.
 on:
   pull_request:
     paths:
