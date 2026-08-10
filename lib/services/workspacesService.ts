@@ -12,6 +12,8 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import { readMembership } from '@/lib/workspaces/membershipGate';
+import { bindOrganizationContext } from '@/lib/organizations/context';
 import { WORKSPACE_ROLE } from '@/lib/workspaces/roles';
 import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 import { organizationsService } from '@/lib/services/organizationsService';
@@ -496,7 +498,7 @@ export const workspacesService = {
   },
 
   async findMembership(userId: string, workspaceId: string): Promise<WorkspaceMembership | null> {
-    return workspaceMembershipRepository.findByUserAndWorkspace(userId, workspaceId);
+    return readMembership(userId, workspaceId);
   },
 
   async listUserWorkspaces(userId: string): Promise<Workspace[]> {
@@ -523,28 +525,43 @@ export const workspacesService = {
   }): Promise<WorkspaceMembership> {
     let organizationId: string | null = null;
     try {
-      const membership = await db.$transaction(async (tx) => {
-        const created = await workspaceMembershipRepository.create(
-          {
-            userId: input.userId,
-            workspaceId: input.workspaceId,
-            role: input.role ?? 'member',
-          },
-          tx,
-        );
-        // Upward auto-join: the create succeeded, so the workspace exists; bring
-        // the user into its org if they aren't a member already.
-        const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
-        if (workspace) {
-          organizationId = workspace.organizationId;
-          await organizationsService.ensureOrgMembership(
-            input.userId,
-            workspace.organizationId,
+      // MOTIR-2527: `withWorkspaceContext`, not a bare `db.$transaction`. This is the
+      // ONE true RLS denial in the MOTIR-2514 inventory —
+      // `new row violates row-level security policy for table "workspace_membership"` —
+      // because `membership_insert_active_or_bootstrap` gates the INSERT on
+      // `"workspaceId" = current_setting('app.workspace_id')` and nothing bound it.
+      // Same root shape as the eleven false denials, one verb over.
+      const membership = await withWorkspaceContext(
+        { userId: input.userId, workspaceId: input.workspaceId },
+        async (tx) => {
+          const created = await workspaceMembershipRepository.create(
+            {
+              userId: input.userId,
+              workspaceId: input.workspaceId,
+              role: input.role ?? 'member',
+            },
             tx,
           );
-        }
-        return created;
-      });
+          // Upward auto-join: the create succeeded, so the workspace exists; bring
+          // the user into its org if they aren't a member already.
+          const workspace = await workspaceRepository.findByIdInTx(input.workspaceId, tx);
+          if (workspace) {
+            organizationId = workspace.organizationId;
+            // The org auto-join writes a SECOND tenant-root table, gated by
+            // `org_membership_insert_active_or_bootstrap` on `app.organization_id` — a
+            // GUC the workspace context does not carry and which is unknowable until
+            // the row above is read. Bind it here rather than splitting the atomic
+            // upward-membership invariant across two transactions.
+            await bindOrganizationContext(tx, workspace.organizationId);
+            await organizationsService.ensureOrgMembership(
+              input.userId,
+              workspace.organizationId,
+              tx,
+            );
+          }
+          return created;
+        },
+      );
       // Committed → resync the org's scaled-tracker seat quantity (8.1.12): the
       // upward auto-join may have grown the org's member count. Best-effort +
       // OUTSIDE the tx (a billing failure must never fail the workspace add);
@@ -594,10 +611,13 @@ export const workspacesService = {
     input: { userId: string; workspaceId: string },
     tx: Prisma.TransactionClient,
   ): Promise<WorkspaceMembership | null> {
-    const existing = await workspaceMembershipRepository.findByUserAndWorkspace(
-      input.userId,
-      input.workspaceId,
-    );
+    // MOTIR-2527: `tx` — this method's only caller is `removeMember`, which wraps it in
+    // `withWorkspaceContext`, so the GUCs are bound and the read that GUARDS the delete
+    // shares the transaction that performs it (the 4-layer rule). Reading through the
+    // `db` singleton here made this fail SILENTLY rather than loudly: a null reads as
+    // "not a member", which is the idempotent no-op below, so Leave/Remove would return
+    // success having deleted nothing.
+    const existing = await readMembership(input.userId, input.workspaceId, tx);
     // Not a member → idempotent no-op (matches the prior contract).
     if (!existing) return null;
 
@@ -701,12 +721,19 @@ export const workspacesService = {
     workspaceId: string,
     actorUserId: string,
   ): Promise<WorkspaceSummaryDTO | null> {
-    const membership = await workspaceMembershipRepository.findByUserAndWorkspace(
-      actorUserId,
-      workspaceId,
+    // MOTIR-2527: ONE bound transaction for both reads. The `workspace` row is gated by
+    // `workspace_active` / `workspace_membership_visible`, which read the same GUCs the
+    // membership policy does — so binding the gate and then reading the workspace back
+    // through the `db` singleton would trade a false "not a member" for a false
+    // "workspace does not exist", which this method also renders as `null`.
+    const workspace = await withWorkspaceContext(
+      { userId: actorUserId, workspaceId },
+      async (tx) => {
+        const membership = await readMembership(actorUserId, workspaceId, tx);
+        if (!membership) return null;
+        return workspaceRepository.findByIdInTx(workspaceId, tx);
+      },
     );
-    if (!membership) return null;
-    const workspace = await workspaceRepository.findById(workspaceId);
     return workspace ? toWorkspaceSummaryDTO(workspace) : null;
   },
 

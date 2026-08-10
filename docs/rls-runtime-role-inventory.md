@@ -114,6 +114,58 @@ sites removes ~1044 of the failures at a stroke. The remaining ~730 fixture fail
 what stands between that and a default flip, and they can be migrated directory by
 directory behind the flag without ever red-lighting `main`.
 
+## RE-MEASURED after MOTIR-2527 — the gates admit, and the layer behind them is now visible
+
+**2026-08-10, same four batches, same flag, on the branch that lands MOTIR-2527.** The card's
+own criterion was that the `NotAMemberError` count reach zero. It does.
+
+| batch |    tests | failed (before → after) | `NotAMemberError` |
+| ----- | -------: | ----------------------: | ----------------: |
+| 1     |      178 |               131 → 108 |           131 → 0 |
+| 2     |      236 |               200 → 202 |               → 0 |
+| 3     |      676 |               469 → 581 |               → 0 |
+| 4     |      259 |               201 → 207 |               → 0 |
+|       | **1349** |         **1001 → 1098** |      **1048 → 0** |
+
+Frames, by the same classification command: **1044 `lib/` → 143**, and `NotAMemberError`
+does not appear once in any batch.
+
+**But the total did not fall, and that is the finding.** Two things move underneath it. The
+batches are bigger than in August's run (1225 → 1349 tests — other cards have landed since),
+so the counts are not directly comparable. And more importantly:
+
+### Finding 4 — the membership gate was MASKING a second layer of the same defect
+
+The failures that replaced it are **not** the fixture debt Finding 2 predicted. The largest
+single group is now `ProjectNotFoundError` (135), with **94 frames in
+`lib/repositories/projectRepository.ts`**, plus 31 in `workItemsService` and 14 in
+`projectTagsService`:
+
+| error                           | count | where                                               |
+| ------------------------------- | ----: | --------------------------------------------------- |
+| `ProjectNotFoundError`          |   135 | `projectRepository.findById` on the `db` singleton  |
+| `PrismaClientKnownRequestError` |   120 | mostly fixture writes with no bound context         |
+| `AssertionError`                |    31 | downstream of the above                             |
+| RLS denials (all tables)        |     4 | `workspace_membership` ×2, `project` ×1, `board` ×1 |
+
+Same root cause, one layer down: `project`, `work_item` and `board` carry workspace-keyed RLS
+policies of their own, and a service that opens with an unbound read of one of them fails
+before any gate is consulted. `createWorkItem` and `getTriageItemDetail` are the clearest
+cases — each starts with a `db`-singleton `findById`, so under the flag they now throw
+`ProjectNotFoundError` / `WorkItemNotFoundError` and never reach the membership gate at all.
+
+**Why the original inventory could not see this.** The membership gate was the FIRST unbound
+read on essentially every path, so it consumed the failure and hid every read behind it. The
+"1044 frames, one file, one error" result was true and was also a ceiling artefact: fixing the
+gate did not remove 1044 failures, it removed 1044 _masks_. This is worth stating plainly
+because the same shape will recur — each layer fixed will reveal the next, and a count that
+does not fall is not evidence that the fix did nothing.
+
+**Consequence for the chain.** The claim that flipping `TEST_DB_APP_ROLE` to the default is
+blocked only on fixtures (MOTIR-2528) is no longer accurate: it is blocked on the application
+reads above as well. That work is filed separately rather than absorbed into MOTIR-2527, whose
+scope was the membership gates and the one `addMember` write.
+
 ## Cards filed from this inventory
 
 Both are **successors** to MOTIR-2435, not children of it — tasks under Epic 8, in a
