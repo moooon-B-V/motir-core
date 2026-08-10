@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { publicProjectsService } from '@/lib/services/publicProjectsService';
 import { triageService } from '@/lib/services/triageService';
@@ -15,16 +15,46 @@ import {
   PublicRequestDescriptionTooLongError,
   PublicSubmissionRateLimitedError,
 } from '@/lib/publicProjects/errors';
-import { truncateAuthTables } from '../helpers/db';
+import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
+import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../helpers/rateLimitWindow';
 
 // Service-layer tests for Story 6.12 · Subtask 6.12.5 — the public submit-to-
 // triage path + the duplicate-detection pre-check. Real Postgres, no DB mocks;
-// the truncate helper CASCADE-resets between tests. The in-memory submission
-// throttle is module-level (NOT reset by truncate), but every test mints fresh
-// random-id users, so the per-account counters never collide across tests.
+// the truncate helper CASCADE-resets between tests. The per-account submission
+// throttle counts through the SHARED store since MOTIR-2598, so its state is a
+// TABLE and gets truncated between cases like every other row; every test also
+// still mints fresh random-id users, so the per-account counters never collide.
+
+/** The budget env pair `publicSubmitBudget()` reads — cleared around every case. */
+const SUBMIT_BUDGET_ENVS = [
+  'MOTIR_PUBLIC_SUBMIT_RATE_LIMIT',
+  'MOTIR_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS',
+];
+
+/**
+ * The window the SIX-submission case aligns against — its own, larger than the
+ * shared `ALIGNED_WINDOW_MS` the two-submission cases use.
+ *
+ * Sized from measurement, the way `rateLimitWindow.ts` sizes its own: the
+ * six-submission section is **276 ms worst-of-5** against a real Postgres
+ * (2026-08-10, MOTIR-2598) — each submission is a full triage create, so this is
+ * the heaviest counted section in either converted suite. 8 s is a ~29× margin
+ * over that worst case: the remaining failure would need a runner 29× slower
+ * than measured, not an unlucky phase.
+ *
+ * The ceiling on this number is `testTimeout` (15 s): aligning costs up to a
+ * whole window, so a larger one would trade a rare flake for a routine timeout.
+ */
+const SIX_SUBMISSION_WINDOW_MS = 8_000;
 
 beforeEach(async () => {
   await truncateAuthTables();
+  await truncateRateLimitCounters();
+  for (const key of SUBMIT_BUDGET_ENVS) delete process.env[key];
+});
+
+afterEach(() => {
+  for (const key of SUBMIT_BUDGET_ENVS) delete process.env[key];
 });
 
 afterAll(async () => {
@@ -122,10 +152,20 @@ describe('publicProjectsService.submitPublicRequest', () => {
   });
 
   it('throttles a single account after the per-account submission limit (429)', async () => {
+    // ⚠️ PIN THE WINDOW, THEN ALIGN TO IT. The throttle counts through the shared
+    // store, which buckets on an EPOCH-ALIGNED grid, so the window does not open
+    // at the first submission: six submissions that straddle a boundary reset the
+    // counter mid-case and the sixth is accepted. That flake needs unlucky PHASE
+    // rather than a slow runner — invisible locally, green on every rerun
+    // (MOTIR-2101 / MOTIR-2224). The shipped window is ten MINUTES, which no test
+    // can align against, so the case shrinks it through the same env pair a
+    // deployment uses and keeps the shipped limit of 5.
+    process.env['MOTIR_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS'] = String(SIX_SUBMISSION_WINDOW_MS);
     const fx = await makePublicProjectFixture('Throttle Co');
     const spammer = await createTestUser(); // a dedicated account so the counter is isolated
 
-    // The first SUBMISSION_RATE_LIMIT (5) succeed.
+    // The first DEFAULT_PUBLIC_SUBMIT_RATE_LIMIT (5) succeed.
+    await waitForWindowBoundary(SIX_SUBMISSION_WINDOW_MS);
     for (let i = 0; i < 5; i++) {
       await publicProjectsService.submitPublicRequest(fx.projectId, spammer.id, {
         kind: 'task',
@@ -139,6 +179,76 @@ describe('publicProjectsService.submitPublicRequest', () => {
         title: 'One too many',
       }),
     ).rejects.toBeInstanceOf(PublicSubmissionRateLimitedError);
+  });
+
+  it('the throttle counts in the SHARED table, and Retry-After names the window’s end', async () => {
+    // Two claims in one case because they are the same swap: the tally is a row
+    // (so a second Fly machine inherits it — the `limit x instances` defect
+    // MOTIR-2598 closes), and the header the route sends is now derived from the
+    // fixed window's reset rather than from the oldest attempt's age.
+    process.env['MOTIR_PUBLIC_SUBMIT_RATE_LIMIT'] = '1';
+    process.env['MOTIR_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
+    const fx = await makePublicProjectFixture('Shared Co');
+    const spammer = await createTestUser();
+
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    await publicProjectsService.submitPublicRequest(fx.projectId, spammer.id, {
+      kind: 'task',
+      title: 'The one allowed',
+    });
+
+    const refused = await publicProjectsService
+      .submitPublicRequest(fx.projectId, spammer.id, { kind: 'task', title: 'Refused' })
+      .catch((err: unknown) => err);
+    expect(refused).toBeInstanceOf(PublicSubmissionRateLimitedError);
+    // Never below 1 (the route puts it straight into `Retry-After`), and never
+    // beyond the window it names.
+    const retryAfter = (refused as PublicSubmissionRateLimitedError).retryAfterSeconds;
+    expect(retryAfter).toBeGreaterThanOrEqual(1);
+    expect(retryAfter).toBeLessThanOrEqual(Math.ceil(ALIGNED_WINDOW_MS / 1000));
+
+    // The counter is a row, not this process's memory: clearing the table restores
+    // the budget. Under the module-level Map it replaced, it would not have.
+    const keys = await db.$queryRawUnsafe<Array<{ key: string }>>(
+      'SELECT key FROM "rate_limit_counter"',
+    );
+    expect(keys.some((r) => r.key.startsWith('public-submit:'))).toBe(true);
+    // ...and the submitting account is hashed into it, never stored in the clear.
+    for (const row of keys) expect(row.key).not.toContain(spammer.id);
+
+    await truncateRateLimitCounters();
+    await expect(
+      publicProjectsService.submitPublicRequest(fx.projectId, spammer.id, {
+        kind: 'task',
+        title: 'Allowed again',
+      }),
+    ).resolves.toBeTruthy();
+  });
+
+  it('is keyed per ACCOUNT — one spammer does not spend another submitter’s budget', async () => {
+    process.env['MOTIR_PUBLIC_SUBMIT_RATE_LIMIT'] = '1';
+    process.env['MOTIR_PUBLIC_SUBMIT_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
+    const fx = await makePublicProjectFixture('Per Account Co');
+    const spammer = await createTestUser();
+    const bystander = await createTestUser();
+
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    await publicProjectsService.submitPublicRequest(fx.projectId, spammer.id, {
+      kind: 'task',
+      title: 'Mine',
+    });
+    await expect(
+      publicProjectsService.submitPublicRequest(fx.projectId, spammer.id, {
+        kind: 'task',
+        title: 'Mine again',
+      }),
+    ).rejects.toBeInstanceOf(PublicSubmissionRateLimitedError);
+    await expect(
+      publicProjectsService.submitPublicRequest(fx.projectId, bystander.id, {
+        kind: 'task',
+        title: 'Someone else entirely',
+      }),
+    ).resolves.toBeTruthy();
   });
 });
 
