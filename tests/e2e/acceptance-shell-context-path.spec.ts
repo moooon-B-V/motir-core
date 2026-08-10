@@ -1,7 +1,8 @@
 import { expect } from '@playwright/test';
 import { test } from './_helpers/acceptance-video';
-import { resetDatabase } from './_helpers/db-reset';
+import { db, resetDatabase } from './_helpers/db-reset';
 import { signUp, createFirstProject, createWorkspace } from './_helpers/shell-session';
+import { ORGANIZATION_ROLE } from '@/lib/organizations/roles';
 
 // Story MOTIR-2554 — the shell's context path (Subtask MOTIR-2559).
 //
@@ -28,6 +29,37 @@ import { signUp, createFirstProject, createWorkspace } from './_helpers/shell-se
 
 test.describe.configure({ timeout: 240_000 });
 
+/**
+ * Put the signed-up account on a PAID tier — a property of this LANE, not a
+ * shortcut around the product.
+ *
+ * The receipt's third chapter needs a SECOND workspace, because that is what
+ * makes the middle crumb appear. This lane runs cloud-on
+ * (playwright.acceptance.config.ts sets MOTIR_CLOUD=true), so §4's entitlement
+ * gates are live — and `free` caps an org at ONE workspace
+ * (`PM_ENTITLEMENTS.free.maxWorkspaces = 1`), so `assertWithinWorkspaceCap`
+ * refuses the create and the dialog just stays open. (Observed: the chapter
+ * failed here with EntitlementExceededError while the same journey passed in
+ * the cloud-OFF functional lane.) A multi-workspace Motir account on cloud IS a
+ * paid account, so the fixture models one instead of working around the gate.
+ *
+ * `aiIncludedSeat` is the shipped lever for exactly that — `pmTierForOrg` reads
+ * it as "a paid Motir AI plan bundles a Motir seat → caps lifted" (ADR §4,
+ * amended 8.1.22), the same `scaled` outcome a purchased scaled-tracker
+ * subscription gives. Set on the ROW, because that is where the shipped code
+ * reads it from. Same precedent, same lane: `_helpers/cli-connect-seed.ts`.
+ */
+async function markAccountPaid(email: string): Promise<void> {
+  const user = await db.user.findFirstOrThrow({ where: { email } });
+  const membership = await db.organizationMembership.findFirstOrThrow({
+    where: { userId: user.id, role: ORGANIZATION_ROLE.owner },
+  });
+  await db.organization.update({
+    where: { id: membership.organizationId },
+    data: { aiIncludedSeat: true },
+  });
+}
+
 test('a person reads where they are from one row, and it follows them', async ({
   page,
   chapter,
@@ -44,7 +76,9 @@ test('a person reads where they are from one row, and it follows them', async ({
   const workspace = bar.getByRole('button', { name: 'Switch workspace' });
 
   await chapter('Where am I? The bar says: the organization, then the project', async () => {
-    await signUp(page, `acceptance-context-path-${Date.now()}@example.com`);
+    const email = `acceptance-context-path-${Date.now()}@example.com`;
+    await signUp(page, email);
+    await markAccountPaid(email);
     await createFirstProject(page, 'Mobile App');
 
     await expect(bar.getByRole('button', { name: 'Organization menu' })).toBeVisible();
