@@ -174,6 +174,46 @@ export const WORK_ITEM_TYPE_META: Record<WorkItemTypeDto, WorkItemTypeMeta> = {
 };
 
 /**
+ * The four GROUPS the canonical order falls into (MOTIR-2631's design, recorded
+ * in ADR Amendment 1 §1b). Presentation only: the picker renders one as a
+ * section header at each transition.
+ *
+ * The key is an i18n key under `labels.workItemTypeGroup.*`, never a display
+ * string — the header is user-visible and needs its `zh` twin like every other
+ * label.
+ */
+export type WorkItemTypeGroupKey = 'build' | 'author' | 'investigate' | 'govern';
+
+/**
+ * Which group each type belongs to. A total `Record`, for the same reason
+ * {@link WORK_ITEM_TYPE_META} is one: a fifteenth member must not be able to
+ * land without someone deciding where in the menu a reader will look for it.
+ *
+ * ⚠️ These groups are a CONSEQUENCE of `WORK_ITEM_TYPES`' order, not a second
+ * ordering laid over it — each is a CONTIGUOUS RUN of that list, which is what
+ * lets the picker render headers without reordering anything and lets a
+ * consumer ignore them entirely and still show the canonical sequence. The
+ * contiguity is asserted in tests rather than trusted, because nothing in the
+ * type system says a `Record` has to describe runs.
+ */
+export const WORK_ITEM_TYPE_GROUP: Record<WorkItemTypeDto, WorkItemTypeGroupKey> = {
+  code: 'build',
+  design: 'build',
+  test: 'build',
+  content: 'author',
+  copy: 'author',
+  translate: 'author',
+  research: 'investigate',
+  review: 'investigate',
+  verification: 'investigate',
+  decision: 'govern',
+  deploy: 'govern',
+  manual: 'govern',
+  legal: 'govern',
+  chore: 'govern',
+};
+
+/**
  * The chip tint BACKGROUND for a type — a `color-mix` of the type's saturated
  * hue into the page background, so one `--el-type-*` token yields both the
  * glyph hue and the chip tint (no separate `--el-tint-*` pairs). The grey

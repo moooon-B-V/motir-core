@@ -428,11 +428,15 @@
       "design": "设计",
       "test": "测试",
       "content": "内容",
+      "copy": "文案",
+      "translate": "翻译",
       "research": "调研",
       "review": "评审",
+      "verification": "验证",
       "decision": "决策",
       "deploy": "部署",
       "manual": "手动",
+      "legal": "法务",
       "chore": "杂务"
     },
     "executor": {
@@ -465,6 +469,12 @@
       "in_review": "评审中",
       "done": "已完成",
       "cancelled": "已取消"
+    },
+    "workItemTypeGroup": {
+      "build": "构建",
+      "author": "撰写",
+      "investigate": "调查与核查",
+      "govern": "治理与运维"
     }
   },
   "issues": {
