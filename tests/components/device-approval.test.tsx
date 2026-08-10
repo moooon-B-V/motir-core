@@ -136,9 +136,14 @@ describe('/device — state 2: confirm (design Panels 3 + 4)', () => {
     // The code the SERVER matched, echoed in the grouped display form.
     expect(screen.getByText('K4TP-9RXM')).toBeTruthy();
     // Scope NAMES, reused from the Tokens catalog rather than duplicated.
-    expect(screen.getByText('Read everything')).toBeTruthy();
+    // The rows are DERIVED from `CLI_TOKEN_GRANT` through the shared presenter
+    // (MOTIR-2579), and their names are the shipped `permissions.*` labels — the
+    // same strings Roles & permissions renders. Asserting the labels rather than
+    // a count is what would catch this screen drifting into its own vocabulary.
+    expect(screen.getByText('View project')).toBeTruthy();
     expect(screen.getByText('Edit work items')).toBeTruthy();
-    expect(screen.getByText('Connect integrations')).toBeTruthy();
+    expect(screen.getByText('Add comments')).toBeTruthy();
+    expect(screen.getByText('Run AI planning')).toBeTruthy();
     expect(screen.getByText('Not: archive or delete work items, members, billing.')).toBeTruthy();
     expect(screen.getByText('In 90 days')).toBeTruthy();
   });
