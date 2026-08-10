@@ -62,7 +62,7 @@ describe('accountSettingsNav registry — totality (route ↔ entry, mistake #29
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('has no reserved "Soon" placeholders — every slot is now a real route (API tokens 7.8.3, Appearance 7.3.58, Profile 8.8.24)', () => {
+  it('has no reserved "Soon" placeholders — every slot is now a real route (Tokens 7.8.3, Appearance 7.3.58, Profile 8.8.24)', () => {
     const placeholders = ACCOUNT_SETTINGS_NAV.filter((e) => e.placeholder).map((e) => e.id);
     expect(placeholders).toEqual([]);
     // Every entry is a real route with a non-empty href in the real-route set.

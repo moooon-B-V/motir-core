@@ -7,8 +7,8 @@ import { ApiDocsLinkPanel } from '../_components/ApiDocsLinkPanel';
 import { ApiTokensManager } from '../_components/ApiTokensManager';
 import { ConnectCliPanel } from '../_components/ConnectCliPanel';
 
-// The API tokens pane of the account-settings area (Story 7.8 · Subtask 7.8.3) —
-// the Security → API tokens surface (design `account-settings.mock.html` Panels
+// The Tokens pane of the account-settings area (Story 7.8 · Subtask 7.8.3) —
+// the Security → Tokens surface (design `account-settings.mock.html` Panels
 // 3–8), the human face of the PAT substrate (7.8.1) the MCP bearer gate (7.8.4)
 // consumes. A server component (gate + the initial reads); the `ApiTokensManager`
 // client island owns the create / revoke / copy interactions and its own

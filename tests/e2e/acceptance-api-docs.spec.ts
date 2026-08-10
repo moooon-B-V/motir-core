@@ -191,14 +191,14 @@ test('a developer finds the API reference, reads an operation, copies its exampl
   });
 
   // ── 5 — the OTHER door, from inside the product ───────────────────────────
-  await chapter('And from inside: the door on the API-tokens page', async () => {
+  await chapter('And from inside: the door on the Tokens page', async () => {
     const seed = await seedCliConnect(`api-docs-${Date.now()}@example.com`);
     await signIn(page, seed.email, seed.password);
     await page.goto('/settings/account/tokens');
-    // `exact` because the EMPTY state's own heading — "No API tokens yet" — is
+    // `exact` because the EMPTY state's own heading — "No tokens yet" — is
     // also on this page for a user who has minted none, and a substring match
     // resolves to both.
-    await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
     await beat();
 
     // THE IN-APP DOOR — above the CLI panel and the token manager, because the

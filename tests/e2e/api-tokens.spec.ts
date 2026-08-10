@@ -1,4 +1,4 @@
-// E2E: the Settings → Account → API tokens pane (Story 7.8 · Subtask 7.8.3) —
+// E2E: the Settings → Account → Tokens pane (Story 7.8 · Subtask 7.8.3) —
 // the human half of the PAT lifecycle, proven end-to-end over the real stack.
 // It drives the acceptance recipe: create → shown-once copy → revoke → the
 // muted revoked-state render, plus the secret-never-reappears guarantee.
@@ -32,17 +32,17 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
   await signUp(page, 'tokens-e2e@example.com');
 
   await page.goto('/settings/account/tokens');
-  // `exact` — "API tokens" is a substring of the empty-state heading "No API
+  // `exact` — "Tokens" is a substring of the empty-state heading "No API
   // tokens yet", which is also an <h2>; the page-head is the exact match.
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   // Empty state — no tokens yet.
-  await expect(page.getByRole('heading', { name: 'No API tokens yet' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No tokens yet' })).toBeVisible();
 
   // CREATE — open the modal from the empty state, name the token, submit.
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const createDialog = page.getByRole('dialog');
-  await expect(createDialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(createDialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await createDialog.getByLabel('Label').fill('claude-code');
 
   const createResp = page.waitForResponse(
@@ -94,11 +94,11 @@ test('create with a chosen expiry → the list shows the expiry', async ({ page 
   await signUp(page, 'tokens-expiry-e2e@example.com');
 
   await page.goto('/settings/account/tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('ci-token');
 
   // Pick a non-default expiry via the Expires combobox (default is 90 days).
@@ -133,11 +133,11 @@ test('create with a custom scope selection → shown-once + the list shows the g
   await signUp(page, 'tokens-scopes-e2e@example.com');
 
   await page.goto('/settings/account/tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('scoped-custom');
 
   // The Permissions picker opens on the default grant (all-on-except-delete):
@@ -194,11 +194,11 @@ test('create a default token → "Standard", and delete is off', async ({ page }
   await signUp(page, 'tokens-default-e2e@example.com');
 
   await page.goto('/settings/account/tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
   await dialog.getByLabel('Label').fill('scoped-default');
 
   // Delete is off by default — the deliberate one-scope opt-in.
@@ -273,11 +273,11 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   await page.setViewportSize({ width: 1280, height: 700 });
 
   await page.goto('/settings/account/tokens');
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 
   await page.getByRole('button', { name: 'Create token' }).first().click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog.getByRole('heading', { name: 'Create API token' })).toBeVisible();
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
 
   // The tall variant: the Organization picker only renders at ≥2 orgs.
   await expect(dialog.getByRole('combobox', { name: 'Organization' })).toBeVisible();

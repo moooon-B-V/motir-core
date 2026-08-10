@@ -15,7 +15,7 @@
 // ⚠️ EVERY NAVIGATION IS A CLICK, never a `goto` to an MCP docs URL. The whole
 // premise of this story is that the MCP was undiscoverable from outside the
 // repository, so a spec that types `/docs/mcp` would pass while the door was
-// bricked up. The rail row and the API-tokens link are the only two things in
+// bricked up. The rail row and the Tokens link are the only two things in
 // the product that point here, and driving both is the only assertion that
 // catches a page that shipped unreachable.
 //
@@ -175,11 +175,11 @@ test('a reader with no session reaches the MCP page from the rail and leaves abl
     await beat();
   });
 
-  await chapter('And from inside: the door on the API-tokens page', async () => {
+  await chapter('And from inside: the door on the Tokens page', async () => {
     const seed = await seedCliConnect(`mcp-docs-${Date.now()}@example.com`);
     await signIn(page, seed.email, seed.password);
     await page.goto('/settings/account/tokens');
-    await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
     await beat();
 
     // ⚠️ THE HANDOFF THIS STORY EXISTS TO FIX. This link used to leave the
