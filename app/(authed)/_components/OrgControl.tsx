@@ -21,7 +21,6 @@ import {
 export interface OrgControlActiveOrg {
   id: string;
   name: string;
-  slug: string;
   role: string;
 }
 

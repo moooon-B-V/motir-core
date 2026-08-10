@@ -81,7 +81,6 @@ export default async function AuthedLayout({ children }: { children: ReactNode }
     ? {
         id: currentOrg.organization.id,
         name: currentOrg.organization.name,
-        slug: currentOrg.organization.slug,
         role: currentOrg.role,
       }
     : null;

@@ -3865,8 +3865,6 @@
       "youreOwner": "You’re an owner",
       "youreAdmin": "You’re an admin",
       "nameLabel": "Organization name",
-      "urlLabel": "Organization URL",
-      "urlHint": "Used in links to this organization. Lowercase letters, numbers and hyphens.",
       "save": "Save changes",
       "saved": "Organization updated",
       "saveError": "Couldn’t save changes",

@@ -3865,8 +3865,6 @@
       "youreOwner": "你是所有者",
       "youreAdmin": "你是管理员",
       "nameLabel": "组织名称",
-      "urlLabel": "组织网址",
-      "urlHint": "用于指向该组织的链接。仅限小写字母、数字和连字符。",
       "save": "保存更改",
       "saved": "组织已更新",
       "saveError": "无法保存更改",

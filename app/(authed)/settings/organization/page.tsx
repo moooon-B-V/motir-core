@@ -111,7 +111,6 @@ export default async function OrganizationSettingsPage() {
       <OrgGeneralCard
         orgId={org.id}
         initialName={org.name}
-        slug={org.slug}
         role={current.role}
         workspaceCount={orgWorkspaces.length}
         memberCount={memberCount}
