@@ -1129,7 +1129,14 @@
     "childrenViewLabel": "Children view",
     "childrenGraphAria": "Child work items as a dependency graph",
     "childrenGraphUnavailableTitle": "The graph couldn’t be drawn",
-    "childrenGraphUnavailableDescription": "Switch back to List to see this item’s children."
+    "childrenGraphUnavailableDescription": "Switch back to List to see this item’s children.",
+    "quickViewEditField": "Edit {field}",
+    "quickViewCloseField": "Close {field}",
+    "quickViewFieldSaving": "Saving",
+    "quickViewFieldSaved": "Saved",
+    "quickViewStaleReloaded": "This item changed while the quick view was open. The fields below have been reloaded.",
+    "sprintUpdateFailed": "Couldn’t update the sprint. Try again.",
+    "quickViewMoreFields": "{count, plural, one {# more field} other {# more fields}}"
   },
   "comments": {
     "title": "Activity",

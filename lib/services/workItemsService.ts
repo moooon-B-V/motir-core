@@ -24,6 +24,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { componentRepository } from '@/lib/repositories/componentRepository';
+import { estimationService } from '@/lib/services/estimationService';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -3682,10 +3683,45 @@ export const workItemsService = {
     ctx: ServiceContext,
     locale: Locale,
   ): Promise<QuickViewData> {
-    const [detail, members] = await Promise.all([
+    // MOTIR-2562 — the peek's rail is a WRITE surface, so this read also carries
+    // the editor inputs. WHAT EACH COSTS, so the next reader can see the price of
+    // a payload that is on the hot path of every row click:
+    //   • `id`, the raw field values and the WORKFLOW ride `detail` (the existing
+    //     aggregate) — free.
+    //   • `members` was already being read here for the name lookup — free.
+    //   • `sprints` and `projectComponents` are the only NEW queries: two
+    //     project-scoped list reads, added to this same Promise.all so they cost
+    //     one round trip rather than lengthening the chain.
+    // `componentRepository.listByProject` is the leaf, not
+    // `componentsService.listComponents` — the service form takes the project
+    // KEY (not known until `detail` resolves), re-resolves the project and
+    // re-asserts `canBrowse`, all of which `getIssueDetail` has already done in
+    // this same call. Reading the leaf and mapping it is the pattern
+    // `getIssueDetail` itself uses for the item's own components.
+    // Sprints come off the LEAF and are projected to the four fields
+    // `SprintPicker` reads. `sprintsService.listByProject` would return the full
+    // `SprintDto`, but it runs one `countSprintIssues` query PER SPRINT to fill
+    // `issueCount` — 1+N on a `no-store` payload fetched on every row click, for
+    // a field the picker never reads. (It also re-asserts `project:browse`,
+    // which `getIssueDetail` has already done in this same call.)
+    const [detail, members, sprintRows, componentRows, estimationConfig] = await Promise.all([
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
+      sprintRepository.listByProject(projectId, ctx.workspaceId),
+      componentRepository.listByProject(projectId),
+      // MOTIR-2593 — the estimation config the composed `EstimateBadge` needs.
+      // One primary-key project read, in the same round trip; without it the
+      // badge falls back to a read-only default and is silently inert on every
+      // peek surface.
+      estimationService.getEstimationConfig(projectId, ctx),
     ]);
+    const sprints = sprintRows.map((s) => ({
+      id: s.id,
+      name: s.name,
+      state: s.state,
+      sequence: s.sequence,
+    }));
+    const projectComponents = componentRows.map(toComponentDto);
     // Resolve the committed sprint's display name (8.8.8) — the one rail field
     // not carried by the detail aggregate. Epics span sprints, so the rail omits
     // the field for them (Jira-faithful, mirroring the detail rail); skip the
@@ -3728,6 +3764,9 @@ export const workItemsService = {
       prefix,
       pullRequests,
       canEdit,
+      sprints,
+      projectComponents,
+      estimationConfig,
     );
   },
 

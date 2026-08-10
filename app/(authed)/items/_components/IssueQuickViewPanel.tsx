@@ -7,10 +7,10 @@ import {
   ArrowRight,
   Bot,
   Calendar,
+  ChevronDown,
   ChevronRight,
   Clock,
   Component as ComponentIcon,
-  Gauge,
   Goal,
   SearchX,
   User,
@@ -24,14 +24,33 @@ import { WorkItemTitle } from '@/components/markdown/WorkItemTitle';
 import { ReadinessBadge } from '@/components/ui/ReadinessBadge';
 import { WorkItemPlanEntrance } from '@/components/planning/WorkItemPlanEntrance';
 import { Pill } from '@/components/ui/Pill';
-import { ValueChip } from '@/components/ui/MultiSelectPicker';
+import { MultiSelectPicker, ValueChip } from '@/components/ui/MultiSelectPicker';
 import { Avatar, AssigneeValue, PriorityValue, StatusValue } from './issueCellPrimitives';
 import { QuickViewCloseButton } from './QuickViewCloseButton';
+import { StatusPicker } from '@/components/issues/StatusPicker';
+import { AssigneePicker } from '@/components/issues/AssigneePicker';
+import { SprintPicker } from '@/components/issues/SprintPicker';
+import { ParentPicker } from '@/components/issues/ParentPicker';
+import { setWorkItemSprint } from '@/components/issues/actions/workItemActionsClient';
+import { changeStatusAction } from '../[key]/edit/actions';
+import type { IssueType } from '@/lib/issues/parentRules';
+import { EstimateBadge } from '@/components/issues/EstimateBadge';
+import { EstimationConfigProvider } from '@/components/issues/EstimationConfigProvider';
+import { PriorityPicker } from '@/components/issues/PriorityPicker';
+import { WorkItemTypePicker } from '@/components/issues/WorkItemTypePicker';
+import { ExecutorPicker } from '@/components/issues/ExecutorPicker';
+import { DatePicker } from '@/components/ui/DatePicker';
+import { Input } from '@/components/ui/Input';
+import { EditableRailField, RailStaleNotice, useQuickViewRailEdit } from './QuickViewRailEdit';
+import { useLabelEditing, useComponentEditing } from './fieldChipEditing';
+import { useCustomFieldEditing } from './customFieldEditing';
+import { useProjectAccess } from '../../_components/ProjectAccessProvider';
+import { LABELS_PER_ISSUE_LIMIT } from '@/lib/labels/constants';
 import { WORK_ITEM_TYPE_META } from '@/lib/issues/workItemTypeMeta';
-import { isTypeableKind } from '@/lib/issues/executorDefaults';
+import { defaultExecutorForType, isTypeableKind } from '@/lib/issues/executorDefaults';
 import { showsReadiness } from '@/lib/issues/readinessVisibility';
-import { labelTint } from '@/lib/labels/labelTint';
 import { formatDate } from '@/lib/utils/datetime';
+import { formatDurationMinutes } from '@/lib/utils/duration';
 import type { ExecutorDto } from '@/lib/dto/workItems';
 import type { CustomFieldWithValueDto } from '@/lib/dto/customFieldValues';
 import type { Locale } from '@/lib/i18n/locales';
@@ -64,7 +83,17 @@ export type { QuickViewData };
 // roadmap-canvas quick-view, which drives the peek from local state. Omitted on
 // /items · /ready · /boards, where the close clears `?peek` via the shipped
 // URL-driven default (see QuickViewCloseButton).
-type IssueQuickViewPanelProps = { onClose?: () => void } & (
+type IssueQuickViewPanelProps = {
+  onClose?: () => void;
+  /**
+   * Fired ONCE, the first time a rail edit is confirmed (MOTIR-2563). The driver
+   * uses it to decide whether the surface behind the modal needs re-reading when
+   * the peek closes — the design's panel-12 decision: re-read on CLOSE, not per
+   * edit (that shape caused `bug-inline-status-revert-on-second-edit`), and not
+   * at all when nothing changed.
+   */
+  onEdited?: () => void;
+} & (
   | { state: 'loading'; peekKey: string }
   | { state: 'notfound'; peekKey: string }
   | { state: 'ready'; data: QuickViewData }
@@ -101,6 +130,55 @@ function RailField({ label, children }: { label: string; children: ReactNode }) 
   );
 }
 
+/**
+ * One custom-field rail row (MOTIR-2599). Its own chevron, because a custom
+ * field's editor is per-TYPE and lives in the shared hook — this is the peek's
+ * chrome around it, the way `FieldCard` is the detail page's. Read mode uses the
+ * peek's condensed value grammar, which is deliberately denser than the card's.
+ */
+function CustomRailRow({
+  field,
+  edit,
+  render,
+}: {
+  field: CustomFieldWithValueDto;
+  edit: ReturnType<typeof useCustomFieldEditing>;
+  render: (f: CustomFieldWithValueDto) => ReactNode;
+}) {
+  const t = useTranslations('issueViews');
+  const { can } = useProjectAccess();
+  const canEdit = can('work_item:edit');
+  const editing = edit.editingId === field.id;
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <dt className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-(--el-text-secondary) uppercase">
+        {field.label}
+        {canEdit ? (
+          <button
+            type="button"
+            onClick={() => edit.onToggle(field, editing)}
+            aria-label={
+              editing
+                ? t('quickViewCloseField', { field: field.label })
+                : t('quickViewEditField', { field: field.label })
+            }
+            aria-expanded={editing}
+            className="ml-auto inline-flex rounded-(--radius-control) p-0.5 text-(--el-text-faint) transition-colors hover:text-(--el-text-secondary) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+          >
+            <ChevronDown
+              className={`h-3.5 w-3.5 transition-transform ${editing ? 'rotate-180' : ''}`}
+              aria-hidden
+            />
+          </button>
+        ) : null}
+      </dt>
+      <dd className="m-0 flex min-w-0 items-center gap-1.5 text-sm text-(--el-text-secondary)">
+        {editing ? edit.renderEditor(field) : render(field)}
+      </dd>
+    </div>
+  );
+}
+
 /** A pulsing skeleton bar (the loading state's placeholders). */
 function Sk({ className }: { className?: string }) {
   return (
@@ -117,6 +195,39 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
   // The expanded rail's empty custom fields hide behind a read-only "Show more
   // fields (N)" disclosure (8.8.8, mirroring the detail rail 5.3.7).
   const [showAllCustom, setShowAllCustom] = useState(false);
+  // Called above the early returns — hooks cannot be conditional, so the rail's
+  // edit state takes a nullable payload and is inert until the peek is `ready`.
+  const edit = useQuickViewRailEdit(props.state === 'ready' ? props.data : null, props.onEdited);
+  // MOTIR-2566 — the SAME hooks the detail rail's Labels / Components cards use.
+  // Called above the early returns (hooks cannot be conditional) and inert until
+  // the peek is `ready`. `active` is this surface's own open/closed state, which
+  // is why the hook takes it rather than owning it.
+  const ready = props.state === 'ready' ? props.data : null;
+  const labelEdit = useLabelEditing({
+    workItemId: ready?.id ?? '',
+    projectKey: ready?.projectIdentifier ?? '',
+    initialLabels: ready?.labels ?? [],
+    active: edit.editing === 'labels',
+  });
+  // MOTIR-2599 — the SAME per-type editors and commit paths the detail rail
+  // runs, via the shared hook. This surface keeps its own condensed value
+  // grammar (`renderCustomValue`), which is deliberately denser than the
+  // detail card's.
+  const customEdit = useCustomFieldEditing({
+    workItemId: ready?.id ?? '',
+    fields: ready?.customFields ?? [],
+    members: ready?.members ?? [],
+  });
+  const componentEdit = useComponentEditing({
+    workItemId: ready?.id ?? '',
+    initialComponents: ready?.components ?? [],
+    projectComponents: ready?.projectComponents ?? [],
+    toOption: (c: { id: string; name: string }) => ({
+      id: c.id,
+      label: c.name,
+      glyph: ComponentIcon,
+    }),
+  });
   const numberFormat = useMemo(
     () => new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }),
     [locale],
@@ -241,20 +352,31 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
 
   // ── READY (panel 2) — the populated peek ──────────────────────────────────
   const { data } = props;
+  // The rail renders the OPTIMISTIC view for the rows this card edits; every
+  // other row still reads `data` directly (untouched by MOTIR-2563).
+  const view = edit.effective ?? data;
   // Custom fields split the detail-rail way (5.3.7): the VALUED ones render as
   // rows, the empty ones hide behind the read-only "Show more fields (N)".
-  const valuedCustom = data.customFields.filter((f) => f.value !== null);
-  const emptyCustom = data.customFields.filter((f) => f.value === null);
+  // Override-applied, so an optimistic commit moves a field from `empty` to
+  // `valued` immediately rather than after a re-read.
+  const valuedCustom = customEdit.valued;
+  const emptyCustom = customEdit.empty;
   // Type/Executor are leaf-only (epic/story have no work type — mirror the
   // detail rail). Sprint is omitted for epics (they span sprints, Jira-faithful);
   // its empty label is status-aware (a done/cancelled item is excluded from the
   // backlog → "None", otherwise "Backlog"), matching CoreFieldsPanel.
   const showWorkType = isTypeableKind(data.kind);
-  const TypeGlyph = data.type ? WORK_ITEM_TYPE_META[data.type].icon : null;
-  const ExecutorGlyph = data.executor ? EXECUTOR_GLYPH[data.executor] : null;
-  const sprintEmptyLabel = data.statusCategory === 'done' ? t('none') : t('backlog');
+  // Derived from the OPTIMISTIC view, so an executor/type change repaints its
+  // glyph with the value the user just picked rather than the served one.
+  const ViewTypeGlyph = view.type ? WORK_ITEM_TYPE_META[view.type].icon : null;
+  const ViewExecutorGlyph = view.executor ? EXECUTOR_GLYPH[view.executor] : null;
+  const sprintEmptyLabel = view.statusCategory === 'done' ? t('none') : t('backlog');
   return (
-    <>
+    // MOTIR-2593 — the peek provides its OWN estimation config, from the payload.
+    // Only three pages mount `EstimationConfigProvider` and none of them wraps
+    // this modal, so without this the composed `EstimateBadge` silently falls
+    // back to a read-only default and is inert on every peek surface.
+    <EstimationConfigProvider config={data.estimation} canEdit={data.estimation.canEdit}>
       <header className="flex flex-none items-center gap-2.5 border-b border-(--el-border) py-3.5 pr-4 pl-5">
         <IssueTypeIcon type={data.kind} className="h-[18px] w-[18px] shrink-0" />
         <Link
@@ -405,9 +527,42 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
             the fixed-height modal; built-in fields always render (muted "None"
             when empty), custom fields split valued / "Show more". */}
         <dl className="flex min-w-0 flex-col gap-4 overflow-y-auto border-l border-(--el-border) bg-(--el-surface-soft) px-5 py-6">
-          <RailField label={t('status')}>
-            <StatusValue category={data.statusCategory} label={data.statusLabel} />
-          </RailField>
+          {/* Not a field error — the whole payload is behind, so the notice sits
+              ABOVE rows that may all have moved (design panel 9). */}
+          {edit.stale ? <RailStaleNotice /> : null}
+          {/* Status has its OWN action — it stopped being a patch field when
+              finding #46 closed, so it goes through the gated `changeStatusAction`
+              and the picker offers only the LEGAL targets under the project's
+              policyMode. */}
+          <EditableRailField
+            label={t('status')}
+            fieldKey="status"
+            edit={edit}
+            control={
+              <StatusPicker
+                statuses={view.workflow.statuses}
+                transitions={view.workflow.transitions}
+                policyMode={view.workflow.policyMode}
+                value={view.status}
+                autoOpen
+                onClose={edit.close}
+                onChange={(toStatusKey) => {
+                  const next = view.workflow.statuses.find((st) => st.key === toStatusKey);
+                  void edit.commitVia(
+                    'status',
+                    {
+                      status: toStatusKey,
+                      statusLabel: next?.label ?? toStatusKey,
+                      statusCategory: next?.category ?? view.statusCategory,
+                    },
+                    () => changeStatusAction({ id: view.id, toStatusKey }),
+                  );
+                }}
+              />
+            }
+          >
+            <StatusValue category={view.statusCategory} label={view.statusLabel} />
+          </EditableRailField>
 
           {/* Work Type + Executor — leaf-only (Story 2.7). The faint value glyph
               follows the Estimate/Due grammar (NOT the coloured type chip — the
@@ -415,153 +570,395 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
               in the header (IssueTypeIcon), so the rail adds only the work type. */}
           {showWorkType ? (
             <>
-              <RailField label={t('type')}>
-                {data.type && TypeGlyph ? (
+              <EditableRailField
+                label={t('type')}
+                fieldKey="workItemType"
+                edit={edit}
+                control={
+                  <WorkItemTypePicker
+                    value={view.type}
+                    autoOpen
+                    onClose={edit.close}
+                    onChange={(type) => void edit.commit('workItemType', { type }, { type })}
+                  />
+                }
+              >
+                {view.type && ViewTypeGlyph ? (
                   <>
-                    <TypeGlyph
+                    <ViewTypeGlyph
                       className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)"
                       aria-hidden
                     />
-                    <span className="truncate">{tl(`workItemType.${data.type}`)}</span>
+                    <span className="truncate">{tl(`workItemType.${view.type}`)}</span>
                   </>
                 ) : (
                   <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}
-              </RailField>
-              <RailField label={t('executor')}>
-                {data.executor && ExecutorGlyph ? (
+              </EditableRailField>
+              <EditableRailField
+                label={t('executor')}
+                fieldKey="executor"
+                edit={edit}
+                control={
+                  view.type == null ? undefined : (
+                    <ExecutorPicker
+                      value={view.executor ?? defaultExecutorForType(view.type)}
+                      onChange={(executor) => {
+                        edit.close();
+                        void edit.commit('executor', { executor }, { executor });
+                      }}
+                    />
+                  )
+                }
+              >
+                {view.executor && ViewExecutorGlyph ? (
                   <>
-                    <ExecutorGlyph
+                    <ViewExecutorGlyph
                       className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)"
                       aria-hidden
                     />
-                    <span className="truncate">{tl(`executor.${data.executor}`)}</span>
+                    <span className="truncate">{tl(`executor.${view.executor}`)}</span>
                   </>
                 ) : (
                   <span className="text-(--el-text-secondary)">{t('none')}</span>
                 )}
-              </RailField>
+              </EditableRailField>
             </>
           ) : null}
 
-          <RailField label={t('priority')}>
-            <PriorityValue priority={data.priority} />
-          </RailField>
-          <RailField label={t('assignee')}>
-            <AssigneeValue name={data.assigneeName} />
-          </RailField>
+          <EditableRailField
+            label={t('priority')}
+            fieldKey="priority"
+            edit={edit}
+            control={
+              <PriorityPicker
+                value={view.priority}
+                autoOpen
+                onClose={edit.close}
+                onChange={(priority) => void edit.commit('priority', { priority }, { priority })}
+              />
+            }
+          >
+            <PriorityValue priority={view.priority} />
+          </EditableRailField>
+          <EditableRailField
+            label={t('assignee')}
+            fieldKey="assignee"
+            edit={edit}
+            control={
+              <AssigneePicker
+                members={view.members}
+                value={view.assigneeId}
+                autoOpen
+                onClose={edit.close}
+                onChange={(assigneeId) => {
+                  const m = view.members.find((x) => x.userId === assigneeId);
+                  void edit.commit(
+                    'assignee',
+                    { assigneeId, assigneeName: m ? m.name || m.email : null },
+                    { assigneeId },
+                  );
+                }}
+              />
+            }
+          >
+            <AssigneeValue name={view.assigneeName} />
+          </EditableRailField>
           <RailField label={t('reporter')}>
             <Avatar name={data.reporterName} />
             <span className="truncate">{data.reporterName}</span>
           </RailField>
-          <RailField label={t('parent')}>
-            {data.parent ? (
+          <EditableRailField
+            label={t('parent')}
+            fieldKey="parent"
+            edit={edit}
+            control={
+              <ParentPicker
+                childType={view.kind as IssueType}
+                value={view.parentId}
+                onChange={(parentId, picked) => {
+                  edit.close();
+                  void edit.commit(
+                    'parent',
+                    {
+                      parentId,
+                      // The picker hands the chosen label over so the row shows it
+                      // immediately, without a server re-read.
+                      parent:
+                        parentId && picked
+                          ? { identifier: picked.identifier, title: picked.title, kind: 'story' }
+                          : null,
+                    },
+                    { parentId },
+                  );
+                }}
+              />
+            }
+          >
+            {/* The OPTIMISTIC parent, not the served one: the picker hands the
+                chosen item's identifier + title over with the id (above), and
+                reading `data` here would compute that label and then throw it
+                away — the row would keep showing the old parent until a re-read
+                the peek never performs. */}
+            {view.parent ? (
               <Link
-                href={`/items/${data.parent.identifier}`}
+                href={`/items/${view.parent.identifier}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex min-w-0 items-center gap-1.5 text-(--el-link) hover:underline"
               >
-                <IssueTypeIcon type={data.parent.kind} className="h-3.5 w-3.5 shrink-0" />
-                <span className="shrink-0 font-mono text-xs">{data.parent.identifier}</span>
-                <span className="truncate text-(--el-text-secondary)">{data.parent.title}</span>
+                <IssueTypeIcon type={view.parent.kind} className="h-3.5 w-3.5 shrink-0" />
+                <span className="shrink-0 font-mono text-xs">{view.parent.identifier}</span>
+                <span className="truncate text-(--el-text-secondary)">{view.parent.title}</span>
               </Link>
             ) : (
               <span className="text-(--el-text-secondary)">{t('none')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
           {/* Labels — coloured chips. Reuses the SHIPPED ValueChip + name-hash
               labelTint (5.4.8), NOT a fixed lavender: the labelTint decision
               (product owner, 2026-06-10) guarantees a label renders the SAME
               colour on every surface, so the peek and the detail rail match. */}
-          <RailField label={t('labelsField')}>
-            {data.labels.length > 0 ? (
+          {/* Labels + Components (MOTIR-2566) — the SAME behaviour the detail
+              cards run, via the shared hooks, behind the rail's chip grammar.
+              A collection row has no single commit moment, so it does not swap
+              its value for one control: it stays a chip stack and the picker
+              opens beneath it, staying open across several adds and removes. */}
+          <EditableRailField
+            label={t('labelsField')}
+            fieldKey="labels"
+            edit={edit}
+            control={
+              <MultiSelectPicker
+                values={labelEdit.chips}
+                options={labelEdit.options}
+                onToggle={labelEdit.toggle}
+                onRemove={labelEdit.remove}
+                onCreate={labelEdit.create}
+                query={labelEdit.query}
+                onQueryChange={labelEdit.setQuery}
+                cap={LABELS_PER_ISSUE_LIMIT}
+                label={t('labelsField')}
+                placeholder={t('labelsPlaceholder')}
+                createLabel={(q) => t('labelsCreate', { name: q })}
+                removeLabel={(label) => t('labelsRemove', { label })}
+                hint={
+                  labelEdit.atCap
+                    ? t('labelsLimitReached', { limit: LABELS_PER_ISSUE_LIMIT })
+                    : undefined
+                }
+                error={labelEdit.error}
+                disabled={labelEdit.isPending}
+              />
+            }
+          >
+            {labelEdit.chips.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {data.labels.map((l) => (
-                  <ValueChip
-                    key={l.id}
-                    option={{ id: l.id, label: l.name, tint: labelTint(l.name) }}
-                  />
+                {labelEdit.chips.map((c) => (
+                  <ValueChip key={c.id} option={c} />
                 ))}
               </div>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noLabels')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
-          {/* Components — neutral chips with the component glyph (5.4.8). */}
-          <RailField label={t('componentsField')}>
-            {data.components.length > 0 ? (
+          {/* Components — neutral chips with the component glyph (5.4.8).
+              The detail card's empty-taxonomy state offers a project admin a
+              "Manage components" link to the settings hub. That link is NOT
+              carried here: following it from a peek would navigate the page out
+              from under the modal, discarding the user's place in the list —
+              the exact loss the peek exists to prevent. An admin with no
+              taxonomy yet sees the same "none defined" text and manages it from
+              the detail page or settings. */}
+          <EditableRailField
+            label={t('componentsField')}
+            fieldKey="components"
+            edit={edit}
+            control={
+              <MultiSelectPicker
+                values={componentEdit.chips}
+                options={componentEdit.options}
+                onToggle={componentEdit.toggle}
+                onRemove={componentEdit.remove}
+                query={componentEdit.query}
+                onQueryChange={componentEdit.setQuery}
+                label={t('componentsField')}
+                placeholder={t('componentsPlaceholder')}
+                removeLabel={(label) => t('componentsRemove', { label })}
+                emptyText={t('componentsNoneDefined')}
+                error={componentEdit.error}
+                disabled={componentEdit.isPending}
+              />
+            }
+          >
+            {componentEdit.chips.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
-                {data.components.map((c) => (
-                  <ValueChip
-                    key={c.id}
-                    option={{ id: c.id, label: c.name, glyph: ComponentIcon }}
-                  />
+                {componentEdit.chips.map((c) => (
+                  <ValueChip key={c.id} option={c} />
                 ))}
               </div>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noComponents')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
-          <RailField label={t('dueDate')}>
-            {data.dueLabel ? (
-              <span className="truncate">{data.dueLabel}</span>
+          {/* Due date + Estimate carry BOTH axes, so an optimistic write updates
+              the raw value AND its display label together — the payload's
+              display/raw pairing is what keeps the panel presentational, and
+              leaving the label behind would show the OLD date under a new one. */}
+          <EditableRailField
+            label={t('dueDate')}
+            fieldKey="dueDate"
+            edit={edit}
+            control={
+              <DatePicker
+                value={view.dueDate ? view.dueDate.slice(0, 10) : ''}
+                onChange={(next) => {
+                  const iso = next ? `${next}T00:00:00.000Z` : null;
+                  void edit.commit(
+                    'dueDate',
+                    { dueDate: iso, dueLabel: iso ? formatDate(iso, locale) : null },
+                    { dueDate: iso },
+                  );
+                }}
+              />
+            }
+          >
+            {view.dueLabel ? (
+              <span className="truncate">{view.dueLabel}</span>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noDueDate')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
           {/* Sprint — omitted for epics (they span sprints). Goal glyph + name,
               or the status-aware empty label (Backlog / None). */}
           {data.kind !== 'epic' ? (
-            <RailField label={t('sprint')}>
-              {data.sprintName ? (
+            <EditableRailField
+              label={t('sprint')}
+              fieldKey="sprint"
+              edit={edit}
+              control={
+                <SprintPicker
+                  sprints={view.sprints}
+                  value={view.sprintId}
+                  autoOpen
+                  onClose={edit.close}
+                  // The SAME value the read row uses, so "Backlog" and "None"
+                  // can never disagree between the label and the sentinel.
+                  emptyLabel={sprintEmptyLabel}
+                  onChange={(sprintId) => {
+                    const picked = view.sprints.find((x) => x.id === sprintId);
+                    void edit.commitVia(
+                      'sprint',
+                      { sprintId, sprintName: picked?.name ?? null },
+                      // Sprint has its own endpoint, not `updateIssueAction`.
+                      // Shape its response into the shared result type.
+                      async () => {
+                        try {
+                          const res = await setWorkItemSprint(view.id, sprintId);
+                          return { ok: true as const, updatedAt: res.updatedAt };
+                        } catch {
+                          return { ok: false as const, error: t('sprintUpdateFailed') };
+                        }
+                      },
+                    );
+                  }}
+                />
+              }
+            >
+              {view.sprintName ? (
                 <>
                   <Goal className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                  <span className="truncate">{data.sprintName}</span>
+                  <span className="truncate">{view.sprintName}</span>
                 </>
               ) : (
                 <span className="text-(--el-text-secondary)">{sprintEmptyLabel}</span>
               )}
-            </RailField>
+            </EditableRailField>
           ) : null}
 
           {/* Story points — the agile estimate, distinct from the TIME estimate. */}
+          {/* Story points (MOTIR-2565) — the shipped `EstimateBadge`, the same
+              click-to-edit chip the backlog, the board, the item list and the
+              detail rail all compose. The peek was the ONE issue surface that
+              rendered a bare number instead.
+              NO edit chevron on this row, deliberately: the badge IS the
+              affordance, which is exactly why the detail rail's FieldCard is
+              `editable={false}` here. A chevron beside it would be a second
+              affordance for one field. Editing routes through the badge's own
+              `PATCH /api/work-items/[id]/estimate` and the project's configured
+              scale deck — never a free-text number, which could hold a value the
+              scale does not contain. */}
           <RailField label={t('storyPoints')}>
-            {data.storyPoints != null ? (
-              <>
-                <Gauge className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                <span className="truncate">{numberFormat.format(data.storyPoints)}</span>
-              </>
-            ) : (
-              <span className="text-(--el-text-secondary)">{t('none')}</span>
-            )}
+            <EstimateBadge
+              itemId={view.id}
+              storyPoints={view.storyPoints}
+              estimateMinutes={view.estimateMinutes}
+              forceStoryPoints
+            />
           </RailField>
 
-          <RailField label={t('estimate')}>
-            {data.estimateLabel ? (
+          <EditableRailField
+            label={t('estimate')}
+            fieldKey="estimate"
+            edit={edit}
+            control={
+              <Input
+                type="number"
+                min={0}
+                autoFocus
+                defaultValue={view.estimateMinutes ?? ''}
+                onBlur={(e) => {
+                  const raw = e.currentTarget.value.trim();
+                  const minutes = raw === '' ? null : Number(raw);
+                  if (minutes !== null && (!Number.isFinite(minutes) || minutes < 0)) {
+                    edit.close();
+                    return;
+                  }
+                  if (minutes === view.estimateMinutes) {
+                    edit.close();
+                    return;
+                  }
+                  void edit.commit(
+                    'estimate',
+                    {
+                      estimateMinutes: minutes,
+                      estimateLabel: minutes != null ? formatDurationMinutes(minutes) : null,
+                    },
+                    { estimateMinutes: minutes },
+                  );
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur();
+                  if (e.key === 'Escape') edit.close();
+                }}
+              />
+            }
+          >
+            {view.estimateLabel ? (
               <>
                 <Clock className="h-3.5 w-3.5 shrink-0 text-(--el-text-faint)" aria-hidden />
-                <span className="truncate">{data.estimateLabel}</span>
+                <span className="truncate">{view.estimateLabel}</span>
               </>
             ) : (
               <span className="text-(--el-text-secondary)">{t('noEstimate')}</span>
             )}
-          </RailField>
+          </EditableRailField>
 
-          {/* Custom fields (5.3.7) — valued rows, then the empty ones behind a
-              read-only "Show more fields (N)" disclosure. A faint divider sets
-              the cluster off from the built-ins. */}
+          {/* Custom fields (5.3.7 · editable MOTIR-2599) — valued rows, then the
+              empty ones behind a disclosure. That disclosure was built READ-ONLY
+              in 8.8.8, purely to stop the rail being a wall of "None". Now the
+              rail edits, it is the ONLY route to an empty field someone wants to
+              fill, so its label says "N more fields" rather than promising only
+              to SHOW them — a field you cannot reach is a field you cannot set. */}
           {data.customFields.length > 0 ? (
             <>
               <div className="-mx-1 my-1 h-px bg-(--el-border-soft)" />
               {valuedCustom.map((f) => (
-                <RailField key={f.id} label={f.label}>
-                  {renderCustomValue(f)}
-                </RailField>
+                <CustomRailRow key={f.id} field={f} edit={customEdit} render={renderCustomValue} />
               ))}
               {emptyCustom.length > 0 ? (
                 <>
@@ -577,13 +974,16 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
                     />
                     {showAllCustom
                       ? t('customFields.showFewer')
-                      : t('customFields.showMore', { count: emptyCustom.length })}
+                      : t('quickViewMoreFields', { count: emptyCustom.length })}
                   </button>
                   {showAllCustom
                     ? emptyCustom.map((f) => (
-                        <RailField key={f.id} label={f.label}>
-                          {renderCustomValue(f)}
-                        </RailField>
+                        <CustomRailRow
+                          key={f.id}
+                          field={f}
+                          edit={customEdit}
+                          render={renderCustomValue}
+                        />
                       ))
                     : null}
                 </>
@@ -603,6 +1003,6 @@ export function IssueQuickViewPanel(props: IssueQuickViewPanelProps) {
           </div>
         </dl>
       </div>
-    </>
+    </EstimationConfigProvider>
   );
 }
