@@ -140,17 +140,23 @@ describe('multi-tenant RLS — read isolation', () => {
 });
 
 describe('multi-tenant RLS — write isolation', () => {
-  it('INSERT into workspace_membership is denied for motir_app (no INSERT policy → 42501)', async () => {
+  it("INSERT of a membership into ANOTHER tenant's workspace is denied (42501)", async () => {
     const fx = await makeTenants();
-    // The add_workspace_rls migration deliberately defines NO INSERT policy
-    // on workspace_membership (tenant-root inserts are gated at the app
-    // layer — see the migration's header comment). With RLS enabled +
-    // FORCED and no permissive INSERT policy, every INSERT by the non-bypass
-    // role is denied. Postgres raises insufficient_privilege (42501), which
-    // the Prisma pg driver surfaces as a DriverAdapterError whose underlying
-    // postgres `cause.code` is the SQLSTATE.
+    // ▶ AMENDED by MOTIR-2512. This case previously asserted that ANY insert
+    // into workspace_membership was denied, because add_workspace_rls defined no
+    // INSERT policy at all. That was true and was a DEFECT, not a guarantee: it
+    // also denied the founder's own owner-row and the invite flow, so no tenant
+    // could be created as the runtime role. `membership_insert_active_or_bootstrap`
+    // now admits exactly two cases — a row in the ACTIVE workspace (the invite
+    // path) and a row in the workspace being bootstrapped.
+    //
+    // So the assertion moves to the case that is still refused, and is the one
+    // that actually matters: tenant A, operating legitimately inside its OWN
+    // workspace, cannot write a membership into tenant B's. Note the GUC binds
+    // workspace A here — the old test bound B, which is now indistinguishable
+    // from an admin of B adding a member, and is exactly what the invite path is.
     await expect(
-      asAppRole({ userId: fx.userAId, workspaceId: fx.workspaceBId }, (tx) =>
+      asAppRole({ userId: fx.userAId, workspaceId: fx.workspaceAId }, (tx) =>
         tx.workspaceMembership.create({
           data: { userId: fx.userAId, workspaceId: fx.workspaceBId, role: 'member' },
         }),
