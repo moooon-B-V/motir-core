@@ -37,6 +37,29 @@ const PEEK = {
   pullRequests: [],
   hasChildren: false,
   canPlan: true,
+  // MOTIR-2562 widened the payload with the editor inputs. They ride the same
+  // read, so a stub that omits them is not a leaner fixture — it is a payload
+  // the route can never return, and the rail dereferences `estimation`.
+  id: 'cmqvroadmap00000000000e1',
+  projectIdentifier: 'MOTIR',
+  workItemRefs: {},
+  archived: null,
+  status: 'in_progress',
+  assigneeId: null,
+  parentId: null,
+  sprintId: null,
+  dueDate: null,
+  estimateMinutes: null,
+  workflow: { statuses: [], transitions: [], policyMode: 'restricted' },
+  members: [],
+  sprints: [],
+  projectComponents: [],
+  estimation: {
+    estimationStatistic: 'story_points',
+    pointScale: 'fibonacci',
+    customScaleValues: [],
+    canEdit: true,
+  },
 };
 
 afterEach(() => {

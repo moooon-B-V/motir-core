@@ -413,12 +413,24 @@ export function Combobox<T extends string>({
 
   // Portal out to escape a short table's overflow:hidden — UNLESS we're inside a
   // focus-trapping dialog, where an inline menu is required (see the `mounted`
-  // comment above). Reading the ref in render is safe: by the time `open` flips
-  // true via a click the trigger is mounted; the only ref-null case is autoOpen,
-  // used solely by inline-edit cells (always in a table, never a dialog) → portal.
-  const inDialog = mounted
-    ? !!triggerRef.current?.closest('[data-surface="modal"],[aria-modal="true"]')
-    : false;
+  // comment above).
+  //
+  // ⚠️ This is SETTLED IN A LAYOUT EFFECT, not read during render. It used to be
+  // read during render on the stated invariant that "the only ref-null case is
+  // autoOpen, used solely by inline-edit cells (always in a table, never a
+  // dialog)". That invariant no longer holds: the quick-view peek's editable
+  // rail (MOTIR-2563) is an `autoOpen` caller INSIDE the modal. The render-time
+  // read fails permanently for it — `useMounted` returns `true` on the very
+  // first client render, `triggerRef.current` is still null at that point, and
+  // `subscribeNoop` means nothing ever re-renders to correct it. The menu then
+  // portals to <body>, lands outside the dialog's focus scope, and every one of
+  // its options is `aria-hidden` to assistive tech and to the accessibility
+  // tree. A layout effect runs after the ref attaches and before paint, so the
+  // branch is right for click-opened AND mount-opened menus alike.
+  const [inDialog, setInDialog] = useState(false);
+  useIsomorphicLayoutEffect(() => {
+    setInDialog(!!triggerRef.current?.closest('[data-surface="modal"],[aria-modal="true"]'));
+  }, [open]);
 
   const menuInner = (
     <>

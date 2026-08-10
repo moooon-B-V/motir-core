@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Component } from 'lucide-react';
@@ -10,9 +10,9 @@ import {
   ValueChip,
   type MultiSelectOption,
 } from '@/components/ui/MultiSelectPicker';
+import { useComponentEditing } from '../../_components/fieldChipEditing';
 import { useProjectAccess } from '../../../_components/ProjectAccessProvider';
 import { FieldCard } from './FieldCard';
-import { addComponentAction, removeComponentAction } from '../labelComponentActions';
 
 // The Components rail card (Story 5.4 · Subtask 5.4.8), per
 // design/work-items/labels-components-watch.mock.html panel 3: the SAME
@@ -25,7 +25,7 @@ import { addComponentAction, removeComponentAction } from '../labelComponentActi
 // admin link — project admins only. Success confirms from the action
 // response — no router.refresh (the inline-edit rule).
 
-function toOption(component: ComponentDto): MultiSelectOption {
+function toOption(component: { id: string; name: string }): MultiSelectOption {
   return { id: component.id, label: component.name, glyph: Component };
 }
 
@@ -47,46 +47,16 @@ export function ComponentsCard({
   // `projectAccessService.assertCanEdit` resolves `work_item:edit`.
   const { can } = useProjectAccess();
   const canEdit = can('work_item:edit');
-  const [isPending, startTransition] = useTransition();
-  const [components, setComponents] = useState<ComponentDto[]>(initialComponents);
+  // Open/closed stays with the CHROME; the behaviour is shared with the
+  // quick-view peek's rail row (MOTIR-2566).
   const [editing, setEditing] = useState(false);
-  const [query, setQuery] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  function applyResult(res: Awaited<ReturnType<typeof addComponentAction>>) {
-    if (res.ok) {
-      setComponents(res.components);
-      setError(null);
-    } else {
-      setError(res.error);
-    }
-  }
-
-  function toggle(option: MultiSelectOption) {
-    setError(null);
-    startTransition(async () => {
-      const attached = components.some((c) => c.id === option.id);
-      applyResult(
-        attached
-          ? await removeComponentAction({ workItemId, componentId: option.id })
-          : await addComponentAction({ workItemId, componentId: option.id }),
-      );
-    });
-  }
-
-  function remove(value: MultiSelectOption) {
-    setError(null);
-    startTransition(async () => {
-      applyResult(await removeComponentAction({ workItemId, componentId: value.id }));
-    });
-  }
-
-  const q = query.trim().toLowerCase();
-  const options = (
-    q ? projectComponents.filter((c) => c.name.toLowerCase().includes(q)) : projectComponents
-  ).map(toOption);
-  const chips = components.map(toOption);
-  const emptyTaxonomy = projectComponents.length === 0;
+  const comps = useComponentEditing({
+    workItemId,
+    initialComponents,
+    projectComponents,
+    toOption,
+  });
+  const { chips, options, query, error, isPending, emptyTaxonomy } = comps;
 
   return (
     <FieldCard
@@ -95,21 +65,18 @@ export function ComponentsCard({
       editing={editing}
       onToggle={() => {
         setEditing((cur) => !cur);
-        setError(null);
-        setQuery('');
+        comps.clearError();
+        comps.setQuery('');
       }}
     >
       {editing ? (
         <MultiSelectPicker
           values={chips}
           options={options}
-          onToggle={toggle}
-          onRemove={remove}
+          onToggle={comps.toggle}
+          onRemove={comps.remove}
           query={query}
-          onQueryChange={(next) => {
-            setQuery(next);
-            setError(null);
-          }}
+          onQueryChange={comps.setQuery}
           label={t('componentsField')}
           placeholder={t('componentsPlaceholder')}
           removeLabel={(label) => t('componentsRemove', { label })}

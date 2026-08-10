@@ -4,6 +4,7 @@ import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
 import { useState } from 'react';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
+import { Modal } from '@/components/ui/Modal';
 
 afterEach(cleanup);
 
@@ -224,5 +225,36 @@ describe('Combobox — menu portaling (bug-inline-edit-clipped-when-table-short)
     const listbox = screen.getByRole('listbox', { name: 'Sprint' });
     expect(dialog.contains(listbox)).toBe(false);
     expect(document.body.contains(listbox)).toBe(true);
+  });
+});
+
+// ── autoOpen INSIDE a modal (MOTIR-2563) ─────────────────────────────────────
+// The in-dialog branch used to be read during RENDER, on the stated invariant
+// that "the only ref-null case is autoOpen, used solely by inline-edit cells
+// (always in a table, never a dialog)". The quick-view peek's editable rail
+// broke that: it opens a picker on mount INSIDE the modal. Because `useMounted`
+// returns true on the first client render and its subscribe is a no-op, the
+// ref-null read was never re-evaluated — the menu portaled to <body>, landed
+// outside the dialog's focus scope, and every option became invisible to the
+// accessibility tree (queryAllByRole('option') returned 0 of 5).
+describe('Combobox — autoOpen inside a modal renders INLINE, not portaled', () => {
+  function ModalHost() {
+    const [value, setValue] = useState<string | null>('in_progress');
+    return (
+      <Modal open onOpenChange={() => {}} srTitle="Peek">
+        <Combobox label="Status" options={OPTIONS} value={value} onChange={setValue} autoOpen />
+      </Modal>
+    );
+  }
+
+  it('keeps the menu inside the dialog so its options stay reachable', async () => {
+    render(<ModalHost />);
+
+    const listbox = await screen.findByRole('listbox', { name: 'Status' });
+    // Inside the modal panel — a body-portaled menu loses the focus-trap war and
+    // is mispositioned by the dialog's centring transform.
+    expect(listbox.closest('[data-surface="modal"]')).not.toBeNull();
+    // And every option is in the accessibility tree, not aria-hidden behind it.
+    expect(screen.getAllByRole('option')).toHaveLength(OPTIONS.length);
   });
 });

@@ -1129,7 +1129,14 @@
     "childrenViewLabel": "子工作项视图",
     "childrenGraphAria": "子工作项依赖关系图",
     "childrenGraphUnavailableTitle": "无法绘制关系图",
-    "childrenGraphUnavailableDescription": "切换回列表即可查看该工作项的子项。"
+    "childrenGraphUnavailableDescription": "切换回列表即可查看该工作项的子项。",
+    "quickViewEditField": "编辑{field}",
+    "quickViewCloseField": "关闭{field}",
+    "quickViewFieldSaving": "保存中",
+    "quickViewFieldSaved": "已保存",
+    "quickViewStaleReloaded": "快速视图打开期间，此工作项已被更改。下方字段已重新加载。",
+    "sprintUpdateFailed": "无法更新冲刺，请重试。",
+    "quickViewMoreFields": "另有 {count} 个字段"
   },
   "comments": {
     "title": "动态",

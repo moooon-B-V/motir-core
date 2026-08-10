@@ -1,6 +1,11 @@
 import { test as base, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  buildClientDiagnostics,
+  DIAGNOSTIC_TAIL,
+  type DiagnosticEvent,
+} from './acceptance-diagnostics';
 
 // The acceptance-video test harness (Story MOTIR-1627 · Subtask MOTIR-1632).
 // Extends the Playwright test with a `chapter(label, body)` step that BOTH runs
@@ -75,7 +80,44 @@ export const BEAT_MS = 4_000;
 // warning that a bigger number alone did not cure ITS cause, an on-demand
 // compile this lane no longer has — see MOTIR-2506 for why sharding, not a
 // bigger number, is the structural answer if this recurs).
+//
+// ── WHAT THE STALL ACTUALLY IS (MOTIR-2600, from the trace of the recurrence) ──
+//
+// It recurred AT 60 s (2026-08-10, PR #1999 attempt 1, job 93452609448), and the
+// failed test's own trace says the budget was never the constraint. Reading it
+// back, request by request:
+//
+//   * the RSC payload for the very navigation that "never painted" —
+//     `/planning?mode=contextual&from=work-item&item=ARP-4&_rsc=…` — returned
+//     **200 in 7.5 ms**, and the route's last three JS chunks in 18–21 ms each;
+//   * of the 140 requests the page made in the whole test, **one** ever failed,
+//     and it was a `_next/static` chunk 25 minutes earlier, not on this route;
+//   * after those chunks the browser issued **no network activity at all** for
+//     the entire 60 s, and the failure screenshot is a **blank white page** —
+//     not even `app/(planning)/loading.tsx`'s skeleton, whose grey blocks would
+//     be plainly visible. The a11y tree held two things: Radix's empty toast
+//     viewport and Next's route announcer, both from the ROOT layout.
+//
+// So the page is not slow and the server is not stalling: the RSC payload and
+// the code both ARRIVED, and the client-side App Router transition then never
+// committed anything — not the segment, not its own loading boundary. A timeout
+// cannot cure that, which is why raising this number a third time is forbidden
+// on MOTIR-2600 rather than merely discouraged: at 60 s the assertion already
+// waits ~60x the measured paint and the page is not painting at ANY number.
+//
+// What the trace canNOT discriminate is *why* React never committed — a thrown
+// exception during chunk evaluation and a renderer starved of CPU by the
+// runner's other tenants look identical once you only have "no network, no
+// paint". The lane keeps no console output, no `pageerror`, and no renderer-side
+// timing, so both readings survive. Closing that gap is what the
+// `clientDiagnostics` fixture below now does: the next occurrence lands with the
+// console, the page errors, the request ledger and the renderer's own clock
+// attached to the failure, and is READ rather than re-derived.
 export const FIRST_PAINT_MS = 60_000;
+
+// The failure report itself is `./acceptance-diagnostics` — pure, and unit-tested
+// there. What lives here is the fixture that FEEDS it.
+export * from './acceptance-diagnostics';
 
 interface AcceptanceFixtures {
   /** Run a phase as a chaptered step; marks its start on the video timeline. */
@@ -99,6 +141,18 @@ interface AcceptanceFixtures {
    * PR-derived key). Call once, in the recorded happy-path test.
    */
   acceptanceStory: (storyKey: string) => void;
+  /**
+   * AUTO fixture — nothing calls it (MOTIR-2600). It listens on the page for the
+   * whole test and, when the test FAILS, writes `client-diagnostics.json` beside
+   * the video and attaches it to the report.
+   *
+   * Auto, and on every test rather than on the first-paint assertion alone,
+   * because the stall it exists for "lands on whichever test happens to be
+   * running" — a capture wired only into the one helper that carries
+   * {@link FIRST_PAINT_MS} would miss the next occurrence the moment it lands on
+   * a spec that reaches `/planning` some other way.
+   */
+  clientDiagnostics: void;
 }
 
 export const test = base.extend<AcceptanceFixtures>({
@@ -154,6 +208,111 @@ export const test = base.extend<AcceptanceFixtures>({
       await page.waitForTimeout(BEAT_MS);
     });
   },
+
+  clientDiagnostics: [
+    async ({ page }, provide, testInfo) => {
+      const t0 = Date.now();
+      /** Seconds since this page was created — the same clock `chapter()` marks. */
+      const at = () => Math.round(Date.now() - t0) / 1000;
+      const consoleEvents: DiagnosticEvent[] = [];
+      const pageErrors: DiagnosticEvent[] = [];
+      const requests: DiagnosticEvent[] = [];
+      const push = (list: DiagnosticEvent[], event: DiagnosticEvent) => {
+        list.push(event);
+        if (list.length > DIAGNOSTIC_TAIL) list.shift();
+      };
+
+      page.on('console', (message) =>
+        push(consoleEvents, {
+          t: at(),
+          kind: 'console',
+          text: `[${message.type()}] ${message.text()}`.slice(0, 500),
+        }),
+      );
+      page.on('pageerror', (error) =>
+        push(pageErrors, {
+          t: at(),
+          kind: 'pageerror',
+          text: `${error.message}\n${error.stack ?? ''}`.slice(0, 2_000),
+        }),
+      );
+      page.on('requestfailed', (request) =>
+        push(requests, {
+          t: at(),
+          kind: 'requestfailed',
+          text: `${request.method()} ${request.url()} — ${request.failure()?.errorText ?? 'unknown failure'}`,
+        }),
+      );
+      page.on('response', (response) =>
+        push(requests, {
+          t: at(),
+          kind: 'response',
+          text: `${response.status()} ${response.request().method()} ${response.url()}`,
+        }),
+      );
+
+      await provide();
+
+      // Green run: nothing to say, and nothing written into the recording dir
+      // the uploader walks.
+      if (testInfo.status === testInfo.expectedStatus) return;
+
+      // The RENDERER's own account of itself, read while the page is still open
+      // (this fixture depends on `page`, so it tears down first). Wrapped
+      // because a crashed or closed page is exactly one of the outcomes being
+      // diagnosed — an unavailable evaluate is itself a finding, not a reason to
+      // lose the rest of the report.
+      let pageState: Record<string, unknown>;
+      try {
+        pageState = await page.evaluate(() => {
+          const resources = performance.getEntriesByType('resource');
+          const last = resources[resources.length - 1];
+          return {
+            url: location.href,
+            readyState: document.readyState,
+            visibility: document.visibilityState,
+            bodyText: (document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
+            // THE DISCRIMINATOR. A page that is merely late still has requests
+            // landing; a dead transition or a starved renderer leaves a silent
+            // tail, and its length is how long nothing at all happened.
+            sinceLastResourceMs: last
+              ? Math.round(performance.now() - (last.startTime + last.duration))
+              : null,
+            resourceCount: resources.length,
+            lastResources: resources.slice(-10).map((entry) => ({
+              name: entry.name,
+              startMs: Math.round(entry.startTime),
+              durationMs: Math.round(entry.duration),
+            })),
+          };
+        });
+      } catch (err) {
+        pageState = { unavailable: String(err) };
+      }
+
+      const report = buildClientDiagnostics({
+        card: 'MOTIR-2600',
+        test: testInfo.titlePath.join(' › '),
+        status: testInfo.status ?? 'unknown',
+        error: testInfo.error?.message ?? null,
+        page: pageState,
+        console: consoleEvents,
+        pageErrors,
+        requests,
+      });
+
+      const file = path.join(testInfo.outputDir, 'client-diagnostics.json');
+      fs.mkdirSync(testInfo.outputDir, { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(report, null, 2));
+      await testInfo.attach('client-diagnostics', { path: file, contentType: 'application/json' });
+      // Also in the job log: that is the one place a reader is already looking
+      // when the check goes red, and it costs one line. `warn` rather than `log`
+      // because a failed test's cause is not chatter — and because `log` is the
+      // one console method this repo's lint config does not allow.
+      console.warn(`[acceptance-video] MOTIR-2600 diagnostics — ${report.verdict}`);
+    },
+    { auto: true },
+  ],
 
   acceptanceStory: async ({}, provide, testInfo) => {
     let declared: string | null = null;
