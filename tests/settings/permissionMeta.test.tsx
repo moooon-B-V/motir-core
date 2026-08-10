@@ -162,9 +162,13 @@ describe('summarizeGrant — the word Yue reads instead of a fraction', () => {
   });
 
   it('has a word for every summary it can return', () => {
-    const shipped = enMessages.settings.apiTokens.scopes as unknown as Record<string, unknown>;
+    const shipped = enMessages.settings.apiTokens.scopes.summary as unknown as Record<
+      string,
+      string
+    >;
     for (const summary of ['full', 'standard', 'readonly', 'custom'] as const) {
-      expect(shipped[`summary_${summary}`] ?? shipped.summary, summary).toBeTruthy();
+      expect(typeof shipped[summary], `scopes.summary.${summary}`).toBe('string');
+      expect(shipped[summary]).toBeTruthy();
     }
   });
 });
