@@ -9,9 +9,10 @@ import {
   ApiTokenRevokedError,
   InvalidApiTokenError,
   InvalidApiTokenLabelError,
-  InvalidApiTokenScopeError,
+  InvalidTokenGrantError,
 } from '@/lib/apiTokens/errors';
-import { DEFAULT_TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
+import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
@@ -309,66 +310,180 @@ describe('verify', () => {
   });
 });
 
-describe('scopes (Subtask 7.7.16)', () => {
-  it('defaults to all scopes EXCEPT work_items:delete when none are given', async () => {
+describe('the GRANT — persist and read (MOTIR-2575)', () => {
+  it('defaults to DEFAULT_TOKEN_GRANT when no permissions are given', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, { label: 'default' });
     const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect([...row.scopes].sort()).toEqual([...DEFAULT_TOKEN_SCOPES].sort());
-    expect(row.scopes).not.toContain('work_items:delete');
+    expect([...row.scopes].sort()).toEqual([...DEFAULT_TOKEN_GRANT].sort());
+    expect(row.scopes).not.toContain('work_item:delete');
   });
 
-  it('persists an explicit scope list verbatim (de-duplicated)', async () => {
+  it('persists an explicit grant verbatim (de-duplicated)', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'narrow',
-      scopes: ['read', 'work_items:write', 'read'],
+      permissions: ['project:browse', 'work_item:edit', 'project:browse'],
     });
     const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect([...row.scopes].sort()).toEqual(['read', 'work_items:write']);
+    expect([...row.scopes].sort()).toEqual(['project:browse', 'work_item:edit']);
   });
 
-  it('can grant the delete scope when explicitly requested', async () => {
+  it('can grant the irreversible key when explicitly requested', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'with-delete',
-      scopes: ['read', 'work_items:delete'],
+      permissions: ['project:browse', 'work_item:delete'],
     });
     const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
-    expect(row.scopes).toContain('work_items:delete');
+    expect(row.scopes).toContain('work_item:delete');
   });
 
-  it('accepts an empty explicit scope list (a read-nothing token)', async () => {
+  it('accepts an empty explicit grant (a token that can do nothing)', async () => {
     const { owner, workspace } = await makeUserWs();
     const { dto } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'empty',
-      scopes: [],
+      permissions: [],
     });
     const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.scopes).toEqual([]);
   });
 
-  it('rejects an unknown scope string and mints nothing', async () => {
+  it('REFUSES an unknown permission and mints nothing', async () => {
     const { owner, workspace } = await makeUserWs();
     await expect(
       apiTokensService.create(owner.id, workspace.id, {
         label: 'bad',
-        scopes: ['read', 'work_items:nuke'],
+        permissions: ['project:browse', 'work_item:nuke'],
       }),
-    ).rejects.toBeInstanceOf(InvalidApiTokenScopeError);
+    ).rejects.toBeInstanceOf(InvalidTokenGrantError);
     expect(await db.apiToken.count()).toBe(0);
   });
 
-  it('verify returns the token’s granted scopes alongside the user + workspace', async () => {
+  it('REFUSES a real catalog key that is not GRANTABLE, and mints nothing', async () => {
+    // The case a plain `isPermissionKey` check would wave through: a genuine
+    // permission that no token-reachable operation asserts. Granting it would
+    // put a switch on a token that gates nothing.
+    const { owner, workspace } = await makeUserWs();
+    await expect(
+      apiTokensService.create(owner.id, workspace.id, {
+        label: 'ungrantable',
+        permissions: ['project:browse', 'board:configure'],
+      }),
+    ).rejects.toBeInstanceOf(InvalidTokenGrantError);
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('names the offending keys on the typed error, so a 422 can say which', async () => {
+    const { owner, workspace } = await makeUserWs();
+    await expect(
+      apiTokensService.create(owner.id, workspace.id, {
+        label: 'bad',
+        permissions: ['work_item:nuke', 'board:configure'],
+      }),
+    ).rejects.toMatchObject({
+      code: 'API_TOKEN_INVALID_PERMISSION',
+      invalidPermissions: ['work_item:nuke', 'board:configure'],
+    });
+  });
+
+  it('verify returns the resolved grant alongside the user + workspace', async () => {
     const { owner, workspace } = await makeUserWs();
     const { token } = await apiTokensService.create(owner.id, workspace.id, {
-      label: 'verify-scopes',
-      scopes: ['read', 'sprints:write'],
+      label: 'verify-grant',
+      permissions: ['project:browse', 'sprint:manage'],
     });
     const resolved = await apiTokensService.verify(token);
-    expect([...resolved.scopes].sort()).toEqual(['read', 'sprints:write']);
+    expect([...resolved.grant].sort()).toEqual(['project:browse', 'sprint:manage']);
     expect(resolved.user.id).toBe(owner.id);
     expect(resolved.workspaceId).toBe(workspace.id);
+  });
+
+  it('the DTO exposes the resolved grant', async () => {
+    const { owner, workspace } = await makeUserWs();
+    const { dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'dto',
+      permissions: ['project:browse'],
+    });
+    expect(dto.permissions).toEqual(['project:browse']);
+  });
+});
+
+describe('the compatibility promise — a row written BEFORE MOTIR-2572', () => {
+  // The seam most worth a real database behind it. Every token already minted
+  // holds legacy strings, nothing rewrites them, and the promise is that they
+  // keep exactly the authority they had. These seed the OLD values directly —
+  // the only way to test a row `create` can no longer produce.
+
+  async function seedLegacyRow(scopes: string[]) {
+    const { owner, workspace } = await makeUserWs();
+    const { token, dto } = await apiTokensService.create(owner.id, workspace.id, {
+      label: 'legacy',
+      permissions: ['project:browse'],
+    });
+    await db.apiToken.update({ where: { id: dto.id }, data: { scopes } });
+    return { token, id: dto.id, owner, workspace };
+  }
+
+  it("['read','work_items:write'] reads back as exactly what those two conferred", async () => {
+    const { token } = await seedLegacyRow(['read', 'work_items:write']);
+    const resolved = await apiTokensService.verify(token);
+    // Asserted against the shipped forward map, key by key — not against a
+    // list retyped here, which would pass even if the map were wrong.
+    const expected = [
+      ...new Set([
+        ...LEGACY_SCOPE_PERMISSIONS.read,
+        ...LEGACY_SCOPE_PERMISSIONS['work_items:write'],
+      ]),
+    ];
+    expect([...resolved.grant].sort()).toEqual([...expected].sort());
+  });
+
+  it('all six legacy strings read back as the whole grantable set', async () => {
+    const { token } = await seedLegacyRow([
+      'read',
+      'work_items:write',
+      'work_items:archive',
+      'work_items:delete',
+      'sprints:write',
+      'integration',
+    ]);
+    const resolved = await apiTokensService.verify(token);
+    expect(resolved.grant.length).toBeGreaterThan(0);
+    for (const key of resolved.grant) expect(typeof key).toBe('string');
+    expect(resolved.grant).toContain('work_item:delete');
+    expect(resolved.grant).toContain('ai:plan');
+  });
+
+  it('an unrecognised stored value yields NO authority and does not throw', async () => {
+    // The asymmetry that matters: a malformed row must degrade to LESS access.
+    const { token } = await seedLegacyRow(['read', 'work_items:nuke', 'utter-nonsense']);
+    const resolved = await apiTokensService.verify(token);
+    expect(resolved.grant).toEqual(['project:browse']);
+  });
+
+  it('a row that is ENTIRELY unrecognised verifies to an empty grant', async () => {
+    const { token } = await seedLegacyRow(['nonsense']);
+    const resolved = await apiTokensService.verify(token);
+    expect(resolved.grant).toEqual([]);
+  });
+
+  it('the DTO never exposes a legacy string as a permission', async () => {
+    const { owner } = await seedLegacyRow(['read', 'work_items:write']);
+    const [listed] = await apiTokensService.listForUser(owner.id);
+    for (const key of listed!.permissions) {
+      expect(key).not.toBe('read');
+      expect(key).not.toBe('work_items:write');
+    }
+    expect(listed!.permissions).toContain('project:browse');
+  });
+
+  it('a MIXED row — one legacy string, one permission key — resolves both', async () => {
+    // Exactly what a real account looks like mid-life: old tokens and new ones
+    // side by side, and nothing migrating between them.
+    const { token } = await seedLegacyRow(['sprints:write', 'project:browse']);
+    const resolved = await apiTokensService.verify(token);
+    expect([...resolved.grant].sort()).toEqual(['project:browse', 'sprint:manage'].sort());
   });
 });
 

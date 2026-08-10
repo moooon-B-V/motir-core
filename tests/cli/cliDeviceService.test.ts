@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // Better-Auth's rate limiter buckets /sign-in|/sign-up per IP (window 10s, max 3),
 // and every test here signs in to obtain the real session cookie the plugin's
@@ -1043,7 +1044,7 @@ describe('toDeviceGrantTokenDTO — the never-expiring token', () => {
     const { owner, workspace } = await createTestWorkspace();
     const { dto, token } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'never expires',
-      scopes: [...CLI_TOKEN_SCOPES],
+      permissions: grantForLegacyScopes([...CLI_TOKEN_SCOPES]),
     });
     expect(dto.expiresAt).toBeNull();
 

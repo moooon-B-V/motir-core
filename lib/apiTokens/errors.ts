@@ -11,8 +11,8 @@
 //   ApiTokenRevokedError  → 401 — the token resolved but was soft-revoked.
 //   ApiTokenExpiredError  → 401 — the token resolved but is past `expiresAt`.
 //   InvalidApiTokenLabelError → 422 — blank / over-cap label at create.
-//   InvalidApiTokenScopeError → 422 — an unrecognized scope string at create
-//                           (Story 7.7 · Subtask 7.7.16).
+//   InvalidTokenGrantError → 422 — a permission at create that is unknown or
+//                           not grantable (MOTIR-2572).
 //
 // The three verify-failure errors are kept DISTINCT (not collapsed to one)
 // so the 7.8.4 gate can surface the precise reason to the agent — "revoked"
@@ -26,14 +26,27 @@ export class InvalidApiTokenLabelError extends Error {
   }
 }
 
-export class InvalidApiTokenScopeError extends Error {
-  readonly code = 'API_TOKEN_INVALID_SCOPE' as const;
-  /** The unknown scope strings that were rejected. */
-  readonly invalidScopes: string[];
-  constructor(invalidScopes: string[]) {
-    super(`Unknown API token scope(s): ${invalidScopes.join(', ')}.`);
-    this.name = 'InvalidApiTokenScopeError';
-    this.invalidScopes = invalidScopes;
+/**
+ * A create request named a permission that is not in the catalog, or is in the
+ * catalog but is not GRANTABLE — no token-reachable operation asserts it
+ * (`GRANTABLE_PERMISSIONS`, `lib/tokens/grant.ts`).
+ *
+ * The two cases share one error on purpose: from the caller's side they are the
+ * same mistake — asking for authority a token cannot hold — and splitting them
+ * would tell an unauthenticated-ish caller which catalog keys exist.
+ *
+ * ⚠️ It REFUSES rather than dropping. A create that silently discarded the keys
+ * it did not recognise would mint a token whose grant is quietly narrower than
+ * the one the user ticked, and they would find out at a 403 much later.
+ */
+export class InvalidTokenGrantError extends Error {
+  readonly code = 'API_TOKEN_INVALID_PERMISSION' as const;
+  /** The permission strings that were rejected. */
+  readonly invalidPermissions: string[];
+  constructor(invalidPermissions: string[]) {
+    super(`Not a grantable permission: ${invalidPermissions.join(', ')}.`);
+    this.name = 'InvalidTokenGrantError';
+    this.invalidPermissions = invalidPermissions;
   }
 }
 

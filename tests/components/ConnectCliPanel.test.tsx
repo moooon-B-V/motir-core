@@ -13,6 +13,7 @@ import { cliTokenLabel } from '@/lib/cliDevice/constants';
 import { CLI_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // The "Connect the CLI" panel (Subtask MOTIR-1869) — the only surface in the
 // product that says the CLI exists. Three things are worth a test and one of them
@@ -203,7 +204,7 @@ describe('the tie line’s promise — a CLI token is listed in the table below'
     // the shipped label reaches the shipped row, not a string typed into a fixture.
     await apiTokensService.create(owner.id, workspace.id, {
       label: cliTokenLabel('workbox'),
-      scopes: CLI_TOKEN_SCOPES,
+      permissions: grantForLegacyScopes(CLI_TOKEN_SCOPES),
     });
     const tokens = await apiTokensService.listForUser(owner.id);
 

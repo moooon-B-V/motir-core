@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // Same reason as the service suite: every approve test signs in for real, and
 // Better-Auth's IP-keyed sign-in bucket (10s / 3) would 429 the fourth one under
@@ -376,7 +377,7 @@ describe('GET /api/cli/device/grant — the approval screen’s read', () => {
     const { token } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'probe',
       expiresAt: null,
-      scopes: ['read'],
+      permissions: grantForLegacyScopes(['read']),
     });
     const withPat = await GRANT(grantReq(grant.user_code, { authorization: `Bearer ${token}` }));
     expect(withPat.status).toBe(401);

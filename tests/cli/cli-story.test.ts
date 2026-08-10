@@ -29,6 +29,7 @@ import {
   type FakeGh,
 } from '../helpers/cliHarness';
 import { randomToken } from '../helpers/random';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // STORY-CLOSING suite for the Motir CLI (Story 7.9 · Subtask 7.9.5 · MOTIR-883).
 //
@@ -110,7 +111,7 @@ async function mintToken(
 ): Promise<{ token: string; id: string }> {
   const { token, dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label,
-    scopes: [...TOKEN_SCOPES],
+    permissions: grantForLegacyScopes([...TOKEN_SCOPES]),
   });
   return { token, id: dto.id };
 }
@@ -715,7 +716,7 @@ describe('motir show --activity / --comments — the discussion, from a real ten
     const item = await argumentativeItem(fx);
     const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'read-only',
-      scopes: ['read'],
+      permissions: grantForLegacyScopes(['read']),
     });
     const env = { MOTIR_TOKEN: token, MOTIR_SERVER: server.url };
 

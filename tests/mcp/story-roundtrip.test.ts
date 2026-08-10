@@ -14,6 +14,7 @@ import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // Story-CLOSING suite for the Motir MCP server (Story 7.7 · Subtask 7.7.12).
 //
@@ -83,7 +84,7 @@ async function connect(token?: string): Promise<Client> {
 async function fullToken(fx: WorkItemFixture, label = 'full'): Promise<string> {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label,
-    scopes: [...TOKEN_SCOPES],
+    permissions: grantForLegacyScopes([...TOKEN_SCOPES]),
   });
   return token;
 }
@@ -97,7 +98,10 @@ async function scopedToken(
   scopes: TokenScope[],
   label = 'scoped',
 ): Promise<string> {
-  const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, { label, scopes });
+  const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+    label,
+    permissions: grantForLegacyScopes(scopes),
+  });
   return token;
 }
 

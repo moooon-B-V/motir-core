@@ -11,9 +11,10 @@ import {
   ApiTokenRevokedError,
   InvalidApiTokenError,
   InvalidApiTokenLabelError,
-  InvalidApiTokenScopeError,
+  InvalidTokenGrantError,
 } from '@/lib/apiTokens/errors';
-import { DEFAULT_TOKEN_SCOPES, isTokenScope, type TokenScope } from '@/lib/mcp/scopes';
+import { DEFAULT_TOKEN_GRANT, expandStoredGrant, isGrantable } from '@/lib/tokens/grant';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ApiTokenDto, CreateApiTokenResult, TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 
 // API-token service (Story 7.8 · Subtask 7.8.1) — the auth substrate every
@@ -49,11 +50,11 @@ export interface CreateApiTokenInput {
   /** Absolute expiry, or null/undefined to never expire. The settings UI
    * derives this from its 30/90/365-day-or-never select. */
   expiresAt?: Date | null;
-  /** The capability scopes to grant (Story 7.7 · Subtask 7.7.16). Omit/undefined
-   * = the default-all-minus-delete set (`DEFAULT_TOKEN_SCOPES`); an explicit list
-   * narrows the grant. Every entry must be a known `TokenScope` or create rejects
-   * with `InvalidApiTokenScopeError` (422). */
-  scopes?: string[];
+  /** The GRANT — the permission keys this token may exercise (MOTIR-2572).
+   * Omit/undefined = `DEFAULT_TOKEN_GRANT` (every grantable permission except
+   * the irreversible one); an explicit list narrows it. Every entry must be
+   * GRANTABLE or create rejects with `InvalidTokenGrantError` (422). */
+  permissions?: string[];
 }
 
 function normalizeLabel(label: string): string {
@@ -65,17 +66,23 @@ function normalizeLabel(label: string): string {
 }
 
 /**
- * Resolve the scopes a `create` call persists: the default-all-minus-delete set
- * when the caller passes none, else the explicit list — validated so every
- * entry is a known {@link TokenScope}, rejecting any unknown string with
- * {@link InvalidApiTokenScopeError} (422). Returns a de-duplicated list.
+ * Resolve the GRANT a `create` call persists: {@link DEFAULT_TOKEN_GRANT} when
+ * the caller passes none, else the explicit list — validated so every entry is
+ * GRANTABLE, rejecting anything else with {@link InvalidTokenGrantError} (422).
+ * Returns a de-duplicated list.
+ *
+ * An EMPTY explicit list is allowed through to persistence and yields a token
+ * that can do nothing. That is a legitimate thing to mint (and the surface
+ * refuses it with its own copy before it gets here); refusing it in the service
+ * would make "grant nothing" un-expressible through the API for no safety gain —
+ * the failure direction is already the harmless one.
  */
-function resolveScopes(requested: string[] | undefined): TokenScope[] {
-  if (requested === undefined) return [...DEFAULT_TOKEN_SCOPES];
-  const invalid = requested.filter((scope) => !isTokenScope(scope));
-  if (invalid.length > 0) throw new InvalidApiTokenScopeError(invalid);
-  // Validated above, so every entry is a TokenScope; de-dup to a stable set.
-  return [...new Set(requested as TokenScope[])];
+function resolveGrant(requested: string[] | undefined): PermissionKey[] {
+  if (requested === undefined) return [...DEFAULT_TOKEN_GRANT];
+  const invalid = requested.filter((key) => !isGrantable(key));
+  if (invalid.length > 0) throw new InvalidTokenGrantError(invalid);
+  // Validated above, so every entry is a grantable PermissionKey.
+  return [...new Set(requested as PermissionKey[])];
 }
 
 export const apiTokensService = {
@@ -92,9 +99,10 @@ export const apiTokensService = {
     input: CreateApiTokenInput,
   ): Promise<CreateApiTokenResult> {
     const label = normalizeLabel(input.label);
-    // Validate + default the scopes BEFORE the membership round-trip, so a bad
-    // scope list fails fast (422) without touching the DB.
-    const scopes = resolveScopes(input.scopes);
+    // Validate + default the grant BEFORE the membership round-trip, so a bad
+    // permission list fails fast (422) without touching the DB — and, since the
+    // whole create is one write, nothing partial is ever persisted.
+    const permissions = resolveGrant(input.permissions);
     // The token BINDS to `workspaceId` (bug 7.21), so the user must be a member
     // of it — the create UI only offers the user's own workspaces, but the
     // server is the authority (a forged id throws NotAMemberError → 403).
@@ -109,7 +117,9 @@ export const apiTokensService = {
           tokenHash: hashToken(token),
           tokenPrefix: tokenPrefixOf(token),
           expiresAt: input.expiresAt ?? null,
-          scopes,
+          // The column's name is historical; it stores the grant. See its
+          // schema doc-comment and `docs/decisions/token-permissions.md` §5.
+          scopes: permissions,
         },
         tx,
       ),
@@ -177,16 +187,30 @@ export const apiTokensService = {
    * and returns the owning User PLUS the workspace the token is BOUND to
    * (bug 7.21) — the MCP bearer gate resolves the request workspace from this
    * `workspaceId`, NOT the owner's default workspace, so a token minted in
-   * workspace A always acts on A — AND the token's granted `scopes` (Story 7.7
-   * · Subtask 7.7.16), so the dispatch gate (7.7.17) can narrow the owner's 6.4
-   * role to the operations the scopes permit.
+   * workspace A always acts on A — AND the token's resolved GRANT
+   * (MOTIR-2572), so each dispatch seam can narrow the owner's role to the
+   * operations the grant permits.
+   *
+   * ⚠️ The grant is the EXPANDED one. A row minted before MOTIR-2572 holds
+   * legacy scope strings, and `expandStoredGrant` maps them forward here — once,
+   * at the single seam every caller comes through — so no gate ever sees a
+   * legacy string. An unrecognised stored value is DROPPED and logged rather
+   * than throwing: a malformed row must degrade to LESS access, never to a
+   * default grant nobody chose.
    *
    * Returns the raw Prisma User (not a DTO) deliberately: the only caller is
    * internal infrastructure (the 7.8.4 transport gate building the request
    * actor), the same internal-caller exception `usersService.findOrCreateOAuthUser`
    * documents — there is no public-API shape for "the authenticated principal".
    */
-  async verify(plaintext: string): Promise<{ user: User; workspaceId: string; scopes: string[] }> {
+  async verify(plaintext: string): Promise<{
+    user: User;
+    workspaceId: string;
+    grant: PermissionKey[];
+    /** @deprecated SCAFFOLDING — the raw column, for the two gates that have
+     * not moved yet. Removed by MOTIR-2576 (MCP) / MOTIR-2577 (`/api/v1`). */
+    scopes: string[];
+  }> {
     const tokenHash = hashToken(plaintext);
     return withSystemContext(async (tx) => {
       const row = await apiTokenRepository.findByTokenHash(tokenHash, tx);
@@ -201,7 +225,13 @@ export const apiTokensService = {
       if (lastUsed === undefined || now.getTime() - lastUsed >= LAST_USED_THROTTLE_MS) {
         await apiTokenRepository.touchLastUsed(row.id, now, tx);
       }
-      return { user: row.user, workspaceId: row.workspaceId, scopes: row.scopes };
+      const { grant, unrecognised } = expandStoredGrant(row.scopes);
+      if (unrecognised.length > 0) {
+        console.warn(
+          `[apiTokens] token ${row.id} carries ${unrecognised.length} unrecognised grant value(s); ignoring them: ${unrecognised.map((u) => JSON.stringify(u.value)).join(', ')}`,
+        );
+      }
+      return { user: row.user, workspaceId: row.workspaceId, grant, scopes: row.scopes };
     });
   },
 };

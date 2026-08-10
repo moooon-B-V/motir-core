@@ -9,6 +9,7 @@ import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { createV1Caller, bearer } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). Real Postgres, real PATs minted through the shipped service —
@@ -70,7 +71,7 @@ describe('withV1Route — authentication', () => {
     // expired — minted with an expiry already in the past
     const expiring = await apiTokensService.create(caller.user.id, caller.workspace.id, {
       label: 'expired',
-      scopes: ['read'],
+      permissions: grantForLegacyScopes(['read']),
       expiresAt: new Date(Date.now() - 60_000),
     });
 

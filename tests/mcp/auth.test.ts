@@ -5,6 +5,7 @@ import { verifyMcpToken } from '@/lib/mcp/auth';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // MCP transport-level auth gate (Subtask 7.8.4) over real Postgres. `verifyMcpToken`
 // is the function `withMcpAuth` calls per request; returning `undefined` is what
@@ -63,7 +64,7 @@ describe('verifyMcpToken', () => {
     const fx = await makeWorkItemFixture();
     const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'scoped',
-      scopes: ['read', 'work_items:write'],
+      permissions: grantForLegacyScopes(['read', 'work_items:write']),
     });
 
     const info = await verifyMcpToken(reqWithBearer(), token);

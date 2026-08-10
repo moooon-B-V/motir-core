@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // The story-acceptance INTEGRATION SEAM (Story MOTIR-1627 · Subtask MOTIR-1637)
 // against a REAL Postgres — the assembled flow across the subtasks, not each
@@ -83,7 +84,7 @@ beforeEach(async () => {
   token = (
     await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'ci',
-      scopes: ['integration'],
+      permissions: grantForLegacyScopes(['integration']),
     })
   ).token;
 });
@@ -159,7 +160,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
   it('a token WITHOUT the integration scope cannot publish (403)', async () => {
     const story = await inReviewStory(fx);
     const readOnly = (
-      await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'ro', scopes: ['read'] })
+      await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'ro', permissions: grantForLegacyScopes(['read']) })
     ).token;
     const res = await publishVia(readOnly, story, {});
     expect(res.status).toBe(403);

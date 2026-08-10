@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 
 // Transport tests for the API-tokens settings routes (Story 7.8 · Subtask
 // 7.8.3, + bug 7.21 scope): GET/POST `/api/me/api-tokens` + DELETE
@@ -150,6 +151,80 @@ describe('POST /api/me/api-tokens', () => {
     expect((await POST(postReq({ expiresInDays: 90, workspaceId: workspace.id }))).status).toBe(
       400,
     );
+  });
+});
+
+describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
+  it('omitting `permissions` mints the default grant', async () => {
+    const { owner, workspace } = await makeUserWs();
+    signInAs(owner);
+    const res = await POST(postReq({ label: 'default', workspaceId: workspace.id }));
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { dto: { permissions: string[] } };
+    expect([...body.dto.permissions].sort()).toEqual([...DEFAULT_TOKEN_GRANT].sort());
+  });
+
+  it('an explicit grant round-trips through the response DTO', async () => {
+    const { owner, workspace } = await makeUserWs();
+    signInAs(owner);
+    const res = await POST(
+      postReq({
+        label: 'narrow',
+        workspaceId: workspace.id,
+        permissions: ['project:browse'],
+      }),
+    );
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { dto: { permissions: string[] } };
+    expect(body.dto.permissions).toEqual(['project:browse']);
+  });
+
+  it('a permission that is not GRANTABLE is 422, and nothing is minted', async () => {
+    const { owner, workspace } = await makeUserWs();
+    signInAs(owner);
+    const res = await POST(
+      postReq({
+        label: 'bad',
+        workspaceId: workspace.id,
+        permissions: ['project:browse', 'board:configure'],
+      }),
+    );
+    expect(res.status).toBe(422);
+    expect((await res.json()).code).toBe('API_TOKEN_INVALID_PERMISSION');
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('an unknown permission string is 422, and nothing is minted', async () => {
+    const { owner, workspace } = await makeUserWs();
+    signInAs(owner);
+    const res = await POST(
+      postReq({ label: 'bad', workspaceId: workspace.id, permissions: ['work_item:nuke'] }),
+    );
+    expect(res.status).toBe(422);
+    expect(await db.apiToken.count()).toBe(0);
+  });
+
+  it('a non-array `permissions` is a 400 SHAPE error, not a 422', async () => {
+    // The route owns the shape; the service owns which strings are acceptable.
+    const { owner, workspace } = await makeUserWs();
+    signInAs(owner);
+    const res = await POST(
+      postReq({ label: 'bad', workspaceId: workspace.id, permissions: 'project:browse' }),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('a LEGACY scope string posted to the new field is refused, not silently accepted', async () => {
+    // The field rename is a contract change. A client still posting the six-scope
+    // vocabulary must get a loud 422 rather than a token whose grant is not what
+    // it asked for.
+    const { owner, workspace } = await makeUserWs();
+    signInAs(owner);
+    const res = await POST(
+      postReq({ label: 'legacy', workspaceId: workspace.id, permissions: ['work_items:write'] }),
+    );
+    expect(res.status).toBe(422);
+    expect(await db.apiToken.count()).toBe(0);
   });
 });
 

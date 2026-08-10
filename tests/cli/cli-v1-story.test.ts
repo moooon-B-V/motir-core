@@ -8,6 +8,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { truncateAuthTables } from '../helpers/db';
 import { startMcpHttpServer, type McpTestServer } from '../helpers/mcpHttpServer';
 import { makeCliWorkspace, type CliWorkspace } from '../helpers/cliHarness';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // THE STORY'S END-TO-END (Story 11.5 · Subtask 11.5.8 — MOTIR-2216).
 //
@@ -75,7 +76,7 @@ async function tenant(): Promise<{ fx: WorkItemFixture; token: string }> {
   const fx = await makeWorkItemFixture();
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label: 'cli',
-    scopes: [...TOKEN_SCOPES],
+    permissions: grantForLegacyScopes([...TOKEN_SCOPES]),
   });
   return { fx, token };
 }
@@ -227,7 +228,7 @@ describe('the BUILT binary, in the states a happy path skips', () => {
     // what a 403 looks like.
     const { token: writeOnly } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'write-only',
-      scopes: ['work_items:write'],
+      permissions: grantForLegacyScopes(['work_items:write']),
     });
 
     const result = await ws.run(['ready'], { env: { MOTIR_TOKEN: writeOnly } });

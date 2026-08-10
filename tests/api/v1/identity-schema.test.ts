@@ -57,6 +57,7 @@ describe('presentMe', () => {
       user: userRow(),
       workspaceId: 'ws_1',
       scopes: ['read', 'work_items:write'],
+      grant: [],
     } as Parameters<typeof presentMe>[0]);
 
     expect(payload).toEqual({
@@ -74,6 +75,7 @@ describe('presentMe', () => {
       user: userRow({ ssn: '000-00-0000', internalRiskScore: 42 }),
       workspaceId: 'ws_1',
       scopes: ['read'],
+      grant: [],
     } as Parameters<typeof presentMe>[0]);
 
     expect(Object.keys(payload.user).sort()).toEqual(['email', 'id', 'name']);
@@ -89,6 +91,7 @@ describe('presentMe', () => {
       user: userRow({ image: null }),
       workspaceId: 'ws_1',
       scopes: [],
+      grant: [],
     } as Parameters<typeof presentMe>[0]);
 
     expect(() => meSchema.parse(payload)).not.toThrow();

@@ -3,7 +3,7 @@
 // (7.8.3) and back. The `tokenHash` NEVER appears in a DTO; the plaintext
 // secret appears in exactly one place ever — `CreateApiTokenResult.token`.
 
-import type { TokenScope } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 /** One token as the settings list renders it. Display-safe: the `tokenPrefix`
  * is a hint, never the secret, and there is no `tokenHash`. Dates are ISO
@@ -25,11 +25,28 @@ export interface ApiTokenDto {
    * MCP gate resolves the request workspace from it. */
   workspace: { id: string; name: string };
   organization: { id: string; name: string };
-  /** The granted capability scopes (Story 7.7 · Subtask 7.7.16) the list
-   * displays — the create-modal picker persists them and the row summarises
-   * them (`read` / `work_items:write` / `work_items:archive` /
-   * `work_items:delete` / `sprints:write` / `integration`). */
-  scopes: TokenScope[];
+  /**
+   * The token's GRANT (MOTIR-2572) — the permission keys it confers, RESOLVED:
+   * a row written before this story has had its legacy scope strings expanded
+   * through `LEGACY_SCOPE_PERMISSIONS` by the time it reaches here.
+   *
+   * The DTO deliberately exposes the EXPANDED grant and never the raw
+   * `api_token.scopes` column, so no consumer can see — or come to depend on —
+   * a legacy string. The list row summarises these and the picker persists them.
+   */
+  permissions: PermissionKey[];
+  /**
+   * @deprecated SCAFFOLDING — the RAW `api_token.scopes` column, mixed
+   * vocabulary and all. Removed by MOTIR-2579, which replaces `scopeMeta.tsx`
+   * with the catalog-driven presenter and re-points the two read surfaces onto
+   * {@link ApiTokenDto.permissions}.
+   *
+   * It exists only because those surfaces render through the six-entry scope
+   * table, and replacing that table is 2579's job — behind the design card. Read
+   * `permissions` for anything new; a consumer that reads this is reading a
+   * legacy string.
+   */
+  scopes: string[];
 }
 
 /** One workspace a token can be scoped to (bug 7.21) — the create modal's

@@ -14,6 +14,21 @@ import { RevokeTokenDialog } from './RevokeTokenDialog';
 import type { ApiTokenDto } from './apiTokensClient';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
 import { grantedScopeMeta, grantsDelete, summarizeScopes } from './scopeMeta';
+import { isLegacyTokenScope, type TokenScope } from '@/lib/mcp/scopes';
+
+/**
+ * SCAFFOLDING — removed by MOTIR-2579, with `scopeMeta.tsx` itself.
+ *
+ * The row still renders through the six-entry scope table, so it reads the
+ * DTO's deprecated raw column rather than its `permissions`. Narrowing here
+ * keeps the types honest about what that column actually holds (a row minted
+ * after MOTIR-2572 carries permission keys, which this table cannot render and
+ * which therefore drop out). 2579 replaces the whole path with the
+ * catalog-driven presenter reading `token.permissions`.
+ */
+function legacyScopesOf(token: ApiTokenDto): TokenScope[] {
+  return token.scopes.filter(isLegacyTokenScope);
+}
 
 // The Tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
 // `account-settings.mock.html` Panels 3 + 7. It owns the token-list state
@@ -177,8 +192,8 @@ export function ApiTokensManager({
                   // `--el-text-secondary`. The row's revoked state reads from
                   // its label and its Revoked pill (MOTIR-2475).
                   const dateClass = 'text-(--el-text-secondary)';
-                  const summary = summarizeScopes(token.scopes);
-                  const hasDelete = grantsDelete(token.scopes);
+                  const summary = summarizeScopes(legacyScopesOf(token));
+                  const hasDelete = grantsDelete(legacyScopesOf(token));
                   const expanded = expandedIds.has(token.id);
                   return (
                     <Fragment key={token.id}>
@@ -283,7 +298,7 @@ export function ApiTokensManager({
                               <span className="mr-1 font-sans text-xs text-(--el-text-secondary)">
                                 {t('scopes.detailLead')}
                               </span>
-                              {grantedScopeMeta(token.scopes).map((m) => {
+                              {grantedScopeMeta(legacyScopesOf(token)).map((m) => {
                                 const Icon = m.Icon;
                                 const chipName = t(`scopes.${m.i18nKey}.name`);
                                 return m.danger ? (

@@ -1,6 +1,26 @@
 import type { User, Workspace } from '@/generated/prisma/client';
 import { apiTokensService } from '@/lib/services/apiTokensService';
-import type { TokenScope } from '@/lib/mcp/scopes';
+import { LEGACY_SCOPE_PERMISSIONS, type TokenScope } from '@/lib/mcp/scopes';
+import { DEFAULT_TOKEN_GRANT, type TokenGrant } from '@/lib/tokens/grant';
+import type { PermissionKey } from '@/lib/permissions/catalog';
+
+/**
+ * Mint a fixture token from the LEGACY scope vocabulary (MOTIR-2572).
+ *
+ * The v1 suites express a caller as "a token with these scopes" in ~40 places,
+ * and that is still exactly what they mean — a caller narrowed the way a real
+ * pre-MOTIR-2572 token was. Rather than rewrite every call site, the fixtures
+ * translate through the shipped forward map, so the suites keep asserting the
+ * property they were written for AND exercise the compatibility promise on
+ * every run.
+ *
+ * A fixture that wants the NEW vocabulary passes `permissions` directly.
+ */
+function grantFrom(opts: { scopes?: TokenScope[]; permissions?: TokenGrant }): PermissionKey[] {
+  if (opts.permissions) return [...opts.permissions];
+  if (opts.scopes) return [...new Set(opts.scopes.flatMap((s) => LEGACY_SCOPE_PERMISSIONS[s]))];
+  return [...DEFAULT_TOKEN_GRANT];
+}
 import { createTestWorkspace } from './workspaceFixtures';
 import { makeWorkItemFixture, type WorkItemFixture } from './workItemFixtures';
 
@@ -30,7 +50,12 @@ export interface V1Caller {
  * Defaults to a read-only token, the narrowest credential v1's GETs need.
  */
 export async function createV1Caller(
-  opts: { scopes?: TokenScope[]; label?: string; workspaceName?: string } = {},
+  opts: {
+    scopes?: TokenScope[];
+    permissions?: TokenGrant;
+    label?: string;
+    workspaceName?: string;
+  } = {},
 ): Promise<V1Caller> {
   const { workspace, owner } = await createTestWorkspace(
     opts.workspaceName ? { name: opts.workspaceName } : {},
@@ -46,11 +71,11 @@ export async function createV1Caller(
 export async function withTokenFor(
   user: User,
   workspace: Workspace,
-  opts: { scopes?: TokenScope[]; label?: string } = {},
+  opts: { scopes?: TokenScope[]; permissions?: TokenGrant; label?: string } = {},
 ): Promise<V1Caller> {
   const { token, dto } = await apiTokensService.create(user.id, workspace.id, {
     label: opts.label ?? 'v1 test token',
-    scopes: opts.scopes ?? ['read'],
+    permissions: grantFrom({ scopes: opts.scopes ?? ['read'], permissions: opts.permissions }),
   });
   return { user, workspace, token, tokenId: dto.id, headers: bearer(token) };
 }
@@ -83,6 +108,7 @@ export interface V1ProjectCaller extends V1Caller {
 export async function createV1ProjectCaller(
   opts: {
     scopes?: TokenScope[];
+    permissions?: TokenGrant;
     /** Workspace name — pass a second one to build an independent tenant. */
     workspaceName?: string;
     /** Project key prefix (default `PROD` → items read as `PROD-1`). */
@@ -94,7 +120,7 @@ export async function createV1ProjectCaller(
     ...(opts.identifier ? { identifier: opts.identifier } : {}),
   });
   const caller = await withTokenFor(fixture.owner, fixture.workspace, {
-    ...(opts.scopes ? { scopes: opts.scopes } : {}),
+    ...(opts.scopes || opts.permissions ? { permissions: grantFrom(opts) } : {}),
   });
   return {
     ...caller,
