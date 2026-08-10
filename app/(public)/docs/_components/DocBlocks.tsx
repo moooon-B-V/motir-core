@@ -14,17 +14,46 @@ import { CodeBlock } from './CodeBlock';
 // images, HTML) in a document we author ourselves, where two inline marks are
 // the whole requirement.
 
-/** `**bold**` and `` `code` `` — the two marks this document set uses. */
+/**
+ * The two marks, as a split.
+ *
+ * Bold is `[\s\S]+?` — anything, lazily — and NOT the `[^*]+` it started as.
+ * That character class made "asterisk-free" part of what a bold run IS, so a
+ * bold sentence quoting a glob (`` `*.ts` ``) simply failed to match and printed
+ * its own asterisks. The alternation order does the work the class was doing:
+ * the leftmost match wins, so a code span that OPENS first is matched whole and
+ * a `**` inside it is never a bold delimiter (MOTIR-2616).
+ */
+const INLINE_MARKS = /(\*\*[\s\S]+?\*\*|`[^`]+`)/g;
+
+/**
+ * `**bold**` and `` `code` `` — the two marks this document set uses.
+ *
+ * The bold arm RECURSES. Emitting `part.slice(2, -2)` as a raw string child was
+ * a one-level-deep read of a document set whose authors reasonably assume the
+ * two marks nest, so every `**bold `filename`**` printed its backticks on the
+ * shipped page. Feeding the run back through here makes a code span inside bold
+ * a real `<code>` inside the `<strong>`.
+ *
+ * The code arm stays LITERAL, and that asymmetry is the point: code means "these
+ * exact characters", so a `**` inside a code span is two asterisks a reader is
+ * meant to see. A symmetric fix would be a renderer that has quietly stopped
+ * rendering one of its two marks.
+ */
 function renderInline(text: string): ReactNode[] {
-  return text.split(/(\*\*[^*]+\*\*|`[^`]+`)/g).map((part, index) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
+  return text.split(INLINE_MARKS).map((part, index) => {
+    // The length guards are what separate a MATCHED run from a lone `**` or a
+    // lone backtick sitting in ordinary text — both of which pass a
+    // startsWith/endsWith pair on their own and would otherwise render as an
+    // empty element, swallowing the character the author typed.
+    if (part.length > 4 && part.startsWith('**') && part.endsWith('**')) {
       return (
         <strong key={index} className="font-semibold text-(--el-text)">
-          {part.slice(2, -2)}
+          {renderInline(part.slice(2, -2))}
         </strong>
       );
     }
-    if (part.startsWith('`') && part.endsWith('`')) {
+    if (part.length > 2 && part.startsWith('`') && part.endsWith('`')) {
       return (
         <code
           key={index}
