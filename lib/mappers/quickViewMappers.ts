@@ -4,6 +4,7 @@ import type { QuickViewData } from '@/lib/dto/quickView';
 import type { LinkedPullRequestDto } from '@/lib/dto/github';
 import type { QuickViewSprintOption } from '@/lib/dto/quickView';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { EstimationConfigDto } from '@/lib/dto/estimation';
 import type { Locale } from '@/lib/i18n/locales';
 import { formatDate } from '@/lib/utils/datetime';
 import { formatDurationMinutes } from '@/lib/utils/duration';
@@ -40,6 +41,7 @@ export function toQuickViewData(
   // The service reads them and hands them in; this mapper stays pure.
   sprints: QuickViewSprintOption[],
   projectComponents: ComponentDto[],
+  estimationConfig: EstimationConfigDto,
 ): QuickViewData {
   const { item, parent, workflow } = detail;
   const nameById = new Map(members.map((m) => [m.userId, m.name || m.email]));
@@ -109,5 +111,8 @@ export function toQuickViewData(
     members,
     sprints,
     projectComponents,
+    // The badge's edit gate is the SAME project capability the Plan door uses —
+    // reuse the one already resolved rather than reading it twice.
+    estimation: { ...estimationConfig, canEdit: canPlan },
   };
 }

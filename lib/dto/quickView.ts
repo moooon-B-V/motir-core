@@ -12,6 +12,7 @@ import type { WorkflowDto } from '@/lib/dto/workflows';
 import type { WorkspaceMemberDTO } from '@/lib/dto/workspaces';
 import type { SprintDto } from '@/lib/dto/sprints';
 import type { ComponentDto } from '@/lib/dto/components';
+import type { EstimationConfigDto } from '@/lib/dto/estimation';
 
 // The quick-view (peek) payload (Subtask 2.5.19; bug 8.8.2). A serializable,
 // already-shaped slice of the detail read that the /api/work-items/peek route
@@ -230,4 +231,20 @@ export interface QuickViewData {
    * `projectIdentifier` above already scopes.)
    */
   projectComponents: ComponentDto[];
+  /**
+   * The project's estimation config + this actor's edit capability (MOTIR-2593),
+   * so the peek can provide it to the `EstimateBadge` its Story-points row
+   * composes.
+   *
+   * ⚠️ It has to ride the payload. `EstimationConfigProvider` is mounted in three
+   * places on `origin/main` — the backlog page, the item detail page and
+   * `IssueTreeSection` — and the peek is mounted from six, none of them inside
+   * that tree section. Outside a provider `useEstimationConfig()` falls back to
+   * `{ story_points, fibonacci, [], canEdit: false }`, which is the right default
+   * for a drag preview and WRONG here: the badge would render, look correct, show
+   * the project's real number, and be permanently inert — with no error, no failed
+   * test, and the project's actual statistic and deck ignored. A silent read-only
+   * is the failure mode this field exists to prevent.
+   */
+  estimation: EstimationConfigDto & { canEdit: boolean };
 }

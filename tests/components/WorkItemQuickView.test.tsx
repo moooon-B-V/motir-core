@@ -56,6 +56,12 @@ const DATA: QuickViewData = {
   members: [],
   sprints: [],
   projectComponents: [],
+  estimation: {
+    estimationStatistic: 'story_points' as const,
+    pointScale: 'fibonacci' as const,
+    customScaleValues: [],
+    canEdit: true,
+  },
 };
 
 afterEach(() => {

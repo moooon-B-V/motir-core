@@ -80,6 +80,12 @@ const DATA: QuickViewData = {
   members: [],
   sprints: [],
   projectComponents: [],
+  estimation: {
+    estimationStatistic: 'story_points' as const,
+    pointScale: 'fibonacci' as const,
+    customScaleValues: [],
+    canEdit: true,
+  },
 };
 
 // The /items row peek-on-click (the per-row eye `QuickViewTrigger` was removed

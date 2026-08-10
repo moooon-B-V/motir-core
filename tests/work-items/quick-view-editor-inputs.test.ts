@@ -172,6 +172,26 @@ describe('getQuickView() — the editor inputs the editable rail needs (MOTIR-25
     expect(p.dueLabel).not.toBe(p.dueDate);
   });
 
+  it('carries the project’s ESTIMATION CONFIG, so the composed badge is not silently inert', async () => {
+    const s = await makeScenario('peek-estimation@example.com');
+    const item = await workItemsService.createWorkItem(
+      { projectId: s.project.id, kind: 'task', title: 'Estimated' },
+      s.ctx,
+    );
+
+    const p = await peek(s, item.identifier);
+
+    // Without this the badge falls back to `{ story_points, fibonacci, [],
+    // canEdit: false }` — it renders, shows the right number, and never responds
+    // to a click, on every peek surface, with nothing going red.
+    expect(p.estimation.estimationStatistic).toBeTruthy();
+    expect(p.estimation.pointScale).toBeTruthy();
+    expect(Array.isArray(p.estimation.customScaleValues)).toBe(true);
+    // The project owner may edit, so the gate must be true here — a payload that
+    // always said false would reproduce the exact defect this field prevents.
+    expect(p.estimation.canEdit).toBe(true);
+  });
+
   it('does not leak the new option sources to a caller who cannot read the item', async () => {
     const owner = await makeScenario('peek-owner@example.com');
     const item = await workItemsService.createWorkItem(

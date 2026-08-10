@@ -24,6 +24,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { componentRepository } from '@/lib/repositories/componentRepository';
+import { estimationService } from '@/lib/services/estimationService';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
@@ -3703,11 +3704,16 @@ export const workItemsService = {
     // `issueCount` — 1+N on a `no-store` payload fetched on every row click, for
     // a field the picker never reads. (It also re-asserts `project:browse`,
     // which `getIssueDetail` has already done in this same call.)
-    const [detail, members, sprintRows, componentRows] = await Promise.all([
+    const [detail, members, sprintRows, componentRows, estimationConfig] = await Promise.all([
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
       sprintRepository.listByProject(projectId, ctx.workspaceId),
       componentRepository.listByProject(projectId),
+      // MOTIR-2593 — the estimation config the composed `EstimateBadge` needs.
+      // One primary-key project read, in the same round trip; without it the
+      // badge falls back to a read-only default and is silently inert on every
+      // peek surface.
+      estimationService.getEstimationConfig(projectId, ctx),
     ]);
     const sprints = sprintRows.map((s) => ({
       id: s.id,
@@ -3760,6 +3766,7 @@ export const workItemsService = {
       canEdit,
       sprints,
       projectComponents,
+      estimationConfig,
     );
   },
 
