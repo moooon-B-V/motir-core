@@ -1,0 +1,1325 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Motir — the /docs index (MOTIR-2521)</title>
+    <!--
+      design/api-docs/docs-index.mock.html — the documentation area's ROOT.
+
+      Story MOTIR-2315 · Subtask MOTIR-2521. A SIBLING pair to
+      api-docs.mock.html / api-docs.png rather than an edit to it: that asset is
+      2,158 lines covering nine panels of the API reference and its two guides,
+      and the index is a different surface in the same area. Both are indexed by
+      the one design-notes.md, which is what makes design/api-docs/ the area's
+      asset of record.
+
+      Covers (multi-panel — review EACH, mistake #31):
+        1. /docs at desktop, in the shipped shell, with no rail
+        2. /docs at 390 px
+        3. the Q4 rail decision, index beside a surface page
+        4. THE ACCESS PATH — both entrances, before and after
+
+      ⚠️ The <style> block below is copied 1:1 from api-docs.mock.html, which
+      copied it 1:1 from app/globals.css (light) — so this asset cannot drift
+      from the area's tokens, and the shell markup it reuses (site-top,
+      site-foot, docs, docs-nav, navrow, card) is that asset's, which was itself
+      drawn against a render of the running pages. The only addition is the
+      .surface-row block at the end, and it names tokens only.
+    -->
+    <style>
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      /* ── Tier 0 + shape tokens + Tier 3 --el-* — copied 1:1 from app/globals.css (light) ── */
+      :root {
+        --color-primary: #5645d4;
+        --color-primary-foreground: #ffffff;
+        --color-primary-pressed: #4534b3;
+        --color-background: #ffffff;
+        --color-foreground: #1a1a1a;
+        --color-surface: #f6f5f4;
+        --color-surface-soft: #fafaf9;
+        --color-charcoal: #37352f;
+        --color-slate: #5d5b54;
+        --color-steel: #787671;
+        --color-stone: #a4a097;
+        --color-muted: #f3f4f6;
+        --color-muted-foreground: #787671;
+        --color-hairline: #e5e3df;
+        --color-hairline-soft: #ede9e4;
+        --color-hairline-strong: #c8c4be;
+        --color-border: #e5e3df;
+        --color-accent: #ff64c8;
+        --color-accent-teal: #2a9d99;
+        --color-accent-green: #1aae39;
+        --color-tint-peach: #ffe8d4;
+        --color-tint-rose: #fde0ec;
+        --color-tint-mint: #d9f3e1;
+        --color-tint-lavender: #e6e0f5;
+        --color-tint-sky: #dcecfa;
+        --color-tint-yellow: #fef7d6;
+        --color-success: #1aae39;
+        --color-warning: #dd5b00;
+        --color-destructive: #e03131;
+        --color-destructive-foreground: #ffffff;
+        --color-info: #0075de;
+        --color-link: #0075de;
+
+        --radius-btn: 8px;
+        --radius-card: 12px;
+        --radius-input: 8px;
+        --radius-modal: 12px;
+        --radius-badge: 9999px;
+        --radius-control: 6px;
+        --radius-kbd: 4px;
+        --shadow-subtle: 0 1px 2px rgba(15, 15, 15, 0.04);
+        --shadow-card: 0 4px 12px rgba(15, 15, 15, 0.08);
+        --shadow-elevated: 0 8px 24px rgba(15, 15, 15, 0.12);
+        --shadow-modal: 0 16px 48px -8px rgba(15, 15, 15, 0.16);
+        --spacing-card-padding: 24px;
+        --spacing-control-x: 10px;
+        --spacing-control-y: 6px;
+        --spacing-icon-btn: 4px;
+        --spacing-chip-x: 10px;
+        --spacing-chip-y: 2px;
+        --spacing-btn-x: 18px;
+        --spacing-btn-y: 10px;
+        --spacing-btn-x-sm: 12px;
+        --spacing-input-x: 16px;
+        --spacing-input-y: 12px;
+        --spacing-kbd-x: 6px;
+        --spacing-kbd-y: 2px;
+        --spacing-tooltip-x: 8px;
+        --spacing-tooltip-y: 4px;
+        --spacing-sm: 12px;
+        --spacing-md: 16px;
+        --height-btn-sm: 32px;
+        --height-btn-md: 40px;
+        --height-btn-lg: 48px;
+        --height-control: 36px;
+        --height-input: 44px;
+
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-serif: Georgia, serif;
+        --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+        --el-page-bg: var(--color-background);
+        --el-text: var(--color-foreground);
+        --el-text-strong: var(--color-charcoal);
+        --el-text-secondary: var(--color-slate);
+        --el-text-tertiary: var(--color-steel);
+        --el-text-muted: var(--color-muted-foreground);
+        --el-text-faint: var(--color-stone);
+        --el-text-inverted: var(--color-background);
+        --el-accent: var(--color-primary);
+        --el-accent-on-surface: var(--color-primary);
+        --el-accent-text: var(--color-primary-foreground);
+        --el-accent-pressed: var(--color-primary-pressed);
+        --el-highlight: var(--color-accent);
+        --el-surface: var(--color-surface);
+        --el-surface-soft: var(--color-surface-soft);
+        --el-muted: var(--color-muted);
+        --el-border: var(--color-border);
+        --el-border-soft: var(--color-hairline-soft);
+        --el-border-strong: var(--color-hairline-strong);
+        --el-link: var(--color-link);
+        --el-success: var(--color-success);
+        --el-warning: var(--color-warning);
+        --el-info: var(--color-info);
+        --el-danger: var(--color-destructive);
+        --el-danger-text: var(--color-destructive-foreground);
+        --el-tint-peach: var(--color-tint-peach);
+        --el-tint-rose: var(--color-tint-rose);
+        --el-tint-mint: var(--color-tint-mint);
+        --el-tint-lavender: var(--color-tint-lavender);
+        --el-tint-sky: var(--color-tint-sky);
+        --el-tint-yellow: var(--color-tint-yellow);
+        --el-type-task: var(--color-info);
+        --el-code-bg: var(--color-muted);
+        --el-code-text: var(--color-charcoal);
+        --el-sidebar-bg: var(--color-surface);
+        --el-sidebar-border: var(--color-hairline);
+        --el-sidebar-item-bg-hover: #eeede9;
+        --el-sidebar-item-bg-active: var(--color-background);
+        --focus-ring-color: var(--color-primary);
+      }
+      [data-theme='dark'] {
+        color-scheme: dark;
+        --color-background: #0f0f0f;
+        --color-foreground: #f3f4f6;
+        --color-surface: #1a1a1a;
+        --color-surface-soft: #161616;
+        --color-charcoal: #e5e5e5;
+        --color-slate: #a4a097;
+        --color-steel: #787671;
+        --color-stone: #5d5b54;
+        --color-muted: #1a1a1a;
+        --color-muted-foreground: #a4a097;
+        --color-hairline: #2a2a2a;
+        --color-hairline-soft: #242424;
+        --color-hairline-strong: #3a3a3a;
+        --color-border: #2a2a2a;
+        --color-primary: #7b6ce5;
+        --color-tint-peach: #3a2a1a;
+        --color-tint-rose: #3a1f2a;
+        --color-tint-mint: #1a2f25;
+        --color-tint-lavender: #2a253a;
+        --color-tint-sky: #1a2a3a;
+        --color-tint-yellow: #3a341a;
+        --color-link: #58a6ff;
+        --el-sidebar-item-bg-hover: #222222;
+      }
+
+      /* ── Mock chrome (NOT part of the design — just the review page) ─────── */
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--el-surface);
+        color: var(--el-text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        padding: 32px 24px 96px;
+      }
+      .review-head {
+        max-width: 1180px;
+        margin: 0 auto 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .review-head h1 {
+        font-family: var(--font-serif);
+        font-size: 22px;
+        margin: 0;
+      }
+      .review-head p {
+        margin: 4px 0 0;
+        color: var(--el-text-secondary);
+        font-size: 13px;
+      }
+      .toggle {
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+        padding: 8px 14px;
+        border-radius: var(--radius-btn);
+        border: 1px solid var(--el-border);
+        background: var(--el-page-bg);
+        color: var(--el-text);
+        cursor: pointer;
+      }
+      .panel-label {
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--el-text-faint);
+        margin: 44px auto 10px;
+        padding-left: 2px;
+        max-width: 1180px;
+      }
+      .panel-label .note {
+        display: block;
+        margin-top: 4px;
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 400;
+        letter-spacing: 0;
+        text-transform: none;
+        color: var(--el-text-muted);
+        max-width: 78ch;
+        line-height: 1.55;
+      }
+      .panel {
+        max-width: 1180px;
+        margin: 0 auto;
+      }
+      .stage {
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+
+      /* ── The shipped marketing chrome — markup mirrored 1:1 from
+           app/(public)/explore/_components/ExploreTopBar.tsx ─────────────── */
+      .site-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        border-bottom: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 12px var(--spacing-card-padding);
+      }
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand .tile {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--radius-control);
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .brand .name {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--el-text);
+      }
+      .site-nav {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+      }
+      /* The SHIPPED treatment: a future page renders as a non-interactive label. */
+      .site-nav .nav-label {
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      /* The SHIPPED treatment for a nav item that resolves to a real page. */
+      .site-nav .nav-link {
+        font-size: 13.5px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-nav .nav-current {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--el-accent-on-surface);
+        text-decoration: none;
+      }
+      .site-foot {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 32px;
+        border-top: 1px solid var(--el-border);
+        background: var(--el-surface-soft);
+        padding: 32px var(--spacing-card-padding);
+      }
+      .site-foot h2 {
+        margin: 0 0 10px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .site-foot ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: var(--el-text-muted);
+      }
+      .site-foot a {
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .site-foot .tagline {
+        margin: 8px 0 0;
+        max-width: 22rem;
+        font-size: 13px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+
+      /* ── The docs shell (THIS design) ───────────────────────────────────── */
+      .docs {
+        display: flex;
+        min-height: 660px;
+      }
+      .docs-nav {
+        flex: none;
+        width: 264px;
+        border-right: 1px solid var(--el-border);
+        background: var(--el-sidebar-bg);
+        padding: 16px 12px 24px;
+        overflow: hidden;
+      }
+      .docs-main {
+        flex: 1;
+        min-width: 0;
+        padding: 28px 36px 40px;
+      }
+      .docs-aside {
+        flex: none;
+        width: 200px;
+        border-left: 1px solid var(--el-border);
+        padding: 28px 16px;
+      }
+      .searchbox {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border: 1px solid var(--el-border-strong);
+        border-radius: var(--radius-input);
+        background: var(--el-page-bg);
+        color: var(--el-text-faint);
+        font-size: 13px;
+      }
+      .searchbox .kbd {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        padding: var(--spacing-kbd-y) var(--spacing-kbd-x);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-kbd);
+        color: var(--el-text-faint);
+      }
+      .navgroup {
+        margin-top: 18px;
+      }
+      .navgroup > h3 {
+        margin: 0 0 6px;
+        padding-left: var(--spacing-control-x);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .navrow {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: var(--height-control);
+        padding: 0 var(--spacing-control-x);
+        border-radius: var(--radius-control);
+        font-size: 13px;
+        color: var(--el-text-secondary);
+        text-decoration: none;
+      }
+      .navrow:hover {
+        background: var(--el-sidebar-item-bg-hover);
+      }
+      .navrow.is-active {
+        background: var(--el-sidebar-item-bg-active);
+        color: var(--el-text);
+        font-weight: 600;
+        box-shadow: var(--shadow-subtle);
+      }
+      .navrow .op {
+        margin-left: auto;
+        font-family: var(--font-mono);
+        font-size: 10px;
+        color: var(--el-text-faint);
+      }
+
+      /* ── HTTP method chip — a Pill, hue in the BACKGROUND, --el-text-strong ── */
+      .verb {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 52px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        color: var(--el-text-strong);
+        border: 1px solid transparent;
+      }
+      .verb--get {
+        background: var(--el-tint-sky);
+      }
+      .verb--post {
+        background: var(--el-tint-mint);
+      }
+      .verb--patch {
+        background: var(--el-tint-peach);
+      }
+      .verb--delete {
+        background: var(--el-tint-rose);
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-sans);
+        font-size: 12px;
+        font-weight: 500;
+        border: 1px solid transparent;
+        white-space: nowrap;
+      }
+      .pill--neutral {
+        background: var(--el-surface);
+        color: var(--el-text-secondary);
+        border-color: var(--el-border);
+      }
+      .pill--scope {
+        background: var(--el-tint-lavender);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      .pill--warning {
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 500;
+        line-height: 1;
+        border-radius: var(--radius-btn);
+        height: var(--height-btn-md);
+        padding: 0 var(--spacing-btn-x);
+        border: 1px solid transparent;
+        cursor: pointer;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .btn-sm {
+        height: var(--height-btn-sm);
+        padding: 0 var(--spacing-btn-x-sm);
+        font-size: 12px;
+      }
+      .btn-primary {
+        background: var(--el-accent);
+        color: var(--el-accent-text);
+      }
+      .btn-secondary {
+        background: transparent;
+        color: var(--el-text);
+        border-color: var(--el-border-strong);
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--el-text);
+      }
+
+      .card {
+        background: var(--el-page-bg);
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        box-shadow: var(--shadow-subtle);
+        overflow: hidden;
+      }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px var(--spacing-card-padding);
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .card-head h3 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .card-head .hsub {
+        margin-top: 3px;
+        max-width: 54ch;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--el-text-muted);
+      }
+      .card-body {
+        padding: 16px var(--spacing-card-padding) 18px;
+      }
+
+      /* ── Docs typography ────────────────────────────────────────────────── */
+      .doc h1 {
+        margin: 0 0 6px;
+        font-family: var(--font-serif);
+        font-size: 26px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h2 {
+        margin: 28px 0 8px;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .doc h3 {
+        margin: 20px 0 6px;
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .doc p {
+        margin: 0 0 12px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.65;
+        color: var(--el-text-secondary);
+      }
+      .doc .lede {
+        max-width: 68ch;
+        font-size: 15px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .doc code {
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        padding: 1px 5px;
+        border-radius: var(--radius-kbd);
+        background: var(--el-code-bg);
+        color: var(--el-code-text);
+      }
+      .doc ul {
+        margin: 0 0 12px;
+        padding-left: 20px;
+        max-width: 68ch;
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--el-text-secondary);
+      }
+
+      /* ⚠️ WIDE CONTENT SCROLLS INSIDE ITS OWN CONTAINER, never the page. */
+      .codeblock {
+        position: relative;
+        margin: 0 0 16px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        background: var(--el-code-bg);
+        overflow: hidden;
+      }
+      .codeblock > pre {
+        margin: 0;
+        padding: 14px 16px;
+        overflow-x: auto;
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        line-height: 1.65;
+        color: var(--el-code-text);
+        white-space: pre;
+      }
+      .codeblock .copy {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+      }
+      .codeblock .cap {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--el-border-soft);
+        background: var(--el-surface-soft);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        color: var(--el-text-faint);
+      }
+
+      .callout {
+        display: flex;
+        gap: 10px;
+        margin: 0 0 16px;
+        padding: 12px 14px;
+        max-width: 68ch;
+        border-radius: var(--radius-card);
+        background: var(--el-tint-sky);
+        color: var(--el-text-strong);
+        font-size: 13.5px;
+        line-height: 1.6;
+      }
+      .callout--warn {
+        background: var(--el-tint-peach);
+      }
+
+      /* ── The operation-detail tables ────────────────────────────────────── */
+      table.spec {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0 0 16px;
+        font-size: 13px;
+      }
+      table.spec th {
+        text-align: left;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--el-border);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      table.spec td {
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--el-border-soft);
+        color: var(--el-text-secondary);
+        vertical-align: top;
+      }
+      table.spec td .nm {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--el-text);
+      }
+      table.spec td .ty {
+        font-family: var(--font-mono);
+        font-size: 11.5px;
+        color: var(--el-text-faint);
+      }
+      .status {
+        display: inline-flex;
+        min-width: 34px;
+        justify-content: center;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        font-weight: 700;
+        color: var(--el-text-strong);
+      }
+      .status--ok {
+        background: var(--el-tint-mint);
+      }
+      .status--client {
+        background: var(--el-tint-peach);
+      }
+      .status--server {
+        background: var(--el-tint-rose);
+      }
+
+      .op-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+      .op-path {
+        font-family: var(--font-mono);
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .toc {
+        font-size: 12px;
+      }
+      .toc h4 {
+        margin: 0 0 8px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--el-text-faint);
+      }
+      .toc a {
+        display: block;
+        padding: 4px 0;
+        color: var(--el-text-muted);
+        text-decoration: none;
+      }
+      .toc a.is-active {
+        color: var(--el-text);
+        font-weight: 600;
+      }
+
+      .empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 72px 24px;
+        text-align: center;
+      }
+      .empty h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 20px;
+        color: var(--el-text);
+      }
+      .empty p {
+        margin: 0;
+        max-width: 46ch;
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: var(--el-text-muted);
+      }
+      .empty .glyph {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-badge);
+        background: var(--el-tint-peach);
+        color: var(--el-text-strong);
+        font-size: 20px;
+      }
+
+      .phone {
+        width: 390px;
+        border: 1px solid var(--el-border);
+        border-radius: var(--radius-card);
+        overflow: hidden;
+        box-shadow: var(--shadow-card);
+        background: var(--el-page-bg);
+      }
+      .phone .docs-main {
+        padding: 18px 16px 24px;
+      }
+      .row2 {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+
+      /* The settings-page row grammar (mirrors design/settings/*) */
+      .srow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--el-border-soft);
+      }
+      .srow:last-child {
+        border-bottom: 0;
+      }
+      .srow .lbl {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--el-text);
+      }
+      .srow .desc {
+        margin-top: 2px;
+        max-width: 58ch;
+        font-size: 12.5px;
+        line-height: 1.55;
+        color: var(--el-text-muted);
+      }
+      .settings-head h2 {
+        margin: 0;
+        font-family: var(--font-serif);
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .settings-head p {
+        margin: 4px 0 0;
+        max-width: 34rem;
+        font-size: 13.5px;
+        color: var(--el-text-muted);
+      }
+      .anno {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 8px;
+        border-radius: var(--radius-badge);
+        padding: var(--spacing-chip-y) var(--spacing-chip-x);
+        background: var(--el-tint-yellow);
+        color: var(--el-text-strong);
+        font-family: var(--font-mono);
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      /* ── Added by MOTIR-2521 — the index's surface row ──────────────────────
+         A row is a whole-card LINK (the card primitive), stacking its name over
+         its one-line description. `.srow` in this asset's sibling mock is a
+         table-ish row inside one card; the index's rows are separate cards, so
+         they get their own class rather than overloading that one.
+         The description is `--el-text-secondary`, NOT `--el-text-muted`:
+         motir-core/CLAUDE.md measures muted at 4.54:1 on white with 0.04 of
+         headroom and failing on every tinted surface, and the hover state below
+         tints the row. Secondary clears AA in both themes on all four. */
+      .surface-row {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 16px var(--spacing-card-padding);
+        text-decoration: none;
+      }
+      .surface-row:hover {
+        background: var(--el-surface-soft);
+        border-color: var(--el-border-strong);
+      }
+      .surface-row .lbl {
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--el-text);
+      }
+      .surface-row .desc {
+        max-width: 64ch;
+        font-size: 13px;
+        line-height: 1.55;
+        color: var(--el-text-secondary);
+      }
+      .surface-row--sm {
+        padding: 10px 12px;
+        gap: 2px;
+      }
+      .surface-row--sm .lbl {
+        font-size: 13px;
+      }
+      .surface-row--sm .desc {
+        font-size: 11.5px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="review-head">
+      <div>
+        <h1>The <code>/docs</code> index — the area's front door</h1>
+        <p>
+          Story MOTIR-2315 · Subtask MOTIR-2521 — the one surface in this area nobody had drawn: its
+          ROOT. Four panels; review each. Built to ADR
+          <code>public-api-conventions.md</code> Amendment 19, which decided that
+          <code>/docs</code> renders a page (Q1), what it lists (Q2), that the list has one home
+          (Q3), that the page carries NO rail (Q4), and where the two entrances point (Q5).
+        </p>
+      </div>
+      <button
+        class="toggle"
+        onclick="
+          document.documentElement.dataset.theme =
+            document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+        "
+      >
+        Toggle dark
+      </button>
+    </div>
+
+    <!-- ════════ PANEL 1 — /docs, the whole page at desktop ════════ -->
+    <div class="panel-label">
+      Panel 1 · <code>/docs</code> — the area's front door, desktop
+      <span class="note">
+        The page is a title, a lede, and ONE ROW PER SURFACE, each with a line saying what it is and
+        who it is for (Amendment 19 Q2). It renders inside the shipped
+        <code>app/(public)/docs/layout.tsx</code> shell — the same marketing top bar and footer
+        every other page in the area already sits in — and it renders
+        <strong>no catalogue rail</strong>: its body IS the navigation, so a rail listing the same
+        four destinations would put them on screen twice, with the shorter copy in the more
+        prominent position (Q4). Compare the content column's full width here against Panel 3's
+        right half. <strong>The rows are NOT grouped</strong>: four rows under category headings is
+        a heading per one-and-a-half rows.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="stage">
+        <header class="site-top">
+          <span class="brand"
+            ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+          >
+          <nav class="site-nav" aria-label="Product">
+            <span class="nav-label">Product</span>
+            <a class="nav-current" href="/docs" aria-current="page">Docs</a>
+            <span class="nav-label">Pricing</span>
+            <a class="nav-link" href="/explore">Explore</a>
+          </nav>
+          <span style="display: inline-flex; gap: 8px">
+            <a class="btn btn-sm btn-ghost" href="/sign-in">Sign in</a>
+            <a class="btn btn-sm btn-primary" href="/sign-up">Start free →</a>
+          </span>
+        </header>
+
+        <!-- NO .docs-nav here. That absence is the design. -->
+        <div class="docs">
+          <main class="docs-main" style="max-width: 760px; margin: 0 auto">
+            <h1
+              style="
+                margin: 8px 0 10px;
+                font-size: 30px;
+                line-height: 1.2;
+                letter-spacing: -0.01em;
+                color: var(--el-text);
+              "
+            >
+              Motir documentation
+            </h1>
+            <p
+              style="
+                margin: 0 0 28px;
+                max-width: 60ch;
+                font-size: 15px;
+                line-height: 1.6;
+                color: var(--el-text-secondary);
+              "
+            >
+              Everything Motir publishes for people building on it. Start with the surface that
+              matches what you are doing — each one below stands on its own.
+            </p>
+
+            <ul style="margin: 0; padding: 0; list-style: none; display: grid; gap: 12px">
+              <li>
+                <a class="card surface-row" href="/docs/api">
+                  <span class="lbl">API reference</span>
+                  <span class="desc">
+                    The REST API, operation by operation, with scopes and a working example. For a
+                    client you ship and cannot afford to break.
+                  </span>
+                </a>
+              </li>
+              <li>
+                <a class="card surface-row" href="/docs/sandbox">
+                  <span class="lbl">Agent sandbox</span>
+                  <span class="desc">
+                    The published container to run an unattended coding agent in, so it reaches your
+                    workspace tree and nothing else on your machine.
+                  </span>
+                </a>
+              </li>
+              <li>
+                <a class="card surface-row" href="/docs/cli">
+                  <span class="lbl">Motir CLI</span>
+                  <span class="desc">
+                    Install it, sign in, and hand a work item to your own coding agent from the
+                    terminal — without cloning anything.
+                  </span>
+                </a>
+              </li>
+              <li>
+                <a class="card surface-row" href="/docs/mcp">
+                  <span class="lbl">MCP server</span>
+                  <span class="desc">
+                    One endpoint that plugs an agent you control into the plan: read the ready set,
+                    claim work, move it, comment.
+                  </span>
+                </a>
+              </li>
+            </ul>
+          </main>
+        </div>
+
+        <footer class="site-foot">
+          <div>
+            <span class="brand"
+              ><span
+                class="tile"
+                style="width: 24px; height: 24px; font-size: 12px"
+                aria-hidden="true"
+                >M</span
+              ><span class="name" style="font-size: 15px">Motir</span></span
+            >
+            <p class="tagline">
+              The AI-native way to plan, track, and ship — explore what teams are building in the
+              open.
+            </p>
+          </div>
+          <div>
+            <h2>Explore by topic</h2>
+            <ul>
+              <li><a href="/explore">Browse all topics</a></li>
+            </ul>
+          </div>
+          <div>
+            <h2>Product</h2>
+            <ul>
+              <li>Overview</li>
+              <li>AI planning</li>
+              <li>Boards &amp; sprints</li>
+              <li>
+                <a href="/docs">Documentation</a>
+                <span class="anno">Q5 — was “API docs” → /docs/api</span>
+              </li>
+              <li>Pricing</li>
+            </ul>
+          </div>
+          <div>
+            <h2>Company</h2>
+            <ul>
+              <li>About</li>
+              <li>Blog</li>
+              <li>Open source</li>
+              <li>Contact</li>
+            </ul>
+          </div>
+        </footer>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 2 — the index below lg ════════ -->
+    <div class="panel-label">
+      Panel 2 · <code>/docs</code> at 390 px — one column, nothing hidden
+      <span class="note">
+        The area's mobile treatment below <code>lg</code> is the rail collapsing ABOVE the content
+        (Panel 9 of <code>api-docs.mock.html</code>). This page has no rail, so there is nothing to
+        collapse and nothing to disclose: the same title, lede and four rows, stacked. The rows keep
+        their descriptions — dropping them at small widths would leave exactly the list of labels
+        this page exists to improve on.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="phone">
+        <header class="site-top" style="padding: 10px 14px">
+          <span class="brand"
+            ><span
+              class="tile"
+              style="width: 22px; height: 22px; font-size: 11px"
+              aria-hidden="true"
+              >M</span
+            ><span class="name" style="font-size: 14px">Motir</span></span
+          >
+          <a class="nav-current" href="/docs" aria-current="page" style="font-size: 12.5px">Docs</a>
+        </header>
+        <main style="padding: 20px 16px 26px">
+          <h1 style="margin: 0 0 8px; font-size: 22px; line-height: 1.25; color: var(--el-text)">
+            Motir documentation
+          </h1>
+          <p
+            style="
+              margin: 0 0 18px;
+              font-size: 13.5px;
+              line-height: 1.6;
+              color: var(--el-text-secondary);
+            "
+          >
+            Everything Motir publishes for people building on it. Start with the surface that
+            matches what you are doing.
+          </p>
+          <ul style="margin: 0; padding: 0; list-style: none; display: grid; gap: 10px">
+            <li>
+              <a class="card surface-row" href="/docs/api">
+                <span class="lbl">API reference</span>
+                <span class="desc">
+                  The REST API, operation by operation. For a client you ship and cannot afford to
+                  break.
+                </span>
+              </a>
+            </li>
+            <li>
+              <a class="card surface-row" href="/docs/sandbox">
+                <span class="lbl">Agent sandbox</span>
+                <span class="desc">
+                  The published container to run an unattended coding agent in.
+                </span>
+              </a>
+            </li>
+            <li>
+              <a class="card surface-row" href="/docs/cli">
+                <span class="lbl">Motir CLI</span>
+                <span class="desc">
+                  Hand a work item to your own coding agent from the terminal.
+                </span>
+              </a>
+            </li>
+            <li>
+              <a class="card surface-row" href="/docs/mcp">
+                <span class="lbl">MCP server</span>
+                <span class="desc">
+                  One endpoint that plugs an agent you control into the plan.
+                </span>
+              </a>
+            </li>
+          </ul>
+        </main>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 3 — the rail decision, side by side ════════ -->
+    <div class="panel-label">
+      Panel 3 · The Q4 decision, drawn — the index (no rail) beside a surface page (rail)
+      <span class="note">
+        ① The index has no rail and its content is centred at reading width. ② The moment a reader
+        picks a surface, the shipped two-tier rail appears and stays for every page in that surface
+        — unchanged from <code>api-docs.mock.html</code> Panel 10, which this composes rather than
+        redraws. So the rail is not removed from the area; it starts one click in, where a reader
+        has chosen a context and needs to move within it.
+      </span>
+    </div>
+    <div class="panel">
+      <div class="row2">
+        <div style="flex: 1; min-width: 0">
+          <p class="anno" style="margin: 0 0 8px">① /docs — no rail</p>
+          <div class="stage">
+            <div class="docs" style="min-height: 300px">
+              <main class="docs-main" style="padding: 20px 24px">
+                <h1 style="margin: 0 0 6px; font-size: 20px; color: var(--el-text)">
+                  Motir documentation
+                </h1>
+                <p style="margin: 0 0 14px; font-size: 12.5px; color: var(--el-text-secondary)">
+                  Everything Motir publishes for people building on it.
+                </p>
+                <ul style="margin: 0; padding: 0; list-style: none; display: grid; gap: 8px">
+                  <li>
+                    <a class="card surface-row surface-row--sm" href="/docs/api"
+                      ><span class="lbl">API reference</span
+                      ><span class="desc">For a client you ship.</span></a
+                    >
+                  </li>
+                  <li>
+                    <a class="card surface-row surface-row--sm" href="/docs/sandbox"
+                      ><span class="lbl">Agent sandbox</span
+                      ><span class="desc">The container an agent runs in.</span></a
+                    >
+                  </li>
+                  <li>
+                    <a class="card surface-row surface-row--sm" href="/docs/cli"
+                      ><span class="lbl">Motir CLI</span><span class="desc">The terminal.</span></a
+                    >
+                  </li>
+                  <li>
+                    <a class="card surface-row surface-row--sm" href="/docs/mcp"
+                      ><span class="lbl">MCP server</span
+                      ><span class="desc">For an agent you control.</span></a
+                    >
+                  </li>
+                </ul>
+              </main>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <p class="anno" style="margin: 0 0 8px">② /docs/cli — the shipped rail, unchanged</p>
+          <div class="stage">
+            <div class="docs" style="min-height: 300px">
+              <nav class="docs-nav" aria-label="Documentation" style="width: 200px">
+                <div class="navgroup">
+                  <h3>Documentation</h3>
+                  <a class="navrow" href="/docs/api">API reference</a>
+                  <a class="navrow" href="/docs/sandbox">Agent sandbox</a>
+                  <a class="navrow is-active" href="/docs/cli" aria-current="page">Motir CLI</a>
+                  <a class="navrow" href="/docs/mcp">MCP server</a>
+                </div>
+              </nav>
+              <main class="docs-main" style="padding: 20px 24px">
+                <h1 style="margin: 0 0 6px; font-size: 20px; color: var(--el-text)">
+                  The Motir CLI
+                </h1>
+                <p style="margin: 0; font-size: 12.5px; color: var(--el-text-secondary)">
+                  Install it, sign in, point it at your project, and hand one work item to your own
+                  coding agent.
+                </p>
+              </main>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════ PANEL 4 — THE DOOR ════════ -->
+    <div class="panel-label">
+      Panel 4 · THE ACCESS PATH — both entrances, before and after
+      <span class="note">
+        Amendment 19 Q5. Neither entrance is a new element: the top bar's
+        <code>Docs</code> item and the footer's product link both already exist and both already
+        resolve — they simply point PAST this page, at <code>/docs/api</code>. What changes is the
+        target of each, and the footer's LABEL, because a link reading “API docs” that opens the
+        whole documentation area is the same mismatch this story is fixing one layer down.
+        <strong
+          >This design owns only these two items; the bar and the footer belong to
+          <code>design/project-square/</code>.</strong
+        >
+      </span>
+    </div>
+    <div class="panel">
+      <div class="row2">
+        <div style="flex: 1; min-width: 0">
+          <p class="anno" style="margin: 0 0 8px">BEFORE</p>
+          <div class="stage">
+            <header class="site-top">
+              <span class="brand"
+                ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+              >
+              <nav class="site-nav" aria-label="Product">
+                <span class="nav-label">Product</span>
+                <a class="nav-current" href="/docs/api" aria-current="page">Docs</a>
+                <span class="nav-label">Pricing</span>
+                <a class="nav-link" href="/explore">Explore</a>
+              </nav>
+            </header>
+            <div style="padding: 14px 18px">
+              <p
+                style="
+                  margin: 0 0 6px;
+                  font-family: var(--font-mono);
+                  font-size: 11.5px;
+                  color: var(--el-text-secondary);
+                "
+              >
+                ExploreTopBar → href="/docs/api"
+              </p>
+              <p
+                style="
+                  margin: 0;
+                  font-family: var(--font-mono);
+                  font-size: 11.5px;
+                  color: var(--el-text-secondary);
+                "
+              >
+                ExploreFooter → “API docs” → /docs/api
+              </p>
+              <p style="margin: 10px 0 0; font-size: 12.5px; color: var(--el-text-secondary)">
+                A visitor who clicks <strong>Docs</strong> lands on the REST API reference.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <p class="anno" style="margin: 0 0 8px">AFTER</p>
+          <div class="stage">
+            <header class="site-top">
+              <span class="brand"
+                ><span class="tile" aria-hidden="true">M</span><span class="name">Motir</span></span
+              >
+              <nav class="site-nav" aria-label="Product">
+                <span class="nav-label">Product</span>
+                <a class="nav-current" href="/docs" aria-current="page">Docs</a>
+                <span class="nav-label">Pricing</span>
+                <a class="nav-link" href="/explore">Explore</a>
+              </nav>
+            </header>
+            <div style="padding: 14px 18px">
+              <p
+                style="
+                  margin: 0 0 6px;
+                  font-family: var(--font-mono);
+                  font-size: 11.5px;
+                  color: var(--el-text-secondary);
+                "
+              >
+                ExploreTopBar → href="/docs" <span class="anno">unchanged label</span>
+              </p>
+              <p
+                style="
+                  margin: 0;
+                  font-family: var(--font-mono);
+                  font-size: 11.5px;
+                  color: var(--el-text-secondary);
+                "
+              >
+                ExploreFooter → “Documentation” → /docs <span class="anno">label moves too</span>
+              </p>
+              <p style="margin: 10px 0 0; font-size: 12.5px; color: var(--el-text-secondary)">
+                A visitor who clicks <strong>Docs</strong> lands on the area, and picks from four.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="margin: 18px 0 0; font-size: 12.5px; color: var(--el-text-secondary)">
+        <strong>And the way back.</strong> Every surface page keeps the shipped rail, whose first
+        tier lists all four surfaces — so a reader who picked wrong is one row from the right one
+        without returning here. The index is the entrance, not a hub they must pass through twice.
+      </p>
+    </div>
+  </body>
+</html>

@@ -37,6 +37,7 @@ designs and would otherwise read as a redesign of them.
 
 | Route                       | Page                                                                                             | Auth          |
 | --------------------------- | ------------------------------------------------------------------------------------------------ | ------------- |
+| `/docs`                     | **The area INDEX** — `docs-index.mock.html`; ADR Amendment 19                                    | none (public) |
 | `/docs/api`                 | The API reference (catalogue + operation)                                                        | none (public) |
 | `/docs/api/getting-started` | The five-step guide                                                                              | none (public) |
 | `/docs/api/stability`       | The stability & deprecation policy                                                               | none (public) |
@@ -489,3 +490,158 @@ checks the message, the retry and the still-reachable sibling pages.
 | **11.4.7** (MOTIR-2188)  | the docs shell, the reference (Panels 1–3, 6), and BOTH doors (7, 8)                                                  |
 | **11.4.8** (MOTIR-2189)  | the getting-started and stability pages' COPY, into Panels 4–5's rhythm                                               |
 | **11.4.10** (MOTIR-2191) | the E2E: a developer finds the reference, reads an operation, follows getting-started, and reaches it from both doors |
+
+---
+
+## The `/docs` INDEX — the area's front door
+
+**Asset:** `docs-index.mock.html` → `docs-index.png` (4 panels).
+**Card:** [MOTIR-2521](motir:cmsmhf4ne0017i3phuez5303i), under
+[MOTIR-2315](motir:cmsi0pmwu000h04lk3lgvthks).
+**Decision it draws:** ADR `public-api-conventions.md`
+**Amendment 19** — Q1 `/docs` renders a page, Q2 what it lists, Q3 where the list
+lives, Q4 no rail, Q5 the redirect and the two entrances.
+
+### Why a SIBLING pair, and why it stays in `design/api-docs/`
+
+`api-docs.mock.html` is 2,158 lines across nine panels of the API reference and
+its two guides. The index is a different surface in the same area, so it gets its
+own source + PNG rather than a tenth panel in there — and **this one
+`design-notes.md` indexes both**, which is what makes `design/api-docs/` the
+AREA's asset of record rather than the API reference's alone.
+
+It stays here rather than moving to a docs-home area of its own, for the reason Amendment 9
+Q1 keeps the folder name at all: the **shell** belongs to exactly one asset. The
+top bar, the footer, the page frame, the two-tier rail, the light/dark treatment
+and the accessibility notes for every page in this area live in this file. A
+second asset for the area's own root would be two documents that must agree about
+the same shell — the duplication problem the surface list has one layer up
+(Amendment 19 Q3), reproduced in the design.
+
+### What is NEW here, and what is COMPOSED
+
+**New:** the index page's body — its `h1`, its lede, and the four surface rows —
+plus the `.surface-row` class the mock adds at the end of its style block.
+
+**Composed, not redrawn:** everything else. The `<style>` block is copied 1:1
+from `api-docs.mock.html`, which copied it 1:1 from `app/globals.css` (light), so
+this asset cannot drift from the area's tokens. The `site-top`, `site-foot`,
+`docs`, `docs-nav`, `navrow` and `card` markup is that asset's — which was itself
+drawn against a render of the running pages (§ _"Drawn against a RENDER, not from
+the source"_). Panel 3's right-hand rail is the shipped two-tier rail from
+Panel 10, unchanged.
+
+### The page
+
+| Element         | Copy                                                                                                                                                                     | Primitive / token                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| `h1`            | **Motir documentation** (`apiDocs.indexTitle`)                                                                                                                           | 30 px, `--el-text`                                                                      |
+| lede            | _Everything Motir publishes for people building on it. Start with the surface that matches what you are doing — each one below stands on its own._ (`apiDocs.indexLede`) | 15 px / 1.6, `--el-text-secondary`, `max-width: 60ch`                                   |
+| a surface row   | the surface's name + its one-line description                                                                                                                            | `Card` (`--radius-card`, `--spacing-card-padding`, `--shadow-subtle`), whole-card `<a>` |
+| row name        | `apiDocs.nav{Reference,Sandbox,Cli,Mcp}` — the SAME keys the rail's rows use                                                                                             | 15 px / 600, `--el-text`                                                                |
+| row description | `apiDocs.surface{Reference,Sandbox,Cli,Mcp}Desc`                                                                                                                         | 13 px / 1.55, **`--el-text-secondary`**, `max-width: 64ch`                              |
+| row hover       | —                                                                                                                                                                        | `--el-surface-soft` fill, `--el-border-strong` edge                                     |
+
+Four rows, **not grouped**: a heading per one-and-a-half rows buys a hierarchy a
+reader must parse before reading four lines. The **order is the shipped rail's**
+— API reference, agent sandbox, CLI, MCP — because Amendment 19 Q3 makes the two
+renderers read one list, so re-ordering the index re-orders the navigation of
+every page in the area. That is a UX decision with its own reasons and its own
+card; this asset does not smuggle it in.
+
+**⚠️ The description ink is `--el-text-secondary`, not `--el-text-muted`.**
+`motir-core/CLAUDE.md` measures muted at 4.54:1 on white — 0.04 of headroom — and
+FAILING on `--el-surface` / `--el-muted` / `--el-surface-soft`. The row's hover
+state tints the surface, so a muted description would pass at rest and fail on
+hover. Secondary clears AA on all four grounds in both themes. (The area's
+existing `.srow .desc` uses muted on a non-hovering row; this is not that row.)
+
+### Panel-by-panel
+
+- **Panel 1 — `/docs` at desktop.** The whole page in the shipped shell. The
+  content column is centred at reading width; there is **no rail**, and that
+  absence is the design. The footer's product link is shown with its new label.
+- **Panel 2 — `/docs` at 390 px.** The area's sub-`lg` treatment is the rail
+  collapsing above the content (Panel 9). This page has no rail, so there is
+  nothing to collapse: the same title, lede and four rows, stacked. **The rows
+  keep their descriptions** — dropping them at small widths leaves exactly the
+  list of labels this page exists to improve on.
+- **Panel 3 — the Q4 decision, drawn.** The index (no rail) beside `/docs/cli`
+  (rail). The rail is not removed from the area; it starts one click in, where a
+  reader has chosen a context and needs to move within it.
+- **Panel 4 — THE ACCESS PATH,** before and after. Neither entrance is a new
+  element; both already exist and both already resolve, at `/docs/api`. What
+  changes is each one's target, and the footer's LABEL.
+
+### The ACCESS PATH — in, and back out
+
+**In.** Two doors, both shipped, both re-pointed by Amendment 19 Q5:
+
+| Door                     | Before                     | After                            |
+| ------------------------ | -------------------------- | -------------------------------- |
+| `ExploreTopBar` **Docs** | `href="/docs/api"`         | `href="/docs"` — label unchanged |
+| `ExploreFooter` product  | _"API docs"_ → `/docs/api` | _"Documentation"_ → `/docs`      |
+
+The top bar's `current === 'docs'` treatment is unchanged and still marks the
+whole area, on the index and on every page inside it.
+
+**Back out.** The index is an entrance, not a hub a reader must pass through
+twice: every surface page keeps the shipped rail, whose first tier lists all four
+surfaces, so a reader who picked wrong is one row from the right one without
+returning here. That is why Panel 3 draws both halves side by side — the pair is
+the navigation model, not either half alone.
+
+**This asset owns only the two door items.** The bar and the footer belong to
+`design/project-square/`, exactly as § _"What this design does NOT own"_ already
+records for Panel 7.
+
+### Light and dark
+
+The mock's `Toggle dark` button flips `data-theme` on `<html>`, and every colour
+above is an `--el-*` token, so the index inherits the area's dark treatment with
+no per-element decision. The two inks it introduces — `--el-text` on the row
+name, `--el-text-secondary` on the description — clear AA on the card ground in
+both themes (the table in `motir-core/CLAUDE.md`).
+
+### Accessibility
+
+- Each row is **one link wrapping both lines**, so the accessible name is the
+  surface's name followed by its description — a screen-reader user gets the same
+  routing information a sighted reader does, in the same order.
+- The rows are a `<ul>` of `<li>`, so a screen reader announces **"list, 4
+  items"** — the count is the page's whole substance.
+- **No rail means no second navigation landmark** on this page: the only `<nav>`
+  is the shipped top bar's, whose accessible name is already `Product`. There is
+  no ambiguous "which nav am I in" state for the one page in the area that has
+  no sub-area context.
+- The `h1` is the page's own, not the area's; the tab order is title → lede →
+  four rows → footer.
+
+### GIVES / TAKES
+
+`grep`ped over this asset for every `MOTIR-<n>` it names, and over the subtree of
+[MOTIR-2315](motir:cmsi0pmwu000h04lk3lgvthks) — the asset's keys say where to
+START, the subtree says where to STOP.
+
+| Card                                                    | Direction | What                                                                                                                                            |
+| ------------------------------------------------------- | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| [MOTIR-2521](motir:cmsmhf4ne0017i3phuez5303i) (this)    | GIVES     | the index's layout, the four-row structure, the rail-less treatment, both viewports, and the access path                                        |
+| [MOTIR-2523](motir:cmsmhhrhd000wi4n88txrafx5) (code)    | GIVES     | the page to build, and the two entrance edits. **TAKES nothing**: its criteria already say no rail (Q4) and no restated list — this draws them  |
+| [MOTIR-2522](motir:cmsmhggb2000li4n817f5go30) (content) | —         | owns the words and the shared list. This asset RENDERS its keys and authors none of them; the copy shown in the panels is its shipped copy      |
+| [MOTIR-2525](motir:cmsmhjv2q002ai3phxawq0myk) (E2E)     | GIVES     | the walk to drive — in by the top bar, out to a non-API surface, back, and out again — and the assertion that the index shows no operation rows |
+| [MOTIR-2311](motir:cmshysgbl001g04jytj8r5cl0) (`done`)  | —         | owns the two-tier rail this composes in Panel 3. Unchanged: the index adds no tier and removes none                                             |
+| MOTIR-2188 (`done`)                                     | —         | owns the shell and the rail COMPONENT. Composed, not modified — the index renders inside the same layout with one child fewer                   |
+
+**This section TAKES nothing from any card.** It adds a surface; it moves no
+element out of another card's scope, replaces no structure another card was built
+to, and invalidates no card's shipping premise. The one thing it constrains that
+was previously open — whether the rail renders here — was decided by Amendment 19
+Q4 BEFORE this asset was drawn, and [MOTIR-2523](motir:cmsmhhrhd000wi4n88txrafx5)
+was amended to it in the same pass.
+
+### What the code cards build from this
+
+| Card                                          | Builds                                                                                    |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| [MOTIR-2523](motir:cmsmhhrhd000wi4n88txrafx5) | Panels 1–2 (the page at both widths) and Panel 4's AFTER column (both entrances)          |
+| [MOTIR-2525](motir:cmsmhjv2q002ai3phxawq0myk) | Panel 4's walk and Panel 3's ① — the door, and the absence of operation rows on the index |
