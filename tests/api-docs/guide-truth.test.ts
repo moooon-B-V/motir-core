@@ -148,11 +148,11 @@ describe('the guide is TRUE of the shipped API', () => {
       )
       .map((block) => block.text)
       .join(' ');
-    expect(prose).toMatch(/API tokens/);
+    expect(prose).toMatch(/Settings → Account → Tokens/);
     // The page it points at exists — "link to it; do not describe a surface you
     // have not opened".
     expect(() =>
-      readFileSync(join(REPO_ROOT, 'app/(authed)/settings/account/api-tokens/page.tsx'), 'utf8'),
+      readFileSync(join(REPO_ROOT, 'app/(authed)/settings/account/tokens/page.tsx'), 'utf8'),
     ).not.toThrow();
   });
 

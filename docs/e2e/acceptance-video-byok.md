@@ -172,8 +172,8 @@ not a hardcoded `story-key`.
 If your repo is **not** connected via the Motir GitHub App, authenticate with a
 token instead of OIDC:
 
-1. In Motir, mint an **API token** scoped to **`integration`** (Settings → API
-   tokens), bound to the workspace that owns the story.
+1. In Motir, mint a **token** scoped to **`integration`** (Settings → Account →
+   Tokens), bound to the workspace that owns the story.
 2. Add it to your repo as the **`MOTIR_UPLOAD_TOKEN`** secret and pass it to the
    Action — you can then drop the `id-token: write` permission:
 

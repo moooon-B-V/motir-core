@@ -600,7 +600,7 @@ export function DeviceApproval({
         ) : null}
 
         <Link
-          href="/settings/account/api-tokens"
+          href="/settings/account/tokens"
           className={cn(buttonVariants({ variant: 'secondary', size: 'md' }), 'w-full')}
         >
           <KeyRound className="h-4 w-4" aria-hidden />

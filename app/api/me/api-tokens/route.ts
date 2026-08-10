@@ -4,7 +4,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { InvalidApiTokenLabelError, InvalidApiTokenScopeError } from '@/lib/apiTokens/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 
-// /api/me/api-tokens (Story 7.8 · Subtask 7.8.3) — the current user's API tokens
+// /api/me/api-tokens (Story 7.8 · Subtask 7.8.3) — the current user's tokens
 // (the MCP bearer credentials, 7.8.1). Account-level: the GET lists ALL the
 // user's tokens across their workspaces (each labelled with the org → workspace
 // it is bound to), and the POST mints a token BOUND to a workspace the caller

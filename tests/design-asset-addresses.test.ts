@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DOCS_REDIRECTS } from '../next.config';
+import { DOCS_REDIRECTS, SETTINGS_REDIRECTS } from '../next.config';
 
 // MOTIR-2316 — a design asset is a REFERRER to the app's addresses, and it is
 // the only referrer no other check can see.
@@ -98,7 +98,13 @@ function appRoutePatterns(): string[][] {
 }
 
 const APP_ROUTES = appRoutePatterns();
-const REDIRECT_SOURCES = DOCS_REDIRECTS.map((rule) => rule.source.replace(/^\//, '').split('/'));
+// EVERY redirect map `next.config.ts` composes into `redirects()`, not just the
+// docs one — a redirect source is an address the app answers on, whichever map
+// declares it, and a map this list forgets makes the guard report a live
+// address as resolving to nothing. (MOTIR-2534 added the second map.)
+const REDIRECT_SOURCES = [...DOCS_REDIRECTS, ...SETTINGS_REDIRECTS].map((rule) =>
+  rule.source.replace(/^\//, '').split('/'),
+);
 
 const isDynamic = (segment: string) => /^\[.+\]$/.test(segment) || /^:.+/.test(segment);
 const isCatchAll = (segment: string) => /^\[\.\.\..+\]$/.test(segment) || /^:.+\*$/.test(segment);
@@ -240,6 +246,37 @@ const KNOWN: { file: string; address: string; why: string }[] = [
     file: 'design/api-docs/design-notes.md',
     address: '/api-docs',
     why: "The asset's own ⚠️ block recording that these addresses moved twice — the correction MOTIR-2316 was filed about, so it must name the old address.",
+  },
+  // ── An address a design asset RECORDED, which the app has since moved ──────
+  // A DIFFERENT KIND of row from every other entry in this table, and the
+  // difference is worth reading once. Every row above is prose that never was
+  // an address — a historical note, a counterfactual, a filesystem path. These
+  // two are addresses that were LIVE AND CORRECT on the day the asset was
+  // drawn, and moved afterwards — and the asset is deliberately NOT corrected.
+  //
+  // A design asset is a RECORD OF THE MOMENT IT WAS DRAWN, not a spec that
+  // tracks the product (Yue, 2026-08-10). MOTIR-2532 renamed the pane's
+  // reader-facing address; MOTIR-2533, the card that would have swept these
+  // assets, was archived unbuilt on that call. So these two keep saying
+  // `/settings/account/api-tokens`, which now 308s to `/settings/account/tokens`
+  // via `SETTINGS_REDIRECTS` — a reader following it still lands on the page.
+  //
+  // ⚠️ These rows carry NO "delete me in card X" instruction, and that is the
+  // distinction to preserve. A FORWARD-LOOKING row — an asset drawn before its
+  // route exists — is temporary and must name the card that removes it; the
+  // `docs-index.mock.html` → `/docs` row was exactly that, and MOTIR-2523
+  // deleted it on schedule when `/docs` became a real page. These two are the
+  // opposite: the asset is finished history, so the row is permanent and there
+  // is nothing to come back for.
+  {
+    file: 'design/cli-connect/cli-connect.mock.html',
+    address: '/settings/account/api-tokens',
+    why: 'A point-in-time record: the CLI-connect mock drew the tokens pane at this address, which was live when MOTIR-1866 drew it. MOTIR-2534 moved the route to `/settings/account/tokens` and left a permanent redirect, so the asset now names an address that redirects away — correctly, and permanently.',
+  },
+  {
+    file: 'design/cli-connect/design-notes.md',
+    address: '/settings/account/api-tokens',
+    why: 'The same point-in-time record in the notes beside that mock — specifically its RENDERED-first section, which states which URL was screenshotted. Re-pointing it would falsify the record of what was actually rendered.',
   },
   {
     file: 'design/roadmap/design-notes.md',
@@ -750,6 +787,21 @@ const reconcilablePath = (finding: PathFinding): Reconcilable => ({
 // inherited: the run that finds a class is not the run that clears it.
 // MOTIR-2369 cleared all six, so the table holds no STALE row today.
 const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
+  // ── A source path a design asset RECORDED, which the app has since moved ──
+  // The `KNOWN` table's point-in-time rows, one axis over: the same MOTIR-2534
+  // route move renamed the DIRECTORY, so an asset citing the pane's `page.tsx`
+  // by its old path no longer resolves. The asset is history and stays as
+  // drawn; these rows are permanent and carry no delete-me instruction.
+  {
+    file: 'design/api-docs/api-docs.mock.html',
+    path: 'app/(authed)/settings/account/api-tokens/page.tsx',
+    why: 'A point-in-time record: Panel 8 cites the file it places a link row into, at the path that file had when MOTIR-2183 drew it. MOTIR-2534 moved the directory to `settings/account/tokens/`.',
+  },
+  {
+    file: 'design/api-docs/design-notes.md',
+    path: 'app/(authed)/settings/account/api-tokens/page.tsx',
+    why: 'The same citation in the notes beside that mock — the ownership table naming where the in-app door is placed. Same move, same reason it stays.',
+  },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
     file: 'design/epic-privacy/design-notes.md',

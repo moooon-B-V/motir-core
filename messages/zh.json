@@ -103,7 +103,7 @@
       "cant": "不可以：归档或删除工作项、管理成员、变更计费。",
       "expires": "有效期",
       "expiresValue": "{days}天后过期",
-      "expiresHelp": "在API令牌中撤销即可断开连接。",
+      "expiresHelp": "在令牌中撤销即可断开连接。",
       "warning": "仅当你刚在{hostname}上亲自运行了<cmd>motir login</cmd>时才批准。如果这个验证码是别人发给你的——不管是聊天、邮件还是工单——请<strong>拒绝</strong>：批准就等于以你的身份，把上述全部权限交给对方的终端。",
       "warningUnknownHost": "仅当你刚亲自运行了<cmd>motir login</cmd>时才批准。如果这个验证码是别人发给你的——不管是聊天、邮件还是工单——请<strong>拒绝</strong>：批准就等于以你的身份，把上述全部权限交给对方的终端。",
       "actions": "批准或拒绝该终端",
@@ -115,7 +115,7 @@
       "bodyUnknownHost": "回到终端即可——<cmd>motir login</cmd>已完成，它已登录到<strong>{workspace}</strong>。",
       "bodyAlready": "该验证码此前已被批准。回到终端即可——<cmd>motir login</cmd>已完成，连接已建立。",
       "tokenNote": "我们在该工作区创建了名为<chip>{label}</chip>的令牌，{days}天后过期；撤销它就会断开那个终端。",
-      "viewTokens": "查看API令牌"
+      "viewTokens": "查看令牌"
     },
     "denied": {
       "body": "未连接任何东西，也没有创建令牌。那个终端会提示请求被拒绝。",
@@ -2066,7 +2066,7 @@
         "language": "语言",
         "notifications": "通知",
         "appearance": "外观",
-        "apiTokens": "API令牌",
+        "apiTokens": "令牌",
         "soon": "即将推出"
       },
       "notifications": {
@@ -2487,7 +2487,7 @@
       "notConnectedBody": "AI规划运行于Motir的云服务。这些设置会被保存，但在该部署连接到Motir AI之前不会生效。"
     },
     "apiTokens": {
-      "heading": "API 令牌",
+      "heading": "令牌",
       "subtitle": "个人访问令牌让你的编码 agent 通过 MCP 服务器连接 Motir。每个令牌都以你的身份执行——给每个 agent 单独分配一个，不再使用的随时吊销。",
       "cli": {
         "title": "连接 CLI",
@@ -2580,7 +2580,7 @@
         "never": "永不过期"
       },
       "createModal": {
-        "title": "创建 API 令牌",
+        "title": "创建令牌",
         "description": "令牌只会在创建后显示一次，请妥善保存。",
         "labelField": "名称",
         "labelHelper": "便于识别此令牌的名称——例如使用它的 agent 或设备。",
@@ -2614,8 +2614,8 @@
         "errorGeneric": "出了点问题，请重试。"
       },
       "empty": {
-        "title": "还没有 API 令牌",
-        "body": "API 令牌让你的编码 agent 通过 MCP 服务器与 Motir 对话——以你的身份列出就绪工作、打开工作项、移动它们并发表评论。",
+        "title": "还没有令牌",
+        "body": "令牌让你的编码 agent 通过 MCP 服务器与 Motir 对话——以你的身份列出就绪工作、打开工作项、移动它们并发表评论。",
         "guideLink": "阅读 MCP 配置指南",
         "bodyAfterLink": "，连接你的第一个 agent。"
       },
@@ -5997,7 +5997,7 @@
     "mcpThMcp": "MCP 服务器",
     "mcpThRest": "REST API",
     "mcpStepToken": "创建令牌",
-    "mcpStepTokenBody": "在应用中：**设置 → 账户 → API 令牌 → 创建**。填写名称和有效期。明文**只显示一次**——请当场复制；Motir 只保存哈希值。",
+    "mcpStepTokenBody": "在应用中：**设置 → 账户 → 令牌 → 创建**。填写名称和有效期。明文**只显示一次**——请当场复制；Motir 只保存哈希值。",
     "mcpStepWire": "把客户端指向该端点",
     "mcpStepWireBody": "每个客户端需要的都是同样四项信息。它们属于 Motir，对所有智能体都一样；下面的每段配置，都只是把它们写成某个厂商的文件格式。",
     "mcpSecretCallout": "不要把令牌粘贴进会被仓库跟踪的文件。只要客户端支持从别处读取，下面的配置就会那样做。",

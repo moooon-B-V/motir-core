@@ -135,7 +135,7 @@ describe('/device — state 2: confirm (design Panels 3 + 4)', () => {
     expect(screen.getByText('Motir CLI on studio-mbp')).toBeTruthy();
     // The code the SERVER matched, echoed in the grouped display form.
     expect(screen.getByText('K4TP-9RXM')).toBeTruthy();
-    // Scope NAMES, reused from the API-tokens catalog rather than duplicated.
+    // Scope NAMES, reused from the Tokens catalog rather than duplicated.
     expect(screen.getByText('Read everything')).toBeTruthy();
     expect(screen.getByText('Edit work items')).toBeTruthy();
     expect(screen.getByText('Connect integrations')).toBeTruthy();
@@ -205,8 +205,8 @@ describe('/device — state 3: approved (design Panel 5)', () => {
     expect(screen.getByText(/CLI · studio-mbp/)).toBeTruthy();
     expect(screen.getByText(/90 days/)).toBeTruthy();
     // The forward path off a terminal screen.
-    expect(screen.getByRole('link', { name: 'View API tokens' }).getAttribute('href')).toBe(
-      '/settings/account/api-tokens',
+    expect(screen.getByRole('link', { name: 'View tokens' }).getAttribute('href')).toBe(
+      '/settings/account/tokens',
     );
   });
 

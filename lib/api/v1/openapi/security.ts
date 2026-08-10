@@ -38,7 +38,7 @@ export const v1SecurityScheme = {
   scheme: 'bearer',
   bearerFormat: 'motir_pat_<secret>',
   description:
-    'A Motir personal access token, sent as `Authorization: Bearer motir_pat_…`. Mint one in Settings → API tokens. A token is BOUND to one workspace and carries a set of scopes that NARROW — never widen — its owner’s role: an operation is permitted only when the owner’s role allows it AND the token carries the operation’s scope.',
+    'A Motir personal access token, sent as `Authorization: Bearer motir_pat_…`. Mint one in Settings → Account → Tokens. A token is BOUND to one workspace and carries a set of scopes that NARROW — never widen — its owner’s role: an operation is permitted only when the owner’s role allows it AND the token carries the operation’s scope.',
 } as const;
 
 /**

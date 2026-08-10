@@ -104,7 +104,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
     blocks: [
       {
         kind: 'prose',
-        text: 'Every call is authenticated with a personal access token. Mint one in Settings → Account → API tokens, choose the workspace it is bound to, and grant it the scopes it needs.',
+        text: 'Every call is authenticated with a personal access token. Mint one in Settings → Account → Tokens, choose the workspace it is bound to, and grant it the scopes it needs.',
       },
       {
         kind: 'prose',

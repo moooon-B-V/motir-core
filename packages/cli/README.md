@@ -85,7 +85,7 @@ There are three credential tiers, and `motir login` is the middle one:
 there is no `.motir.json` to walk up to) and outranks a stored credential.
 
 **Disconnecting** is two different things: `motir logout` forgets the local copy
-on this machine, while **revoking the token in Settings → Account → API tokens**
+on this machine, while **revoking the token in Settings → Account → Tokens**
 is the server-side kill switch. Full guide: [`docs/cli.md` §
 Authenticate](../../docs/cli.md#authenticate).
 

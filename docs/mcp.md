@@ -52,12 +52,12 @@ agent ──POST /api/mcp (Authorization: Bearer motir_pat_…)──▶ withMcp
            └─ tool handler ──ServiceContext──▶ the SAME service the UI route calls
 ```
 
-## Creating an API token
+## Creating a token
 
 The MCP server authenticates with a **personal access token (PAT)**. Mint one
 from the web UI:
 
-**Settings → Account → API tokens → Create.**
+**Settings → Account → Tokens → Create.**
 
 Give the token a **label** (a human name, e.g. `claude-code`, ≤ 100 chars) and
 an **expiry** (the select offers 30 / 90 / 365 days or never; 90 days is the
@@ -1482,8 +1482,8 @@ do through the web UI in that user's active workspace — no more, no less.
   credential store, never in committed code or shared chat.
 - **Set an expiry.** Prefer a bounded lifetime (30 / 90 / 365 days) over "never";
   90 days is a reasonable default for an agent you re-provision periodically.
-- **Revoke on leak — instantly.** Revoking a token from Settings → Account → API
-  tokens is instant: the very next tool call with that token fails the bearer
+- **Revoke on leak — instantly.** Revoking a token from Settings → Account → Tokens
+  is instant: the very next tool call with that token fails the bearer
   gate with a 401. Revocation is a soft-revoke (the row is kept for the audit
   trail, stamped `revokedAt`).
 - **Tokens are stored only as a SHA-256 hash.** Motir persists the hash plus a

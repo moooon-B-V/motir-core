@@ -7,7 +7,7 @@
 // (MOTIR-1684), so the clip publishes to 1863 whichever PR triggered the run.
 //
 // It closes the Story from the user's seat, and from the terminal's at the same
-// time: a person finds the CLI in Settings → Account → API tokens, a terminal
+// time: a person finds the CLI in Settings → Account → Tokens, a terminal
 // opens a device grant and blocks, the person approves it at `/device` choosing
 // a workspace, the terminal is handed a credential that really works, and
 // revoking the row in that same table really disconnects it.
@@ -63,7 +63,7 @@ test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 const TERMINAL_HOSTNAME = 'studio-mbp';
 const CLI_TOKEN_LABEL = cliTokenLabel(TERMINAL_HOSTNAME);
 
-const TOKENS_PATH = '/settings/account/api-tokens';
+const TOKENS_PATH = '/settings/account/tokens';
 
 // ── Page helpers ─────────────────────────────────────────────────────────────
 
@@ -71,17 +71,17 @@ const TOKENS_PATH = '/settings/account/api-tokens';
 const codeField = (page: Page) => page.getByRole('textbox', { name: 'Device code' });
 
 /**
- * Reach the API-tokens pane through its REAL door — the avatar menu → Account
- * → API tokens (design `cli-connect` Panel 0's access path) — so the recording
+ * Reach the Tokens pane through its REAL door — the avatar menu → Account
+ * → Tokens (design `cli-connect` Panel 0's access path) — so the recording
  * shows how a person actually finds the CLI rather than teleporting by URL.
  *
- * `exact` on the page heading: "API tokens" is a substring of the empty-state
- * heading "No API tokens yet", which is also a heading. Matching loosely here
+ * `exact` on the page heading: "Tokens" is a substring of the empty-state
+ * heading "No tokens yet", which is also a heading. Matching loosely here
  * is the superstring trap the shipped spec already documents.
  */
 async function openApiTokensPane(page: Page): Promise<void> {
   await page.goto(TOKENS_PATH);
-  await expect(page.getByRole('heading', { name: 'API tokens', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
 }
 
 /** The tokens-table row for a label — the surface the CLI token must appear in. */
