@@ -4,9 +4,13 @@
 //
 //   1. RENAME the project on the Details page → the save bar reports "Saved" and
 //      the project SWITCHER reflects the new name;
-//   2. set an AVATAR (preset icon + colour) → it round-trips through save (the
-//      picker re-opens with the same selection) and the switcher chip stops
-//      showing the mono key-letters;
+//   2. (RETIRED) this step drove the preset AVATAR picker. MOTIR-2588 replaced
+//      the project's mark with an uploaded IMAGE and MOTIR-2678 deleted the
+//      picker, so the step is gone from here rather than rewritten: the logo's
+//      own journey — upload, header, remove, the empty state — is
+//      `project-logo.spec.ts`, which owns the blob-mock machinery this file has
+//      no other use for. What survives here is the ABSENCE the switcher now
+//      shows, asserted in step 1;
 //   3. CHANGE THE KEY PROD → NIF through the guarded modal — the consequence copy
 //      is spelled out verbatim ("every issue identifier becomes NIF-…", "old PROD
 //      links keep working"); after confirm the Details key + Previous-keys row
@@ -16,8 +20,8 @@
 //   5. REVERT (reclaim the own previous key) NIF → PROD — Previous-keys now lists
 //      NIF and old NIF links redirect to PROD;
 //   6. a NON-ADMIN member sees the values but NONE of the editing controls;
-//   7. a11y: a strict axe sweep over the Details page, the open avatar picker, the
-//      change-key modal, and the release-key confirm.
+//   7. a11y: a strict axe sweep over the Details page, the change-key modal, and
+//      the release-key confirm.
 //
 // The exhaustive rename-tx / collision / resolution MATRICES are proven at the
 // integration tier (project-details-service / project-alias-resolution /
@@ -105,7 +109,7 @@ test.describe('project-details — the editable Details + change-key journey', (
     await db.$disconnect();
   });
 
-  test('@smoke rename + avatar → switcher updates; change key PROD→NIF → old links redirect; reclaim restores PROD', async ({
+  test('@smoke rename → switcher updates; change key PROD→NIF → old links redirect; reclaim restores PROD', async ({
     page,
   }) => {
     const tenant = await seedTenant('pd-owner-1@example.com');
@@ -130,36 +134,12 @@ test.describe('project-details — the editable Details + change-key journey', (
 
     await page.goto('/items');
     await expect(switcher(page)).toContainText('Details E2E Renamed');
-    // No avatar yet → the mono key-letters chip ("PR") is present in the trigger.
-    await expect(switcher(page).getByText('PR', { exact: true })).toBeVisible();
-
-    // ── 2. Avatar: pick a preset icon + colour, save, and prove it round-trips ─
-    await page.goto('/settings/project');
-    await page.getByRole('button', { name: 'Change avatar' }).click();
-    await page.getByRole('radio', { name: 'rocket' }).click();
-    await page.getByRole('radio', { name: 'lavender' }).click();
-    await page.keyboard.press('Escape'); // close the popover; selection is staged
-    await expect(saveButton).toBeEnabled();
-    await saveButton.click();
-    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
-
-    // Re-open the picker → the saved selection is reflected (round-tripped through
-    // the server + router.refresh).
-    await page.getByRole('button', { name: 'Change avatar' }).click();
-    await expect(page.getByRole('radio', { name: 'rocket' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    await expect(page.getByRole('radio', { name: 'lavender' })).toHaveAttribute(
-      'aria-checked',
-      'true',
-    );
-    await page.keyboard.press('Escape');
-
-    // The switcher chip now shows the preset (the mono "PR" letters are gone).
-    await page.goto('/items');
+    // ⚠️ AMENDED by MOTIR-2588. This used to assert the mono key-letters chip
+    // ("PR") was PRESENT — the shipped fallback for a project with no avatar.
+    // There is no fallback any more (`docs/decisions/entity-marks.md` §3), so the
+    // same line inverts: the tier is the project's NAME and nothing else.
     await expect(switcher(page).getByText('PR', { exact: true })).toHaveCount(0);
-    await expect(switcher(page)).toContainText('Details E2E Renamed');
+    await expect(switcher(page).locator('img')).toHaveCount(0);
 
     // ── 3. Change the key PROD → NIF (consequence copy asserted) ─────────────
     await page.goto('/settings/project');
@@ -213,7 +193,7 @@ test.describe('project-details — the editable Details + change-key journey', (
 
   // ⚠️ INVERTED BY MOTIR-2258 (`design-notes.md` § *Amendment 2026-08-08*).
   // Details is the project-level administration that belongs to no domain —
-  // rename, key, avatar, archive — and its own gate asserts `project:administer`.
+  // rename, key, logo, archive — and its own gate asserts `project:administer`.
   // A read-only Details for someone who can change nothing on it is exactly the
   // 2026-06-09 treatment the amendment supersedes.
   test('a non-admin member is REFUSED the Details page', async ({ page }) => {
@@ -232,10 +212,14 @@ test.describe('project-details — the editable Details + change-key journey', (
     // server-side too, proven at the service tier).
     await expect(page.getByRole('button', { name: 'Save changes' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Change key', exact: false })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Change avatar' })).toHaveCount(0);
+    // The logo row's only control for a project with no logo. (Its `Change` /
+    // `Remove` pair only exists once one is SET, so asserting those here would
+    // pass on a build where the row rendered fully — and a loose `name: 'Change'`
+    // matches other controls on this page besides.)
+    await expect(page.getByRole('button', { name: 'Upload logo' })).toHaveCount(0);
   });
 
-  test('@a11y the Details page, avatar picker, change-key modal, and release confirm are axe-clean', async ({
+  test('@a11y the Details page, change-key modal, and release confirm are axe-clean', async ({
     page,
   }) => {
     const tenant = await seedTenant('pd-owner-3@example.com');
@@ -251,12 +235,9 @@ test.describe('project-details — the editable Details + change-key journey', (
     // Details page (with the Previous-keys / Release controls present).
     await sweep(page, '/settings/project — Details');
 
-    // The avatar picker popover.
-    await page.getByRole('button', { name: 'Change avatar' }).click();
-    await expect(page.getByRole('radio', { name: 'rocket' })).toBeVisible();
-    await sweep(page, 'avatar picker (open)');
-    await page.keyboard.press('Escape');
-
+    // (The avatar picker's sweep was here; MOTIR-2678 replaced the picker with
+    // the logo row, whose own axe sweep rides `project-logo.spec.ts` — the spec
+    // that can actually get an image onto the row.)
     // The change-key modal.
     await page.getByRole('button', { name: 'Change key', exact: false }).click();
     await expect(page.getByRole('heading', { name: 'Change project key' })).toBeVisible();
