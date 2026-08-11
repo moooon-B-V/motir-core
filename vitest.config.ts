@@ -948,6 +948,21 @@ export default defineConfig({
         'lib/blob/s3.ts',
         'lib/blob/referencedUrls.ts',
 
+        // Story MOTIR-2588 · Subtask MOTIR-2681 — the project's MARK, end to end.
+        // Four files the story wrote, none of which entered the report when their
+        // own cards shipped, so the >=90% floor did not apply to any of them:
+        // the policy pair the route and the field both read, the upload route,
+        // the settings row, and the renderer. All four are GATED below, MEASURED
+        // first (this card's whole first job).
+        //
+        // The two `app/**/...` forms are the route-group workaround the block
+        // comment at the top of `coverage` explains — a literal `app/(authed)/...`
+        // key matches no reported file and would gate nothing.
+        'lib/projects/imageUpload.ts',
+        'app/api/upload/project-image/route.ts',
+        'app/**/_components/ProjectLogoField.tsx',
+        'app/**/_components/ProjectMark.tsx',
+
         // MOTIR-2527 — the membership READER every access gate now routes
         // through. Small, and gated precisely because it is small: its whole job
         // is choosing a BINDING, and a branch of it going untested is a gate
@@ -1080,6 +1095,27 @@ export default defineConfig({
         'lib/blob/uploader.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/blob/s3.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/blob/referencedUrls.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2588 · Subtask MOTIR-2681 — the project's MARK.
+        //
+        // MEASURED FIRST, then pinned, on this branch over
+        // `tests/integration/projectImageUploadRoute`, `tests/components/
+        // project-{logo-field,mark}`, `tests/project-details-service` and
+        // `tests/attachments/referenced-urls`:
+        //   imageUpload.ts             100 / 100 / 100
+        //   ProjectMark.tsx            100 / 100 / 100
+        //   ProjectLogoField.tsx       100 lines / 95.83 branches / 100 functions
+        //   project-image/route.ts      90 lines /  91.66 branches / 100 functions
+        //
+        // Two of them ENTERED this card below the floor and were brought to it by
+        // real tests, which is what the measurement was for: `ProjectLogoField`
+        // sat at 86.53 / 79.16 / 75 with every FAILURE arm unexercised (a refused
+        // upload, a thrown request, a failed remove, the in-flight dismissal
+        // guard) and `ProjectMark` had no test at all, because the file it
+        // replaced took its test with it.
+        'lib/projects/imageUpload.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/_components/ProjectLogoField.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/_components/ProjectMark.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/api/upload/project-image/route.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/bearer.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/api/v1/pagination.ts': { branches: 90, functions: 90, lines: 90 },

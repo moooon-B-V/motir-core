@@ -1,4 +1,4 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
@@ -55,6 +55,12 @@ beforeEach(async () => {
   await truncateAuthTables();
   ctxRef.current = null;
   stored.length = 0;
+});
+
+// The read-back seam below stubs MOTIR_S3_PUBLIC_BASE_URL; unstub between tests
+// so a stub cannot leak into a case that is asserting the unconfigured arm.
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 afterAll(async () => {
@@ -177,6 +183,115 @@ describe('POST /api/upload/project-image', () => {
       select: { image: true },
     });
     expect(row?.image).toBe(key);
+  });
+});
+
+// ── The WHOLE chain, through the read the shell actually performs ───────────
+// MOTIR-2681. The seam above stops at `updateDetails`'s RETURN, which is the
+// same mapper call the write just made — so it cannot catch a value that
+// persists fine and stops resolving on a FRESH read. These do the round trip:
+// upload, persist, then read back through the two project reads every authed
+// screen is built on.
+describe('upload → persist → READ BACK, the shape the shell consumes', () => {
+  const PUBLIC_BASE = 'https://cdn.test.invalid';
+
+  it('a fresh read resolves the stored KEY to an absolute URL, on both project reads', async () => {
+    // The resolution `storedAssetUrl` performs needs the public origin to be
+    // CONFIGURED — with it unset the mapper passes the key through unchanged (a
+    // deliberate fallback, asserted on its own below). Production has one, so
+    // that is the condition this seam has to be measured under.
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', PUBLIC_BASE);
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const { key } = (await (await upload(fx.projectIdentifier, pngOf(64))).json()) as {
+      key: string;
+    };
+    await projectsService.updateDetails({
+      key: fx.projectIdentifier,
+      ctx: ctxRef.current!,
+      image: key,
+    });
+
+    // The switcher list…
+    const listed = await projectsService.listProjects(fx.workspaceId, fx.ownerId);
+    const mine = listed.find((p) => p.identifier === fx.projectIdentifier)!;
+    // …and the active-project resolution the shell's context row reads.
+    const active = await projectsService.getActiveProject(fx.ownerId, fx.workspaceId);
+
+    for (const [label, image] of [
+      ['listProjects', mine.image],
+      ['getActiveProject', active?.image ?? null],
+    ] as const) {
+      expect(image, `${label} must resolve the key`).not.toBeNull();
+      // An <img src> can use it, and it is NOT the raw key the column holds.
+      expect(image, label).toMatch(/^https?:\/\//);
+      expect(image, label).toContain(key);
+      expect(image, label).not.toBe(key);
+      expect(image, label).toBe(`${PUBLIC_BASE}/${key}`);
+    }
+  });
+
+  it('with NO public origin configured, the key passes through — the documented fallback', async () => {
+    // Worth pinning rather than leaving implicit: a deployment with no CDN base
+    // still gets a value the DTO carries, and the surface renders a relative
+    // reference instead of nothing. If this ever became `null` instead, every
+    // logo would silently disappear on such a deployment rather than break
+    // visibly, which is the harder failure to notice.
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', '');
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+    const { key } = (await (await upload(fx.projectIdentifier, pngOf(64))).json()) as {
+      key: string;
+    };
+    const dto = await projectsService.updateDetails({
+      key: fx.projectIdentifier,
+      ctx: ctxRef.current!,
+      image: key,
+    });
+
+    expect(dto.image).toBe(key);
+  });
+
+  it('a project with NO image reads back as null on both — never "" and never a key', async () => {
+    // The other half of the mark contract: `null` is what tells every surface to
+    // render NOTHING. An empty string is truthy enough in JSX to draw a broken
+    // image, so the DISTINCTION is the assertion, not the falsiness.
+    const fx = await makeWorkItemFixture();
+    signInAs(fx);
+
+    const listed = await projectsService.listProjects(fx.workspaceId, fx.ownerId);
+    const active = await projectsService.getActiveProject(fx.ownerId, fx.workspaceId);
+
+    expect(listed.find((p) => p.identifier === fx.projectIdentifier)!.image).toBeNull();
+    expect(active?.image).toBeNull();
+  });
+
+  it('a key minted under ANOTHER project is refused by this one — through the real service', async () => {
+    // The pure helper's unit test proves the string rule. This proves the rule is
+    // actually WIRED: a real key from a real upload, against a real second
+    // project, through the service the route calls.
+    const a = await makeWorkItemFixture();
+    const b = await makeWorkItemFixture();
+    signInAs(a);
+    const { key } = (await (await upload(a.projectIdentifier, pngOf(64))).json()) as {
+      key: string;
+    };
+
+    ctxRef.current = { userId: b.ownerId, workspaceId: b.workspaceId };
+    await expect(
+      projectsService.updateDetails({
+        key: b.projectIdentifier,
+        ctx: ctxRef.current,
+        image: key,
+      }),
+    ).rejects.toMatchObject({ code: 'INVALID_PROJECT_IMAGE' });
+
+    // And B is unchanged — a refused write leaves no half-state.
+    const row = await db.project.findUnique({
+      where: { id: b.projectId },
+      select: { image: true },
+    });
+    expect(row?.image).toBeNull();
   });
 });
 
