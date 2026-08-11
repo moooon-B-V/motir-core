@@ -804,22 +804,25 @@ export const workItemRepository = {
    * cursor never repeats or drops a row. Workspace-gated explicitly
    * (finding #26; RLS is inert under the dev/CI superuser) and
    * `archivedAt`/`triagedAt`-excluded, matching every other list read.
-   * Read-only path → `db` singleton.
+   *
+   * ⚠️ `tx` and `take` are REQUIRED — see `watcherRepository.listByUser`, whose
+   * twin this is, for both reasons. The pair must stay identical: they back the
+   * two tabs of one surface, and a difference between them is a difference the
+   * reader would see.
    */
   async findByAssigneeOrReporterInWorkspace(
     userId: string,
     workspaceId: string,
     options: {
       projectIds: readonly string[];
-      take?: number;
+      take: number;
       cursor?: HomeCursor | null;
     },
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<HomeWorkItemRow[]> {
-    const { projectIds, take = 25, cursor } = options;
+    const { projectIds, take, cursor } = options;
     if (projectIds.length === 0) return [];
-    const client = tx ?? db;
-    return client.workItem.findMany({
+    return tx.workItem.findMany({
       where: {
         workspaceId,
         projectId: { in: [...projectIds] },
@@ -847,11 +850,10 @@ export const workItemRepository = {
     userId: string,
     workspaceId: string,
     projectIds: readonly string[],
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<number> {
     if (projectIds.length === 0) return 0;
-    const client = tx ?? db;
-    return client.workItem.count({
+    return tx.workItem.count({
       where: {
         workspaceId,
         projectId: { in: [...projectIds] },

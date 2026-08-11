@@ -374,6 +374,21 @@ describe('watcherRepository.listByUser / homeService.listWatching', () => {
     expect(page.items).toEqual([]);
   });
 
+  it('returns nothing for a reader with no browsable projects, without querying', async () => {
+    const fx = await makeFixture({ identifier: 'WSTR' });
+    const item = await createWorkItem(fx, { kind: 'task', title: 'Watched by a stranger' });
+    const stranger = await createTestUser({ email: `wstr-${Date.now()}@example.com` });
+    await db.$transaction((tx) => watcherRepository.add(item.id, stranger.id, tx));
+
+    // The watch row EXISTS — only the empty browsable set keeps it out, and the
+    // read short-circuits before issuing a degenerate `IN ()` rather than
+    // asking the database a question with no possible answer.
+    expect(await adminDb.watcher.count({ where: { userId: stranger.id } })).toBe(1);
+    expect(
+      await homeService.listWatching({ userId: stranger.id, workspaceId: fx.workspaceId }),
+    ).toEqual({ items: [], nextCursor: null });
+  });
+
   it('pages the watching read by the same keyset', async () => {
     const fx = await makeFixture({ identifier: 'WPAG' });
     const made: string[] = [];
