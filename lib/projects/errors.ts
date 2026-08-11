@@ -126,6 +126,19 @@ export class InvalidAvatarError extends Error {
   }
 }
 
+// A project `image` reference that is not one of OUR public-bucket objects under
+// THIS project's own `projects/<projectId>/` prefix (MOTIR-2676). The value the
+// caller sent is deliberately NOT echoed: a rejected ref is by definition one
+// this project may not point at, and reflecting it turns the error into an oracle
+// for probing another tenant's key space.
+export class InvalidProjectImageError extends Error {
+  readonly code = 'INVALID_PROJECT_IMAGE' as const;
+  constructor() {
+    super('A project image must be an uploaded asset belonging to this project.');
+    this.name = 'InvalidProjectImageError';
+  }
+}
+
 // No alias with this key belongs to the project (release of a non-existent
 // previous key). 404 — indistinguishable shape from a missing resource.
 export class AliasNotFoundError extends Error {

@@ -6,13 +6,15 @@ import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 // PATCH /api/projects/[key] (Story 6.8 · Subtask 6.8.1)
 // Edit a project's details, OR change its key. Project-admin gated (the gate is
 // in the service). Body shape:
-//   { name?, avatarIcon?, avatarColor? }  → updateDetails (name + avatar)
+//   { name?, avatarIcon?, avatarColor?, image? } → updateDetails (name + mark)
 //   { identifier? }                       → changeKey (the guarded key change)
 // The presence of `identifier` selects the change-key flow — it is its own
 // request in the UI (a consequence modal), distinct from a details Save, so the
-// two never mix in one PATCH. `avatarIcon`/`avatarColor` accept `null` to clear
-// (back to the mono-identifier rendering); an ABSENT field is left untouched, so
-// the route distinguishes "key present with null" from "key absent". Thin HTTP
+// two never mix in one PATCH. `avatarIcon`/`avatarColor`/`image` accept `null` to
+// clear (the avatar pair back to the mono-identifier rendering; `image` to NO mark
+// at all); an ABSENT field is left untouched, so the route distinguishes "key
+// present with null" from "key absent". `image` carries an object KEY the upload
+// route returned — the service gates it to this project's own prefix. Thin HTTP
 // transport per CLAUDE.md: parse, one service call, map typed errors.
 
 interface RouteParams {
@@ -77,9 +79,10 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
     }
     const avatarIcon = readNullableString(obj, 'avatarIcon');
     const avatarColor = readNullableString(obj, 'avatarColor');
-    if (avatarIcon === false || avatarColor === false) {
+    const image = readNullableString(obj, 'image');
+    if (avatarIcon === false || avatarColor === false || image === false) {
       return NextResponse.json(
-        { error: 'An avatar field must be a string or null.', code: 'BAD_REQUEST' },
+        { error: 'A mark field must be a string or null.', code: 'BAD_REQUEST' },
         { status: 400 },
       );
     }
@@ -90,6 +93,7 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
       name,
       avatarIcon,
       avatarColor,
+      image,
     });
     return NextResponse.json({ project });
   } catch (err) {

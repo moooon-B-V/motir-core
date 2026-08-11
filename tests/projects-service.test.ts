@@ -75,13 +75,16 @@ describe('createProject — happy path', () => {
       name: 'Motir Core',
     });
 
-    // DTO shape: id / name / slug / identifier / archivedAt / accessLevel +
-    // the Story 6.8 avatar fields ONLY — never a raw Prisma row (no createdAt,
-    // no lastWorkItemNumber). archivedAt rides on the DTO so the shell can flag
-    // an archived active project (#29.2); a freshly created project is always
-    // non-archived (null). avatarIcon/avatarColor backfill to null (the
-    // mono-identifier rendering); `previousKeys` is NOT present here — it loads
-    // only on the details-surface read path (6.8), not on a plain create.
+    // DTO shape: id / name / slug / identifier / archivedAt / accessLevel + the
+    // MARK fields ONLY — never a raw Prisma row (no createdAt, no
+    // lastWorkItemNumber). archivedAt rides on the DTO so the shell can flag an
+    // archived active project (#29.2); a freshly created project is always
+    // non-archived (null). The Story 6.8 avatarIcon/avatarColor backfill to null
+    // (the mono-identifier rendering) and MOTIR-2680 drops them; `image`
+    // (MOTIR-2676) is null on create — a new project has no mark, and the
+    // surfaces render NOTHING rather than a generated one. `previousKeys` is NOT
+    // present here — it loads only on the details-surface read path (6.8), not on
+    // a plain create.
     expect(Object.keys(project).sort()).toEqual([
       'accessLevel',
       'aiGenerateExplanations',
@@ -90,10 +93,13 @@ describe('createProject — happy path', () => {
       'avatarIcon',
       'id',
       'identifier',
+      'image',
       'name',
       'onboardingRanAt',
       'slug',
     ]);
+    // No mark on a fresh project — the null that means "render nothing".
+    expect(project.image).toBeNull();
     // A freshly created project defaults to explanations OFF (Story 7.4 / MOTIR-850).
     expect(project.aiGenerateExplanations).toBe(false);
     // A freshly created project has never onboarded — the marker is null until

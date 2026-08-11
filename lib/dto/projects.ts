@@ -36,6 +36,19 @@ export interface ProjectDTO {
   avatarIcon: string | null;
   avatarColor: string | null;
   /**
+   * The project's uploaded IMAGE (MOTIR-2676) — an ABSOLUTE URL, or null when the
+   * project has no mark. The column stores an object KEY; `toProjectDTO` runs it
+   * through `storedAssetUrl` so every consumer receives something an `<img src>`
+   * can use and nothing has to know where the bucket lives (the same read-side
+   * resolution every `User.image` mapper does).
+   *
+   * `null` means the surface renders NOTHING beside the project's name — not a
+   * monogram, not a generated tile (`docs/decisions/entity-marks.md` §3). It
+   * REPLACES `avatarIcon`/`avatarColor` above, which MOTIR-2680 drops once the
+   * last reader is gone.
+   */
+  image: string | null;
+  /**
    * The immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264) — the ISO
    * timestamp the project's FIRST plan was approved + materialized, or null when
    * the project NEVER onboarded (a `db:seed` tree or a migrate-existing project).

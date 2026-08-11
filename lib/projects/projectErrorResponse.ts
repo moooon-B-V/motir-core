@@ -7,6 +7,7 @@ import {
   InvalidAiSettingsError,
   InvalidAvatarError,
   InvalidIdentifierError,
+  InvalidProjectImageError,
   InvalidProjectNameError,
   InvalidStatusAutomationSettingsError,
   NotProjectAdminError,
@@ -29,7 +30,8 @@ import {
 //       PermissionDeniedError carries the `permission` that was missing, so the
 //       body adds it; the other two keep the shape they shipped with)
 //   InvalidProjectNameError / InvalidIdentifierError
-//       / IdentifierUnchangedError / InvalidAvatarError       → 400
+//       / IdentifierUnchangedError / InvalidAvatarError
+//       / InvalidProjectImageError                            → 400
 //   IdentifierTakenError / IdentifierReservedError           → 409
 //   InvalidAiSettingsError                                   → 422 (Story 7.13 ·
 //       MOTIR-915 — a well-formed patch carrying an out-of-range threshold /
@@ -65,7 +67,8 @@ export function projectErrorResponse(err: unknown): NextResponse | null {
     err instanceof InvalidProjectNameError ||
     err instanceof InvalidIdentifierError ||
     err instanceof IdentifierUnchangedError ||
-    err instanceof InvalidAvatarError
+    err instanceof InvalidAvatarError ||
+    err instanceof InvalidProjectImageError
   ) {
     return NextResponse.json({ error: err.message, code: err.code }, { status: 400 });
   }

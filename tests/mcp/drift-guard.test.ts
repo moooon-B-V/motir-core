@@ -44,6 +44,10 @@ const projectDto = {
   accessLevel: 'open' as const,
   avatarIcon: null,
   avatarColor: null,
+  // The project MARK (MOTIR-2676) — null means the project has no image, which
+  // is the case every MCP payload should carry through unchanged: neither the
+  // v1 `Project` shape nor the MCP row publishes it.
+  image: null,
   onboardingRanAt: null,
   aiGenerateExplanations: false,
 };

@@ -13,6 +13,7 @@ import {
   IdentifierUnchangedError,
   InvalidAvatarError,
   InvalidIdentifierError,
+  InvalidProjectImageError,
   InvalidProjectNameError,
   NotProjectAdminError,
   ProjectNotFoundError,
@@ -27,6 +28,7 @@ import {
 } from '@/lib/publicProjects/limits';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import { truncateAuthTables } from './helpers/db';
+import * as uploader from '@/lib/blob/uploader';
 
 // Service-layer tests for the Story 6.8 (Subtask 6.8.1) project-details + change-
 // key backend: projectsService.{updateDetails, changeKey, releaseAlias,
@@ -91,6 +93,13 @@ async function seedItems(projectId: string, ctx: WorkspaceContext, n: number) {
   return items;
 }
 
+// The RAW stored value — the object key — as distinct from the DTO's resolved
+// URL. Asserting on both is what proves the key/URL split holds.
+async function storedImageOf(projectId: string): Promise<string | null> {
+  const row = await db.project.findUnique({ where: { id: projectId }, select: { image: true } });
+  return row?.image ?? null;
+}
+
 async function identifiersOf(projectId: string): Promise<string[]> {
   const rows = await db.workItem.findMany({ where: { projectId }, select: { identifier: true } });
   return rows.map((r) => r.identifier).sort();
@@ -132,6 +141,91 @@ describe('updateDetails', () => {
     });
     expect(cleared.avatarIcon).toBeNull();
     expect(cleared.avatarColor).toBeNull();
+  });
+
+  // ── The project IMAGE (MOTIR-2676) ──────────────────────────────────────
+  // The mark that REPLACES the preset pair above. Three things are worth a test
+  // and only one of them is the happy path: the own-project gate, and the
+  // ORDERING of the blob collection relative to the commit.
+
+  it('sets, replaces and clears the image, resolving the stored KEY to a URL on read', async () => {
+    const { key, project, ownerCtx } = await makeFixture('image');
+    const del = vi.spyOn(uploader, 'deletePublicAsset').mockResolvedValue(undefined);
+    const first = `projects/${project.id}/logo.png`;
+    const second = `projects/${project.id}/logo-v2.png`;
+
+    const set = await projectsService.updateDetails({ key, ctx: ownerCtx, image: first });
+    // The DTO carries a resolved absolute URL, never the raw key; the COLUMN
+    // carries the key, never a URL. That split is the whole point of MOTIR-2404.
+    expect(set.image).toContain(first);
+    expect(await storedImageOf(project.id)).toBe(first);
+    expect(del).not.toHaveBeenCalled(); // nothing to collect on a first set
+
+    const replaced = await projectsService.updateDetails({ key, ctx: ownerCtx, image: second });
+    expect(replaced.image).toContain(second);
+    expect(await storedImageOf(project.id)).toBe(second);
+    expect(del).toHaveBeenCalledWith(first); // the REPLACED object is collected
+
+    del.mockClear();
+    const cleared = await projectsService.updateDetails({ key, ctx: ownerCtx, image: null });
+    expect(cleared.image).toBeNull();
+    expect(await storedImageOf(project.id)).toBeNull();
+    expect(del).toHaveBeenCalledWith(second); // removing collects it too
+  });
+
+  it('leaves the image untouched when the field is ABSENT (absent \u2260 null)', async () => {
+    const { key, project, ownerCtx } = await makeFixture('image-absent');
+    vi.spyOn(uploader, 'deletePublicAsset').mockResolvedValue(undefined);
+    const stored = `projects/${project.id}/logo.png`;
+    await projectsService.updateDetails({ key, ctx: ownerCtx, image: stored });
+
+    const renamed = await projectsService.updateDetails({ key, ctx: ownerCtx, name: 'Renamed' });
+
+    expect(renamed.image).toContain(stored);
+    expect(await storedImageOf(project.id)).toBe(stored);
+  });
+
+  it("rejects ANOTHER project's object, a foreign URL and a traversal", async () => {
+    const { key, ownerCtx } = await makeFixture('image-gate');
+    const other = await makeFixture('image-gate-other', 'OTHR');
+
+    for (const bad of [
+      `projects/${other.project.id}/logo.png`, // a real object — just not ours
+      'https://lh3.googleusercontent.com/a/abc123',
+      'javascript:alert(1)//logo.png',
+      'avatars/u1/me.png', // a real object of ours, in the WRONG namespace
+    ]) {
+      await expect(
+        projectsService.updateDetails({ key, ctx: ownerCtx, image: bad }),
+      ).rejects.toBeInstanceOf(InvalidProjectImageError);
+    }
+  });
+
+  // The ordering test. A blob delete is irreversible; the row write is not. If
+  // the delete ran inside the transaction, a later fault would roll the row back
+  // to a key whose object we had already destroyed — a project pointing at a
+  //404 with no way to tell what happened.
+  it('collects the replaced blob ONLY after the row commits \u2014 a fault rolls back and deletes nothing', async () => {
+    const { key, project, ownerCtx } = await makeFixture('image-atomic');
+    const del = vi.spyOn(uploader, 'deletePublicAsset').mockResolvedValue(undefined);
+    const first = `projects/${project.id}/logo.png`;
+    await projectsService.updateDetails({ key, ctx: ownerCtx, image: first });
+    del.mockClear();
+
+    // Fault AFTER the row write, still inside the transaction.
+    vi.spyOn(projectKeyAliasRepository, 'findManyByProject').mockRejectedValueOnce(
+      new Error('boom'),
+    );
+    await expect(
+      projectsService.updateDetails({
+        key,
+        ctx: ownerCtx,
+        image: `projects/${project.id}/logo-v2.png`,
+      }),
+    ).rejects.toThrow('boom');
+
+    expect(del).not.toHaveBeenCalled(); // the old object still exists
+    expect(await storedImageOf(project.id)).toBe(first); // and is still referenced
   });
 
   it('rejects a blank name, an unknown icon, and an unknown colour', async () => {

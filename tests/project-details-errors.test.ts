@@ -7,6 +7,7 @@ import {
   IdentifierUnchangedError,
   InvalidAvatarError,
   InvalidIdentifierError,
+  InvalidProjectImageError,
   InvalidProjectNameError,
   NotProjectAdminError,
   ProjectAccessDeniedError,
@@ -24,6 +25,17 @@ import {
 // returns null (the route rethrows → 500), and the registry guards accept only
 // preset keys.
 
+// The rejected REF is deliberately absent from the message: a project image that
+// fails the gate is by definition one this project may not point at, and echoing
+// it back would turn a 400 into an oracle for probing another tenant's keys.
+describe('InvalidProjectImageError', () => {
+  it('names no value', () => {
+    const message = new InvalidProjectImageError().message;
+    expect(message).not.toContain('projects/');
+    expect(message).toContain('this project');
+  });
+});
+
 describe('projectErrorResponse', () => {
   const cases: [Error, number][] = [
     [new ProjectNotFoundError('p'), 404],
@@ -34,6 +46,7 @@ describe('projectErrorResponse', () => {
     [new InvalidIdentifierError('a-b'), 400],
     [new IdentifierUnchangedError('PROD'), 400],
     [new InvalidAvatarError('icon', 'nope'), 400],
+    [new InvalidProjectImageError(), 400],
     [new IdentifierTakenError('LIVE'), 409],
     [new IdentifierReservedError('MOVE'), 409],
   ];

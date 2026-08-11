@@ -16,6 +16,7 @@ import {
   IdentifierUnchangedError,
   InvalidAvatarError,
   InvalidIdentifierError,
+  InvalidProjectImageError,
   InvalidProjectNameError,
   ProjectNotFoundError,
   ProjectOverviewTooLongError,
@@ -24,6 +25,8 @@ import {
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
+import { isOwnProjectImageRef, storedAssetKey } from '@/lib/blob/referencedUrls';
+import { deletePublicAsset } from '@/lib/blob/uploader';
 import {
   PUBLIC_OVERVIEW_MAX_LENGTH,
   PUBLIC_TAGLINE_MAX_LENGTH,
@@ -760,12 +763,25 @@ export const projectsService = {
     name?: string;
     avatarIcon?: string | null;
     avatarColor?: string | null;
+    image?: string | null;
   }): Promise<ProjectDTO> {
-    return withWorkspaceContext(input.ctx, async (tx) => {
+    // The object key of a REPLACED/removed project image, captured inside the
+    // transaction and collected only AFTER it commits (below). A blob delete is
+    // an external side effect: inside the tx it would hold the row lock across
+    // network I/O, and — the reason that actually bites — a rolled-back update
+    // would leave the row still pointing at an object we had already destroyed.
+    let oldImageKeyToDelete: string | null = null;
+
+    const dto = await withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
       await projectAccessService.assertCanManage(project.id, input.ctx, tx);
 
-      const data: { name?: string; avatarIcon?: string | null; avatarColor?: string | null } = {};
+      const data: {
+        name?: string;
+        avatarIcon?: string | null;
+        avatarColor?: string | null;
+        image?: string | null;
+      } = {};
       if (input.name !== undefined) {
         const trimmed = input.name.trim();
         if (!trimmed) throw new InvalidProjectNameError();
@@ -783,11 +799,36 @@ export const projectsService = {
         }
         data.avatarColor = input.avatarColor;
       }
+      if (input.image !== undefined) {
+        const image = input.image; // string (set) | null (remove)
+        // A non-null value must be OUR object under THIS project's prefix — the
+        // gate that stops one project pointing its mark at another's blob.
+        if (image !== null && !isOwnProjectImageRef(image, project.id)) {
+          throw new InvalidProjectImageError();
+        }
+        data.image = image;
+        // The prior image is ours to collect iff it is actually CHANGING and it
+        // is one of our own objects. `storedAssetKey` reduces either storage form
+        // (a bare key, or an absolute URL on the configured public base) to the
+        // object the GC deletes.
+        if (project.image && project.image !== image) {
+          oldImageKeyToDelete = storedAssetKey(project.image);
+        }
+      }
 
       const updated = await projectRepository.update(project.id, data, tx);
       const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
       return toProjectDTO(updated, aliases);
     });
+
+    // AFTER the commit (CLAUDE.md: external side effects live outside the
+    // transaction), so a rolled-back update can never orphan a still-referenced
+    // object. `deletePublicAsset` is idempotent, so a retry is safe.
+    if (oldImageKeyToDelete) {
+      await deletePublicAsset(oldImageKeyToDelete);
+    }
+
+    return dto;
   },
 
   /**

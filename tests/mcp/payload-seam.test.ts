@@ -688,6 +688,10 @@ describe('presentMcpProjectRow', () => {
     accessLevel: 'open' as const,
     avatarIcon: null,
     avatarColor: null,
+    // The project MARK (MOTIR-2676) — deliberately NOT published by the MCP row
+    // or by v1's `Project`, so the widening assertion below must keep holding
+    // with it present on the DTO.
+    image: null,
     onboardingRanAt: null,
     aiGenerateExplanations: false,
   };
