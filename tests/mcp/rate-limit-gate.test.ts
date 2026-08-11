@@ -12,6 +12,7 @@ import type { McpRequestExtra } from '@/lib/mcp/context';
 import type { TokenScope } from '@/lib/mcp/scopes';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
+import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../helpers/rateLimitWindow';
 
 // The BILLABLE-TOOL gate at the MCP dispatch seam (MOTIR-2610), wired.
 //
@@ -29,8 +30,44 @@ import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 //
 // Refusals here happen BEFORE the tool's runner, so no service and no provider is
 // reached — which is why these cases need no AI fixture and no motir-ai.
+//
+// ⚠️ EVERY CASE PINS THE WINDOW AS WELL AS THE BUDGET (MOTIR-2647). A budget of
+// `1` says how much may be spent; it says nothing about WHEN the counter resets,
+// and `consumeSharedRateLimit` buckets on a grid aligned to the EPOCH — so two
+// calls that land on opposite sides of a `windowMs` multiple get a fresh counter
+// between them and the one expected to be refused is served instead. That is a
+// property of the wall clock's PHASE, not of the runner's speed: it is invisible
+// locally, it clears on every re-run, and it presents as `PROJECT_NOT_FOUND`
+// where `RATE_LIMITED` was expected — which reads like a product bug in whatever
+// the branch touched. `tests/helpers/rateLimitWindow.ts` is the one definition of
+// the cure; `budgetOf` below applies it, and the second case — "the ALIGNMENT is
+// what refuses" — makes the failure summonable, so the fix is not the kind
+// nobody can watch fail first.
 
-const ENVS = ['MOTIR_AI_GENERATE_RATE_LIMIT', 'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'];
+const LIMIT_ENV = 'MOTIR_AI_GENERATE_RATE_LIMIT';
+const WINDOW_ENV = 'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS';
+const ENVS = [LIMIT_ENV, WINDOW_ENV];
+
+/** The refusal the runner returns for the fixture's absent project — i.e. what a
+ *  call that PASSED the gate comes back with. */
+const PROJECT_NOT_FOUND = 'PROJECT_NOT_FOUND';
+
+/**
+ * How far short of a boundary the reproduction case below starts — the phase an
+ * unaligned pair is handed by bad luck, here handed to it on purpose.
+ *
+ * Both this and {@link CALL_GAP_MS} are margins, not delays: the first call must
+ * finish on the NEAR side of the boundary and the second on the FAR side, so
+ * each is ~20× the 19 ms worst-of-20 the heaviest counted section in these
+ * suites measures at (`rateLimitWindow.ts`). Shrinking them makes the
+ * reproduction itself phase-dependent, which is the defect it demonstrates.
+ */
+const PRE_BOUNDARY_MS = 400;
+
+/** The gap between the reproduction's two calls — longer than the window
+ *  remainder they start with, so the pair provably straddles unless something
+ *  crosses the boundary for them first. */
+const CALL_GAP_MS = 800;
 
 const ctx: ServiceContext = { userId: 'gate_user', workspaceId: 'gate_ws' };
 
@@ -71,33 +108,129 @@ function textOf(result: unknown): string {
   return JSON.stringify(result);
 }
 
+type ToolResult = Awaited<ReturnType<Client['callTool']>>;
+
+/** Call the billable tool every case in this file meters on. */
+function expandItem(client: Client): Promise<ToolResult> {
+  return client.callTool({ name: 'expand_item', arguments: { key: 'ACME-7' } });
+}
+
+/**
+ * Assert the call PASSED the gate and reached the runner, which then failed on
+ * the fixture's absent project.
+ *
+ * Stated positively on purpose. "It was not rate-limited" is true of a call that
+ * never happened, of a transport error swallowed by a `.catch`, and of a runner
+ * that refused for some third reason — so inferring "the gate let it through"
+ * from the ABSENCE of `RATE_LIMITED` infers it from almost nothing. The
+ * `PROJECT_NOT_FOUND` these calls come back with is the positive evidence, and it
+ * is load-bearing in every case below.
+ */
+function expectReachedTheTool(result: ToolResult): void {
+  expect(result.isError).toBe(true);
+  expect(textOf(result.content)).toContain(PROJECT_NOT_FOUND);
+  expect(textOf(result.content)).not.toContain(RATE_LIMITED_CODE);
+}
+
+/**
+ * Pin the generation budget to `limit` over an ALIGNED window, then hand the
+ * caller a whole one — so a case's accumulated count owns its window instead of
+ * whatever was left of a randomly-phased 60 s one.
+ *
+ * Applied by every case that sets the budget at all, including the two that
+ * spend nothing from it (the non-billable tools, and the unmetered server). They
+ * are not window-sensitive TODAY, and pinning them costs up to one window each;
+ * what it buys is that neither depends on `MCP_BILLABLE_TOOLS` staying as it is —
+ * a tool added to that list would otherwise make them silently phase-dependent,
+ * which is exactly how this file acquired the defect in the first place.
+ */
+async function budgetOf(limit: number): Promise<void> {
+  process.env[LIMIT_ENV] = String(limit);
+  process.env[WINDOW_ENV] = String(ALIGNED_WINDOW_MS);
+  await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+}
+
+/** Land `PRE_BOUNDARY_MS` short of the next aligned-window boundary — i.e. with
+ *  only that much of a window left to spend. Composed from the shared helper
+ *  rather than from a phase computed here; the arithmetic has exactly one home
+ *  (`tests/api/v1/rate-limit-window-alignment.test.ts` enforces that). */
+async function waitUntilJustBeforeBoundary(): Promise<void> {
+  await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+  await sleep(ALIGNED_WINDOW_MS - PRE_BOUNDARY_MS);
+}
+
 describe('the billable-tool gate, wired into a real server', () => {
   it('refuses an over-budget expand_item with an isError tool result, not a transport error', async () => {
-    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await budgetOf(1);
     const client = await connect();
 
     // The first call passes the gate and reaches the tool, which fails on the
     // missing project rather than on the limiter — proof the gate let it THROUGH.
-    const first = await client
-      .callTool({ name: 'expand_item', arguments: { key: 'ACME-7' } })
-      .catch(() => null);
-    expect(textOf(first)).not.toContain(RATE_LIMITED_CODE);
+    expectReachedTheTool(await expandItem(client));
 
-    const second = await client.callTool({ name: 'expand_item', arguments: { key: 'ACME-7' } });
+    const second = await expandItem(client);
     expect(second.isError).toBe(true);
     expect(textOf(second.content)).toContain(RATE_LIMITED_CODE);
     expect(textOf(second.content)).toContain('expand_item');
     await client.close();
   });
 
+  // ⚠️ The case above cannot be watched failing on demand — the phase it needs
+  // arrives maybe one run in many — so on its own the pin is an unfalsifiable
+  // fix: a green suite after the change proves exactly what a green suite before
+  // it proved. This case makes both halves summonable, from the same budget and
+  // the same two calls, and asserts the OPPOSITE outcomes.
+  it('the ALIGNMENT is what refuses — the same two calls straddle a boundary without it', async () => {
+    process.env[LIMIT_ENV] = '1';
+    process.env[WINDOW_ENV] = String(ALIGNED_WINDOW_MS);
+
+    // Both halves start at the SAME phase — `PRE_BOUNDARY_MS` short of a
+    // boundary — and leave the SAME gap between their two calls. The gap is
+    // longer than the window remainder they start with, so the pair lands on
+    // opposite sides of the boundary unless something crosses it for them
+    // first. The alignment is the only thing that differs.
+
+    // (a) UNALIGNED: the boundary falls between the calls, the counter starts
+    //     fresh, and the second call reaches the runner. This is the reported
+    //     failure summoned on demand — a `PROJECT_NOT_FOUND` where the case
+    //     above asserts `RATE_LIMITED`, which is the whole bug.
+    await waitUntilJustBeforeBoundary();
+    const straddling = await connect();
+    expectReachedTheTool(await expandItem(straddling));
+    await sleep(CALL_GAP_MS);
+    expectReachedTheTool(await expandItem(straddling));
+    await straddling.close();
+
+    // (b) ALIGNED, from that same phase: `waitForWindowBoundary` crosses the
+    //     boundary BEFORE the first call, so the gap that straddled in (a)
+    //     now falls inside one window and the second call is refused. Same
+    //     budget, same two calls, same spacing, opposite verdict.
+    await waitUntilJustBeforeBoundary();
+    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+    const aligned = await connect();
+    expectReachedTheTool(await expandItem(aligned));
+    await sleep(CALL_GAP_MS);
+    const refused = await expandItem(aligned);
+    expect(refused.isError).toBe(true);
+    expect(textOf(refused.content)).toContain(RATE_LIMITED_CODE);
+    await aligned.close();
+  }, // Two constructed phases plus two inter-call gaps: ~9 s of deliberate
+  // sleeping, which the 15 s default leaves too little room above.
+  30_000);
+
   it('the SCOPE gate runs FIRST — a denied call never spends the generation budget', async () => {
     // The ordering `registerMcpTools` composes for. `expand_item` needs
     // `work_items:write`; a read-only token is refused for SCOPE, and the budget
     // it could not reach is still whole afterwards.
-    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    //
+    // The window pin is what makes that last clause mean anything: an unpinned
+    // window could reset between the denials and the final call, and then "the
+    // budget is still whole" would hold for a reason that has nothing to do with
+    // the scope gate — the case would pass while proving nothing.
+    await budgetOf(1);
     const readOnly = await connect(['read']);
     for (let i = 0; i < 3; i += 1) {
-      const denied = await readOnly.callTool({ name: 'expand_item', arguments: { key: 'ACME-7' } });
+      const denied = await expandItem(readOnly);
       expect(denied.isError).toBe(true);
       expect(textOf(denied.content)).toContain(SCOPE_NOT_GRANTED_CODE);
       expect(textOf(denied.content)).not.toContain(RATE_LIMITED_CODE);
@@ -106,15 +239,12 @@ describe('the billable-tool gate, wired into a real server', () => {
 
     // One unspent unit left: a properly-scoped caller still gets its first call.
     const full = await connect();
-    const allowed = await full
-      .callTool({ name: 'expand_item', arguments: { key: 'ACME-7' } })
-      .catch(() => null);
-    expect(textOf(allowed)).not.toContain(RATE_LIMITED_CODE);
+    expectReachedTheTool(await expandItem(full));
     await full.close();
   });
 
   it('leaves every NON-billable tool alone, however low the generation budget is', async () => {
-    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await budgetOf(1);
     const client = await connect();
     for (let i = 0; i < 4; i += 1) {
       const result = await client.callTool({ name: 'whoami', arguments: {} });
@@ -136,17 +266,16 @@ describe('the billable-tool gate, wired into a real server', () => {
   });
 
   it('a server built WITHOUT the flag meters nothing (the in-process tool tests)', async () => {
-    process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await budgetOf(1);
     const client = new Client({ name: 'test', version: '0' });
     const server = buildMcpServer(() => ctx); // meterBillableTools defaults to false
     const [ct, st] = InMemoryTransport.createLinkedPair();
     await Promise.all([server.connect(st), client.connect(ct)]);
 
+    // All three reach the runner, on a budget that permits one — which is the
+    // claim, and is stronger than "none of them said RATE_LIMITED".
     for (let i = 0; i < 3; i += 1) {
-      const result = await client
-        .callTool({ name: 'expand_item', arguments: { key: 'ACME-7' } })
-        .catch(() => null);
-      expect(textOf(result)).not.toContain(RATE_LIMITED_CODE);
+      expectReachedTheTool(await expandItem(client));
     }
     await client.close();
   });
