@@ -63,6 +63,10 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'attachments.spec.ts': 14.9,
   'auth-credentials.spec.ts': 3.6,
   'auth-google.spec.ts': 3.5,
+  // Not measured from a green `main` run — this spec did not exist for either
+  // of them. The value is its own budget: the two injected document holds
+  // (1.5s + 4s, `auth-post-auth-landing.spec.ts`) plus sign-in and seeding.
+  'auth-post-auth-landing.spec.ts': 12.0,
   'automation.spec.ts': 12.1,
   'backlog-filter.spec.ts': 3.1,
   'backlog.spec.ts': 16.9,

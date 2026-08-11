@@ -15,6 +15,14 @@ import { dashboardsService } from '@/lib/services/dashboardsService';
 import { ProjectsEmptyState } from '../_components/ProjectsEmptyState';
 import { DashboardsHome } from './_components/DashboardsHome';
 
+// The post-auth landing marker. `/dashboard` is where both credential flows
+// land, and BOTH of its branches carry this — so `tests/e2e/_helpers/
+// shell-session.ts` has one authoritative "the dashboard has rendered" signal
+// to wait on whether or not the workspace has a project yet (MOTIR-2645). It is
+// on a bare wrapper rather than on one branch's root so neither branch's own
+// layout is touched.
+const DASHBOARD_TESTID = 'dashboard-page';
+
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) redirect('/sign-in');
@@ -26,9 +34,17 @@ export default async function DashboardPage() {
   // preserved empty-state cue (1.3.4).
   const project = await getActiveProject();
   if (!project) {
-    return <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />;
+    return (
+      <div data-testid={DASHBOARD_TESTID}>
+        <ProjectsEmptyState aiConfigured={isMotirAiConfigured()} />
+      </div>
+    );
   }
 
   const dashboards = await dashboardsService.listDashboards(ctx);
-  return <DashboardsHome dashboards={dashboards} />;
+  return (
+    <div data-testid={DASHBOARD_TESTID}>
+      <DashboardsHome dashboards={dashboards} />
+    </div>
+  );
 }

@@ -138,7 +138,23 @@ function SignInForm() {
     if (!password) return;
     setSubmitting(true);
     try {
-      const result = await signIn.email({ email, password, callbackURL });
+      // `callbackURL` is deliberately NOT passed (MOTIR-2645). The endpoint
+      // answers a request that carries one with `{ redirect: true, url }`
+      // (better-auth `api/routes/sign-in.mjs`), and the CLIENT's `redirect`
+      // fetch plugin then assigns `window.location.href = url` from its
+      // onSuccess hook — a full DOCUMENT navigation, racing the `router.push`
+      // below to the very same route. Two navigations to one destination is a
+      // wasted document load and re-hydration on every sign-in, and it is what
+      // made a `page.goto` right after a test's sign-in abort intermittently
+      // ("interrupted by another navigation to …/dashboard", three CI
+      // occurrences). The soft push is the one we want, so it is the only one
+      // we start.
+      //
+      // The endpoint's OTHER use of callbackURL is the destination baked into a
+      // verification email, and only on the `requireEmailVerification` branch —
+      // which is `false` here (lib/auth/index.ts) and throws EMAIL_NOT_VERIFIED
+      // rather than redirecting. Whoever turns that on wires the link there.
+      const result = await signIn.email({ email, password });
       if (result?.error) {
         // Unified error message — no enumeration. Mockup 07's exact copy.
         setPasswordError(t('wrongPassword'));
