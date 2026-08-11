@@ -16,8 +16,9 @@ import {
 
 // The Home personal reads (Story MOTIR-2649 · Subtask MOTIR-2651) against a REAL
 // Postgres (the motir-core no-mocks rule). These are the SUBTASK-level tests —
-// the reads' own behaviour. The story-level matrix (the full access matrix, the
-// quick-links CRUD, coverage of every branch) is MOTIR-2655.
+// the reads' own behaviour. The story-level matrix (the full access matrix with
+// its positive controls, the page-boundary dedupe, the active-project
+// coverage of every branch) is MOTIR-2655.
 //
 // Two properties get most of the attention here because they are the two the
 // card exists for, and both are invisible in a small fixture:
