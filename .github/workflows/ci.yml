@@ -427,12 +427,24 @@ jobs:
     # contention (the local shared-:5433
     # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)
     # to max(slowest leg).
-    #   • 5 "bulk" legs — the non-at-scale, non-a11y suite split by Playwright's
-    #     native `--shard=i/5` (it filters by --grep* first, then shards the
-    #     result). Bumped 4→5 to shrink the slowest bulk leg; pulling the @a11y
-    #     sweeps out into their own leg (below) already removed the worst long
-    #     pole, so 5 is the balance — each leg re-pays the install + dual-webServer
-    #     boot, and more legs past this give diminishing returns for the cost.
+    #   • 5 "bulk" legs — the non-at-scale, non-a11y suite, split by MEASURED
+    #     per-spec cost (`tests/e2e/shard-plan.ts`, MOTIR-2617), NOT by
+    #     Playwright's `--shard=i/5`. Bumped 4→5 to shrink the slowest bulk leg;
+    #     pulling the @a11y sweeps out into their own leg (below) already removed
+    #     the worst long pole, so 5 is the balance — each leg re-pays the install
+    #     + dual-webServer boot, and more legs past this give diminishing returns
+    #     for the cost.
+    #     WHY NOT `--shard=i/5`: it partitions by test COUNT in discovery order,
+    #     so what a spec costs never enters the split. Measured across two green
+    #     `main` runs (31438176201 + 31440981319) the five legs ran 159–280s of
+    #     test time — 55% of mean, slowest leg ~1.75x the fastest — and the
+    #     overloaded leg is where the webServer crosses its memory cliff and
+    #     hangs every later navigation (MOTIR-2617, three occurrences on bulk-4:
+    #     PRs #1636 / #1912 / #2014). The plan bin-packs the same measurement to
+    #     <1% spread, and a vitest guard (tests/e2e-shard-plan.test.ts) fails the
+    #     unit lane if a NEW spec has no measured cost — which is what stops one
+    #     silently rejoining the heaviest shard. `E2E_SHARD` (below) is how a leg
+    #     tells playwright.config.ts which slice it is.
     #   • 2 "a11y" legs — every `@a11y` axe sweep, pulled out of the bulk legs
     #     via `--grep "@a11y"` (and `--grep-invert`-ed OUT of them), then split
     #     `--shard=i/2`. WHY a dedicated selection and not just more bulk shards:
@@ -486,17 +498,24 @@ jobs:
         include:
           # The non-at-scale, non-a11y suite, split five ways. `--grep-invert`
           # excludes the three at-scale tags AND the @a11y sweeps (their own leg
-          # below); `--shard=i/5` then partitions what remains.
+          # below) — that selection is by TAG and unchanged. `shard:` then names
+          # this leg to playwright.config.ts, which narrows `testMatch` to the
+          # spec files tests/e2e/shard-plan.ts assigns it by measured cost.
           - id: bulk-1
-            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=1/5'
+            shard: bulk-1
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           - id: bulk-2
-            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=2/5'
+            shard: bulk-2
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           - id: bulk-3
-            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=3/5'
+            shard: bulk-3
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           - id: bulk-4
-            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=4/5'
+            shard: bulk-4
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           - id: bulk-5
-            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y" --shard=5/5'
+            shard: bulk-5
+            args: '--grep-invert "(board(-scrum)?|collab|epic6)-at-scale|@a11y"'
           # Every @a11y axe sweep (the shell-a11y* files + the per-feature a11y
           # closers), pulled into one parallel leg so the slow sweeps stop
           # clustering into a single bulk shard. Standard board/collab defaults
@@ -611,6 +630,10 @@ jobs:
       - name: Run E2E (${{ matrix.id }})
         run: pnpm test:e2e ${{ matrix.args }}
         env:
+          # MOTIR-2617 — which cost-derived slice this leg runs. Empty on the
+          # a11y / at-scale / billing lanes, which select by --grep instead and
+          # must keep seeing every spec file.
+          E2E_SHARD: ${{ matrix.shard }}
           BOARD_ISSUE_CAP_OVERRIDE: ${{ matrix.board_issue_cap }}
           DONE_AGE_WINDOW_DAYS_OVERRIDE: ${{ matrix.done_age_window_days }}
           SEED_COLLAB_COMMENTS: ${{ matrix.collab_comments }}
@@ -633,12 +656,21 @@ jobs:
       # — a red billing leg left no trace, screenshot, or report to debug from.
       # (The acceptance lane's own `-acceptance` report is uploaded by the
       # `acceptance-video.yml` workflow, which owns that lane since MOTIR-1949.)
+      #
+      # `out/e2e-harness` is the MOTIR-2617 watchdog series — one JSONL per leg
+      # carrying MemAvailable + the webServer's RSS sampled on a timer and at
+      # every test boundary, plus each spec's duration. It is what makes a
+      # recurrence of the bulk-shard degradation NAME its cliff (and what
+      # tests/e2e/shard-plan.ts is re-measured from) instead of being diagnosed
+      # from scratch a fourth time. Uploaded on every leg, green or red.
       - name: Upload Playwright report
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report-${{ matrix.id }}
-          path: out/playwright-report*
+          path: |
+            out/playwright-report*
+            out/e2e-harness
           retention-days: 7
 
   # ── The sandbox image (Story 7.9 · 7.9.7c MOTIR-885 · 7.9.7e MOTIR-1788) ──

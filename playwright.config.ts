@@ -14,6 +14,7 @@ import {
   E2E_GITLAB_TOKEN_ENCRYPTION_KEY,
   E2E_GITLAB_WEBHOOK_SECRET,
 } from './tests/e2e/_helpers/gitlab-const';
+import { legTestMatch } from './tests/e2e/shard-plan';
 
 // Playwright doesn't pick up .env automatically the way Next.js does. The
 // spec files import @/lib/db (via _helpers/db-reset) for DB assertions,
@@ -42,6 +43,10 @@ loadEnv();
 const USING_CUSTOM_ORIGIN = Boolean(process.env['E2E_BASE_URL']) || Boolean(process.env['PORT']);
 const BASE_URL = process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`;
 const PORT = new URL(BASE_URL).port || '3000';
+
+// MOTIR-2617 — the cost-derived bulk-leg selection (see `testMatch` below).
+// `null` for anything that is not a bulk leg id, including an unset E2E_SHARD.
+const SHARD_TEST_MATCH = legTestMatch(process.env['E2E_SHARD'] ?? '');
 
 // The Inngest dev server's port (Subtask 5.4.11 — the per-run port the :8288
 // note below asked for). :8288 was fixed, so two concurrent E2E runs (sibling
@@ -144,6 +149,13 @@ export default defineConfig({
   // would break unrelated at-scale/menu specs). The self-host-ABSENT billing spec
   // (billing-selfhost) is off-cloud and DOES run in this lane.
   testIgnore: ['**/billing-cloud.spec.ts', '**/acceptance*.spec.ts'],
+  // MOTIR-2617 — bulk-leg membership comes from MEASURED per-spec cost, not from
+  // Playwright's `--shard=i/5`. `E2E_SHARD=bulk-N` (set per matrix leg in
+  // ci.yml) narrows this run to that leg's specs; the a11y / at-scale / billing
+  // lanes set nothing and so still see every file, selected by their own
+  // `--grep`. The plan, the measurement behind it and the guard that keeps a new
+  // spec from silently rejoining a shard live in tests/e2e/shard-plan.ts.
+  ...(SHARD_TEST_MATCH ? { testMatch: SHARD_TEST_MATCH } : {}),
   // Each spec has its own truncate + sign-up flow; 30s is plenty for the
   // longest path (request reset → poll file outbox → follow link → set
   // new password).
@@ -157,9 +169,17 @@ export default defineConfig({
   forbidOnly: Boolean(process.env['CI']),
   retries: process.env['CI'] ? 1 : 0,
   workers: 1,
-  reporter: process.env['CI']
-    ? [['list'], ['html', { open: 'never', outputFolder: 'out/playwright-report' }]]
-    : [['list'], ['html', { open: 'never', outputFolder: 'out/playwright-report' }]],
+  // The two branches of the old `CI ? … : …` here were character-for-character
+  // identical, so it is one list. The third entry is the MOTIR-2617 harness
+  // watchdog: it records the memory series CI uploads per leg, and aborts the
+  // shard when the webServer stops answering rather than letting the retry burn
+  // a second 180s timeout against the same dead server. It writes files only
+  // (`printsToStdio()` is false), so it composes with `list` + `html`.
+  reporter: [
+    ['list'],
+    ['html', { open: 'never', outputFolder: 'out/playwright-report' }],
+    ['./tests/e2e/_reporters/harness-watchdog.ts', { port: Number(PORT) }],
+  ],
   outputDir: 'out/playwright-output',
   use: {
     baseURL: BASE_URL,
