@@ -6038,5 +6038,25 @@
     "count": "{count, plural, one {# repository has no code-health audit.} other {# repositories have no code-health audit.}}",
     "consequence": "Plans that touch them are made without their recorded standards.",
     "action": "Review code health"
+  },
+  "designResult": {
+    "title": "Design result",
+    "gloss": "— what this card produced",
+    "openInNewTab": "Open in new tab",
+    "frameTitle": "Design mock — {path}",
+    "frameFailed": "The mock could not be loaded",
+    "frameFailedBody": "Its preview link may have expired. The file itself is safe.",
+    "retry": "Retry",
+    "screenshots": "Screenshot",
+    "noteTruncated": "Shown in part — the complete note is published as a file.",
+    "downloadNote": "Download design-notes.md",
+    "ciRun": "CI run",
+    "publishedBy": "published by",
+    "empty": {
+      "title": "No design result published yet",
+      "body": "A design result appears here when a pull request that changes this card’s design assets runs CI.",
+      "bodyDesign": "A design result appears here when this card’s pull request runs CI — the note, the page/view mock and the screenshot are published automatically. Nothing to upload."
+    },
+    "frameLoading": "Loading the mock…"
   }
 }
