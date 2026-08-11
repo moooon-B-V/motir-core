@@ -14928,6 +14928,3224 @@
           </div>
         </div>
       </section>
+      <section class="panel">
+        <h2 class="panel-h">Panel G · Without the marks — the resolved row (MOTIR-2674)</h2>
+        <p class="panel-p">
+          <code>docs/decisions/entity-marks.md</code> deletes the organization's mark and makes the
+          project's an optional uploaded image. Two things follow, and the first is the reason this
+          panel exists: at <code>md</code>–<code>xl</code> the org tier rendered its MARK and
+          nothing else, so removing it would leave <b>a ghost button holding a chevron</b>. The
+          resolution is to reveal the org's NAME from <code>md</code> — measured at
+          <b>+2px</b> against today's mark form at 768px and <b>+7px</b> at 1024px, with
+          <b>zero overflow at every band</b>
+          (<code>scripts/measure-context-row.mjs</code>, re-runnable). Every frame below is Panel
+          B's real markup with those mutations applied, not a redraw.
+        </p>
+        <p class="panel-p">
+          The second: each band is drawn TWICE — a project with an uploaded image and one without —
+          because once images are optional the mixed case is the normal one.
+          <b>Nothing renders where the mark would be</b>: no placeholder box, no dashed outline, no
+          monogram. The gap closes and the name moves left.
+        </p>
+        <figure class="frame">
+          <figcaption>320px — the project ALONE — project <b>WITH</b> an uploaded image</figcaption>
+          <div class="device" data-vw="320" style="width: 320px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span
+                            aria-hidden="true"
+                            class="inline-flex h-5 w-5 flex-none items-center justify-center overflow-hidden rounded-(--radius-control)"
+                            ><img
+                              src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%232f6f5e%22%2F%3E%3Cpath%20d%3D%22M8%2028l8-16%208%2016z%22%20fill%3D%22%23ffffff%22%2F%3E%3Ccircle%20cx%3D%2229%22%20cy%3D%2213%22%20r%3D%224%22%20fill%3D%22%23f2c14e%22%2F%3E%3C%2Fsvg%3E"
+                              alt=""
+                              class="h-full w-full object-cover" /></span
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            320px — the project ALONE — project <b>with NO image</b>: nothing renders, the gap
+            closes
+          </figcaption>
+          <div class="device" data-vw="320" style="width: 320px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            768px (md) — the org returns as its NAME — project <b>WITH</b> an uploaded image
+          </figcaption>
+          <div class="device" data-vw="768" style="width: 768px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span
+                            aria-hidden="true"
+                            class="inline-flex h-5 w-5 flex-none items-center justify-center overflow-hidden rounded-(--radius-control)"
+                            ><img
+                              src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%232f6f5e%22%2F%3E%3Cpath%20d%3D%22M8%2028l8-16%208%2016z%22%20fill%3D%22%23ffffff%22%2F%3E%3Ccircle%20cx%3D%2229%22%20cy%3D%2213%22%20r%3D%224%22%20fill%3D%22%23f2c14e%22%2F%3E%3C%2Fsvg%3E"
+                              alt=""
+                              class="h-full w-full object-cover" /></span
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            768px (md) — the org returns as its NAME — project <b>with NO image</b>: nothing
+            renders, the gap closes
+          </figcaption>
+          <div class="device" data-vw="768" style="width: 768px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            1024px (lg) — unchanged from md — project <b>WITH</b> an uploaded image
+          </figcaption>
+          <div class="device" data-vw="1024" style="width: 1024px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span
+                            aria-hidden="true"
+                            class="inline-flex h-5 w-5 flex-none items-center justify-center overflow-hidden rounded-(--radius-control)"
+                            ><img
+                              src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%232f6f5e%22%2F%3E%3Cpath%20d%3D%22M8%2028l8-16%208%2016z%22%20fill%3D%22%23ffffff%22%2F%3E%3Ccircle%20cx%3D%2229%22%20cy%3D%2213%22%20r%3D%224%22%20fill%3D%22%23f2c14e%22%2F%3E%3C%2Fsvg%3E"
+                              alt=""
+                              class="h-full w-full object-cover" /></span
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            1024px (lg) — unchanged from md — project <b>with NO image</b>: nothing renders, the gap
+            closes
+          </figcaption>
+          <div class="device" data-vw="1024" style="width: 1024px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            1280px (xl) — the FULL path — project <b>WITH</b> an uploaded image
+          </figcaption>
+          <div class="device" data-vw="1280" style="width: 1280px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span
+                            aria-hidden="true"
+                            class="inline-flex h-5 w-5 flex-none items-center justify-center overflow-hidden rounded-(--radius-control)"
+                            ><img
+                              src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2040%2040%22%3E%3Crect%20width%3D%2240%22%20height%3D%2240%22%20fill%3D%22%232f6f5e%22%2F%3E%3Cpath%20d%3D%22M8%2028l8-16%208%2016z%22%20fill%3D%22%23ffffff%22%2F%3E%3Ccircle%20cx%3D%2229%22%20cy%3D%2213%22%20r%3D%224%22%20fill%3D%22%23f2c14e%22%2F%3E%3C%2Fsvg%3E"
+                              alt=""
+                              class="h-full w-full object-cover" /></span
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+        <figure class="frame">
+          <figcaption>
+            1280px (xl) — the FULL path — project <b>with NO image</b>: nothing renders, the gap
+            closes
+          </figcaption>
+          <div class="device" data-vw="1280" style="width: 1280px">
+            <header
+              data-surface="header"
+              class="border-(--el-border) bg-(--el-page-bg) sticky top-0 z-30 border-b"
+            >
+              <nav
+                aria-label="Global"
+                class="flex h-14 items-center justify-between gap-2 px-4 sm:px-6"
+              >
+                <div class="flex min-w-0 items-center gap-2">
+                  <a
+                    aria-label="Motir — go to dashboard"
+                    class="hidden h-8 w-8 flex-none items-center justify-center rounded-(--radius-control) md:flex border border-(--el-border) bg-(--el-surface)"
+                    href="/dashboard"
+                    ><svg
+                      viewBox="0 0 24 24"
+                      width="24"
+                      height="24"
+                      class="brand-glyph"
+                      aria-hidden="true"
+                      focusable="false"
+                    >
+                      <path
+                        d="M1.008 1.016Q7.42 15.214 12.916 4.851Q18.412 -5.511 22.992 12.008L22.992 23Q18.412 5.71 12.916 18.019Q7.42 30.328 1.008 12.008Z"
+                        fill="currentColor"
+                      ></path></svg
+                  ></a>
+                  <div class="md:hidden">
+                    <button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans font-medium rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-sm) text-xs w-9 px-0"
+                      aria-label="Open navigation"
+                    >
+                      <span
+                        ><svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="24"
+                          height="24"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          class="lucide lucide-menu h-5 w-5"
+                          aria-hidden="true"
+                        >
+                          <path d="M4 5h16"></path>
+                          <path d="M4 12h16"></path>
+                          <path d="M4 19h16"></path></svg
+                      ></span>
+                    </button>
+                  </div>
+                  <div class="flex min-w-0 items-center gap-1">
+                    <span class="hidden md:contents"
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Organization menu"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_0_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="flex items-center gap-2"
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
+                          ></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden xl:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ><button
+                        type="button"
+                        data-variant="ghost"
+                        class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x)"
+                        aria-label="Switch workspace"
+                        aria-haspopup="dialog"
+                        aria-expanded="false"
+                        aria-controls="radix-_r_d_"
+                        data-state="closed"
+                      >
+                        <span
+                          ><span class="max-w-[24ch] truncate font-serif">Engineering</span></span
+                        ><span aria-hidden="true" class="inline-flex"
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down h-4 w-4"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg
+                        ></span></button></span
+                    ><span class="hidden md:contents"
+                      ><span aria-hidden="true" class="text-(--el-text-faint) px-0.5 text-sm"
+                        >›</span
+                      ></span
+                    ><button
+                      type="button"
+                      data-variant="ghost"
+                      class="inline-flex items-center justify-center gap-2 font-sans text-sm font-medium leading-none rounded-(--radius-btn) transition-[transform,background-color,border-color,color] duration-(--transition-duration) active:scale-(--active-scale) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 bg-transparent text-(--el-text) hover:bg-(--el-surface) h-(--height-btn-md) px-(--spacing-btn-x) min-w-0 shrink"
+                      aria-label="Switch project"
+                      aria-haspopup="dialog"
+                      aria-expanded="false"
+                      aria-controls="radix-_r_n_"
+                      data-state="closed"
+                    >
+                      <span
+                        ><span class="flex min-w-0 items-center gap-2"
+                          ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
+                            >Motir</span
+                          ><svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            stroke-width="2"
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            class="lucide lucide-chevron-down text-(--el-text-muted) h-4 w-4 shrink-0"
+                            aria-hidden="true"
+                          >
+                            <path d="m6 9 6 6 6-6"></path></svg></span
+                      ></span>
+                    </button>
+                  </div>
+                </div>
+                <div class="flex flex-none items-center gap-2">
+                  <a
+                    aria-label="Plan with AI"
+                    style="
+                      background-image: linear-gradient(
+                        135deg,
+                        var(--el-accent),
+                        color-mix(in srgb, var(--el-accent) 55%, var(--el-highlight))
+                      );
+                      box-shadow:
+                        inset 0 1px 0 color-mix(in srgb, var(--el-accent-text) 38%, transparent),
+                        inset 0 0 0 1px color-mix(in srgb, var(--el-accent-text) 18%, transparent),
+                        0 6px 18px -5px color-mix(in srgb, var(--el-accent) 75%, transparent),
+                        0 0 22px -3px color-mix(in srgb, var(--el-highlight) 50%, transparent);
+                    "
+                    class="group relative h-(--height-btn-md) items-center gap-2 overflow-hidden rounded-(--radius-badge) px-(--spacing-btn-x) hidden md:inline-flex font-sans text-sm font-semibold whitespace-nowrap text-(--el-accent-text) transition-transform active:scale-(--active-scale) focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+                    href="/planning?mode=project&amp;from=project"
+                    ><span
+                      aria-hidden="true"
+                      class="plan-with-ai-shimmer pointer-events-none absolute inset-y-0 -left-1/3 w-1/3 -skew-x-12"
+                    ></span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-sparkles relative h-4 w-4 shrink-0"
+                      aria-hidden="true"
+                      style="
+                        filter: drop-shadow(
+                          0 0 5px color-mix(in srgb, var(--el-accent-text) 80%, transparent)
+                        );
+                      "
+                    >
+                      <path
+                        d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"
+                      ></path>
+                      <path d="M20 2v4"></path>
+                      <path d="M22 4h-4"></path>
+                      <circle cx="4" cy="20" r="2"></circle></svg
+                    ><span class="relative hidden lg:inline">Plan with AI</span></a
+                  ><a
+                    aria-label="Building in public — manage"
+                    class="items-center gap-1 rounded-(--radius-badge) border border-transparent hidden md:inline-flex px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium bg-(--el-build-bg) text-(--el-build-text) no-underline cursor-pointer transition-colors hover:bg-[color-mix(in_srgb,var(--el-accent)_16%,var(--el-build-bg))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:ring-offset-2"
+                    href="/settings/project/members"
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-megaphone size-3 shrink-0 text-(--el-build-glyph)"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"
+                      ></path>
+                      <path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"></path>
+                      <path d="M8 6v8"></path></svg
+                    ><span class="truncate">Building in public</span
+                    ><svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-settings size-3 shrink-0 text-(--el-build-text) opacity-55"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"
+                      ></path>
+                      <circle cx="12" cy="12" r="3"></circle></svg></a
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="C"
+                    aria-label="Create work item"
+                    class="inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) lg:w-auto lg:px-2.5 text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text)"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-plus h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12h14"></path>
+                      <path d="M12 5v14"></path></svg
+                    ><span class="hidden lg:inline">Create</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >C</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-keyshortcuts="Meta+K Control+K"
+                    aria-label="Search"
+                    class="text-(--el-text-secondary) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center gap-2 rounded-(--radius-btn) border border-(--el-border) font-sans text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 lg:w-auto lg:px-2.5"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-search h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <path d="m21 21-4.34-4.34"></path>
+                      <circle cx="11" cy="11" r="8"></circle></svg
+                    ><span class="hidden lg:inline">Search</span
+                    ><kbd
+                      class="hidden rounded-(--radius-kbd) border border-(--el-border) px-1 py-0.5 font-mono text-[10px] lg:inline"
+                      >CtrlK</kbd
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Report"
+                    class="items-center justify-center rounded-(--radius-control) h-(--height-control) w-(--height-control) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) hidden md:inline-flex text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text)"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bug h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M12 20v-9"></path>
+                      <path d="M14 7a4 4 0 0 1 4 4v3a6 6 0 0 1-12 0v-3a4 4 0 0 1 4-4z"></path>
+                      <path d="M14.12 3.88 16 2"></path>
+                      <path d="M21 21a4 4 0 0 0-3.81-4"></path>
+                      <path d="M21 5a4 4 0 0 1-3.55 3.97"></path>
+                      <path d="M22 13h-4"></path>
+                      <path d="M3 21a4 4 0 0 1 3.81-4"></path>
+                      <path d="M3 5a4 4 0 0 0 3.55 3.97"></path>
+                      <path d="M6 13H2"></path>
+                      <path d="m8 2 1.88 1.88"></path>
+                      <path d="M9 7.13V6a3 3 0 1 1 6 0v1.13"></path>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Theme: System (light). Activate to change."
+                    class="text-(--el-text-muted) hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-(--focus-ring-color) h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) transition-colors focus-visible:outline-none focus-visible:ring-2 hidden md:inline-flex"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-monitor h-4 w-4"
+                      aria-hidden="true"
+                    >
+                      <rect width="20" height="14" x="2" y="3" rx="2"></rect>
+                      <line x1="8" x2="16" y1="21" y2="21"></line>
+                      <line x1="12" x2="12" y1="17" y2="21"></line>
+                    </svg></button
+                  ><button
+                    type="button"
+                    aria-label="Notifications, 3 unread"
+                    class="relative inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-(--radius-control) text-(--el-text-secondary) transition-colors hover:bg-(--el-surface) hover:text-(--el-text) focus-visible:ring-2 focus-visible:ring-(--focus-ring-color) focus-visible:outline-none"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_33_"
+                    data-state="closed"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="lucide lucide-bell h-5 w-5"
+                      aria-hidden="true"
+                    >
+                      <path d="M10.268 21a2 2 0 0 0 3.464 0"></path>
+                      <path
+                        d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"
+                      ></path></svg
+                    ><span
+                      aria-hidden="true"
+                      class="absolute -top-0.5 -right-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-(--radius-badge) bg-(--el-accent) px-1 text-[10px] leading-none font-bold text-(--el-accent-text) ring-2 ring-(--el-page-bg)"
+                      >3</span
+                    ></button
+                  ><button
+                    type="button"
+                    aria-label="Account menu"
+                    class="bg-(--el-text) text-(--el-text-inverted) focus-visible:ring-(--focus-ring-color) inline-flex h-(--height-control) w-(--height-control) items-center justify-center rounded-full font-sans text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-controls="radix-_r_34_"
+                    data-state="closed"
+                  >
+                    Z
+                  </button>
+                </div>
+              </nav>
+            </header>
+          </div>
+        </figure>
+      </section>
     </div>
   </body>
 </html>
