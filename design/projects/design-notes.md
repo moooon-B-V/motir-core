@@ -1019,7 +1019,7 @@ cover`), or **nothing at all** when the project has none (MOTIR-2675). A quiet
 | Details page title           | `"Details"`                                                                                                                                                                                                                  |
 | Details page subtitle        | `"Project name, key and avatar. Workspace owners and admins can edit these — editing arrives with project-details editing."`                                                                                                 |
 | Details card title           | `"Project details"`                                                                                                                                                                                                          |
-| Identity row labels          | `"Image"` · `"Name"` · `"Key"` · `"Workspace"` · `"Created"`                                                                                                                                                                 |
+| Identity row labels          | _(the logo row carries NO label — see below)_ · `"Name"` · `"Key"` · `"Workspace"` · `"Created"`                                                                                                                             |
 | 6.8 seam note                | `"Editing name, key and avatar — plus changing the project key with old-key redirects — arrives with project-details editing. For now these are read-only."`                                                                 |
 | Danger zone heading          | `"Danger zone"` (the shipped `settings.danger.heading`)                                                                                                                                                                      |
 | Archive row                  | `"Archive this project"` · `"Hide {projectName} from the project list and stop new work. You can restore it later."` · `"Archive…"` (shipped `settings.archive.*`)                                                           |
@@ -1047,6 +1047,31 @@ at plan time (2026-06-10):
 - **No settings search box** — Jira ships one at site-admin scale; ~8 bounded
   entries do not earn it (finding #57: the nav is bounded, not a scale
   surface).
+
+## The logo row has no label (Yue, 2026-08-11)
+
+Every other identity row on this card is `label → value`. The logo row is not, and
+the omission is deliberate: **a label reading "Image" above a picture of the
+project's logo says nothing the picture has not already said.** It is chrome
+describing its own contents.
+
+**Where the word survives, and why exactly there.** The label can go because the
+picture speaks; when there IS no picture, nothing speaks — so the word is
+load-bearing in precisely the two states where the image is absent:
+
+| state          | copy                     | why the word is needed                                       |
+| -------------- | ------------------------ | ------------------------------------------------------------ |
+| no logo set    | `"Upload logo"`          | the row is one button; without the noun it is "upload what?" |
+| remove confirm | `"Remove project logo?"` | the dialog replaces the surface it is about                  |
+
+Everywhere else the controls sit **beside the thing they act on** and read as
+`Change` / `Remove` with no noun at all.
+
+**And the noun is "logo", not "image."** That is the word Yue used, and it is the
+more specific of the two — "image" describes the file format, "logo" describes
+what the file is for. The DTO field and the column stay `image` (they are about
+storage, and `User.image` sets that precedent); only the user-facing copy says
+logo.
 
 ## The mixed switcher list — what drawing it changed (MOTIR-2675)
 
@@ -1526,10 +1551,10 @@ service. This is the 6.4.6 read-only grammar 5.4 / 6.4 / 6.5 all share.
 | Page title / sub              | `"Details"` / `"Your project's name, image and key. Changing the key re-keys every issue and keeps old links working. Only project admins can edit these."`                                                                          |
 | Card title                    | `"Project details"`                                                                                                                                                                                                                  |
 | Image field label / help      | `"Image"` / `"PNG or JPG, up to 2 MB. Shown wherever the project is named. Projects without one show their name alone."`                                                                                                             |
-| Image buttons                 | `"Change"` (an image is set) · `"Upload"` (none is set) · `"Uploading…"` (pending) · `"Remove"`                                                                                                                                      |
+| Logo buttons                  | `"Change"` (a logo is set) · `"Upload logo"` (none is set — the ONE place the word is load-bearing) · `"Uploading…"` · `"Remove"`                                                                                                    |
 | Remove-image modal            | title `"Remove project image?"` / body `"Motir will show {Project} by name wherever the image appears. You can upload a new one at any time."` / buttons `"Cancel"` · `"Remove image"`                                               |
 | Image rejections (client)     | wrong type `"That file type is not supported. Use a PNG or JPG."` · too large `"That image is over 2 MB. Choose a smaller file."`                                                                                                    |
-| Image success toasts          | `"Project image updated"` · `"Project image removed"`                                                                                                                                                                                |
+| Logo success toasts           | `"Project logo updated"` · `"Project logo removed"`                                                                                                                                                                                  |
 | Name field label / help       | `"Name"` / `"The display name across the app. The URL slug is not affected."`                                                                                                                                                        |
 | Key field label / help        | `"Key"` / `"Issues are keyed {IDENT}-1, {IDENT}-2, … Changing it re-keys every issue and keeps old links working."`                                                                                                                  |
 | Change-key affordance         | `"Change key…"`                                                                                                                                                                                                                      |
