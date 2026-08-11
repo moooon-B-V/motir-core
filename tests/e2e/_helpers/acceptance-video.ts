@@ -113,6 +113,44 @@ export const BEAT_MS = 4_000;
 // `clientDiagnostics` fixture below now does: the next occurrence lands with the
 // console, the page errors, the request ledger and the renderer's own clock
 // attached to the failure, and is READ rather than re-derived.
+//
+// ── WHAT THE CAPTURE THEN SAID (MOTIR-2621, read 2026-08-11) ──
+//
+// It was read, and the first thing it establishes is that **this failure is not
+// `/planning`'s**. The occurrence carrying the discriminating evidence landed on
+// `acceptance-mcp-docs.spec.ts` — a PUBLIC docs route, no session, no planning
+// code, no `motir-ai` on any path — and it is the same failure exactly (runs
+// 31438023288 and 31440555516, the identical shape twice):
+//
+//   * the destination's RSC payload — `/docs/mcp/tools?_rsc=…` — arrived 200 in
+//     8-21 ms, at t=7.4 s;
+//   * then **46.2 s with no network event at all**, `readyState: 'complete'`;
+//   * `pageErrors: []` and `console: []` — and those are MEASUREMENTS, not gaps
+//     in instrumentation: the same fixture recorded 2 console entries on the
+//     `cli-connect` failures in the same run;
+//   * ZERO genuinely failed requests once cancelled `_rsc` prefetches are
+//     excluded (MOTIR-2643 — see below);
+//   * the URL never advanced and `bodyText` is still the ORIGIN page's.
+//
+// So the client router fetched the destination payload and then committed
+// nothing — on a route that shares none of `/planning`'s suspects. Whatever this
+// is, it is a property of client-side navigation under this runner, not of the
+// planning workspace. `/planning` is where we happened to look first, because it
+// is the slowest-looking surface and the one with a plausible story.
+//
+// The two readings are now unequal rather than settled. An uncaught throw is
+// DISFAVOURED — the `pageerror` channel demonstrably works and stayed empty —
+// but not excluded, since a throw swallowed inside React's own error handling
+// never reaches it. Starvation fits everything observed: 4 vCPU hosting
+// `next start`, Inngest, Postgres and Playwright, and a main thread that never
+// runs the commit. What has NOT been shown is a defect in any route's code.
+//
+// ⚠️ The corollary for whoever reads a future `client-diagnostics.json`: BEFORE
+// MOTIR-2643 all five captures taken on 2026-08-10 reported "N request(s)
+// failed" and named a URL, because `next/link` prefetch cancellations were
+// counted in the tally. That verdict was wrong on every one of them, and it hid
+// exactly the idle-renderer rung that matters here. If you are reading an
+// artifact from before that fix, recompute the verdict — do not quote it.
 export const FIRST_PAINT_MS = 60_000;
 
 // The failure report itself is `./acceptance-diagnostics` — pure, and unit-tested
