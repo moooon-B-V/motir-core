@@ -69,8 +69,7 @@ export default async function ProjectSettingsPage() {
         projectId={ctx.projectId}
         projectName={details.name}
         projectIdentifier={details.identifier}
-        avatarIcon={details.avatarIcon}
-        avatarColor={details.avatarColor}
+        image={details.image}
         previousKeys={previousKeys}
         canManage={caps.canManage}
       />

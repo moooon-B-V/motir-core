@@ -11,6 +11,7 @@ import {
   IdentifierUnchangedError,
   InvalidAvatarError,
   InvalidIdentifierError,
+  InvalidProjectImageError,
   InvalidProjectNameError,
   NotProjectAdminError,
   ProjectNotFoundError,
@@ -77,6 +78,41 @@ export async function updateProjectDetailsAction(
   } catch (err) {
     if (err instanceof InvalidProjectNameError) return { ok: false, code: 'INVALID_NAME' };
     if (err instanceof InvalidAvatarError) return { ok: false, code: 'INVALID_AVATAR' };
+    if (err instanceof NotProjectAdminError) return { ok: false, code: 'NOT_ADMIN' };
+    if (err instanceof ProjectNotFoundError) return { ok: false, code: 'UNKNOWN' };
+    throw err;
+  }
+}
+
+// ── updateLogo (the Details logo row — MOTIR-2678) ───────────────────────────
+
+export type UpdateLogoResult =
+  | { ok: true; image: string | null }
+  | { ok: false; code: 'INVALID_IMAGE' | 'NOT_ADMIN' | 'UNKNOWN' };
+
+/**
+ * Persist (or clear) the project's logo. Takes the object KEY the upload route
+ * returned — never a URL — and returns the RESOLVED absolute URL the field
+ * renders, so the key never reaches the client. `null` removes the logo, and
+ * `updateDetails` collects the replaced object after its transaction commits.
+ *
+ * Separate from `updateProjectDetailsAction` on purpose: the logo is NOT part of
+ * the card's save bar. It commits the moment a file is picked (the account Photo
+ * row's behaviour, which this composes), whereas the name batches through Save —
+ * folding them together would either make the logo wait for a Save the person
+ * did not press, or make the name commit on keystroke.
+ */
+export async function updateProjectLogoAction(image: string | null): Promise<UpdateLogoResult> {
+  const { userId, workspaceId, key } = await requireProjectContext();
+  try {
+    const project = await projectsService.updateDetails({
+      key,
+      ctx: { userId, workspaceId },
+      image,
+    });
+    return { ok: true, image: project.image };
+  } catch (err) {
+    if (err instanceof InvalidProjectImageError) return { ok: false, code: 'INVALID_IMAGE' };
     if (err instanceof NotProjectAdminError) return { ok: false, code: 'NOT_ADMIN' };
     if (err instanceof ProjectNotFoundError) return { ok: false, code: 'UNKNOWN' };
     throw err;

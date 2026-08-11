@@ -1394,11 +1394,8 @@
       "cardTitle": "Project details",
       "roleAdmin": "Admin",
       "roleReadOnly": "Read-only",
-      "fieldAvatar": "Avatar",
       "fieldName": "Name",
       "fieldKey": "Key",
-      "avatarHelp": "A preset icon and colour, shown on the project switcher and lists. Choose “None” to fall back to the key letters.",
-      "changeAvatar": "Change avatar",
       "pickerIcon": "Icon",
       "pickerColour": "Colour",
       "pickerPreview": "Preview",
@@ -1434,7 +1431,27 @@
       "releaseBody": "Releasing {ident} frees it for other projects and breaks old {ident} links — they’ll stop redirecting and start returning “not found”. This can’t be undone except by changing the key back to {ident}.",
       "releaseButton": "Release key",
       "releasedToast": "Released {ident}. It’s free for other projects now, and its old links no longer redirect.",
-      "releaseErrorTitle": "Couldn’t release the key. Try again."
+      "releaseErrorTitle": "Couldn’t release the key. Try again.",
+      "logo": {
+        "help": "PNG or JPG, up to 2 MB. Shown wherever the project is named; projects without one show their name alone.",
+        "alt": "Project logo",
+        "upload": "Upload logo",
+        "change": "Change",
+        "remove": "Remove",
+        "updated": "Project logo updated",
+        "removed": "Project logo removed",
+        "removeConfirm": {
+          "title": "Remove project logo?",
+          "body": "Motir will show the project by name wherever the logo appears. You can upload a new one at any time.",
+          "cancel": "Cancel",
+          "confirm": "Remove logo"
+        },
+        "errors": {
+          "invalidType": "That file type is not supported. Use a PNG or JPG.",
+          "tooLarge": "That logo is over 2 MB. Choose a smaller file.",
+          "failed": "Couldn’t update the project logo. Try again."
+        }
+      }
     },
     "workspace": {
       "empty": {
