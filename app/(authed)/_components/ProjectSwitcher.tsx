@@ -12,7 +12,7 @@ import { afterContextSwitchTarget } from '@/lib/navigation/afterContextSwitch';
 import type { ProjectDTO } from '@/lib/dto/projects';
 import { setActiveProjectAction, startNewAiProjectAction } from '../_project-actions';
 import { CreateProjectModal } from './CreateProjectModal';
-import { ProjectAvatar } from './ProjectAvatar';
+import { ProjectMark } from './ProjectMark';
 
 export interface ProjectSwitcherProps {
   /** Non-archived projects in the workspace (the switch targets). */
@@ -101,14 +101,9 @@ export function ProjectSwitcher({
             )}
           >
             <span className="flex min-w-0 items-center gap-2">
-              {active ? (
-                <ProjectAvatar
-                  icon={active.avatarIcon}
-                  color={active.avatarColor}
-                  identifier={active.identifier}
-                  size={22}
-                />
-              ) : null}
+              {/* The bar's tier: the logo, or nothing. No slot is reserved —
+                  a single tier has no column to align to, so the gap closes. */}
+              {active ? <ProjectMark image={active.image} size={22} /> : null}
               {/* font-serif: the project name is an IDENTITY label — the last
                   tier of the context path — so it wears the headline
                   (`--font-serif`) role, the one role the `data-type` axis
@@ -155,12 +150,9 @@ export function ProjectSwitcher({
                       isActive && 'bg-(--el-surface)',
                     )}
                   >
-                    <ProjectAvatar
-                      icon={p.avatarIcon}
-                      color={p.avatarColor}
-                      identifier={p.identifier}
-                      size={24}
-                    />
+                    {/* A LIST row holds the slot open so every NAME keeps one
+                        left edge — nothing is drawn in it (MOTIR-2675). */}
+                    <ProjectMark image={p.image} size={24} reserveSlot />
                     <span
                       className={cn(
                         'flex-1 truncate font-sans text-sm text-(--el-text)',

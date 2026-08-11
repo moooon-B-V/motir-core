@@ -265,11 +265,27 @@ describe('rendered specimen — the differentiating hues still differentiate', (
     );
     for (const token of LABEL_TOKENS) expect(picker).toContain(token);
 
-    const projectAvatar = readFileSync(
-      join(process.cwd(), 'app/(authed)/_components/ProjectAvatar.tsx'),
+    // The avatar ramp's binding moved with MOTIR-2679: `ProjectAvatar` is gone
+    // (a project's mark is an uploaded logo now), so the component that
+    // actually RENDERS this family is `TriageAvatar` — it hashes a person's
+    // name onto the six tints. The point of this assertion is unchanged: a
+    // family is only real if something paints with it.
+    const triageAvatar = readFileSync(
+      join(process.cwd(), 'app/(authed)/triage/_components/TriageAvatar.tsx'),
       'utf8',
     );
-    for (const token of AVATAR_TOKENS) expect(projectAvatar).toContain(token);
+    for (const token of AVATAR_TOKENS.filter((t) => !t.includes('fallback'))) {
+      expect(triageAvatar).toContain(token);
+    }
+    // `--el-avatar-fallback` is painted by the initial tiles instead.
+    const codeAccess = readFileSync(
+      join(
+        process.cwd(),
+        'app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx',
+      ),
+      'utf8',
+    );
+    expect(codeAccess).toContain('--el-avatar-fallback');
 
     // `statusElVar` IS the shipped helper StatusPicker calls, so STATUS_TOKENS
     // is what the dot paints by construction — assert it covers every status.
