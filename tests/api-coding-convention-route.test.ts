@@ -47,6 +47,8 @@ const { parseRepoScopeBody, parseOffsetParam, parseLimitParam, mapCodeHealthErro
 const { MotirAiUnavailableError } = await import('@/lib/ai/errors');
 const { truncateAuthTables, truncateRateLimitCounters } = await import('./helpers/db');
 const { __resetSharedRateLimitStoreForTest } = await import('@/lib/rateLimit/store');
+const { ALIGNED_HEADROOM_MS, ALIGNED_WINDOW_MS, waitForWindowHeadroom } =
+  await import('./helpers/rateLimitWindow');
 
 const BASE = 'http://localhost:3000/api/ai/coding-convention';
 
@@ -214,10 +216,20 @@ describe('POST /api/ai/coding-convention/refresh', () => {
     // provider has not been called yet, so the assertion that matters is not the
     // status — it is that `refreshCodeAudit` was called ONCE across two requests.
     // A 429 returned after the submit would have already spent the money.
+    //
+    // Two counted requests whose outcome depends on the ACCUMULATED count, so
+    // the window is pinned and aligned (MOTIR-2648). Left at the shipped 60 s
+    // default this case straddles a minute boundary at a probability of roughly
+    // its own duration over 60 000 ms: the second request is then served, and
+    // BOTH the `toBe(429)` and the `toHaveBeenCalledTimes(1)` assertions fail —
+    // reading exactly like a real regression in the route's refuse-before-submit
+    // ordering. Same class as MOTIR-2101 / -2224 / -2598 / -2647.
     await signInAtProject();
     await truncateRateLimitCounters();
     __resetSharedRateLimitStoreForTest();
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'] = String(ALIGNED_WINDOW_MS);
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     try {
       refreshCodeAuditMock.mockResolvedValue({ auditJobId: 'job_a', conventionJobId: 'job_c' });
       expect((await refreshPOST(bodylessRequest())).status).toBe(202);
@@ -231,6 +243,7 @@ describe('POST /api/ai/coding-convention/refresh', () => {
       expect(refreshCodeAuditMock).toHaveBeenCalledTimes(1);
     } finally {
       delete process.env['MOTIR_AI_GENERATE_RATE_LIMIT'];
+      delete process.env['MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS'];
       __resetSharedRateLimitStoreForTest();
       await truncateRateLimitCounters();
     }
