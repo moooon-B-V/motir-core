@@ -21,7 +21,7 @@ import {
   type V1PlanSession,
 } from '@/lib/api/v1/workLoop/schema';
 import { MAX_SCOPE_TARGETS, PROJECT_SCOPE, buildScope } from '@/lib/planChange/scope';
-import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { runOpenPlanSession } from '@/lib/mcp/tools/planSession';
 import { planChangeSessionsService } from '@/lib/services/planChangeSessionsService';
 import { projectsService } from '@/lib/services/projectsService';
@@ -99,7 +99,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   });
 
   it('opens the project-wide thread and returns it empty', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
 
     const res = await open(caller);
 
@@ -113,7 +113,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   });
 
   it('RESUMES the same thread on a second open, rather than forking one', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
 
     const first = await json<V1PlanSession>(await open(caller));
     await append(caller, { body: 'a first thought' });
@@ -127,7 +127,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   it('resumes the SAME ROW the web panel resolves for that scope', async () => {
     // The guarantee, asserted across BOTH surfaces: the API and the panel must
     // land on one thread or they are talking past each other.
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const anchor = await makeItem(caller, 'the anchor');
 
     const viaApi = await json<V1PlanSession>(
@@ -149,7 +149,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   });
 
   it('resumes the same thread the MCP tool opens for the same scope', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const a = await makeItem(caller, 'a');
     const b = await makeItem(caller, 'b');
 
@@ -170,7 +170,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   it('treats the anchor set as a SET — order and duplicates do not fork it', async () => {
     // Asserted against `buildScope`, the helper the service and the repository
     // derive the key from, rather than against an assumption about either.
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const a = await makeItem(caller, 'a');
     const b = await makeItem(caller, 'b');
 
@@ -191,7 +191,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   });
 
   it('keeps an ANCHORED thread distinct from the project-wide one', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const anchor = await makeItem(caller, 'the anchor');
 
     const wide = await json<V1PlanSession>(await open(caller, {}));
@@ -204,7 +204,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   });
 
   it('404s an anchor key that names no item, rather than anchoring at nothing', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
 
     const res = await open(caller, { targetKeys: [`${caller.projectKey}-99999`] });
 
@@ -212,7 +212,7 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
   });
 
   it('422s an anchor set over the cap, before the resolution fan-out', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const tooMany = Array.from(
       { length: MAX_SCOPE_TARGETS + 1 },
       (_unused, i) => `${caller.projectKey}-${i + 1}`,
@@ -225,13 +225,16 @@ describe('POST /api/v1/projects/{projectKey}/plan-session', () => {
     expect(DOMAIN_ERROR_STATUS['PLAN_CHANGE_TOO_MANY_TARGETS']).toBe(422);
   });
 
-  it('404s a project in another workspace; 403s a token with no `read`', async () => {
-    const mine = await createV1ProjectCaller({ scopes: ['read'] });
-    const theirs = await createV1ProjectCaller({ scopes: ['read'], identifier: 'OTHR' });
+  it('404s a project in another workspace; 403s a token with no `ai:plan`', async () => {
+    const mine = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
+    const theirs = await createV1ProjectCaller({
+      permissions: ['project:browse', 'ai:plan'],
+      identifier: 'OTHR',
+    });
 
     expect((await open(mine, {}, theirs.projectKey)).status).toBe(404);
-    const noScope = await createV1ProjectCaller({ scopes: ['sprints:write'] });
-    expect((await open(noScope)).status).toBe(403);
+    const noPlanning = await createV1ProjectCaller({ permissions: ['sprint:manage'] });
+    expect((await open(noPlanning)).status).toBe(403);
   });
 });
 
@@ -244,7 +247,7 @@ describe('POST …/plan-session/turns', () => {
   it('persists the turn and starts NO job, spends NO credits, changes NO work item', async () => {
     // The contract every client depends on: an append that looked like a submit
     // would have an agent polling a job that was never created.
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const item = await makeItem(caller, 'untouched');
 
     const res = await append(caller, { body: 'split the billing epic' });
@@ -266,7 +269,7 @@ describe('POST …/plan-session/turns', () => {
   });
 
   it('ACCUMULATES turns in order across calls', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
 
     await append(caller, { body: 'add auth to the billing epic' });
     const body = await json<V1PlanSession>(
@@ -281,21 +284,23 @@ describe('POST …/plan-session/turns', () => {
   });
 
   it('opens the thread on the first turn — appending to an unopened scope is normal', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
 
     const body = await json<V1PlanSession>(await append(caller, { body: 'a first turn' }));
 
     expect(body.turnCount).toBe(1);
   });
 
-  it('422s an empty body, and 403s a read-only token', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+  it('422s an empty body, and 403s a token without ai:plan', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
 
     expect((await append(caller, { body: '   ' })).status).toBe(422);
     expect(DOMAIN_ERROR_STATUS['PLAN_CHANGE_EMPTY_TURN']).toBe(422);
 
-    const readOnly = await createV1ProjectCaller({ scopes: ['read'] });
-    expect((await append(readOnly, { body: 'nope' })).status).toBe(403);
+    // A token that can BROWSE but was not granted planning — the shape this
+    // story makes expressible, and the one that must be refused here.
+    const noPlanning = await createV1ProjectCaller({ permissions: ['project:browse'] });
+    expect((await append(noPlanning, { body: 'nope' })).status).toBe(403);
   });
 });
 
@@ -306,7 +311,7 @@ describe('POST …/plan-session/submissions', () => {
   });
 
   it('sends every turn as ONE change and returns the handle at 202', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     await append(caller, { body: 'first' });
     await append(caller, { body: 'second' });
     acceptJob();
@@ -326,7 +331,7 @@ describe('POST …/plan-session/submissions', () => {
   });
 
   it('refuses an EMPTY thread with 422, never a 500', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     await open(caller);
     acceptJob();
 
@@ -341,7 +346,7 @@ describe('POST …/plan-session/submissions', () => {
   it('leaves the thread INTACT and re-submittable after a failed submit', async () => {
     // What a client on a flaky link depends on: a failed send must not consume
     // the turns it was carrying.
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     await append(caller, { body: 'the intent that must survive' });
     vi.mocked(submitJob).mockRejectedValueOnce(new MotirAiUnavailableError('connect ECONNREFUSED'));
 
@@ -359,7 +364,7 @@ describe('POST …/plan-session/submissions', () => {
   });
 
   it('submits the ANCHORED thread when the anchor set is given', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read', 'work_items:write'] });
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse', 'ai:plan'] });
     const anchor = await makeItem(caller, 'the anchor');
     await append(caller, { targetKeys: [anchor.identifier], body: 're-plan this' });
     await append(caller, { body: 'a project-wide thought' });
@@ -376,8 +381,8 @@ describe('POST …/plan-session/submissions', () => {
     expect((await json<V1PlanSession>(await open(caller))).lastJobId).toBeNull();
   });
 
-  it('403s a read-only token — a submit spends credits', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['read'] });
+  it('403s a token without ai:plan — a submit spends the owner’s credits', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['project:browse'] });
 
     expect((await submit(caller)).status).toBe(403);
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
@@ -385,15 +390,19 @@ describe('POST …/plan-session/submissions', () => {
 });
 
 describe('the conversation’s contract', () => {
-  it('carries the scope each MCP counterpart holds, read off the shipped map', () => {
+  it('carries the permission each MCP counterpart holds, read off the shipped map', () => {
     const byId = new Map(WORK_LOOP_OPERATIONS.map((op) => [op.operationId, op]));
-    expect(byId.get('openPlanSession')?.scope).toBe(TOOL_SCOPES.open_plan_session);
-    expect(byId.get('appendPlanTurn')?.scope).toBe(TOOL_SCOPES.append_plan_turn);
-    expect(byId.get('submitPlanSession')?.scope).toBe(TOOL_SCOPES.submit_plan_session);
-    // The mount is `read`-scoped despite being a POST — the scope mirrors the
-    // CAPABILITY, never the verb.
-    expect(TOOL_SCOPES.open_plan_session).toBe('read');
-    expect(TOOL_SCOPES.append_plan_turn).toBe('work_items:write');
+    expect(byId.get('openPlanSession')?.permission).toBe(TOOL_PERMISSIONS.open_plan_session);
+    expect(byId.get('appendPlanTurn')?.permission).toBe(TOOL_PERMISSIONS.append_plan_turn);
+    expect(byId.get('submitPlanSession')?.permission).toBe(TOOL_PERMISSIONS.submit_plan_session);
+    // ⚠️ THE MOUNT MOVED. It was `read`-scoped despite being a POST, on the
+    // reasoning that opening a thread changes nothing — but
+    // `planChangeSessionsService.getOrCreateForScope` asserts `ai:plan`, so the
+    // scope was over-permissive relative to its own gate. All three now name
+    // what the service asks for (MOTIR-2577; ADR §5 records the one legacy
+    // read-only token this narrows).
+    expect(TOOL_PERMISSIONS.open_plan_session).toBe('ai:plan');
+    expect(TOOL_PERMISSIONS.append_plan_turn).toBe('ai:plan');
   });
 
   it('accepts NO session id anywhere — the thread is addressed by scope alone', () => {

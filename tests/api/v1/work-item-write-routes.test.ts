@@ -210,7 +210,7 @@ describe('POST /api/v1/projects/{projectKey}/work-items', () => {
     const res = await post(readOnly, { kind: 'task', title: 'Nope' });
 
     expect(res.status).toBe(403);
-    await expect(res.json()).resolves.toMatchObject({ code: 'INSUFFICIENT_SCOPE' });
+    await expect(res.json()).resolves.toMatchObject({ code: 'INSUFFICIENT_PERMISSION' });
   });
 
   it('404s a project in another workspace', async () => {

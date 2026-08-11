@@ -250,7 +250,7 @@ describe('the shared-resource set is DERIVED from the v1 operation registry', ()
       operationId: 'invented',
       summary: 's',
       description: 'd',
-      scope: 'read',
+      permission: 'project:browse',
       parameters: [],
       response: { status: 200, body: { kind: 'empty' }, description: 'd' },
       errorStatuses: [],

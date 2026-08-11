@@ -2538,36 +2538,6 @@
       "scopes": {
         "permissionsLabel": "权限",
         "permissionsHelper": "选择此令牌可以执行的操作。你可以授予低于自身的访问权限，但不能更高。",
-        "groupLabels": {
-          "read": "读取",
-          "sprints": "Sprint",
-          "integrations": "集成",
-          "workItems": "工作项"
-        },
-        "read": {
-          "name": "读取所有内容",
-          "desc": "查看工作项、看板、Sprint、评论和报表。"
-        },
-        "sprintsWrite": {
-          "name": "管理 Sprint",
-          "desc": "创建 Sprint，并将工作项移入或移出 Sprint。"
-        },
-        "integration": {
-          "name": "连接集成",
-          "desc": "关联外部工具，并将动态回传到 Motir。"
-        },
-        "workItemsWrite": {
-          "name": "编辑工作项",
-          "desc": "创建和更新工作项、评论、关联和附件。"
-        },
-        "workItemsArchive": {
-          "name": "归档工作项",
-          "desc": "归档和恢复工作项。此操作可以撤销。"
-        },
-        "workItemsDelete": {
-          "name": "删除工作项",
-          "desc": "永久删除工作项及其整个子树。此操作无法撤销。"
-        },
         "dangerTag": "· 危险",
         "emptyError": "至少授予一项权限才能创建令牌。",
         "summary": {
@@ -2579,7 +2549,8 @@
         "canDelete": "可删除",
         "detailLead": "此令牌可以：",
         "showScopes": "显示 {label} 的权限范围",
-        "hideScopes": "隐藏 {label} 的权限范围"
+        "hideScopes": "隐藏 {label} 的权限范围",
+        "lockedWhy": "你在此项目中没有该权限。"
       },
       "expiresIn": "{days} 天后",
       "expiresNever": "永不",
@@ -2608,7 +2579,9 @@
         "cancel": "取消",
         "errorTitle": "无法创建令牌",
         "errorGeneric": "出了点问题，请重试。",
-        "copyFailed": "复制失败——请手动选择并复制令牌。"
+        "copyFailed": "复制失败——请手动选择并复制令牌。",
+        "projectField": "项目",
+        "projectHelper": "该令牌仅在此项目中生效。"
       },
       "created": {
         "title": "令牌已创建",
@@ -6023,7 +5996,7 @@
     "mcpScopeHeading": "你的令牌能调用什么",
     "mcpToolsTitle": "MCP 工具",
     "mcpToolsLede": "Motir MCP 服务器提供的全部工具，以及各自受哪个权限范围管控。按权限范围分组，因为这正是你创建令牌时要做的选择——不勾选某个范围，该组工具就会被拒绝。",
-    "mcpToolsMeta": "{tools} 个工具 · {scopes} 个权限范围 · 由服务器自身的权限映射推导而来",
+    "mcpToolsMeta": "{tools} 个工具 · {permissions} 项权限 · 由服务器自身的权限映射推导而来",
     "mcpToolsSummaryNote": "这里是简介。工具的完整参数和返回结构请查阅参考文档——它与代码放在一起，因为这部分变动最频繁。",
     "mcpThTool": "工具",
     "mcpThDoes": "作用",

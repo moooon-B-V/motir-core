@@ -79,8 +79,8 @@ describe('GET /api/v1/workspaces', () => {
     });
   });
 
-  it('refuses a token without the read scope', async () => {
-    const caller = await createV1Caller({ scopes: ['integration'] });
+  it('refuses a token without project:browse', async () => {
+    const caller = await createV1Caller({ permissions: ['work_item:edit'] });
 
     const res = await GET(req(caller.headers));
 

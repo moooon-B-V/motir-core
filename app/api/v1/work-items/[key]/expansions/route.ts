@@ -40,7 +40,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 //
 // Three service calls, all RESOLVE, then the submit — the bounded-call rule.
 
-export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'ai:plan' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const project = await projectsService.getByKey(
     identifier.slice(0, identifier.lastIndexOf('-')),

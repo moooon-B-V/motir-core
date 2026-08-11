@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_TOKEN_SCOPES, TOKEN_SCOPES, TOOL_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import {
   MCP_AUTH_HEADER,
   MCP_AUTH_SCHEME,
@@ -27,22 +29,22 @@ import {
 // ships: that needs a live `tools/list` handshake and belongs to the story's
 // vitest gate (MOTIR-2330), in a file where importing the registry costs nothing.
 
-describe('the catalogue derives from TOOL_SCOPES', () => {
+describe('the catalogue derives from TOOL_PERMISSIONS', () => {
   it('carries every shipped tool, and nothing else', () => {
     const derived = mcpToolRows()
       .map((row) => row.name)
       .sort();
-    expect(derived).toEqual(Object.keys(TOOL_SCOPES).sort());
+    expect(derived).toEqual(Object.keys(TOOL_PERMISSIONS).sort());
   });
 
   it('gives every row the scope the server gates it with', () => {
     for (const row of mcpToolRows()) {
-      expect(row.scope).toBe(TOOL_SCOPES[row.name]);
+      expect(row.permission).toBe(TOOL_PERMISSIONS[row.name]);
     }
   });
 
   it('counts the rows it derived rather than a literal', () => {
-    expect(mcpToolCount()).toBe(Object.keys(TOOL_SCOPES).length);
+    expect(mcpToolCount()).toBe(Object.keys(TOOL_PERMISSIONS).length);
     expect(mcpToolCount()).toBe(mcpToolRows().length);
   });
 
@@ -65,11 +67,11 @@ describe('the catalogue derives from TOOL_SCOPES', () => {
   });
 });
 
-describe('the grouping is by scope, and derived', () => {
-  it('groups in TOKEN_SCOPES order, and every group is non-empty', () => {
+describe('the grouping is by permission, and derived', () => {
+  it('groups in GRANTABLE_PERMISSIONS order, and every group is non-empty', () => {
     const groups = mcpCatalogue();
-    const order = groups.map((group) => group.scope);
-    expect(order).toEqual(TOKEN_SCOPES.filter((scope) => order.includes(scope)));
+    const order = groups.map((group) => group.permission);
+    expect(order).toEqual(GRANTABLE_PERMISSIONS.filter((key) => order.includes(key)));
     for (const group of groups) {
       expect(group.tools.length).toBeGreaterThan(0);
     }
@@ -79,7 +81,7 @@ describe('the grouping is by scope, and derived', () => {
     const groups = mcpCatalogue();
     for (const group of groups) {
       for (const tool of group.tools) {
-        expect(tool.scope).toBe(group.scope);
+        expect(tool.permission).toBe(group.permission);
       }
     }
     const total = groups.reduce((sum, group) => sum + group.tools.length, 0);
@@ -91,23 +93,25 @@ describe('the grouping is by scope, and derived', () => {
     expect(new Set(names).size).toBe(names.length);
   });
 
-  it('marks the default grant from DEFAULT_TOKEN_SCOPES, not a second list', () => {
+  it('marks the default grant from DEFAULT_TOKEN_GRANT, not a second list', () => {
     for (const group of mcpCatalogue()) {
-      expect(group.grantedByDefault).toBe(DEFAULT_TOKEN_SCOPES.includes(group.scope));
+      expect(group.grantedByDefault).toBe(DEFAULT_TOKEN_GRANT.includes(group.permission));
     }
     const off = mcpCatalogue().filter((group) => !group.grantedByDefault);
-    expect(off.map((group) => group.scope)).toEqual(['work_items:delete']);
+    expect(off.map((group) => group.permission)).toEqual(['work_item:delete']);
   });
 });
 
 describe('the scope legend', () => {
   it('covers every TOKEN_SCOPE, in order', () => {
-    expect(mcpScopeLegend().map((row) => row.scope)).toEqual([...TOKEN_SCOPES]);
+    expect(mcpScopeLegend().map((row) => row.permission)).toEqual([...GRANTABLE_PERMISSIONS]);
   });
 
-  it('counts each scope’s tools from TOOL_SCOPES', () => {
+  it('counts each scope’s tools from TOOL_PERMISSIONS', () => {
     for (const row of mcpScopeLegend()) {
-      const expected = Object.values(TOOL_SCOPES).filter((scope) => scope === row.scope).length;
+      const expected = Object.values(TOOL_PERMISSIONS).filter(
+        (scope) => scope === row.permission,
+      ).length;
       expect(row.toolCount).toBe(expected);
     }
   });
@@ -117,11 +121,11 @@ describe('the scope legend', () => {
     expect(total).toBe(mcpToolCount());
   });
 
-  it('marks exactly work_items:delete as off by default', () => {
+  it('marks exactly work_item:delete as off by default', () => {
     const off = mcpScopeLegend()
       .filter((row) => !row.grantedByDefault)
-      .map((row) => row.scope);
-    expect(off).toEqual(['work_items:delete']);
+      .map((row) => row.permission);
+    expect(off).toEqual(['work_item:delete']);
   });
 
   it('gives every scope a label and a description of what it gates', () => {
@@ -132,7 +136,7 @@ describe('the scope legend', () => {
   });
 
   it('includes a scope that gates no tool, with a zero count', () => {
-    // The legend enumerates TOKEN_SCOPES, so it stays total even if a scope
+    // The legend enumerates GRANTABLE_PERMISSIONS, so it stays total even if a scope
     // temporarily gates nothing — unlike the catalogue, which drops empty groups.
     const legend = mcpScopeLegend();
     const catalogue = mcpCatalogue();
@@ -293,20 +297,21 @@ describe('the dependency-graph boundary (Amendment 13 Q2)', () => {
   });
 });
 
-describe('a scope that gates nothing', () => {
+describe('a permission that gates no MCP tool', () => {
   it('drops from the catalogue but survives in the legend', () => {
     // Drives the `.filter(group => group.tools.length > 0)` branch honestly: the
-    // legend enumerates all six scopes, the catalogue only the populated ones.
-    const legendScopes = mcpScopeLegend().map((row) => row.scope);
-    const catalogueScopes = mcpCatalogue().map((group) => group.scope);
-    for (const scope of catalogueScopes) {
-      expect(legendScopes).toContain(scope);
+    // legend enumerates every grantable permission, the catalogue only the ones
+    // some MCP tool actually asserts.
+    const legendPermissions = mcpScopeLegend().map((row) => row.permission);
+    const cataloguePermissions = mcpCatalogue().map((group) => group.permission);
+    for (const scope of cataloguePermissions) {
+      expect(legendPermissions).toContain(scope);
     }
-    const unpopulated = legendScopes.filter(
-      (scope: TokenScope) => !catalogueScopes.includes(scope),
+    const unpopulated = legendPermissions.filter(
+      (key: PermissionKey) => !cataloguePermissions.includes(key),
     );
     for (const scope of unpopulated) {
-      const row = mcpScopeLegend().find((entry) => entry.scope === scope);
+      const row = mcpScopeLegend().find((entry) => entry.permission === scope);
       expect(row?.toolCount).toBe(0);
     }
   });

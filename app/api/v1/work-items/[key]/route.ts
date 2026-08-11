@@ -33,7 +33,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // later sends back, so the validator is minted by the same module that parses it
 // — a validator produced by one card and parsed by another is a contract, and it
 // belongs with the resource.
-export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
 
@@ -62,7 +62,7 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
 // today's behaviour. This adds a guarantee a client can opt into; it does not
 // make one mandatory. Two agents patching the same item is the epic's own stated
 // normal, which is why the guard is exposed rather than left internal.
-export const PATCH = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async (ctx) => {
+export const PATCH = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, updateWorkItemBodySchema);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const target = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);

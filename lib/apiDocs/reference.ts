@@ -57,7 +57,8 @@ export interface ReferenceOperation {
   path: string;
   summary: string;
   description: string;
-  scope: string;
+  /** The permission this operation requires (MOTIR-2577). */
+  permission: string;
   parameters: ReferenceParameter[];
   /** The request body's JSON schema, pretty-printed — absent when it takes none. */
   requestBody?: string;
@@ -260,7 +261,7 @@ export function toReferenceOperation(operation: V1Operation, origin?: string): R
     path: operation.path,
     summary: operation.summary,
     description: operation.description,
-    scope: operation.scope,
+    permission: operation.permission,
     parameters: operation.parameters.map((parameter) => ({
       name: parameter.name,
       location: parameter.in,

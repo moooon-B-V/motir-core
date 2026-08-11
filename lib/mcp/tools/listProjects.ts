@@ -76,11 +76,28 @@ export function summarizeProject(row: McpProjectRow): string {
   return `${row.key} — ${row.name} · ${row.accessLevel}`;
 }
 
-/** The adapter: enumerate the token workspace's browsable projects. */
+/**
+ * The adapter: enumerate the projects this CREDENTIAL can reach.
+ *
+ * ⚠️ TWO ANSWERS, because there are two credential shapes (MOTIR-2607):
+ *
+ *   * a DEVICE token (`motir login`, no binding) → every project its holder's
+ *     roles reach in the workspace. This is the job that keeps the tool alive:
+ *     `motir link` / `autoLinkAfterLogin` call it to bind a folder.
+ *   * a PROJECT-BOUND token → exactly its one project.
+ *
+ * The second arm is not cosmetic. A bound token that enumerated ten projects
+ * and then 404'd on nine has told the agent something false and made the truth
+ * expensive to discover; answering with its one project makes the binding
+ * legible at the moment the agent asks what it can reach.
+ */
 export async function runListProjects(ctx: ServiceContext): Promise<CallToolResult> {
   try {
     const projects = await projectsService.listProjects(ctx.workspaceId, ctx.userId);
-    const rows = projects.map(toProjectRow);
+    const reachable = ctx.tokenProjectId
+      ? projects.filter((p) => p.id === ctx.tokenProjectId)
+      : projects;
+    const rows = reachable.map(toProjectRow);
     // Dual content: the text block for a human, the array under `projects` for
     // the agent (structuredContent must be an object, so the list is wrapped).
     // An empty workspace is an EMPTY LIST, never an error — "you can reach no

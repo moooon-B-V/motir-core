@@ -2,7 +2,7 @@ import { join, relative, sep } from 'node:path';
 import type { ZodObject, ZodType } from 'zod/v4';
 import { v1PageEnvelopeSchema, v1RankedPageEnvelopeSchema } from '@/lib/api/v1/openapi/envelopes';
 import { operationKey, type V1Operation } from '@/lib/api/v1/openapi/operation';
-import { declaredScopeByMethod } from './v1RouteAudit';
+import { declaredPermissionByMethod } from './v1RouteAudit';
 
 // The route↔spec CONFORMANCE rules (Story 11.4 · Subtask 11.4.6 — MOTIR-2187).
 //
@@ -21,7 +21,7 @@ import { declaredScopeByMethod } from './v1RouteAudit';
 
 /** One route↔spec disagreement. */
 export interface SpecDrift {
-  rule: 'route-without-operation' | 'operation-without-route' | 'scope-mismatch';
+  rule: 'route-without-operation' | 'operation-without-route' | 'permission-mismatch';
   /** The `METHOD /path` the drift is about. */
   subject: string;
   detail: string;
@@ -34,8 +34,8 @@ export interface ShippedRouteMethod {
   path: string;
   /** The repo-relative route file it came from. */
   file: string;
-  /** The scope its `withV1Route` call declares, or `undefined` if unreadable. */
-  scope: string | undefined;
+  /** The permission its `withV1Route` call declares, or `undefined` if unreadable. */
+  permission: string | undefined;
 }
 
 /**
@@ -52,7 +52,7 @@ export function pathTemplateForRouteFile(routeFile: string): string {
 }
 
 /**
- * Every (method, path, scope) the given route sources actually export.
+ * Every (method, path, permission) the given route sources actually export.
  *
  * Takes the sources rather than reading them, so the caller can pass the real
  * tree OR a synthetic file that does not exist on disk — which is what makes
@@ -61,8 +61,8 @@ export function pathTemplateForRouteFile(routeFile: string): string {
 export function shippedRouteMethods(sources: ReadonlyMap<string, string>): ShippedRouteMethod[] {
   const found: ShippedRouteMethod[] = [];
   for (const [file, source] of sources) {
-    for (const [method, scope] of declaredScopeByMethod(source)) {
-      found.push({ method, path: pathTemplateForRouteFile(file), file, scope });
+    for (const [method, permission] of declaredPermissionByMethod(source)) {
+      found.push({ method, path: pathTemplateForRouteFile(file), file, permission });
     }
   }
   return found;
@@ -99,13 +99,13 @@ export function findSpecDrift(
     // ── Scope mismatch: the document lies about a permission ───────────────
     // Not one of the card's three named drifts, but the same class and free to
     // check here: ADR Amendment 4 Q2 keeps the registry as an independent
-    // second opinion on the scope the route enforces, and an opinion nothing
+    // second opinion on the permission the route enforces, and an opinion nothing
     // compares is not one.
-    if (operation.scope !== route.scope) {
+    if (operation.permission !== route.permission) {
       drifts.push({
-        rule: 'scope-mismatch',
+        rule: 'permission-mismatch',
         subject: key,
-        detail: `route declares scope "${route.scope ?? '(unreadable)'}", the document says "${operation.scope}"`,
+        detail: `route declares permission "${route.permission ?? '(unreadable)'}", the document says "${operation.permission}"`,
       });
     }
   }

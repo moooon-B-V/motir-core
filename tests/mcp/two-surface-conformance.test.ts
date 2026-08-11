@@ -11,6 +11,7 @@ import { checkPayloadDrift } from '@/lib/mcp/payloads/driftGuard';
 import { startMcpHttpServer, type McpTestServer } from '../helpers/mcpHttpServer';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // TWO-SURFACE CONFORMANCE (Story 11.6 · Subtask 11.6.8 — MOTIR-2234).
 //
@@ -50,7 +51,7 @@ afterAll(async () => {
 beforeEach(async () => {
   await truncateAuthTables();
   caller = await createV1ProjectCaller({
-    scopes: ['read', 'work_items:write', 'sprints:write'],
+    permissions: grantForLegacyScopes(['read', 'work_items:write', 'sprints:write']),
   });
 });
 

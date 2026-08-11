@@ -18,7 +18,7 @@ vi.mock('../src/prompts.js', () => prompts);
 
 import { delay, planCommand, type PlanDeps } from '../src/commands/plan.js';
 import { setCredential } from '../src/config/userConfig.js';
-import { CliError, ScopeError } from '../src/errors.js';
+import { CliError, PermissionError } from '../src/errors.js';
 import { WATCH_TIMEOUT_MS } from '../src/plan.js';
 import {
   startTestServer,
@@ -630,12 +630,13 @@ describe('motir plan — the production seams', () => {
 });
 
 describe('motir plan — server refusals are reported verbatim', () => {
-  // ⚠️ A read-only token now gets a ScopeError NAMING the scope it lacks, where
-  // the MCP tool sent back a sentence. That is the v1 error model rather than a
-  // rewording: 403 means "valid token, wrong scope" by contract, so the client
-  // can say WHICH scope and what to do about it — which "FORBIDDEN: this token
-  // cannot change the plan" never could.
-  it('names the SCOPE a read-only token is missing when an append is refused', async () => {
+  // ⚠️ A read-only token gets a PermissionError NAMING the permission it lacks,
+  // where the MCP tool sent back a sentence. That is the v1 error model rather
+  // than a rewording: 403 means "valid token, wrong permission" by contract, so
+  // the client can say WHICH permission and what to do about it — which
+  // "FORBIDDEN: this token cannot change the plan" never could. Since Story
+  // MOTIR-2572 the name it prints is a catalog key, not one of the six scopes.
+  it('names the PERMISSION a read-only token is missing when an append is refused', async () => {
     server.scriptV1(
       planScript({
         'POST /api/v1/projects/{projectKey}/plan-session/turns': {
@@ -648,11 +649,11 @@ describe('motir plan — server refusals are reported verbatim', () => {
     const failure = await planCommand([], {}, reader(['add auth', '/exit'])).catch(
       (err: unknown) => err,
     );
-    expect(failure).toBeInstanceOf(ScopeError);
-    expect((failure as ScopeError).message).toContain('work_items:write');
+    expect(failure).toBeInstanceOf(PermissionError);
+    expect((failure as PermissionError).message).toContain('ai:plan');
 
-    // The thread still OPENED — reading the conversation needs `read` alone,
-    // which is why the two operations declare different scopes.
+    // The thread still OPENED — reading the conversation needs `project:browse`
+    // alone, which is why the two operations declare different permissions.
     expect(callsTo('open_plan_session')).toHaveLength(1);
   });
 

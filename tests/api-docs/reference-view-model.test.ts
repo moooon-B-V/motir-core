@@ -78,7 +78,7 @@ describe('every operation carries what the criteria require', () => {
     for (const operation of operations) {
       expect(operation.method, operation.id).toBeTruthy();
       expect(operation.path.startsWith('/api/v1/'), operation.id).toBe(true);
-      expect(operation.scope, operation.id).toBeTruthy();
+      expect(operation.permission, operation.id).toBeTruthy();
       expect(operation.responses.length, operation.id).toBeGreaterThan(1);
       expect(operation.example, operation.id).toContain(EXAMPLE_TOKEN);
     }
@@ -181,7 +181,7 @@ describe('the copy-pasteable example', () => {
         operationId: 'x',
         summary: 's',
         description: 'd',
-        scope: 'work_items:write',
+        permission: 'work_item:edit',
         parameters: [
           { name: 'toKey', in: 'query', required: true, description: 'd', schema: z.string() },
           {
@@ -221,7 +221,7 @@ describe('the example BODY carries one value of each shape it can meet', () => {
         operationId: 'x',
         summary: 's',
         description: 'd',
-        scope: 'work_items:write',
+        permission: 'work_item:edit',
         parameters: [],
         requestBody: { schema, description: 'd' },
         response: { status: 201, body: { kind: 'empty' }, description: 'd' },
@@ -264,7 +264,7 @@ describe('grouping falls back VISIBLY rather than silently', () => {
         operationId: 'listWidgets',
         summary: 's',
         description: 'd',
-        scope: 'read',
+        permission: 'project:browse',
         parameters: [],
         response: { status: 200, body: { kind: 'empty' }, description: 'd' },
         errorStatuses: [],

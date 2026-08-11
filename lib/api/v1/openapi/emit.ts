@@ -21,7 +21,7 @@ import {
 } from '@/lib/api/v1/openapi/operation';
 import { V1_OPERATIONS, V1_RESOURCE_COMPONENTS } from '@/lib/api/v1/openapi/registry';
 import {
-  V1_SCOPE_EXTENSION,
+  V1_PERMISSION_EXTENSION,
   V1_SECURITY_SCHEME_NAME,
   v1SecurityScheme,
 } from '@/lib/api/v1/openapi/security';
@@ -248,11 +248,11 @@ function operationObject(operation: V1Operation): JsonObject {
   return {
     operationId: operation.operationId,
     summary: operation.summary,
-    description: `${operation.description}\n\nRequires the \`${operation.scope}\` scope.`,
-    // The scope as an EXTENSION: `type: http` bearer has no `scopes` map, and
-    // inventing an `oauth2` scheme to get one would document a flow this API
+    description: `${operation.description}\n\nRequires the \`${operation.permission}\` permission.`,
+    // The permission as an EXTENSION: `type: http` bearer has no `scopes` map,
+    // and inventing an `oauth2` scheme to get one would document a flow this API
     // does not implement (ADR Amendment 4 Q2/Q4).
-    [V1_SCOPE_EXTENSION]: operation.scope,
+    [V1_PERMISSION_EXTENSION]: operation.permission,
     ...(operation.parameters.length > 0
       ? { parameters: operation.parameters.map(parameterObject) }
       : {}),

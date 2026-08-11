@@ -8,12 +8,16 @@ export type ApiTokenWithUser = Prisma.ApiTokenGetPayload<{ include: { user: true
  * eager-loaded (bug 7.21) — the list/create return shape, so the DTO can label
  * each token with the org → workspace it belongs to without a second query. */
 export type ApiTokenWithScope = Prisma.ApiTokenGetPayload<{
-  include: { workspace: { include: { organization: true } } };
+  include: { workspace: { include: { organization: true } }; project: true };
 }>;
 
 /** The include the list/create reads share to populate {@link ApiTokenWithScope}. */
 const SCOPE_INCLUDE = {
   workspace: { include: { organization: true } },
+  // The bound project, when there is one (MOTIR-2606). Included here rather
+  // than fetched per row by the mapper: the list is the only reader and it
+  // needs the NAME, not the id.
+  project: true,
 } satisfies Prisma.ApiTokenInclude;
 
 // API-token repository — single Prisma operations on the `api_token` table
@@ -38,10 +42,14 @@ export interface CreateApiTokenInput {
   tokenHash: string;
   tokenPrefix: string;
   expiresAt: Date | null;
-  /** The token's granted capability scopes (Story 7.7 · Subtask 7.7.16) — the
-   * service resolves these (the caller's choice, or the default-all-minus-delete
-   * set) and validates them before they reach here. */
+  /** The token's GRANT — the service resolves it (the caller's choice validated
+   * against what they can confer in the bound project, or the fixed device
+   * grant) and validates it before it reaches here. */
   scopes: string[];
+  /** The PROJECT this token is bound to, or null (MOTIR-2606). Null is the
+   * DEVICE-CREDENTIAL SHAPE, not an absent value — see the column's own
+   * doc-comment in `prisma/schema.prisma`. */
+  projectId: string | null;
 }
 
 export const apiTokenRepository = {

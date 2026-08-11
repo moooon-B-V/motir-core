@@ -73,7 +73,7 @@ function parseOrder(params: URLSearchParams): 'asc' | 'desc' | undefined {
   throw new InvalidRequestError('INVALID_ORDER', 'The `order` parameter must be `asc` or `desc`.');
 }
 
-export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   // Parse BEFORE reading: a bad view, order or cursor is the caller's to fix.
   const params = new URL(ctx.req.url).searchParams;
   const view = parseView(params);

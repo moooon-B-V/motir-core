@@ -4,7 +4,7 @@ Terminal dispatch of the Motir work loop. The CLI is a client of **Motir's
 public REST API** (`/api/v1`): every command is an ordinary HTTPS request
 carrying a personal access token (PAT) as its bearer. There is no private
 channel — the CLI uses the same documented endpoints, the same credential and
-the same scopes any third-party integration gets, and if it needs a capability
+the same permissions any third-party integration gets, and if it needs a capability
 that capability lands on `/api/v1` first, where everyone can reach it.
 
 That is the point rather than an implementation detail: nothing this tool does
@@ -68,8 +68,8 @@ construction** — the code and URL are printed whether or not a browser opens, 
 an SSH session or a container uses the same command; `--no-browser` skips the
 launch attempt outright.
 
-The approval mints a CLI-scoped PAT: scopes `read`, `work_items:write`,
-`integration` (fixed — the grant can neither widen nor narrow them), 90-day
+The approval mints a CLI-scoped PAT: permissions `project:browse`, `work_item:edit`,
+`comment:add`, `ai:plan` (fixed — the grant can neither widen nor narrow them), 90-day
 expiry, labelled `CLI · <hostname>`. It lands in `~/.config/motir/config.json`,
 `chmod 600`, keyed by server URL.
 
