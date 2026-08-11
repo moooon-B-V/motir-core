@@ -244,7 +244,6 @@ const LABEL_TOKENS = LABEL_TINTS.map((_tint, index) => `--el-label-${index + 1}`
 const AVATAR_TOKENS = elementTokens
   .filter((token) => token.startsWith('--el-avatar-') && token !== '--el-avatar-fallback')
   .sort();
-const AVATAR_RAMP_KEYS = AVATAR_TOKENS.map((token) => token.slice('--el-avatar-'.length));
 const SELECTION_TOKENS = ['--el-selection-bg', '--el-droptarget-bg'];
 
 const FAMILIES: Record<string, string[]> = {
