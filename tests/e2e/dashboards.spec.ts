@@ -234,6 +234,9 @@ test.describe('dashboards @smoke', () => {
   }) => {
     const t = await seedTenant();
     await signIn(page, t.ownerEmail, TEST_PASSWORD);
+    // Sign-in lands on `/home` since MOTIR-2654, so the dashboards surface is
+    // now somewhere this spec NAVIGATES to rather than somewhere it arrives.
+    await page.goto('/dashboard');
 
     // The dashboards home renders (empty — first run).
     await expect(page.getByRole('heading', { name: 'Dashboards' })).toBeVisible();
@@ -333,6 +336,9 @@ test.describe('dashboards @smoke', () => {
 
     // The member sees ONLY the shared dashboard, marked View only.
     await signIn(page, memberEmail, TEST_PASSWORD);
+    // Sign-in lands on `/home` since MOTIR-2654, so the dashboards surface is
+    // now somewhere this spec NAVIGATES to rather than somewhere it arrives.
+    await page.goto('/dashboard');
     await expect(page.getByTestId(`dashboard-row-${shared.id}`)).toBeVisible();
     await expect(page.getByText('View only')).toBeVisible();
     await expect(page.getByTestId(`dashboard-row-${priv.id}`)).toHaveCount(0);
@@ -394,6 +400,9 @@ test.describe('dashboards @smoke', () => {
     );
 
     await signIn(page, t.ownerEmail, TEST_PASSWORD);
+    // Sign-in lands on `/home` since MOTIR-2654, so the dashboards surface is
+    // now somewhere this spec NAVIGATES to rather than somewhere it arrives.
+    await page.goto('/dashboard');
 
     // Dashboards home.
     await expect(page.getByRole('heading', { name: 'Dashboards', exact: true })).toBeVisible();

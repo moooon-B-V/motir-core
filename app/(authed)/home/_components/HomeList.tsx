@@ -53,7 +53,11 @@ function RowLink({ row, label }: { row: HomeRowView; label: string }) {
 function AssigneeCell({ row }: { row: HomeRowView }) {
   const t = useTranslations('home');
   if (!row.assigneeName) {
-    return <span className="text-(--el-text-muted)">{t('row.unassigned')}</span>;
+    // Same pair as the identifier above: this sits in a row whose hover fill is
+    // `--el-surface`, where muted fails AA. The guard cannot see this one (it
+    // resolves surfaces per file and this is a sibling function), which is a
+    // reason to fix it rather than to leave it.
+    return <span className="text-(--el-text-secondary)">{t('row.unassigned')}</span>;
   }
   return (
     <span className="flex min-w-0 items-center gap-2">
@@ -99,7 +103,14 @@ function HomeRow({ row }: { row: HomeRowView }) {
         <RowLink row={row} label={`${row.identifier} ${row.title}`} />
         <span className="flex min-w-0 items-center gap-2">
           <IssueTypeIcon type={row.kind} className="h-4 w-4 shrink-0" />
-          <span className="shrink-0 font-mono text-xs text-(--el-text-muted)">
+          {/* ⚠️ `--el-text-secondary`, NOT the `--el-text-muted` the /items row
+              uses for the same identifier. Muted clears AA on the white page by
+              0.04 and FAILS on `--el-surface` (4.17:1) — which is this row's
+              hover fill, so the key would drop below AA exactly while the
+              pointer is on it. `tests/theme/inkContrastLint.test.ts` catches it
+              here and not on /items only because that row keeps its ink and its
+              surface in two different files; the pair is the same. */}
+          <span className="shrink-0 font-mono text-xs text-(--el-text-secondary)">
             {row.identifier}
           </span>
           <span className="min-w-0 flex-1 truncate text-(--el-text) group-hover:underline">
