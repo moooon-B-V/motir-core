@@ -391,9 +391,12 @@ export function IssueFilterBar({
           </div>
 
           {/* WORK TYPE — the 6.15 net-new facet (the WorkItemType field, before
-              this reachable only via [Advanced]): the 10 WORK_ITEM_TYPES + the
-              nullable "Untyped" bucket. Glyph + hue via WorkItemTypeIcon
-              (WORK_ITEM_TYPE_META); Untyped = a faint dashed circle. */}
+              this reachable only via [Advanced]): every WORK_ITEM_TYPES member
+              + the nullable "Untyped" bucket. Glyph + hue via WorkItemTypeIcon
+              (WORK_ITEM_TYPE_META); Untyped = a faint dashed circle. It ITERATES
+              the canonical list rather than restating it, so MOTIR-2629's four
+              admitted members appeared here with no edit — only this comment's
+              count was stale (it said ten). */}
           <div className="border-t border-(--el-border) py-1.5">
             <FacetLabel
               label={t('filterWorkType')}

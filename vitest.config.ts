@@ -959,6 +959,17 @@ export default defineConfig({
         // `lib/blob/**` is held on above: `middleware.ts` sits at ~5% and
         // `errors.ts` at ~21%, neither of them this card's code.
         'lib/workspaces/membershipGate.ts',
+
+        // Bug MOTIR-2643 — the acceptance lane's VERDICT. It is a pure module
+        // under `tests/`, which enters the report perfectly well (vitest 4's
+        // default `coverage.exclude` is empty), and it had never been in it: the
+        // instrument that decides which of four causes a red acceptance run had
+        // was the one shipped surface with no floor under it. That is exactly
+        // backwards for a module whose whole job is to be believed. GATED below,
+        // MEASURED first — 100 / 90.9 / 100 / 100 (stmts / branches / funcs /
+        // lines) on this branch; the two uncovered branches are the pre-existing
+        // `?? ''` fallbacks behind a length check.
+        'tests/e2e/_helpers/acceptance-diagnostics.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -977,6 +988,15 @@ export default defineConfig({
         // MOTIR-2527 — the membership reader, measured at 100/100/100 on this
         // branch before being pinned (see the `include` note above).
         'lib/workspaces/membershipGate.ts': { branches: 90, functions: 90, lines: 90 },
+        // Bug MOTIR-2643 — MEASURED before being pinned, on this branch, with
+        // `tests/acceptance-video-diagnostics.test.ts`: 90.9 branches / 100
+        // functions / 100 lines. See the `include` note above for why this file
+        // is worth a floor at all.
+        'tests/e2e/_helpers/acceptance-diagnostics.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         'lib/mappers/permissionMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/settings/projectSettingsNav.ts': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2258 · Subtask MOTIR-2476 — both MEASURED before being

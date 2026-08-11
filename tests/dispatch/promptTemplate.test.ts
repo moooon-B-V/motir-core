@@ -188,11 +188,15 @@ describe('assembleDispatchPrompt — the per-type WHAT TO DO variant', () => {
     design: 'Draw the ACCESS PATH',
     test: 'Make each test fail for the right reason first',
     content: 'match the terms the app',
+    copy: 'never coin a synonym for a shipped term',
+    translate: 'a translation card authors no new',
     research: 'A research card ships a document',
     review: 'A finding without a scenario is an opinion',
+    verification: 'verification that cannot fail has verified nothing',
     decision: 'ships a decision, not a survey',
     deploy: 'how it is rolled back',
     manual: 'Never paste a secret into the work item.',
+    legal: 'stop at the draft',
     chore: 'keep the diff to that change alone',
   };
 

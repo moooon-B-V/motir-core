@@ -771,7 +771,7 @@ export interface components {
             key: string;
             /** @enum {string} */
             kind: "epic" | "story" | "task" | "subtask" | "bug";
-            type: ("code" | "design" | "test" | "content" | "research" | "review" | "decision" | "deploy" | "manual" | "chore") | null;
+            type: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "deploy" | "manual" | "legal" | "chore") | null;
             title: string;
             status: string;
             /** @enum {string} */
@@ -805,7 +805,7 @@ export interface components {
             key: string;
             /** @enum {string} */
             kind: "epic" | "story" | "task" | "subtask" | "bug";
-            type: ("code" | "design" | "test" | "content" | "research" | "review" | "decision" | "deploy" | "manual" | "chore") | null;
+            type: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "deploy" | "manual" | "legal" | "chore") | null;
             title: string;
             status: string;
             /** @enum {string} */
@@ -1112,7 +1112,7 @@ export interface components {
                 key: string;
                 category: string;
             };
-            type: ("code" | "design" | "test" | "content" | "research" | "review" | "decision" | "deploy" | "manual" | "chore") | null;
+            type: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "deploy" | "manual" | "legal" | "chore") | null;
             executor: ("coding_agent" | "human") | null;
             assigneeId: string | null;
             assignee: {
@@ -1675,7 +1675,7 @@ export interface operations {
                     descriptionMd?: string | null;
                     /** @enum {string} */
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
-                    type?: ("code" | "design" | "test" | "content" | "research" | "review" | "decision" | "deploy" | "manual" | "chore") | null;
+                    type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
@@ -2124,7 +2124,7 @@ export interface operations {
                     parentKey?: string | null;
                     /** @enum {string} */
                     priority?: "lowest" | "low" | "medium" | "high" | "highest";
-                    type?: ("code" | "design" | "test" | "content" | "research" | "review" | "decision" | "deploy" | "manual" | "chore") | null;
+                    type?: ("code" | "design" | "test" | "content" | "copy" | "translate" | "research" | "review" | "verification" | "decision" | "deploy" | "manual" | "legal" | "chore") | null;
                     executor?: ("coding_agent" | "human") | null;
                     storyPoints?: number | null;
                     estimateMinutes?: number | null;
