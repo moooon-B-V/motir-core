@@ -746,6 +746,7 @@
   },
   "shell": {
     "nav": {
+      "home": "主页",
       "dashboard": "工作台",
       "issues": "工作项",
       "ready": "就绪",

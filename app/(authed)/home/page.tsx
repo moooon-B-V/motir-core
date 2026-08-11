@@ -81,7 +81,10 @@ export default async function HomePage({
   const isEmpty = rows.length === 0;
 
   return (
-    <div className="flex flex-col gap-6">
+    // `data-testid` is the E2E settle target — `_helpers/shell-session.ts`
+    // returns on a RENDERED Home rather than on a URL that merely reads right
+    // (MOTIR-2645's contract: an authoritative signal, never an interval).
+    <div data-testid="home-page" className="flex flex-col gap-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
           <h1 className="font-serif text-2xl font-semibold text-(--el-text)">{t('heading')}</h1>

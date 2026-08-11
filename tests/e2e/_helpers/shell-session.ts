@@ -8,8 +8,21 @@ import { expect, type Page } from '@playwright/test';
 
 export const SHELL_PASSWORD = 'shell-a11y-spec-pass-123';
 
-// Where both credential flows land.
-export const POST_AUTH_LANDING = '/dashboard';
+// ⚠️ THE TWO CREDENTIAL FLOWS NO LONGER LAND IN THE SAME PLACE (Story
+// MOTIR-2649 · Subtask MOTIR-2654), and the helpers below settle accordingly.
+//
+//   * SIGN-IN → `/home`, the signed-in landing surface. Signing in is the
+//     moment the reader asks "what should I do now?", and Home answers it.
+//   * SIGN-UP → `/dashboard`. A brand-new account has nothing waiting on it, so
+//     Home would greet its first visitor with an empty state whose next action
+//     needs a project they do not have; `/dashboard`'s projects-empty branch
+//     offers the one that IS next — create your first project.
+//
+// This constant is sign-IN's landing, which is what the post-auth-landing spec
+// counts navigations to.
+export const POST_AUTH_LANDING = '/home';
+/** Where `signUp` lands — deliberately NOT the same route. */
+export const POST_SIGNUP_LANDING = '/dashboard';
 
 /**
  * ── Why the URL reading /dashboard did not mean sign-in had FINISHED ──
@@ -56,8 +69,18 @@ export const POST_AUTH_LANDING = '/dashboard';
  * a tuned sleep would fail).
  */
 async function settleOnDashboard(page: Page): Promise<void> {
-  await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
+  await page.waitForURL(`**${POST_SIGNUP_LANDING}`, { timeout: 30_000 });
   await expect(page.getByTestId('dashboard-page')).toBeVisible({ timeout: 30_000 });
+}
+
+/**
+ * The sign-IN settle. Same contract as `settleOnDashboard` — return on a
+ * RENDERED page, never on a URL that merely reads right — pointed at the route
+ * MOTIR-2654 moved the landing to.
+ */
+async function settleOnHome(page: Page): Promise<void> {
+  await page.waitForURL(`**${POST_AUTH_LANDING}`, { timeout: 30_000 });
+  await expect(page.getByTestId('home-page')).toBeVisible({ timeout: 30_000 });
 }
 
 // Sign up a fresh user → auto-workspace, zero projects → lands on /dashboard.
@@ -81,14 +104,17 @@ export async function signUp(page: Page, email: string): Promise<void> {
 // sign-in UI — the two-step email→password flow, both steps submitted with the
 // "Continue" button (Subtask 3.5.1). Used by the at-scale board specs to sign in
 // as the server-seeded board-seed owner, who is created via usersService (not
-// signed up), then land on the project board. Lands on the default `/dashboard`.
+// signed up), then land on the project board. Lands on the default `/home`
+// (MOTIR-2654 moved it there from `/dashboard`); callers that need a different
+// surface `goto` it afterwards, which is safe because sign-in performs exactly
+// ONE navigation (MOTIR-2645).
 export async function signIn(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/sign-in');
   await page.getByPlaceholder('Email address').fill(email);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(password);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await settleOnDashboard(page);
+  await settleOnHome(page);
 }
 
 // Create the first project via the dashboard empty-state CTA, so the

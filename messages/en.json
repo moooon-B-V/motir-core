@@ -746,6 +746,7 @@
   },
   "shell": {
     "nav": {
+      "home": "Home",
       "dashboard": "Dashboard",
       "issues": "Work Items",
       "ready": "Ready",
