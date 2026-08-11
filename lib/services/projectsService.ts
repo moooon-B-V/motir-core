@@ -25,7 +25,14 @@ import {
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
-import { isOwnProjectImageRef, storedAssetKey } from '@/lib/blob/referencedUrls';
+import { PROJECT_IMAGE_MAX_BYTES, isProjectImageType } from '@/lib/projects/imageUpload';
+import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
+import { putPublicAsset } from '@/lib/blob/uploader';
+import {
+  isOwnProjectImageRef,
+  projectImagePrefix,
+  storedAssetKey,
+} from '@/lib/blob/referencedUrls';
 import { deletePublicAsset } from '@/lib/blob/uploader';
 import {
   PUBLIC_OVERVIEW_MAX_LENGTH,
@@ -829,6 +836,50 @@ export const projectsService = {
     }
 
     return dto;
+  },
+
+  /**
+   * Store an uploaded project LOGO and return its object KEY (MOTIR-2677) — the
+   * backend `POST /api/upload/project-image` is the thin HTTP layer over. Writes
+   * to the per-PROJECT `projects/<projectId>/` prefix so the returned key passes
+   * `updateDetails`'s `isOwnProjectImageRef` gate; the caller then PATCHes it as
+   * `image`. Returns a key rather than a URL so no hosting origin is persisted —
+   * `storedAssetUrl` composes the URL on read, at the DTO boundary.
+   *
+   * ⚠️ **ADMIN-GATED BEFORE A SINGLE BYTE IS STORED**, which is the one place
+   * this deliberately differs from `usersService.uploadAvatar`. An avatar's owner
+   * IS the session user, so that route needs no further question. A project logo
+   * lands under a prefix keyed to a PROJECT, so without this gate any signed-in
+   * member of any workspace could write objects into any project's prefix — they
+   * could never make one APPEAR (that is `updateDetails`'s gate) but they could
+   * consume storage and plant objects a later reader would read as the project's.
+   * Gate the write, not only the attach.
+   *
+   * Keeps NO audit row: a logo's lifecycle is owned entirely by `Project.image`
+   * and its GC by `updateDetails`, exactly as an avatar's is by `User.image`.
+   */
+  async uploadImage(input: {
+    key: string;
+    ctx: WorkspaceContext;
+    file: File;
+  }): Promise<{ key: string }> {
+    const projectId = await withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
+      await projectAccessService.assertCanManage(project.id, input.ctx, tx);
+      return project.id;
+    });
+
+    // The narrow project-logo policy, not the shared attachment allowlist — see
+    // `lib/projects/imageUpload.ts` for why the two differ.
+    if (input.file.size > PROJECT_IMAGE_MAX_BYTES) {
+      throw new FileTooLargeError(PROJECT_IMAGE_MAX_BYTES);
+    }
+    if (!isProjectImageType(input.file.type)) {
+      throw new UnsupportedFileTypeError(input.file.type);
+    }
+
+    const pathname = `${projectImagePrefix(projectId)}${input.file.name}`;
+    return putPublicAsset(pathname, input.file, input.file.type);
   },
 
   /**
