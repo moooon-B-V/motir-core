@@ -169,15 +169,20 @@ export function buildClientDiagnostics(input: {
 // continuously they stop being one bit per run and become a distribution that
 // moves with load. A remedy can then be judged in a handful of runs.
 //
-// THREE SIGNALS, and they fail differently on purpose:
+// FOUR SIGNALS, and they fail differently on purpose:
 //
 //   * `idleGapMs` — the longest stretch inside a navigation's window with no
 //     resource completing. This is `sinceLastResourceMs` generalised: the
-//     mcp-docs capture's 46 228 ms IS this quantity, read once. ⚠️ It is
-//     CONTAMINATED BY THE LANE'S OWN PACING — `CHAPTER_HOLD_MS` and `BEAT_MS`
-//     are deliberate stretches of nothing, so a healthy run's median idle gap is
-//     a measure of the hold schedule, not of the runner. Read its TAIL, not its
-//     centre.
+//     mcp-docs capture's 46 228 ms IS this quantity, read once. ⚠️ ON ITS OWN IT
+//     DOES NOT WORK, and that is measured rather than feared — see the field's
+//     own doc comment for the numbers. `CHAPTER_HOLD_MS` and `BEAT_MS` are
+//     deliberate stretches of nothing, so this reads the hold schedule as
+//     readily as the runner. Kept only so the two artifacts stay comparable.
+//   * `idleToProbeMs` — the SAME measure with the pacing removed: the window
+//     closes at the first probe after the navigation, which fires when the
+//     chapter body ends and therefore BEFORE the hold. This is the headline, and
+//     it still sees a stall (a dead transition holds its assertion open, so its
+//     probe is a minute away and the gap says so).
 //   * `longestTaskMs` / `blockingMs` — the Long Tasks API, windowed per
 //     navigation. Immune to the holds (an idle main thread runs no tasks) and a
 //     direct reading of the CPU contention that starvation would consist of.
@@ -230,6 +235,17 @@ export interface ContentionReading {
   resourceEndsMs: number[];
   /** The resource-timing buffer filled — gaps recorded after that point are not real. */
   resourceBufferFull: boolean;
+  /**
+   * Page-clock instants at which this document has been PROBED — one per drain,
+   * accumulated by the fixture across the document's life.
+   *
+   * ⚠️ This is what makes {@link ContentionSample.idleToProbeMs} possible, and it
+   * is the whole reason the reading carries something the page cannot supply. A
+   * drain fires when a chapter body ENDS, i.e. before the hold that follows it,
+   * so the first probe after a navigation is the last moment that belongs to the
+   * navigation's own work rather than to the lane's pacing.
+   */
+  probeAtMs: number[];
 }
 
 /** What one navigation cost, on a runner shared with four other tenants. */
@@ -239,8 +255,27 @@ export interface ContentionSample {
   atMs: number;
   /** To the next navigation, or to the read that closed the document. */
   windowMs: number;
-  /** ⚠️ Includes the lane's deliberate holds — see the header. Read the tail. */
+  /**
+   * ⚠️ DOMINATED BY THE LANE'S OWN PACING — measured, not merely suspected.
+   * Across the 82 navigations of this instrument's first real run, the soft
+   * navigations' median gap was 4,046 ms (≈ `CHAPTER_HOLD_MS` + `BEAT_MS`) and
+   * the worst was 35,885 ms with a 35,898 ms window — a recording that navigated
+   * once and then held, on a run where nothing went wrong. That is the same
+   * order as the 46,228 ms of the actual stall, so this number ALONE cannot tell
+   * a stall from a healthy paced recording. Kept because it is the quantity the
+   * failure report reads and the two must stay comparable; use
+   * {@link idleToProbeMs} to judge anything.
+   */
   idleGapMs: number;
+  /**
+   * THE DECONTAMINATED IDLE GAP: the same measure, but the window closes at the
+   * first PROBE after the navigation instead of at the next navigation — so it
+   * covers the navigation's own work and stops before the hold that follows.
+   * This is the signal a lane remedy would move.
+   */
+  idleToProbeMs: number;
+  /** How long that shortened window was, so a reader can see what it excluded. */
+  windowToProbeMs: number;
   longestTaskMs: number;
   /** Σ(task − {@link LONG_TASK_MS}) over the window — the API's blocking time. */
   blockingMs: number;
@@ -272,12 +307,15 @@ export interface ContentionReport {
   status: string;
   /** How many navigations this recording contributed to the distribution. */
   navigations: number;
+  /** ⚠️ Pacing-contaminated — see {@link ContentionSample.idleGapMs}. */
   idleGap: ContentionDistribution;
+  /** The headline signal: the idle gap up to the navigation's own probe. */
+  idleToProbe: ContentionDistribution;
   longestTask: ContentionDistribution;
   /** Over the drains that ANSWERED; the ones that did not are counted below. */
   drainLatency: ContentionDistribution;
   unresponsiveDrains: number;
-  /** The navigation with the longest idle gap — this run's closest approach. */
+  /** The navigation with the longest DECONTAMINATED gap — the run's closest approach. */
   worst: ContentionSample | null;
   samples: ContentionSample[];
   drains: ContentionDrain[];
@@ -331,9 +369,16 @@ function longestIdleGap(sortedEndsMs: number[], start: number, end: number): num
 export function buildContentionSamples(reading: ContentionReading): ContentionSample[] {
   const ends = [...reading.resourceEndsMs].sort((a, b) => a - b);
   const marks = [...reading.navigations].sort((a, b) => a.atMs - b.atMs);
+  const probes = [...reading.probeAtMs].sort((a, b) => a - b);
   return marks.map((mark, index) => {
     const start = mark.atMs;
     const end = Math.max(start, marks[index + 1]?.atMs ?? reading.nowMs);
+    // The first probe strictly after the navigation, clamped into the window: a
+    // navigation with no probe of its own (the spec ended, or two navigations
+    // landed inside one chapter body) falls back to the full window, which is
+    // the conservative direction — it over-reports rather than inventing a
+    // shorter one.
+    const probeEnd = Math.min(end, probes.find((at) => at > start) ?? end);
     const tasks = reading.longTasks.filter((task) => task.atMs >= start && task.atMs < end);
     return {
       url: mark.url,
@@ -341,6 +386,8 @@ export function buildContentionSamples(reading: ContentionReading): ContentionSa
       atMs: start,
       windowMs: Math.round(end - start),
       idleGapMs: longestIdleGap(ends, start, end),
+      idleToProbeMs: longestIdleGap(ends, start, probeEnd),
+      windowToProbeMs: Math.round(probeEnd - start),
       longestTaskMs: tasks.reduce((max, task) => Math.max(max, task.durationMs), 0),
       blockingMs: Math.round(
         tasks.reduce((sum, task) => sum + Math.max(0, task.durationMs - LONG_TASK_MS), 0),
@@ -369,11 +416,15 @@ export function buildContentionReport(input: {
     status: input.status,
     navigations: samples.length,
     idleGap: describeContention(samples.map((sample) => sample.idleGapMs)),
+    idleToProbe: describeContention(samples.map((sample) => sample.idleToProbeMs)),
     longestTask: describeContention(samples.map((sample) => sample.longestTaskMs)),
     drainLatency: describeContention(answered.map((drain) => drain.latencyMs)),
     unresponsiveDrains: input.drains.length - answered.length,
+    // Ranked on the DECONTAMINATED gap: ranking on `idleGapMs` would nominate
+    // whichever recording paced the longest, every time.
     worst: samples.reduce<ContentionSample | null>(
-      (worst, sample) => (worst === null || sample.idleGapMs > worst.idleGapMs ? sample : worst),
+      (worst, sample) =>
+        worst === null || sample.idleToProbeMs > worst.idleToProbeMs ? sample : worst,
       null,
     ),
     samples,

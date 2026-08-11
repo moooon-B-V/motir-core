@@ -326,6 +326,7 @@ function reading(patch: Partial<ContentionReading> = {}): ContentionReading {
     longTasks: [],
     resourceEndsMs: [],
     resourceBufferFull: false,
+    probeAtMs: [],
     ...patch,
   };
 }
@@ -508,6 +509,99 @@ describe('buildContentionSamples — one sample per navigation (MOTIR-2646)', ()
 
   it('contributes nothing for a document that never navigated', () => {
     expect(buildContentionSamples(reading())).toEqual([]);
+  });
+});
+
+describe('idleToProbeMs — the gap with the lane’s own pacing taken out (MOTIR-2646)', () => {
+  it('stops at the first PROBE after the navigation, not at the next one', () => {
+    // The shape this measure exists for. A chapter body navigates at 1,000 and
+    // finishes at 3,000, where the drain fires; the 2.5 s hold and a 4 s beat
+    // then pass with nothing on the wire before the next navigation at 10,000.
+    // The raw gap charges all of that to the navigation; the probe-bounded one
+    // charges the 2,000 ms the page actually had.
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(1_000), navigation(10_000)],
+        probeAtMs: [3_000, 7_500],
+        nowMs: 12_000,
+      }),
+    );
+    expect(sample?.idleGapMs).toBe(9_000);
+    expect(sample?.idleToProbeMs).toBe(2_000);
+    expect(sample?.windowToProbeMs).toBe(2_000);
+  });
+
+  it('is the measure that would still see a stall', () => {
+    // The mcp-docs occurrence, had it been sampled rather than caught: the
+    // assertion sat on the dead transition for its whole budget, so the probe
+    // that follows it is 46 s away and the decontaminated gap says so too.
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(7_400, '/docs/mcp')],
+        resourceEndsMs: [7_421],
+        probeAtMs: [53_649],
+        nowMs: 53_649,
+      }),
+    );
+    expect(sample?.idleToProbeMs).toBe(46_228);
+  });
+
+  it('ignores a probe that fired BEFORE the navigation', () => {
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(5_000)], probeAtMs: [1_000, 6_000], nowMs: 9_000 }),
+    );
+    expect(sample?.idleToProbeMs).toBe(1_000);
+  });
+
+  it('falls back to the full window when the navigation got no probe of its own', () => {
+    // Two navigations inside one chapter body, or a spec that ended straight
+    // after navigating. Over-reporting is the conservative direction — inventing
+    // a shorter window would understate contention, which is the one error this
+    // instrument must not make.
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(1_000)], probeAtMs: [], nowMs: 5_000 }),
+    );
+    expect(sample?.idleToProbeMs).toBe(4_000);
+    expect(sample?.windowToProbeMs).toBe(4_000);
+  });
+
+  it('never runs past the window, even when the next probe is later than the next navigation', () => {
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(1_000), navigation(2_000)],
+        probeAtMs: [8_000],
+        nowMs: 9_000,
+      }),
+    );
+    expect(sample?.windowToProbeMs).toBe(1_000);
+    expect(sample?.idleToProbeMs).toBe(1_000);
+  });
+
+  it('sorts probe instants the fixture appended in drain order', () => {
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(0)], probeAtMs: [9_000, 2_000], nowMs: 12_000 }),
+    );
+    expect(sample?.idleToProbeMs).toBe(2_000);
+  });
+
+  it('ranks the report’s WORST navigation on it, not on the paced gap', () => {
+    // Ranking on `idleGapMs` would nominate whichever recording held the
+    // longest, on every single run.
+    const report = buildContentionReport({
+      test: 'spec',
+      status: 'passed',
+      readings: [
+        reading({
+          navigations: [navigation(0, '/held-a-long-time'), navigation(30_000, '/actually-slow')],
+          probeAtMs: [1_000, 40_000],
+          nowMs: 40_000,
+        }),
+      ],
+      drains: [],
+    });
+    expect(report.idleGap.maxMs).toBe(30_000);
+    expect(report.worst?.url).toBe('/actually-slow');
+    expect(report.idleToProbe.maxMs).toBe(10_000);
   });
 });
 

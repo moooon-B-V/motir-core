@@ -190,11 +190,13 @@ export const FIRST_PAINT_MS = 60_000;
 // lane and ship it" is what produced the two earlier wrong conclusions this note
 // records. Both shapes were refused.
 //
-// What is built instead is the INSTRUMENT: `contentionSamples` below reads the
-// same renderer signals on every navigation of every run, so the lane reports a
-// distribution rather than one bit. `acceptance-diagnostics.ts`'s CONTENTION
-// SAMPLING header carries the three signals and why they fail differently. The
-// per-run sidecar is `contention.json`, beside `chapters.json`.
+// What is built instead is the INSTRUMENT: the `contention` fixture below reads
+// the same renderer signals on every navigation of every run, so the lane
+// reports a distribution rather than one bit. `acceptance-diagnostics.ts`'s
+// CONTENTION SAMPLING header carries the four signals and why they fail
+// differently. The per-run sidecar is `contention.json`, beside `chapters.json`,
+// and a one-line summary of it goes to the JOB LOG — the artifacts are ~1.5 GB
+// per run, and an instrument nobody can afford to open is not an instrument.
 //
 // ── THE CANDIDATES, AND WHAT EACH WOULD COST ─────────────────────────────────
 //
@@ -472,6 +474,12 @@ export const test = base.extend<AcceptanceFixtures>({
       const t0 = Date.now();
       /** Latest cumulative reading PER DOCUMENT, keyed by its `performance.timeOrigin`. */
       const readings = new Map<number, ContentionReading>();
+      /**
+       * Page-clock instants at which each document has been probed. The page
+       * cannot supply this — it is when the HARNESS looked — and it is what
+       * separates a navigation's own work from the hold that follows it.
+       */
+      const probesByDocument = new Map<number, number[]>();
       const drains: ContentionDrain[] = [];
 
       const sample = async (): Promise<void> => {
@@ -494,7 +502,14 @@ export const test = base.extend<AcceptanceFixtures>({
           timedOut: reading === null,
         };
         drains.push(drain);
-        if (reading !== null) readings.set(reading.timeOrigin, reading);
+        if (reading === null) return;
+        // The probe list has to OUTLIVE the reading it arrived with: each read is
+        // a fresh cumulative snapshot that replaces the last, so appending to the
+        // reading's own array would keep only this drain's instant.
+        const probes = probesByDocument.get(reading.timeOrigin) ?? [];
+        probes.push(reading.nowMs);
+        probesByDocument.set(reading.timeOrigin, probes);
+        readings.set(reading.timeOrigin, { ...reading, probeAtMs: probes });
       };
 
       await provide({ sample });
@@ -529,13 +544,16 @@ export const test = base.extend<AcceptanceFixtures>({
       // reader already is, `gh api …/logs` is one call, and the whole summary
       // fits on a line. `warn` for the same reason `clientDiagnostics` uses it:
       // `log` is the one console method this repo's lint config forbids.
+      const band = (distribution: { medianMs: number; p90Ms: number; maxMs: number }) =>
+        `${distribution.medianMs}/${distribution.p90Ms}/${distribution.maxMs}ms`;
       console.warn(
         `[acceptance-video] MOTIR-2646 contention — navs=${report.navigations} ` +
-          `idleGap med/p90/max=${report.idleGap.medianMs}/${report.idleGap.p90Ms}/${report.idleGap.maxMs}ms ` +
-          `longestTask med/p90/max=${report.longestTask.medianMs}/${report.longestTask.p90Ms}/${report.longestTask.maxMs}ms ` +
-          `drainLatency med/p90/max=${report.drainLatency.medianMs}/${report.drainLatency.p90Ms}/${report.drainLatency.maxMs}ms ` +
+          `idleToProbe med/p90/max=${band(report.idleToProbe)} ` +
+          `longestTask med/p90/max=${band(report.longestTask)} ` +
+          `drainLatency med/p90/max=${band(report.drainLatency)} ` +
           `unresponsive=${report.unresponsiveDrains}/${report.drains.length} ` +
-          `worst=${report.worst ? `${report.worst.idleGapMs}ms@${report.worst.kind}:${report.worst.url}` : 'none'}`,
+          `idleGap[paced] med/p90/max=${band(report.idleGap)} ` +
+          `worst=${report.worst ? `${report.worst.idleToProbeMs}ms@${report.worst.kind}:${report.worst.url}` : 'none'}`,
       );
     },
     { auto: true },
