@@ -154,8 +154,10 @@ export interface BoardCardDto {
   assigneeId: string | null;
   dueDate: string | null;
   estimateMinutes: number | null;
-  /** The agile STORY-POINT estimate (Story 4.3.4) — the card `.pts` chip renders
-   *  this (or the time estimate / nothing) per the project's `estimationStatistic`. */
+  /** The agile STORY-POINT estimate (Story 4.3.4). `BoardCardView` renders it as
+   *  the static `.pts` chip (MOTIR-2618) — UNCONDITIONALLY, like the scrum
+   *  `ColumnPointsBadge` total it has to explain, not gated on the project's
+   *  `estimationStatistic`. `null` renders no chip. */
   storyPoints: number | null;
   position: string;
   /** False iff an `is_blocked_by` blocker remains in a non-terminal status (finding #21). */

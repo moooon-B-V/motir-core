@@ -1,4 +1,6 @@
 // @vitest-environment happy-dom
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen } from '@testing-library/react';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
@@ -53,6 +55,75 @@ describe('BoardCard', () => {
     expect(screen.getByText('High')).toBeTruthy();
     // Estimate chip is the shared formatDurationMinutes output.
     expect(screen.getByText('1h 30m')).toBeTruthy();
+  });
+
+  // MOTIR-2618 — the board card rendered NO story points for two months while
+  // this file's first case asserted it "renders … and estimate" and passed, because
+  // the estimate it renders is the TIME estimate. The two chips are adjacent, share
+  // a treatment, and had one assertion between them; each now has its own.
+  it('renders the story-point chip beside the time estimate (MOTIR-2618)', () => {
+    render(
+      <BoardCard
+        card={card({ id: 'w1', key: 7, storyPoints: 5, estimateMinutes: 90 })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    // The `.pts` chip: the bare figure, per design/boards/board.mock.html.
+    expect(screen.getByText('5')).toBeTruthy();
+    expect(screen.getByTitle('5 story points')).toBeTruthy();
+    expect(screen.getByLabelText('5 story points')).toBeTruthy();
+    // …and it did not displace the time estimate — both render.
+    expect(screen.getByText('1h 30m')).toBeTruthy();
+    // The `hash` glyph that tells the two adjacent mono figures apart is
+    // DECORATIVE — the chip's accessible name is the label alone, never "# 5".
+    const glyph = screen.getByLabelText('5 story points').querySelector('svg');
+    expect(glyph?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('omits the story-point chip when the card is unpointed', () => {
+    render(
+      <BoardCard
+        card={card({ id: 'w1', key: 7, storyPoints: null, estimateMinutes: 90 })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.queryByTitle(/story points$/)).toBeNull();
+    // No empty placeholder either — the slot collapses, as the estimate's does.
+    expect(screen.getByText('1h 30m')).toBeTruthy();
+  });
+
+  it('formats a fractional story-point value the way every other surface does', () => {
+    render(
+      <BoardCard
+        card={card({ id: 'w1', key: 7, storyPoints: 0.5 })}
+        assigneeName={null}
+        onOpenQuickView={() => {}}
+      />,
+    );
+    expect(screen.getByText('0.5')).toBeTruthy();
+  });
+
+  // MOTIR-2618's stated NON-goal, held from the code side. The board card's own
+  // surface is the drag-handle `<button>`, so `EstimateBadge`'s editable arm — a
+  // button — cannot nest inside it; putting the interactive chip on the board
+  // needs the overlay-vs-handle design decision first, and until that exists the
+  // board renders the static span. `EstimateBadge`'s header comment names the
+  // four real call sites and this asserts the board is not quietly a fifth.
+  it('nothing under app/(authed)/boards imports EstimateBadge — the static chip is deliberate', () => {
+    const root = join(process.cwd(), 'app/(authed)/boards');
+    const sources = readdirSync(root, { recursive: true, encoding: 'utf8' }).filter((f) =>
+      /\.tsx?$/.test(f),
+    );
+    // The whole tree, not just _components — and matched on the IMPORT / the JSX
+    // element, so a comment explaining why the board doesn't use it (BoardCard has
+    // one) is not a false positive.
+    const offenders = sources.filter((f) =>
+      /import[^;]*\bEstimateBadge\b|<EstimateBadge\b/.test(readFileSync(join(root, f), 'utf8')),
+    );
+    expect(offenders).toEqual([]);
+    expect(sources.length).toBeGreaterThan(10); // the scan actually read the tree
   });
 
   it('omits the estimate chip when the card has no estimate', () => {

@@ -2719,6 +2719,7 @@
     "blocked": "受阻",
     "awaitingAcceptance": "等待验收",
     "estimateLabel": "预估 {value}",
+    "storyPointsLabel": "{points} 个故事点",
     "assignedTo": "负责人：{name}",
     "unassigned": "未分配",
     "boardLabel": "面板列",

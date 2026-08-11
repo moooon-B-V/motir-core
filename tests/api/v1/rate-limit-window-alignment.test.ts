@@ -92,17 +92,26 @@ describe('fixed-window alignment lives in ONE place', () => {
   // the limiter env directly rather than through a local `budget()` helper —
   // which is exactly how it survived two sweeps that grepped for `budget(`.
   //
-  // The last two arrived with MOTIR-2598, which moved the upload and
+  // The next two arrived with MOTIR-2598, which moved the upload and
   // public-submit throttles off their per-process Maps onto the shared store:
   // that swap is what makes them accumulating fixed-window assertions, and so
   // members of this class, in a part of the tree (`tests/attachments`,
   // `tests/publicProjects`) no `/api/v1`-shaped sweep would have looked at.
+  //
+  // The last is MOTIR-2647 — the fourth occurrence of the class, and the first
+  // to fire from `tests/mcp`. It set the budget and left the window at the
+  // shipped 60 s default, so its two calls straddled a minute and the refusal it
+  // asserted arrived as `PROJECT_NOT_FOUND`. Note what the file already had: the
+  // window env sat in its own cleanup list, so the knob was known and simply
+  // never set — which is why membership of this list is the assertion, not
+  // whether the author was aware the window existed.
   it.each([
     'tests/api/v1/rate-limit.test.ts',
     'tests/api/v1/story-gate.test.ts',
     'tests/api/v1/conformance.test.ts',
     'tests/attachments/attachments-service.test.ts',
     'tests/publicProjects/publicSubmit.test.ts',
+    'tests/mcp/rate-limit-gate.test.ts',
   ])('%s imports the shared helper', (file) => {
     const source = readFileSync(join(REPO_ROOT, file), 'utf8');
 
