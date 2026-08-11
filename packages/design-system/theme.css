@@ -2405,6 +2405,13 @@
   --el-notif-commented: var(--color-info); /* was --el-type-task */
   --el-notif-assigned: var(--color-accent-green); /* was --el-type-story */
   --el-notif-transitioned: var(--color-accent-teal); /* was --el-type-subtask */
+  /* The EXECUTOR badge on a Home row's assignee avatar (Story MOTIR-2649 ·
+     Subtask MOTIR-2653, per design/home/design-notes.md §"The agent state").
+     Same mapping form as --el-notif-mentioned above and for the same reason:
+     it resolves to the accent fill today, but owning its own slot means a
+     palette can move agent badges without dragging the CTA with them. The
+     third pillar becoming visible is worth a token of its own. */
+  --el-executor-agent: var(--color-primary-fill);
   /* AI model dots (promote to a named family; deepseek was borrowing --el-type-subtask).
      opus keeps the accent fill, same --color-primary-fill reasoning as mentioned. */
   --el-model-opus: var(--color-primary-fill); /* the accent fill (matches prior --el-accent) */

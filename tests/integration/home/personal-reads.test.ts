@@ -423,3 +423,63 @@ describe('the Home page cursor', () => {
     expect(page.items).toHaveLength(1);
   });
 });
+
+describe('homeService.tabCounts — the tab badges', () => {
+  it('counts each SET, not the current page, and applies the same access rule', async () => {
+    const fx = await makeFixture({ identifier: 'CNT' });
+    const secret = await createTestProject({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.ownerId,
+      name: 'Secret',
+      identifier: 'CNS',
+    });
+    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+
+    for (let i = 0; i < 4; i += 1) {
+      await createWorkItem(fx, { kind: 'task', title: `Mine ${i}` });
+    }
+    const hidden = await createWorkItem(
+      { ...fx, project: secret, projectId: secret.id, projectIdentifier: secret.identifier },
+      { kind: 'task', title: 'Hidden' },
+    );
+    const watched = await createWorkItem(fx, { kind: 'task', title: 'Watched' });
+    await db.$transaction(async (tx) => {
+      await watcherRepository.add(watched.id, fx.ownerId, tx);
+      await watcherRepository.add(hidden.id, fx.ownerId, tx);
+    });
+
+    const member = await enrolMember(fx, 'counts');
+    await own(hidden.id, { assignee: member.id, reporter: member.id });
+
+    // The owner is a workspace manager, so they browse the private project too:
+    // 5 owned (4 + the watched one they reported) and 2 watched.
+    expect(await homeService.tabCounts(fx.ctx)).toEqual({ myWork: 5, watching: 2 });
+
+    // The plain member owns only the hidden one, which they cannot browse — so
+    // both counts are 0, and the number beside the tab agrees with what the tab
+    // will actually show.
+    const memberCtx = { userId: member.id, workspaceId: fx.workspaceId };
+    expect(await homeService.tabCounts(memberCtx)).toEqual({ myWork: 0, watching: 0 });
+    expect((await homeService.listMyWork(memberCtx)).items).toEqual([]);
+  });
+
+  it('counts the whole set even when a page shows less of it', async () => {
+    const fx = await makeFixture({ identifier: 'CNP' });
+    for (let i = 0; i < 6; i += 1) {
+      await createWorkItem(fx, { kind: 'task', title: `Item ${i}` });
+    }
+
+    // The badge is the SIZE OF THE SET — a reader deciding whether to switch
+    // tabs is not asking how big the current page is.
+    expect((await homeService.listMyWork(fx.ctx, { limit: 2 })).items).toHaveLength(2);
+    expect((await homeService.tabCounts(fx.ctx)).myWork).toBe(6);
+  });
+
+  it('is zero for a reader with no browsable projects, without issuing a degenerate query', async () => {
+    const fx = await makeFixture({ identifier: 'CNZ' });
+    const stranger = await createTestUser({ email: `cnz-${Date.now()}@example.com` });
+    expect(
+      await homeService.tabCounts({ userId: stranger.id, workspaceId: fx.workspaceId }),
+    ).toEqual({ myWork: 0, watching: 0 });
+  });
+});

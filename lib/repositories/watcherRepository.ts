@@ -131,6 +131,32 @@ export const watcherRepository = {
   },
 
   /**
+   * How many items the Watching read would return — the tab's count badge
+   * (Subtask MOTIR-2653). Same predicate as {@link listByUser} minus the
+   * keyset, so the number beside the tab is the number the tab will show.
+   */
+  async countByUser(
+    userId: string,
+    workspaceId: string,
+    projectIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (projectIds.length === 0) return 0;
+    const client = tx ?? db;
+    return client.watcher.count({
+      where: {
+        userId,
+        workItem: {
+          workspaceId,
+          projectId: { in: [...projectIds] },
+          archivedAt: null,
+          triagedAt: null,
+        },
+      },
+    });
+  },
+
+  /**
    * Is this user watching this issue? The detail read's
    * `viewerIsWatching` flag (5.4.4 slots it into `getIssueDetail`'s
    * parallel fetch). Point lookup on the compound unique.

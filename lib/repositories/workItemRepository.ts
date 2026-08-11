@@ -837,6 +837,32 @@ export const workItemRepository = {
   },
 
   /**
+   * How many items the My work read would return — the tab's count badge
+   * (Subtask MOTIR-2653). Same predicate as
+   * {@link findByAssigneeOrReporterInWorkspace} MINUS the keyset, so the number
+   * beside the tab is the number the tab will show rather than the number on
+   * the current page. Empty browsable set short-circuits.
+   */
+  async countByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    projectIds: readonly string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (projectIds.length === 0) return 0;
+    const client = tx ?? db;
+    return client.workItem.count({
+      where: {
+        workspaceId,
+        projectId: { in: [...projectIds] },
+        archivedAt: null,
+        triagedAt: null,
+        OR: [{ assigneeId: userId }, { reporterId: userId }],
+      },
+    });
+  },
+
+  /**
    * Live (non-archived) children of MANY parents created strictly after a
    * cutoff, in ONE query — the batched read behind plan-staleness `siblings_added`
    * (7.21.3 / MOTIR-1340): a proposed `add` is stale when its parent gained a

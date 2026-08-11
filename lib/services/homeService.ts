@@ -6,7 +6,7 @@ import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { projectAccessService, type AccessActorContext } from '@/lib/services/projectAccessService';
 import { toHomeWorkItemRowDto } from '@/lib/mappers/homeMappers';
 import { decodeHomeCursor, encodeHomeCursor } from '@/lib/home/cursor';
-import type { HomePageDto } from '@/lib/dto/home';
+import type { HomePageDto, HomeTabCountsDto } from '@/lib/dto/home';
 
 // The Home landing surface's read layer (Story MOTIR-2649 · Subtask
 // MOTIR-2651) — the business logic behind `/home`'s two tabs. Orchestrates the
@@ -109,6 +109,31 @@ export const homeService = {
       );
     });
     return toPage(rows, limit, ctx.userId);
+  },
+
+  /**
+   * BOTH tab counts, in one workspace context.
+   *
+   * The tab strip shows the size of the tab you are NOT looking at as well as
+   * the one you are, so a reader can tell whether switching is worth it — which
+   * means the numbers are the size of each SET, not of the current page.
+   * Resolved together because the browsable-project set is the expensive half
+   * and both counts need the same one.
+   */
+  async tabCounts(ctx: AccessActorContext): Promise<HomeTabCountsDto> {
+    return withWorkspaceContext(ctx, async (tx) => {
+      const projectIds = await browsableProjectIds(ctx, tx);
+      const [myWork, watching] = await Promise.all([
+        workItemRepository.countByAssigneeOrReporterInWorkspace(
+          ctx.userId,
+          ctx.workspaceId,
+          projectIds,
+          tx,
+        ),
+        watcherRepository.countByUser(ctx.userId, ctx.workspaceId, projectIds, tx),
+      ]);
+      return { myWork, watching };
+    });
   },
 
   /**

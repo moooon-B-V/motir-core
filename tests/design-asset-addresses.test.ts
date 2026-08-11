@@ -399,24 +399,13 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   // ("the route lands no earlier than MOTIR-2263"). The guard reads the ROUTE
   // TABLE, so a 404 rendered BY a matching route is invisible to it; that is a
   // known limit of the sweep, not something this deletion introduces.
-  // ── Forward-looking: the Home landing surface (MOTIR-2653 / MOTIR-2654) ───
-  //    The asset (MOTIR-2650) draws a route that does not exist yet:
-  //    `app/(authed)/` holds `dashboard`, `items`, `ready`, `boards`, `roadmap`
-  //    and the rest, but no `home`. MOTIR-2653 builds `app/(authed)/home/page.tsx`
-  //    and MOTIR-2654 adds the nav entry + moves the post-auth landing onto it.
-  //    Per the pattern above, MOTIR-2653 is the card that DELETES these two rows,
-  //    in the commit that adds the route — they are temporary by construction,
-  //    unlike the point-in-time rows further up, which are permanent.
-  {
-    file: 'design/home/design-notes.md',
-    address: '/home',
-    why: 'Forward-looking: the design gate for MOTIR-2649 draws `/home` before the route exists. MOTIR-2653 adds `app/(authed)/home/page.tsx` and deletes this row in the same commit.',
-  },
-  {
-    file: 'design/home/home.mock.html',
-    address: '/home',
-    why: "Forward-looking: the mock's tab strip and rail entry link to `/home`, the route MOTIR-2653 builds. MOTIR-2653 deletes this row in the commit that adds the route.",
-  },
+  // MOTIR-2653 SHIPPED THE ROUTE, so the two `/home` rows are gone — deleted by
+  // the card that built them, in the same commit, exactly as their own `why`
+  // said they would be. `app/(authed)/home/page.tsx` is a real page now and both
+  // assets' `/home` links resolve, so the pair is guarded again rather than
+  // excused. (Contrast the point-in-time rows above, which are permanent: those
+  // record an address that WAS live when the asset was drawn and has since moved
+  // away, and nothing is ever coming back to change them.)
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -961,12 +950,8 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  guarded like any other. An exemption cannot outlive its reason — and the
   //  `carries no KNOWN_PATHS entry that has stopped applying` test below is
   //  what made sure nobody had to remember.)
-  // ── Forward-looking: the Home page module (MOTIR-2653) ────────────────────
-  {
-    file: 'design/home/design-notes.md',
-    path: 'app/(authed)/home/page.tsx',
-    why: 'Forward-looking: the MOTIR-2650 asset names the module MOTIR-2653 will create. MOTIR-2653 deletes this row in the commit that adds the file.',
-  },
+  // MOTIR-2653 CREATED `app/(authed)/home/page.tsx`, so its forward-looking row
+  // is gone — deleted by the card that built the file, in the same commit.
 ];
 
 describe('a design asset cites source paths that still exist', () => {

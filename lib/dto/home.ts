@@ -86,3 +86,16 @@ export interface HomePageDto {
   items: HomeWorkItemRowDto[];
   nextCursor: string | null;
 }
+
+/**
+ * The size of each tab's SET (Subtask MOTIR-2653) — not of the current page.
+ *
+ * Both numbers ride together because the tab strip shows the size of the tab
+ * the reader is NOT on as well as the one they are: that is what makes
+ * switching an informed choice rather than a guess. `design/home/` suppresses
+ * both when they are zero — a "0" beside a tab is noise a new user has to parse.
+ */
+export interface HomeTabCountsDto {
+  myWork: number;
+  watching: number;
+}
