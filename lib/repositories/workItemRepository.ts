@@ -103,6 +103,87 @@ export interface WorkItemForestRow {
  * (`parentId` / `depth` / `matched`) — the List is un-nested, so there is no
  * hierarchy to carry. The service maps these to `WorkItemListItemDto`s.
  */
+/**
+ * One row of a HOME personal read (Story MOTIR-2649 · Subtask MOTIR-2651) — the
+ * columns `design/home/`'s row draws, plus the owning project it identifies.
+ *
+ * NOT `WorkItemListRow`: Home adds the project (a project-scoped list never has
+ * to say which project it is in) and `executor` (the agent badge), and drops
+ * `hasDescription` (a projected boolean that exists to drive the `/items` row ⋯
+ * menu, which Home does not render) and `dueDate` (no Due cell in Home's column
+ * set). `descriptionMd` is never selected — the same reason the forest CTE
+ * excludes it: these reads fan out across a whole workspace and the Markdown
+ * body is the large column.
+ */
+export interface HomeWorkItemRow {
+  id: string;
+  kind: WorkItemKind;
+  type: WorkItemType | null;
+  key: number;
+  identifier: string;
+  title: string;
+  status: string;
+  priority: WorkItemPriority;
+  assigneeId: string | null;
+  reporterId: string;
+  executor: Executor | null;
+  storyPoints: Prisma.Decimal | null;
+  estimateMinutes: number | null;
+  updatedAt: Date;
+  project: { id: string; identifier: string; name: string };
+}
+
+/**
+ * The Prisma `select` producing a {@link HomeWorkItemRow}. Exported because the
+ * WATCHING read projects the same row through the `watcher.workItem` relation —
+ * one shape, one place, so the two tabs can never drift into rendering different
+ * columns. A shared projection CONSTANT, not a cross-repository call (repos stay
+ * leaves; `watcherRepository` issues its own single query).
+ */
+export const HOME_WORK_ITEM_SELECT = {
+  id: true,
+  kind: true,
+  type: true,
+  key: true,
+  identifier: true,
+  title: true,
+  status: true,
+  priority: true,
+  assigneeId: true,
+  reporterId: true,
+  executor: true,
+  storyPoints: true,
+  estimateMinutes: true,
+  updatedAt: true,
+  project: { select: { id: true, identifier: true, name: true } },
+} as const satisfies Prisma.WorkItemSelect;
+
+/**
+ * The keyset a Home page resumes after — the exact pair both reads ORDER BY,
+ * `(updatedAt DESC, id DESC)`. A keyset rather than an offset or a bare id
+ * because rows keep being updated while a reader pages: an offset would repeat
+ * and drop rows as items move, and `updatedAt` alone is not a total order.
+ */
+export interface HomeCursor {
+  updatedAt: Date;
+  id: string;
+}
+
+/**
+ * The `WHERE` half of the keyset — "strictly after this position in
+ * `(updatedAt DESC, id DESC)`". Shared by both Home reads so the two tabs page
+ * by identical rules. Returns `{}` for the first page.
+ */
+export function homeKeysetWhere(cursor: HomeCursor | null | undefined): Prisma.WorkItemWhereInput {
+  if (!cursor) return {};
+  return {
+    OR: [
+      { updatedAt: { lt: cursor.updatedAt } },
+      { updatedAt: cursor.updatedAt, id: { lt: cursor.id } },
+    ],
+  };
+}
+
 export interface WorkItemListRow {
   id: string;
   kind: WorkItemKind;
@@ -697,6 +778,62 @@ export const workItemRepository = {
     if (ids.length === 0) return [];
     const client = tx ?? db;
     return client.workItem.findMany({ where: { id: { in: ids }, workspaceId } });
+  },
+
+  /**
+   * Every non-archived work item in a WORKSPACE where the actor is the
+   * ASSIGNEE **or** the REPORTER — the My work read (Story MOTIR-2649 ·
+   * Subtask MOTIR-2651). The first list read in this repository that is scoped
+   * by PERSON across projects rather than by project; every other one
+   * (`findByProject*`) answers "what is in this project".
+   *
+   * ⚠️ ONE query with an `OR`, never two reads merged in the service. The merge
+   * has to happen in the database for two reasons the AC turns into tests:
+   * the **dedupe** (an item where the actor is BOTH assignee and reporter is one
+   * row, and stays one row ACROSS a page boundary — a union in the service
+   * would dedupe AFTER the limit, so a page of ten could silently return nine),
+   * and the **cursor**, which cannot mean two positions at once.
+   *
+   * `projectIds` is the actor's BROWSABLE set, resolved by `homeService` through
+   * `projectAccessService` and passed IN. It is a query input, not a post-read
+   * filter, for the same paging reason: dropping rows afterwards shortens pages
+   * instead of erroring, which is the failure mode nobody notices. An EMPTY set
+   * short-circuits to `[]` rather than issuing a degenerate `IN ()`.
+   *
+   * Order is `(updatedAt DESC, id DESC)` — total and stable, so the keyset
+   * cursor never repeats or drops a row. Workspace-gated explicitly
+   * (finding #26; RLS is inert under the dev/CI superuser) and
+   * `archivedAt`/`triagedAt`-excluded, matching every other list read.
+   * Read-only path → `db` singleton.
+   */
+  async findByAssigneeOrReporterInWorkspace(
+    userId: string,
+    workspaceId: string,
+    options: {
+      projectIds: readonly string[];
+      take?: number;
+      cursor?: HomeCursor | null;
+    },
+    tx?: Prisma.TransactionClient,
+  ): Promise<HomeWorkItemRow[]> {
+    const { projectIds, take = 25, cursor } = options;
+    if (projectIds.length === 0) return [];
+    const client = tx ?? db;
+    return client.workItem.findMany({
+      where: {
+        workspaceId,
+        projectId: { in: [...projectIds] },
+        archivedAt: null,
+        triagedAt: null, // read-exclusion (6.11.3)
+        // ⚠️ BOTH predicates are `OR`s, so they go in an explicit `AND` — a
+        // spread would have the keyset's `OR` overwrite the assignee/reporter
+        // one and return the whole workspace's items from page two onward.
+        AND: [{ OR: [{ assigneeId: userId }, { reporterId: userId }] }, homeKeysetWhere(cursor)],
+      },
+      select: HOME_WORK_ITEM_SELECT,
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+      take,
+    });
   },
 
   /**
