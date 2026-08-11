@@ -59,6 +59,41 @@ export function isAllowedAcceptanceVideoType(mime: string): boolean {
   return ALLOWED_ACCEPTANCE_VIDEO_TYPES.includes(mime);
 }
 
+/**
+ * Design-result artifact MIME types (Story MOTIR-2664 · Subtask MOTIR-2666).
+ * DELIBERATELY SEPARATE from {@link ALLOWED_UPLOAD_TYPES}, exactly like the
+ * acceptance-video list above and for a sharper reason: this set contains
+ * **`text/html`**, and the whole safety of publishing a design mock rests on
+ * that type being reachable through EXACTLY ONE path — the design publish
+ * (MOTIR-2667), which is authenticated as a CI job over GitHub OIDC.
+ *
+ * So an `.html` file pasted into a description or dropped on the attachments
+ * panel is still a **415**, and `isAllowedUploadType('text/html')` stays
+ * `false`. Keeping this list out of the generic one is what makes that a hard,
+ * one-place policy rather than a per-call-site check.
+ *
+ * The other two layers of the posture live elsewhere and are NOT substitutes
+ * for this one (`docs/decisions/design-result.md` §5): the authenticated
+ * content route 302s to a presigned URL on the OBJECT-STORE host, so a mock is
+ * cross-origin to the app by construction; and the panel renders it in an
+ * iframe under a fully restrictive `sandbox` — neither `allow-scripts` nor
+ * `allow-same-origin`.
+ *
+ * `image/png` is the `.png` export and `text/markdown` the extracted
+ * `design-notes.md` section; both are already generically allowed, and are
+ * repeated here so the design path validates against ONE list.
+ */
+export const ALLOWED_DESIGN_ASSET_TYPES: readonly string[] = [
+  'text/html',
+  'image/png',
+  'text/markdown',
+];
+
+/** True when a MIME type is an allowed design-result artifact (MOTIR-2666). */
+export function isAllowedDesignAssetType(mime: string): boolean {
+  return ALLOWED_DESIGN_ASSET_TYPES.includes(mime);
+}
+
 /** True when a MIME type embeds inline in Markdown (drives `![]` vs `[]`). */
 export function isImageType(mime: string): boolean {
   return ALLOWED_IMAGE_TYPES.includes(mime);
