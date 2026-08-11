@@ -52,6 +52,22 @@ export interface NavAccessEntry {
  */
 export const PROJECT_NAV_ACCESS: NavAccessEntry[] = [
   {
+    // Home (Story MOTIR-2649 · Subtask MOTIR-2654) is the one row here that is
+    // NOT project-scoped: it reads the workspace, resolves the actor's own
+    // browsable-project set through `projectAccessService`, and asserts nothing
+    // past it. So the requirement is genuinely `browse-only` — and it is in this
+    // map anyway, because `canOfferNavDestination` answers FALSE for an href it
+    // does not carry. That default is the right one (a room nobody vouched for
+    // is not offered), and it means an omission here does not fail loudly: it
+    // silently drops the row from the rail, which is the failure mode this file's
+    // own header warns about. The totality guard in
+    // `tests/settings/projectNavAccess.test.ts` is what makes that unmissable.
+    href: '/home',
+    requires: 'browse-only',
+    evidence:
+      'app/(authed)/home/page.tsx resolves the session + workspace context and calls homeService, which filters to the browsable-project set itself. No permission is asserted, and none could be: the surface spans projects rather than sitting in one.',
+  },
+  {
     href: '/dashboard',
     requires: 'browse-only',
     evidence: 'The page resolves the session and the active project and asserts nothing further.',

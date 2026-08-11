@@ -977,6 +977,19 @@ export default defineConfig({
         // clamped index's `?? 0` in `percentileMs`, which
         // `noUncheckedIndexedAccess` requires and the clamp makes unreachable.
         'tests/e2e/_helpers/acceptance-diagnostics.ts',
+        // Story MOTIR-2649 · Subtask MOTIR-2655 — every executable file the Home
+        // story adds, named so the ≥90% per-file gate applies to code that is
+        // brand new rather than only to code that was already reported.
+        // `lib/dto/home.ts` is types only and emits no statements, so it is
+        // deliberately absent: a threshold on a file with nothing to cover
+        // passes vacuously, which is the failure MOTIR-2655 exists to prevent.
+        'lib/home/**',
+        'lib/services/homeService.ts',
+        'lib/mappers/homeMappers.ts',
+        // MOTIR-2653's page. `app/**/home/**`, not `app/(authed)/home/**` — a
+        // literal route-group path matches no reported file (the note above),
+        // so the threshold would pass vacuously.
+        'app/**/home/_components/**',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1898,6 +1911,21 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story MOTIR-2649 · Subtask MOTIR-2655 — MEASURED before being pinned,
+        // on this branch, with `tests/integration/home/`: 100 branches / 100
+        // functions / 100 lines on the service and the mapper, and 100 / 100 /
+        // 92.3 on the cursor. Pinned at the repo's 90 floor rather than at the
+        // measured number, so a later refactor has room without the gate being
+        // loosened to make a build pass.
+        'lib/home/cursor.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/home/tab.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/services/homeService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mappers/homeMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        // Subtask MOTIR-2653 — the page's own modules, MEASURED before being
+        // pinned with `tests/components/home-list.test.tsx`.
+        'app/**/home/_components/HomeList.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/home/_components/HomeTabs.tsx': { branches: 90, functions: 90, lines: 90 },
+        'app/**/home/_components/homeRows.ts': { branches: 90, functions: 90, lines: 90 },
       },
     },
   },

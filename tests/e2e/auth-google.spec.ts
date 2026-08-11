@@ -137,7 +137,10 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   await signOut(page);
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
-  await page.waitForURL('**/dashboard', { timeout: 15_000 });
+  // The Google button carries the HOST PAGE's `callbackURL`, so it lands
+  // wherever that page's default points — `/home` from /sign-in, `/dashboard`
+  // from /sign-up (MOTIR-2654). Same button, two destinations.
+  await page.waitForURL('**/home', { timeout: 15_000 });
   await assertSignedInAs(page, GOOGLE_USER_EMAIL);
 
   const usersAfterSecond = await db.user.findMany({
@@ -203,7 +206,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
 
   // Sign out, then sign in via Google with the SAME email. Expected:
   // Better-Auth links the new google Account row to the existing User,
-  // promotes the User's emailVerified to true, lands on /dashboard.
+  // promotes the User's emailVerified to true, lands on /home.
   await signOut(page);
   await setSyntheticGoogleUser({
     sub: EMAIL_FIRST_SUB,
@@ -212,7 +215,7 @@ test('@smoke Google OAuth happy path + email-first auto-link', async ({ page }) 
   });
   await page.goto('/sign-in');
   await page.getByRole('button', { name: /^(Continue with Google|Connecting…)$/ }).click();
-  await page.waitForURL('**/dashboard', { timeout: 15_000 });
+  await page.waitForURL('**/home', { timeout: 15_000 });
   await assertSignedInAs(page, EMAIL_FIRST_EMAIL);
 
   // DB shape after auto-link:

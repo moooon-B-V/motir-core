@@ -123,7 +123,9 @@ test.describe('Cross-device appearance sync (7.3.63)', () => {
     // ── 2. User A · device 2 — fresh context, no pane visit, appearance applies ──
     const deviceA2 = await browser.newContext();
     const pageA2 = await deviceA2.newPage();
-    await signIn(pageA2, USER_A, SHELL_PASSWORD); // lands on /dashboard
+    // Lands on /home (MOTIR-2654) — incidental here: every assertion below
+    // fetches /dashboard itself rather than relying on where sign-in put us.
+    await signIn(pageA2, USER_A, SHELL_PASSWORD);
 
     // (a) Server-applied / no-flash: the RAW /dashboard markup already carries the
     //     saved axes on the <html> tag — the bytes came from the server, not the

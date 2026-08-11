@@ -66,7 +66,16 @@ function SignInForm() {
   // and default the post-auth destination to onboarding so the idea seeds the
   // first chat turn. An explicit `next=` still wins if the caller set one.
   const draftId = searchParams.get('draft');
-  const callbackURL = searchParams.get('next') ?? (draftId ? ONBOARDING_ENTRY_PATH : '/dashboard');
+  // The post-auth landing (Story MOTIR-2649 · Subtask MOTIR-2654): `/home`, the
+  // signed-in landing surface, NOT `/dashboard`. Signing in is the moment the
+  // reader asks "what should I do now?", and the dashboards list answers a
+  // different question — it is an index of reporting artifacts, most of which a
+  // given person did not create. `/dashboard` keeps its route and its own nav
+  // entry; only this default moved.
+  //
+  // An explicit `?next=` still WINS (the CLI-connect hand-off and every
+  // deep-link rely on it), and the `?draft=` → onboarding branch is untouched.
+  const callbackURL = searchParams.get('next') ?? (draftId ? ONBOARDING_ENTRY_PATH : '/home');
   const [carriedIdea, setCarriedIdea] = useState<string | null>(null);
   // The CLI-connect hand-off (Story MOTIR-1863 · Subtask MOTIR-1867): `/device`
   // sends a signed-out visitor here with `?next=/device?user_code=…`, and this

@@ -56,6 +56,18 @@ function SignUpForm() {
   const t = useTranslations('auth');
   const router = useRouter();
   const searchParams = useSearchParams();
+  // ⚠️ SIGN-UP KEEPS `/dashboard`, and it is a decision rather than an
+  // oversight (Subtask MOTIR-2654). Sign-IN now lands on `/home` — but a
+  // brand-new account has nothing waiting on it, so Home would greet its very
+  // first visitor with an empty state whose next action (`/ready`) needs a
+  // project they do not have yet. `/dashboard`'s projects-empty branch offers
+  // the one thing that IS the next action here: create your first project.
+  //
+  // The two destinations are the same question answered for two different
+  // people — "what is waiting on you" for someone with a workspace, "start
+  // something" for someone with nothing — which is why this is not a fork to
+  // collapse later. If Home ever learns the no-project case, this is the line
+  // to revisit.
   const callbackURL = searchParams.get('next') ?? '/dashboard';
 
   const [step, setStep] = useState<'identity' | 'password'>('identity');
