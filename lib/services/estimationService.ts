@@ -21,6 +21,7 @@ import type {
   SprintPointsDto,
   UpdateEstimationConfigInput,
 } from '@/lib/dto/estimation';
+import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 
 // Estimation service (Story 4.3 · Subtask 4.3.3) — the business logic + data
 // access for story-point estimation. It owns:
@@ -68,7 +69,7 @@ export const estimationService = {
     // row `existing` while its own `Gate today` column said "workspace only", so
     // any workspace member could re-estimate any item in any project. The project
     // is resolved from the ITEM, below.
-    const target = await workItemRepository.findById(itemId);
+    const target = await readWorkItem(itemId, ctx);
     if (!target || target.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(itemId);
     await projectAccessService.assertPermission(target.projectId, ctx, 'work_item:edit');
 
@@ -115,7 +116,7 @@ export const estimationService = {
    * Throws: `ProjectNotFoundError` (404).
    */
   async getEstimationConfig(projectId: string, ctx: ServiceContext): Promise<EstimationConfigDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -137,7 +138,7 @@ export const estimationService = {
     patch: UpdateEstimationConfigInput,
     ctx: ServiceContext,
   ): Promise<EstimationConfigDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -264,7 +265,7 @@ export const estimationService = {
    * Throws: `WorkItemNotFoundError` (404 — unknown / cross-workspace parent).
    */
   async rollupForParent(parentId: string, ctx: ServiceContext): Promise<ParentRollupDto> {
-    const item = await workItemRepository.findById(parentId);
+    const item = await readWorkItem(parentId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(parentId);
     }

@@ -48,8 +48,9 @@ import {
   QUICK_SEARCH_MIN_QUERY_LENGTH,
 } from '@/lib/workItems/quickSearch';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
+import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import {
   CANCELLED_STATUS_KEY,
   MOTIR_SEED_BURST_END,
@@ -668,8 +669,21 @@ export const workItemsService = {
    * authoritative tenant of the row.
    */
   async createWorkItem(input: CreateWorkItemInput, ctx: ServiceContext): Promise<WorkItemDto> {
-    const project = await projectRepository.findById(input.projectId);
-    if (!project) throw new ProjectNotFoundError(input.projectId);
+    // MOTIR-2569: the OPENING read is context-bound (`readProject`), and the
+    // cross-workspace 404 is made EXPLICIT here rather than left to
+    // `assertCanEdit` three lines down. Two reasons, and the second is the one
+    // that matters. (a) Under the non-bypass role the bound read already hides a
+    // foreign project, so without the check the two roles would disagree about
+    // WHICH error a cross-tenant id produces. (b) Without it the actor learns,
+    // from `ReporterNotInWorkspaceError`, that a project they cannot see EXISTS
+    // in a workspace they are not in — an existence leak the resolveInputs gate
+    // closes only for callers that reach it. The gates below are unchanged and
+    // still run; this just refuses a foreign tenant in the same breath as a
+    // missing one (finding #26).
+    const project = await readProject(input.projectId, ctx);
+    if (!project || project.workspaceId !== ctx.workspaceId) {
+      throw new ProjectNotFoundError(input.projectId);
+    }
     const workspaceId = project.workspaceId;
 
     // Workspace gate first (the project gate sits BENEATH it): the reporter
@@ -690,7 +704,7 @@ export const workItemsService = {
     // backstops kind/depth/cycle; cross-project parenting has no trigger, so
     // this assertion is the primary guard for it).
     if (input.parentId != null) {
-      const parent = await workItemRepository.findById(input.parentId);
+      const parent = await readWorkItem(input.parentId, ctx);
       if (!parent) throw new WorkItemNotFoundError(input.parentId);
       if (parent.projectId !== input.projectId) throw new CrossProjectParentError();
       assertValidParent(parent.kind, input.kind);
@@ -790,7 +804,21 @@ export const workItemsService = {
       descMentionIds = descTokenIds.filter((id) => mentionable.has(id));
     }
 
-    const { dto, revisionId } = await db.$transaction(async (tx) => {
+    // MOTIR-2569: the key-allocation transaction BINDS the workspace context.
+    // It was a bare `db.$transaction`, so under the non-bypass role its very
+    // first statement — `allocateWorkItemNumber`'s
+    // `UPDATE "project" … RETURNING` — matched zero rows and threw
+    // `ProjectNotFoundError` from the repository, AFTER both membership gates
+    // had already admitted the actor. Fixing only the opening read would have
+    // moved the failure four gates later without removing it, and the gate probe
+    // in `tests/permissions/membershipGate.test.ts` cannot tell the two apart
+    // (it classifies any `ProjectNotFoundError` as `blocked-before-gate`), so an
+    // unbound transaction here would read as an unreached gate. `app.project_id`
+    // is deliberately left unbound (empty): the reads inside are already
+    // project-scoped by argument, and narrowing `work_item` would hide the
+    // sibling/backlog boundary rows this transaction needs.
+    const createContext = { userId: ctx.userId, workspaceId };
+    const { dto, revisionId } = await withWorkspaceContext(createContext, async (tx) => {
       // §4 work-item cap (8.1.11): block BEFORE burning a key when the org is at
       // its free-tier ceiling. Org resolved UP from the workspace; the assert
       // locks the org row FOR UPDATE so concurrent creates serialize (inert
@@ -1140,7 +1168,7 @@ export const workItemsService = {
     ];
     const anyFieldProvided = PATCH_KEYS.some((k) => patch[k] !== undefined);
     if (!anyFieldProvided) {
-      const current = await workItemRepository.findById(id);
+      const current = await readWorkItem(id, ctx);
       if (!current) throw new WorkItemNotFoundError(id);
       // Even the empty-patch no-op is an edit entry point — gate it (6.4.3) so a
       // read-only actor can't probe an item through a write route.
@@ -1168,7 +1196,7 @@ export const workItemsService = {
     // against is the project the write lands in.
     let nextTargetRepo: string | null | undefined;
     if (patch.targetRepo !== undefined) {
-      const pre = await workItemRepository.findById(id);
+      const pre = await readWorkItem(id, ctx);
       if (!pre) throw new WorkItemNotFoundError(id);
       nextTargetRepo = await resolveAuthoredTargetRepoInProject(
         patch.targetRepo,
@@ -1186,9 +1214,9 @@ export const workItemsService = {
       typeof patch.descriptionMd === 'string' ? parseMentionIds(patch.descriptionMd) : [];
     let descMentionable: Set<string> | null = null;
     if (patchDescTokenIds.length > 0) {
-      const pre = await workItemRepository.findById(id);
+      const pre = await readWorkItem(id, ctx);
       if (pre) {
-        const project = await projectRepository.findById(pre.projectId);
+        const project = await readProject(pre.projectId, ctx);
         if (project) {
           descMentionable = await resolveDescriptionMentionable(
             project.id,
@@ -1199,7 +1227,7 @@ export const workItemsService = {
       }
     }
 
-    const result = await db.$transaction(async (tx) => {
+    const result = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
@@ -1871,7 +1899,13 @@ export const workItemsService = {
     actorUserId: string,
     opts: { dryRun?: boolean; seedBurstEnd?: Date } = {},
   ): Promise<ProvenanceBackfillReport> {
-    const project = await projectRepository.findById(projectId);
+    // MOTIR-2569: the same operator-shaped resolution as
+    // `boardsService.backfillDefaultBoard` / `workflowsService.backfillDefaultWorkflow`
+    // — there is no session and the workspace this would bind is what the read
+    // RESOLVES, so it runs under the `app.system_admin` arm the `project` policy
+    // carries for operator tooling. Everything after it already binds
+    // `withWorkspaceContext` with the workspace resolved here.
+    const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
     if (!project) throw new ProjectNotFoundError(projectId);
 
     const dryRun = opts.dryRun ?? false;
@@ -2196,7 +2230,7 @@ export const workItemsService = {
    * explicit action — never a side effect of archive.
    */
   async archiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       // Resolve + tenant-gate first so the access gate (6.4.3) has the item's
       // project, and a cross-workspace id is a 404 (no existence leak) before
       // the archive write.
@@ -2228,7 +2262,7 @@ export const workItemsService = {
    * carried before the restore (null if it was already live — a no-op restore).
    */
   async unarchiveWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const current = await workItemRepository.findById(id, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
       await projectAccessService.assertPermission(current.projectId, ctx, 'work_item:delete', tx);
@@ -2278,7 +2312,7 @@ export const workItemsService = {
    * raw Prisma error. Returns nothing — the rows are gone, there is no DTO to map.
    */
   async deleteWorkItem(id: string, ctx: ServiceContext): Promise<void> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       // 1. Lock the root + tenant-gate (404 on cross-workspace / already-deleted).
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
@@ -2346,7 +2380,7 @@ export const workItemsService = {
   async getDeletePreview(id: string, ctx: ServiceContext): Promise<WorkItemDeletePreviewDto> {
     // Resolve + tenant-gate (404 on cross-workspace / missing) before the gate,
     // so the access check has the item's project and an unknown id never leaks.
-    const root = await workItemRepository.findById(id);
+    const root = await readWorkItem(id, ctx);
     if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
     await projectAccessService.assertPermission(root.projectId, ctx, 'work_item:delete');
 
@@ -2390,7 +2424,7 @@ export const workItemsService = {
     input: MoveWorkItemInput,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.lockById(id, tx);
       if (!locked) throw new WorkItemNotFoundError(id);
       const current = await workItemRepository.findById(id, tx);
@@ -2499,7 +2533,7 @@ export const workItemsService = {
     ctx: ServiceContext,
     depth?: number,
   ): Promise<{ nodes: WorkItemSubtreeDto[]; depth: number }> {
-    const row = await workItemRepository.findById(rootId);
+    const row = await readWorkItem(rootId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(rootId);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     const effectiveDepth = clampBound(depth, 0, MAX_SUBTREE_DEPTH, DEFAULT_SUBTREE_DEPTH);
@@ -2534,7 +2568,7 @@ export const workItemsService = {
     filter: ProjectTreeFilter,
     ctx: ServiceContext,
   ): Promise<WorkItemTreeNodeDto[]> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2583,7 +2617,7 @@ export const workItemsService = {
     ctx: ServiceContext,
     opts: { scope?: 'project' | 'sprint' } = {},
   ): Promise<ProjectRoadmapDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2740,7 +2774,7 @@ export const workItemsService = {
     params: { sort: IssueSort; filter?: ProjectTreeFilter; page?: number; pageSize?: number },
     ctx: ServiceContext,
   ): Promise<PagedIssueListDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2800,7 +2834,7 @@ export const workItemsService = {
     params: { filter?: ProjectTreeFilter; after?: { createdAt: Date; id: string }; limit?: number },
     ctx: ServiceContext,
   ): Promise<{ items: WorkItemKeysetItemDto[]; hasMore: boolean }> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2857,7 +2891,7 @@ export const workItemsService = {
     params: { filter?: ProjectTreeFilter },
     ctx: ServiceContext,
   ): Promise<number> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2891,7 +2925,7 @@ export const workItemsService = {
     params: { page?: number; pageSize?: number },
     ctx: ServiceContext,
   ): Promise<PagedArchivedWorkItemsDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2920,7 +2954,7 @@ export const workItemsService = {
    * just returns the `archivedAt IS NOT NULL` count instead of a page.
    */
   async countArchivedWorkItems(projectId: string, ctx: ServiceContext): Promise<number> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2943,7 +2977,7 @@ export const workItemsService = {
     params: { sort: IssueSort; take?: number; offset?: number },
     ctx: ServiceContext,
   ): Promise<TreeLevelDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -2970,7 +3004,7 @@ export const workItemsService = {
     params: { sort: IssueSort; take?: number; offset?: number },
     ctx: ServiceContext,
   ): Promise<TreeLevelDto> {
-    const parent = await workItemRepository.findById(parentId);
+    const parent = await readWorkItem(parentId, ctx);
     if (!parent || parent.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(parentId);
     }
@@ -3002,7 +3036,7 @@ export const workItemsService = {
    * is bookkeeping, not a separate user action.
    */
   async linkWorkItems(input: LinkWorkItemsInput, ctx: ServiceContext): Promise<WorkItemLinkDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const fromItem = await workItemRepository.findById(input.fromId, tx);
       if (!fromItem) throw new WorkItemNotFoundError(input.fromId);
       const toItem = await workItemRepository.findById(input.toId, tx);
@@ -3046,7 +3080,7 @@ export const workItemsService = {
    * (forward-compat with legacy half-pairs).
    */
   async unlinkWorkItems(linkId: string, ctx: ServiceContext): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       const link = await workItemLinkRepository.findById(linkId);
       if (!link) throw new WorkItemLinkNotFoundError(linkId);
 
@@ -3098,7 +3132,7 @@ export const workItemsService = {
     input: LinkWorkItemsInput,
     ctx: ServiceContext,
   ): Promise<boolean> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const link = await workItemLinkRepository.findReciprocal(
         input.fromId,
         input.toId,
@@ -3191,7 +3225,7 @@ export const workItemsService = {
     edges: Array<{ blockedId: string; blockerId: string }>;
     truncated: boolean;
   }> {
-    const root = await workItemRepository.findById(rootId);
+    const root = await readWorkItem(rootId, ctx);
     if (!root || root.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(rootId);
     await projectAccessService.assertCanBrowse(root.projectId, ctx);
 
@@ -3383,7 +3417,7 @@ export const workItemsService = {
    * the unguarded mutation method runs.
    */
   async getWorkItem(id: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    const row = await workItemRepository.findById(id);
+    const row = await readWorkItem(id, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(id);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
@@ -3821,7 +3855,7 @@ export const workItemsService = {
    * row to a WorkItemRevisionDto at the read boundary.
    */
   async listRevisions(workItemId: string, ctx: ServiceContext): Promise<WorkItemRevisionDto[]> {
-    const row = await workItemRepository.findById(workItemId);
+    const row = await readWorkItem(workItemId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
     const revisions = await workItemRevisionRepository.listByWorkItem(workItemId);
     return revisions.map(toWorkItemRevisionDto);
@@ -3841,7 +3875,7 @@ export const workItemsService = {
     ctx: ServiceContext,
     options: { cursor?: string; take?: number } = {},
   ): Promise<{ revisions: WorkItemRevisionDto[]; nextCursor: string | null }> {
-    const row = await workItemRepository.findById(workItemId);
+    const row = await readWorkItem(workItemId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
     const take = clampBound(options.take, 1, HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE);
     const window = await workItemRevisionRepository.listByWorkItem(workItemId, {
@@ -3903,7 +3937,7 @@ export const workItemsService = {
     query: string,
     ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
-    const item = await workItemRepository.findById(currentItemId);
+    const item = await readWorkItem(currentItemId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(currentItemId);
     }
@@ -4010,7 +4044,7 @@ export const workItemsService = {
     filter: ReadyListFilter,
     ctx: ServiceContext,
   ): Promise<{ items: ReadyItemDto[]; nextCursor: string | null }> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -4156,7 +4190,7 @@ export const workItemsService = {
     filter: Omit<ReadyListFilter, 'limit' | 'cursor'> & { excludeIds?: string[] },
     ctx: ServiceContext,
   ): Promise<ReadyItemDispatchDto | null> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -4196,7 +4230,7 @@ export const workItemsService = {
     sprintId: string | null,
     ctx: ServiceContext,
   ): Promise<ReadyItemDispatchDto | null> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -4257,7 +4291,7 @@ export const workItemsService = {
     filter: Omit<ReadyListFilter, 'limit' | 'cursor'>,
     ctx: ServiceContext,
   ): Promise<{ count: number; hasMore: boolean }> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -4281,7 +4315,7 @@ export const workItemsService = {
     projectId: string,
     ctx: ServiceContext,
   ): Promise<ExpansionNudge | null> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }

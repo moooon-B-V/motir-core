@@ -3,7 +3,6 @@ import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/contex
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -26,6 +25,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { toAttachmentDto } from '@/lib/mappers/attachmentMappers';
 import type { AttachmentDTO, AttachmentsPageDTO } from '@/lib/dto/attachments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readWorkItem } from '@/lib/workspaces/tenantRead';
 
 // Attachment upload (Subtask 2.3.7, finding #52). GENERAL — not image-only: the
 // same primitive serves the description editor's inline-image case AND Epic 5's
@@ -151,7 +151,7 @@ async function resolveGatedWorkItem(
   ctx: ServiceContext,
   tx?: Prisma.TransactionClient,
 ): Promise<AttachmentGate> {
-  const item = await workItemRepository.findById(workItemId, tx);
+  const item = await readWorkItem(workItemId, ctx, tx);
   if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
   const caps = await projectAccessService.getAttachmentCapabilities(item.projectId, ctx, tx);
   if (!caps.canBrowse) throw new WorkItemNotFoundError(workItemId);

@@ -8,11 +8,7 @@ import { workspaceInvitesService } from '@/lib/services/workspaceInvitesService'
 import { workspacesService } from '@/lib/services/workspacesService';
 import { InviteTargetAlreadyMemberError, NotAMemberError } from '@/lib/workspaces/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import {
-  AssigneeNotInWorkspaceError,
-  ReporterNotInWorkspaceError,
-  WorkItemNotFoundError,
-} from '@/lib/workItems/errors';
+import { AssigneeNotInWorkspaceError, ReporterNotInWorkspaceError } from '@/lib/workItems/errors';
 import { readMembership, readOwnMembership } from '@/lib/workspaces/membershipGate';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from '../helpers/adminDb';
@@ -42,8 +38,6 @@ import { captureEmailEvents } from '../helpers/jobs';
 // These run in BOTH modes on purpose. Under `TEST_DB_APP_ROLE=1` they are the proof;
 // with the flag unset (what CI runs today) they are the regression guard that keeps
 // the gates behaving while MOTIR-2528 migrates the fixtures.
-
-const gateReachable = !isAppRoleTestMode();
 
 interface Tenant {
   ownerId: string;
@@ -315,23 +309,29 @@ describe('workspaceInvitesService.sendInvite — inviter gate + the already-a-me
   });
 });
 
-// ⚠️ TWO SERVICES WHOSE GATE CANNOT BE REACHED UNDER THE FLAG — and why that is
-// reported here rather than routed around.
+// ⚠️ THE TWO SERVICES WHOSE GATE COULD NOT BE REACHED UNDER THE FLAG — now reached
+// (MOTIR-2569). This block used to carry four `it.runIf(gateReachable)` guards and two
+// `gateReachable ? … : …` expectations, and this comment used to explain why.
 //
-// `workItemsService.createWorkItem` and `triageService.getTriageItemDetail` each open
+// `workItemsService.createWorkItem` and `triageService.getTriageItemDetail` each opened
 // with an UNRELATED `db`-singleton read — `projectRepository.findById` and
 // `workItemRepository.findById` — and `project` / `work_item` carry their own
-// workspace-keyed RLS policies. So under `TEST_DB_APP_ROLE=1` those reads return null
-// and the method throws `ProjectNotFoundError` / `WorkItemNotFoundError` BEFORE the
-// membership gate is ever consulted.
+// workspace-keyed RLS policies. So under `TEST_DB_APP_ROLE=1` those reads returned null
+// and the method threw `ProjectNotFoundError` / `WorkItemNotFoundError` BEFORE the
+// membership gate was ever consulted. Both now read through
+// `lib/workspaces/tenantRead.ts`, the sibling of `membershipGate.ts` one layer down.
 //
-// This is the same defect class one layer down, and it is out of MOTIR-2527's stated
-// scope ("the membership-gate reads and the one `addMember` write") — filed as its own
-// card rather than absorbed. It is also WHY the inventory saw only one error: the
-// membership gate was the FIRST unbound read on every path, and it masked every read
-// behind it. The assertions below therefore pin what is true in EACH mode rather than
-// asserting a `not.toBe(...)` that an earlier error would satisfy vacuously. When the
-// follow-up card lands, the flagged expectations here become the unflagged ones.
+// It is also WHY the MOTIR-2514 inventory saw only ONE error: the membership gate was
+// the FIRST unbound read on every path, and it masked every read behind it. Keep that
+// in view — the next layer down will look the same way, and the honest completion
+// signal is a NAMED error class reaching zero, never the total failure count falling.
+//
+// ⚠️ EVERY ASSERTION IN THIS FILE NOW HOLDS IDENTICALLY IN BOTH MODES, and that is the
+// property to protect. A mode-split expectation here would once again let an UNREACHED
+// gate pass for an admitting one — the exact vacuity `gateReachable` was invented to
+// make visible, and the reason deleting it was MOTIR-2569's acceptance criterion rather
+// than a tidy-up. Do not reintroduce one: if a gate stops being reachable under the
+// flag, that is a regression to fix in `lib/`, not a branch to add here.
 
 describe('workItemsService — the reporter and assignee gates', () => {
   it('ADMITS a member as reporter', async () => {
@@ -339,7 +339,7 @@ describe('workItemsService — the reporter and assignee gates', () => {
       { userId: home.ownerId, workspaceId: home.workspaceId },
       home.projectId,
     );
-    expect(outcome).toBe(gateReachable ? 'past-gates' : 'blocked-before-gate');
+    expect(outcome).toBe('past-gates');
   });
 
   it('ADMITS a member as assignee', async () => {
@@ -348,16 +348,16 @@ describe('workItemsService — the reporter and assignee gates', () => {
       home.projectId,
       home.ownerId,
     );
-    expect(outcome).toBe(gateReachable ? 'past-gates' : 'blocked-before-gate');
+    expect(outcome).toBe('past-gates');
   });
 
-  it.runIf(gateReachable)('still refuses a non-member as reporter', async () => {
+  it('still refuses a non-member as reporter', async () => {
     await expect(
       createAndCatch({ userId: outsiderId, workspaceId: home.workspaceId }, home.projectId),
     ).resolves.toBe('reporter-refused');
   });
 
-  it.runIf(gateReachable)('still refuses a non-member as assignee', async () => {
+  it('still refuses a non-member as assignee', async () => {
     await expect(
       createAndCatch(
         { userId: home.ownerId, workspaceId: home.workspaceId },
@@ -365,6 +365,17 @@ describe('workItemsService — the reporter and assignee gates', () => {
         outsiderId,
       ),
     ).resolves.toBe('assignee-refused');
+  });
+
+  // The cross-tenant arm MOTIR-2569 made explicit in `createWorkItem`. Before it, a
+  // project in ANOTHER workspace got as far as the reporter gate and came back
+  // `ReporterNotInWorkspaceError` — which tells the caller that a project they cannot
+  // see EXISTS, in a workspace they are not in. It is now indistinguishable from a
+  // project that never existed (finding #26), in both modes.
+  it('refuses a project in ANOTHER workspace as never-existed, not as a membership failure', async () => {
+    await expect(
+      createAndCatch({ userId: home.ownerId, workspaceId: home.workspaceId }, neighbour.projectId),
+    ).resolves.toBe('blocked-before-gate');
   });
 });
 
@@ -375,20 +386,15 @@ describe('triageService — the submitter CLASSIFICATION gate', () => {
     // re-labels every member submitter as an outside public one, and nothing
     // anywhere reports an error.
     const item = await seedTriageItem(home, home.ownerId);
-    const read = triageService.getTriageItemDetail(item.id, {
+    const detail = await triageService.getTriageItemDetail(item.id, {
       userId: home.ownerId,
       workspaceId: home.workspaceId,
     });
-    if (!gateReachable) {
-      await expect(read).rejects.toThrow(WorkItemNotFoundError);
-      return;
-    }
-    const detail = await read;
     expect(detail.submitter.kind).toBe('member');
     expect(detail.submitter.userId).toBe(home.ownerId);
   });
 
-  it.runIf(gateReachable)('still classifies a non-member submitter as `public`', async () => {
+  it('still classifies a non-member submitter as `public`', async () => {
     const item = await seedTriageItem(home, outsiderId);
     const detail = await triageService.getTriageItemDetail(item.id, {
       userId: home.ownerId,

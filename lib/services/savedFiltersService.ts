@@ -5,7 +5,6 @@ import type { SavedFilterListView } from '@/lib/repositories/savedFilterReposito
 import { savedFilterStarRepository } from '@/lib/repositories/savedFilterStarRepository';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -59,6 +58,7 @@ import type {
   SavedFilterSummaryDto,
 } from '@/lib/dto/savedFilters';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readProjectByIdentifier } from '@/lib/workspaces/tenantRead';
 
 // Saved-filters service (Story 6.2 · Subtask 6.2.1) — persistence +
 // permissions for the 6.1 filter substrate. Owns validation (name caps, the
@@ -103,7 +103,7 @@ async function resolveProjectAndCaps(
   tx?: Prisma.TransactionClient,
 ): Promise<ProjectAndCaps> {
   const key = projectKey.trim().toUpperCase();
-  const project = await projectRepository.findByIdentifier(ctx.workspaceId, key, tx);
+  const project = await readProjectByIdentifier(key, ctx, tx);
   if (!project) throw new ProjectNotFoundError(projectKey);
   const caps = await projectAccessService.getSavedFilterCapabilities(project.id, ctx, tx);
   // This IS the `project:browse` gate the three READ paths ask for (MOTIR-2352):

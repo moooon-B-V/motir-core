@@ -1,6 +1,5 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
@@ -39,6 +38,7 @@ import {
   MAX_TRIAGE_TITLE_LENGTH,
 } from '@/lib/triage/errors';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+import { readProject, readProjectByIdentifier, readWorkItem } from '@/lib/workspaces/tenantRead';
 
 /** The two request-grammar kinds a triage submission is born as (ADR §1): a
  *  `bug` (bug report) or a `task` (feature request). Never epic/story/subtask. */
@@ -115,7 +115,7 @@ export const triageService = {
     params: { cursor?: string; limit?: number },
     ctx: ServiceContext,
   ): Promise<TriageQueuePageDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -140,10 +140,7 @@ export const triageService = {
     params: { cursor?: string; limit?: number },
     ctx: ServiceContext,
   ): Promise<TriageQueuePageDto> {
-    const project = await projectRepository.findByIdentifier(
-      ctx.workspaceId,
-      projectKey.trim().toUpperCase(),
-    );
+    const project = await readProjectByIdentifier(projectKey.trim().toUpperCase(), ctx);
     if (!project) throw new ProjectNotFoundError(projectKey);
     try {
       await projectAccessService.assertPermission(project.id, ctx, 'work_item:triage');
@@ -170,7 +167,7 @@ export const triageService = {
    * the issue-detail reads so the pane shares the existing display primitives.
    */
   async getTriageItemDetail(workItemId: string, ctx: ServiceContext): Promise<TriageItemDetailDto> {
-    const item = await workItemRepository.findById(workItemId);
+    const item = await readWorkItem(workItemId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(workItemId);
     }
@@ -245,10 +242,7 @@ export const triageService = {
     // to 404 so a non-browser can't probe project existence (the labelsService
     // pattern). The edit gate is left to `createWorkItem` (→ 403 for a browser
     // without edit rights).
-    const project = await projectRepository.findByIdentifier(
-      ctx.workspaceId,
-      input.projectKey.trim().toUpperCase(),
-    );
+    const project = await readProjectByIdentifier(input.projectKey.trim().toUpperCase(), ctx);
     if (!project) throw new ProjectNotFoundError(input.projectKey);
     try {
       // ⚠️ SUBMITTING IS NOT TRIAGING (MOTIR-2354). The inventory mapped this row
