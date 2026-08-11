@@ -1,13 +1,18 @@
-// The MOTIR-2600 failure report — the PURE half of the acceptance lane's
-// client diagnostics, in its own module so it can be unit-tested.
+// The acceptance lane's client diagnostics — the PURE half, in its own module
+// so it can be unit-tested. Two reports live here:
+//
+//   * the MOTIR-2600 FAILURE report (`buildClientDiagnostics`) — what a red run
+//     leaves behind, and which of four causes the evidence supports;
+//   * the MOTIR-2646 CONTENTION report (`buildContentionReport`) — the same
+//     renderer signals read on EVERY navigation of EVERY run, pass or fail.
 //
 // It is separate from `acceptance-video.ts` for one reason: that file imports
 // `@playwright/test` to extend the fixture set, and a vitest suite cannot pull
-// the Playwright runner into its own process. The artifact this lane leaves
-// behind on a red run IS the deliverable of MOTIR-2600's first half, so its
-// shape needs a guard like any other shipped surface — see
-// `tests/acceptance-video-diagnostics.test.ts`. The fixture that FEEDS it
-// (the page listeners, the renderer read, the attachment) lives next door.
+// the Playwright runner into its own process. The artifacts this lane leaves
+// behind ARE the deliverable of both cards, so their shape needs a guard like
+// any other shipped surface — see `tests/acceptance-video-diagnostics.test.ts`.
+// The fixtures that FEED them (the page listeners, the renderer read, the
+// in-page recorder, the attachments) live next door.
 
 /**
  * How many of each kind of client event the failure buffer keeps (most recent
@@ -143,5 +148,235 @@ export function buildClientDiagnostics(input: {
     pageErrors: input.pageErrors,
     requests: input.requests,
     verdict,
+  };
+}
+
+// ── CONTENTION SAMPLING (MOTIR-2646) ─────────────────────────────────────────
+//
+// Everything above fires only when a test FAILS. This half fires always, and it
+// exists because the failure it is about happens on ~1 run in 30.
+//
+// MOTIR-2621's census put the `/planning` stall at 2 occurrences in 57 runs, and
+// its AC 3 asked for a remedy proposed against the LANE. A 3.5 % binary event
+// cannot be A/B'd: detecting even a HALVING at that base rate needs on the order
+// of a hundred runs per arm, so "change the lane, then prove it helped" is
+// unbuildable and "change the lane and ship it" is a guess wearing a fix's
+// clothes. Every previous step in this lineage took one of those two shapes.
+//
+// So the event is not what gets measured. The CONDITION behind it is. The
+// renderer signals `buildClientDiagnostics` reads once, at the moment of a
+// failure, are available on every navigation of every run; collected
+// continuously they stop being one bit per run and become a distribution that
+// moves with load. A remedy can then be judged in a handful of runs.
+//
+// THREE SIGNALS, and they fail differently on purpose:
+//
+//   * `idleGapMs` — the longest stretch inside a navigation's window with no
+//     resource completing. This is `sinceLastResourceMs` generalised: the
+//     mcp-docs capture's 46 228 ms IS this quantity, read once. ⚠️ It is
+//     CONTAMINATED BY THE LANE'S OWN PACING — `CHAPTER_HOLD_MS` and `BEAT_MS`
+//     are deliberate stretches of nothing, so a healthy run's median idle gap is
+//     a measure of the hold schedule, not of the runner. Read its TAIL, not its
+//     centre.
+//   * `longestTaskMs` / `blockingMs` — the Long Tasks API, windowed per
+//     navigation. Immune to the holds (an idle main thread runs no tasks) and a
+//     direct reading of the CPU contention that starvation would consist of.
+//   * the drain's own `latencyMs` (`ContentionDrain`) — how long a trivial
+//     `page.evaluate` took to round-trip. It is not a page metric at all: it
+//     measures the whole path a Playwright assertion travels, main thread
+//     included, and a starved renderer cannot answer it. Sampled at every hold,
+//     it is the cheapest continuous proxy for the exact failure — a renderer
+//     that will not run.
+//
+// None of the three is asserted on. The lane is a receipt (see
+// `docs/decisions/acceptance-video.md`), so this records and never judges.
+
+/** The Long Tasks API's threshold — a task at or over this is reported. */
+export const LONG_TASK_MS = 50;
+
+/** One navigation the in-page recorder marked. */
+export interface ContentionNavigationMark {
+  /** `document` — a full page load; `soft` — a client-side App Router transition. */
+  kind: 'document' | 'soft';
+  /** Path + search of where it landed; the host is constant and would only bulk the sidecar. */
+  url: string;
+  /** Page-relative ms (`performance.now()`) at which the navigation was marked. */
+  atMs: number;
+}
+
+/** One main-thread task over {@link LONG_TASK_MS}, as the observer saw it. */
+export interface ContentionTask {
+  atMs: number;
+  durationMs: number;
+}
+
+/**
+ * One cumulative read of a single DOCUMENT's contention state.
+ *
+ * Cumulative rather than incremental, and keyed by `timeOrigin`, because that is
+ * what makes a lost drain harmless: each read carries the document's whole life
+ * so far, so the LATEST read per document is sufficient and nothing has to be
+ * stitched. A document navigation starts a new origin and therefore a new
+ * reading, which is how a hard navigation stops discarding what came before it.
+ */
+export interface ContentionReading {
+  /** `performance.timeOrigin` — the document's identity, and its epoch. */
+  timeOrigin: number;
+  /** `performance.now()` at the moment of the read; the end of the last window. */
+  nowMs: number;
+  navigations: ContentionNavigationMark[];
+  longTasks: ContentionTask[];
+  /** Completion times (page-relative ms) of every resource the document fetched. */
+  resourceEndsMs: number[];
+  /** The resource-timing buffer filled — gaps recorded after that point are not real. */
+  resourceBufferFull: boolean;
+}
+
+/** What one navigation cost, on a runner shared with four other tenants. */
+export interface ContentionSample {
+  url: string;
+  kind: 'document' | 'soft';
+  atMs: number;
+  /** To the next navigation, or to the read that closed the document. */
+  windowMs: number;
+  /** ⚠️ Includes the lane's deliberate holds — see the header. Read the tail. */
+  idleGapMs: number;
+  longestTaskMs: number;
+  /** Σ(task − {@link LONG_TASK_MS}) over the window — the API's blocking time. */
+  blockingMs: number;
+  longTaskCount: number;
+  resourcesTruncated: boolean;
+}
+
+/** One probe of whether the renderer could answer at all. */
+export interface ContentionDrain {
+  /** Wall-clock ISO, so a sample can be joined against the job log's own lines. */
+  at: string;
+  /** Seconds into the recording — the clock `chapter()` marks. */
+  tSeconds: number;
+  latencyMs: number;
+  /** The probe exceeded its budget: the renderer did not answer. */
+  timedOut: boolean;
+}
+
+export interface ContentionDistribution {
+  count: number;
+  medianMs: number;
+  p90Ms: number;
+  maxMs: number;
+}
+
+export interface ContentionReport {
+  card: string;
+  test: string;
+  status: string;
+  /** How many navigations this recording contributed to the distribution. */
+  navigations: number;
+  idleGap: ContentionDistribution;
+  longestTask: ContentionDistribution;
+  /** Over the drains that ANSWERED; the ones that did not are counted below. */
+  drainLatency: ContentionDistribution;
+  unresponsiveDrains: number;
+  /** The navigation with the longest idle gap — this run's closest approach. */
+  worst: ContentionSample | null;
+  samples: ContentionSample[];
+  drains: ContentionDrain[];
+}
+
+/**
+ * Nearest-rank percentile over a list of millisecond readings.
+ *
+ * Nearest-rank rather than interpolated because every consumer here is a tail
+ * question ("how bad does it get"), and interpolation invents a value between
+ * two real samples — which at n≈20 per recording is most of the answer.
+ */
+export function percentileMs(values: number[], fraction: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const rank = Math.ceil(fraction * sorted.length) - 1;
+  return sorted[Math.min(sorted.length - 1, Math.max(0, rank))] ?? 0;
+}
+
+/** Median / p90 / max of one signal. An empty signal reports zeroes, not nulls. */
+export function describeContention(values: number[]): ContentionDistribution {
+  return {
+    count: values.length,
+    medianMs: percentileMs(values, 0.5),
+    p90Ms: percentileMs(values, 0.9),
+    maxMs: values.reduce((max, value) => Math.max(max, value), 0),
+  };
+}
+
+/**
+ * The longest stretch in `[start, end)` with no resource completing.
+ *
+ * The window's own edges anchor it: a navigation followed by nothing at all
+ * reports the whole window, which is exactly the mcp-docs shape (the destination
+ * payload landed, and then 46 s of nothing). Completions rather than starts,
+ * matching `sinceLastResourceMs`, so the two numbers mean the same thing.
+ */
+function longestIdleGap(sortedEndsMs: number[], start: number, end: number): number {
+  let previous = start;
+  let longest = 0;
+  for (const at of sortedEndsMs) {
+    if (at <= start) continue;
+    if (at >= end) break;
+    longest = Math.max(longest, at - previous);
+    previous = at;
+  }
+  return Math.round(Math.max(longest, end - previous));
+}
+
+/** Turn one document's cumulative reading into a sample per navigation. */
+export function buildContentionSamples(reading: ContentionReading): ContentionSample[] {
+  const ends = [...reading.resourceEndsMs].sort((a, b) => a - b);
+  const marks = [...reading.navigations].sort((a, b) => a.atMs - b.atMs);
+  return marks.map((mark, index) => {
+    const start = mark.atMs;
+    const end = Math.max(start, marks[index + 1]?.atMs ?? reading.nowMs);
+    const tasks = reading.longTasks.filter((task) => task.atMs >= start && task.atMs < end);
+    return {
+      url: mark.url,
+      kind: mark.kind,
+      atMs: start,
+      windowMs: Math.round(end - start),
+      idleGapMs: longestIdleGap(ends, start, end),
+      longestTaskMs: tasks.reduce((max, task) => Math.max(max, task.durationMs), 0),
+      blockingMs: Math.round(
+        tasks.reduce((sum, task) => sum + Math.max(0, task.durationMs - LONG_TASK_MS), 0),
+      ),
+      longTaskCount: tasks.length,
+      resourcesTruncated: reading.resourceBufferFull,
+    };
+  });
+}
+
+/** Assemble one recording's contention sidecar (MOTIR-2646). */
+export function buildContentionReport(input: {
+  test: string;
+  status: string;
+  /** One per DOCUMENT — the latest read of each, in any order. */
+  readings: ContentionReading[];
+  drains: ContentionDrain[];
+}): ContentionReport {
+  const samples = [...input.readings]
+    .sort((a, b) => a.timeOrigin - b.timeOrigin)
+    .flatMap(buildContentionSamples);
+  const answered = input.drains.filter((drain) => !drain.timedOut);
+  return {
+    card: 'MOTIR-2646',
+    test: input.test,
+    status: input.status,
+    navigations: samples.length,
+    idleGap: describeContention(samples.map((sample) => sample.idleGapMs)),
+    longestTask: describeContention(samples.map((sample) => sample.longestTaskMs)),
+    drainLatency: describeContention(answered.map((drain) => drain.latencyMs)),
+    unresponsiveDrains: input.drains.length - answered.length,
+    worst: samples.reduce<ContentionSample | null>(
+      (worst, sample) => (worst === null || sample.idleGapMs > worst.idleGapMs ? sample : worst),
+      null,
+    ),
+    samples,
+    drains: input.drains,
   };
 }

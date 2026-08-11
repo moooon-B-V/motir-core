@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   buildClientDiagnostics,
+  buildContentionReport,
   DIAGNOSTIC_TAIL,
+  type ContentionDrain,
+  type ContentionReading,
   type DiagnosticEvent,
 } from './acceptance-diagnostics';
 
@@ -119,8 +122,8 @@ export const BEAT_MS = 4_000;
 // It was read, and the first thing it establishes is that **this failure is not
 // `/planning`'s**. The occurrence carrying the discriminating evidence landed on
 // `acceptance-mcp-docs.spec.ts` — a PUBLIC docs route, no session, no planning
-// code, no `motir-ai` on any path — and it is the same failure exactly (runs
-// 31438023288 and 31440555516, the identical shape twice):
+// code, no `motir-ai` on any path — and it carries the same IDLE-RENDERER
+// SIGNATURE (runs 31438023288 and 31440555516, the identical shape twice):
 //
 //   * the destination's RSC payload — `/docs/mcp/tools?_rsc=…` — arrived 200 in
 //     8-21 ms, at t=7.4 s;
@@ -138,6 +141,18 @@ export const BEAT_MS = 4_000;
 // planning workspace. `/planning` is where we happened to look first, because it
 // is the slowest-looking surface and the one with a plausible story.
 //
+// ⚠️ "The same failure exactly" was one step too strong, and MOTIR-2646 walked
+// it back (this note said it, so this note corrects it). The two occurrences are
+// not identical in what the CLIENT DID: on `/planning` the URL HAD advanced —
+// `waitForURL` resolved — and the screenshot was blank, whereas on `mcp-docs`
+// the URL NEVER advanced and the origin page was still fully painted. One cause
+// remains plausible for both (Next advances the URL optimistically only for a
+// destination it has already prefetched, so the same dead commit shows a
+// different address bar depending on prefetch state), but plausible is what it
+// is. What IS shared, and is what the paragraph above rests on, is the
+// idle-renderer signature: payload in, then nothing, with no error on any
+// channel. Do not carry "identical" forward as a finding.
+//
 // The two readings are now unequal rather than settled. An uncaught throw is
 // DISFAVOURED — the `pageerror` channel demonstrably works and stayed empty —
 // but not excluded, since a throw swallowed inside React's own error handling
@@ -148,10 +163,185 @@ export const BEAT_MS = 4_000;
 // ⚠️ The corollary for whoever reads a future `client-diagnostics.json`: BEFORE
 // MOTIR-2643 all five captures taken on 2026-08-10 reported "N request(s)
 // failed" and named a URL, because `next/link` prefetch cancellations were
-// counted in the tally. That verdict was wrong on every one of them, and it hid
-// exactly the idle-renderer rung that matters here. If you are reading an
-// artifact from before that fix, recompute the verdict — do not quote it.
+// counted in the tally. That LINE was wrong on every one of them; the VERDICT
+// changed on the two `mcp-docs` captures, where excluding the cancelled
+// prefetches leaves zero genuine failures and promotes the idle-renderer rung
+// that matters here. The `cli-connect` capture from the same run recomputes to a
+// failed-request verdict either way — it carries 2 real failures on
+// `/api/ai/pre-plan`. So: if you are reading an artifact from before that fix,
+// recompute the verdict — do not quote it. (MOTIR-2646 narrowed this from "that
+// verdict was wrong on every one of them", which over-claimed the same way the
+// line it was correcting did.)
 export const FIRST_PAINT_MS = 60_000;
+
+// ── THE LANE REMEDY, AND THE INSTRUMENT IT IS ARGUED FROM (MOTIR-2646) ───────
+//
+// Everything above this line is a diagnosis, and MOTIR-2621 closed it: the stall
+// is not a route's defect. Its AC 3 then asked for a remedy proposed against the
+// LANE — fewer concurrent tenants during a navigation — and that is what this
+// section owes. It is deliberately placed HERE, beside the budget, because the
+// budget is the lever everyone reaches for first and this is the argument for
+// not reaching for it again.
+//
+// ⚠️ WHY THE OBVIOUS CARD SHAPE IS UNBUILDABLE. The census is 2 occurrences in
+// 57 runs, ≈3.5 %. Detecting even a HALVING of a 3.5 % binary event at any
+// respectable confidence takes on the order of a hundred runs per arm. So
+// "change the lane, then prove it helped" cannot be executed, and "change the
+// lane and ship it" is what produced the two earlier wrong conclusions this note
+// records. Both shapes were refused.
+//
+// What is built instead is the INSTRUMENT: `contentionSamples` below reads the
+// same renderer signals on every navigation of every run, so the lane reports a
+// distribution rather than one bit. `acceptance-diagnostics.ts`'s CONTENTION
+// SAMPLING header carries the three signals and why they fail differently. The
+// per-run sidecar is `contention.json`, beside `chapters.json`.
+//
+// ── THE CANDIDATES, AND WHAT EACH WOULD COST ─────────────────────────────────
+//
+// None of these is pre-selected; the samples decide, and "the change already
+// made was enough" is an acceptable ending.
+//
+//   * THE 4-WAY SHARD, ALREADY LANDED (MOTIR-2600). It cut a ~30-minute serial
+//     lane into four legs — and its effect on CONTENTION has never been
+//     measured, because it landed before anything measured contention. Note that
+//     its sign is not obvious: fewer specs per leg means less time per machine,
+//     but each leg still hosts `next start` + Inngest + Postgres + Playwright on
+//     its own 4 vCPU, so per-navigation contention need not have moved at all.
+//     Cost: zero, it is already paid.
+//   * QUIESCING THE INNGEST DEV SERVER for specs that never enqueue. It is one
+//     of the five tenants and the job log shows it bursting. Cost: a config
+//     change plus the risk of a spec that enqueues something nobody noticed.
+//   * A LARGER RUNNER. Probably effective, and it is the tempting shortcut this
+//     card exists to refuse until there is a number: it costs money on EVERY run
+//     forever, and GitHub's larger runners are not free minutes (see
+//     `github-runner-group-and-labels-facts`). Cost: recurring, and unbounded in
+//     the number of runs.
+//   * STAGGERING TENANT SEEDING away from navigations. Cost: harness complexity
+//     in the seeds, and it only helps if the samples show seeding and stalls
+//     coinciding — which is exactly what `ContentionDrain.at` exists to let a
+//     reader check against the job log.
+//
+// Any of these that turns out to need a real change ships as ITS OWN card. This
+// one produces the reading and the proposal.
+//
+// ── WHAT THE SAMPLES SAID ────────────────────────────────────────────────────
+//
+// (Filled from this PR's own lane runs — see the PR body for the full tables.)
+
+/**
+ * How long the contention probe may wait for the renderer to answer.
+ *
+ * ⚠️ THIS NUMBER IS WHAT MAKES THE SAMPLING FREE, and it is why it is strictly
+ * below {@link CHAPTER_HOLD_MS}. Every drain runs CONCURRENTLY with a hold the
+ * lane was already taking, so the hold dominates and a passing run's wall clock
+ * is unchanged. A probe that exceeds this is abandoned — and counted, because a
+ * renderer that cannot answer a trivial `evaluate` in two seconds is the very
+ * condition being measured, not an error.
+ */
+export const CONTENTION_SAMPLE_BUDGET_MS = 2_000;
+
+/**
+ * The in-page recorder, installed before the first navigation of every document.
+ *
+ * ⚠️ IT MUST NOT CHANGE WHAT IT MEASURES (the receipt-lane constraint in
+ * `docs/decisions/acceptance-video.md`). What it does: pushes onto two capped
+ * arrays, widens the resource-timing buffer, and wraps `history.pushState` /
+ * `replaceState` in a passthrough that calls the original FIRST and returns its
+ * result unchanged. It adds no listener the app can observe, no assertion, and
+ * no wait. The `pushState` wrapper is the one app-visible mutation and it is a
+ * mark, not a policy — Next's App Router is what calls it, and a soft navigation
+ * is otherwise invisible from the page's own clock.
+ */
+const CONTENTION_RECORDER = () => {
+  const KEY = '__motirContention';
+  const scope = window as unknown as Record<string, unknown>;
+  if (scope[KEY]) return;
+  const state = {
+    navigations: [] as { kind: 'document' | 'soft'; url: string; atMs: number }[],
+    longTasks: [] as { atMs: number; durationMs: number }[],
+    resourceBufferFull: false,
+  };
+  scope[KEY] = state;
+
+  const mark = (kind: 'document' | 'soft') => {
+    // Capped: a runaway router loop must not turn the sidecar into the artifact.
+    if (state.navigations.length >= 500) return;
+    state.navigations.push({
+      kind,
+      url: location.pathname + location.search,
+      atMs: Math.round(performance.now()),
+    });
+  };
+  mark('document');
+
+  const history = window.history as unknown as Record<string, (...args: unknown[]) => unknown>;
+  for (const method of ['pushState', 'replaceState']) {
+    const original = history[method];
+    if (typeof original !== 'function') continue;
+    history[method] = function (this: unknown, ...args: unknown[]) {
+      const result = original.apply(this, args);
+      mark('soft');
+      return result;
+    };
+  }
+  window.addEventListener('popstate', () => mark('soft'));
+
+  // The default buffer is 250 entries and the browser SILENTLY STOPS RECORDING
+  // once it fills — which would make every gap after that point a fiction, and
+  // (worse) would have been quietly distorting `sinceLastResourceMs` in the
+  // failure report above. Widened, and the overflow recorded rather than hidden.
+  window.addEventListener('resourcetimingbufferfull', () => {
+    state.resourceBufferFull = true;
+  });
+  try {
+    performance.setResourceTimingBufferSize(3_000);
+  } catch {
+    // A browser without the setter keeps the default; the flag above still tells
+    // the reader when that default was reached.
+  }
+
+  try {
+    new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (state.longTasks.length >= 1_000) return;
+        state.longTasks.push({
+          atMs: Math.round(entry.startTime),
+          durationMs: Math.round(entry.duration),
+        });
+      }
+      // `buffered` picks up tasks from before this observer existed.
+    }).observe({ type: 'longtask', buffered: true });
+  } catch {
+    // `longtask` is Chromium-only. Without it the idle-gap and drain-latency
+    // signals still work; only the CPU one goes quiet.
+  }
+};
+
+/**
+ * Read one document's whole contention state. Cumulative and non-destructive —
+ * see {@link ContentionReading} for why that is what makes a lost drain
+ * harmless.
+ */
+const CONTENTION_READER = () => {
+  const state = (window as unknown as Record<string, unknown>)['__motirContention'] as
+    | {
+        navigations: { kind: 'document' | 'soft'; url: string; atMs: number }[];
+        longTasks: { atMs: number; durationMs: number }[];
+        resourceBufferFull: boolean;
+      }
+    | undefined;
+  if (!state) return null;
+  return {
+    timeOrigin: performance.timeOrigin,
+    nowMs: Math.round(performance.now()),
+    navigations: state.navigations,
+    longTasks: state.longTasks,
+    resourceEndsMs: performance
+      .getEntriesByType('resource')
+      .map((entry) => Math.round(entry.startTime + entry.duration)),
+    resourceBufferFull: state.resourceBufferFull,
+  };
+};
 
 // The failure report itself is `./acceptance-diagnostics` — pure, and unit-tested
 // there. What lives here is the fixture that FEEDS it.
@@ -191,13 +381,29 @@ interface AcceptanceFixtures {
    * a spec that reaches `/planning` some other way.
    */
   clientDiagnostics: void;
+  /**
+   * AUTO fixture (MOTIR-2646) — installs the in-page contention recorder and
+   * drains it, writing a `contention.json` sidecar on EVERY run, pass or fail.
+   *
+   * It hands back a `sample()` the pacing helpers call inside the holds they
+   * were already taking, which is what makes it free: see
+   * {@link CONTENTION_SAMPLE_BUDGET_MS}. Nothing else should call it — a drain
+   * outside a hold would be the one thing this must never do, which is cost a
+   * passing run wall-clock time.
+   */
+  contention: ContentionRecorder;
+}
+
+interface ContentionRecorder {
+  /** Drain the page's buffer. Bounded, never throws, safe to run inside a hold. */
+  sample: () => Promise<void>;
 }
 
 export const test = base.extend<AcceptanceFixtures>({
   // `provide` is Playwright's fixture-value callback (normally named `use`); it
   // is renamed here so eslint's react-hooks rule doesn't mistake it for React's
   // `use` hook.
-  chapter: async ({}, provide, testInfo) => {
+  chapter: async ({ contention }, provide, testInfo) => {
     // t=0 is the fixture setup — as close to the recording start as the harness
     // can observe (the video begins at context creation, just before this).
     const start = Date.now();
@@ -208,7 +414,15 @@ export const test = base.extend<AcceptanceFixtures>({
       await test.step(label, body);
       // Let the phase land before the next one starts. AFTER the body, so it
       // holds a state the body's own assertions already proved.
-      await new Promise((resolve) => setTimeout(resolve, CHAPTER_HOLD_MS));
+      //
+      // The contention drain (MOTIR-2646) rides ALONGSIDE the hold rather than
+      // before or after it: its budget is strictly below CHAPTER_HOLD_MS, so
+      // `Promise.all` finishes when the hold does and the recording's pace is
+      // arithmetically unchanged.
+      await Promise.all([
+        new Promise((resolve) => setTimeout(resolve, CHAPTER_HOLD_MS)),
+        contention.sample(),
+      ]);
     };
 
     await provide(chapter);
@@ -241,11 +455,73 @@ export const test = base.extend<AcceptanceFixtures>({
     await testInfo.attach('recording-meta', { path: metaFile, contentType: 'application/json' });
   },
 
-  beat: async ({ page }, provide) => {
+  beat: async ({ page, contention }, provide) => {
     await provide(async () => {
-      await page.waitForTimeout(BEAT_MS);
+      // Same free-riding arrangement as `chapter()` above: the drain's budget is
+      // well under BEAT_MS, so the beat's own hold is what times this out.
+      await Promise.all([page.waitForTimeout(BEAT_MS), contention.sample()]);
     });
   },
+
+  contention: [
+    async ({ page }, provide, testInfo) => {
+      // Before any navigation — an init script installed later would miss the
+      // document the test starts on, which is the one every spec navigates FROM.
+      await page.addInitScript(CONTENTION_RECORDER);
+
+      const t0 = Date.now();
+      /** Latest cumulative reading PER DOCUMENT, keyed by its `performance.timeOrigin`. */
+      const readings = new Map<number, ContentionReading>();
+      const drains: ContentionDrain[] = [];
+
+      const sample = async (): Promise<void> => {
+        const startedAt = Date.now();
+        // `page.evaluate` has no per-call timeout, and the failure being measured
+        // is precisely a renderer that never answers — so the budget is enforced
+        // here. A `.catch` on the evaluate rather than a try/catch around the
+        // race: the abandoned call settles later (when the page closes, usually
+        // as a rejection) and must not surface as an unhandled rejection.
+        const reading = await Promise.race([
+          page.evaluate(CONTENTION_READER).catch(() => null),
+          new Promise<null>((resolve) =>
+            setTimeout(() => resolve(null), CONTENTION_SAMPLE_BUDGET_MS),
+          ),
+        ]);
+        const drain: ContentionDrain = {
+          at: new Date(startedAt).toISOString(),
+          tSeconds: Math.max(0, (startedAt - t0) / 1000),
+          latencyMs: Date.now() - startedAt,
+          timedOut: reading === null,
+        };
+        drains.push(drain);
+        if (reading !== null) readings.set(reading.timeOrigin, reading);
+      };
+
+      await provide({ sample });
+
+      // The last window closes here — the drains above are per-hold, and a spec's
+      // final navigation is usually followed by an assertion and then teardown.
+      // This fixture depends on `page`, so the page is still open.
+      await sample();
+
+      const report = buildContentionReport({
+        test: testInfo.titlePath.join(' › '),
+        status: testInfo.status ?? 'unknown',
+        readings: [...readings.values()],
+        drains,
+      });
+      // A test that never navigated (or never held) contributes nothing, and an
+      // empty sidecar in every output dir is noise the uploader would have to
+      // walk past.
+      if (report.navigations === 0 && report.drains.length === 0) return;
+
+      const file = path.join(testInfo.outputDir, 'contention.json');
+      fs.mkdirSync(testInfo.outputDir, { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(report, null, 2));
+      await testInfo.attach('contention', { path: file, contentType: 'application/json' });
+    },
+    { auto: true },
+  ],
 
   clientDiagnostics: [
     async ({ page }, provide, testInfo) => {

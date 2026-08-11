@@ -457,6 +457,39 @@ in flight_ and _the page was genuinely still working_. The first three were
 indistinguishable before, which is how the same red check got two opposite verdicts
 on consecutive runs of one PR.
 
+#### Amendment 2026-08-11 (MOTIR-2646) — the lane also SAMPLES, on every run
+
+Clause 3 above fires only when a test fails, and that turned out to be the binding
+limit rather than a detail. MOTIR-2621 read one of those captures and closed the
+diagnosis — the stall is not a route's defect, it landed on a public docs page with
+no session and no planning code — and then asked for a remedy proposed against the
+LANE. The census is 2 occurrences in 57 runs. **A ≈3.5 % binary event cannot be
+A/B'd**: detecting even a halving needs on the order of a hundred runs per arm, so
+every card shaped as _change the lane, then prove it helped_ is unbuildable, and
+every card that skips the proof is a guess.
+
+So the lane now measures the CONDITION instead of waiting for the event. The same
+renderer signals the failure report reads once are read on **every navigation of
+every run**, and written to a `contention.json` sidecar beside `chapters.json`: the
+per-navigation idle gap, the windowed Long Tasks reading, and the round-trip latency
+of the probe itself (a renderer that will not answer a trivial `evaluate` is the
+failure, sampled continuously). The shaping is pure and gated —
+`tests/e2e/_helpers/acceptance-diagnostics.ts`, same module and same coverage floor
+as the verdict — and the fixture that feeds it is next door.
+
+**Two constraints this amendment does NOT relax**, both from §2's watchability rule:
+
+- **The lane stays a RECEIPT, not an alarm.** Sampling adds no assertion. A slow
+  navigation is recorded, never failed, and the budget above is untouched.
+- **It costs a passing run nothing.** Every drain runs concurrently with a hold the
+  lane was already taking, under a budget strictly below `CHAPTER_HOLD_MS`, so the
+  hold is what times it out. A measurement that changed the pace would be worse
+  than no measurement — the pace IS the product here.
+
+⚠️ **Read the idle gap's TAIL, not its centre.** Those same deliberate holds are
+stretches of nothing, so a healthy recording's median idle gap is a reading of the
+hold schedule. The long-task and probe-latency signals carry no such contamination.
+
 ---
 
 ## Consequences
