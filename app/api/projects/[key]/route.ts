@@ -6,16 +6,20 @@ import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 // PATCH /api/projects/[key] (Story 6.8 · Subtask 6.8.1)
 // Edit a project's details, OR change its key. Project-admin gated (the gate is
 // in the service). Body shape:
-//   { name?, avatarIcon?, avatarColor?, image? } → updateDetails (name + mark)
-//   { identifier? }                       → changeKey (the guarded key change)
+//   { name?, image? } → updateDetails (the name + the mark)
+//   { identifier? }   → changeKey (the guarded key change)
 // The presence of `identifier` selects the change-key flow — it is its own
 // request in the UI (a consequence modal), distinct from a details Save, so the
-// two never mix in one PATCH. `avatarIcon`/`avatarColor`/`image` accept `null` to
-// clear (the avatar pair back to the mono-identifier rendering; `image` to NO mark
-// at all); an ABSENT field is left untouched, so the route distinguishes "key
-// present with null" from "key absent". `image` carries an object KEY the upload
-// route returned — the service gates it to this project's own prefix. Thin HTTP
-// transport per CLAUDE.md: parse, one service call, map typed errors.
+// two never mix in one PATCH. `image` accepts `null` to clear it, which leaves
+// the project with NO mark at all (`docs/decisions/entity-marks.md` §3); an
+// ABSENT field is left untouched, so the route distinguishes "key present with
+// null" from "key absent". It carries an object KEY the upload route returned —
+// the service gates it to this project's own prefix. Thin HTTP transport per
+// CLAUDE.md: parse, one service call, map typed errors.
+//
+// ⚠️ The retired preset icon/colour pair (MOTIR-2680) is NOT read here any
+// more. A body still carrying one is not an error — it is simply an unknown
+// key, and this route has never rejected those.
 
 interface RouteParams {
   params: Promise<{ key: string }>;
@@ -69,7 +73,7 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
       return NextResponse.json({ project });
     }
 
-    // Otherwise, a details edit (name + avatar).
+    // Otherwise, a details edit (name + mark).
     const name = 'name' in obj ? obj.name : undefined;
     if (name !== undefined && typeof name !== 'string') {
       return NextResponse.json(
@@ -77,12 +81,10 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
         { status: 400 },
       );
     }
-    const avatarIcon = readNullableString(obj, 'avatarIcon');
-    const avatarColor = readNullableString(obj, 'avatarColor');
     const image = readNullableString(obj, 'image');
-    if (avatarIcon === false || avatarColor === false || image === false) {
+    if (image === false) {
       return NextResponse.json(
-        { error: 'A mark field must be a string or null.', code: 'BAD_REQUEST' },
+        { error: 'An "image" must be a string or null.', code: 'BAD_REQUEST' },
         { status: 400 },
       );
     }
@@ -91,8 +93,6 @@ export async function PATCH(req: Request, { params }: RouteParams): Promise<Resp
       key,
       ctx,
       name,
-      avatarIcon,
-      avatarColor,
       image,
     });
     return NextResponse.json({ project });

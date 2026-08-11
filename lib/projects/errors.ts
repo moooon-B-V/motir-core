@@ -21,7 +21,7 @@ export class IdentifierCollisionError extends Error {
 // The PATCH /api/projects/[key] + DELETE .../aliases/[alias] write path throws
 // these; `projectErrorResponse` maps them:
 //   InvalidProjectNameError / InvalidIdentifierError / IdentifierUnchangedError
-//       / InvalidAvatarError                                 → 400
+//       / InvalidProjectImageError                           → 400
 //   IdentifierTakenError / IdentifierReservedError           → 409
 //   AliasNotFoundError                                       → 404
 // (admin-gating reuses NotProjectAdminError → 403 and ProjectNotFoundError → 404
@@ -114,15 +114,6 @@ export class IdentifierReservedError extends Error {
   constructor(identifier: string) {
     super(`The key "${identifier}" is reserved by another project's previous key.`);
     this.name = 'IdentifierReservedError';
-  }
-}
-
-// An avatar icon/colour key that is not in the preset registry (lib/projects/avatar.ts).
-export class InvalidAvatarError extends Error {
-  readonly code = 'INVALID_AVATAR' as const;
-  constructor(field: 'icon' | 'color', value: string) {
-    super(`"${value}" is not a valid avatar ${field}.`);
-    this.name = 'InvalidAvatarError';
   }
 }
 

@@ -557,12 +557,7 @@ export const projectRepository = {
 
   async update(
     id: string,
-    data: {
-      name?: string;
-      avatarIcon?: string | null;
-      avatarColor?: string | null;
-      image?: string | null;
-    },
+    data: { name?: string; image?: string | null },
     tx: Prisma.TransactionClient,
   ): Promise<Project> {
     return tx.project.update({ where: { id }, data });

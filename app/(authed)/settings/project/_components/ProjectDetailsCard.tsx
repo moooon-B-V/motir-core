@@ -38,9 +38,9 @@ export interface ProjectDetailsCardProps {
   projectName: string;
   projectIdentifier: string;
   /** The project's logo — a resolved absolute URL, or null for no logo.
-   *  The retired `avatarIcon`/`avatarColor` props are GONE from this component:
-   *  nothing here renders them any more. They survive on the DTO and the column
-   *  only until MOTIR-2680 drops them. */
+   *  It is the ONLY mark prop this card takes. Story 6.8's preset icon + colour
+   *  pair was removed from the component by MOTIR-2678 and from the DTO and the
+   *  table by MOTIR-2680, so there is nothing left of it to thread. */
   image: string | null;
   previousKeys: PreviousKeyView[];
   /** Project admin (or workspace owner/admin) — gates every editing affordance. */

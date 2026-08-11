@@ -82,7 +82,12 @@ rename-with-same-value, not a re-colour.
 2. **`--el-type-*` misuse** (work-item-type hues borrowed for non-type meaning):
    - `app/(authed)/_components/NotificationRow.tsx:31-36` — `commented`→`--el-type-task`,
      `assigned`→`--el-type-story`, `transitioned`→`--el-type-subtask`.
-   - `app/(authed)/_components/ProjectAvatar.tsx:121` — mono fallback tile →`--el-type-task`.
+   - the project-avatar component's mono fallback tile →`--el-type-task`. (Its file is
+     deliberately not addressed here: MOTIR-2679 DELETED that component, so a repo path
+     would send the next reader looking for nothing. The fix below shipped first, and
+     the `--el-avatar-fallback` tile it introduced now lives in
+     `app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx` and
+     `app/(authed)/settings/project/code-access/_components/CodeAccessSettings.tsx`.)
    - `app/(authed)/org/.../OrgUsageClient.tsx:224` — DeepSeek model →`--el-type-subtask`.
 3. **`--el-vote-bg` defined-but-unused** — globals.css:2312 maps it to
    `--color-tint-lavender`, but `app/(public)/_components/PublicRoadmapVote.tsx:98`
@@ -196,11 +201,11 @@ default to today's value (zero-change) and decouple the `--el-type-*` misuse.
 
 **Label + avatar ramps** (deterministic hash → tint):
 
-| Token                                               | base                                                  | current                                                          | note                                                                                                                                                                                                                                                        |
-| --------------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--el-label-1..6`                                   | tint `peach,rose,mint,lavender,sky,yellow` (in order) | `lib/labels/labelTint.ts:15` `LABEL_TINTS` + `MultiSelectPicker` | hash `fnv1a(name)%6`→token; matches shipped                                                                                                                                                                                                                 |
-| `--el-avatar-{peach,rose,mint,lavender,sky,yellow}` | matching tint                                         | `ProjectAvatar.tsx:69-76`, `TriageAvatar.tsx:11-18`              | **keep the named keys** — `lib/projects/avatar.ts` persists `project.avatarColor` ∈ these strings; numbering them (`1..N`) would break stored rows. Spec deviates from the card's "1..N" for **migration safety** (rung-2: `avatar.ts` is the DB contract). |
-| `--el-avatar-fallback`                              | `--color-info`                                        | `ProjectAvatar.tsx:121` (`--el-type-task`)                       | **fixes misuse #2** — mono initials tile keeps its blue, stops borrowing the type token                                                                                                                                                                     |
+| Token                                               | base                                                  | current                                                                 | note                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| --------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--el-label-1..6`                                   | tint `peach,rose,mint,lavender,sky,yellow` (in order) | `lib/labels/labelTint.ts:15` `LABEL_TINTS` + `MultiSelectPicker`        | hash `fnv1a(name)%6`→token; matches shipped                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `--el-avatar-{peach,rose,mint,lavender,sky,yellow}` | matching tint                                         | `app/(authed)/triage/_components/TriageAvatar.tsx:20-27`                | **keep the named keys.** As written, for **migration safety** — a project column persisted the colour key. MOTIR-2680 dropped that column and MOTIR-2679 deleted `ProjectAvatar`, so the ramp is now PERSON-avatar only; the keys stay because `TriageAvatar` hashes a name onto them BY NAME and they are 1:1 with `--el-label-1..6`. Same conclusion, a different reason — recorded so the next reader does not restore a numbering the DB no longer forbids. |
+| `--el-avatar-fallback`                              | `--color-info`                                        | `app/(authed)/settings/workspace/_components/gitSettingsPrimitives.tsx` | **fixes misuse #2** — the initials tile keeps its blue, stops borrowing the type token. Cited against `ProjectAvatar.tsx:121` when written; that component is gone (MOTIR-2679) and the tile's surviving consumers are this file and `CodeAccessSettings.tsx`.                                                                                                                                                                                                  |
 
 **`--el-type-*` misuse decouple** (bug #2 — give each its own token):
 
@@ -309,7 +314,9 @@ tokens (`--el-overlay-scrim`) need a `[data-theme='dark']` companion.
 ## 7. Decisions resolved here (no user round-trip — `motir run` never asks)
 
 1. **Avatar tokens keep named keys** (`peach…yellow`), not `1..N` — the keys are
-   DB-persisted (`lib/projects/avatar.ts`). Migration safety over the card's wording.
+   DB-persisted at the time (a project colour column, dropped by MOTIR-2680).
+   Migration safety over the card's wording; see the token table for why the named
+   keys still stand now that the column does not.
 2. **StationNode stays off `--el-roadmap-*`** — different semantic; §5H.
 3. **`cancelled` = terminal grey, not red** — cancel is not an error.
 4. **NEW (un-built) surfaces** (`selection`, `overdue`/`due-soon`, `auth-wash`,

@@ -953,23 +953,15 @@ model Project {
   /// successful sync the stamp is non-null forever — which is why the flag is its
   /// own column rather than a derived read.
   runnerGroupSyncPending           Boolean               @default(false) @map("runner_group_sync_pending")
-  /// Project avatar (Story 6.8) — a preset icon key + a colour-swatch key, both
-  /// validated at the service layer against the avatar registry
-  /// (lib/projects/avatar.ts). NULL on either = the shipped mono-identifier
-  /// rendering (the avatar chip falls back to the project's first identifier
-  /// letters), so every existing row backfills with no migration data step.
-  /// NOT an image upload — Jira's own default avatars are a preset library; the
-  /// 2.3.7 upload primitive is attachment-scoped (the recorded deviation).
-  avatarIcon                       String?
-  avatarColor                      String?
   /// The project's uploaded IMAGE (MOTIR-2676) — the object KEY of a public-bucket
   /// asset under `projects/<projectId>/`, never a URL, so no hosting origin is ever
   /// persisted (the same reason `User.image` stores a key since MOTIR-2404).
   /// `storedAssetUrl` composes the absolute URL at the DTO boundary on READ.
   /// NULL = the project has no mark and NOTHING is rendered beside its name — no
   /// monogram and no generated tile (`docs/decisions/entity-marks.md` §3).
-  /// It REPLACES the preset pair above, which MOTIR-2680 drops once the last
-  /// reader is gone; the two co-exist only for that transition.
+  /// It REPLACED Story 6.8's preset icon/colour pair, dropped by MOTIR-2680
+  /// once the last reader was gone (migration
+  /// 20260811223000_drop_project_preset_avatar).
   image                            String?
   createdAt                        DateTime              @default(now())
   updatedAt                        DateTime              @updatedAt

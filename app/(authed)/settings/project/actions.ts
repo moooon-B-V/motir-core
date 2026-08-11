@@ -9,7 +9,6 @@ import {
   IdentifierReservedError,
   IdentifierTakenError,
   IdentifierUnchangedError,
-  InvalidAvatarError,
   InvalidIdentifierError,
   InvalidProjectImageError,
   InvalidProjectNameError,
@@ -49,17 +48,16 @@ async function requireProjectContext(): Promise<ResolvedContext> {
   return { userId: ctx.userId, workspaceId: ctx.workspaceId, key: ctx.project.identifier };
 }
 
-// ── updateDetails (name + avatar — the save bar) ─────────────────────────────
+// ── updateDetails (the name — the save bar) ──────────────────────────────────
+// The LOGO is not here: it commits on pick, through `updateProjectLogoAction`
+// below. This action is the save bar's, and the save bar carries the name.
 
 export type UpdateDetailsResult =
   | { ok: true; project: ProjectDTO }
-  | { ok: false; code: 'INVALID_NAME' | 'INVALID_AVATAR' | 'NOT_ADMIN' | 'UNKNOWN' };
+  | { ok: false; code: 'INVALID_NAME' | 'NOT_ADMIN' | 'UNKNOWN' };
 
 export interface UpdateProjectDetailsInput {
   name?: string;
-  /** `null` clears the avatar (the "None" choice); omit to leave unchanged. */
-  avatarIcon?: string | null;
-  avatarColor?: string | null;
 }
 
 export async function updateProjectDetailsAction(
@@ -71,13 +69,10 @@ export async function updateProjectDetailsAction(
       key,
       ctx: { userId, workspaceId },
       name: input.name,
-      avatarIcon: input.avatarIcon,
-      avatarColor: input.avatarColor,
     });
     return { ok: true, project };
   } catch (err) {
     if (err instanceof InvalidProjectNameError) return { ok: false, code: 'INVALID_NAME' };
-    if (err instanceof InvalidAvatarError) return { ok: false, code: 'INVALID_AVATAR' };
     if (err instanceof NotProjectAdminError) return { ok: false, code: 'NOT_ADMIN' };
     if (err instanceof ProjectNotFoundError) return { ok: false, code: 'UNKNOWN' };
     throw err;

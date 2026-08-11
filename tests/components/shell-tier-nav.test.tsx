@@ -53,8 +53,6 @@ const project = (over: Partial<ProjectDTO> = {}) =>
     id: 'p1',
     name: 'Motir',
     identifier: 'MOTIR',
-    avatarIcon: 'rocket',
-    avatarColor: 'lavender',
     archivedAt: null,
     ...over,
   }) as unknown as ProjectDTO;

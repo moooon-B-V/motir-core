@@ -11,7 +11,6 @@ import {
   IdentifierReservedError,
   IdentifierTakenError,
   IdentifierUnchangedError,
-  InvalidAvatarError,
   InvalidIdentifierError,
   InvalidProjectImageError,
   InvalidProjectNameError,
@@ -121,32 +120,13 @@ describe('updateDetails', () => {
     expect(updated.previousKeys).toEqual([]);
   });
 
-  it('sets and clears the avatar (icon + colour)', async () => {
-    const { key, ownerCtx } = await makeFixture('avatar');
-
-    const set = await projectsService.updateDetails({
-      key,
-      ctx: ownerCtx,
-      avatarIcon: 'rocket',
-      avatarColor: 'mint',
-    });
-    expect(set.avatarIcon).toBe('rocket');
-    expect(set.avatarColor).toBe('mint');
-
-    const cleared = await projectsService.updateDetails({
-      key,
-      ctx: ownerCtx,
-      avatarIcon: null,
-      avatarColor: null,
-    });
-    expect(cleared.avatarIcon).toBeNull();
-    expect(cleared.avatarColor).toBeNull();
-  });
-
   // ── The project IMAGE (MOTIR-2676) ──────────────────────────────────────
-  // The mark that REPLACES the preset pair above. Three things are worth a test
-  // and only one of them is the happy path: the own-project gate, and the
-  // ORDERING of the blob collection relative to the commit.
+  // The project's mark. It REPLACED a preset icon + colour pair, whose
+  // set-and-clear test stood here until MOTIR-2680 dropped the columns — the
+  // subject went, so the test went with it, and what follows is the mark's
+  // coverage now. Three things are worth a test and only one of them is the
+  // happy path: the own-project gate, and the ORDERING of the blob collection
+  // relative to the commit.
 
   it('sets, replaces and clears the image, resolving the stored KEY to a URL on read', async () => {
     const { key, project, ownerCtx } = await makeFixture('image');
@@ -228,18 +208,12 @@ describe('updateDetails', () => {
     expect(await storedImageOf(project.id)).toBe(first); // and is still referenced
   });
 
-  it('rejects a blank name, an unknown icon, and an unknown colour', async () => {
+  it('rejects a blank name', async () => {
     const { key, ownerCtx } = await makeFixture('valid');
 
     await expect(
       projectsService.updateDetails({ key, ctx: ownerCtx, name: '   ' }),
     ).rejects.toBeInstanceOf(InvalidProjectNameError);
-    await expect(
-      projectsService.updateDetails({ key, ctx: ownerCtx, avatarIcon: 'not-an-icon' }),
-    ).rejects.toBeInstanceOf(InvalidAvatarError);
-    await expect(
-      projectsService.updateDetails({ key, ctx: ownerCtx, avatarColor: 'chartreuse' }),
-    ).rejects.toBeInstanceOf(InvalidAvatarError);
   });
 
   it('rejects a non-admin with NotProjectAdminError', async () => {

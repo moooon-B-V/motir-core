@@ -11,13 +11,13 @@ import { guardSettingsPage } from './_guard';
 
 // Project-settings AREA landing — the registry's `details` entry. Story 6.5 ·
 // 6.5.3 shipped this read-only; Story 6.8 · 6.8.4 grows it into the EDITABLE
-// surface (name + avatar + the guarded change-key flow + previous keys), per
+// surface (name + logo + the guarded change-key flow + previous keys), per
 // `design/projects/details.mock.html`. The verified mirror rule: settings opens
 // ON Details, and Details owns the editable project identity + the danger zone.
 //
-// Identity, avatar, and the retired-key history are read via the details-surface
-// path (`projectsService.getDetails`) — the DTO that loads `avatarIcon`,
-// `avatarColor`, and `previousKeys` (the hot active-project read deliberately
+// Identity, the logo, and the retired-key history are read via the details-surface
+// path (`projectsService.getDetails`) — the DTO that loads `createdAt` and
+// `previousKeys` (the hot active-project read deliberately
 // omits the alias join). `canManage` gates the editable affordances in the UI;
 // the update / change-key / release Server Actions are independently
 // admin-gated server-side.

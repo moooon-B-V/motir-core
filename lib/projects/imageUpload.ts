@@ -13,7 +13,7 @@
 //
 // Kept dependency-free (no `lib/blob/s3`, no Prisma) so a `'use client'`
 // component can import it without dragging the AWS SDK into its bundle — the
-// same reason `lib/projects/avatar.ts` stayed UI-free before it.
+// same reason the retired preset registry stayed UI-free before it.
 
 /**
  * The size ceiling for a project logo — **2 MB**, the figure

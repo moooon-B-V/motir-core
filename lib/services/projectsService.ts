@@ -14,7 +14,6 @@ import {
   IdentifierReservedError,
   IdentifierTakenError,
   IdentifierUnchangedError,
-  InvalidAvatarError,
   InvalidIdentifierError,
   InvalidProjectImageError,
   InvalidProjectNameError,
@@ -24,7 +23,6 @@ import {
   ProjectTagsInvalidError,
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
-import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
 import { PROJECT_IMAGE_MAX_BYTES, isProjectImageType } from '@/lib/projects/imageUpload';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import { putPublicAsset } from '@/lib/blob/uploader';
@@ -759,17 +757,15 @@ export const projectsService = {
    * Update a project's name and/or avatar (Story 6.8). Admin-gated. `name` is
    * trimmed + non-empty; the `slug` is NOT regenerated — it is a create-time
    * artifact no URL consumes (recorded decision), so a rename keeps every
-   * existing slug-addressed link working. Avatar icon/colour are validated
-   * against the preset registry (lib/projects/avatar.ts); `null` clears a field
-   * back to the shipped mono-identifier rendering; an absent field is left
-   * untouched. Returns the DTO with `previousKeys` (the details-surface shape).
+   * existing slug-addressed link working. `image` is the project's LOGO — an
+   * object key gated to this project's own prefix; `null` clears it (the project
+   * then renders no mark at all), and an absent field is left untouched. Returns
+   * the DTO with `previousKeys` (the details-surface shape).
    */
   async updateDetails(input: {
     key: string;
     ctx: WorkspaceContext;
     name?: string;
-    avatarIcon?: string | null;
-    avatarColor?: string | null;
     image?: string | null;
   }): Promise<ProjectDTO> {
     // The object key of a REPLACED/removed project image, captured inside the
@@ -783,28 +779,11 @@ export const projectsService = {
       const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
       await projectAccessService.assertCanManage(project.id, input.ctx, tx);
 
-      const data: {
-        name?: string;
-        avatarIcon?: string | null;
-        avatarColor?: string | null;
-        image?: string | null;
-      } = {};
+      const data: { name?: string; image?: string | null } = {};
       if (input.name !== undefined) {
         const trimmed = input.name.trim();
         if (!trimmed) throw new InvalidProjectNameError();
         data.name = trimmed;
-      }
-      if (input.avatarIcon !== undefined) {
-        if (input.avatarIcon !== null && !isValidAvatarIcon(input.avatarIcon)) {
-          throw new InvalidAvatarError('icon', input.avatarIcon);
-        }
-        data.avatarIcon = input.avatarIcon;
-      }
-      if (input.avatarColor !== undefined) {
-        if (input.avatarColor !== null && !isValidAvatarColor(input.avatarColor)) {
-          throw new InvalidAvatarError('color', input.avatarColor);
-        }
-        data.avatarColor = input.avatarColor;
       }
       if (input.image !== undefined) {
         const image = input.image; // string (set) | null (remove)

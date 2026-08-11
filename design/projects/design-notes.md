@@ -1460,28 +1460,36 @@ the primitive each block maps to:
 - The **save bar** is the card footer action row (`save-bar`) with a
   dirty/saving/saved status region on the left.
 
-## The avatar contract (the 6.8.1 registry — `lib/projects/avatar.ts`)
+## The avatar contract — RETIRED (MOTIR-2680, 2026-08-11)
 
-The picker renders from the SAME two key sets the `updateDetails` service
-validates against — the mock does not invent its own:
+**This section specified a picker that no longer exists.** Story 6.8 gave a
+project a mark chosen from a preset library — 18 icon keys and 6 colour keys,
+validated server-side against a registry, with the project's key letters
+rendered on a tile when unset. MOTIR-2588 replaced the whole mechanism: the mark
+is an **uploaded image** now, and a project with none renders **nothing at all**.
+The registry, the two columns, the picker and the renderer are gone.
 
-- **18 preset ICON keys** (the grid, in registry order): `folder`, `rocket`,
-  `layers`, `box`, `compass`, `flag`, `star`, `target`, `zap`, `bug`, `code`,
-  `sparkles`, `hexagon`, `briefcase`, `beaker`, `palette`, `globe`, `bookmark`.
-  The keys are opaque STRINGS server-side; **6.8.4 owns the key → lucide-component
-  map** (the picker imports `lucide-react`; the service must not — the same
-  UI-free split `issueTypes.ts` → `parentRules.ts` uses).
-- **6 COLOUR keys**, aligned 1:1 to `--el-tint-*`: `peach`, `rose`, `mint`,
-  `lavender`, `sky`, `yellow`. Each swatch is `bg-(--el-tint-<key>)` — colour
-  stays on the swap layer, never a raw `--color-*`. The chip puts the glyph in
-  `--el-text-strong` over the tint (AA, finding #35).
-- **`null` avatar = the shipped MONO rendering** — the chip shows the project's
-  key letters on `--el-type-task` (the existing tile). "None" in the picker
-  restores it. Drawn on the switcher's "Apex" row (`AP`).
-- **NO image upload** (recorded deviation — Jira's own default avatars are a
-  preset library; the 2.3.7 upload primitive is issue-attachment-scoped; an
-  arbitrary user image as workspace chrome would need crop/moderation infra).
-  Adding an icon key is append-only-safe; removing one orphans existing rows.
+**Read the sections it touched, not this one.** _The logo row has no label_
+(above) is the current spec for this card's mark row, and
+`docs/decisions/entity-marks.md` is the stance behind it.
+
+The full text is left out rather than struck through because a preset grid is a
+concrete thing to build, and a reader skimming for "what does the mark row
+look like" would have found it and built it. What IS worth keeping is the
+argument that lost, because the reversal is only legible next to it:
+
+> **NO image upload** (recorded deviation — Jira's own default avatars are a
+> preset library; the 2.3.7 upload primitive is issue-attachment-scoped; an
+> arbitrary user image as workspace chrome would need crop/moderation infra).
+
+Two of those three held up and one did not. The mirror argument was sound and
+was simply outranked by what Yue wanted. The attachment-scope argument was true
+in June and false by August — the account Photo row (`User.image`) shipped a
+public-bucket upload primitive in between, which is exactly what the project
+logo composes. The crop/moderation cost never materialised: the row caps size
+and MIME type and stores the file as uploaded. A deviation that rests on
+infrastructure not existing yet is worth re-checking whenever it is cited, not
+inherited.
 
 ## The change-key flow (the 6.8.1 service + errors contract)
 

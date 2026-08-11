@@ -6,7 +6,6 @@ import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 import { statusElVar } from '@/lib/workflows/statusColor';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { LABEL_TINTS } from '@/lib/labels/labelTint';
-import { AVATAR_COLORS } from '@/lib/projects/avatar';
 import { loadTokenLayer, declaredIn, resolveValue, type ThemeContext } from './paletteCascade';
 
 // MOTIR-1278 · 1266.7 — the cross-cutting per-palette COVERAGE + SWAP-LAYER
@@ -220,14 +219,32 @@ describe('recessed canvas — the planning board reads as a recess in every pale
 //
 // Each family is enumerated from the shipped source of truth — the workflow's
 // own status list through `statusElVar`, the priority option list, the label
-// tint ramp, the avatar colour keys — never from a list hand-copied here, so a
+// tint ramp, the token layer's own `--el-avatar-*` set — never from a list
+// hand-copied here, so a
 // registry that grows drags its new member into this check automatically
 // (auto-memory: write the assertion as a derivation, not a frozen count).
 
 const STATUS_TOKENS = DEFAULT_STATUSES.map((status) => statusElVar(status));
 const PRIORITY_TOKENS = PRIORITY_OPTIONS.map((option) => `--el-priority-${option.value}`);
 const LABEL_TOKENS = LABEL_TINTS.map((_tint, index) => `--el-label-${index + 1}`);
-const AVATAR_TOKENS = AVATAR_COLORS.map((colour) => `--el-avatar-${colour}`);
+/**
+ * The `--el-avatar-*` PASTEL ramp, derived from the Tier-3 layer itself.
+ *
+ * ⚠️ It used to come from a hand-kept array in the project-avatar registry,
+ * which MOTIR-2680 deleted with the preset avatar. No TypeScript registry names these
+ * keys any more — the ramp IS its declaration in the token layer — so the
+ * stylesheet is now its shipped source, and the "derive, never hand-copy" rule
+ * this file opens with still holds: add `--el-avatar-teal` to the layer and it
+ * joins these checks with no edit here.
+ *
+ * `--el-avatar-fallback` is excluded deliberately: it is the no-hue initial
+ * tile (it rides `--color-info`, pinned to `--el-type-task` in
+ * `identityHuesTokens`), not a member of the pastel family being measured.
+ */
+const AVATAR_TOKENS = elementTokens
+  .filter((token) => token.startsWith('--el-avatar-') && token !== '--el-avatar-fallback')
+  .sort();
+const AVATAR_RAMP_KEYS = AVATAR_TOKENS.map((token) => token.slice('--el-avatar-'.length));
 const SELECTION_TOKENS = ['--el-selection-bg', '--el-droptarget-bg'];
 
 const FAMILIES: Record<string, string[]> = {

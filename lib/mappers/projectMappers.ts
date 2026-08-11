@@ -24,8 +24,6 @@ export function toProjectDTO(project: Project, aliases?: ProjectKeyAlias[]): Pro
     identifier: project.identifier,
     archivedAt: project.archivedAt ? project.archivedAt.toISOString() : null,
     accessLevel: project.accessLevel,
-    avatarIcon: project.avatarIcon,
-    avatarColor: project.avatarColor,
     // The column holds an object KEY; the DTO carries an absolute URL. Resolving
     // HERE — at the DTO boundary, like every user-image mapper — is what lets the
     // stored value stay origin-free (MOTIR-2404's reason, applied to the project
