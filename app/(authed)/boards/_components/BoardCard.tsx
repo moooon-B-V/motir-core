@@ -3,10 +3,11 @@
 import { useTranslations } from 'next-intl';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { CircleAlert, Clock, GripVertical } from 'lucide-react';
+import { CircleAlert, Clock, GripVertical, Hash } from 'lucide-react';
 import { IssueTypeIcon } from '@/components/issues/IssueTypeIcon';
 import { Pill } from '@/components/ui/Pill';
 import { formatDurationMinutes } from '@/lib/utils/duration';
+import { formatStoryPoints } from '@/lib/estimation/scales';
 import type { BoardCardDto } from '@/lib/dto/boards';
 import { WorkItemActionsMenu } from '@/components/issues/actions/WorkItemActionsMenu';
 import { Avatar, PriorityValue } from '../../items/_components/issueCellPrimitives';
@@ -57,6 +58,12 @@ export function BoardCardView({
   const t = useTranslations('boards');
   const estimate =
     card.estimateMinutes != null ? formatDurationMinutes(card.estimateMinutes) : null;
+  // The STORY-POINT value (MOTIR-2618). Formatted with the same
+  // `formatStoryPoints` the backlog / list / detail chips use, so `2` and `0.5`
+  // read identically on every surface. A STATIC span, not `EstimateBadge`: the
+  // whole card is the drag-handle `<button>` (see below), so the badge's
+  // click-to-edit button cannot nest inside it.
+  const points = card.storyPoints != null ? formatStoryPoints(card.storyPoints) : null;
 
   return (
     <>
@@ -96,6 +103,28 @@ export function BoardCardView({
             {t('blocked')}
           </Pill>
         )}
+        {/* The story-point chip — `design/boards/board.mock.html`'s `.pts`
+            (mono, semibold, `--el-text-secondary`), in the slot the design
+            gives it: directly after the priority chip, before the spacer. The
+            design-notes call this the "story-point / estimate chip" and the
+            time estimate has been occupying it alone since 4.3.4; both render
+            here now, points first, and each is absent when its value is null. */}
+        {points ? (
+          <span
+            className="inline-flex items-center gap-1 font-mono text-xs font-semibold text-(--el-text-secondary)"
+            title={t('storyPointsLabel', { points })}
+            aria-label={t('storyPointsLabel', { points })}
+          >
+            {/* The `hash` glyph EstimateBadge puts on the story-point value
+                everywhere else, and what the mock's `.pts { display: inline-flex;
+                gap: 4px }` leaves room for. It is load-bearing, not decoration:
+                rendered, a bare `5` beside the time estimate reads as one figure
+                ("5 1h 30m"). Decorative + aria-hidden, so `--el-text-faint` is one
+                of that token's two legitimate jobs; the label carries the meaning. */}
+            <Hash className="h-3 w-3 shrink-0 text-(--el-text-faint)" aria-hidden />
+            {points}
+          </span>
+        ) : null}
         {estimate ? (
           <span
             className="font-mono text-xs font-semibold text-(--el-text-secondary)"

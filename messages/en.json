@@ -2746,6 +2746,7 @@
     "blocked": "Blocked",
     "awaitingAcceptance": "Awaiting acceptance",
     "estimateLabel": "Estimate {value}",
+    "storyPointsLabel": "{points} story points",
     "assignedTo": "Assigned to {name}",
     "unassigned": "Unassigned",
     "boardLabel": "Board columns",

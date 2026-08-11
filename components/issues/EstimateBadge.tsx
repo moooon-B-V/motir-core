@@ -12,8 +12,20 @@ import type { PointScaleDto } from '@/lib/dto/estimation';
 import { useEstimationConfig, type EstimationConfigContextValue } from './EstimationConfigProvider';
 
 // EstimateBadge (Story 4.3 · Subtask 4.3.4) — the ONE inline estimate chip +
-// click-to-edit picker, reused on every surface that renders an issue (backlog
-// row · board/scrum card · issue-detail rail · list Points column). Drawn per
+// click-to-edit picker. Its call sites are exactly these FOUR, and a
+// `grep '<EstimateBadge'` must keep returning the same list (MOTIR-2618):
+//   - `app/(authed)/backlog/_components/BacklogRow.tsx`      (the backlog row)
+//   - `app/(authed)/items/[key]/_components/CoreFieldsPanel.tsx` (detail rail)
+//   - `app/(authed)/items/_components/issueColumns.tsx`      (list Points column)
+//   - `app/(authed)/items/_components/IssueQuickViewPanel.tsx` (peek rail, MOTIR-2565)
+// The **board/scrum card is NOT one of them** — it renders a STATIC `.pts` span
+// of its own (`app/(authed)/boards/_components/BoardCard.tsx`), because the whole
+// card is the drag-handle `<button>` and this badge's editable arm is a button
+// that cannot nest inside it. This comment claimed the board for two months while
+// the board rendered no points at all, and three separate artifacts believed it
+// (MOTIR-2560, MOTIR-2565, `quick-view.mock.html` panel 11) — hence the grep rule
+// above: extend the list when you add a call site, never describe it in prose.
+// Drawn per
 // `design/estimation/estimation.mock.html` panels 0–2 + 5 (the `.est` / `.est--btn`
 // chip + the Popover picker). It renders the project's configured estimation
 // STATISTIC (story points by default; the formatted time estimate when Time;
@@ -61,11 +73,11 @@ export interface EstimateBadgeProps {
   /** The issue's TIME estimate in minutes — shown when the statistic is Time. */
   estimateMinutes?: number | null;
   /**
-   * Force the static read-only chip even when the actor `canEdit`. Used by the
-   * board card, whose whole surface is a drag/click `<button>` — an interactive
-   * picker button can't nest inside it (invalid HTML; the design wants the badge
-   * as a flex-sibling). The board still SHOWS the configured statistic; inline
-   * board editing awaits the card → stretched-overlay refactor (PRODECT_FINDINGS).
+   * Force the static read-only chip even when the actor `canEdit`. Used by
+   * `BacklogRow`, which passes its own `readOnlyEstimate` — the row suppresses
+   * the picker in the contexts where an inline edit would fight the row's other
+   * affordances. (It does NOT serve the board card: the board never mounts this
+   * component at all — see the call-site list in the header.)
    */
   readOnly?: boolean;
   /**
