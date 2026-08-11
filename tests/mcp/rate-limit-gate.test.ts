@@ -69,6 +69,12 @@ const PRE_BOUNDARY_MS = 400;
  *  crosses the boundary for them first. */
 const CALL_GAP_MS = 800;
 
+/** The reproduction case sleeps ~9 s BY CONSTRUCTION — two constructed phases
+ *  plus two inter-call gaps — which the 15 s default leaves too little room
+ *  above. Named rather than written inline because a comment in `it`'s argument
+ *  position is one of the few things Prettier reformats non-idempotently. */
+const REPRODUCTION_TIMEOUT_MS = 30_000;
+
 const ctx: ServiceContext = { userId: 'gate_user', workspaceId: 'gate_ws' };
 
 beforeEach(async () => {
@@ -180,43 +186,45 @@ describe('the billable-tool gate, wired into a real server', () => {
   // fix: a green suite after the change proves exactly what a green suite before
   // it proved. This case makes both halves summonable, from the same budget and
   // the same two calls, and asserts the OPPOSITE outcomes.
-  it('the ALIGNMENT is what refuses — the same two calls straddle a boundary without it', async () => {
-    process.env[LIMIT_ENV] = '1';
-    process.env[WINDOW_ENV] = String(ALIGNED_WINDOW_MS);
+  it(
+    'the ALIGNMENT is what refuses — the same two calls straddle a boundary without it',
+    async () => {
+      process.env[LIMIT_ENV] = '1';
+      process.env[WINDOW_ENV] = String(ALIGNED_WINDOW_MS);
 
-    // Both halves start at the SAME phase — `PRE_BOUNDARY_MS` short of a
-    // boundary — and leave the SAME gap between their two calls. The gap is
-    // longer than the window remainder they start with, so the pair lands on
-    // opposite sides of the boundary unless something crosses it for them
-    // first. The alignment is the only thing that differs.
+      // Both halves start at the SAME phase — `PRE_BOUNDARY_MS` short of a
+      // boundary — and leave the SAME gap between their two calls. The gap is
+      // longer than the window remainder they start with, so the pair lands on
+      // opposite sides of the boundary unless something crosses it for them
+      // first. The alignment is the only thing that differs.
 
-    // (a) UNALIGNED: the boundary falls between the calls, the counter starts
-    //     fresh, and the second call reaches the runner. This is the reported
-    //     failure summoned on demand — a `PROJECT_NOT_FOUND` where the case
-    //     above asserts `RATE_LIMITED`, which is the whole bug.
-    await waitUntilJustBeforeBoundary();
-    const straddling = await connect();
-    expectReachedTheTool(await expandItem(straddling));
-    await sleep(CALL_GAP_MS);
-    expectReachedTheTool(await expandItem(straddling));
-    await straddling.close();
+      // (a) UNALIGNED: the boundary falls between the calls, the counter starts
+      //     fresh, and the second call reaches the runner. This is the reported
+      //     failure summoned on demand — a `PROJECT_NOT_FOUND` where the case
+      //     above asserts `RATE_LIMITED`, which is the whole bug.
+      await waitUntilJustBeforeBoundary();
+      const straddling = await connect();
+      expectReachedTheTool(await expandItem(straddling));
+      await sleep(CALL_GAP_MS);
+      expectReachedTheTool(await expandItem(straddling));
+      await straddling.close();
 
-    // (b) ALIGNED, from that same phase: `waitForWindowBoundary` crosses the
-    //     boundary BEFORE the first call, so the gap that straddled in (a)
-    //     now falls inside one window and the second call is refused. Same
-    //     budget, same two calls, same spacing, opposite verdict.
-    await waitUntilJustBeforeBoundary();
-    await waitForWindowBoundary(ALIGNED_WINDOW_MS);
-    const aligned = await connect();
-    expectReachedTheTool(await expandItem(aligned));
-    await sleep(CALL_GAP_MS);
-    const refused = await expandItem(aligned);
-    expect(refused.isError).toBe(true);
-    expect(textOf(refused.content)).toContain(RATE_LIMITED_CODE);
-    await aligned.close();
-  }, // Two constructed phases plus two inter-call gaps: ~9 s of deliberate
-  // sleeping, which the 15 s default leaves too little room above.
-  30_000);
+      // (b) ALIGNED, from that same phase: `waitForWindowBoundary` crosses the
+      //     boundary BEFORE the first call, so the gap that straddled in (a)
+      //     now falls inside one window and the second call is refused. Same
+      //     budget, same two calls, same spacing, opposite verdict.
+      await waitUntilJustBeforeBoundary();
+      await waitForWindowBoundary(ALIGNED_WINDOW_MS);
+      const aligned = await connect();
+      expectReachedTheTool(await expandItem(aligned));
+      await sleep(CALL_GAP_MS);
+      const refused = await expandItem(aligned);
+      expect(refused.isError).toBe(true);
+      expect(textOf(refused.content)).toContain(RATE_LIMITED_CODE);
+      await aligned.close();
+    },
+    REPRODUCTION_TIMEOUT_MS,
+  );
 
   it('the SCOPE gate runs FIRST — a denied call never spends the generation budget', async () => {
     // The ordering `registerMcpTools` composes for. `expand_item` needs
