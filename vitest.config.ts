@@ -969,6 +969,13 @@ export default defineConfig({
         // MEASURED first — 100 / 90.9 / 100 / 100 (stmts / branches / funcs /
         // lines) on this branch; the two uncovered branches are the pre-existing
         // `?? ''` fallbacks behind a length check.
+        //
+        // MOTIR-2646 added the CONTENTION half to the same module — the shaping
+        // helpers behind `contention.json`, which the lane now writes on every
+        // run rather than only on a red one. Re-measured with the same suite:
+        // 100 / 92.1 / 100 / 100. The one further uncovered branch is the
+        // clamped index's `?? 0` in `percentileMs`, which
+        // `noUncheckedIndexedAccess` requires and the clamp makes unreachable.
         'tests/e2e/_helpers/acceptance-diagnostics.ts',
       ],
       reporter: ['text', 'text-summary'],

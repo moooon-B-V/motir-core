@@ -1,7 +1,5 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { toWatcherDto } from '@/lib/mappers/watcherMappers';
@@ -9,6 +7,8 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { WatchersForbiddenError, WatcherTargetCannotViewError } from '@/lib/watchers/errors';
 import type { WatcherDto, WatchersPageDto, WatchStateDto } from '@/lib/dto/watchers';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readWorkItem } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Watchers service (Story 5.4 · Subtask 5.4.4) — the watch mechanics over the
 // 5.4.1 watcher repository. Owns the verified permission split, the
@@ -66,7 +66,7 @@ async function resolveGatedWorkItem(
   ctx: ServiceContext,
   tx?: Prisma.TransactionClient,
 ): Promise<{ item: WorkItem; canManage: boolean }> {
-  const item = await workItemRepository.findById(workItemId, tx);
+  const item = await readWorkItem(workItemId, ctx, tx);
   if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
   const caps = await projectAccessService.getWatcherCapabilities(item.projectId, ctx, tx);
   if (!caps.canBrowse) throw new WorkItemNotFoundError(workItemId);
@@ -101,7 +101,7 @@ export const watchersService = {
    * optimistic reconcile. No revision, no event.
    */
   async watch(workItemId: string, ctx: ServiceContext): Promise<WatchStateDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const { item } = await resolveGatedWorkItem(workItemId, ctx, tx);
       await watcherRepository.add(item.id, ctx.userId, tx);
       const watcherCount = await watcherRepository.countByWorkItem(item.id, tx);
@@ -114,7 +114,7 @@ export const watchersService = {
    * zero rows and still returns the (unchanged) state. View-gated like watch.
    */
   async unwatch(workItemId: string, ctx: ServiceContext): Promise<WatchStateDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const { item } = await resolveGatedWorkItem(workItemId, ctx, tx);
       await watcherRepository.remove(item.id, ctx.userId, tx);
       const watcherCount = await watcherRepository.countByWorkItem(item.id, tx);
@@ -134,7 +134,7 @@ export const watchersService = {
     targetUserId: string,
     ctx: ServiceContext,
   ): Promise<{ watcher: WatcherDto; watcherCount: number }> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const { item, canManage } = await resolveGatedWorkItem(workItemId, ctx, tx);
       if (!canManage) throw new WatchersForbiddenError('add');
       await assertTargetCanView(item, targetUserId, tx);
@@ -156,7 +156,7 @@ export const watchersService = {
     targetUserId: string,
     ctx: ServiceContext,
   ): Promise<{ watcherCount: number }> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const { item, canManage } = await resolveGatedWorkItem(workItemId, ctx, tx);
       if (!canManage) throw new WatchersForbiddenError('remove');
       await watcherRepository.remove(item.id, targetUserId, tx);

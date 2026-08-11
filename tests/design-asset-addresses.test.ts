@@ -399,6 +399,24 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   // ("the route lands no earlier than MOTIR-2263"). The guard reads the ROUTE
   // TABLE, so a 404 rendered BY a matching route is invisible to it; that is a
   // known limit of the sweep, not something this deletion introduces.
+  // ── Forward-looking: the Home landing surface (MOTIR-2653 / MOTIR-2654) ───
+  //    The asset (MOTIR-2650) draws a route that does not exist yet:
+  //    `app/(authed)/` holds `dashboard`, `items`, `ready`, `boards`, `roadmap`
+  //    and the rest, but no `home`. MOTIR-2653 builds `app/(authed)/home/page.tsx`
+  //    and MOTIR-2654 adds the nav entry + moves the post-auth landing onto it.
+  //    Per the pattern above, MOTIR-2653 is the card that DELETES these two rows,
+  //    in the commit that adds the route — they are temporary by construction,
+  //    unlike the point-in-time rows further up, which are permanent.
+  {
+    file: 'design/home/design-notes.md',
+    address: '/home',
+    why: 'Forward-looking: the design gate for MOTIR-2649 draws `/home` before the route exists. MOTIR-2653 adds `app/(authed)/home/page.tsx` and deletes this row in the same commit.',
+  },
+  {
+    file: 'design/home/home.mock.html',
+    address: '/home',
+    why: "Forward-looking: the mock's tab strip and rail entry link to `/home`, the route MOTIR-2653 builds. MOTIR-2653 deletes this row in the commit that adds the route.",
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -827,6 +845,16 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'docs/decisions/entity-marks.md',
     why: 'The same citation in Panel G, which names the decision its frames render. Same story, same reason it is deliberate, same removal.',
   },
+  {
+    file: 'design/projects/design-notes.md',
+    path: 'docs/decisions/entity-marks.md',
+    why: 'The projects-area half of the same story (MOTIR-2675) cites the same ADR for the same reason — it draws that decision’s Image row. Lands with MOTIR-2588; remove with the two rows above.',
+  },
+  {
+    file: 'design/projects/details.mock.html',
+    path: 'docs/decisions/entity-marks.md',
+    why: 'The mock’s header block records the reversed preset deviation and names the ADR that reversed it. Same story, same removal.',
+  },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
     file: 'design/epic-privacy/design-notes.md',
@@ -943,6 +971,12 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  guarded like any other. An exemption cannot outlive its reason — and the
   //  `carries no KNOWN_PATHS entry that has stopped applying` test below is
   //  what made sure nobody had to remember.)
+  // ── Forward-looking: the Home page module (MOTIR-2653) ────────────────────
+  {
+    file: 'design/home/design-notes.md',
+    path: 'app/(authed)/home/page.tsx',
+    why: 'Forward-looking: the MOTIR-2650 asset names the module MOTIR-2653 will create. MOTIR-2653 deletes this row in the commit that adds the file.',
+  },
 ];
 
 describe('a design asset cites source paths that still exist', () => {

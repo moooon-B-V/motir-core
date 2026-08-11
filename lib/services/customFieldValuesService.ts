@@ -1,5 +1,4 @@
 import { Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import {
@@ -7,7 +6,6 @@ import {
   type CustomFieldValueWithRefs,
 } from '@/lib/repositories/customFieldValueRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
@@ -26,6 +24,8 @@ import {
 import { MAX_TEXT_VALUE_LENGTH } from '@/lib/customFields/valueLimits';
 import type { CustomFieldValueDto, SetCustomFieldValueInput } from '@/lib/dto/customFieldValues';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // customFieldValuesService — the VALUES half of the custom-fields domain
 // (Story 5.3 · Subtask 5.3.3): per-type validated set/clear of one issue's
@@ -162,7 +162,7 @@ export const customFieldValuesService = {
     ctx: ServiceContext,
   ): Promise<CustomFieldValueDto | null> {
     // Tenant gates first — 404, no existence leak (finding #44).
-    const item = await workItemRepository.findById(workItemId);
+    const item = await readWorkItem(workItemId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
     const field = await customFieldDefinitionRepository.findById(fieldId, ctx.workspaceId);
     // A field of a DIFFERENT project is, from this issue's vantage, absent.
@@ -178,7 +178,7 @@ export const customFieldValuesService = {
     let assignableIds: Set<string> | null = null;
     if (field.fieldType === 'user' && raw !== null) {
       if (typeof raw !== 'string') throw new CustomFieldValueTypeMismatchError(field.fieldType);
-      const project = await projectRepository.findById(item.projectId);
+      const project = await readProject(item.projectId, ctx);
       if (!project) throw new WorkItemNotFoundError(workItemId);
       const members = await assignableMembersService.list({
         projectId: project.id,
@@ -188,7 +188,7 @@ export const customFieldValuesService = {
       assignableIds = new Set(members.map((m) => m.userId));
     }
 
-    const result = await db.$transaction(async (tx) => {
+    const result = await withWorkspaceContext(ctx, async (tx) => {
       // Serialize value edits per issue: the revision diff below is derived
       // from the current row, so the compare-then-write must be race-free.
       const locked = await workItemRepository.lockById(workItemId, tx);

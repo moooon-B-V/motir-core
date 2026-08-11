@@ -9,7 +9,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import {
   DEFAULT_STATUSES,
@@ -433,16 +433,24 @@ export const workflowsService = {
    * seeds and returns true otherwise. Throws ProjectNotFoundError if absent.
    */
   async backfillDefaultWorkflow(projectId: string, actorUserId: string): Promise<boolean> {
-    const project = await projectRepository.findById(projectId);
+    // MOTIR-2569: same shape as `boardsService.backfillDefaultBoard` — the read
+    // that RESOLVES the workspace cannot bind it, so it runs under the
+    // `app.system_admin` arm the `project` policy carries for operator tooling;
+    // the probe and the seed then run tenant-scoped under what it resolved.
+    // `workflow_status` is workspace-keyed too, so an unbound probe would report
+    // "no statuses" for a project that has them and seed a second set.
+    const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
     if (!project) throw new ProjectNotFoundError(projectId);
 
-    const existing = await workflowsRepository.findStatuses(projectId, project.workspaceId);
-    if (existing.length > 0) return false;
-
-    await withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, (tx) =>
-      workflowsService.seedDefaultWorkflow(projectId, project.workspaceId, tx),
+    return withWorkspaceContext(
+      { userId: actorUserId, workspaceId: project.workspaceId },
+      async (tx) => {
+        const existing = await workflowsRepository.findStatuses(projectId, project.workspaceId, tx);
+        if (existing.length > 0) return false;
+        await workflowsService.seedDefaultWorkflow(projectId, project.workspaceId, tx);
+        return true;
+      },
     );
-    return true;
   },
 
   // ── Management writes (Subtask 2.2.5) ──────────────────────────────────────

@@ -1,4 +1,3 @@
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -8,6 +7,7 @@ import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // The DISPATCH-PROMPT read (Story 7.9 · MOTIR-1802) — resolve everything the
 // canonical prompt is assembled from, then hand it to the PURE assembler
@@ -81,7 +81,7 @@ export const dispatchPromptService = {
     ctx: ServiceContext,
     opts: DispatchPromptOptions = {},
   ): Promise<DispatchPromptDto> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }

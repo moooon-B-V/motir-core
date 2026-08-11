@@ -427,10 +427,18 @@ the same object at different sizes.
 
 - **Nothing renders. The box is not reserved** — no placeholder, no dashed outline, no picture glyph,
   no monogram, no generated tint. The tier collapses to its name and the gap closes.
-- **In a LIST, rows do not indent to a phantom column.** A project without an image starts at the
-  same x as one with an image starts its _box_; the row's text therefore shifts left. Drawn in the
-  projects asset (`MOTIR-2675`) at a realistic row count, because a mixed list is the normal case
-  once images are optional, not an edge state.
+- **⚠️ AMENDED by MOTIR-2675 (2026-08-11), after drawing it: in a LIST the NAME keeps one left
+  edge.** This clause used to read _"rows do not indent to a phantom column … the row's text
+  therefore shifts left"_, and it was written without a list in front of it. `MOTIR-2675` drew the
+  switcher at four rows, two imaged and two not, and **the ragged name edge reads noticeably worse
+  than this predicted** — the un-imaged names hang left of the imaged ones and the list stops
+  scanning as a column.
+  **The corrected rule: a LIST row holds the 24px slot open; the BAR does not.** Nothing is drawn in
+  that slot — no border, no fill, no glyph — so the no-mark rule holds exactly; what is preserved is
+  ALIGNMENT, which is a property of the list rather than a mark. A single BAR tier has no column to
+  align to, so there the gap simply closes. Measured after the fix: all four names start at the same
+  x. Recorded here rather than only in the projects asset, because a spec that two assets disagree
+  about is worse than either answer.
 - The rule this encodes: **an empty slot states a true fact** — nobody has set one. A generated tile
   states a false one, in the same visual weight a real logo would use.
 
