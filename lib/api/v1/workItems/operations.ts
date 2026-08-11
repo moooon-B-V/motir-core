@@ -92,7 +92,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'List a project’s work items',
     description:
       'A cursor-paged collection of a project’s work items, optionally narrowed by a filter expression. Ordered by `(createdAt, id)` ascending — the position the cursor encodes.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       projectKeyParameter,
       ...pageParameters,
@@ -123,7 +123,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Count a project’s work items',
     description:
       'How many work items match a filter, in ONE request and without paging the match set. Takes the same `filter` the collection takes, and counts exactly what that collection would page. Exact, never capped.',
-    scope: 'read',
+    permission: 'project:browse',
     // No `cursor` / `limit`: a count has no position and no page size, and
     // accepting either would invite a caller to believe it counts a WINDOW.
     parameters: [
@@ -151,7 +151,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Create a work item',
     description:
       'Create a work item in a project. The parent, if given, is named by its key and must be a kind-legal parent in the same project.',
-    scope: 'work_items:write',
+    permission: 'work_item:edit',
     parameters: [projectKeyParameter],
     requestBody: {
       schema: createWorkItemBodySchema,
@@ -171,7 +171,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Read a work item',
     description:
       'The full work item: its own fields, its parent and children, its five link groups, its readiness verdict and its comment count. The response carries an `ETag` for use as an `If-Match` on a later update.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [keyParameter],
     response: {
       status: 200,
@@ -187,7 +187,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Update a work item',
     description:
       'Patch any subset of a work item’s fields. A field that is ABSENT is untouched; a field explicitly set to `null` CLEARS it. Send `If-Match` to make the update conditional on the item not having moved.',
-    scope: 'work_items:write',
+    permission: 'work_item:edit',
     parameters: [keyParameter, ifMatchParameter],
     requestBody: {
       schema: updateWorkItemBodySchema,
@@ -207,7 +207,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'List the statuses a work item can move to',
     description:
       'The workflow-legal targets from the item’s current status. An `open`-policy project permits every other status; a `restricted` one permits only the declared edges.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [keyParameter],
     response: {
       status: 200,
@@ -223,7 +223,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Move a work item to a new status',
     description:
       'Apply a workflow transition. A status the workflow does not define and a status not reachable from here are DIFFERENT errors, because a client can fix only one of them.',
-    scope: 'work_items:write',
+    permission: 'work_item:edit',
     parameters: [keyParameter],
     requestBody: {
       schema: z.object({ status: z.string().min(1) }).strict(),
@@ -243,7 +243,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Read a work item’s relationship edges',
     description:
       'All five edge groups. An empty group is `[]`, never an absent key — to a typed client those are different things.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [keyParameter],
     response: {
       status: 200,
@@ -259,7 +259,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Create a relationship edge',
     description:
       'Link this work item to another by key. Creating an edge that already exists is a 409 — the body is valid, the state is not what the request assumed.',
-    scope: 'work_items:write',
+    permission: 'work_item:edit',
     parameters: [keyParameter],
     requestBody: {
       schema: z.object({ toKey: workItemKeySchema, relationship: relationshipSchema }).strict(),
@@ -282,7 +282,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Remove a relationship edge',
     description:
       'Remove the edge named by its ENDPOINTS — the same pair that created it. Idempotent: 204 whether or not an edge was there, because the post-condition holds either way.',
-    scope: 'work_items:write',
+    permission: 'work_item:edit',
     parameters: [
       keyParameter,
       {
@@ -310,7 +310,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'List a work item’s comments',
     description:
       'Root comments with their single-level reply threads, cursor-paged. This collection DOES report a total, because the shipped read computes it as a bounded aggregate.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       keyParameter,
       ...pageParameters,
@@ -337,7 +337,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Comment on a work item',
     description:
       'Add a root comment, or a reply by naming a root comment as its parent. Replies are single-level: a reply to a reply is a 422.',
-    scope: 'work_items:write',
+    permission: 'comment:add',
     parameters: [keyParameter],
     requestBody: {
       schema: z
@@ -359,7 +359,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     summary: 'Archive a work item',
     description:
       'A recoverable soft-remove. Does NOT cascade to children — the irreversible subtree delete is not exposed by this API at all (ADR §3).',
-    scope: 'work_items:archive',
+    permission: 'work_item:delete',
     parameters: [keyParameter],
     response: {
       status: 200,
@@ -374,7 +374,7 @@ export const WORK_ITEM_OPERATIONS: readonly V1Operation[] = [
     operationId: 'restoreWorkItem',
     summary: 'Restore an archived work item',
     description: 'The inverse of archiving. Idempotent on an item that is not archived.',
-    scope: 'work_items:archive',
+    permission: 'work_item:delete',
     parameters: [keyParameter],
     response: {
       status: 200,

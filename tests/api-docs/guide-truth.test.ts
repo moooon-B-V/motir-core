@@ -14,7 +14,7 @@ import { findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { isV1Status } from '@/lib/api/v1/openapi/statuses';
 import { V1_SHARED_RESPONSE_HEADERS } from '@/lib/api/v1/openapi/headers';
 import { DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
-import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { isGrantable } from '@/lib/tokens/grant';
 
 // The guide and the policy, CHECKED AGAINST THE THING THEY DESCRIBE
 // (Story 11.4 · Subtask 11.4.8 — MOTIR-2189).
@@ -125,20 +125,29 @@ describe('the guide is TRUE of the shipped API', () => {
     expect(prose).toContain(String(MAX_PAGE_LIMIT));
   });
 
-  it('describes only scopes the product actually offers', () => {
+  it('describes only permissions the product actually grants', () => {
     const prose = GUIDE_STEPS.find((s) => s.id === 'mint-a-token')!
       .blocks.filter(
         (block): block is Extract<GuideBlock, { kind: 'prose' }> => block.kind === 'prose',
       )
       .map((block) => block.text)
       .join(' ');
-    // Every scope the step names is real…
-    for (const named of prose.match(/`([a-z_]+:[a-z_]+|read)`/g) ?? []) {
-      const scope = named.replaceAll('`', '');
-      expect(TOKEN_SCOPES as readonly string[], `unknown scope "${scope}"`).toContain(scope);
+    // Every permission the step names is real and GRANTABLE. `resource:action`
+    // is the SHAPE being described rather than a key, so it is excluded by name.
+    for (const named of prose.match(/`[a-z_]+:[a-z_]+`/g) ?? []) {
+      const key = named.replaceAll('`', '');
+      if (key === 'resource:action') continue;
+      expect(isGrantable(key), `"${key}" is not a grantable permission`).toBe(true);
     }
-    // …and it does NOT advertise the one v1 refuses to expose.
-    expect(prose).not.toContain('work_items:delete');
+    // …and it names no retired scope string.
+    for (const retired of [
+      'work_items:write',
+      'work_items:archive',
+      'work_items:delete',
+      'sprints:write',
+    ]) {
+      expect(prose).not.toContain(retired);
+    }
   });
 
   it('sends the reader to the SHIPPED token surface', () => {
@@ -318,3 +327,39 @@ function bullet(section: string, label: string): string {
 function clauseCount(body: string): number {
   return body.split(';').filter((clause) => clause.trim().length > 0).length;
 }
+
+describe('no reader-facing surface still teaches the six-scope vocabulary (MOTIR-2581)', () => {
+  // The AC as a test rather than as a review pass. A page that names a scope a
+  // reader can no longer choose is worse than a page that says nothing: it sends
+  // them looking for a switch that is not there, and the failure mode is a
+  // support conversation rather than an error.
+  const RETIRED = [
+    'work_items:write',
+    'work_items:archive',
+    'work_items:delete',
+    'sprints:write',
+  ] as const;
+
+  const SURFACES = [
+    'docs/mcp.md',
+    'docs/cli.md',
+    'lib/apiDocs/guide.ts',
+    'lib/apiDocs/sandbox.ts',
+    'lib/apiDocs/mcp.ts',
+    'packages/cli/README.md',
+    'packages/cli/sandbox/README.md',
+  ];
+
+  it.each(SURFACES)('%s names no retired scope a reader could try to choose', (file) => {
+    const source = readFileSync(join(process.cwd(), file), 'utf8');
+    for (const retired of RETIRED) {
+      // `docs/mcp.md` QUOTES the retired names once, in the migration note that
+      // tells a reader they are gone — which is the opposite of teaching them.
+      const occurrences = source.split(retired).length - 1;
+      const allowed = file === 'docs/mcp.md' ? 1 : 0;
+      expect(occurrences, `${file} names "${retired}" ${occurrences}×`).toBeLessThanOrEqual(
+        allowed,
+      );
+    }
+  });
+});

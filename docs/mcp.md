@@ -17,7 +17,7 @@ complete catalog of every shipped tool with its input and output shape.
 > `/api/v1`, a config block for Claude Code, Cursor, VS Code, Codex CLI and any
 > other streamable-HTTP client, and one call that comes back. Its
 > [tool catalogue](https://app.motir.co/docs/mcp/tools) lists every tool with the
-> scope that gates it.
+> permission that gates it.
 >
 > **This document is the REFERENCE**, and it is what the guide hands you off to:
 > it keeps the per-tool input tables and output shapes below, which is the part
@@ -82,37 +82,47 @@ more PATs — the MCP tool surface has no token-management tool. Cross-user toke
 ids read as not-found (the 404-not-403 contract), so a token only ever
 sees/mutates its owner's tokens.
 
-## Token scopes
+## Token permissions
 
-Every token carries a set of **scopes** — the capability boundary for that
-token. At dispatch, each tool call is gated by the granted scopes: if the
-tool's scope is not in the token's set, the call is rejected with a typed
-**`SCOPE_NOT_GRANTED`** error _before_ any work runs.
+Every token carries a **grant** — a set of the same **permissions** the rest of
+Motir enforces, in `resource:action` form, chosen when the token is minted. At
+dispatch, each tool call is gated by that grant: if the permission the tool's
+own service asserts is not in the grant, the call is rejected with a typed
+**`PERMISSION_NOT_GRANTED`** error _before_ any work runs, naming the missing
+key.
 
-**Scope NARROWS; it does not replace the role.** The token still acts as its
+> **This replaced six coarse "scopes" (`read`, `work_items:write`, …) in
+> MOTIR-2572.** Those names no longer exist and are not accepted anywhere.
+> **Every token minted before the change keeps exactly the authority it had** —
+> Motir expands the stored values when it reads them, and nothing was reissued
+> or rewritten. The reasoning is in
+> [`docs/decisions/token-permissions.md`](decisions/token-permissions.md).
+
+**The grant NARROWS; it does not replace the role.** The token still acts as its
 owner, so the same workspace/project access checks apply on every call (a
 foreign or unreachable item is still a 404-not-403 not-found). A call must pass
-**both** gates: the token must hold the tool's scope **and** the owner's role
-must permit the operation. A token whose owner is an admin but whose
-`work_items:delete` scope is off still cannot delete; a token that holds the
-delete scope still cannot delete in a workspace its owner can't reach.
+**both** gates: the grant must hold the tool's permission **and** the owner's
+role must permit the operation. A token whose owner is an admin but whose grant
+omits `work_item:delete` still cannot delete; a token holding it still cannot
+delete in a workspace its owner can't reach. Granting a permission the owner's
+role does not have changes nothing — you can grant less than your own access,
+never more.
 
-The scopes and the tools each one gates:
+The permissions a token can hold, and the tools each one gates, are listed on
+the [tool catalogue](https://app.motir.co/docs/mcp/tools), which is **generated
+from the shipped map** rather than transcribed — so it cannot go stale the day
+someone adds a tool. Each tool's own entry below names its permission too.
 
-| Scope                | Gates                                                                                                                                                                                                                                            |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `read`               | `get_work_item`, `list_ready`, `next_ready`, `dispatch_prompt`, `search_work_items`, `whoami`, `list_projects`, `get_project_state`, `list_sprints`, `validate_sprint`, `validate_work_item`, `get_plan_status`, `get_plan`, `open_plan_session` |
-| `work_items:write`   | `create_work_item`, `update_work_item`, `transition_status`, `claim_next_ready`, `add_comment`, `link_work_items`, `unlink_work_items`, `move_to_parent`, `change_kind`, `expand_item`, `append_plan_turn`, `submit_plan_session`                |
-| `work_items:archive` | `archive_work_item`, `unarchive_work_item` (recoverable soft-remove)                                                                                                                                                                             |
-| `work_items:delete`  | `delete_work_item` — the only irreversible, subtree-cascade op; **OFF by default**                                                                                                                                                               |
-| `sprints:write`      | `create_sprint`, `update_sprint`, `delete_sprint`, `start_sprint`, `complete_sprint`, `move_to_sprint`, `move_to_backlog`                                                                                                                        |
-| `integration`        | `mark_integrated`, `complete_session`                                                                                                                                                                                                            |
+**Default grant.** A token minted without an explicit choice gets **every
+grantable permission EXCEPT `work_item:delete`**. Note that `work_item:delete`
+governs **archiving as well as deleting** — that is the gate the server has
+always applied to both — so a default-granted token can neither archive nor
+delete, and archiving is an opt-in.
 
-**Default grant set.** A token minted without an explicit scope choice gets
-**every scope EXCEPT `work_items:delete`** — full read + write + archive +
-sprint + integration, with the single irreversible cascade-delete opt-in only.
-Archive stays on by default (it is recoverable); only `delete_work_item`, which
-cascades to the whole subtree, must be granted deliberately.
+**AI planning is its own permission.** `ai:plan` gates `expand_item` and the
+three plan-session tools, all of which spend the workspace's AI credits. Under
+the old vocabulary they travelled with _edit work items_ because nothing
+narrower existed; an agent wired only to file work items can now be denied them.
 
 ## Rate limits
 
@@ -502,8 +512,8 @@ On a claim, `item` is the same `ReadyItemDispatchDto` as `next_ready` (with
 identically (see `next_ready` above for the project-scoped rule and the null
 semantics). When nothing could be claimed,
 `item` is `null` and `reason` is `"none_ready"` (retry — a sibling may have just
-claimed the last one — or check there is unblocked work to start). Scope token:
-`work_items:write` (it flips status).
+claimed the last one — or check there is unblocked work to start). Requires
+`work_item:edit` (it flips status).
 
 **`advisories`** — see [the dispatch advisories](#the-dispatch-advisories).
 Always present, `[]` when there are none, on BOTH arms.
@@ -567,7 +577,7 @@ null branch.
 The prompt is a **pure function of server state**: two calls for an unchanged item
 return byte-identical text (no LLM, no timestamps). See
 `docs/decisions/dispatch-prompt-assembly.md` for the grammar's rationale and the
-single named extension point enrichment lands on. Scope token: `read`.
+single named extension point enrichment lands on. Requires `project:browse`.
 
 #### `get_work_item`
 
@@ -1201,7 +1211,11 @@ credits, and draws the shared **`ai:generate`** budget (see
 [Rate limits](#rate-limits)) — the same one the "Expand" button in Motir spends,
 so a loop here cannot be paid for out of a looser allowance. Over budget returns
 a `RATE_LIMITED` tool error _before_ the job is submitted; retry after the
-seconds it names. Scope token: `work_items:write`.
+seconds it names. Requires `ai:plan` — the permission that exists precisely so a
+token allowed to file work items can still be denied a billable planning submit.
+
+Two different limits, and they compose: `ai:plan` decides whether this token may
+submit at all, `ai:generate` decides how much the workspace has left to spend.
 
 #### `get_plan_status`
 
@@ -1233,7 +1247,7 @@ passing both (or neither) returns `BAD_REQUEST`.
 
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
 and an unknown job id `NO_PLAN_FOR_JOB` — the same 404-not-403 contract every
-other tool keeps. Scope token: `read`.
+other tool keeps. Requires `project:browse`.
 
 #### `get_plan`
 
@@ -1277,7 +1291,7 @@ it fill.
 > created.
 
 A pure read. Errors: an unknown / other-tenant plan id returns `PLAN_NOT_FOUND`
-(404-not-403, no existence leak). Scope token: `read`.
+(404-not-403, no existence leak). Requires `project:browse`.
 
 #### Planning as a CONVERSATION — `open_plan_session` · `append_plan_turn` · `submit_plan_session`
 
@@ -1307,14 +1321,15 @@ a `NOT_FOUND`, never a silent anchor.
   `{ id, projectId, targetKeys, turnCount, lastJobId, lastSubmittedAt, createdAt, updatedAt, turns }`,
   where `turns` is the FULL ordered thread (`user` turns are what was typed,
   `system` turns are submission markers carrying their `jobId`). Submits
-  nothing and costs nothing. Scope token: `read`.
+  nothing and costs nothing — but it still requires `ai:plan`, because opening
+  the thread is what the shipped gate asks for.
 - **`append_plan_turn`** — add one turn. **Output**: the updated session DTO.
   **⚠️ Appending does NOT submit.** Turns accumulate until you call
   `submit_plan_session`; that separation is the point — a later turn **refines**
   the earlier ones rather than replacing them, so _"add auth to the billing
   epic"_ then _"keep every subtask under 3 points"_ go out as ONE coherent
   change. A first turn opens the thread on its own, so no separate `open` call
-  is required to start talking. Scope token: `work_items:write`.
+  is required to start talking. Requires `ai:plan`.
 - **`submit_plan_session`** — send the accumulated intent as ONE job.
   **Output** — `structuredContent`: `{ jobId, planId, session }`. It **submits
   and returns** exactly like `expand_item` — poll `get_plan_status` for the

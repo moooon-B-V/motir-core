@@ -6,7 +6,7 @@ import { act, cleanup, fireEvent, screen } from '@testing-library/react';
 import { NextIntlClientProvider } from 'next-intl';
 import en from '@/messages/en.json';
 import { renderWithIntl as render } from '../helpers/renderWithIntl';
-import { declaredScopeByMethod, stripComments } from '../helpers/v1RouteAudit';
+import { declaredPermissionByMethod, stripComments } from '../helpers/v1RouteAudit';
 import { emitOpenApiDocument } from '@/lib/api/v1/openapi/emit';
 import {
   V1_PAGE_ENVELOPE_COMPONENT,
@@ -182,7 +182,7 @@ describe('seam: the document → 11.4.7’s reference page', () => {
     const { default: Page } = await import('@/app/(public)/docs/api/page');
     const html = await renderPageToHtml(await Page());
     for (const operation of V1_OPERATIONS) {
-      expect(html, `${operation.operationId}: scope missing`).toContain(operation.scope);
+      expect(html, `${operation.operationId}: scope missing`).toContain(operation.permission);
     }
   });
 });
@@ -203,9 +203,10 @@ describe('seam: the registry → the real route tree', () => {
         'route.ts',
       );
       const source = readFileSync(join(REPO_ROOT, file), 'utf8');
-      expect(declaredScopeByMethod(source).get(operation.method), operationKey(operation)).toBe(
-        operation.scope,
-      );
+      expect(
+        declaredPermissionByMethod(source).get(operation.method),
+        operationKey(operation),
+      ).toBe(operation.permission);
     }
   });
 });

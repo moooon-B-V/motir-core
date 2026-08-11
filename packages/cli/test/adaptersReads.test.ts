@@ -17,7 +17,7 @@ import {
 const ME = {
   user: { id: 'u1', name: 'Zhu Yue', email: 'yue@motir.test' },
   workspaceId: 'ws-1',
-  scopes: ['read'],
+  permissions: ['project:browse'],
 };
 
 describe('the paged-body fallback', () => {

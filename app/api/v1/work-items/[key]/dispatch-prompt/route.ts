@@ -63,7 +63,7 @@ function parseSessionBranch(req: Request): string | null {
   return branch;
 }
 
-export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   // Parse BEFORE reading: an unsafe branch name is the caller's to fix, and
   // answering 422 without a database round-trip is both faster and honest.
   const sessionBranch = parseSessionBranch(ctx.req);

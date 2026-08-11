@@ -20,7 +20,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 // return. No `db.*`, no `$transaction`. The response is `presentMe`'s output —
 // shaped field by field, never spread; that mapper's header records why (ADR
 // Amendment 5 §4: a v1 route MAPS THROUGH its schema).
-export const GET = withV1Route({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route({ permission: 'project:browse' }, async (ctx) => {
   const verified = await apiTokensService.verify(ctx.presentedToken);
   return NextResponse.json(presentMe(verified));
 });

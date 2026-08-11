@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { workItemLabelRepository } from '@/lib/repositories/workItemLabelRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { toLabelDto } from '@/lib/mappers/labelMappers';
@@ -57,6 +56,7 @@ import {
   LABELS_PER_ISSUE_LIMIT,
   LABEL_SEARCH_LIMIT,
 } from '@/lib/labels/constants';
+import { readProjectByIdentifier } from '@/lib/workspaces/tenantRead';
 
 export { LABEL_NAME_MAX_LENGTH, LABELS_PER_ISSUE_LIMIT, LABEL_SEARCH_LIMIT };
 
@@ -299,10 +299,7 @@ export const labelsService = {
    * reads as ProjectNotFoundError (404, no existence leak).
    */
   async searchLabels(projectKey: string, q: string, ctx: ServiceContext): Promise<LabelDto[]> {
-    const project = await projectRepository.findByIdentifier(
-      ctx.workspaceId,
-      projectKey.trim().toUpperCase(),
-    );
+    const project = await readProjectByIdentifier(projectKey.trim().toUpperCase(), ctx);
     if (!project) throw new ProjectNotFoundError(projectKey);
     try {
       await projectAccessService.assertCanBrowse(project.id, ctx);
@@ -328,10 +325,7 @@ export const labelsService = {
    */
   async resolveByIds(projectKey: string, ids: string[], ctx: ServiceContext): Promise<LabelDto[]> {
     if (ids.length === 0) return [];
-    const project = await projectRepository.findByIdentifier(
-      ctx.workspaceId,
-      projectKey.trim().toUpperCase(),
-    );
+    const project = await readProjectByIdentifier(projectKey.trim().toUpperCase(), ctx);
     if (!project) throw new ProjectNotFoundError(projectKey);
     try {
       await projectAccessService.assertCanBrowse(project.id, ctx);

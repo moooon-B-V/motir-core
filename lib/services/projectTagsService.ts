@@ -1,6 +1,4 @@
 import type { Project } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectTagRepository } from '@/lib/repositories/projectTagRepository';
 import { projectTagAssignmentRepository } from '@/lib/repositories/projectTagAssignmentRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -12,8 +10,9 @@ import {
 } from '@/lib/projectTags/vocabulary';
 import { InvalidProjectTagError, TooManyProjectTagsError } from '@/lib/projectTags/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import type { ProjectCategoryDto, ProjectTagDto } from '@/lib/dto/projectTags';
+import { readProjectByIdentifier } from '@/lib/workspaces/tenantRead';
 
 // projectTagsService (Story 6.13 · Subtask 6.13.5) — the topic-tag half of the
 // project square: per-project tagging (admin-gated) + the public tag-FACET read
@@ -46,7 +45,7 @@ import type { ProjectCategoryDto, ProjectTagDto } from '@/lib/dto/projectTags';
  */
 async function resolveProject(key: string, ctx: WorkspaceContext): Promise<Project> {
   const identifier = key.trim().toUpperCase();
-  const project = await projectRepository.findByIdentifier(ctx.workspaceId, identifier);
+  const project = await readProjectByIdentifier(identifier, ctx);
   if (!project) throw new ProjectNotFoundError(key);
   return project;
 }
@@ -100,7 +99,7 @@ export const projectTagsService = {
     const project = await resolveProject(key, ctx);
     const desired = resolveDesiredTags(slugs);
 
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await projectAccessService.assertPermission(project.id, ctx, 'label:manage', tx);
 
       // Materialize the curated vocabulary rows (idempotent by slug → shared

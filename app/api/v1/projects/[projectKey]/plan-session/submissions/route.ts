@@ -27,18 +27,15 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 //
 // `work_items:write` — this is the act that SPENDS the owner's AI credits.
 
-export const POST = withV1Route<{ projectKey: string }>(
-  { scope: 'work_items:write' },
-  async (ctx) => {
-    const body = await parseV1Body(ctx.req, planSessionScopeBodySchema);
-    const { pctx, scope } = await resolvePlanScope(
-      ctx.params.projectKey,
-      body.targetKeys,
-      ctx.service,
-    );
+export const POST = withV1Route<{ projectKey: string }>({ permission: 'ai:plan' }, async (ctx) => {
+  const body = await parseV1Body(ctx.req, planSessionScopeBodySchema);
+  const { pctx, scope } = await resolvePlanScope(
+    ctx.params.projectKey,
+    body.targetKeys,
+    ctx.service,
+  );
 
-    const result = await planChangeSessionsService.submit(pctx, scope.scopeKey);
+  const result = await planChangeSessionsService.submit(pctx, scope.scopeKey);
 
-    return NextResponse.json(presentPlanJobHandle(result), { status: 202 });
-  },
-);
+  return NextResponse.json(presentPlanJobHandle(result), { status: 202 });
+});

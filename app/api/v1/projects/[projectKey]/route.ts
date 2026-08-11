@@ -35,7 +35,10 @@ import { projectsService } from '@/lib/services/projectsService';
 // the caller may not browse (`assertCanBrowse` raises `ProjectAccessDeniedError`
 // → also 404). Different code paths, deliberately indistinguishable answers —
 // otherwise the endpoint becomes an oracle for which project keys are real.
-export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async (ctx) => {
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
-  return NextResponse.json(presentProject(project));
-});
+export const GET = withV1Route<{ projectKey: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+    return NextResponse.json(presentProject(project));
+  },
+);

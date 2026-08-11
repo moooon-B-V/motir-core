@@ -72,12 +72,22 @@ export const meSchema = z
     /** The ONE workspace this token is bound to. v1 never widens past it. */
     workspaceId: z.string(),
     /**
-     * The scopes this token was granted.
+     * The PERMISSIONS this token was granted (MOTIR-2577).
      *
      * Returned deliberately: it is how a client discovers what its own
-     * credential may do without probing endpoints and collecting 403s.
+     * credential may do without probing endpoints and collecting 403s — and it
+     * is the ONE place a client can read its grant, so it must speak the same
+     * vocabulary as the 403s it is trying to avoid and as
+     * `x-motir-permission` on every operation.
+     *
+     * ⚠️ It REPLACES `scopes`. A client reading the old field gets `undefined`
+     * rather than a stale six-scope answer, which is the honest break: the
+     * values it used to carry no longer exist, so continuing to publish them
+     * under any name would describe a model the product does not have.
+     * `apiTokensService.verify` has already expanded a legacy row, so a token
+     * minted before this story reports the permissions it always conferred.
      */
-    scopes: z.array(z.string()),
+    permissions: z.array(z.string()),
   })
   .strict();
 
@@ -90,7 +100,7 @@ export type V1Me = z.infer<typeof meSchema>;
  *
  * Restating it would reintroduce exactly the defect this card removes, one
  * layer down: two shapes agreeing until someone edits one. Bound this way, a
- * service that renames `workspaceId` or stops returning `scopes` breaks the
+ * service that renames `workspaceId` or stops returning the grant breaks the
  * build here, at the seam that decides what the public API says.
  */
 type VerifiedToken = Awaited<ReturnType<typeof apiTokensService.verify>>;
@@ -111,7 +121,7 @@ export function presentMe(verified: VerifiedToken): V1Me {
       email: verified.user.email,
     },
     workspaceId: verified.workspaceId,
-    scopes: verified.scopes,
+    permissions: verified.grant,
   };
 }
 

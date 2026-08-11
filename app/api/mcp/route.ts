@@ -1,6 +1,6 @@
 import { createMcpHandler, withMcpAuth } from 'mcp-handler';
 import { MCP_SERVER_INFO, registerMcpTools } from '@/lib/mcp/registry';
-import { contextFromAuthInfo, contextFromExtra, scopesFromExtra } from '@/lib/mcp/context';
+import { contextFromAuthInfo, contextFromExtra, grantFromExtra } from '@/lib/mcp/context';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 import { enforceMcpRateLimit } from '@/lib/rateLimit/mcpGuard';
 import { stampRateLimitHeaders } from '@/lib/rateLimit/guard';
@@ -61,7 +61,7 @@ const baseHandler = createMcpHandler(
   // The trailing `true` turns on the billable-tool gate (MOTIR-2610): the two
   // job-submitting tools spend the `ai:generate` budget — the browser's own —
   // before they run.
-  (server) => registerMcpTools(server, contextFromExtra, scopesFromExtra, true),
+  (server) => registerMcpTools(server, contextFromExtra, grantFromExtra, true),
   { serverInfo: MCP_SERVER_INFO },
   { basePath: '/api', disableSse: true },
 );

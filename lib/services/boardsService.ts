@@ -1,6 +1,5 @@
 import { Prisma, BoardSwimlaneGroupBy, BoardType } from '@/generated/prisma/client';
 import type { BoardColumn, WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { boardRepository } from '@/lib/repositories/boardRepository';
 import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository';
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
@@ -27,7 +26,7 @@ import {
   toBoardSummaryDto,
   toSprintSummaryDto,
 } from '@/lib/mappers/boardMappers';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -67,6 +66,7 @@ import {
 } from '@/lib/boards/errors';
 import { IllegalTransitionError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // Boards service (Story 3.1) — business logic for the board entity. It hosts
 // two surfaces:
@@ -151,16 +151,32 @@ export const boardsService = {
    * fleet sweep, one project at a time.
    */
   async backfillDefaultBoard(projectId: string, actorUserId: string): Promise<boolean> {
-    const project = await projectRepository.findById(projectId);
+    // MOTIR-2569: the OPENING read is the one context nothing can supply — the
+    // sweep hands this a bare projectId and the workspace it would bind is what
+    // the read RESOLVES. That is precisely the case
+    // `project_workspace_or_system_read`'s `app.system_admin` arm was added for
+    // (the 20260727 migration: "operator tooling that must … span workspaces"),
+    // so the resolution runs under `withSystemContext` and everything after it
+    // runs tenant-scoped under the workspace it resolved. The probe moves inside
+    // that tenant transaction too — `board` is workspace-keyed as well, so an
+    // unbound probe would read "no board" for a project that has one and seed a
+    // second.
+    const project = await withSystemContext((tx) => projectRepository.findById(projectId, tx));
     if (!project) throw new ProjectNotFoundError(projectId);
 
-    const existing = await boardRepository.findDefaultForProject(projectId, project.workspaceId);
-    if (existing) return false;
-
-    await withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, (tx) =>
-      boardsService.seedDefaultBoard(projectId, project.workspaceId, tx),
+    return withWorkspaceContext(
+      { userId: actorUserId, workspaceId: project.workspaceId },
+      async (tx) => {
+        const existing = await boardRepository.findDefaultForProject(
+          projectId,
+          project.workspaceId,
+          tx,
+        );
+        if (existing) return false;
+        await boardsService.seedDefaultBoard(projectId, project.workspaceId, tx);
+        return true;
+      },
     );
-    return true;
   },
 
   /**
@@ -445,8 +461,8 @@ export const boardsService = {
     target: MoveCardTarget,
     ctx: ServiceContext,
   ): Promise<MoveCardResultDto> {
-    const { row, appliedStatus, transition, columnName, swimlaneGroupBy } = await db.$transaction(
-      async (tx) => {
+    const { row, appliedStatus, transition, columnName, swimlaneGroupBy } =
+      await withWorkspaceContext(ctx, async (tx) => {
         // Lock the card up front — serialize the status + rank writes against a
         // concurrent move of the same card (lost-update guard, like updateStatus).
         const locked = await workItemRepository.lockById(workItemId, tx);
@@ -548,8 +564,7 @@ export const boardsService = {
           columnName: column.name,
           swimlaneGroupBy: board.swimlaneGroupBy,
         };
-      },
-    );
+      });
 
     // A cross-column move IS a status transition — emit the same
     // `work-item/transitioned` event the direct updateStatus path emits
@@ -1359,7 +1374,7 @@ async function resolveBoardFilter(
     // Saved filters resolve by the project's IDENTIFIER (the `PROD`-style key),
     // not its id — `getBoard` already browse-gated the project, so this read is
     // for the key only.
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     /* istanbul ignore next -- defensive: getBoard's assertCanBrowse already resolved the project; a null here would mean it vanished mid-request */
     if (!project) throw new ProjectNotFoundError(projectId);
     const resolved = await savedFiltersService.resolve(

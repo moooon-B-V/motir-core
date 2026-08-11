@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
-import { TOKEN_SCOPES, TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import { isGrantable } from '@/lib/tokens/grant';
 import { workItemsService } from '@/lib/services/workItemsService';
 import {
   auditV1RouteSource,
-  declaredScopeByMethod,
+  declaredPermissionByMethod,
   readRouteSource,
   v1RouteFiles,
 } from '../../helpers/v1RouteAudit';
@@ -93,47 +94,53 @@ describe('gate — the work-item route surface exists and is clean', () => {
   });
 
   // Table-driven over the WHOLE tree, so a new endpoint cannot pick its own gate.
-  it('every VERB declares the scope the ADR §3 table assigns it', () => {
-    /** The ADR's operation → scope map, as a predicate per verb. */
-    const expectedScope = (file: string, method: string): string => {
-      if (method === 'GET') return 'read';
-      if (/\/(archive|restore)\//.test(file)) return 'work_items:archive';
-      // Story 11.3's planning writes. The ADR §3 row is "create / update /
-      // start / complete a sprint; move an item into or out of a sprint" —
-      // keyed on the SPRINT, so every write under a `sprints` segment takes
-      // `sprints:write`, including the membership move that happens to end in
-      // `/work-items`.
-      if (/\bsprints\b/.test(file) || /\bbacklog\b/.test(file)) return 'sprints:write';
-      // Story 11.7's two close-out writes. ADR §3 has a row of its own for them
-      // — "Mark-integrated / complete-session (external-agent writes) →
-      // `integration`" — and Amendment 6 Q2 pins that v1 MIRRORS the shipped
-      // `lib/mcp/scopes.ts` entry rather than re-deriving one. So the expectation
-      // is READ OFF that map: if the shared map ever moved these operations, this
-      // guard would follow it instead of contradicting it.
-      if (/\/integration\//.test(file)) return TOOL_SCOPES.mark_integrated;
-      if (/\/sessions\//.test(file)) return TOOL_SCOPES.complete_session;
-      // Provenance recorded on its own (MOTIR-2421 · Amendment 18). Same actor
-      // and same row of §3 as its two neighbours — an external agent runner
-      // reporting what it ran as — so it takes the same scope, read off the
-      // same shipped map rather than re-derived from the verb.
-      if (/\/implementation\//.test(file)) return TOOL_SCOPES.mark_integrated;
-      // Story 11.7's conversation MOUNT. A `read`-scoped POST, and the one place
-      // on this surface where the verb and the scope deliberately disagree: it
-      // is a POST because get-or-create writes a row and a GET must stay safe,
-      // and it is `read` because the SCOPE mirrors the capability, not the verb
-      // (Amendment 6 Q2). Read off the shipped map, like its two neighbours.
-      if (/\/plan-session\/route\.ts$/.test(file)) return TOOL_SCOPES.open_plan_session;
-      return 'work_items:write';
+  it('every VERB declares the permission the operation→permission table assigns it', () => {
+    /**
+     * The table from `docs/decisions/token-permissions.md` §3, as a predicate per
+     * verb — expressed in the PERMISSION vocabulary (MOTIR-2577).
+     *
+     * Where a shipped map already answers, the expectation is READ OFF IT rather
+     * than restated, so a future move of an operation drags this guard along
+     * instead of putting it in contradiction.
+     */
+    const expectedPermission = (file: string, method: string): string => {
+      if (method === 'GET') return 'project:browse';
+      // Archive and restore assert `work_item:delete` in shipped code — the old
+      // `work_items:archive` / `work_items:delete` split has no counterpart in
+      // the gates (ADR §3), so v1's two archive operations name the one key.
+      if (/\/(archive|restore)\//.test(file)) return 'work_item:delete';
+      // Sprint + backlog writes, keyed on the SPRINT: every write under a
+      // `sprints` or `backlog` segment takes `sprint:manage`, including the
+      // membership move that happens to end in `/work-items`.
+      if (/\bsprints\b/.test(file) || /\bbacklog\b/.test(file)) return 'sprint:manage';
+      // The comment POST is the one work-item write that is NOT `work_item:edit`:
+      // `commentsService` gates it on `canComment`. Under the six scopes it hid
+      // inside `work_items:write`; withholding it is now expressible.
+      if (/\/comments\/route\.ts$/.test(file)) return TOOL_PERMISSIONS.add_comment;
+      // The two close-out writes and the provenance report, read off the shipped
+      // map rather than re-derived from the verb.
+      if (/\/integration\//.test(file)) return TOOL_PERMISSIONS.mark_integrated;
+      if (/\/sessions\//.test(file)) return TOOL_PERMISSIONS.complete_session;
+      if (/\/implementation\//.test(file)) return TOOL_PERMISSIONS.mark_integrated;
+      // The planning surface. The MOUNT no longer disagrees with its neighbours:
+      // `getOrCreateForScope` asserts `ai:plan`, so all of open / append / submit
+      // — and the expansion submit — name the permission that actually gates them
+      // (ADR §5 records the legacy read-only token this narrows).
+      if (/\/plan-session\//.test(file)) return TOOL_PERMISSIONS.open_plan_session;
+      if (/\/expansions\//.test(file)) return TOOL_PERMISSIONS.expand_item;
+      return 'work_item:edit';
     };
 
     let verbsChecked = 0;
     for (const file of v1RouteFiles(REPO_ROOT)) {
-      const byMethod = declaredScopeByMethod(readRouteSource(REPO_ROOT, file));
-      for (const [method, scope] of byMethod) {
+      const byMethod = declaredPermissionByMethod(readRouteSource(REPO_ROOT, file));
+      for (const [method, permission] of byMethod) {
         verbsChecked += 1;
-        expect(scope, `${file} ${method} declares a readable scope`).toBeDefined();
-        expect(TOKEN_SCOPES as readonly string[], `${file} ${method}`).toContain(scope);
-        expect(scope, `${file} ${method} — the ADR §3 table`).toBe(expectedScope(file, method));
+        expect(permission, `${file} ${method} declares a readable permission`).toBeDefined();
+        expect(isGrantable(permission), `${file} ${method} declares "${permission}"`).toBe(true);
+        expect(permission, `${file} ${method} — the operation→permission table`).toBe(
+          expectedPermission(file, method),
+        );
       }
     }
     // The sweep really covered the surface, not a subset of it.
@@ -159,7 +166,7 @@ describe('gate — the work-item route surface exists and is clean', () => {
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
         import { getWorkItem } from '@/lib/mcp/tools/getWorkItem';
-        export const GET = withV1Route({ scope: 'read' }, async () => Response.json({}));
+        export const GET = withV1Route({ permission: 'project:browse' }, async () => Response.json({}));
       `;
       expect(auditV1RouteSource('bad/route.ts', bad).map((v) => v.rule)).toContain(
         'imports-mcp-tools',
@@ -170,7 +177,7 @@ describe('gate — the work-item route surface exists and is clean', () => {
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
         import { workItemsService } from '@/lib/services/workItemsService';
-        export const DELETE = withV1Route({ scope: 'work_items:write' }, async (ctx) => {
+        export const DELETE = withV1Route({ permission: 'work_item:edit' }, async (ctx) => {
           await workItemsService.deleteWorkItem(ctx.params.id, ctx.service);
           return new Response(null, { status: 204 });
         });
@@ -180,39 +187,54 @@ describe('gate — the work-item route surface exists and is clean', () => {
       );
     });
 
-    it('catches a route declaring the unexposed delete scope', () => {
+    it('catches a NON-archive route declaring the irreversible permission', () => {
+      // ⚠️ The rule can no longer key on the permission alone: archive and
+      // delete share `work_item:delete` (ADR §3) and v1 legitimately exposes
+      // archive. So it admits the archive/restore PATHS and fails anything else
+      // — which is the property the old `declares-delete-scope` rule protected.
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
-        export const POST = withV1Route({ scope: 'work_items:delete' }, async () => Response.json({}));
+        export const POST = withV1Route({ permission: 'work_item:delete' }, async () => Response.json({}));
       `;
       expect(auditV1RouteSource('bad/route.ts', bad).map((v) => v.rule)).toContain(
-        'declares-delete-scope',
+        'declares-unexposed-permission',
       );
     });
 
-    it('reads a per-verb scope map that distinguishes a GET from its sibling POST', () => {
-      const source = `
-        export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async () => x);
-        export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async () => x);
+    it('does NOT fire on the archive/restore routes, which legitimately declare it', () => {
+      const archive = `
+        import { withV1Route } from '@/lib/api/v1/route';
+        export const POST = withV1Route({ permission: 'work_item:delete' }, async () => Response.json({}));
       `;
-      const byMethod = declaredScopeByMethod(source);
-      expect(byMethod.get('GET')).toBe('read');
-      expect(byMethod.get('POST')).toBe('work_items:write');
+      const rules = auditV1RouteSource('app/api/v1/work-items/[key]/archive/route.ts', archive).map(
+        (v) => v.rule,
+      );
+      expect(rules).not.toContain('declares-unexposed-permission');
     });
 
-    it('records an unreadable scope as UNDEFINED rather than dropping the verb', () => {
+    it('reads a per-verb permission map that distinguishes a GET from its sibling POST', () => {
+      const source = `
+        export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async () => x);
+        export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async () => x);
+      `;
+      const byMethod = declaredPermissionByMethod(source);
+      expect(byMethod.get('GET')).toBe('project:browse');
+      expect(byMethod.get('POST')).toBe('work_item:edit');
+    });
+
+    it('records an unreadable permission as UNDEFINED rather than dropping the verb', () => {
       // A silently skipped route is a hole in a guard that still reads as
       // coverage, so the map keeps the verb and the assertion fails on it.
       const source = `export const PATCH = withV1Route(OPTIONS, async () => x);`;
-      expect(declaredScopeByMethod(source).has('PATCH')).toBe(true);
-      expect(declaredScopeByMethod(source).get('PATCH')).toBeUndefined();
+      expect(declaredPermissionByMethod(source).has('PATCH')).toBe(true);
+      expect(declaredPermissionByMethod(source).get('PATCH')).toBeUndefined();
     });
 
     it('does NOT fire on prose — a comment naming deleteWorkItem is not a violation', () => {
       const good = `
         // This route deliberately does NOT call deleteWorkItem( — see ADR §3.
         import { withV1Route } from '@/lib/api/v1/route';
-        export const GET = withV1Route({ scope: 'read' }, async () => Response.json({}));
+        export const GET = withV1Route({ permission: 'project:browse' }, async () => Response.json({}));
       `;
       expect(auditV1RouteSource('good/route.ts', good)).toEqual([]);
     });

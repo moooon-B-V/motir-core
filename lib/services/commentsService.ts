@@ -1,5 +1,4 @@
 import type { Comment, Prisma, WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { commentMentionRepository } from '@/lib/repositories/commentMentionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -13,7 +12,6 @@ import { parseMentionIds } from '@/lib/mentions/parse';
 import { parseWorkItemTokenIds } from '@/lib/mentions/workItemRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { resolveWorkItemRefSummaries } from '@/lib/workItems/resolveWorkItemRefs';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 // The PUBLIC API's page ceiling (ADR §5) — imported, never re-declared, so the
 // number a client is promised and the number enforced here cannot drift.
 import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
@@ -33,6 +31,8 @@ import {
 } from '@/lib/comments/errors';
 import type { CommentDTO, CommentsPageDTO } from '@/lib/dto/comments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Comments service (Story 5.1 · Subtask 5.1.2) — the business-logic core over
 // the 5.1.1 repositories. Owns validation, the permission matrix, the
@@ -119,7 +119,7 @@ async function resolveGatedWorkItem(
   ctx: ServiceContext,
   tx?: Prisma.TransactionClient,
 ): Promise<CommentGate> {
-  const item = await workItemRepository.findById(workItemId, tx);
+  const item = await readWorkItem(workItemId, ctx, tx);
   if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
   const caps = await projectAccessService.getCommentCapabilities(item.projectId, ctx, tx);
   if (!caps.canBrowse) throw new WorkItemNotFoundError(workItemId);
@@ -206,7 +206,7 @@ async function autoRelateForBody(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
 ): Promise<void> {
-  const project = await projectRepository.findById(item.projectId, tx);
+  const project = await readProject(item.projectId, ctx, tx);
   /* istanbul ignore if -- the item's project always resolves (the comment gate
      read it); the guard narrows the nullable type only */
   if (!project) return;
@@ -260,7 +260,7 @@ export const commentsService = {
       mentionable = await resolveMentionableIds(await resolveGatedWorkItem(workItemId, ctx), ctx);
     }
 
-    const { row, storedMentionIds } = await db.$transaction(async (tx) => {
+    const { row, storedMentionIds } = await withWorkspaceContext(ctx, async (tx) => {
       const gate = await resolveGatedWorkItem(workItemId, ctx, tx);
       if (!gate.caps.canComment) throw new CommentForbiddenError('add');
 
@@ -364,7 +364,8 @@ export const commentsService = {
     const mentionable =
       tokenIds.length > 0 ? await resolveMentionableIds(preGate, ctx) : new Set<string>();
 
-    const { row, storedMentionIds, addedMentionIds, changed } = await db.$transaction(
+    const { row, storedMentionIds, addedMentionIds, changed } = await withWorkspaceContext(
+      ctx,
       async (tx) => {
         const current = await resolveComment(commentId, ctx, tx);
         const gate = await resolveGatedWorkItem(current.workItemId, ctx, tx);
@@ -442,7 +443,7 @@ export const commentsService = {
    * count included — the surviving History trace Story 5.5 renders.
    */
   async deleteComment(commentId: string, ctx: ServiceContext): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       const current = await resolveComment(commentId, ctx, tx);
       const gate = await resolveGatedWorkItem(current.workItemId, ctx, tx);
       if (current.authorId !== ctx.userId && !gate.caps.canModerate) {

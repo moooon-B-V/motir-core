@@ -6,14 +6,16 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { plansService } from '@/lib/services/plansService';
-import { TOKEN_SCOPES, DEFAULT_TOKEN_SCOPES, toolScope, type TokenScope } from '@/lib/mcp/scopes';
-import { SCOPE_NOT_GRANTED_CODE } from '@/lib/mcp/scopeGate';
+import { toolPermission } from '@/lib/mcp/toolPermissions';
+import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
+import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { MCP_TOOL_NAMES, type McpToolName } from '@/lib/mcp/registry';
 import { decodeFilterEnvelope, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 // Story-CLOSING suite for the Motir MCP server (Story 7.7 · Subtask 7.7.12).
 //
@@ -25,7 +27,7 @@ import { truncateAuthTables } from '../helpers/db';
 //
 // THIS suite is the story's acceptance contract: it drives the ACTUAL
 // `/api/mcp` route — the real `createMcpHandler` + `withMcpAuth` +
-// `verifyMcpToken` + the production `contextFromExtra` / `scopesFromExtra`
+// `verifyMcpToken` + the production `contextFromExtra` / `grantFromExtra`
 // resolvers — with the official `@modelcontextprotocol/sdk` CLIENT over a
 // real bearer PAT, `initialize → tools/list → tools/call`. Real Postgres, no
 // mocks (the repo testing contract). Three pillars:
@@ -83,7 +85,7 @@ async function connect(token?: string): Promise<Client> {
 async function fullToken(fx: WorkItemFixture, label = 'full'): Promise<string> {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label,
-    scopes: [...TOKEN_SCOPES],
+    fixedGrant: [...GRANTABLE_PERMISSIONS],
   });
   return token;
 }
@@ -92,12 +94,15 @@ async function fullToken(fx: WorkItemFixture, label = 'full'): Promise<string> {
  * the lever for the scope matrix (a restricted set, the default set, a
  * delete-enabled set). The owner's ROLE is unchanged; only the token's
  * capability is narrowed, so a denial here isolates SCOPE from the 6.4 role. */
-async function scopedToken(
+async function grantedToken(
   fx: WorkItemFixture,
-  scopes: TokenScope[],
-  label = 'scoped',
+  permissions: readonly PermissionKey[],
+  label = 'granted',
 ): Promise<string> {
-  const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, { label, scopes });
+  const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+    label,
+    fixedGrant: [...permissions],
+  });
   return token;
 }
 
@@ -106,7 +111,9 @@ async function scopedToken(
  * raw result (the same shape `structured` reads). */
 function isScopeDenied(res: unknown): boolean {
   const r = res as { isError?: boolean; content?: unknown };
-  return r.isError === true && JSON.stringify(r.content ?? '').includes(SCOPE_NOT_GRANTED_CODE);
+  return (
+    r.isError === true && JSON.stringify(r.content ?? '').includes(PERMISSION_NOT_GRANTED_CODE)
+  );
 }
 
 /** Create a task via the service (the create-modal write) and return its key. */
@@ -181,7 +188,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(await whoamiSucceeds('motir_pat_deadbeefdeadbeefdeadbeef')).toBe(false);
 
       // revoked
-      const revoked = await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'rev' });
+      const revoked = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+        label: 'rev',
+        fixedGrant: DEFAULT_TOKEN_GRANT,
+      });
       await apiTokensService.revoke(fx.ownerId, revoked.dto.id);
       expect(await whoamiSucceeds(revoked.token)).toBe(false);
 
@@ -189,6 +199,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const expired = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'exp',
         expiresAt: new Date(Date.now() - 60_000),
+        fixedGrant: DEFAULT_TOKEN_GRANT,
       });
       expect(await whoamiSucceeds(expired.token)).toBe(false);
     });
@@ -490,9 +501,12 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
 
       // A DEFAULT token (every scope EXCEPT work_items:delete) is gated BEFORE
       // the service runs — the cross-check on 7.7.17 scope enforcement.
-      expect(DEFAULT_TOKEN_SCOPES).not.toContain('work_items:delete');
+      expect(DEFAULT_TOKEN_GRANT).not.toContain('work_item:delete');
       const defaultToken = (
-        await apiTokensService.create(fx.ownerId, fx.workspaceId, { label: 'default' })
+        await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+          label: 'default',
+          fixedGrant: DEFAULT_TOKEN_GRANT,
+        })
       ).token;
       const defClient = await connect(defaultToken);
       const denied = await defClient.callTool({
@@ -500,7 +514,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         arguments: { key: story.identifier },
       });
       expect(denied.isError).toBe(true);
-      expect(JSON.stringify(denied.content)).toContain('SCOPE_NOT_GRANTED');
+      expect(JSON.stringify(denied.content)).toContain('PERMISSION_NOT_GRANTED');
       await defClient.close();
       // Nothing was deleted by the refused call.
       expect(await db.workItem.count({ where: { id: { in: [story.id, child.id] } } })).toBe(2);
@@ -554,7 +568,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
   // the 6.4 ROLE check by handing the non-member a FULL-scope token; this pillar
   // isolates the per-token SCOPE gate (Subtask 7.7.17) by handing the OWNER
   // (whose role allows everything) a token with a RESTRICTED scope set, and
-  // drives it through the SAME real `/api/mcp` route + `scopesFromExtra`
+  // drives it through the SAME real `/api/mcp` route + `grantFromExtra`
   // resolver. The pure decision + in-memory wiring live in `scope-gate.test.ts`
   // / `scopes.test.ts` (the totality + registry-loop guards that fail CI when a
   // tool is added without a scope); THIS proves the gate end-to-end over a real
@@ -641,12 +655,12 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const fx = await makeWorkItemFixture();
       const { argFor, item1 } = await ownArgMap(fx);
 
-      // A token granted ONLY the `read` scope — its owner is the workspace owner,
-      // so the ROLE permits everything; only the token narrows it.
-      const client = await connect(await scopedToken(fx, ['read'], 'read-only'));
+      // A token granted ONLY `project:browse` — its owner is the workspace
+      // owner, so the ROLE permits everything; only the grant narrows it.
+      const client = await connect(await grantedToken(fx, ['project:browse'], 'read-only'));
       for (const name of MCP_TOOL_NAMES) {
         const res = await client.callTool({ name, arguments: argFor[name] });
-        if (toolScope(name) === 'read') {
+        if (toolPermission(name) === 'project:browse') {
           // Granted: the gate lets it through and it executes successfully
           // against the caller's own reachable data.
           expect(res.isError, `read tool ${name} should execute`).toBeFalsy();
@@ -676,19 +690,25 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
 
       // The default grant set (every scope except work_items:delete), minted by
       // OMITTING the scopes option — exactly what the create modal sends.
-      expect(DEFAULT_TOKEN_SCOPES).not.toContain('work_items:delete');
+      expect(DEFAULT_TOKEN_GRANT).not.toContain('work_item:delete');
       const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'default',
+        fixedGrant: DEFAULT_TOKEN_GRANT,
       });
       const client = await connect(token);
 
       // The gate's verdict per tool: only delete_work_item is withheld. (We
       // assert the GATE decision — that downstream execution is correct is the
       // tool/UI-parity pillar's job — so this stays robust to mutation ordering.)
+      // ⚠️ ARCHIVE JOINS DELETE. Under the six scopes archive was on by default
+      // (recoverable) and delete off; both assert `work_item:delete` in shipped
+      // code, so one key cannot hold them apart and "all but the irreversible
+      // one" withholds all three (ADR §8).
+      const defaultOff = new Set(['delete_work_item', 'archive_work_item', 'unarchive_work_item']);
       for (const name of MCP_TOOL_NAMES) {
         const res = await client.callTool({ name, arguments: argFor[name] });
-        if (name === 'delete_work_item') {
-          expect(isScopeDenied(res), 'delete is the one default-off tool').toBe(true);
+        if (defaultOff.has(name)) {
+          expect(isScopeDenied(res), `${name} is default-off`).toBe(true);
         } else {
           expect(isScopeDenied(res), `${name} should pass the default token's gate`).toBe(false);
         }
@@ -696,11 +716,12 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       await client.close();
     });
 
-    it('a DEFAULT token DOES the non-delete work — a representative write/archive/sprint/integration all succeed', async () => {
+    it('a DEFAULT token DOES the non-delete work — a representative write/sprint/integration succeed, archive does not', async () => {
       const fx = await makeWorkItemFixture();
       const key = await makeTask(fx, 'Default does work');
       const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
         label: 'default-does',
+        fixedGrant: DEFAULT_TOKEN_GRANT,
       });
       const client = await connect(token);
 
@@ -710,17 +731,18 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         arguments: { key, status: 'in_progress' },
       });
       expect(moved.isError).toBeFalsy();
-      // work_items:archive — recoverable soft-remove (on by default).
+      // ARCHIVE is NO LONGER default-on: it asserts `work_item:delete`, the one
+      // key the default grant withholds (ADR §8). Asserting the refusal here
+      // keeps this test honest about what a default token can do.
       const archived = await client.callTool({ name: 'archive_work_item', arguments: { key } });
-      expect(archived.isError).toBeFalsy();
-      await client.callTool({ name: 'unarchive_work_item', arguments: { key } });
-      // sprints:write — create a sprint.
+      expect(archived.isError).toBe(true);
+      // sprint:manage — create a sprint.
       const sprintRes = await client.callTool({
         name: 'create_sprint',
         arguments: { projectKey: 'PROD', name: 'Default sprint' },
       });
       expect(sprintRes.isError).toBeFalsy();
-      // integration — mark the item integrated against a session branch.
+      // work_item:edit — mark the item integrated against a session branch.
       const integrated = await client.callTool({
         name: 'mark_integrated',
         arguments: { key, sessionBranch: 'feat/default' },
@@ -752,7 +774,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
 
       // A token granted the delete scope (+ read to resolve the key) — nothing
       // more. The owner's role reaches the subtree, so scope is the only gate.
-      const client = await connect(await scopedToken(fx, ['read', 'work_items:delete'], 'deleter'));
+      const client = await connect(
+        await grantedToken(fx, ['project:browse', 'work_item:delete'], 'deleter'),
+      );
       const deleted = await client.callTool({
         name: 'delete_work_item',
         arguments: { key: story.identifier },
@@ -770,9 +794,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       const a = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
       const key = await makeTask(a, 'A-only');
 
-      // (1) Scope GRANTED (full), role DENIES — an OUTSIDER's full-scope token
+      // (1) Permission GRANTED (full), role DENIES — an OUTSIDER's fully-granted token
       // aimed at A's item reads as not-found (the 404-not-403 contract), NOT a
-      // scope error: scope narrows the role, it cannot widen a role that can't
+      // permission error: the grant narrows the role, it cannot widen a role that can't
       // even see the resource.
       const outsider = await makeWorkItemFixture({ name: 'Rival', identifier: 'ZZZ' });
       const crossTenant = await connect(await fullToken(outsider, 'outsider-full'));
@@ -785,9 +809,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(isScopeDenied(roleDenied), 'role-denied is a 404, not a scope error').toBe(false);
       await crossTenant.close();
 
-      // (2) Role ALLOWS (A's owner), scope ABSENT (read-only) — the gate fires
-      // FIRST and returns the scope-denied error, never reaching the role check.
-      const scopeShort = await connect(await scopedToken(a, ['read'], 'a-read-only'));
+      // (2) Role ALLOWS (A's owner), permission ABSENT (browse-only) — the gate
+      // fires FIRST and returns the denial, never reaching the role check.
+      const scopeShort = await connect(await grantedToken(a, ['project:browse'], 'a-read-only'));
       const scopeDenied = await scopeShort.callTool({
         name: 'transition_status',
         arguments: { key, status: 'in_progress' },

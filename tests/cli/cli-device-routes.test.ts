@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 
 // Same reason as the service suite: every approve test signs in for real, and
 // Better-Auth's IP-keyed sign-in bucket (10s / 3) would 429 the fourth one under
@@ -235,7 +237,7 @@ describe('POST /api/cli/device/token — the five states on the wire', () => {
     };
     expect(body.access_token.startsWith('motir_pat_')).toBe(true);
     expect(body.token_type).toBe('Bearer');
-    expect(body.scope).toBe('read work_items:write integration');
+    expect(body.scope).toBe([...CLI_TOKEN_GRANT].join(' '));
     expect(body.user.id).toBe(owner.id);
     expect(body.workspace).toEqual({
       id: workspace.id,
@@ -338,13 +340,13 @@ describe('GET /api/cli/device/grant — the approval screen’s read', () => {
       'clientId',
       'expiresAt',
       'hostname',
-      'scopes',
+      'permissions',
       'status',
       'userCode',
     ]);
     expect(body['status']).toBe('pending');
     expect(body['hostname']).toBe('workbox');
-    expect(body['scopes']).toEqual(['read', 'work_items:write', 'integration']);
+    expect(body['permissions']).toEqual([...CLI_TOKEN_GRANT]);
     // The GET's side effect: the page can now approve (approve refuses an unclaimed code).
     expect(
       (await db.deviceCode.findUniqueOrThrow({ where: { deviceCode: grant.device_code } })).userId,
@@ -376,7 +378,7 @@ describe('GET /api/cli/device/grant — the approval screen’s read', () => {
     const { token } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'probe',
       expiresAt: null,
-      scopes: ['read'],
+      fixedGrant: grantForLegacyScopes(['read']),
     });
     const withPat = await GRANT(grantReq(grant.user_code, { authorization: `Bearer ${token}` }));
     expect(withPat.status).toBe(401);

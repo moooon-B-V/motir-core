@@ -96,7 +96,7 @@ describe('the route tree and the document agree', () => {
     const sources = realRouteSources();
     sources.set(
       syntheticRouteFile('widgets'),
-      `export const GET = withV1Route({ scope: 'read' }, async () => {});`,
+      `export const GET = withV1Route({ permission: 'project:browse' }, async () => {});`,
     );
 
     const drift = findSpecDrift(shippedRouteMethods(sources), V1_OPERATIONS);
@@ -112,7 +112,7 @@ describe('the route tree and the document agree', () => {
       operationId: 'listWidgets',
       summary: 'A resource that does not exist',
       description: 'Renamed or removed, and still advertised.',
-      scope: 'read',
+      permission: 'project:browse',
       parameters: [],
       response: { status: 200, body: { kind: 'empty' }, description: 'nothing' },
       errorStatuses: [],
@@ -128,15 +128,15 @@ describe('the route tree and the document agree', () => {
     expect(drift[0]?.detail).toContain('listWidgets');
   });
 
-  it('a SCOPE mismatch fails too — the document may not lie about a permission', () => {
+  it('a PERMISSION mismatch fails too — the document may not lie about a permission', () => {
     const real = findV1Operation('GET', '/api/v1/work-items/{key}');
     expect(real).toBeDefined();
-    const widened: V1Operation = { ...real!, scope: 'work_items:write' };
+    const widened: V1Operation = { ...real!, permission: 'work_item:edit' };
     const operations = V1_OPERATIONS.map((op) => (op === real ? widened : op));
 
     const drift = findSpecDrift(shippedRouteMethods(realRouteSources()), operations);
-    expect(drift.map((d) => d.rule)).toEqual(['scope-mismatch']);
-    expect(drift[0]?.detail).toContain('work_items:write');
+    expect(drift.map((d) => d.rule)).toEqual(['permission-mismatch']);
+    expect(drift[0]?.detail).toContain('work_item:edit');
   });
 });
 

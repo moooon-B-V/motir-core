@@ -205,7 +205,7 @@ describe('GET /api/v1/work-items/{key}', () => {
     const wrongScope = await createV1ProjectCaller({ scopes: ['integration'] });
     const scoped = await get(item.identifier, wrongScope);
     expect(scoped.status).toBe(403);
-    await expect(scoped.json()).resolves.toMatchObject({ code: 'INSUFFICIENT_SCOPE' });
+    await expect(scoped.json()).resolves.toMatchObject({ code: 'INSUFFICIENT_PERMISSION' });
   });
 
   // ── The ETag ──────────────────────────────────────────────────────────────

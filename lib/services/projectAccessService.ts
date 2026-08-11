@@ -66,6 +66,9 @@ import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions'
 export interface AccessActorContext {
   userId: string;
   workspaceId: string;
+  /** See {@link ServiceContext.tokenProjectId} — the acting token's project
+   *  binding, enforced in {@link resolveInputs}. */
+  tokenProjectId?: string;
 }
 
 /**
@@ -88,6 +91,20 @@ async function resolveInputs(
   // them invisible under the non-bypass role and turn a member into a 404.
   if (!tx) return withWorkspaceContext(ctx, (t) => resolveInputs(projectId, ctx, t));
 
+  // ⚠️ THE TOKEN'S PROJECT BINDING, enforced here and nowhere else (MOTIR-2607).
+  // This function is the one place a project id meets an actor — every
+  // `assertCanBrowse` / `assertCanEdit` / `assertPermission` / `getPermissions`
+  // / `filterBrowsable` in the product resolves through it — so the two bearer
+  // seams inherit the check without either re-implementing it, and no route has
+  // to remember to ask.
+  //
+  // The refusal is NOT-FOUND, deliberately. "Forbidden" would confirm the other
+  // project exists, turning a deliberately narrowed credential into an oracle
+  // for enumerating a workspace; it is indistinguishable here from the
+  // cross-tenant case immediately below, which is the point.
+  if (ctx.tokenProjectId !== undefined && ctx.tokenProjectId !== projectId) {
+    throw new ProjectNotFoundError(projectId);
+  }
   const project = await projectRepository.findById(projectId, tx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
     throw new ProjectNotFoundError(projectId);
@@ -357,14 +374,19 @@ export const projectAccessService = {
     const result = new Map<string, boolean>();
     if (userIds.length === 0) return result;
 
-    const project = await projectRepository.findById(projectId);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
-    }
-
+    // MOTIR-2569: the project read moves INSIDE the transaction that was already
+    // being opened below, rather than being bound separately — one context, one
+    // snapshot, the same move MOTIR-2527 made in `resolveInputs`. It used to run
+    // on the `db` singleton, so under the non-bypass role `project_workspace_or_
+    // system_read` hid the row and every caller 404'd before the membership
+    // lists were ever read.
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
       async (tx) => {
+        const project = await projectRepository.findById(projectId, tx);
+        if (!project || project.workspaceId !== ctx.workspaceId) {
+          throw new ProjectNotFoundError(projectId);
+        }
         const [workspaceMembers, projectMembers] = await Promise.all([
           workspaceMembershipRepository.findMembersByWorkspace(ctx.workspaceId, tx),
           projectMembershipRepository.findMembersByProject(projectId, tx),

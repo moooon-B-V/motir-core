@@ -399,6 +399,24 @@ const KNOWN: { file: string; address: string; why: string }[] = [
   // ("the route lands no earlier than MOTIR-2263"). The guard reads the ROUTE
   // TABLE, so a 404 rendered BY a matching route is invisible to it; that is a
   // known limit of the sweep, not something this deletion introduces.
+  // ── Forward-looking: the Home landing surface (MOTIR-2653 / MOTIR-2654) ───
+  //    The asset (MOTIR-2650) draws a route that does not exist yet:
+  //    `app/(authed)/` holds `dashboard`, `items`, `ready`, `boards`, `roadmap`
+  //    and the rest, but no `home`. MOTIR-2653 builds `app/(authed)/home/page.tsx`
+  //    and MOTIR-2654 adds the nav entry + moves the post-auth landing onto it.
+  //    Per the pattern above, MOTIR-2653 is the card that DELETES these two rows,
+  //    in the commit that adds the route — they are temporary by construction,
+  //    unlike the point-in-time rows further up, which are permanent.
+  {
+    file: 'design/home/design-notes.md',
+    address: '/home',
+    why: 'Forward-looking: the design gate for MOTIR-2649 draws `/home` before the route exists. MOTIR-2653 adds `app/(authed)/home/page.tsx` and deletes this row in the same commit.',
+  },
+  {
+    file: 'design/home/home.mock.html',
+    address: '/home',
+    why: "Forward-looking: the mock's tab strip and rail entry link to `/home`, the route MOTIR-2653 builds. MOTIR-2653 deletes this row in the commit that adds the route.",
+  },
 ];
 
 type Entry = { file: string; address: string; why: string };
@@ -803,22 +821,29 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: 'The same citation in the notes beside that mock — the ownership table naming where the in-app door is placed. Same move, same reason it stays.',
   },
   // ── A path this asset SPECIFIES INTO, which its own story has not merged ──
-  // MOTIR-2578 is the DESIGN stopper of story MOTIR-2572: it ships to `main`
-  // ahead of the code it specifies, so the two files it cites as the source of
-  // the grantable set exist only on `parent/MOTIR-2572-token-permissions` until
-  // that story's PR lands. Citing them is correct — the asset must say where its
-  // six rows come from — and the sweep is correct that they do not resolve yet.
-  // ⚠️ DELETE BOTH ROWS when MOTIR-2572 merges; at that point the paths resolve
+  // MOTIR-2674 is the DESIGN stopper of story MOTIR-2588: it ships to `main`
+  // ahead of the code it specifies, so the ADR it draws to
+  // (`docs/decisions/entity-marks.md`, MOTIR-2589) exists only on
+  // `parent/MOTIR-2588-project-image` until that story's PR lands. The asset
+  // MUST cite it — the no-fallback rule it draws is that document's decision,
+  // and a design that states a rule without naming where the rule was made is
+  // the thing this whole suite exists to prevent.
+  //
+  // The pair of MOTIR-2572 rows that used to sit here were removed by that
+  // story's own merge, exactly as their delete-on-merge note instructed —
+  // `docs/decisions/token-permissions.md` and `lib/tokens/grant.ts` both resolve
+  // on `main` now. This block is the same shape, one story behind.
+  // ⚠️ DELETE BOTH ROWS when MOTIR-2588 merges; at that point the path resolves
   // and a lingering entry here would be muting a check rather than explaining it.
   {
-    file: 'design/settings/design-notes.md',
-    path: 'docs/decisions/token-permissions.md',
-    why: 'The ADR (MOTIR-2573) that fixes the grantable set this asset draws. Lands with story MOTIR-2572; remove this row when it merges.',
+    file: 'design/shell/design-notes.md',
+    path: 'docs/decisions/entity-marks.md',
+    why: 'The ADR (MOTIR-2589) that decides the org/workspace/project mark stance this asset draws — including the no-fallback rule. Lands with story MOTIR-2588; remove this row when it merges.',
   },
   {
-    file: 'design/settings/design-notes.md',
-    path: 'lib/tokens/grant.ts',
-    why: 'The module (MOTIR-2574) whose GRANTABLE_PERMISSIONS is the six rows this asset counts and measures. Lands with story MOTIR-2572; remove this row when it merges.',
+    file: 'design/shell/context-row.mock.html',
+    path: 'docs/decisions/entity-marks.md',
+    why: 'The same citation in Panel G, which names the decision its frames render. Same story, same reason it is deliberate, same removal.',
   },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
@@ -936,6 +961,12 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   //  guarded like any other. An exemption cannot outlive its reason — and the
   //  `carries no KNOWN_PATHS entry that has stopped applying` test below is
   //  what made sure nobody had to remember.)
+  // ── Forward-looking: the Home page module (MOTIR-2653) ────────────────────
+  {
+    file: 'design/home/design-notes.md',
+    path: 'app/(authed)/home/page.tsx',
+    why: 'Forward-looking: the MOTIR-2650 asset names the module MOTIR-2653 will create. MOTIR-2653 deletes this row in the commit that adds the file.',
+  },
 ];
 
 describe('a design asset cites source paths that still exist', () => {

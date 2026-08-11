@@ -39,7 +39,8 @@ import {
   TooManyPlanChangeTargetsError,
 } from '@/lib/planChange/errors';
 import { MCP_TOOL_NAMES } from '@/lib/mcp/registry';
-import { TOOL_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { activityService } from '@/lib/services/activityService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -51,7 +52,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { buildScope } from '@/lib/planChange/scope';
 import {
   auditV1RouteSource,
-  declaredScopeByMethod,
+  declaredPermissionByMethod,
   readRouteSource,
   v1RouteFiles,
 } from '../../helpers/v1RouteAudit';
@@ -83,7 +84,7 @@ const WORK_LOOP_PATHS = WORK_LOOP_OPERATIONS.map((op) => op.path);
  * The operation → MCP tool correspondence, as the story's own audit table states
  * it.
  *
- * Only the PAIRING is written here; the SCOPE is read from `TOOL_SCOPES` at
+ * Only the PAIRING is written here; the PERMISSION is read from `TOOL_PERMISSIONS` at
  * assertion time, so a change to the shared map moves the expectation with it
  * instead of contradicting it. Shared by the scope-mirroring block and by
  * GUARD 4, which asks a different question of the same ten tools.
@@ -111,7 +112,7 @@ const WORK_LOOP_MIRRORS = {
  * no reason still fails. What the guard actually protects is that nobody adds a
  * v1 operation whose scope was invented rather than mirrored, and an operation
  * with no counterpart cannot invent one either — its scope is asserted against
- * `TOOL_SCOPES` all the same.
+ * `TOOL_PERMISSIONS` all the same.
  */
 const WORK_LOOP_UNMIRRORED: Record<string, string> = {
   reportWorkItemImplementation:
@@ -142,47 +143,48 @@ describe('every work-loop operation mirrors its MCP counterpart’s scope', () =
 
   it('an unmirrored operation still needs a REASON, and still mirrors a real scope', () => {
     // The excuse proven against a violation: an empty reason is not a reason,
-    // and an unmirrored operation cannot invent a scope of its own either.
+    // and an unmirrored operation cannot invent a permission of its own either.
     for (const [operationId, reason] of Object.entries(WORK_LOOP_UNMIRRORED)) {
       expect(reason.trim().length, `${operationId} states why it has no tool`).toBeGreaterThan(40);
       const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === operationId);
       expect(op, `${operationId} is declared`).toBeDefined();
-      expect(Object.values(TOOL_SCOPES) as readonly string[]).toContain(op?.scope);
+      expect(Object.values(TOOL_PERMISSIONS) as readonly string[]).toContain(op?.permission);
     }
   });
 
   it.each(Object.entries(MIRRORS))(
-    '%s carries the scope `%s` holds in lib/mcp/scopes.ts',
+    '%s carries the permission `%s` holds in lib/mcp/toolPermissions.ts',
     (operationId, tool) => {
       const op = WORK_LOOP_OPERATIONS.find((o) => o.operationId === operationId);
       expect(op, `${operationId} is declared`).toBeDefined();
-      expect(op?.scope).toBe(TOOL_SCOPES[tool]);
+      expect(op?.permission).toBe(TOOL_PERMISSIONS[tool]);
     },
   );
 
-  it('ENFORCES the same scope it documents — the route’s argument, not the doc', () => {
+  it('ENFORCES the same permission it documents — the route’s argument, not the doc', () => {
     // The document says; the route does. Asserted separately because a docs typo
     // that also changed enforcement would be a privilege bug, which is exactly
     // why the two are independent values.
     for (const file of v1RouteFiles(REPO_ROOT)) {
       const source = readFileSync(join(REPO_ROOT, file), 'utf8');
-      for (const [method, scope] of declaredScopeByMethod(source)) {
+      for (const [method, permission] of declaredPermissionByMethod(source)) {
         const path = pathTemplateFor(file);
         if (!WORK_LOOP_PATHS.includes(path)) continue;
         const declared = findV1Operation(method, path);
-        expect(declared?.scope, `${method} ${path}`).toBe(scope);
+        expect(declared?.permission, `${method} ${path}`).toBe(permission);
       }
     }
   });
 
   it('would FAIL if a route and its declaration disagreed', () => {
     // The check, run against a violation: a synthetic route source declaring the
-    // wrong scope must not match its operation.
-    const synthetic = "export const GET = withV1Route({ scope: 'sprints:write' }, async () => {});";
-    const scope = declaredScopeByMethod(synthetic).get('GET');
-    expect(scope).toBe('sprints:write');
-    expect(findV1Operation('GET', '/api/v1/work-items/{key}/dispatch-prompt')?.scope).not.toBe(
-      scope,
+    // wrong permission must not match its operation.
+    const synthetic =
+      "export const GET = withV1Route({ permission: 'sprint:manage' }, async () => {});";
+    const permission = declaredPermissionByMethod(synthetic).get('GET');
+    expect(permission).toBe('sprint:manage');
+    expect(findV1Operation('GET', '/api/v1/work-items/{key}/dispatch-prompt')?.permission).not.toBe(
+      permission,
     );
   });
 });
@@ -481,7 +483,7 @@ describe('the contract guards, and each one proven to FAIL', () => {
     const found = auditV1RouteSource(
       'app/api/v1/fake/route.ts',
       "import { runGetPlan } from '@/lib/mcp/tools/getPlan';\n" +
-        "export const GET = withV1Route({ scope: 'read' }, async () => {});",
+        "export const GET = withV1Route({ permission: 'project:browse' }, async () => {});",
     );
     expect(found.map((v) => v.rule)).toContain('imports-mcp-tools');
   });
@@ -502,7 +504,7 @@ describe('the contract guards, and each one proven to FAIL', () => {
   it('GUARD 2 FAILS on a route that opens one', () => {
     const found = auditV1RouteSource(
       'app/api/v1/fake/route.ts',
-      "export const GET = withV1Route({ scope: 'read' }, async () => {\n" +
+      "export const GET = withV1Route({ permission: 'project:browse' }, async () => {\n" +
         '  await db.$transaction(async () => {});\n});',
     );
     expect(found.length).toBeGreaterThan(0);
@@ -512,7 +514,7 @@ describe('the contract guards, and each one proven to FAIL', () => {
     for (const file of workLoopRouteFiles()) {
       const source = readFileSync(join(REPO_ROOT, file), 'utf8');
       const path = pathTemplateFor(file);
-      const methods = [...declaredScopeByMethod(source).keys()];
+      const methods = [...declaredPermissionByMethod(source).keys()];
       expect(methods.length, `${file} exports a verb`).toBeGreaterThan(0);
       for (const method of methods) {
         expect(findV1Operation(method, path), `${method} ${path} undocumented`).toBeDefined();
@@ -545,7 +547,7 @@ describe('the contract guards, and each one proven to FAIL', () => {
       expect(registered, `${tool} (mirrored by ${operationId})`).toContain(tool);
       // …and gated exactly as it was: v1 MIRRORS this entry, so a change here
       // would silently move the public API's gate too.
-      expect(TOOL_SCOPES[tool], `${tool}'s scope`).toBeDefined();
+      expect(TOOL_PERMISSIONS[tool], `${tool}'s scope`).toBeDefined();
     }
   });
 
@@ -620,9 +622,9 @@ describe('the merged operation registry', () => {
   });
 
   it('gates every work-loop operation on a REAL scope', () => {
-    const scopes: readonly TokenScope[] = Object.values(TOOL_SCOPES);
+    const scopes: readonly PermissionKey[] = Object.values(TOOL_PERMISSIONS);
     for (const op of WORK_LOOP_OPERATIONS) {
-      expect(scopes, `${op.operationId}`).toContain(op.scope);
+      expect(scopes, `${op.operationId}`).toContain(op.permission);
     }
   });
 });

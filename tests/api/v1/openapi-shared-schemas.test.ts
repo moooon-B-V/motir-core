@@ -4,7 +4,7 @@ import {
   classifyApiV1Error,
   DOMAIN_ERROR_STATUS,
   INTERNAL_ERROR_BODY,
-  InsufficientScopeError,
+  InsufficientPermissionError,
   InvalidRequestError,
   UnauthenticatedError,
 } from '@/lib/api/v1/errors';
@@ -32,11 +32,11 @@ import {
 } from '@/lib/api/v1/openapi/headers';
 import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 import {
-  V1_EXPOSED_SCOPES,
-  V1_SCOPE_DESCRIPTIONS,
-  V1_SCOPE_EXTENSION,
+  V1_EXPOSED_PERMISSIONS,
+  V1_PERMISSION_DESCRIPTION_KEYS,
+  V1_PERMISSION_EXTENSION,
   V1_SECURITY_SCHEME_NAME,
-  V1_UNEXPOSED_SCOPES,
+  V1_UNEXPOSED_PERMISSIONS,
   v1SecurityScheme,
 } from '@/lib/api/v1/openapi/security';
 import {
@@ -48,7 +48,10 @@ import {
   V1_STATUSES,
   V1_SUCCESS_STATUSES,
 } from '@/lib/api/v1/openapi/statuses';
-import { TOKEN_SCOPES, isTokenScope } from '@/lib/mcp/scopes';
+import { PERMISSIONS, PERMISSION_CATALOG, isPermissionKey } from '@/lib/permissions/catalog';
+import { GRANTABLE_PERMISSIONS, isGrantable } from '@/lib/tokens/grant';
+import { V1_OPERATIONS } from '@/lib/api/v1/openapi/registry';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { createV1Caller, type V1Caller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -124,7 +127,7 @@ describe('the v1 status vocabulary', () => {
     // reconciliation above cannot see them.
     for (const err of [
       new UnauthenticatedError(),
-      new InsufficientScopeError('read'),
+      new InsufficientPermissionError('read'),
       new InvalidRequestError('INVALID_CURSOR', 'nope'),
       new RateLimitExceededError(30),
     ]) {
@@ -209,7 +212,7 @@ describe('the error schema against a REAL response off the shipped wrapper', () 
 
     expect(res.status).toBe(403);
     const parsed = v1ErrorBodySchema.parse(await res.json());
-    expect(parsed.code).toBe('INSUFFICIENT_SCOPE');
+    expect(parsed.code).toBe('INSUFFICIENT_PERMISSION');
 
     // The declared shared headers are on an ERROR response, which is the
     // property that put them in the shared layer rather than on an operation.
@@ -320,26 +323,158 @@ describe('the v1 security scheme', () => {
     expect(v1SecurityScheme.bearerFormat).toContain('motir_pat_');
   });
 
-  it('describes EVERY token scope — the totality guard, at runtime', () => {
-    for (const scope of TOKEN_SCOPES) {
-      expect(V1_SCOPE_DESCRIPTIONS[scope], `scope "${scope}" has no description`).toBeTruthy();
+  it('describes EVERY catalog permission — the totality guard, at runtime', () => {
+    for (const key of PERMISSIONS) {
+      expect(
+        V1_PERMISSION_DESCRIPTION_KEYS[key],
+        `permission "${key}" has no published description`,
+      ).toBeTruthy();
     }
-    expect(Object.keys(V1_SCOPE_DESCRIPTIONS).length).toBe(TOKEN_SCOPES.length);
+    expect(Object.keys(V1_PERMISSION_DESCRIPTION_KEYS).length).toBe(PERMISSIONS.length);
   });
 
-  it('has no description for a scope the vocabulary does not define', () => {
-    for (const described of Object.keys(V1_SCOPE_DESCRIPTIONS)) {
-      expect(isTokenScope(described), `stale scope "${described}"`).toBe(true);
+  it('reads its descriptions FROM the catalog — no hand-written second copy', () => {
+    // The drift this replaces: `V1_SCOPE_DESCRIPTIONS` was a table of prose
+    // maintained beside the one on Roles & permissions. Now both resolve the
+    // SAME i18n key, so they cannot say different things about one capability.
+    for (const key of PERMISSIONS) {
+      expect(V1_PERMISSION_DESCRIPTION_KEYS[key]).toBe(PERMISSION_CATALOG[key].descriptionKey);
     }
   });
 
-  it('exposes every scope EXCEPT the irreversible delete', () => {
-    expect(V1_UNEXPOSED_SCOPES).toEqual(['work_items:delete']);
-    expect(V1_EXPOSED_SCOPES).not.toContain('work_items:delete');
-    expect(V1_EXPOSED_SCOPES.length + V1_UNEXPOSED_SCOPES.length).toBe(TOKEN_SCOPES.length);
+  it('has no description for a permission the catalog does not define', () => {
+    for (const described of Object.keys(V1_PERMISSION_DESCRIPTION_KEYS)) {
+      expect(isPermissionKey(described), `stale permission "${described}"`).toBe(true);
+    }
   });
 
-  it('names the extension an operation carries its scope on', () => {
-    expect(V1_SCOPE_EXTENSION.startsWith('x-')).toBe(true);
+  it('exposes exactly what v1 declares — derived, not filtered off a vocabulary', () => {
+    expect(V1_EXPOSED_PERMISSIONS.length + V1_UNEXPOSED_PERMISSIONS.length).toBe(
+      GRANTABLE_PERMISSIONS.length,
+    );
+    for (const key of V1_EXPOSED_PERMISSIONS) expect(isGrantable(key)).toBe(true);
+    for (const operation of V1_OPERATIONS) {
+      expect(V1_EXPOSED_PERMISSIONS).toContain(operation.permission);
+    }
   });
+
+  it('exposes work_item:delete ONLY for archive/restore — never a cascade delete', () => {
+    // ⚠️ The old rule read "v1 does not expose the delete scope", and it cannot
+    // survive the merge: archive and delete assert ONE key (ADR §3), and v1
+    // legitimately exposes archive. So the property worth protecting is stated
+    // over OPERATIONS instead of over the key — v1 must expose no operation that
+    // cascade-deletes, whatever permission it names.
+    const declaring = V1_OPERATIONS.filter((o) => o.permission === 'work_item:delete').map(
+      (o) => o.operationId,
+    );
+    expect([...declaring].sort()).toEqual(['archiveWorkItem', 'restoreWorkItem']);
+    expect(
+      V1_OPERATIONS.some((o) => o.method === 'DELETE' && o.path === '/api/v1/work-items/{key}'),
+    ).toBe(false);
+  });
+
+  it('names the extension an operation carries its permission on', () => {
+    expect(V1_PERMISSION_EXTENSION).toBe('x-motir-permission');
+    expect(V1_PERMISSION_EXTENSION.startsWith('x-')).toBe(true);
+  });
+});
+
+describe('the operation → permission map is checked against the CODE (MOTIR-2577)', () => {
+  // The card's load-bearing guard: each declaration must name the permission the
+  // route's own service asserts, not the one its old scope happened to carry.
+  //
+  // The check runs through the MCP surface, which is the only mechanically
+  // readable second opinion the repo has: a v1 operation and its MCP counterpart
+  // call the SAME service method, so they must ask for the same key. A pairing
+  // written down here and disagreeing at runtime means one of the two was filed
+  // from the old vocabulary.
+  const MIRRORED: ReadonlyArray<[operationId: string, tool: string]> = [
+    ['getWorkItem', 'get_work_item'],
+    ['getWorkItemActivity', 'get_work_item_activity'],
+    ['createWorkItem', 'create_work_item'],
+    ['updateWorkItem', 'update_work_item'],
+    ['transitionWorkItem', 'transition_status'],
+    ['createWorkItemLink', 'link_work_items'],
+    ['deleteWorkItemLink', 'unlink_work_items'],
+    ['createWorkItemComment', 'add_comment'],
+    ['archiveWorkItem', 'archive_work_item'],
+    ['restoreWorkItem', 'unarchive_work_item'],
+    ['createSprint', 'create_sprint'],
+    ['updateSprint', 'update_sprint'],
+    ['startSprint', 'start_sprint'],
+    ['completeSprint', 'complete_sprint'],
+    ['moveWorkItemsToSprint', 'move_to_sprint'],
+    ['moveWorkItemsToBacklog', 'move_to_backlog'],
+    ['listProjects', 'list_projects'],
+    ['listProjectSprints', 'list_sprints'],
+    ['getProjectReadySet', 'list_ready'],
+    ['getWorkItemDispatchPrompt', 'dispatch_prompt'],
+    ['recordWorkItemIntegration', 'mark_integrated'],
+    ['completeSession', 'complete_session'],
+    ['submitWorkItemExpansion', 'expand_item'],
+    ['getPlanStatus', 'get_plan_status'],
+    ['getPlan', 'get_plan'],
+    ['openPlanSession', 'open_plan_session'],
+    ['appendPlanTurn', 'append_plan_turn'],
+    ['submitPlanSession', 'submit_plan_session'],
+  ];
+
+  it.each(MIRRORED)('%s asks for the same permission as the %s tool', (operationId, tool) => {
+    const operation = V1_OPERATIONS.find((o) => o.operationId === operationId);
+    expect(operation, `${operationId} is declared`).toBeDefined();
+    expect(operation?.permission).toBe(TOOL_PERMISSIONS[tool as keyof typeof TOOL_PERMISSIONS]);
+  });
+
+  it('every one of the 40 declarations names a GRANTABLE permission', () => {
+    expect(V1_OPERATIONS.length).toBe(40);
+    for (const operation of V1_OPERATIONS) {
+      expect(
+        isGrantable(operation.permission),
+        `${operation.operationId} requires "${operation.permission}", which no token can hold`,
+      ).toBe(true);
+    }
+  });
+
+  it('no declaration still names a RETIRED scope string', () => {
+    const retired = [
+      'read',
+      'work_items:write',
+      'work_items:archive',
+      'work_items:delete',
+      'sprints:write',
+      'integration',
+    ];
+    for (const operation of V1_OPERATIONS) {
+      expect(retired, `${operation.operationId}`).not.toContain(operation.permission as string);
+    }
+  });
+
+  it('the AI-planning operations no longer hide under work-item editing', () => {
+    // The narrowing this story is FOR, stated where it can fail: submitting a
+    // planning job spends the owner's credits, and a token wired to file work
+    // items must be able to withhold it.
+    for (const id of [
+      'submitWorkItemExpansion',
+      'openPlanSession',
+      'appendPlanTurn',
+      'submitPlanSession',
+    ]) {
+      expect(V1_OPERATIONS.find((o) => o.operationId === id)?.permission).toBe('ai:plan');
+    }
+  });
+
+  it('commenting is withholdable on its own', () => {
+    expect(V1_OPERATIONS.find((o) => o.operationId === 'createWorkItemComment')?.permission).toBe(
+      'comment:add',
+    );
+  });
+
+  // ADR §3 had ONE exception pinned here by name —
+  // `reportWorkItemImplementation`, whose declaration said `work_item:edit`
+  // while its service asserted only `project:browse`. MOTIR-2603 fixed the gate
+  // instead of the declaration, so the row is no longer special and its pin is
+  // deleted rather than left drifting: the property it stood in for (the service
+  // refuses a browse-only ACTOR) is now asserted where it actually lives, in
+  // `tests/work-items/report-implementation-gate.test.ts`, against real
+  // Postgres. §3's rule is total again — no exception list.
 });

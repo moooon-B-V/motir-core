@@ -138,7 +138,7 @@ export default async function McpGuidePage() {
               kind: 'table',
               columns: [t('mcpThScope'), t('mcpThGates'), ''],
               rows: legend.map((row) => [
-                `\`${row.scope}\``,
+                `\`${row.permission}\``,
                 row.gates,
                 row.grantedByDefault ? '' : `**${t('mcpScopeDefaultOff')}**`,
               ]),

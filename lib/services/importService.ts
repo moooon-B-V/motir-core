@@ -11,7 +11,6 @@
 import { db } from '@/lib/db';
 import type { ImportSource } from '@/generated/prisma/client';
 import { importRepository } from '@/lib/repositories/importRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
 import { linearImportOAuthService } from '@/lib/services/linearImportOAuthService';
@@ -43,6 +42,7 @@ import {
   ImportSourceNotConnectedError,
 } from '@/lib/import/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 export interface CreateImportInput {
   projectId: string;
@@ -85,7 +85,7 @@ export const importService = {
   /** Create a DRAFT import for a project (POST /api/import). Gated by
    *  `import:run` (MOTIR-2353); the reporter/owner is the acting user. */
   async createDraft(input: CreateImportInput, ctx: ServiceContext): Promise<ImportDto> {
-    const project = await projectRepository.findById(input.projectId);
+    const project = await readProject(input.projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(input.projectId);
     }
