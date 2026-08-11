@@ -9,6 +9,9 @@ import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { createV1Caller, bearer } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import { createV1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+const { GET: GET_PROJECT } = await import('@/app/api/v1/projects/[projectKey]/route');
 
 // The shared `/api/v1` route wrapper (Story 11.1 · Subtask 11.1.2 —
 // MOTIR-1858). Real Postgres, real PATs minted through the shipped service —
@@ -23,13 +26,13 @@ import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../../helpers/rateLimi
 const BASE = 'http://localhost:3000/api/v1/fixture';
 
 /** The minimal route a v1 endpoint can be: declare a scope, return a body. */
-const fixtureRoute = withV1Route({ scope: 'read' }, async (ctx) =>
+const fixtureRoute = withV1Route({ permission: 'project:browse' }, async (ctx) =>
   NextResponse.json({ userId: ctx.userId, workspaceId: ctx.workspaceId }),
 );
 
 /** A route whose handler throws whatever the test needs thrown. */
 function throwingRoute(thrown: unknown) {
-  return withV1Route({ scope: 'read' }, async () => {
+  return withV1Route({ permission: 'project:browse' }, async () => {
     throw thrown;
   });
 }
@@ -70,7 +73,7 @@ describe('withV1Route — authentication', () => {
     // expired — minted with an expiry already in the past
     const expiring = await apiTokensService.create(caller.user.id, caller.workspace.id, {
       label: 'expired',
-      scopes: ['read'],
+      fixedGrant: grantForLegacyScopes(['read']),
       expiresAt: new Date(Date.now() - 60_000),
     });
 
@@ -98,22 +101,23 @@ describe('withV1Route — authentication', () => {
     expect(rendered.size).toBe(1);
   });
 
-  it('returns 403 — not 401, and never an empty 200 — when the token lacks the scope', async () => {
-    // A token with a real scope that is NOT the one the route declares.
-    const caller = await createV1Caller({ scopes: ['work_items:write'] });
+  it('returns 403 — not 401, and never an empty 200 — when the grant lacks the permission', async () => {
+    // A token holding a real permission that is NOT the one the route declares.
+    const caller = await createV1Caller({ permissions: ['work_item:edit'] });
 
     const res = await fixtureRoute(req(caller.headers));
 
     expect(res.status).toBe(403);
     await expect(res.json()).resolves.toEqual({
-      code: 'INSUFFICIENT_SCOPE',
-      error: "This token lacks the 'read' scope required for this operation.",
+      code: 'INSUFFICIENT_PERMISSION',
+      error:
+        "This token is not granted the 'project:browse' permission required for this operation.",
     });
   });
 
   it('runs auth BEFORE the handler — an unauthenticated request never reaches it', async () => {
     let handlerRan = false;
-    const route = withV1Route({ scope: 'read' }, async () => {
+    const route = withV1Route({ permission: 'project:browse' }, async () => {
       handlerRan = true;
       return NextResponse.json({ ok: true });
     });
@@ -338,7 +342,7 @@ describe('withV1Route — composition and route params', () => {
 
   it('resolves dynamic route params and hands the handler a ServiceContext', async () => {
     const caller = await createV1Caller();
-    const route = withV1Route<{ id: string }>({ scope: 'read' }, async (ctx) =>
+    const route = withV1Route<{ id: string }>({ permission: 'project:browse' }, async (ctx) =>
       NextResponse.json({ id: ctx.params.id, service: ctx.service }),
     );
 
@@ -356,7 +360,7 @@ describe('withV1Route — composition and route params', () => {
     const caller = await createV1Caller();
     // The seam MOTIR-1860's rate-limit headers use: stamped into
     // `responseHeaders`, they must appear even when the handler then throws.
-    const route = withV1Route({ scope: 'read' }, async (ctx) => {
+    const route = withV1Route({ permission: 'project:browse' }, async (ctx) => {
       ctx.responseHeaders.set('x-fixture-header', 'kept');
       throw new Error('boom');
     });
@@ -390,5 +394,40 @@ describe('presented bearer credential', () => {
     expect(fp).toBe(tokenFingerprint('motir_pat_abc'));
     expect(fp).not.toBe(tokenFingerprint('motir_pat_abd'));
     expect(fp).not.toContain('motir_pat_');
+  });
+});
+
+describe('the token PROJECT binding, over the v1 seam (MOTIR-2607)', () => {
+  // The same enforcement the MCP seam gets, inherited from the same place:
+  // `projectAccessService.resolveInputs`. Asserted HERE too because "one seam,
+  // both surfaces" is a claim about two surfaces, and a wiring that reached
+  // only one would pass every MCP test.
+  it('a bound token is NOT-FOUND on another project — never a 403', async () => {
+    const mine = await createV1ProjectCaller();
+    const theirs = await createV1ProjectCaller({ identifier: 'OTHR' });
+
+    // `mine`'s token is bound to `mine`'s project (the fixture binds it), so
+    // reaching for `theirs` must read as not-found rather than forbidden.
+    const res = await GET_PROJECT(
+      new Request(`http://localhost:3000/api/v1/projects/${theirs.fixture.projectIdentifier}`, {
+        headers: mine.headers,
+      }),
+      { params: Promise.resolve({ projectKey: theirs.fixture.projectIdentifier }) },
+    );
+
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(JSON.stringify(body)).not.toContain('INSUFFICIENT_PERMISSION');
+  });
+
+  it('…and reaches its OWN project normally', async () => {
+    const mine = await createV1ProjectCaller();
+    const res = await GET_PROJECT(
+      new Request(`http://localhost:3000/api/v1/projects/${mine.fixture.projectIdentifier}`, {
+        headers: mine.headers,
+      }),
+      { params: Promise.resolve({ projectKey: mine.fixture.projectIdentifier }) },
+    );
+    expect(res.status).toBe(200);
   });
 });

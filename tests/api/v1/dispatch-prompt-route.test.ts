@@ -8,7 +8,7 @@ import {
   type V1DispatchPrompt,
 } from '@/lib/api/v1/workLoop/schema';
 import { WORK_LOOP_OPERATIONS } from '@/lib/api/v1/workLoop/operations';
-import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import { runDispatchPrompt } from '@/lib/mcp/tools/dispatchPrompt';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
@@ -185,7 +185,7 @@ describe('GET /api/v1/work-items/{key}/dispatch-prompt', () => {
     const operation = WORK_LOOP_OPERATIONS.find(
       (op) => op.operationId === 'getWorkItemDispatchPrompt',
     );
-    expect(operation?.scope).toBe(TOOL_SCOPES.dispatch_prompt);
+    expect(operation?.permission).toBe(TOOL_PERMISSIONS.dispatch_prompt);
   });
 
   it('refuses a token without `read` with 403', async () => {

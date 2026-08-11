@@ -9,11 +9,8 @@ import {
   CircleCheckBig,
   CircleX,
   Clock,
-  Eye,
   KeyRound,
-  Plug,
   ShieldAlert,
-  SquarePen,
   Terminal,
 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/Button';
@@ -24,6 +21,12 @@ import { CLI_TOKEN_EXPIRY_DAYS, DEVICE_CODE_EXPIRES_MINUTES } from '@/lib/cliDev
 import { formatUserCode, isCompleteUserCode, normalizeUserCode } from '@/lib/cliDevice/userCode';
 import type { DeviceGrantDescriptionDTO } from '@/lib/dto/cliDevice';
 import { AuthShell, CodeChip } from '../../_components/AuthShell';
+import {
+  grantedPermissionMeta,
+  type PermissionMeta,
+} from '@/app/(authed)/settings/account/_components/permissionMeta';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
+import { permissionSlug } from '@/lib/permissions/catalog';
 
 // The `/device` page's interactive half (Story MOTIR-1863 · Subtask MOTIR-1867),
 // built to `design/cli-connect/` Panels 1–7. One island, six states, because they
@@ -490,19 +493,18 @@ export function DeviceApproval({
 
               <DetailColumn divided>
                 {/* 4 — WHAT SCOPES. Names only: fewer words on a screen people skim,
-                    and the per-scope descriptions live in the API-tokens UI that owns
-                    them. Reused from `settings.apiTokens.scopes.*`, never duplicated. */}
+                    and the per-permission descriptions live in the tokens UI that owns
+                    them. Read from the shipped `permissions.*` copy through the SHARED
+                    presenter (MOTIR-2579), so this screen, the picker and the list row
+                    cannot describe one grant in three sets of words. DERIVED from
+                    `CLI_TOKEN_GRANT` rather than hard-coded: a change to what the CLI
+                    needs must not be able to leave this screen telling someone something
+                    the credential no longer does. */}
                 <DetailBlock label={t('confirm.itCan')}>
                   <span className="flex flex-col gap-1.5">
-                    <ScopeRow icon={<Eye className="h-4 w-4" aria-hidden />} namespace="read" />
-                    <ScopeRow
-                      icon={<SquarePen className="h-4 w-4" aria-hidden />}
-                      namespace="workItemsWrite"
-                    />
-                    <ScopeRow
-                      icon={<Plug className="h-4 w-4" aria-hidden />}
-                      namespace="integration"
-                    />
+                    {grantedPermissionMeta(CLI_TOKEN_GRANT).map((meta) => (
+                      <PermissionRow key={meta.key} meta={meta} />
+                    ))}
                   </span>
                   <DetailSub>{t('confirm.cant')}</DetailSub>
                 </DetailBlock>
@@ -713,17 +715,19 @@ function DetailSub({ children }: { children: ReactNode }) {
   );
 }
 
-/** A granted scope, by NAME only — the description belongs to the scopes UI that
- *  owns it (`settings.apiTokens.scopes.*`), and this screen buys its one-screen fit
- *  by not repeating it. */
-function ScopeRow({ icon, namespace }: { icon: ReactNode; namespace: string }) {
-  const t = useTranslations('settings.apiTokens.scopes');
+/** A granted permission, by NAME only — the description belongs to the tokens UI
+ *  that owns it, and this screen buys its one-screen fit by not repeating it.
+ *  The name is the SHIPPED catalogue label, so it reads identically here and on
+ *  Roles & permissions. */
+function PermissionRow({ meta }: { meta: PermissionMeta }) {
+  const tp = useTranslations('permissions');
+  const Icon = meta.Icon;
   return (
     <span className="flex items-center gap-2 font-sans text-sm text-(--el-text)">
       <span aria-hidden className="text-(--el-text-muted) inline-flex shrink-0">
-        {icon}
+        <Icon className="h-4 w-4" />
       </span>
-      {t(`${namespace}.name`)}
+      {tp(`${permissionSlug(meta.key)}.label`)}
     </span>
   );
 }

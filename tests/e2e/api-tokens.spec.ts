@@ -3,13 +3,19 @@
 // It drives the acceptance recipe: create → shown-once copy → revoke → the
 // muted revoked-state render, plus the secret-never-reappears guarantee.
 //
-// Account settings are PERSONAL (no project needed), so a freshly signed-up user
-// reaches the pane directly. Every mutation waits on its route response (the
-// authoritative signal — never the optimistic UI alone, per the E2E discipline).
+// ⚠️ A TOKEN NEEDS A PROJECT (Story MOTIR-2572 · Subtask MOTIR-2606). The pane
+// is still personal, but a hand-minted token BINDS to a project, because
+// permissions resolve per project — so every test that mints one now creates a
+// project first. Before that change a freshly signed-up user could mint from a
+// zero-project workspace; now the modal's submit guard refuses, silently, and
+// the `waitForResponse` below would hang rather than fail with a reason.
+//
+// Every mutation waits on its route response (the authoritative signal — never
+// the optimistic UI alone, per the E2E discipline).
 
 import { expect, test } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
-import { signUp } from './_helpers/shell-session';
+import { createFirstProject, signUp } from './_helpers/shell-session';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 
@@ -30,6 +36,7 @@ test.afterAll(async () => {
 
 test('create → shown-once copy → revoke → revoked render', async ({ page }) => {
   await signUp(page, 'tokens-e2e@example.com');
+  await createFirstProject(page, 'Tokens E2E');
 
   await page.goto('/settings/account/tokens');
   // `exact` — "Tokens" is a substring of the empty-state heading "No tokens
@@ -95,6 +102,7 @@ test('create → shown-once copy → revoke → revoked render', async ({ page }
 // label + expiry → list-shows-expiry path the card calls out.
 test('create with a chosen expiry → the list shows the expiry', async ({ page }) => {
   await signUp(page, 'tokens-expiry-e2e@example.com');
+  await createFirstProject(page, 'Expiry E2E');
 
   await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
@@ -127,13 +135,16 @@ test('create with a chosen expiry → the list shows the expiry', async ({ page 
 
 // Permission-scope selection (Story 7.8 · Subtask 7.8.20, over the 7.7.19 UI):
 // the human half of the scope contract proven end-to-end — create a token with
-// a CUSTOM scope selection, confirm the shown-once secret, and confirm the list
-// surfaces the granted scopes (the "Custom" summary + the per-scope detail
-// chips, with the off scopes absent and no "Can delete" pill).
+// a CUSTOM permission selection, confirm the shown-once secret, and confirm the
+// list surfaces the granted permissions (the "Custom" summary + the per-
+// permission detail chips, with the withheld ones absent and no "Can delete"
+// pill). The names are the CATALOG's (Story MOTIR-2572) — the shipped
+// `permissions.*` copy the Roles & permissions screen also renders.
 test('create with a custom scope selection → shown-once + the list shows the granted scopes', async ({
   page,
 }) => {
   await signUp(page, 'tokens-scopes-e2e@example.com');
+  await createFirstProject(page, 'Grant E2E');
 
   await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
@@ -150,11 +161,11 @@ test('create with a custom scope selection → shown-once + the list shows the g
     dialog.getByRole('switch', { name: 'Delete work items', exact: true }),
   ).not.toBeChecked();
 
-  // Narrow to a CUSTOM subset: turn OFF Manage sprints + Connect integrations
-  // (keeping Read + Edit + Archive). Not the default set, not read-only, not
-  // full → the list will summarise it as "Custom".
+  // Narrow to a CUSTOM subset: turn OFF Manage sprints + Run AI planning,
+  // keeping View project + Edit work items + Add comments. Not the default set,
+  // not read-only, not full → the list will summarise it as "Custom".
   await dialog.getByRole('switch', { name: 'Manage sprints', exact: true }).click();
-  await dialog.getByRole('switch', { name: 'Connect integrations', exact: true }).click();
+  await dialog.getByRole('switch', { name: 'Run AI planning', exact: true }).click();
   await expect(
     dialog.getByRole('switch', { name: 'Manage sprints', exact: true }),
   ).not.toBeChecked();
@@ -179,14 +190,14 @@ test('create with a custom scope selection → shown-once + the list shows the g
   await expect(row.getByText('Custom', { exact: true })).toBeVisible();
   await expect(row.getByText('Can delete')).toHaveCount(0);
 
-  // Disclosing the scope detail lists exactly the granted scopes — the kept
+  // Disclosing the detail lists exactly the granted permissions — the kept
   // three present, the toggled-off two and delete absent.
   await row.getByRole('button', { name: 'Show scopes for scoped-custom' }).click();
-  await expect(page.getByText('Read everything', { exact: true })).toBeVisible();
+  await expect(page.getByText('View project', { exact: true })).toBeVisible();
   await expect(page.getByText('Edit work items', { exact: true })).toBeVisible();
-  await expect(page.getByText('Archive work items', { exact: true })).toBeVisible();
+  await expect(page.getByText('Add comments', { exact: true })).toBeVisible();
   await expect(page.getByText('Manage sprints', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('Connect integrations', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Run AI planning', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Delete work items', { exact: true })).toHaveCount(0);
 });
 
@@ -195,6 +206,7 @@ test('create with a custom scope selection → shown-once + the list shows the g
 // disable delete" requirement, proven through the modal + list.
 test('create a default token → "Standard", and delete is off', async ({ page }) => {
   await signUp(page, 'tokens-default-e2e@example.com');
+  await createFirstProject(page, 'Default E2E');
 
   await page.goto('/settings/account/tokens');
   await expect(page.getByRole('heading', { name: 'Tokens', exact: true })).toBeVisible();
@@ -228,7 +240,7 @@ test('create a default token → "Standard", and delete is off', async ({ page }
   await expect(row.getByText('Can delete')).toHaveCount(0);
 
   await row.getByRole('button', { name: 'Show scopes for scoped-default' }).click();
-  await expect(page.getByText('Read everything', { exact: true })).toBeVisible();
+  await expect(page.getByText('View project', { exact: true })).toBeVisible();
   await expect(page.getByText('Delete work items', { exact: true })).toHaveCount(0);
 });
 
@@ -256,6 +268,7 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
 }) => {
   const email = 'tokens-tall-modal-e2e@example.com';
   await signUp(page, email);
+  await createFirstProject(page, 'Tall Modal E2E');
 
   // A second org, server-side — a single-org account has no UI path to org #2.
   // It needs a workspace of its own: the binding picker reads ORGS THAT HAVE a
@@ -282,8 +295,17 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   const dialog = page.getByRole('dialog');
   await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
 
-  // The tall variant: the Organization picker only renders at ≥2 orgs.
+  // THE TALLEST SHAPE THE MODAL HAS. Three things stack here, and each was
+  // added by a different card: the Organization picker (≥2 orgs only), the
+  // Project picker (MOTIR-2606's required binding), and the six-permission
+  // grid (MOTIR-2580). Asserting all three are present is what makes the
+  // footer assertion below a test of the WORST case rather than of whichever
+  // case happens to render today.
   await expect(dialog.getByRole('combobox', { name: 'Organization' })).toBeVisible();
+  await expect(dialog.getByRole('combobox', { name: 'Project' })).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'Permissions' }).getByRole('switch')).toHaveCount(
+    6,
+  );
 
   // The panel obeys its own cap — it grows no further than 90vh (630px here).
   const panel = await dialog.boundingBox();
@@ -308,6 +330,45 @@ test('the Create button stays reachable on a multi-org account in a short viewpo
   await dialog.getByRole('button', { name: 'Done' }).click();
   await expect(dialog).toBeHidden();
   await expect(page.getByRole('row', { name: /short-viewport/ })).toBeVisible();
+});
+
+// The EMPTY grant (Story MOTIR-2572 · Subtask MOTIR-2586): a token that grants
+// nothing is not a token. The CTA goes dead and the modal says why, rather than
+// minting a credential every call would then refuse. Asserted here as well as in
+// the acceptance clip, because the bulk lane is what runs on every PR.
+test('a grant with nothing selected refuses submission, with its reason', async ({ page }) => {
+  await signUp(page, 'tokens-empty-grant-e2e@example.com');
+  await createFirstProject(page, 'Empty Grant E2E');
+
+  await page.goto('/settings/account/tokens');
+  await page.getByRole('button', { name: 'Create token' }).first().click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: 'Create token' })).toBeVisible();
+  await dialog.getByLabel('Label').fill('grants-nothing');
+
+  // Everything the DEFAULT grant turned on, turned back off. (Delete is already
+  // off — the one permission the default withholds.)
+  for (const name of [
+    'View project',
+    'Edit work items',
+    'Add comments',
+    'Manage sprints',
+    'Run AI planning',
+  ]) {
+    await dialog.getByRole('switch', { name, exact: true }).click();
+  }
+
+  await expect(dialog.getByRole('alert')).toContainText(
+    'Grant at least one permission to create a token.',
+  );
+  const submit = dialog.getByRole('button', { name: 'Create token', exact: true });
+  await expect(submit).toBeDisabled();
+
+  // Turning one back on revives it — the refusal is about the grant, not a
+  // form the modal has got stuck in.
+  await dialog.getByRole('switch', { name: 'View project', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toHaveCount(0);
+  await expect(submit).toBeEnabled();
 });
 
 // ── The MOTIR-2532 rename: the DOOR and the old address (Subtask MOTIR-2541) ──

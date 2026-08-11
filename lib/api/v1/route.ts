@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
-import type { TokenScope } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { presentedBearerToken, tokenFingerprint } from '@/lib/api/v1/bearer';
 import { V1_CONTRACT_VERSION } from '@/lib/api/v1/contractVersion';
 import {
   classifyApiV1Error,
   INTERNAL_ERROR_BODY,
-  InsufficientScopeError,
+  InsufficientPermissionError,
   UnauthenticatedError,
 } from '@/lib/api/v1/errors';
 import {
@@ -25,7 +25,7 @@ import {
 //
 // It owns, in this order:
 //
-//   1. AUTH — delegates to the shipped `authenticateApiToken(req, scope)`;
+//   1. AUTH — delegates to `authenticateApiToken(req, permission)`;
 //      `unauthenticated` → 401 (undifferentiated), `forbidden` → 403.
 //   2. RATE LIMITING — per token, with `X-RateLimit-*` on every response and a
 //      429 when the budget is spent (MOTIR-1860).
@@ -96,7 +96,7 @@ export interface V1RouteContext<P> {
   /**
    * The bearer secret this request presented. Present because the gate
    * already accepted it. Routes that need the token's own metadata (its
-   * granted scopes) pass this to `apiTokensService.verify`; see
+   * resolved grant) pass this to `apiTokensService.verify`; see
    * `lib/api/v1/bearer.ts` for why the wrapper reads it at all.
    */
   presentedToken: string;
@@ -110,11 +110,12 @@ export interface V1RouteContext<P> {
 
 export interface V1RouteOptions {
   /**
-   * The scope this route REQUIRES. Declared, never inferred: the ADR's
-   * operation → scope table (§3) is implemented here, at the route's
+   * The PERMISSION this route REQUIRES — the one its own service asserts.
+   * Declared, never inferred: the operation → permission table
+   * (`docs/decisions/token-permissions.md` §3) is implemented here, at the route's
    * definition, and a route that declares none fails MOTIR-1861's guard.
    */
-  scope: TokenScope;
+  permission: PermissionKey;
 }
 
 type V1Handler<P> = (ctx: V1RouteContext<P>) => Promise<Response> | Response;
@@ -126,7 +127,7 @@ type NextRouteArgs<P> = { params: Promise<P> } | undefined;
  * Wrap a handler as a `/api/v1` route.
  *
  * ```ts
- * export const GET = withV1Route({ scope: 'read' }, async (ctx) => {
+ * export const GET = withV1Route({ permission: 'project:browse' }, async (ctx) => {
  *   const dto = await someService.read(ctx.service);
  *   return NextResponse.json(dto);
  * });
@@ -150,7 +151,7 @@ export function withV1Route<P = Record<string, never>>(
     try {
       // ── 1. Authenticate, BEFORE any parsing or reading ──────────────────
       const presentedToken = presentedBearerToken(req);
-      const auth = await authenticateApiToken(req, options.scope);
+      const auth = await authenticateApiToken(req, options.permission);
 
       // 401 exits here, WITHOUT touching the limiter. The budget belongs to a
       // credential, so a request we could not identify must not be able to
@@ -165,11 +166,11 @@ export function withV1Route<P = Record<string, never>>(
 
       // ── 2. Rate-limit, per TOKEN ────────────────────────────────────────
       // Everything from here holds a VALID token — `ok`, or `forbidden`, which
-      // means the credential resolved but lacks the scope. Both are metered.
+      // means the credential resolved but lacks the permission. Both are metered.
       //
-      // ⚠️ The scope refusal is metered DELIBERATELY, and the ordering is the
+      // ⚠️ The permission refusal is metered DELIBERATELY, and the ordering is the
       // whole point: if 403s were free, a holder of any valid token could
-      // hammer an endpoint whose scope it lacks — a full token lookup per
+      // hammer an endpoint whose permission it lacks — a full token lookup per
       // request — with no ceiling at all. Refusing a request is not the same as
       // it being free to serve. It also means a 429 outranks a 403: a caller
       // over its budget is told to back off regardless of what it asked for.
@@ -182,8 +183,8 @@ export function withV1Route<P = Record<string, never>>(
       }
       if (!decision.allowed) throw new RateLimitExceededError(retryAfterSeconds(decision));
 
-      // ── 3. Enforce the declared scope ───────────────────────────────────
-      if (!auth.ok) throw new InsufficientScopeError(options.scope);
+      // ── 3. Enforce the declared permission ──────────────────────────────
+      if (!auth.ok) throw new InsufficientPermissionError(options.permission);
 
       // ── 4. Run the handler ──────────────────────────────────────────────
       const params = ((await args?.params) ?? {}) as P;
@@ -192,7 +193,14 @@ export function withV1Route<P = Record<string, never>>(
         params,
         userId: auth.userId,
         workspaceId: auth.workspaceId,
-        service: { userId: auth.userId, workspaceId: auth.workspaceId },
+        service: {
+          userId: auth.userId,
+          workspaceId: auth.workspaceId,
+          // The token's project binding (MOTIR-2607). Absent when the token
+          // names none, which is every device credential — so an unbound token
+          // behaves exactly as it did before this card.
+          ...(auth.projectId ? { tokenProjectId: auth.projectId } : {}),
+        },
         requestId,
         presentedToken,
         responseHeaders,

@@ -27,7 +27,10 @@ import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 // holding a job id holds a plan id. A narrower ADDRESS, not a narrower
 // capability — adding the job address later is additive under §8.
 
-export const GET = withV1Route<{ planId: string }>({ scope: 'read' }, async (ctx) => {
-  const outcome = await aiPlanEditsService.getOutcome({ planId: ctx.params.planId }, ctx.service);
-  return NextResponse.json(presentPlanOutcome(outcome));
-});
+export const GET = withV1Route<{ planId: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    const outcome = await aiPlanEditsService.getOutcome({ planId: ctx.params.planId }, ctx.service);
+    return NextResponse.json(presentPlanOutcome(outcome));
+  },
+);

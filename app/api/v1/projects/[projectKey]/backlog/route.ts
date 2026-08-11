@@ -17,18 +17,25 @@ import { projectsService } from '@/lib/services/projectsService';
 // ⚠️ The backlog EXCLUDES done-category issues, and its sibling (a sprint's
 // members) does NOT. See `lib/api/v1/rankedCollections.ts` for why that
 // asymmetry is correct in both directions.
-export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async (ctx) => {
-  // Parse BEFORE reading: a bad cursor, limit or filter is the caller's to fix,
-  // and answering 422 without touching the database is both faster and honest.
-  const page = parseCollectionPageRequest(ctx.req, 'backlog', readRowIdPosition);
-  const filter = parseRankedFilterParam(ctx.req);
+export const GET = withV1Route<{ projectKey: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    // Parse BEFORE reading: a bad cursor, limit or filter is the caller's to fix,
+    // and answering 422 without touching the database is both faster and honest.
+    const page = parseCollectionPageRequest(ctx.req, 'backlog', readRowIdPosition);
+    const filter = parseRankedFilterParam(ctx.req);
 
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
-  const result = await backlogService.getBacklog(
-    project.id,
-    { limit: page.limit, ...(page.cursor !== undefined ? { cursor: page.cursor } : {}), ...filter },
-    ctx.service,
-  );
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+    const result = await backlogService.getBacklog(
+      project.id,
+      {
+        limit: page.limit,
+        ...(page.cursor !== undefined ? { cursor: page.cursor } : {}),
+        ...filter,
+      },
+      ctx.service,
+    );
 
-  return NextResponse.json(presentRankedPage(result, 'backlog'));
-});
+    return NextResponse.json(presentRankedPage(result, 'backlog'));
+  },
+);

@@ -39,10 +39,21 @@
 // The `resource:action` form is the mirror convention (Plane names permissions
 // `workitem:edit`; Jira's permission names read the same way).
 //
-// ⚠️ "PERMISSION", NOT "SCOPE". `lib/mcp/scopes.ts` deliberately records that an
-// API-token SCOPE is a separate axis — it NARROWS its owner's role and gates MCP
-// operations. The two vocabularies stay distinct; nothing here is a scope and
-// nothing there is a permission.
+// ⚠️ SUPERSEDED — READ `docs/decisions/token-permissions.md` (MOTIR-2573,
+// 2026-08-10). This header used to say:
+//
+//   ⚠️ "PERMISSION", NOT "SCOPE". `lib/mcp/scopes.ts` deliberately records that
+//   an API-token SCOPE is a separate axis — it NARROWS its owner's role and
+//   gates MCP operations. The two vocabularies stay distinct; nothing here is a
+//   scope and nothing there is a permission.
+//
+// It rested on a premise that expired: that this catalog was a project-access
+// model too narrow to describe what a token reaches. With 31 enforced keys it
+// describes exactly that, so an API TOKEN now GRANTS keys from THIS catalog —
+// the grantable subset being the keys some token-reachable operation asserts
+// (`lib/tokens/grant.ts`). The COMPOSITION rule is unchanged and is the part of
+// the old statement that survives: a grant NARROWS its owner's role and the two
+// are intersected at dispatch. Nothing here is a scope, because scopes are gone.
 
 /**
  * The domain groups, in the order a UI renders them. Every permission carries

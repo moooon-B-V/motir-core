@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
+import { ACCEPTANCE_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
 import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectsService } from '@/lib/services/projectsService';
@@ -35,7 +36,13 @@ export async function authorizeAcceptancePublish(
   identifier: string,
 ): Promise<AcceptancePublishGate | Response> {
   // Auth: keyless GitHub OIDC first (MOTIR-1650) when the caller opts in via the
-  // `X-Motir-Auth: github-oidc` marker; otherwise the `integration` PAT.
+  // `X-Motir-Auth: github-oidc` marker; otherwise a PAT holding the permission the
+  // publish actually needs. MOTIR-2576: this was `'integration'`, the one caller
+  // that is neither MCP nor `/api/v1` and the one a migration of "the two big
+  // seams" would leave behind — with every story's acceptance video 403ing.
+  // `acceptanceEvidenceService` asserts `work_item:edit` on the resolved story,
+  // so that is what the route asks for (ADR §5's forward map sends `integration`
+  // to the same key, so no already-minted CI token loses the publish).
   let ctx: { userId: string; workspaceId: string };
   const oidc = await authenticateGithubOidc(req);
   if (oidc) {
@@ -46,12 +53,15 @@ export async function authorizeAcceptancePublish(
     }
     ctx = { userId: oidc.userId, workspaceId: oidc.workspaceId };
   } else {
-    const auth = await authenticateApiToken(req, 'integration');
+    const auth = await authenticateApiToken(req, ACCEPTANCE_PUBLISH_PERMISSION);
     if (!auth.ok) {
       return auth.reason === 'unauthenticated'
         ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })
         : NextResponse.json(
-            { code: 'FORBIDDEN', error: 'The token lacks the integration scope.' },
+            {
+              code: 'FORBIDDEN',
+              error: `The token is not granted the "${ACCEPTANCE_PUBLISH_PERMISSION}" permission.`,
+            },
             { status: 403 },
           );
     }

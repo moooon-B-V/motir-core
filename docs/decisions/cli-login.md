@@ -324,7 +324,7 @@ owns that, and MOTIR-1870 owns proving it.
 **Decision: `['read', 'work_items:write', 'integration']`, not
 `DEFAULT_TOKEN_SCOPES`.**
 
-`docs/cli.md` § Scopes asserts this is what the CLI needs; the assertion was
+`docs/cli.md` § What the approval mints asserts this is what the CLI needs; the assertion was
 verified rather than copied. Every tool the shipped client calls
 (`packages/cli/src/client.ts`: `whoami`, `list_projects`, `list_ready`,
 `next_ready`, `get_work_item`, `get_work_item_activity`, `transition_status`,

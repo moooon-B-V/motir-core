@@ -52,7 +52,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'recorded session branch, so fetching a prompt to look at it is always safe. The text ' +
       'is deliberately identical for every agent harness; do not rewrite it. `advisories` is ' +
       'never a gate — it changes what you are told, never what you may do.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       {
         name: 'key',
@@ -97,7 +97,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'three to leave the item’s recorded provenance untouched. Honors the project’s workflow ' +
       'rules — an item with no legal path to “In review” is refused and its branch is left ' +
       'unchanged.',
-    scope: 'integration',
+    permission: 'work_item:edit',
     parameters: [
       {
         name: 'key',
@@ -134,7 +134,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'leaves the item’s session branch untouched, both of which are echoed back so a client ' +
       'can see it. A field you omit is left exactly as it is — omitting all of them changes ' +
       'nothing.',
-    scope: 'integration',
+    permission: 'work_item:edit',
     parameters: [
       {
         name: 'key',
@@ -171,7 +171,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'named with a reason. Read the results; do not infer an outcome from their count. A ' +
       'branch nothing is recorded on returns an empty list, not a 404. The branch travels in ' +
       'the BODY because a git ref routinely contains `/`.',
-    scope: 'integration',
+    permission: 'work_item:edit',
     parameters: [],
     requestBody: {
       schema: sessionCloseOutBodySchema,
@@ -202,7 +202,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       '⚠️ A submit SPENDS the token owner’s AI credits, so wrapping this call in a blind ' +
       'retry-on-timeout costs real money — poll `statusUrl` instead of resubmitting. A leaf ' +
       '(subtask) cannot be expanded.',
-    scope: 'work_items:write',
+    permission: 'ai:plan',
     parameters: [
       {
         name: 'key',
@@ -235,7 +235,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'failed job leaves its plan `generating` forever, so the plan status alone cannot tell ' +
       'you to stop polling. `job.reachable: false` means motir-ai could not be asked, not ' +
       'that the job died. A pure read; the proposal count is NOT a count of created work items.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       {
         name: 'planId',
@@ -266,7 +266,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       '⚠️ These are PROPOSALS, not work items: an `add`’s `workItemKey` is `null` and stays ' +
       'null until the plan is approved in Motir, which is the only path from a proposal to a ' +
       'work item. A plan still generating returns the proposals that have arrived so far.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       {
         name: 'planId',
@@ -300,7 +300,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'the thread’s identity: order and duplicates do not matter. ' +
       'Opening submits nothing and costs nothing — which is why it is `read`-scoped despite ' +
       'being a POST (a GET that creates a row would not be safe).',
-    scope: 'read',
+    permission: 'ai:plan',
     parameters: [
       {
         name: 'projectKey',
@@ -335,7 +335,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'point — a later turn REFINES the earlier ones rather than replacing them, so "add auth ' +
       'to the billing epic" then "keep them under 3 points" go out as ONE coherent change. ' +
       'Addresses the thread by scope, so it always extends the same conversation.',
-    scope: 'work_items:write',
+    permission: 'ai:plan',
     parameters: [
       {
         name: 'projectKey',
@@ -370,7 +370,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       '⚠️ This is the act that SPENDS the token owner’s AI credits, and it produces a PLAN of ' +
       'proposals: approving that plan in Motir is the only thing that turns a proposal into a ' +
       'work item. Submitting a thread with no turns is refused.',
-    scope: 'work_items:write',
+    permission: 'ai:plan',
     parameters: [
       {
         name: 'projectKey',
@@ -411,7 +411,7 @@ export const WORK_LOOP_OPERATIONS: readonly V1Operation[] = [
       'until `nextCursor` is `null`, never until a page looks short. ' +
       '`GET /api/v1/work-items/{key}/comments` still exists and is unchanged — this view is ' +
       'the same data through the same read, offered so one code path can walk all three.',
-    scope: 'read',
+    permission: 'project:browse',
     parameters: [
       {
         name: 'key',

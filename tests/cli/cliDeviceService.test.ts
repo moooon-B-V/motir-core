@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@/generated/prisma/client';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 
 // Better-Auth's rate limiter buckets /sign-in|/sign-up per IP (window 10s, max 3),
 // and every test here signs in to obtain the real session cookie the plugin's
@@ -258,7 +259,7 @@ describe('approve → poll — the mint', () => {
 
     expect(granted.access_token.startsWith('motir_pat_')).toBe(true);
     expect(granted.token_type).toBe('Bearer');
-    expect(granted.scope).toBe('read work_items:write integration');
+    expect(granted.scope).toBe([...CLI_TOKEN_GRANT].join(' '));
     // 90 days, derived from the token's own expiresAt (never from the constant).
     expect(granted.expires_in).toBeGreaterThan(CLI_TOKEN_EXPIRY_DAYS * 86400 - 60);
     expect(granted.expires_in).toBeLessThanOrEqual(CLI_TOKEN_EXPIRY_DAYS * 86400);
@@ -269,11 +270,11 @@ describe('approve → poll — the mint', () => {
       slug: workspace.slug,
     });
 
-    // Exactly one token row, with the ADR's label / scopes / expiry / binding.
+    // Exactly one token row, with the ADR's label / grant / expiry / binding.
     const tokens = await db.apiToken.findMany();
     expect(tokens).toHaveLength(1);
     expect(tokens[0]!.label).toBe('CLI · workbox');
-    expect(tokens[0]!.scopes.sort()).toEqual([...CLI_TOKEN_SCOPES].sort());
+    expect([...tokens[0]!.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
     expect(tokens[0]!.workspaceId).toBe(workspace.id);
     expect(tokens[0]!.userId).toBe(owner.id);
     const daysOut = (tokens[0]!.expiresAt!.getTime() - Date.now()) / DAY_MS;
@@ -285,7 +286,7 @@ describe('approve → poll — the mint', () => {
     const verified = await apiTokensService.verify(granted.access_token);
     expect(verified.user.id).toBe(owner.id);
     expect(verified.workspaceId).toBe(workspace.id);
-    expect(verified.scopes.sort()).toEqual([...CLI_TOKEN_SCOPES].sort());
+    expect([...verified.grant].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
 
     // Single-use: the grant is gone, so a second poll cannot re-issue.
     expect(await db.deviceCode.count()).toBe(0);
@@ -658,8 +659,8 @@ describe('describe — claim + what is connecting', () => {
       headers,
     });
 
-    expect(described.scopes).toEqual(CLI_TOKEN_SCOPES);
-    expect(described.scopes).not.toContain('work_items:delete');
+    expect(described.permissions).toEqual([...CLI_TOKEN_GRANT]);
+    expect(described.permissions).not.toContain('work_item:delete');
   });
 
   it('never returns the device code, the user, the workspace, or a token', async () => {
@@ -680,7 +681,7 @@ describe('describe — claim + what is connecting', () => {
       'clientId',
       'expiresAt',
       'hostname',
-      'scopes',
+      'permissions',
       'status',
       'userCode',
     ]);
@@ -1043,7 +1044,7 @@ describe('toDeviceGrantTokenDTO — the never-expiring token', () => {
     const { owner, workspace } = await createTestWorkspace();
     const { dto, token } = await apiTokensService.create(owner.id, workspace.id, {
       label: 'never expires',
-      scopes: [...CLI_TOKEN_SCOPES],
+      fixedGrant: [...CLI_TOKEN_GRANT],
     });
     expect(dto.expiresAt).toBeNull();
 
@@ -1051,6 +1052,6 @@ describe('toDeviceGrantTokenDTO — the never-expiring token', () => {
 
     expect(mapped.expires_in).toBe(0);
     expect(mapped.access_token).toBe(token);
-    expect(mapped.scope).toBe(dto.scopes.join(' '));
+    expect(mapped.scope).toBe(dto.permissions.join(' '));
   });
 });

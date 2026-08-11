@@ -277,7 +277,7 @@ describe('/api/v1 work-item conformance — an external client with a real PAT',
     for (const [path, init] of mutations) {
       const res = await http(path, readOnlyOnSameTenant, init);
       expect(res.status, `${init.method} ${path} on a read-only token`).toBe(403);
-      expect((await json<{ code: string }>(res)).code).toBe('INSUFFICIENT_SCOPE');
+      expect((await json<{ code: string }>(res)).code).toBe('INSUFFICIENT_PERMISSION');
     }
 
     // A WRITE token is still refused on archive — the scope split, over the wire.

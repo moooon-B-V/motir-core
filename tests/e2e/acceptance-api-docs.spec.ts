@@ -125,7 +125,7 @@ test('a developer finds the API reference, reads an operation, copies its exampl
     // Method, path and the scope the token must carry.
     await expect(section.getByText(READ.path, { exact: true })).toBeVisible();
     await expect(section.getByText(READ.method, { exact: true }).first()).toBeVisible();
-    await expect(section.getByText(READ.scope, { exact: true })).toBeVisible();
+    await expect(section.getByText(READ.permission, { exact: true })).toBeVisible();
     await beat();
 
     // Its parameters, and the statuses it can answer with — including the two
