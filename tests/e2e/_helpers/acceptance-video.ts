@@ -519,6 +519,24 @@ export const test = base.extend<AcceptanceFixtures>({
       fs.mkdirSync(testInfo.outputDir, { recursive: true });
       fs.writeFileSync(file, JSON.stringify(report, null, 2));
       await testInfo.attach('contention', { path: file, contentType: 'application/json' });
+
+      // ⚠️ AND ONE LINE IN THE JOB LOG — this is not a convenience, it is what
+      // makes the instrument USABLE. The sidecar rides in the report artifact
+      // alongside the videos, and this lane's four shard artifacts are ~1.5 GB;
+      // reading a distribution out of them means a multi-minute download per
+      // shard, which is enough friction that nobody will do it on a green run —
+      // and a green run is precisely when this must be read. The log is where a
+      // reader already is, `gh api …/logs` is one call, and the whole summary
+      // fits on a line. `warn` for the same reason `clientDiagnostics` uses it:
+      // `log` is the one console method this repo's lint config forbids.
+      console.warn(
+        `[acceptance-video] MOTIR-2646 contention — navs=${report.navigations} ` +
+          `idleGap med/p90/max=${report.idleGap.medianMs}/${report.idleGap.p90Ms}/${report.idleGap.maxMs}ms ` +
+          `longestTask med/p90/max=${report.longestTask.medianMs}/${report.longestTask.p90Ms}/${report.longestTask.maxMs}ms ` +
+          `drainLatency med/p90/max=${report.drainLatency.medianMs}/${report.drainLatency.p90Ms}/${report.drainLatency.maxMs}ms ` +
+          `unresponsive=${report.unresponsiveDrains}/${report.drains.length} ` +
+          `worst=${report.worst ? `${report.worst.idleGapMs}ms@${report.worst.kind}:${report.worst.url}` : 'none'}`,
+      );
     },
     { auto: true },
   ],
