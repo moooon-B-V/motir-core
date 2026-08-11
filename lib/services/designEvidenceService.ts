@@ -6,7 +6,8 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
-import { headPrivateBlob } from '@/lib/blob/uploader';
+import { randomUUID } from 'node:crypto';
+import { headPrivateBlob, mintPrivateUploadToken } from '@/lib/blob/uploader';
 import { MAX_UPLOAD_BYTES, isAllowedDesignAssetType } from '@/lib/blob/allowlist';
 import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
 import {
@@ -18,7 +19,12 @@ import {
   DesignEvidenceSupersedeConflictError,
 } from '@/lib/designEvidence/errors';
 import { toDesignEvidenceDto } from '@/lib/mappers/designEvidenceMappers';
-import type { DesignAssetKindDTO, DesignEvidenceDTO } from '@/lib/dto/designEvidence';
+import type {
+  DesignAssetKindDTO,
+  DesignEvidenceDTO,
+  DesignUploadTargetDTO,
+  DesignUploadTokensDTO,
+} from '@/lib/dto/designEvidence';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
 /**
@@ -67,6 +73,11 @@ export function designPrefix(workspaceId: string, workItemId: string): string {
 /** The last path segment (the stored filename) of a blob pathname. */
 function blobFilename(pathname: string): string {
   return pathname.slice(pathname.lastIndexOf('/') + 1);
+}
+
+/** The basename of a repo path, used to keep a stored key recognisable. */
+function basenameOf(sourcePath: string): string {
+  return sourcePath.slice(sourcePath.lastIndexOf('/') + 1) || 'asset';
 }
 
 /**
@@ -294,6 +305,59 @@ async function persistEvidence(
 }
 
 export const designEvidenceService = {
+  /**
+   * Mint scoped CLIENT upload grants so a trusted CI job PUTs each design
+   * artifact DIRECTLY to the private store, never through the application. Each
+   * grant is bound to one exact pathname (under this item's
+   * `design/<ws>/<itemId>/` prefix), one content type, and the org's per-file
+   * cap. CI then reports the pathnames back via {@link recordFromPathnames}.
+   *
+   * The declared content type is checked against the design allowlist HERE, so a
+   * disallowed type never gets a key minted for it at all — and checked AGAIN at
+   * register against what the store actually holds, because a presigned PUT
+   * proves what was signed, not what was sent.
+   */
+  async createUploadTokens(
+    input: {
+      workItemId: string;
+      files: Array<{ kind: DesignAssetKindDTO; sourcePath: string; contentType: string }>;
+    },
+    ctx: ServiceContext,
+  ): Promise<DesignUploadTokensDTO> {
+    const item = await resolveTarget(input.workItemId, ctx);
+    if (!input.files || input.files.length === 0) throw new DesignEvidenceEmptyError();
+
+    const { perFileLimit } = await resolveCostContext(ctx.workspaceId);
+    const prefix = designPrefix(ctx.workspaceId, item.id);
+    const nonce = randomUUID();
+
+    const targets: DesignUploadTargetDTO[] = [];
+    for (const [index, file] of input.files.entries()) {
+      if (!ASSET_KINDS.includes(file.kind)) {
+        throw new UnsupportedFileTypeError(String(file.kind));
+      }
+      if (!isAllowedDesignAssetType(file.contentType)) {
+        throw new UnsupportedFileTypeError(file.contentType);
+      }
+      // The nonce + index keep two files of the same basename from colliding,
+      // and keep a re-publish from overwriting the previous run's objects (the
+      // superseded ones are the orphan-GC's to reclaim, not ours to clobber).
+      const pathname = `${prefix}${nonce}-${index}-${basenameOf(file.sourcePath)}`;
+      targets.push({
+        sourcePath: file.sourcePath,
+        kind: file.kind,
+        pathname,
+        token: await mintPrivateUploadToken(pathname, {
+          contentType: file.contentType,
+          maxBytes: perFileLimit,
+        }),
+        contentType: file.contentType,
+        maxBytes: perFileLimit,
+      });
+    }
+    return { targets };
+  },
+
   /**
    * Register design artifacts already CLIENT-uploaded to the private store,
    * superseding the prior current result. The caller reports only pathnames; the

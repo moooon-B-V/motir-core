@@ -294,7 +294,8 @@ describe('designEvidenceService.recordFromPathnames', () => {
     );
 
     const after = await db.workItem.findUniqueOrThrow({ where: { id: card.id } });
-    expect(after.workflowStatusId).toBe(before.workflowStatusId);
+    expect(after.status).toBe(before.status);
+    expect(after.status).toBeTruthy();
   });
 });
 
@@ -463,6 +464,87 @@ describe('translateSupersedeConflict', () => {
 
     const boom = new Error('boom');
     expect(translateSupersedeConflict(boom, 'wi-1')).toBe(boom);
+  });
+});
+
+describe('designEvidenceService.createUploadTokens', () => {
+  it('binds each grant to one exact key and one exact content type', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+
+    const { targets } = await designEvidenceService.createUploadTokens(
+      {
+        workItemId: card.id,
+        files: [
+          { kind: 'mock', sourcePath: 'design/work-items/t.mock.html', contentType: 'text/html' },
+          {
+            kind: 'note_file',
+            sourcePath: 'design/work-items/design-notes.md',
+            contentType: 'text/markdown',
+          },
+        ],
+      },
+      fx.ctx,
+    );
+
+    expect(targets).toHaveLength(2);
+    for (const t of targets) {
+      expect(t.pathname.startsWith(designPrefix(fx.ctx.workspaceId, card.id))).toBe(true);
+      expect(t.maxBytes).toBeGreaterThan(0);
+    }
+    expect(targets[0]!.contentType).toBe('text/html');
+    expect(targets[1]!.contentType).toBe('text/markdown');
+  });
+
+  it('refuses an unknown KIND and a disallowed content type before minting anything', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+
+    await expect(
+      designEvidenceService.createUploadTokens(
+        {
+          workItemId: card.id,
+          files: [
+            {
+              kind: 'screenshot' as unknown as 'mock',
+              sourcePath: 'design/x/a.png',
+              contentType: 'image/png',
+            },
+          ],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(UnsupportedFileTypeError);
+
+    await expect(
+      designEvidenceService.createUploadTokens(
+        {
+          workItemId: card.id,
+          files: [{ kind: 'image', sourcePath: 'design/x/a.svg', contentType: 'image/svg+xml' }],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(UnsupportedFileTypeError);
+  });
+
+  it('refuses to mint for an empty file list, or for a container target', async () => {
+    const fx = await makeWorkItemFixture();
+    const card = await makeSubtask(fx);
+    const story = await createTestWorkItem(fx, { kind: 'story', title: 'Container' });
+
+    await expect(
+      designEvidenceService.createUploadTokens({ workItemId: card.id, files: [] }, fx.ctx),
+    ).rejects.toBeInstanceOf(DesignEvidenceEmptyError);
+
+    await expect(
+      designEvidenceService.createUploadTokens(
+        {
+          workItemId: story.id,
+          files: [{ kind: 'mock', sourcePath: 'design/x/s.mock.html', contentType: 'text/html' }],
+        },
+        fx.ctx,
+      ),
+    ).rejects.toBeInstanceOf(DesignEvidenceNotALeafError);
   });
 });
 

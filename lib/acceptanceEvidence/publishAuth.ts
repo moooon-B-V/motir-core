@@ -1,27 +1,26 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
-import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
-import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { projectsService } from '@/lib/services/projectsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  authenticateCiPublisher,
+  resolveWorkItemByIdentifier,
+} from '@/lib/publishAuth/ciPublishAuth';
 
 // Shared gate for the acceptance-publish routes (MOTIR-1631/1681): both the
 // mint-token route and the register route authenticate the CI caller (keyless
 // GitHub OIDC first, else an `integration` PAT), resolve the STORY within the
 // caller's workspace, and apply the plan/toggle eligibility gate — identically.
+//
+// The auth + resolve halves moved to `lib/publishAuth/ciPublishAuth.ts` when the
+// design result became a second CI publisher (MOTIR-2667); the two steps BELOW —
+// the parent-story hop and the eligibility gate — are what make this gate
+// acceptance's rather than every publisher's. Behaviour is unchanged.
 
 export interface AcceptancePublishGate {
   ctx: { userId: string; workspaceId: string };
   story: WorkItem;
-}
-
-/** Derive the owning project key from a `MOTIR-7`-style identifier. */
-function projectKeyOf(identifier: string): string {
-  const dash = identifier.lastIndexOf('-');
-  return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
 /**
@@ -34,48 +33,12 @@ export async function authorizeAcceptancePublish(
   req: Request,
   identifier: string,
 ): Promise<AcceptancePublishGate | Response> {
-  // Auth: keyless GitHub OIDC first (MOTIR-1650) when the caller opts in via the
-  // `X-Motir-Auth: github-oidc` marker; otherwise the `integration` PAT.
-  let ctx: { userId: string; workspaceId: string };
-  const oidc = await authenticateGithubOidc(req);
-  if (oidc) {
-    if (!oidc.ok) {
-      return oidc.status === 401
-        ? NextResponse.json({ code: 'UNAUTHENTICATED', reason: oidc.reason }, { status: 401 })
-        : NextResponse.json({ code: 'FORBIDDEN', reason: oidc.reason }, { status: 403 });
-    }
-    ctx = { userId: oidc.userId, workspaceId: oidc.workspaceId };
-  } else {
-    const auth = await authenticateApiToken(req, 'integration');
-    if (!auth.ok) {
-      return auth.reason === 'unauthenticated'
-        ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })
-        : NextResponse.json(
-            { code: 'FORBIDDEN', error: 'The token lacks the integration scope.' },
-            { status: 403 },
-          );
-    }
-    ctx = { userId: auth.userId, workspaceId: auth.workspaceId };
-  }
+  const ctx = await authenticateCiPublisher(req);
+  if (ctx instanceof Response) return ctx;
 
-  let story: WorkItem | null;
-  try {
-    const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
-    story = await withWorkspaceContext(ctx, (tx) =>
-      workItemRepository.findByIdentifier(project.id, identifier, tx),
-    );
-  } catch (err) {
-    if (err instanceof ProjectNotFoundError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
-    }
-    throw err;
-  }
-  if (!story) {
-    return NextResponse.json(
-      { code: 'WORK_ITEM_NOT_FOUND', error: `${identifier} was not found.` },
-      { status: 404 },
-    );
-  }
+  const resolved = await resolveWorkItemByIdentifier(identifier, ctx);
+  if (resolved instanceof Response) return resolved;
+  let story: WorkItem = resolved;
 
   // Acceptance evidence is a STORY-level artifact (Principle #18 — review at the
   // Story level). When the CI caller passes a non-story LEAF (a subtask / bug /

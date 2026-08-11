@@ -29,6 +29,33 @@ export interface DesignAssetDTO {
 }
 
 /**
+ * ONE minted upload grant. A presigned PUT bound to EXACTLY this pathname and
+ * this content type — a holder can write that one private object, as that one
+ * type, and nothing else (`mintPrivateUploadToken`'s `signableHeaders` is what
+ * makes the type part of the signature rather than a suggestion).
+ */
+export interface DesignUploadTargetDTO {
+  /** Echoed back so the caller can pair a grant with the file it asked for. */
+  sourcePath: string;
+  kind: DesignAssetKindDTO;
+  /** The private-store key to PUT to, and to report back at register. */
+  pathname: string;
+  token: string;
+  contentType: string;
+  /**
+   * The cap this upload is bound by. Told to the caller up front (MOTIR-1911's
+   * lesson) — otherwise the only way to learn it is to exceed it and read an
+   * opaque store error.
+   */
+  maxBytes: number;
+}
+
+/** The mint-token response: one grant per file the caller declared. */
+export interface DesignUploadTokensDTO {
+  targets: DesignUploadTargetDTO[];
+}
+
+/**
  * The CURRENT design result for a work item, as the Design result panel renders
  * it.
  *
