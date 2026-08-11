@@ -1,26 +1,4 @@
 <!doctype html>
-<!--
-  THE SHELL'S CONTEXT ROW — org › workspace › project, the rail head, and the
-  brand tile (MOTIR-2555).
-
-  The design of record for what the authed top bar's LEFT cluster carries at
-  each width. Read it with design/shell/design-notes.md, which carries the
-  amended budget, the truncation rule, the token map, and what this design
-  overrides.
-
-  BUILT AGAINST SHIPPED REALITY, NOT AGAINST THE SOURCE (notes.html #73). Every
-  control in every frame is the REAL component's markup, dumped from
-  app/(authed)/_components/{OrgControl,WorkspaceSwitcher,ProjectSwitcher,
-  SidebarHeader,ShellTierNav,TopNav}.tsx through the repo's own vitest + RTL
-  harness with the real messages/en.json. What this asset AUTHORS is the
-  arrangement and the responsive prefixes — which is exactly what the code card
-  ships. The stylesheet is the build's own Tailwind output compiled over that
-  markup, not a retyped token block.
-
-  Each frame renders at its own width inside ONE document, so the compiled
-  @media (width >= …) blocks are also emitted scoped to [data-vw="W"] — the same
-  rules, resolved per frame. That is a property of this board, not of the app.
--->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -10898,13 +10876,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -10969,34 +10941,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><svg
@@ -11326,13 +11270,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -11397,34 +11335,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><svg
@@ -11686,7 +11596,7 @@
         </figure>
         <figure class="frame">
           <figcaption>
-            768px (md) — the org returns as its MARK: <code>org › project</code>
+            768px (md) — the org returns as its NAME: <code>org › project</code>
           </figcaption>
           <div class="device" data-vw="768" style="width: 768px">
             <header
@@ -11756,13 +11666,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -11827,34 +11731,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><svg
@@ -12186,13 +12062,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -12257,34 +12127,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><svg
@@ -12616,13 +12458,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -12687,34 +12523,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><svg
@@ -13059,13 +12867,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -13099,34 +12901,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><svg
@@ -13456,13 +13230,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -13527,34 +13295,6 @@
                     >
                       <span
                         ><span class="flex min-w-0 items-center gap-2"
-                          ><span
-                            aria-hidden="true"
-                            style="width: 22px; height: 22px"
-                            class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                            ><svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="24"
-                              height="24"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                              class="lucide lucide-rocket"
-                              style="width: 13px; height: 13px"
-                              aria-hidden="true"
-                            >
-                              <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                              <path
-                                d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                              ></path>
-                              <path
-                                d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                              ></path>
-                              <path
-                                d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"
-                              ></path></svg></span
                           ><span class="min-w-0 max-w-[22ch] truncate text-left font-serif"
                             >Motir</span
                           ><span
@@ -13887,13 +13627,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -14286,13 +14020,7 @@
                       >
                         <span
                           ><span class="flex items-center gap-2"
-                            ><span
-                              aria-hidden="true"
-                              class="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-                              >M</span
-                            ><span class="hidden max-w-[20ch] truncate font-serif xl:inline"
-                              >moooon B.V.</span
-                            ></span
+                            ><span class="max-w-[20ch] truncate font-serif">moooon B.V.</span></span
                           ></span
                         ><span aria-hidden="true" class="inline-flex"
                           ><svg
@@ -14738,32 +14466,6 @@
               >
                 <span
                   ><span class="flex min-w-0 items-center gap-2"
-                    ><span
-                      aria-hidden="true"
-                      style="width: 22px; height: 22px"
-                      class="inline-flex flex-none items-center justify-center text-(--el-text-strong) rounded-(--radius-control) bg-(--el-avatar-lavender)"
-                      ><svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        class="lucide lucide-rocket"
-                        style="width: 13px; height: 13px"
-                        aria-hidden="true"
-                      >
-                        <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
-                        <path
-                          d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09"
-                        ></path>
-                        <path
-                          d="M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z"
-                        ></path>
-                        <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05"></path></svg></span
                     ><span class="min-w-0 flex-1 truncate text-left font-serif">Motir</span
                     ><svg
                       xmlns="http://www.w3.org/2000/svg"

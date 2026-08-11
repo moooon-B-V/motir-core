@@ -271,6 +271,13 @@ and diverge at `md`, where min-content reports the truncated width and this repo
 | 1024px (`lg`)        | 233px                | 209px         | **240px**                        |
 | 1280px (`xl`)        | 486px                | 428px         | **428px**                        |
 
+> **⚠️ Where the baseline lives now.** The `today: marks present` column was measured against
+> **Panel B as it stood before this pass corrected it**. Panel B, C and E have since been amended to
+> draw the target (no org mark, no preset chip, org name from `md`) — because an asset that shows the
+> old target beside the new one cannot tell a reader which is current. So re-running the harness today
+> compares against **Panel A**, which keeps the ships-today row on purpose; the with-marks numbers
+> above are reproducible from Panel A and from this file's history, not from Panel B.
+
 Row overflow is **0 at every band, in every variant** — the ladder holds with the marks gone.
 
 > **A second finding, on the SHIPPED bar (Panel A).** Re-measured here at **49px** of overflow at
@@ -387,6 +394,18 @@ Three things this pins, each for a reason:
 `design/brand/design-notes.md` §7a is amended in the same PR. **A field BEHIND the mark is not a
 recolour OF the mark** — §9's _"one token, never a hex, never a second hue"_ still holds exactly, and
 the glyph still takes one token, the same one it took before.
+
+### The target panels were CORRECTED, not supplemented (MOTIR-2674)
+
+The first version of this pass added Panel G and left Panels B, C and E drawing the org mark and the
+project's preset chip. That is a worse state than not having amended the asset at all: two targets in
+one file, with nothing saying which is authoritative, and the older one appearing first.
+
+**Panels B, C and E now draw the target** — no org mark, no preset chip, the org's name revealed from
+`md`. **Panel A deliberately still draws both marks**: it is captioned _"what ships today"_ and is the
+before-state the 320px finding is measured against; an asset that erases its own history cannot show
+what changed. The correction is applied by `scripts/apply-entity-marks.mjs`, which is idempotent and
+committed, so the transformation is auditable rather than a hand-edit nobody can re-check.
 
 ### The MARK — pinned once here, applied everywhere (MOTIR-2674)
 
