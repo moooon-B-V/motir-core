@@ -12,6 +12,11 @@ import { GET as GET_DETAIL } from '@/app/api/v1/work-items/[key]/route';
 import { GET as GET_ACTIVITY } from '@/app/api/v1/work-items/[key]/activity/route';
 import { GET as GET_COMMENTS } from '@/app/api/v1/work-items/[key]/comments/route';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
+import {
+  ALIGNED_HEADROOM_MS,
+  ALIGNED_WINDOW_MS,
+  waitForWindowHeadroom,
+} from '../../helpers/rateLimitWindow';
 import { commentsService } from '@/lib/services/commentsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -429,7 +434,14 @@ describe('the error path, end to end from a real refusal', () => {
 
   it('a real 429 becomes a RateLimitError carrying the reset the server sent', async () => {
     const caller = await createV1ProjectCaller();
+    // Two counted calls whose outcome depends on the ACCUMULATED count, so the
+    // window is pinned and aligned (MOTIR-2648). At the shipped 60 s default a
+    // boundary between them resets the counter, the second call is SERVED, and
+    // `toBeInstanceOf(RateLimitError)` fails against a perfectly good result —
+    // which reads as a broken error path rather than as the timing race it is.
     vi.stubEnv('MOTIR_API_V1_RATE_LIMIT', '1');
+    vi.stubEnv('MOTIR_API_V1_RATE_LIMIT_WINDOW_MS', String(ALIGNED_WINDOW_MS));
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
 
     const client = clientFor(caller);
     // The first call spends the whole budget; the second is refused by the real

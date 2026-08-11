@@ -26,33 +26,67 @@ import {
 import { mapJobRequestError } from '@/lib/ai/jobAuthResponse';
 import { JobAuthError, JobRateLimitedError } from '@/lib/ai/jobAuth';
 import { rateLimitedResponse } from '@/lib/rateLimit/guard';
+import {
+  ALIGNED_HEADROOM_MS,
+  ALIGNED_WINDOW_MS,
+  waitForWindowHeadroom,
+} from '@/tests/helpers/rateLimitWindow';
 
 // The three SURFACE guards (Subtask 8.5.9 / MOTIR-1165): which requests each one
 // limits, what it keys on, and the axis it must NOT key on.
 //
 // Budgets come from the environment, so each case pins the ones it needs to a
 // tiny number — that is the same mechanism a deployment uses, exercised.
-
-const ENVS = [
+//
+// ── WINDOWS ARE PINNED, AND THE ACCUMULATING CASES ALIGN (MOTIR-2648) ────────
+// Every budget here shares the epoch-aligned fixed window described in
+// `tests/helpers/rateLimitWindow.ts`. Until MOTIR-2648 this file pinned the
+// BUDGETS and left every window at the shipped 60 s default — while listing all
+// six `*_WINDOW_MS` names in the cleanup array below, i.e. naming a knob it
+// never set. That is the same shape MOTIR-2101 / -2224 / -2598 / -2647 each
+// fixed one file at a time, at six times the scale.
+//
+// Two separate things now hold, and they are not interchangeable:
+//
+//  1. `beforeEach` PINS every window to `ALIGNED_WINDOW_MS`, derived from
+//     `BUDGET_ENVS` so the two lists cannot drift. This is free, and it makes
+//     the window an explicit property of every case rather than an inherited
+//     default nobody chose.
+//  2. A case that asserts a REFUSAL which depends on the calls BEFORE it must
+//     additionally `await waitForWindowHeadroom(...)`, so its counted calls
+//     cannot straddle a grid boundary and reset the counter mid-test. A case
+//     that only asserts requests are ALLOWED does NOT need it: a straddle can
+//     only ever allow MORE, so it cannot turn such a case red. That asymmetry is
+//     why 25 of the cases here wait and the other 12 do not.
+//
+// ⚠️ The wait is `waitForWindowHeadroom`, not `waitForWindowBoundary`, and the
+// difference was measured at 36 s. Aligning outright makes each case land ~20 ms
+// into a fresh cell, so the NEXT case waits nearly a whole window rather than
+// the half an isolated call would average — the phases are not independent. With
+// `waitForWindowBoundary` this file and its two neighbours went 15.9 s → 52.4 s;
+// with 500 ms of headroom they share a cell and sleep only when one is nearly
+// spent, for 14.8 s, and this file alone 4.30 s → 4.39 s. Same guarantee, stated
+// as a floor. The sizing argument lives with the constants in
+// `tests/helpers/rateLimitWindow.ts`.
+const BUDGET_ENVS = [
   'MOTIR_AUTH_RATE_LIMIT',
-  'MOTIR_AUTH_RATE_LIMIT_WINDOW_MS',
   'MOTIR_PASSWORD_RESET_RATE_LIMIT',
-  'MOTIR_PASSWORD_RESET_RATE_LIMIT_WINDOW_MS',
   'MOTIR_PUBLIC_WRITE_RATE_LIMIT',
-  'MOTIR_PUBLIC_WRITE_RATE_LIMIT_WINDOW_MS',
   'MOTIR_AI_RATE_LIMIT',
-  'MOTIR_AI_RATE_LIMIT_WINDOW_MS',
   'MOTIR_AI_GENERATE_RATE_LIMIT',
-  'MOTIR_AI_GENERATE_RATE_LIMIT_WINDOW_MS',
   'MOTIR_MCP_RATE_LIMIT',
-  'MOTIR_MCP_RATE_LIMIT_WINDOW_MS',
-  RATE_LIMIT_DISABLE_ENV,
-];
+] as const;
+
+const WINDOW_ENVS = BUDGET_ENVS.map((name) => `${name}_WINDOW_MS`);
+
+const ENVS = [...BUDGET_ENVS, ...WINDOW_ENVS, RATE_LIMIT_DISABLE_ENV];
 
 beforeEach(async () => {
   await truncateRateLimitCounters();
   __resetSharedRateLimitStoreForTest();
   for (const key of ENVS) delete process.env[key];
+  // Pin EVERY window, so no case silently inherits the shipped 60 s default.
+  for (const key of WINDOW_ENVS) process.env[key] = String(ALIGNED_WINDOW_MS);
 });
 afterEach(() => {
   __resetSharedRateLimitStoreForTest();
@@ -104,6 +138,7 @@ describe('the auth surface', () => {
 
   it('refuses the (N+1)-th sign-in from one IP with a 429 + Retry-After', async () => {
     process.env['MOTIR_AUTH_RATE_LIMIT'] = '3';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     for (let i = 0; i < 3; i += 1) {
       expect(
         await enforceAuthRateLimit(authReq('/api/auth/sign-in/email', { email: `u${i}@x.com` })),
@@ -120,6 +155,7 @@ describe('the auth surface', () => {
   it('keys per IDENTIFIER too, so one account cannot be attacked from many IPs', async () => {
     // The per-IP limb is generous; the identifier limb is what bites.
     process.env['MOTIR_AUTH_RATE_LIMIT'] = '2';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const victim = { email: 'victim@example.com' };
     // Two attempts from two DIFFERENT IPs — each IP limb is at 1 of 2, but the
     // identifier limb is now at 2 of 2.
@@ -138,6 +174,7 @@ describe('the auth surface', () => {
 
   it('sign-in and sign-up are SEPARATE buckets', async () => {
     process.env['MOTIR_AUTH_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAuthRateLimit(authReq('/api/auth/sign-in/email'))).toBeNull();
     // Same IP, different scope — untouched budget.
     expect(await enforceAuthRateLimit(authReq('/api/auth/sign-up/email'))).toBeNull();
@@ -147,6 +184,7 @@ describe('the auth surface', () => {
   it('password reset takes the TIGHTER budget, not the sign-in one', async () => {
     process.env['MOTIR_AUTH_RATE_LIMIT'] = '100';
     process.env['MOTIR_PASSWORD_RESET_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAuthRateLimit(authReq('/api/auth/request-password-reset'))).toBeNull();
     const refused = await enforceAuthRateLimit(authReq('/api/auth/request-password-reset'));
     expect(refused).not.toBeNull();
@@ -174,6 +212,7 @@ describe('the auth surface', () => {
 
   it('an unparseable body still gets the per-IP limb (no free pass)', async () => {
     process.env['MOTIR_AUTH_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const make = () =>
       new Request('http://localhost/api/auth/sign-in/email', {
         method: 'POST',
@@ -196,6 +235,7 @@ describe('the auth surface', () => {
 describe('the public-write surface', () => {
   it('refuses the (N+1)-th write from one IP', async () => {
     process.env['MOTIR_PUBLIC_WRITE_RATE_LIMIT'] = '2';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const req = () =>
       new Request('http://localhost/api/public-requests/abc/upvote', {
         method: 'POST',
@@ -210,6 +250,7 @@ describe('the public-write surface', () => {
 
   it('is keyed on IP — a different origin has its own budget', async () => {
     process.env['MOTIR_PUBLIC_WRITE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const at = (ip: string) =>
       new Request('http://localhost/api/public/projects/p1/requests', {
         method: 'POST',
@@ -222,6 +263,7 @@ describe('the public-write surface', () => {
 
   it('shares ONE bucket across the public-write endpoints (a scope, not a route)', async () => {
     process.env['MOTIR_PUBLIC_WRITE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const ip = { 'x-forwarded-for': '203.0.113.55' };
     expect(
       await enforcePublicWriteRateLimit(
@@ -259,6 +301,7 @@ describe('the AI surface', () => {
 
   it('refuses the (N+1)-th call for one user+workspace', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '2';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx)).toBeNull();
     expect(await enforceAiRateLimit(ctx)).toBeNull();
     const refused = await enforceAiRateLimit(ctx);
@@ -270,6 +313,7 @@ describe('the AI surface', () => {
     // cannot leak into the key — and two users behind one NAT keep separate
     // budgets while one user keeps ONE budget across networks.
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w1' })).toBeNull();
     expect(await enforceAiRateLimit({ userId: 'u2', workspaceId: 'w1' })).toBeNull();
     expect(await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w2' })).toBeNull();
@@ -278,6 +322,7 @@ describe('the AI surface', () => {
 
   it('the browser and service-to-service surfaces are SEPARATE budgets', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:internal')).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).not.toBeNull();
@@ -292,6 +337,7 @@ describe('the AI surface', () => {
   it('generation takes its OWN budget, not the chat one', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '100';
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
     const refused = await enforceAiRateLimit(ctx, 'ai:generate');
     expect(refused!.status).toBe(429);
@@ -305,6 +351,7 @@ describe('the AI surface', () => {
     // consume the generation allowance.
     process.env['MOTIR_AI_RATE_LIMIT'] = '2';
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
@@ -312,6 +359,7 @@ describe('the AI surface', () => {
 
   it('generation is keyed per user + workspace like every other AI scope', async () => {
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit({ userId: 'u1', workspaceId: 'w1' }, 'ai:generate')).toBeNull();
     expect(await enforceAiRateLimit({ userId: 'u2', workspaceId: 'w1' }, 'ai:generate')).toBeNull();
     expect(
@@ -325,6 +373,7 @@ describe('the AI surface', () => {
     // metered more loosely than the cheap one.
     expect(DEFAULT_AI_GENERATE_RATE_LIMIT).toBeLessThan(DEFAULT_AI_RATE_LIMIT);
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = 'not a number';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const refusedAt = DEFAULT_AI_GENERATE_RATE_LIMIT;
     for (let i = 0; i < refusedAt; i += 1) {
       expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
@@ -346,6 +395,7 @@ describe('the tenant-LESS internal routes (service-bearer gated)', () => {
 
   it('refuses the (N+1)-th call for one credential', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '2';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceInternalServiceRateLimit(withBearer('secret-a'))).toBeNull();
     expect(await enforceInternalServiceRateLimit(withBearer('secret-a'))).toBeNull();
     const refused = await enforceInternalServiceRateLimit(withBearer('secret-a'));
@@ -355,6 +405,7 @@ describe('the tenant-LESS internal routes (service-bearer gated)', () => {
 
   it('keys on the CREDENTIAL, not the IP — a second secret has its own budget', async () => {
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     // Same IP on both calls; only the bearer differs.
     expect(await enforceInternalServiceRateLimit(withBearer('secret-a'))).toBeNull();
     expect(await enforceInternalServiceRateLimit(withBearer('secret-b'))).toBeNull();
@@ -365,6 +416,7 @@ describe('the tenant-LESS internal routes (service-bearer gated)', () => {
     // Unreachable from a route (the bearer check runs first and fails closed), but
     // keyed rather than skipped so a future reordering cannot open a hole.
     process.env['MOTIR_AI_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     const bare = () =>
       new Request('http://localhost/api/internal/ai/live-projects', { method: 'POST' });
     expect(await enforceInternalServiceRateLimit(bare())).toBeNull();
@@ -420,6 +472,7 @@ describe('the MCP transport surface', () => {
 
   it('refuses the (N+1)-th request with a 429 + Retry-After + X-RateLimit-*', async () => {
     process.env['MOTIR_MCP_RATE_LIMIT'] = '2';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
     expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
 
@@ -437,6 +490,7 @@ describe('the MCP transport surface', () => {
     // GET/DELETE 405), and the SDK client surfaces a non-2xx body as TEXT
     // (`StreamableHTTPError(status, text)`), so a parseable envelope serves both.
     process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     await enforceMcpRateLimit(ctx);
     const { refusal } = await enforceMcpRateLimit(ctx);
 
@@ -479,6 +533,7 @@ describe('the MCP transport surface', () => {
     // every newly-minted PAT a fresh budget, and minting one is self-service. The
     // guard is not even given a token, so a fingerprint cannot leak into the key.
     process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w1' })).refusal).toBeNull();
     expect((await enforceMcpRateLimit({ userId: 'u2', workspaceId: 'w1' })).refusal).toBeNull();
     expect((await enforceMcpRateLimit({ userId: 'u1', workspaceId: 'w2' })).refusal).toBeNull();
@@ -489,6 +544,7 @@ describe('the MCP transport surface', () => {
     process.env['MOTIR_MCP_RATE_LIMIT'] = '1';
     process.env['MOTIR_AI_RATE_LIMIT'] = '5';
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '5';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect((await enforceMcpRateLimit(ctx)).refusal).toBeNull();
     expect((await enforceMcpRateLimit(ctx)).refusal).not.toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:chat')).toBeNull();
@@ -537,6 +593,7 @@ describe('the MCP BILLABLE tools', () => {
 
   it('a job-submitting tool draws the ai:generate bucket', async () => {
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await billableToolDenial('expand_item', ctx)).toBeNull();
 
     const refused = await billableToolDenial('expand_item', ctx);
@@ -549,12 +606,14 @@ describe('the MCP BILLABLE tools', () => {
     // `aiPlanEditsService.submitExpand`. If the two kept separate counters, the
     // agent door would simply be a second allowance for the same spend.
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await enforceAiRateLimit(ctx, 'ai:generate')).toBeNull();
     expect(await billableToolDenial('expand_item', ctx)).not.toBeNull();
   });
 
   it('and in the other direction — a tool call spends the browser route’s budget', async () => {
     process.env['MOTIR_AI_GENERATE_RATE_LIMIT'] = '1';
+    await waitForWindowHeadroom(ALIGNED_WINDOW_MS, ALIGNED_HEADROOM_MS);
     expect(await billableToolDenial('submit_plan_session', ctx)).toBeNull();
     expect(await enforceAiRateLimit(ctx, 'ai:generate')).not.toBeNull();
   });

@@ -9,6 +9,11 @@ import { truncateAuthTables } from '../helpers/db';
 import { startMcpHttpServer, type McpTestServer } from '../helpers/mcpHttpServer';
 import { makeCliWorkspace, type CliWorkspace } from '../helpers/cliHarness';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import {
+  SUBPROCESS_HEADROOM_MS,
+  SUBPROCESS_WINDOW_MS,
+  waitForWindowHeadroom,
+} from '../helpers/rateLimitWindow';
 
 // THE STORY'S END-TO-END (Story 11.5 · Subtask 11.5.8 — MOTIR-2216).
 //
@@ -253,6 +258,16 @@ describe('the BUILT binary, in the states a happy path skips', () => {
     // enforces without the child knowing anything about it. That is the whole
     // reason a socket harness can test this at all.
     vi.stubEnv('MOTIR_API_V1_RATE_LIMIT', '1');
+    // Two counted calls whose outcome depends on the ACCUMULATED count, so the
+    // window is pinned and a slice of it guaranteed (MOTIR-2648). This is the
+    // SLOW regime: each `ws.run` spawns the built binary, so the counted span is
+    // ~1.9 s rather than the ~19 ms of an in-process call — which is why it pins
+    // `SUBPROCESS_WINDOW_MS` and takes headroom instead of aligning against
+    // `ALIGNED_WINDOW_MS`. A 2 s cell would be smaller than the work it has to
+    // hold; a full alignment of a 60 s window would cost 30 s. See the sizing
+    // note in `tests/helpers/rateLimitWindow.ts`.
+    vi.stubEnv('MOTIR_API_V1_RATE_LIMIT_WINDOW_MS', String(SUBPROCESS_WINDOW_MS));
+    await waitForWindowHeadroom(SUBPROCESS_WINDOW_MS, SUBPROCESS_HEADROOM_MS);
     resetRateLimitStore();
 
     const first = await ws.run(['ready']);
