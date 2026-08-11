@@ -226,9 +226,71 @@ export const FIRST_PAINT_MS = 60_000;
 // Any of these that turns out to need a real change ships as ITS OWN card. This
 // one produces the reading and the proposal.
 //
-// ── WHAT THE SAMPLES SAID ────────────────────────────────────────────────────
+// ── WHAT THE SAMPLES SAID (run 31508786558, this PR's own lane) ──────────────
 //
-// (Filled from this PR's own lane runs — see the PR body for the full tables.)
+// 77 recordings, 313 navigations, 444 probes across the four shards. Pooled
+// per-navigation figures are shard 2's (23 recordings, 106 navigations, 135
+// probes), the shard whose raw sidecars were read back:
+//
+//   idleToProbe      median 113 ms   p90 318 ms    p99 3 291 ms   max 3 704 ms
+//   idleGap [paced]  median 271 ms   p90 8 290 ms  p99 23 021 ms  max 32 784 ms
+//   longestTask      median 0 ms     p90 0 ms      p99 147 ms     max 174 ms
+//   probe latency    median 13 ms    p90 40 ms     p99 91 ms      max 107 ms
+//   UNRESPONSIVE PROBES: 0 of 444, run-wide.
+//
+// ⚠️ READ THE p90, NOT THE p99. The decontaminated tail still carries about one
+// hold of leakage: a navigation that lands INSIDE a hold (a redirect, or a
+// deferred client transition) gets no probe of its own until the next chapter,
+// so its window is the rest of the hold. Both p99 outliers are that shape — the
+// `/items/CRE-1` one has window == idle == 3 291 ms exactly. A remedy would move
+// the median and p90 by far more than this leakage, so it does not need
+// engineering away; it needs saying.
+//
+// ── THE PROPOSAL: CHANGE NOTHING ABOUT THE LANE'S CAPACITY, AND ADOPT A TRIGGER
+//
+// On all three uncontaminated signals this runner is nowhere near the regime
+// that produces the stall. Zero probes in 444 failed to answer within two
+// seconds; the worst single main-thread task in 106 navigations was 174 ms; the
+// median probe answers in 13 ms. Spending money or complexity now would be
+// spending against a number that does not exist — which is the move this whole
+// lineage keeps making. So: no change, and the baseline above becomes the
+// trigger. Re-open this when the lane reports ANY of:
+//
+//   * an `unresponsive` probe — a renderer that will not answer in 2 s is the
+//     stall's own signature, and today's count is 0. This is the strong trigger;
+//     one occurrence is worth acting on.
+//   * `longestTask` p90 lifting off 0, or probe-latency p90 above ~100 ms
+//     (40 ms today) sustained across runs.
+//
+// ── AND WHY EACH CANDIDATE WAS NOT CHOSEN ────────────────────────────────────
+//
+//   * A LARGER RUNNER — rejected, with a number rather than a mood. It costs on
+//     every run forever, and the three signals above do not show the contention
+//     it would buy away. It stays the right answer the moment a trigger fires.
+//   * QUIESCING THE INNGEST DEV SERVER — rejected, and this one is MEASURED, not
+//     assumed, which is why it is worth the words. Joining shard 2's probe
+//     instants against the webserver log's Inngest events (142 of them, in the
+//     bursts of ~18 `function.finished` inside one second that the log plainly
+//     shows): probes within 2 s of an Inngest event read median 15 ms / p90
+//     33 ms / max 36 ms (n=14); probes with none nearby read median 13 ms / p90
+//     41 ms / max 107 ms (n=121). The bursty arm is if anything CLEANER, and
+//     widening the join to 5 s and 10 s changes nothing. There is no correlation
+//     here to remove. (This was the candidate I expected to win.)
+//   * STAGGERING TENANT SEEDING — rejected. The worst probe latencies are spread
+//     across the recording rather than clustered at its start, and shard 2's two
+//     worst navigations are `/settings/project/roles/<id>` and `/items/CRE-1`,
+//     both mid-spec.
+//   * THE 4-WAY SHARD (MOTIR-2600) — NEITHER CREDITED NOR DEBITED, deliberately.
+//     It is tempting to read the healthy numbers above as proof it worked, and
+//     that inference is not available: this instrument POSTDATES it, so no
+//     pre-shard baseline exists and no comparison can be made. "The shard
+//     sufficed" would be a story fitted to a number that cannot support it —
+//     the exact error the two corrections above walk back.
+//
+// ⚠️ AND WHAT THIS RUN IS NOT: a captured stall. At 2 in 57 runs, a clean run is
+// the ordinary outcome and 77 recordings is nowhere near enough to expect one.
+// What it establishes is the BASELINE against which the next one can be read —
+// and, for the first time in this lineage, a green run that says something.
 
 /**
  * How long the contention probe may wait for the renderer to answer.
