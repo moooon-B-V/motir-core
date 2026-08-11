@@ -50,6 +50,13 @@ const BY_EXTENSION: Record<string, { type: string; body: Buffer }> = {
   '.pdf': { type: 'application/pdf', body: PDF_BYTES },
   '.zip': { type: 'application/zip', body: ZIP_BYTES },
   '.txt': { type: 'text/plain', body: Buffer.from('e2e') },
+  // Story MOTIR-2664 — the design-result artifact types, so a published note
+  // file or mock fetched through the store arrives as itself rather than as
+  // `application/octet-stream` (which the browser downloads instead of
+  // rendering). NOTE the `.mock.html` a SANDBOXED frame loads never reaches
+  // here — see the opaque-origin note in `acceptance-design-result.spec.ts`.
+  '.html': { type: 'text/html', body: Buffer.from('<!doctype html><title>mock</title>') },
+  '.md': { type: 'text/markdown', body: Buffer.from('## The note\n\nPublished from CI.\n') },
 };
 
 /**
@@ -91,7 +98,20 @@ async function refuseUnsigned(route: Route): Promise<void> {
  * one at all, on the path production uses, and the 302's `Location` is where
  * that is asserted directly.
  */
-export async function servePrivateObjectStore(page: Page): Promise<void> {
+/**
+ * Accepts a `Page` OR a `BrowserContext` — both expose the same `route()`.
+ *
+ * ⚠️ PASS THE CONTEXT WHEN THE BYTES LAND IN A SANDBOXED IFRAME. `page.route`
+ * does not intercept the navigation of a frame loaded into an OPAQUE origin
+ * (`sandbox` without `allow-same-origin`), so the request escapes to the real
+ * network and dies `ERR_NAME_NOT_RESOLVED` against the `.invalid` host.
+ * `context.route` does intercept it. Found by MOTIR-2672, whose design mock is
+ * exactly that shape; the existing image callers never hit it because
+ * `expect(img).toBeVisible()` passes whether or not the bytes ever arrived.
+ */
+type Routable = Pick<Page, 'route'>;
+
+export async function servePrivateObjectStore(page: Routable): Promise<void> {
   await page.route(PRIVATE_STORE_URL, async (route) => {
     const url = new URL(route.request().url());
     if (!url.searchParams.get('X-Amz-Signature')) return refuseUnsigned(route);
