@@ -13,7 +13,8 @@ import { CreateTokenModal } from './CreateTokenModal';
 import { RevokeTokenDialog } from './RevokeTokenDialog';
 import type { ApiTokenDto } from './apiTokensClient';
 import type { TokenScopeOrgDTO } from '@/lib/dto/apiTokens';
-import { grantedScopeMeta, grantsDelete, summarizeScopes } from './scopeMeta';
+import { grantedPermissionMeta, grantsDelete, summarizeGrant } from './permissionMeta';
+import { permissionSlug } from '@/lib/permissions/catalog';
 
 // The Tokens pane's CLIENT ISLAND (Story 7.8 · Subtask 7.8.3) — design
 // `account-settings.mock.html` Panels 3 + 7. It owns the token-list state
@@ -58,6 +59,10 @@ export function ApiTokensManager({
   activeWorkspaceId: string | null;
 }) {
   const t = useTranslations('settings.apiTokens');
+  // The permission LABELS come from the shipped `permissions.*` catalogue copy —
+  // the same strings Roles & permissions renders — never from a second table
+  // written for this screen (MOTIR-2579).
+  const tp = useTranslations('permissions');
   const locale = useLocale() as Locale;
 
   // A token's scope spans one org (so don't repeat the org name when the account
@@ -177,8 +182,8 @@ export function ApiTokensManager({
                   // `--el-text-secondary`. The row's revoked state reads from
                   // its label and its Revoked pill (MOTIR-2475).
                   const dateClass = 'text-(--el-text-secondary)';
-                  const summary = summarizeScopes(token.scopes);
-                  const hasDelete = grantsDelete(token.scopes);
+                  const summary = summarizeGrant(token.permissions);
+                  const hasDelete = grantsDelete(token.permissions);
                   const expanded = expandedIds.has(token.id);
                   return (
                     <Fragment key={token.id}>
@@ -283,12 +288,12 @@ export function ApiTokensManager({
                               <span className="mr-1 font-sans text-xs text-(--el-text-secondary)">
                                 {t('scopes.detailLead')}
                               </span>
-                              {grantedScopeMeta(token.scopes).map((m) => {
+                              {grantedPermissionMeta(token.permissions).map((m) => {
                                 const Icon = m.Icon;
-                                const chipName = t(`scopes.${m.i18nKey}.name`);
+                                const chipName = tp(`${permissionSlug(m.key)}.label`);
                                 return m.danger ? (
                                   <span
-                                    key={m.scope}
+                                    key={m.key}
                                     className="inline-flex items-center gap-1 rounded-(--radius-badge) border border-transparent bg-(--el-tint-rose) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-strong)"
                                   >
                                     <Icon className="size-3 text-(--el-danger)" aria-hidden />
@@ -296,7 +301,7 @@ export function ApiTokensManager({
                                   </span>
                                 ) : (
                                   <span
-                                    key={m.scope}
+                                    key={m.key}
                                     className="inline-flex items-center gap-1 rounded-(--radius-badge) border border-(--el-border) bg-(--el-surface) px-(--spacing-chip-x) py-(--spacing-chip-y) font-sans text-xs font-medium text-(--el-text-secondary)"
                                   >
                                     <Icon className="size-3 text-(--el-text-muted)" aria-hidden />

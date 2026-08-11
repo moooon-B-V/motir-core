@@ -19,6 +19,18 @@ export interface ServiceContext {
   userId: string;
   workspaceId: string;
   /**
+   * The PROJECT the acting API token is bound to (MOTIR-2607), when the actor is
+   * a bearer token that names one. Absent for every cookie-session caller and
+   * for a device credential (`motir login`), whose binding is deliberately NULL.
+   *
+   * ⚠️ It NARROWS WHERE, not WHAT — the grant narrows what. When it is set,
+   * `projectAccessService` refuses any gate on a DIFFERENT project as a
+   * `ProjectNotFoundError`, so the two seams inherit the check without either
+   * one re-implementing it, and a narrowed credential cannot be used to
+   * enumerate the workspace (the 404-not-403 contract; ADR Amendment 1 §A.6).
+   */
+  tokenProjectId?: string;
+  /**
    * Automation provenance (Story 6.6 · Subtask 6.6.2). When a write is
    * performed by the automation engine running a rule's action, this carries
    * that rule's id. The post-commit `work-item/*` events the write emits stamp

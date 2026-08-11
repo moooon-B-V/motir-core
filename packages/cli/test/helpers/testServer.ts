@@ -545,7 +545,7 @@ export const DEFAULT_V1: V1Script = {
     body: {
       user: { id: 'user-1', name: 'Zhu Yue', email: 'yue@motir.test' },
       workspaceId: 'ws-1',
-      scopes: ['read'],
+      permissions: ['project:browse'],
     },
   },
   'GET /api/v1/workspaces': {

@@ -21,6 +21,7 @@ asset it lives in, the primitives it composes from, copy strings, and placement.
 | **Work-item provenance on the detail rail**       | **`provenance.mock.html`** + `provenance.png`                     | `detail.pen`/`CoreFieldsPanel` draw no provenance surface — two new READ-ONLY rail `FieldCard`s (Planning · Implementation), each a `source · harness · model` triple + the "—" unknown state. Composes the shipped rail (does not redraw); source = a tinted `Pill`-chip (six values). Story MOTIR-1685 · MOTIR-1688 (design). Gates MOTIR-1693. See below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Plan / Re-plan entrance (detail + quick-view)** | **`plan-replan-entrance.mock.html`** + `plan-replan-entrance.png` | The contextual Plan / Re-plan entrance on BOTH the work-item detail page AND the quick-view / peek modal, for EVERY kind. COMPOSES the shipped surfaces — detail page (`detail.pen`), quick-view (`quick-view.mock.html`), universal workspace (`planning-workspace.mock.html` / 7.20.1), and `PlanWithAILauncher` (MOTIR-1299). **Plan / Re-plan is a CONVERSATION, not a single message** — the button opens the universal workspace directly; for Re-plan, the reason is captured as the FIRST CHAT TURN inside the workspace's chat rail (no pre-workspace form). Map scoped to item neighborhood, proposed nodes dashed, done work LOCKED. Confirm gate (MOTIR-911) as a bottom bar. Six panels: Plan button on detail · Re-plan button on detail · Plan button on quick-view · Re-plan button on quick-view · scoped workspace with conversation (Plan flow + Re-plan flow + continuing conversation) · states (loading/error/empty). Story 7.12 · MOTIR-1489 (design). Gates MOTIR-910. See below. |
 | **Child panel — List ↔ Graph**                    | **`child-panel-graph.mock.html`** + `child-panel-graph.png`       | The Children section gains a `List` ↔ `Graph` view switcher; Graph mounts the shipped roadmap canvas **rooted at this item**, bounded in a 28rem block. COMPOSES `design/roadmap/` (node cards, edges, legend, ready highlight, breadcrumb, quick-view) — nothing there is redrawn. Five panels light + dark: the door · Graph · drilled · loading / empty-level / graph-unavailable · leaf-renders-nothing. Resolves the height, every canvas opt-in, the crumb root label, and the no-local-preference rule. Story MOTIR-2284 · MOTIR-2285 (design). Gates MOTIR-2287 + MOTIR-2288. See below.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Design result panel**                           | **`design-result.mock.html`** + `design-result.png`               | The published DESIGN RESULT of a design subtask — the rendered `design-notes.md` section, the `*.mock.html` in a bounded SANDBOXED cross-origin iframe, and the `.png` in the shipped lightbox. COMPOSES the detail page's left column, `ContentSectionCard`, `provenance.mock.html`'s chip grammar and `AttachmentPreview` — none is redrawn. Frame MEASURED at 32rem with its own scroll in both axes. Three states, not five: the design-result decision record (MOTIR-2665) §2 decided there is no entitlement axis, so there is no upsell and no toggle. Story MOTIR-2664 · MOTIR-2669 (design). Gates MOTIR-2670. See below.                                                                                                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -4371,3 +4372,125 @@ Four assets under `design/`, each a complete three-file set — this
 (Playwright chromium, light theme, `deviceScaleFactor: 2`, 1200 px wide) — plus
 `scripts/render-work-item-types.mjs`, which renders all four and prints the Q1
 measurement. Gates MOTIR-2633.
+
+---
+
+## ⭐ Design result panel (Story MOTIR-2664 · MOTIR-2669 — `design-result.mock.html`)
+
+`detail.pen` and the shipped item-detail page reserve NO design-result surface,
+so the panel, its frame and its states are whole elements no design specifies —
+the NONE-exists case. This asset closes that gate for MOTIR-2670.
+
+**What it is for.** A `type: design` subtask's deliverable is three files in
+`design/<area>/`. Until now the product showed none of them: to judge a design a
+reviewer left Motir, found the pull request and opened raw files on GitHub. This
+panel is where the design comes home.
+
+### Placement + the access path
+
+A `ContentSectionCard` in the item-detail **left column**, between
+**Development** and **Children** — the same slot family as the acceptance panel,
+and detail-page only for the same reason (the quick view is unchanged).
+
+It renders on any LEAF with a current design result. On a `type: design` subtask
+with none it renders the EMPTY state rather than disappearing: "no design
+published" is worth stating on the card whose job was to produce one.
+
+The panel is not a view, so it has no nav entry. A reviewer reaches a design
+subtask two ways, both already shipped: the parent story's **Children** list, and
+the **Relationships** panel of any card that is `blocked_by` the design — which
+is how a UI code card's implementer arrives.
+
+### Anatomy
+
+| Element                | Primitive composed                                      | Colour token                                           | Shape token                               |
+| ---------------------- | ------------------------------------------------------- | ------------------------------------------------------ | ----------------------------------------- |
+| Section                | `ContentSectionCard` (`Card` + header grammar)          | `--el-page-bg` on `--el-border`                        | `--radius-card`, `--spacing-card-padding` |
+| Title / gloss          | header grammar                                          | `--el-text` / `--el-text-secondary`                    | —                                         |
+| `Current` chip         | `Pill`                                                  | `--el-tint-mint` bg + `--el-text-strong` (finding #35) | `--radius-badge`, `--spacing-chip-*`      |
+| Rendered note          | `lib/markdown/render.tsx` — the SINGLE shipped renderer | `--el-text` / `--el-text-secondary`                    | —                                         |
+| Wide table in the note | scroll container                                        | `--el-border-soft`                                     | `--radius-input`                          |
+| Frame strip            | —                                                       | `--el-surface-soft` on `--el-border`                   | `--radius-input` (top corners)            |
+| Mock frame             | `<iframe sandbox>`                                      | `--el-border`                                          | `--radius-input`                          |
+| Open in new tab        | `Button` secondary                                      | `--el-page-bg` / `--el-border`                         | `--radius-btn`, `--height-btn-sm`         |
+| Screenshot thumb       | `AttachmentPreview` (lightbox reused as-is)             | `--el-border` / `--el-surface-soft`                    | `--radius-input`                          |
+| Provenance chips       | `provenance.mock.html` chip grammar                     | `--el-muted` + `--el-text-secondary`                   | `--radius-badge`                          |
+| Empty state            | —                                                       | `--el-surface-soft` on `--el-border-soft`              | `--radius-input`                          |
+| Failed-to-load state   | —                                                       | `--el-tint-peach` + `--el-text-strong`                 | `--radius-input`                          |
+
+### ⚠️ The mock frame — the measurement this asset exists to pin
+
+**32rem (512px) tall, scrolling inside itself in BOTH axes.** A published mock is
+a tall multi-panel document — `acceptance-panel.mock.html` is 48 KB of stacked
+panels — so an unbounded frame would swallow a page that already has eight
+sections. Panel 2 of the mock measures it against a 900px viewport: header, note,
+frame and screenshot still leave the sections below reachable by ordinary page
+scroll.
+
+- **Horizontal.** A mock wider than the content column scrolls INSIDE the frame.
+  The page body never gains a horizontal scrollbar.
+- **The escape.** _Open in new tab_ is the full-width read, and it is the only
+  affordance the frame carries.
+- **The sandbox.** `sandbox` with NEITHER `allow-scripts` NOR
+  `allow-same-origin`. Nothing drawn here needs script inside the iframe.
+  **Consequence, stated rather than discovered:** a mock that requires
+  JavaScript to render appears inert. That is the intended trade — a design
+  mockup is a static artifact, and the `.png` and the new tab remain.
+- Reads go through `/api/attachments/<id>/content`, which 302s to a presigned URL
+  on the OBJECT-STORE host, so the document is cross-origin to the app before the
+  sandbox is applied at all (the design-result decision record (MOTIR-2665) §5).
+
+### States — THREE, not five
+
+the design-result decision record (MOTIR-2665) §2 decided the feature has **no entitlement
+axis**: no plan gate, no org toggle. So unlike the acceptance panel there is **no
+upsell state and no toggle state to draw**.
+
+1. **Published** — note, frame, screenshot, provenance.
+2. **Nothing published yet** — the empty state. This is the MOST-SEEN state for a
+   long while (every design subtask that shipped before the feature has none), so
+   it reads as "this design predates the feature", never as an error, and it says
+   where a result comes from so nobody hunts for an upload button.
+3. **Failed to load** — the frame only. The note and screenshot still render; the
+   frame offers a Retry and the new-tab escape. Never a blank rectangle, and it
+   never takes the rest of the panel down with it.
+
+Loading applies to the FRAME alone: the note and screenshot render server-side,
+and only the signed content URL resolves on the client.
+
+### Superseded, and the truncation notice
+
+Every push to a design PR republishes, so a card accumulates history. The panel
+shows the CURRENT result and says when it landed.
+
+**Prior results are NOT reachable from this panel in this iteration** — stated
+here so the next reader does not take the absence for a bug. The rows are
+retained (superseded, not deleted), so a history affordance is a later addition
+needing no migration.
+
+The note carries a truncation notice when the ADR's 64 KiB inline cap bites
+("Shown to 64 KB · N of M sections omitted"), linking the `note_file` asset that
+always carries the complete text. That notice is the visible half of the cap: the
+panel never renders a 300 KB per-area document, and nothing is lost.
+
+### Tokens / a11y
+
+- Colour ONLY via Tier-3 `--el-*`; shape via the element-semantic radius /
+  spacing / height tokens. No Tier-0 `--color-*`, no raw `rounded-*` / `p-*` /
+  `h-*`, no invented hue.
+- Muted copy sits on the white card, never on `--el-surface` / `--el-muted` /
+  `--el-surface-soft` (the AA table in `CLAUDE.md` — `--el-text-muted` clears AA
+  only against the page/card).
+- The iframe carries a `title` naming the mock's source path, so it is
+  announced rather than read as an unlabelled frame.
+- The screenshot thumb is a button into the shipped lightbox; the frame's
+  new-tab affordance is a real link.
+
+### Out of scope (documented extension slots)
+
+- **The runtime approval gate.** Approve / request-changes, the "for review"
+  state, holding dependents and the revise-chat are Story MOTIR-693's (9.2). This
+  panel is READ-ONLY and exposes no control that writes. 9.2's approval surface
+  COMPOSES this panel rather than deploying the mock to a preview host.
+- **History.** See above — deliberate, and named.
+- **The quick view.** Unchanged, matching the acceptance panel's precedent.

@@ -35,12 +35,15 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // about the work, not a claim about its state. The response echoes `status` and
 // `sessionBranch` unchanged so a client can SEE that.
 //
-// ── The `integration` scope, same as its siblings ───────────────────────────
-// `lib/mcp/scopes.ts` defines it as "External-agent integration writes", which
-// is exactly the actor here: an agent runner reporting what it ran as. A token
-// with `work_items:write` and not `integration` is refused, as on both siblings.
+// ── `work_item:edit`, same as its siblings ──────────────────────────────────
+// The declaration names the permission the service asserts (ADR
+// `token-permissions.md` §3). Two independent gates run, in this order: the
+// wrapper refuses a TOKEN whose grant lacks `work_item:edit`, and
+// `reportImplementation` then refuses an ACTOR whose project role cannot edit.
+// The second was missing until MOTIR-2603 — this operation was §3's one
+// exception, and closing it is what emptied that list.
 
-export const POST = withV1Route<{ key: string }>({ scope: 'integration' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, implementationReportBodySchema);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);

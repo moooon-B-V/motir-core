@@ -33,59 +33,62 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // That is the entire reason 11.2.3 exists. This route composes `parsePageRequest`
 // + `encodePageCursor` and lets the DATABASE do the windowing.
 
-export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async (ctx) => {
-  // Parse BEFORE reading: a bad cursor, limit or filter is the caller's to fix,
-  // and answering 422 without touching the database is both faster and honest.
-  const page = parsePageRequest(ctx.req);
-  const filter = parseFilterParam(ctx.req);
+export const GET = withV1Route<{ projectKey: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    // Parse BEFORE reading: a bad cursor, limit or filter is the caller's to fix,
+    // and answering 422 without touching the database is both faster and honest.
+    const page = parsePageRequest(ctx.req);
+    const filter = parseFilterParam(ctx.req);
 
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
-  const { items, hasMore } = await workItemsService.listProjectWorkItemsPage(
-    project.id,
-    { limit: page.limit, ...(page.cursor ? { after: toAfter(page.cursor) } : {}), ...filter },
-    ctx.service,
-  );
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+    const { items, hasMore } = await workItemsService.listProjectWorkItemsPage(
+      project.id,
+      { limit: page.limit, ...(page.cursor ? { after: toAfter(page.cursor) } : {}), ...filter },
+      ctx.service,
+    );
 
-  // The page's dependency edges, in ONE batched call over the ids just read —
-  // the BOUNDED projection ADR Amendment 3 Q4 permits and Amendment 6 Q4 applies
-  // to this collection. A per-row read here would be an N+1 invisible until a
-  // 100-row page; that is why the service takes an id ARRAY.
-  const edges = await workItemsService.getDependencyEdgesForItems(
-    items.map((item) => item.id),
-    ctx.service,
-  );
+    // The page's dependency edges, in ONE batched call over the ids just read —
+    // the BOUNDED projection ADR Amendment 3 Q4 permits and Amendment 6 Q4 applies
+    // to this collection. A per-row read here would be an N+1 invisible until a
+    // 100-row page; that is why the service takes an id ARRAY.
+    const edges = await workItemsService.getDependencyEdgesForItems(
+      items.map((item) => item.id),
+      ctx.service,
+    );
 
-  const last = items[items.length - 1];
-  return NextResponse.json({
-    items: items.map((item) =>
-      presentWorkItemSummary(
-        {
-          identifier: item.identifier,
-          kind: item.kind,
-          type: item.type,
-          title: item.title,
-          status: item.status,
-          priority: item.priority,
-          assigneeId: item.assigneeId,
-          reporterId: item.reporterId,
-          dueDate: item.dueDate,
-          estimateMinutes: item.estimateMinutes,
-          storyPoints: item.storyPoints,
-          createdAt: item.createdAt.toISOString(),
-          updatedAt: item.updatedAt,
-        },
-        edges[item.id],
+    const last = items[items.length - 1];
+    return NextResponse.json({
+      items: items.map((item) =>
+        presentWorkItemSummary(
+          {
+            identifier: item.identifier,
+            kind: item.kind,
+            type: item.type,
+            title: item.title,
+            status: item.status,
+            priority: item.priority,
+            assigneeId: item.assigneeId,
+            reporterId: item.reporterId,
+            dueDate: item.dueDate,
+            estimateMinutes: item.estimateMinutes,
+            storyPoints: item.storyPoints,
+            createdAt: item.createdAt.toISOString(),
+            updatedAt: item.updatedAt,
+          },
+          edges[item.id],
+        ),
       ),
-    ),
-    // The cursor names the LAST row of THIS page, so the next request resumes
-    // strictly after it. `null` on the last page — never an extra empty round
-    // trip, and never a silent restart at the top.
-    nextCursor:
-      hasMore && last
-        ? encodePageCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
-        : null,
-  });
-});
+      // The cursor names the LAST row of THIS page, so the next request resumes
+      // strictly after it. `null` on the last page — never an extra empty round
+      // trip, and never a silent restart at the top.
+      nextCursor:
+        hasMore && last
+          ? encodePageCursor({ createdAt: last.createdAt.toISOString(), id: last.id })
+          : null,
+    });
+  },
+);
 
 // POST /api/v1/projects/{projectKey}/work-items (Subtask 11.2.6 — MOTIR-2046).
 //
@@ -94,7 +97,7 @@ export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async 
 // "a POST that bypasses the wrapper even when a sibling GET does not", and the
 // ADR's §3 map is per OPERATION, not per resource.
 export const POST = withV1Route<{ projectKey: string }>(
-  { scope: 'work_items:write' },
+  { permission: 'work_item:edit' },
   async (ctx) => {
     const body = await parseV1Body(ctx.req, createWorkItemBodySchema);
     const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);

@@ -8,6 +8,12 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { truncateAuthTables } from '../helpers/db';
 import { startMcpHttpServer, type McpTestServer } from '../helpers/mcpHttpServer';
 import { makeCliWorkspace, type CliWorkspace } from '../helpers/cliHarness';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import {
+  SUBPROCESS_HEADROOM_MS,
+  SUBPROCESS_WINDOW_MS,
+  waitForWindowHeadroom,
+} from '../helpers/rateLimitWindow';
 
 // THE STORY'S END-TO-END (Story 11.5 · Subtask 11.5.8 — MOTIR-2216).
 //
@@ -75,7 +81,7 @@ async function tenant(): Promise<{ fx: WorkItemFixture; token: string }> {
   const fx = await makeWorkItemFixture();
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label: 'cli',
-    scopes: [...TOKEN_SCOPES],
+    fixedGrant: grantForLegacyScopes([...TOKEN_SCOPES]),
   });
   return { fx, token };
 }
@@ -215,28 +221,28 @@ describe('the socket harness dispatches /api/v1 by PATTERN', () => {
 });
 
 describe('the BUILT binary, in the states a happy path skips', () => {
-  it('a SCOPE-refused call reports the scope, and exits 1', async () => {
+  it('a PERMISSION-refused call names the permission, and exits 1', async () => {
     const { fx, token } = await tenant();
     expect(
       (await ws.run(['auth', 'login', '--server', server.url, '--token', token])).exitCode,
     ).toBe(0);
     expect((await ws.run(['link', '--project', fx.projectIdentifier])).exitCode).toBe(0);
 
-    // A PAT that can WRITE work items and cannot READ anything. The refusal is
-    // the shipped scope gate's, over a real socket — not a fixture's idea of
+    // A PAT that can EDIT work items and cannot BROWSE. The refusal is the
+    // shipped permission gate's, over a real socket — not a fixture's idea of
     // what a 403 looks like.
     const { token: writeOnly } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'write-only',
-      scopes: ['work_items:write'],
+      fixedGrant: ['work_item:edit'],
     });
 
     const result = await ws.run(['ready'], { env: { MOTIR_TOKEN: writeOnly } });
 
     expect(result.exitCode).toBe(1);
-    // The CLI names the scope from its OWN operation table rather than parsing
-    // the server's sentence (ADR Q5), which is what makes the message
+    // The CLI names the requirement from its OWN operation table rather than
+    // parsing the server's sentence (ADR Q5), which is what makes the message
     // actionable instead of "forbidden".
-    expect(result.stderr).toContain('read');
+    expect(result.stderr).toContain('project:browse');
     expect(result.stderr).not.toContain('undefined');
   });
 
@@ -252,6 +258,16 @@ describe('the BUILT binary, in the states a happy path skips', () => {
     // enforces without the child knowing anything about it. That is the whole
     // reason a socket harness can test this at all.
     vi.stubEnv('MOTIR_API_V1_RATE_LIMIT', '1');
+    // Two counted calls whose outcome depends on the ACCUMULATED count, so the
+    // window is pinned and a slice of it guaranteed (MOTIR-2648). This is the
+    // SLOW regime: each `ws.run` spawns the built binary, so the counted span is
+    // ~1.9 s rather than the ~19 ms of an in-process call — which is why it pins
+    // `SUBPROCESS_WINDOW_MS` and takes headroom instead of aligning against
+    // `ALIGNED_WINDOW_MS`. A 2 s cell would be smaller than the work it has to
+    // hold; a full alignment of a 60 s window would cost 30 s. See the sizing
+    // note in `tests/helpers/rateLimitWindow.ts`.
+    vi.stubEnv('MOTIR_API_V1_RATE_LIMIT_WINDOW_MS', String(SUBPROCESS_WINDOW_MS));
+    await waitForWindowHeadroom(SUBPROCESS_WINDOW_MS, SUBPROCESS_HEADROOM_MS);
     resetRateLimitStore();
 
     const first = await ws.run(['ready']);

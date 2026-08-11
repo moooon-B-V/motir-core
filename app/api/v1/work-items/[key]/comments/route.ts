@@ -31,7 +31,7 @@ const commentBodySchema = z
 
 const orderSchema = z.enum(['asc', 'desc']);
 
-export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   const page = parsePageRequest(ctx.req);
   const rawOrder = new URL(ctx.req.url).searchParams.get('order');
   const parsedOrder = rawOrder === null ? undefined : orderSchema.safeParse(rawOrder);
@@ -71,7 +71,7 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
   });
 });
 
-export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'comment:add' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, commentBodySchema);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);

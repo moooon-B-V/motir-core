@@ -31,7 +31,7 @@ const linkBodySchema = z
   .object({ toKey: workItemKeySchema, relationship: relationshipSchema })
   .strict();
 
-export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   // ONE service call: the aggregate already resolves all five groups. Assembling
   // them from several reads would be both slower and a second place for the
@@ -40,7 +40,7 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
   return NextResponse.json(presentWorkItemLinkGroups(detail));
 });
 
-export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, linkBodySchema);
   const edge = await resolveEdge(ctx.params.key, body, ctx.service);
 
@@ -49,31 +49,34 @@ export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, 
   return NextResponse.json({ toKey: body.toKey, relationship: body.relationship }, { status: 201 });
 });
 
-export const DELETE = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async (ctx) => {
-  // Addressed by ENDPOINTS, not by link id: no internal `linkId` appears on the
-  // wire in either direction (ADR §7), so a client deletes the edge it can
-  // NAME — the same pair it created.
-  const params = new URL(ctx.req.url).searchParams;
-  const parsed = linkBodySchema.safeParse({
-    toKey: params.get('toKey') ?? undefined,
-    relationship: params.get('relationship') ?? undefined,
-  });
-  if (!parsed.success) {
-    throw new InvalidRequestError(
-      'INVALID_BODY',
-      'DELETE requires `toKey` and `relationship` query parameters.',
-    );
-  }
-  const edge = await resolveEdge(ctx.params.key, parsed.data, ctx.service);
+export const DELETE = withV1Route<{ key: string }>(
+  { permission: 'work_item:edit' },
+  async (ctx) => {
+    // Addressed by ENDPOINTS, not by link id: no internal `linkId` appears on the
+    // wire in either direction (ADR §7), so a client deletes the edge it can
+    // NAME — the same pair it created.
+    const params = new URL(ctx.req.url).searchParams;
+    const parsed = linkBodySchema.safeParse({
+      toKey: params.get('toKey') ?? undefined,
+      relationship: params.get('relationship') ?? undefined,
+    });
+    if (!parsed.success) {
+      throw new InvalidRequestError(
+        'INVALID_BODY',
+        'DELETE requires `toKey` and `relationship` query parameters.',
+      );
+    }
+    const edge = await resolveEdge(ctx.params.key, parsed.data, ctx.service);
 
-  // ⚠️ 204 WHETHER OR NOT an edge was there. `unlinkWorkItemsByEndpoints` is
-  // idempotent and reports whether a row was actually removed; the correct HTTP
-  // reading of an idempotent delete is that the post-condition ("this edge does
-  // not exist") holds either way. It also means a retried teardown is safe.
-  await workItemsService.unlinkWorkItemsByEndpoints(edge, ctx.service);
+    // ⚠️ 204 WHETHER OR NOT an edge was there. `unlinkWorkItemsByEndpoints` is
+    // idempotent and reports whether a row was actually removed; the correct HTTP
+    // reading of an idempotent delete is that the post-condition ("this edge does
+    // not exist") holds either way. It also means a retried teardown is safe.
+    await workItemsService.unlinkWorkItemsByEndpoints(edge, ctx.service);
 
-  return new NextResponse(null, { status: 204 });
-});
+    return new NextResponse(null, { status: 204 });
+  },
+);
 
 /**
  * Resolve a `(path key, toKey, relationship)` triple to the DIRECTED storage

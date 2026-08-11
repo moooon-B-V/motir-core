@@ -37,22 +37,23 @@ export class AuthError extends CliError {
 }
 
 /**
- * 403 — a valid token whose granted scopes do not include this operation's.
+ * 403 — a valid token whose GRANT does not include this operation's permission.
  *
- * The scope NAME comes from the generated operation table (`x-motir-scope`,
- * which the server emits from its own `lib/mcp/scopes.ts`), never from parsing
+ * The permission NAME comes from the generated operation table
+ * (`x-motir-permission`, which the server emits from its own operation
+ * declarations — MOTIR-2583 checks the two agree), never from parsing
  * the server's English sentence. Re-reading it out of prose would be
  * `isUnauthorized`'s message regex all over again, one status down.
  *
  * Pinned by `docs/decisions/cli-v1-client.md` Q5.
  */
-export class ScopeError extends CliError {
-  constructor(scope: string, operationId: string) {
-    super(`This token lacks the '${scope}' scope required for ${operationId}.`, {
+export class PermissionError extends CliError {
+  constructor(permission: string, operationId: string) {
+    super(`This token is not granted the '${permission}' permission required for ${operationId}.`, {
       exitCode: 1,
-      hint: `Create a token with the '${scope}' scope: Settings → Account → Tokens.`,
+      hint: `Grant the '${permission}' permission on a token: Settings → Account → Tokens.`,
     });
-    this.name = 'ScopeError';
+    this.name = 'PermissionError';
   }
 }
 

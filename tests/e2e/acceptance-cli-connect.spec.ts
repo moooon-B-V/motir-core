@@ -37,7 +37,7 @@ import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { formatUserCode } from '@/lib/cliDevice/userCode';
 import { cliTokenLabel } from '@/lib/cliDevice/constants';
-import { CLI_TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { escapeRegExp } from '@/lib/utils/regexp';
 import {
   expireGrant,
@@ -251,7 +251,10 @@ test('connect the CLI — the panel, the code, the approval, and a terminal that
     // one), carrying exactly the scopes the approval screen showed.
     expect(accessToken.startsWith('motir_pat_')).toBe(true);
     expect(resolved.workspace.id).toBe(seed.targetWorkspaceId);
-    expect(resolved.scope.split(' ').sort()).toEqual([...CLI_TOKEN_SCOPES].sort());
+    // The RFC 8628 `scope` parameter is a PROTOCOL field and keeps its name; what
+    // travels in it is now the catalog grant (Story MOTIR-2572), not the six
+    // retired scopes.
+    expect(resolved.scope.split(' ').sort()).toEqual([...CLI_TOKEN_GRANT].sort());
 
     // And it is a working credential, not just a string: a real MCP session.
     expect(await mcpBearerWorks(accessToken), 'the granted bearer authenticates').toBe(true);

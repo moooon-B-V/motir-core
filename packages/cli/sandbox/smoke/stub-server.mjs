@@ -165,7 +165,7 @@ function me() {
   return {
     user: { id: 'u1', name: 'Smoke User', email: 'smoke@example.invalid' },
     workspaceId: 'w1',
-    scopes: ['read', 'work_items:write', 'integration'],
+    permissions: ['project:browse', 'work_item:edit', 'comment:add', 'ai:plan'],
   };
 }
 

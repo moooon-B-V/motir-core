@@ -139,9 +139,11 @@ test('a reader with no session reaches the MCP page from the rail and leaves abl
   });
 
   await chapter('Learn what the token can call before minting one', async () => {
-    // The scope legend, and the one scope a new token does NOT get — the fact
-    // most likely to break a reader's first run if they never see it.
-    await expect(page.locator('main').getByText('work_items:delete').first()).toBeVisible();
+    // The permission legend, and the one permission a new token does NOT get —
+    // the fact most likely to break a reader's first run if they never see it.
+    // Since Story MOTIR-2572 the legend is keyed by the catalog, so the key it
+    // prints is `work_item:delete`, not the retired `work_items:delete`.
+    await expect(page.locator('main').getByText('work_item:delete').first()).toBeVisible();
     await beat();
   });
 

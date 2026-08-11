@@ -4,12 +4,12 @@ import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { db } from '@/lib/db';
 import { buildMcpServer, MCP_SERVER_INFO } from '@/lib/mcp/registry';
 import { MCP_BILLABLE_TOOLS, rateLimitedServer } from '@/lib/mcp/rateLimitGate';
-import { SCOPE_NOT_GRANTED_CODE } from '@/lib/mcp/scopeGate';
+import { PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permissionGate';
 import { RATE_LIMITED_CODE } from '@/lib/rateLimit/guard';
 import { RATE_LIMIT_DISABLE_ENV } from '@/lib/rateLimit/limiter';
 import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import type { McpRequestExtra } from '@/lib/mcp/context';
-import type { TokenScope } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../helpers/rateLimitWindow';
@@ -96,12 +96,12 @@ afterAll(async () => {
   await db.$disconnect();
 });
 
-/** Connect an in-memory MCP client to a metered server. `scopes` mirrors what a
- *  token was granted; omitting it applies no scope narrowing. */
-async function connect(scopes?: readonly TokenScope[]): Promise<Client> {
+/** Connect an in-memory MCP client to a metered server. `grant` mirrors what a
+ *  token was granted; omitting it applies no permission narrowing. */
+async function connect(grant?: readonly PermissionKey[]): Promise<Client> {
   const server = buildMcpServer(
     () => ctx,
-    scopes ? () => [...scopes] : undefined,
+    grant ? () => [...grant] : undefined,
     true, // meterBillableTools — the production wiring
   );
   const client = new Client({ name: 'test', version: '0' });
@@ -226,26 +226,28 @@ describe('the billable-tool gate, wired into a real server', () => {
     REPRODUCTION_TIMEOUT_MS,
   );
 
-  it('the SCOPE gate runs FIRST — a denied call never spends the generation budget', async () => {
+  it('the PERMISSION gate runs FIRST — a denied call never spends the generation budget', async () => {
     // The ordering `registerMcpTools` composes for. `expand_item` needs
-    // `work_items:write`; a read-only token is refused for SCOPE, and the budget
-    // it could not reach is still whole afterwards.
+    // `ai:plan` (Story MOTIR-2572); a browse-only token is refused for
+    // PERMISSION, and the budget it could not reach is still whole afterwards.
+    // The two limits are independent and BOTH apply: `ai:plan` decides whether
+    // this token may submit at all, `ai:generate` how much is left to spend.
     //
     // The window pin is what makes that last clause mean anything: an unpinned
     // window could reset between the denials and the final call, and then "the
     // budget is still whole" would hold for a reason that has nothing to do with
-    // the scope gate — the case would pass while proving nothing.
+    // the permission gate — the case would pass while proving nothing.
     await budgetOf(1);
-    const readOnly = await connect(['read']);
+    const readOnly = await connect(['project:browse']);
     for (let i = 0; i < 3; i += 1) {
       const denied = await expandItem(readOnly);
       expect(denied.isError).toBe(true);
-      expect(textOf(denied.content)).toContain(SCOPE_NOT_GRANTED_CODE);
+      expect(textOf(denied.content)).toContain(PERMISSION_NOT_GRANTED_CODE);
       expect(textOf(denied.content)).not.toContain(RATE_LIMITED_CODE);
     }
     await readOnly.close();
 
-    // One unspent unit left: a properly-scoped caller still gets its first call.
+    // One unspent unit left: a properly-granted caller still gets its first call.
     const full = await connect();
     expectReachedTheTool(await expandItem(full));
     await full.close();

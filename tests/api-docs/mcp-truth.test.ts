@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { buildMcpServer } from '@/lib/mcp/registry';
-import { TOOL_SCOPES } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { fingerprintToolText } from '@/lib/apiDocs/mcpFingerprint';
 import {
@@ -23,12 +23,12 @@ import {
 // `public-api-conventions.md` Amendment 13 Q2 and Q3a).
 //
 // The published catalogue is half derived and half authored. The derived half
-// cannot drift — it IS `TOOL_SCOPES`. This file stands over the half that can:
+// cannot drift — it IS `TOOL_PERMISSIONS`. This file stands over the half that can:
 //
 //   1. SET EQUALITY   the tools `tools/list` returns are exactly the ones the
 //                     page carries. Belt and braces over the compile-time
 //                     totality, and the arm that catches a tool REMOVED.
-//   2. SCOPE          every row's scope equals `TOOL_SCOPES[name]` — the page
+//   2. SCOPE          every row's scope equals `TOOL_PERMISSIONS[name]` — the page
 //                     reads the map the gate enforces, not a copy of it.
 //   3. FINGERPRINT    each authored summary was written against the `title` +
 //                     `description` the server ships TODAY. It does not prove a
@@ -78,12 +78,12 @@ describe('the published catalogue against the SHIPPED tools/list', () => {
     expect(mcpToolCount()).toBe(shipped.length);
   });
 
-  it('gates every published row with the scope the server gates it with', async () => {
+  it('gates every published row with the permission the server gates it with', async () => {
     const shipped = await listShippedTools();
     for (const tool of shipped) {
       const row = mcpToolRows().find((entry) => entry.name === tool.name);
       expect(row, `no published row for shipped tool ${tool.name}`).toBeDefined();
-      expect(row?.scope).toBe(TOOL_SCOPES[tool.name as McpCatalogueToolName]);
+      expect(row?.permission).toBe(TOOL_PERMISSIONS[tool.name as McpCatalogueToolName]);
     }
   });
 
@@ -159,10 +159,15 @@ describe('the client matrix containment (Amendment 13 Q3a)', () => {
 });
 
 describe('the dependency-graph boundary (Amendment 13 Q2)', () => {
-  it('imports nothing from lib/mcp except the scope map', () => {
+  it('imports nothing from lib/mcp except the tool→permission map', () => {
+    // The boundary, re-pinned by MOTIR-2581: it was `lib/mcp/scopes`, which is
+    // now the legacy table and no longer what this page reads. `toolPermissions`
+    // is a LEAF whose only imports are types, so the property this pin protects
+    // — a public page that cannot drag the registry, the services or Prisma into
+    // its bundle — is unchanged.
     const source = read('lib/apiDocs/mcp.ts');
     const mcpImports = [...source.matchAll(/from '(@\/lib\/mcp\/[^']+)'/g)].map((m) => m[1]);
-    expect([...new Set(mcpImports)]).toEqual(['@/lib/mcp/scopes']);
+    expect([...new Set(mcpImports)]).toEqual(['@/lib/mcp/toolPermissions']);
   });
 
   it('never reaches the registry — the module that drags the services and Prisma', () => {

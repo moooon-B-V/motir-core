@@ -246,7 +246,7 @@ describe('/api/v1 planning conformance — an external client with a real PAT', 
     for (const [path, body] of writes) {
       const res = await http(path, readOnly, { method: 'POST', body });
       expect(res.status, `${path} refuses a read-only token`).toBe(403);
-      expect((await json<{ code: string }>(res)).code).toBe('INSUFFICIENT_SCOPE');
+      expect((await json<{ code: string }>(res)).code).toBe('INSUFFICIENT_PERMISSION');
     }
   });
 
