@@ -86,13 +86,27 @@ uses.
 icon has always been _"a default icon or upload your own"_ (§3) — the preset-only registry was the
 deviation, recorded as such in `lib/projects/avatar.ts`'s own header, and this reverses it.
 
-### 2. An organization and a workspace carry no mark
+### 2. An organization and a workspace carry no mark — EVER, not "none until one is uploaded"
 
 They are containers you navigate _through_, not things a team decorates. The org's derived initial
 tile is deleted; the workspace needs no change because it never had one.
 
-This is the tier where a mark earns least: an organization is a billing and membership boundary
-most people belong to exactly one of, and its name is already the first word of the context path.
+**The decisive reason is mechanical rather than aesthetic, and it is worth stating first: there is no
+way to give an organization an image.** No upload surface, no column, no route — the archived
+`MOTIR-2544` / `MOTIR-2547` / `MOTIR-2549` set that would have built one never merged (verified on
+`origin/main`, 2026-08-11: no `Organization.image`, no `AvatarUploadField`, no org upload route, no
+org prefix in `lib/blob/referencedUrls.ts`). So **every org mark that has ever rendered was generated
+from the name** — a letter on a tinted square, present for every organization, chosen by nobody. That
+is precisely the thing §3 rejects, and it is not a fallback for a missing upload: with no upload
+feature it is the ONLY state, so the tile is 100% placeholder and 0% identity.
+
+This also fixes the shape of the rule. It is **not** _"show the org's mark when it has one"_ — an
+organization cannot have one, so there is no conditional to implement and no empty state to design.
+`OrgAvatar` and both of its call sites are deleted outright.
+
+Beyond that, this is the tier where a mark earns least anyway: an organization is a billing and
+membership boundary most people belong to exactly one of, and its name is already the first word of
+the context path.
 
 ### 3. A project with no image renders NOTHING — no monogram, no generated colour, no reserved box
 
