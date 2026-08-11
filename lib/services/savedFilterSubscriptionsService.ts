@@ -36,6 +36,7 @@ import { sendEvent } from '@/lib/jobs/sendEvent';
 import { encodeFilterParam, FILTER_PARAM } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // Filter-subscription service (Story 6.2 · Subtask 6.2.5). Two faces:
 //
@@ -298,10 +299,13 @@ export const savedFilterSubscriptionsService = {
 
     const filterRow = await savedFilterRepository.findByIdWithStars(sub.savedFilterId, sub.userId);
     if (!filterRow) return { status: 'skipped', reason: 'filter_gone' };
-    const project = await projectRepository.findById(filterRow.projectId);
-    if (!project) return { status: 'skipped', reason: 'filter_gone' };
-
+    // MOTIR-2569: the subscriber context is built BEFORE the project read, so the
+    // read can bind it. A delivery runs off a job, but it acts AS the subscriber —
+    // both ids are in hand here, and an unbound read made the job report every
+    // filter as `filter_gone` under the non-bypass role.
     const subscriberCtx: ServiceContext = { userId: sub.userId, workspaceId: input.workspaceId };
+    const project = await readProject(filterRow.projectId, subscriberCtx);
+    if (!project) return { status: 'skipped', reason: 'filter_gone' };
 
     let resolved;
     try {

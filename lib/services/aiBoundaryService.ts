@@ -1,6 +1,5 @@
 import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
 import {
@@ -24,6 +23,7 @@ import type {
   BlockingClosureResponse,
   SearchWorkItemsResponse,
 } from '@/lib/dto/ai';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // The ai→core boundary service (Subtask 7.1.6). The READ-back side of the
 // boundary: the project's work-item skeleton (plan-tree) + the calling org's
@@ -46,7 +46,7 @@ export const aiBoundaryService = {
   // #26). `projectKey` comes from the gated project row.
   async readPlanTree(projectId: string, ctx: ServiceContext): Promise<PlanTreeResponse> {
     const items = await workItemsService.listWorkItems(projectId, {}, ctx);
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }
@@ -134,7 +134,7 @@ export const aiBoundaryService = {
     ctx: ServiceContext,
   ): Promise<SubtreeResponse> {
     const root = await workItemsService.getWorkItemByIdentifier(projectId, rootKey, ctx);
-    const project = await projectRepository.findById(projectId);
+    const project = await readProject(projectId, ctx);
     if (!project || project.workspaceId !== ctx.workspaceId) {
       throw new ProjectNotFoundError(projectId);
     }

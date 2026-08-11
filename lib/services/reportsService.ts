@@ -58,6 +58,7 @@ import type {
   WorkloadDto,
   WorkloadMeasureDto,
 } from '@/lib/dto/reports';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // Reports service (Story 4.6) — the read-only analytics layer over the data
 // Stories 4.1 / 4.3 / 4.4 / 1.4.6 already ship: NO new write model, NO
@@ -647,7 +648,7 @@ async function resolveReportScope(
   // row reads as deleted — the stale card, no cross-tenant leak.
   const row = await savedFilterRepository.findByIdWithStars(scope.savedFilterId, ctx.userId);
   if (!row) return { state: 'stale', reason: 'filter_missing' };
-  const project = await projectRepository.findById(row.projectId);
+  const project = await readProject(row.projectId, ctx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
     return { state: 'stale', reason: 'filter_missing' };
   }

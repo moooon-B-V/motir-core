@@ -357,14 +357,19 @@ export const projectAccessService = {
     const result = new Map<string, boolean>();
     if (userIds.length === 0) return result;
 
-    const project = await projectRepository.findById(projectId);
-    if (!project || project.workspaceId !== ctx.workspaceId) {
-      throw new ProjectNotFoundError(projectId);
-    }
-
+    // MOTIR-2569: the project read moves INSIDE the transaction that was already
+    // being opened below, rather than being bound separately — one context, one
+    // snapshot, the same move MOTIR-2527 made in `resolveInputs`. It used to run
+    // on the `db` singleton, so under the non-bypass role `project_workspace_or_
+    // system_read` hid the row and every caller 404'd before the membership
+    // lists were ever read.
     return withWorkspaceContext(
       { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId },
       async (tx) => {
+        const project = await projectRepository.findById(projectId, tx);
+        if (!project || project.workspaceId !== ctx.workspaceId) {
+          throw new ProjectNotFoundError(projectId);
+        }
         const [workspaceMembers, projectMembers] = await Promise.all([
           workspaceMembershipRepository.findMembersByWorkspace(ctx.workspaceId, tx),
           projectMembershipRepository.findMembersByProject(projectId, tx),
