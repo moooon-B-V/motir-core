@@ -23,19 +23,16 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 // `work_items:write` — mirrored from `lib/mcp/scopes.ts`, whose entry reasons it
 // out: a read-only token may look at a thread but never extend or fire one.
 
-export const POST = withV1Route<{ projectKey: string }>(
-  { scope: 'work_items:write' },
-  async (ctx) => {
-    const body = await parseV1Body(ctx.req, planTurnBodySchema);
-    const { pctx, scope } = await resolvePlanScope(
-      ctx.params.projectKey,
-      body.targetKeys,
-      ctx.service,
-    );
+export const POST = withV1Route<{ projectKey: string }>({ permission: 'ai:plan' }, async (ctx) => {
+  const body = await parseV1Body(ctx.req, planTurnBodySchema);
+  const { pctx, scope } = await resolvePlanScope(
+    ctx.params.projectKey,
+    body.targetKeys,
+    ctx.service,
+  );
 
-    await planChangeSessionsService.getOrCreateForScope(pctx, scope);
-    const session = await planChangeSessionsService.appendTurn(body.body, pctx, scope.scopeKey);
+  await planChangeSessionsService.getOrCreateForScope(pctx, scope);
+  const session = await planChangeSessionsService.appendTurn(body.body, pctx, scope.scopeKey);
 
-    return NextResponse.json(presentPlanSession(session));
-  },
-);
+  return NextResponse.json(presentPlanSession(session));
+});

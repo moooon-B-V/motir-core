@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
 import { renderWithIntl } from '../helpers/renderWithIntl';
-import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import { mcpClients, mcpToolCount, mcpToolRows, mcpTransportFacts } from '@/lib/apiDocs/mcp';
 
 // The published MCP pages (Story MOTIR-2309 · Subtask MOTIR-2327 · ADR
@@ -82,11 +82,11 @@ describe('/docs/mcp — the wiring page', () => {
     expect(container.textContent).not.toMatch(/motir_pat_[A-Za-z0-9]{10,}/);
   });
 
-  it('lists every scope in the legend, marking the one that is off by default', async () => {
+  it('lists every permission in the legend, marking the one that is off by default', async () => {
     const { default: Page } = await import('@/app/(public)/docs/mcp/page');
     const { container } = renderWithIntl(await Page());
 
-    for (const scope of TOKEN_SCOPES) {
+    for (const scope of GRANTABLE_PERMISSIONS) {
       expect(container.textContent).toContain(scope);
     }
     expect(container.textContent).toContain('mcpScopeDefaultOff');
@@ -119,7 +119,7 @@ describe('/docs/mcp/tools — the catalogue', () => {
     }
   });
 
-  it('shows a count that is the DERIVED length, and a group per populated scope', async () => {
+  it('shows a count that is the DERIVED length, and a group per populated permission', async () => {
     const { default: Page } = await import('@/app/(public)/docs/mcp/tools/page');
     const { container } = renderWithIntl(await Page());
 
@@ -128,7 +128,7 @@ describe('/docs/mcp/tools — the catalogue', () => {
     // Every rendered group belongs to a real scope.
     for (const group of groups) {
       const scope = group.getAttribute('data-testid')?.replace('mcp-group-', '');
-      expect(TOKEN_SCOPES).toContain(scope);
+      expect(GRANTABLE_PERMISSIONS).toContain(scope);
     }
     // The tools rendered across the groups are exactly the derived set.
     const rendered = mcpToolRows().filter((row) => container.textContent?.includes(row.name));

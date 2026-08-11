@@ -6,7 +6,7 @@ import { ACCOUNT_SETTINGS_NAV, ACCOUNT_SETTINGS_ROUTES } from '@/lib/settings/ac
 import {
   V1_SECURITY_SCHEME_NAME,
   v1SecurityScheme,
-  V1_SCOPE_EXTENSION,
+  V1_PERMISSION_EXTENSION,
 } from '@/lib/api/v1/openapi/security';
 
 // MOTIR-2540 — the three writer→consumer SEAMS Story MOTIR-2532 created.
@@ -101,6 +101,13 @@ describe('the tokens rename — the seams between its cards', () => {
     expect(scheme!.type).toBe('http');
     expect(scheme!.scheme).toBe('bearer');
     expect(v1SecurityScheme.bearerFormat).toBe('motir_pat_<secret>');
-    expect(V1_SCOPE_EXTENSION).toBe('x-motir-scope');
+    // ⚠️ MOTIR-2532 pinned this as "the wire contract stays put" while the pane
+    // was RENAMED. MOTIR-2577 changes the wire deliberately and with no
+    // compatibility window (`docs/decisions/token-permissions.md` §6): the old
+    // extension carried values from a vocabulary that no longer exists, so
+    // emitting it would publish a name resolving to a scope no token can be
+    // granted. The rest of the scheme — the bearer format above — is what
+    // "stays put" still means.
+    expect(V1_PERMISSION_EXTENSION).toBe('x-motir-permission');
   });
 });

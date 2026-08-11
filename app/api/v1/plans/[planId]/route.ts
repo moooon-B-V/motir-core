@@ -23,16 +23,21 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // (deleted, or in a project this caller may not browse) becomes `null` rather
 // than leaking the cuid.
 
-export const GET = withV1Route<{ planId: string }>({ scope: 'read' }, async (ctx) => {
-  const plan = await plansService.getPlan(ctx.params.planId, ctx.service);
+export const GET = withV1Route<{ planId: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    const plan = await plansService.getPlan(ctx.params.planId, ctx.service);
 
-  const targetIds = [
-    ...new Set(plan.items.map((item) => item.workItemId).filter((id): id is string => id !== null)),
-  ];
-  const refs = await workItemsService.resolveReferenceSummaries(
-    { ids: targetIds, keys: [] },
-    plan.projectId,
-    ctx.service,
-  );
-  return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs)));
-});
+    const targetIds = [
+      ...new Set(
+        plan.items.map((item) => item.workItemId).filter((id): id is string => id !== null),
+      ),
+    ];
+    const refs = await workItemsService.resolveReferenceSummaries(
+      { ids: targetIds, keys: [] },
+      plan.projectId,
+      ctx.service,
+    );
+    return NextResponse.json(presentPlan(plan, planTargetKeyResolver(refs)));
+  },
+);

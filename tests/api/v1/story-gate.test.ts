@@ -4,11 +4,11 @@ import { NextResponse } from 'next/server';
 import { withV1Route } from '@/lib/api/v1/route';
 import { decodePageCursor } from '@/lib/api/v1/pagination';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
-import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
+import { isGrantable } from '@/lib/tokens/grant';
 import { workspacesService } from '@/lib/services/workspacesService';
 import {
   auditV1RouteSource,
-  declaredScopes,
+  declaredPermissions,
   loadV1RouteModules,
   readRouteSource,
   v1RouteFiles,
@@ -94,7 +94,7 @@ describe('gate — seam: auth × pagination', () => {
 
   it('does not run the handler at all for an unauthenticated paginated request', async () => {
     let handlerRan = false;
-    const route = withV1Route({ scope: 'read' }, async () => {
+    const route = withV1Route({ permission: 'project:browse' }, async () => {
       handlerRan = true;
       return NextResponse.json({ items: [], nextCursor: null });
     });
@@ -252,7 +252,7 @@ describe('gate — seam: error mapping × every layer', () => {
   it('a 500 keeps the limit + request-id headers while leaking nothing', async () => {
     budget(4);
     const caller = await createV1Caller();
-    const route = withV1Route({ scope: 'read' }, async () => {
+    const route = withV1Route({ permission: 'project:browse' }, async () => {
       throw new Error('Invalid `db.workspace.findMany()` invocation at 10.0.0.4:5432');
     });
 
@@ -291,22 +291,21 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
     expect(violations, JSON.stringify(violations, null, 2)).toEqual([]);
   });
 
-  it('EVERY declared scope is a real TokenScope, and a GET declares `read` (the ADR table)', () => {
+  it('EVERY declared permission is GRANTABLE, and a GET declares `project:browse`', () => {
     for (const file of v1RouteFiles(REPO_ROOT)) {
       const source = readRouteSource(REPO_ROOT, file);
-      const scopes = declaredScopes(source);
+      const permissions = declaredPermissions(source);
 
-      expect(scopes.length, `${file} declares a scope`).toBeGreaterThan(0);
-      for (const scope of scopes) {
-        expect(TOKEN_SCOPES as readonly string[], `${file} declares a known scope`).toContain(
-          scope,
-        );
+      expect(permissions.length, `${file} declares a permission`).toBeGreaterThan(0);
+      for (const permission of permissions) {
+        // Grantable, not merely a real catalog key: a route asking for
+        // something no token can hold is unreachable over the public API.
+        expect(isGrantable(permission), `${file} declares "${permission}"`).toBe(true);
       }
-      // Every route in this story is a GET; the ADR's operation→scope table
-      // maps every read to `read`. When 11.2 adds writes this assertion grows
-      // a branch per verb rather than being deleted.
       if (/export const GET\s*=/.test(source)) {
-        expect(scopes, `${file} — a GET is gated on \`read\``).toContain('read');
+        expect(permissions, `${file} — a GET is gated on \`project:browse\``).toContain(
+          'project:browse',
+        );
       }
     }
   });
@@ -318,7 +317,7 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
       const bad = `
         import { db } from '@/lib/db';
         import { withV1Route } from '@/lib/api/v1/route';
-        export const GET = withV1Route({ scope: 'read' }, async () => {
+        export const GET = withV1Route({ permission: 'project:browse' }, async () => {
           const rows = await db.workspace.findMany();
           return Response.json(rows);
         });
@@ -333,7 +332,7 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
         import { prisma } from '@/lib/prisma';
-        export const GET = withV1Route({ scope: 'read' }, async () => {
+        export const GET = withV1Route({ permission: 'project:browse' }, async () => {
           await prisma.$transaction(async (tx) => tx.workspace.count());
           return Response.json({});
         });
@@ -362,7 +361,7 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
     it('catches a POST that bypasses the wrapper even when a sibling GET does not', () => {
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
-        export const GET = withV1Route({ scope: 'read' }, async () => Response.json({}));
+        export const GET = withV1Route({ permission: 'project:browse' }, async () => Response.json({}));
         export const POST = async (req: Request) => Response.json({ wrote: true });
       `;
 
@@ -371,14 +370,14 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
       expect(rules.find((v) => v.rule === 'bypasses-wrapper')?.detail).toContain('POST');
     });
 
-    it('catches a route that declares no scope', () => {
+    it('catches a route that declares no permission', () => {
       const bad = `
         import { withV1Route } from '@/lib/api/v1/route';
         export const GET = withV1Route({}, async () => Response.json({}));
       `;
 
       expect(auditV1RouteSource('bad/route.ts', bad).map((v) => v.rule)).toContain(
-        'no-scope-declared',
+        'no-permission-declared',
       );
     });
 
@@ -388,7 +387,7 @@ describe('gate — architecture guards over the /api/v1 route tree', () => {
       const good = `
         // No \`db.*\` and no $transaction( in a route — the 4-layer contract.
         import { withV1Route } from '@/lib/api/v1/route';
-        export const GET = withV1Route({ scope: 'read' }, async () => Response.json({}));
+        export const GET = withV1Route({ permission: 'project:browse' }, async () => Response.json({}));
       `;
 
       expect(auditV1RouteSource('good/route.ts', good)).toEqual([]);

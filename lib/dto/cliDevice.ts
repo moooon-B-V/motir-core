@@ -14,7 +14,7 @@
 //   consumer is Motir's own `/device` page, not an OAuth client, so there is no
 //   interoperability to buy and the repo-wide convention wins.
 
-import type { TokenScope } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 
 /**
  * The grant, as `POST /api/cli/device/start` hands it to the terminal. Everything
@@ -91,11 +91,14 @@ export interface DeviceGrantDescriptionDTO {
   askedAt: string;
   /** When the code ages out (15m after `askedAt`). ISO string. */
   expiresAt: string;
-  /** What approval WILL GRANT — `CLI_TOKEN_SCOPES`, never the row's requested
-   * `scope` string, which the substrate is explicit is "a record of what was asked,
-   * not what is granted". The grant is unconfigurable, so this is a fact about the
-   * deployment, not about the request. */
-  scopes: TokenScope[];
+  /** What approval WILL GRANT — `CLI_TOKEN_GRANT` (MOTIR-2577), never the row's
+   * requested `scope` string, which the substrate is explicit is "a record of what
+   * was asked, not what is granted". The grant is unconfigurable, so this is a fact
+   * about the deployment, not about the request.
+   *
+   * The FIELD keeps its name for now; MOTIR-2579 re-points the approval screen
+   * onto the shared permission presenter and renames it with that surface. */
+  permissions: PermissionKey[];
   /** The client that opened the grant (`motir-cli`). Pinned server-side at start, so
    * it is a display fact, not an input. */
   clientId: string | null;

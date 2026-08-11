@@ -182,7 +182,7 @@ describe('a malformed response NAMES the field, rather than blanking a cell', ()
 describe('the operation table the transport will read', () => {
   it('carries the scope for every operation, so a 403 need not parse prose', () => {
     for (const [id, row] of Object.entries(V1_OPERATIONS)) {
-      expect(row.scope, `${id} has no scope`).toBeTruthy();
+      expect(row.permission, `${id} has no permission`).toBeTruthy();
       expect(row.method).toMatch(/^(GET|POST|PATCH|PUT|DELETE)$/);
       expect(row.path.startsWith('/api/v1/'), `${id}: ${row.path}`).toBe(true);
       expect(row.successStatus).toBeGreaterThanOrEqual(200);

@@ -47,7 +47,7 @@ import { projectsService } from '@/lib/services/projectsService';
 // the page addressing", applied to rows already in hand: no new predicate, no
 // new gate, no new field, and the shipped read's own order is untouched for the
 // web app that depends on it.
-export const GET = withV1Route({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route({ permission: 'project:browse' }, async (ctx) => {
   // Parse BEFORE reading: a bad cursor or limit is the caller's to fix, and
   // answering 422 without touching the database is both faster and honest.
   const page = parseCollectionPageRequest(ctx.req, 'projects', readRowIdPosition);

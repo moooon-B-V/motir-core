@@ -38,15 +38,18 @@ import { sprintsService } from '@/lib/services/sprintsService';
 // `sprints:write` AND sprint-admin gated, exactly as the write pair: a token
 // carrying the scope is still refused `NOT_SPRINT_ADMIN` when its owner is an
 // ordinary member (ADR §3).
-export const POST = withV1Route<{ sprintId: string }>({ scope: 'sprints:write' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, startSprintBodySchema);
-  const started = await sprintsService.startSprint(
-    ctx.params.sprintId,
-    pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
-    ctx.service,
-  );
-  return NextResponse.json(presentSprint(started));
-});
+export const POST = withV1Route<{ sprintId: string }>(
+  { permission: 'sprint:manage' },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, startSprintBodySchema);
+    const started = await sprintsService.startSprint(
+      ctx.params.sprintId,
+      pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
+      ctx.service,
+    );
+    return NextResponse.json(presentSprint(started));
+  },
+);
 
 /** Copy only the keys a caller actually supplied — the absent/null tri-state. */
 function pickSupplied<T extends object, K extends keyof T>(

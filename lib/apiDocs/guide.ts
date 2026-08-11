@@ -104,11 +104,11 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
     blocks: [
       {
         kind: 'prose',
-        text: 'Every call is authenticated with a personal access token. Mint one in Settings → Account → Tokens, choose the workspace it is bound to, and grant it the scopes it needs.',
+        text: 'Every call is authenticated with a personal access token. Mint one in Settings → Account → Tokens, choose the workspace it is bound to, and grant it the permissions it needs.',
       },
       {
         kind: 'prose',
-        text: 'A token carries a set of scopes: `read` for every read in this guide, `work_items:write` to create or change work items, `work_items:archive` to archive and restore, and `sprints:write` for sprint lifecycle and membership. Grant the narrowest set that does the job — a scope narrows your own role and never widens it, so a token cannot do something you could not.',
+        text: 'A token GRANTS permissions — the same `resource:action` names the Roles & permissions screen shows: `project:browse` for every read in this guide, `work_item:edit` to create or change work items, `comment:add` to comment, `sprint:manage` for sprint lifecycle and membership, `work_item:delete` to archive or delete, and `ai:plan` for a planning submit that spends your AI credits. Grant the narrowest set that does the job — a grant narrows your own role and never widens it, so a token cannot do something you could not.',
       },
       {
         kind: 'callout',
@@ -125,7 +125,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
     blocks: [
       {
         kind: 'prose',
-        text: 'Make this call first. It answers who the token is, which workspace it is bound to, and exactly which scopes it carries — so you learn what your own credential may do without probing endpoints and collecting 403s.',
+        text: 'Make this call first. It answers who the token is, which workspace it is bound to, and exactly which permissions it carries — so you learn what your own credential may do without probing endpoints and collecting 403s.',
       },
       {
         kind: 'code',
@@ -139,7 +139,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
         code: `{
   "user": { "id": "usr_…", "name": "Ada", "email": "ada@example.com" },
   "workspaceId": "wsp_…",
-  "scopes": ["read"]
+  "permissions": ["project:browse"]
 }`,
       },
       {
@@ -207,7 +207,7 @@ export const GUIDE_STEPS: readonly GuideStep[] = [
       },
       {
         kind: 'prose',
-        text: 'A 404 means the resource does not exist **or** is outside the workspace your token is bound to — the same answer on purpose, so the API cannot be used to enumerate another tenant’s data. A 403 means the opposite kind of refusal: your token is valid, and it lacks the scope this operation requires. A 422 is a request you can fix, and its `code` names which part.',
+        text: 'A 404 means the resource does not exist **or** is outside the workspace your token is bound to — the same answer on purpose, so the API cannot be used to enumerate another tenant’s data. A 403 means the opposite kind of refusal: your token is valid, and its grant lacks the permission this operation requires — the response names the key. A 422 is a request you can fix, and its `code` names which part.',
       },
       {
         kind: 'callout',

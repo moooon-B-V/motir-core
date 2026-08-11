@@ -803,19 +803,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     why: 'The same citation in the notes beside that mock — the ownership table naming where the in-app door is placed. Same move, same reason it stays.',
   },
   // ── A path this asset SPECIFIES INTO, which its own story has not merged ──
-  // MOTIR-2578 is the DESIGN stopper of story MOTIR-2572: it ships to `main`
-  // ahead of the code it specifies, so the two files it cites as the source of
-  // the grantable set exist only on `parent/MOTIR-2572-token-permissions` until
-  // that story's PR lands. Citing them is correct — the asset must say where its
-  // six rows come from — and the sweep is correct that they do not resolve yet.
-  // ⚠️ DELETE BOTH ROWS when MOTIR-2572 merges; at that point the paths resolve
-  // and a lingering entry here would be muting a check rather than explaining it.
-  {
-    file: 'design/settings/design-notes.md',
-    path: 'docs/decisions/token-permissions.md',
-    why: 'The ADR (MOTIR-2573) that fixes the grantable set this asset draws. Lands with story MOTIR-2572; remove this row when it merges.',
-  },
-  // ── The same shape again, one story over ──────────────────────────────────
   // MOTIR-2674 is the DESIGN stopper of story MOTIR-2588: it ships to `main`
   // ahead of the code it specifies, so the ADR it draws to
   // (`docs/decisions/entity-marks.md`, MOTIR-2589) exists only on
@@ -823,6 +810,11 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
   // MUST cite it — the no-fallback rule it draws is that document's decision,
   // and a design that states a rule without naming where the rule was made is
   // the thing this whole suite exists to prevent.
+  //
+  // The pair of MOTIR-2572 rows that used to sit here were removed by that
+  // story's own merge, exactly as their delete-on-merge note instructed —
+  // `docs/decisions/token-permissions.md` and `lib/tokens/grant.ts` both resolve
+  // on `main` now. This block is the same shape, one story behind.
   // ⚠️ DELETE BOTH ROWS when MOTIR-2588 merges; at that point the path resolves
   // and a lingering entry here would be muting a check rather than explaining it.
   {
@@ -834,11 +826,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     file: 'design/shell/context-row.mock.html',
     path: 'docs/decisions/entity-marks.md',
     why: 'The same citation in Panel G, which names the decision its frames render. Same story, same reason it is deliberate, same removal.',
-  },
-  {
-    file: 'design/settings/design-notes.md',
-    path: 'lib/tokens/grant.ts',
-    why: 'The module (MOTIR-2574) whose GRANTABLE_PERMISSIONS is the six rows this asset counts and measures. Lands with story MOTIR-2572; remove this row when it merges.',
   },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
