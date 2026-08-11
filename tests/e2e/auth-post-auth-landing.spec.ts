@@ -29,13 +29,17 @@ import { projectsService } from '@/lib/services/projectsService';
 //
 // The abort window is milliseconds wide, so asserting on the ABORT would be
 // asserting on a coin flip. What is deterministic is the thing that creates the
-// window in the first place: a second navigation existing at all. So the test
-// counts DOCUMENT navigation requests to the landing route across the whole
-// sign-in. Against the pre-MOTIR-2645 code that count is 1 (the redirect
-// plugin's full page load, on top of the soft push) and this fails; with the
-// `callbackURL` removed at the source it is 0, and the soft push is the only
-// navigation there is. Nothing here waits an interval to decide something is
-// ready (CLAUDE.md § E2E authoritative signal).
+// window in the first place: a SECOND navigation existing at all. So the test
+// counts every fetch of the landing route the sign-in performs — the document
+// load and the soft push's RSC payload alike, since either can be the one that
+// commits late — and requires exactly one. Against the pre-MOTIR-2645 code
+// there are two and this fails; with the `router.push` gone there is one.
+// Nothing here waits an interval to decide something is ready (CLAUDE.md § E2E
+// authoritative signal).
+//
+// Prefetches are excluded by their `Next-Router-Prefetch` header: the shell
+// prefetches its own nav links once the dashboard mounts, and a prefetch is a
+// warm cache entry, not a navigation that can abort anything.
 //
 // The `goto` assertion below is then the behaviour that property buys, written
 // the way the three occurrences were written: sign in, navigate, land.
@@ -71,24 +75,24 @@ test.describe('post-auth landing', () => {
       data: { activeProjectId: project.id },
     });
 
-    // A DOCUMENT request is the fingerprint of a full-page navigation; the soft
-    // push fetches the same route as an RSC payload, which is not one. So this
-    // counts the navigations sign-in performs BEYOND its own soft push —
-    // including any that is aborted before it commits, since a request that is
-    // issued is a race that exists.
-    const landingDocumentRequests: string[] = [];
+    // Every fetch of the landing route sign-in causes, labelled by kind: a
+    // `document` request is a full page load, anything else is the RSC payload
+    // of a soft navigation. Both are counted — a request that is ISSUED is a
+    // race that exists, even if it is later aborted — and prefetches are not,
+    // since they commit nothing.
+    const landingNavigations: string[] = [];
     page.on('request', (r) => {
-      if (r.isNavigationRequest() && new URL(r.url()).pathname === POST_AUTH_LANDING) {
-        landingDocumentRequests.push(r.url());
-      }
+      if (new URL(r.url()).pathname !== POST_AUTH_LANDING) return;
+      if (r.headers()['next-router-prefetch'] === '1') return;
+      landingNavigations.push(r.isNavigationRequest() ? 'document' : 'rsc');
     });
 
     await signIn(page, OWNER_EMAIL, PWD);
 
     expect(
-      landingDocumentRequests,
-      "signing in must not start a full-page navigation to the landing route — the page already soft-navigates there, and the second one is what aborts the caller's next goto",
-    ).toEqual([]);
+      landingNavigations,
+      'signing in must navigate to the landing route exactly ONCE — a second navigation to the same place races the first, and whichever loses is what aborts the caller\'s next goto. It must be the "document" one: the saved appearance is server-applied to the root layout\'s <html>, which only a fresh document render can rewrite (tests/e2e/appearance-sync.spec.ts).',
+    ).toEqual(['document']);
 
     // The behaviour that buys: the navigation a spec writes immediately after
     // signing in is the one that lands.

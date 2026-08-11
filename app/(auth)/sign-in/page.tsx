@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useRef, useState, type FormEvent } from 'react';
 import { Mail, Lock, Eye, EyeOff, Sparkles } from 'lucide-react';
 import { useTranslations } from 'next-intl';
@@ -60,7 +60,6 @@ function SignInShell() {
 function SignInForm() {
   const t = useTranslations('auth');
   const tDevice = useTranslations('device');
-  const router = useRouter();
   const searchParams = useSearchParams();
   // A cross-origin idea draft handed off from the marketing hero (Subtask 7.22.2
   // / MOTIR-1458). When present, we claim it (planting the preserved-idea cookie)
@@ -138,30 +137,36 @@ function SignInForm() {
     if (!password) return;
     setSubmitting(true);
     try {
-      // `callbackURL` is deliberately NOT passed (MOTIR-2645). The endpoint
-      // answers a request that carries one with `{ redirect: true, url }`
-      // (better-auth `api/routes/sign-in.mjs`), and the CLIENT's `redirect`
-      // fetch plugin then assigns `window.location.href = url` from its
-      // onSuccess hook — a full DOCUMENT navigation, racing the `router.push`
-      // below to the very same route. Two navigations to one destination is a
-      // wasted document load and re-hydration on every sign-in, and it is what
-      // made a `page.goto` right after a test's sign-in abort intermittently
-      // ("interrupted by another navigation to …/dashboard", three CI
-      // occurrences). The soft push is the one we want, so it is the only one
-      // we start.
+      // ONE navigation to `callbackURL`, and it is a DOCUMENT one (MOTIR-2645).
       //
-      // The endpoint's OTHER use of callbackURL is the destination baked into a
-      // verification email, and only on the `requireEmailVerification` branch —
-      // which is `false` here (lib/auth/index.ts) and throws EMAIL_NOT_VERIFIED
-      // rather than redirecting. Whoever turns that on wires the link there.
-      const result = await signIn.email({ email, password });
+      // Passing `callbackURL` makes the endpoint answer `{ redirect: true, url }`
+      // (better-auth `api/routes/sign-in.mjs`), and the CLIENT's `redirect` fetch
+      // plugin then assigns `window.location.href = url` from its onSuccess hook
+      // — a full page load. This used to ALSO be followed by a
+      // `router.push(callbackURL)`, so two navigations raced to one destination;
+      // the loser was aborted at the winner's commit, and when that landed the
+      // wrong side of a test's next `page.goto` it aborted THAT instead ("…is
+      // interrupted by another navigation to …/dashboard", three CI occurrences).
+      //
+      // The soft push is the one that had to go, not the document load: the
+      // user's saved APPEARANCE is server-applied onto the root layout's `<html>`
+      // (data-theme / data-palette / data-style / data-type), and an RSC
+      // navigation cannot rewrite those — only a fresh document render can. So a
+      // returning user signing in on a new device needs this page to be REPLACED,
+      // not soft-navigated away from, or they land on the anonymous defaults.
+      // `tests/e2e/appearance-sync.spec.ts` is the assertion that says so; the
+      // race meant it was already coin-flipping on whichever navigation won.
+      const result = await signIn.email({ email, password, callbackURL });
       if (result?.error) {
         // Unified error message — no enumeration. Mockup 07's exact copy.
         setPasswordError(t('wrongPassword'));
         setSubmitting(false);
         return;
       }
-      router.push(callbackURL);
+      // No client-side navigation on success, on purpose — see above. The
+      // redirect plugin has already started the document load, and this
+      // component is on its way out, so `submitting` stays true until the page
+      // is replaced (which is what it did before, whenever that load won).
     } catch {
       setPasswordError(t('wrongPassword'));
       setSubmitting(false);

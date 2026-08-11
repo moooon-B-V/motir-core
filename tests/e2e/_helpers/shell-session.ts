@@ -39,11 +39,15 @@ export const POST_AUTH_LANDING = '/dashboard';
  * **No wait here could have closed that**, which is why the fix is not in this
  * file alone: the losing navigation is aborted at the winner's commit, so at
  * almost every instant there is nothing left to wait FOR — and the one window
- * where there is, is a few milliseconds wide. So the second navigation was
- * removed at its source (`app/(auth)/sign-in/page.tsx` no longer passes
- * `callbackURL`), which is what makes a `page.goto` straight after `signIn`
- * safe by CONSTRUCTION, and `tests/e2e/auth-post-auth-landing.spec.ts` pins
- * that there is exactly one.
+ * where there is, is a few milliseconds wide. So the SECOND navigation was
+ * removed at its source: `app/(auth)/sign-in/page.tsx` dropped its
+ * `router.push` and leaves the document load the redirect plugin performs as
+ * the only one. That is what makes a `page.goto` straight after `signIn` safe
+ * by CONSTRUCTION, and `tests/e2e/auth-post-auth-landing.spec.ts` pins that
+ * there is exactly one. (It had to be the SOFT one that went: the saved
+ * appearance is server-applied to the root layout's `<html>`, which an RSC
+ * navigation cannot rewrite — `tests/e2e/appearance-sync.spec.ts` fails if a
+ * returning user reaches the dashboard without a fresh document render.)
  *
  * What these helpers add is the second half: they return on a RENDERED
  * dashboard rather than on a URL that merely reads right — an authoritative
