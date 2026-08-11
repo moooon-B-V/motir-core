@@ -845,6 +845,16 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'docs/decisions/entity-marks.md',
     why: 'The same citation in Panel G, which names the decision its frames render. Same story, same reason it is deliberate, same removal.',
   },
+  {
+    file: 'design/projects/design-notes.md',
+    path: 'docs/decisions/entity-marks.md',
+    why: 'The projects-area half of the same story (MOTIR-2675) cites the same ADR for the same reason — it draws that decision’s Image row. Lands with MOTIR-2588; remove with the two rows above.',
+  },
+  {
+    file: 'design/projects/details.mock.html',
+    path: 'docs/decisions/entity-marks.md',
+    why: 'The mock’s header block records the reversed preset deviation and names the ADR that reversed it. Same story, same removal.',
+  },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
     file: 'design/epic-privacy/design-notes.md',
