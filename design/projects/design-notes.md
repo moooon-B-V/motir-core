@@ -966,8 +966,9 @@ its page. This is the "draw the slot, don't build the page" convention.
 border-(--el-danger)`, the `Archive…` `danger` Button + its modal, UNCHANGED
   — a move, not a rebuild).
 - **Identity rows** — label-and-value rows (a 132px muted label with a 15px
-  lucide glyph + the value); the Key value is mono; the Avatar row holds a
-  40px project tile (issue-type-task hue square, `--radius-control`). A quiet
+  lucide glyph + the value); the Key value is mono; the **Image** row holds the
+  project's uploaded picture in a square `--radius-control` box (`object-fit:
+cover`), or **nothing at all** when the project has none (MOTIR-2675). A quiet
   `--el-surface` **seam note** states "editing arrives with project-details
   editing" — the 6.8 seam (6.8 swaps these rows for edit forms + the
   key-change flow; **no edit affordances are improvised here**).
@@ -1018,7 +1019,7 @@ border-(--el-danger)`, the `Archive…` `danger` Button + its modal, UNCHANGED
 | Details page title           | `"Details"`                                                                                                                                                                                                                  |
 | Details page subtitle        | `"Project name, key and avatar. Workspace owners and admins can edit these — editing arrives with project-details editing."`                                                                                                 |
 | Details card title           | `"Project details"`                                                                                                                                                                                                          |
-| Identity row labels          | `"Avatar"` · `"Name"` · `"Key"` · `"Workspace"` · `"Created"`                                                                                                                                                                |
+| Identity row labels          | `"Image"` · `"Name"` · `"Key"` · `"Workspace"` · `"Created"`                                                                                                                                                                 |
 | 6.8 seam note                | `"Editing name, key and avatar — plus changing the project key with old-key redirects — arrives with project-details editing. For now these are read-only."`                                                                 |
 | Danger zone heading          | `"Danger zone"` (the shipped `settings.danger.heading`)                                                                                                                                                                      |
 | Archive row                  | `"Archive this project"` · `"Hide {projectName} from the project list and stop new work. You can restore it later."` · `"Archive…"` (shipped `settings.archive.*`)                                                           |
@@ -1046,6 +1047,28 @@ at plan time (2026-06-10):
 - **No settings search box** — Jira ships one at site-admin scale; ~8 bounded
   entries do not earn it (finding #57: the nav is bounded, not a scale
   surface).
+
+## The mixed switcher list — what drawing it changed (MOTIR-2675)
+
+`MOTIR-2674` pinned the mark and its empty case, and for a LIST it predicted that a row without an
+image would simply start where an imaged row starts its box — the text shifting left, nothing drawn
+to hold the space. **Drawing it at four rows (two imaged, two not) showed that reads worse than the
+prediction:** the un-imaged names hang left of the imaged ones and the list stops scanning as a
+column, which is the one job a switcher list has.
+
+**The corrected rule, and it is a refinement rather than a reversal:**
+
+| surface  | a row/tier with no image                                                         |
+| -------- | -------------------------------------------------------------------------------- |
+| **LIST** | holds the **24px slot** open — nothing drawn in it; the NAME keeps one left edge |
+| **BAR**  | the gap **closes** — a single tier has no column to align to                     |
+
+Nothing is rendered in the held slot: no border, no fill, no glyph, no monogram. **The no-mark rule
+is untouched** — what is preserved is ALIGNMENT, which is a property of the list, not a mark. After
+the fix all four names measure to the same x.
+
+`design/shell/design-notes.md` § _The MARK_ is amended in the same pass, because a spec two assets
+disagree about is worse than either answer on its own.
 
 ## Extension slots (reserved — do NOT build here)
 
@@ -1349,8 +1372,10 @@ controls — and adds three new things: the **avatar picker** (Popover), the
 
 `details.mock.html` is one multi-panel review page (panels 0–5); `details.png`
 is the full-page light render. Dark parity is in-file (the `Toggle dark` button).
-Avatar-registry + key-error contracts come from the shipped 6.8.1 code, not the
-mock — see the catalog below.
+Key-error contracts come from the shipped 6.8.1 code, not the mock — see the
+catalog below. The avatar REGISTRY that used to be cited here is retired: the
+mark is an uploaded image (`docs/decisions/entity-marks.md`), and its box, sizes
+and empty case are pinned in `design/shell/design-notes.md` § _The MARK_.
 
 ## Mirror product (rung 1, VERIFIED at plan time 2026-06-10 — Atlassian docs)
 
@@ -1486,7 +1511,7 @@ generic "Save changes".
 ## Gated state (panel 5 left — the 6.4.6 grammar)
 
 A non-admin **member** sees the values but **no controls**: no Save bar, no
-"Change avatar" / "Change key" affordances, no Danger zone — the `Read-only` Pill
+"Change" / "Remove" image controls, no "Change key" affordance, no Danger zone — the `Read-only` Pill
 replaces the `Admin` Pill (the same degradation 6.5.1 drew for the read-only
 Details landing). The actions also **reject server-side** (the 6.8.1
 admin-gated PATCH/DELETE → typed 403) — hiding is presentation, the gate is the
@@ -1498,11 +1523,13 @@ service. This is the 6.4.6 read-only grammar 5.4 / 6.4 / 6.5 all share.
 
 | Surface                       | String                                                                                                                                                                                                                               |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Page title / sub              | `"Details"` / `"Your project's name, avatar and key. Changing the key re-keys every issue and keeps old links working. Only project admins can edit these."`                                                                         |
+| Page title / sub              | `"Details"` / `"Your project's name, image and key. Changing the key re-keys every issue and keeps old links working. Only project admins can edit these."`                                                                          |
 | Card title                    | `"Project details"`                                                                                                                                                                                                                  |
-| Avatar field label / help     | `"Avatar"` / `"A preset icon and colour, shown on the project switcher and lists. Choose \"None\" to fall back to the key letters."`                                                                                                 |
-| Change-avatar button          | `"Change avatar"`                                                                                                                                                                                                                    |
-| Avatar picker sections / None | `"Icon"` · `"Colour"` · `"Preview"` · `"None"`                                                                                                                                                                                       |
+| Image field label / help      | `"Image"` / `"PNG or JPG, up to 2 MB. Shown wherever the project is named. Projects without one show their name alone."`                                                                                                             |
+| Image buttons                 | `"Change"` (an image is set) · `"Upload"` (none is set) · `"Uploading…"` (pending) · `"Remove"`                                                                                                                                      |
+| Remove-image modal            | title `"Remove project image?"` / body `"Motir will show {Project} by name wherever the image appears. You can upload a new one at any time."` / buttons `"Cancel"` · `"Remove image"`                                               |
+| Image rejections (client)     | wrong type `"That file type is not supported. Use a PNG or JPG."` · too large `"That image is over 2 MB. Choose a smaller file."`                                                                                                    |
+| Image success toasts          | `"Project image updated"` · `"Project image removed"`                                                                                                                                                                                |
 | Name field label / help       | `"Name"` / `"The display name across the app. The URL slug is not affected."`                                                                                                                                                        |
 | Key field label / help        | `"Key"` / `"Issues are keyed {IDENT}-1, {IDENT}-2, … Changing it re-keys every issue and keeps old links working."`                                                                                                                  |
 | Change-key affordance         | `"Change key…"`                                                                                                                                                                                                                      |
@@ -1539,7 +1566,10 @@ build — keep them in lock-step (the route returns the typed `code`; 6.8.4 maps
 
 ## Extension slots (reserved — do NOT build here)
 
-- Avatar **image upload** (crop/moderation infra) — when a use case lands.
+- ~~Avatar **image upload**~~ — **DELIVERED** by MOTIR-2588 (2026-08-11): the mark
+  IS an upload now. What stays reserved is the richer half this slot also implied —
+  **cropping / resizing / moderation**, which the shipped path deliberately omits
+  (the file is stored as uploaded behind a MIME + size gate).
 - **Project description / category / lead** — when the model grows the fields.
 - A workspace-level **"reserved keys" admin view** — deletion already cascades
   the aliases (the 6.8.1 `onDelete: Cascade`), so there's no orphan to manage yet.

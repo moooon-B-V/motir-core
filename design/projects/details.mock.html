@@ -11,7 +11,7 @@
       DESIGN ASSET (HTML mockup) for the EDITABLE project DETAILS page — Story 6.8, subtask 6.8.3.
 
       Story 6.8 grows the 6.5.3 READ-ONLY Details landing (the identity page the 6.5
-      settings AREA lands on) into the editable surface: project NAME, AVATAR (preset icon
+      settings AREA lands on) into the editable surface: project NAME, IMAGE (an upload
       + colour swatch), and — the load-bearing piece — the project KEY change with
       old-key redirects (PROD → NIF, every identifier re-renders, numbers preserved, old
       links keep working forever via the project_key_alias table). It also lists PREVIOUS
@@ -39,15 +39,22 @@
         • The archive-confirm.png danger-modal grammar (TriangleAlert in a tint-rose circle
           + danger Button) — reused for the release-an-alias confirm.
 
-      Avatar registry (the 6.8.1 validation contract — lib/projects/avatar.ts):
-        • 18 preset ICON keys (folder, rocket, layers, box, compass, flag, star, target,
-          zap, bug, code, sparkles, hexagon, briefcase, beaker, palette, globe, bookmark).
-        • 6 COLOUR keys aligned 1:1 to --el-tint-* (peach, rose, mint, lavender, sky,
-          yellow) — the swatch renders as bg-(--el-tint-<key>), colour stays on the swap
-          layer.
-        • null avatar = the shipped MONO-IDENTIFIER rendering (the chip shows the key
-          letters). NO image upload (recorded deviation — Jira's own default avatars ARE a
-          preset library; the 2.3.7 upload primitive is attachment-scoped).
+      The project MARK (MOTIR-2675, amending the 6.8.1 contract this block used to state):
+        • An UPLOADED IMAGE, stored as a public-bucket object key on Project.image and
+          resolved to a URL at the DTO boundary. Square, --radius-control, object-fit
+          cover; 20px in the switcher / 30px in the rail head / 52px on the Details row —
+          the sizes MOTIR-2674 pinned in design/shell/design-notes.md § The MARK.
+        • NO image = NOTHING renders. No reserved box, no placeholder, no monogram, no
+          generated tint. An empty slot states the true fact: nobody has set one.
+
+      ⚠️ REVERSED, 2026-08-11 (MOTIR-2588 / docs/decisions/entity-marks.md). This block
+      used to read: 18 preset ICON keys + 6 COLOUR keys aligned to --el-tint-*, with a
+      null avatar falling back to the MONO-IDENTIFIER chip, and "NO image upload (recorded
+      deviation — Jira's own default avatars ARE a preset library; the 2.3.7 upload
+      primitive is attachment-scoped)". That deviation is overturned: Jira in fact offers
+      "a default icon or upload your own", so the preset-ONLY registry was the departure,
+      not the upload. Kept here as a record rather than deleted — the question was asked
+      twice and answered differently, and the next reader should be able to see that.
 
       Key contract (the 6.8.1 service + errors): a project key is 3–5 uppercase A–Z/0–9
       (the shipped normalizeIdentifier shape, /^[A-Z0-9]{3,5}$/), validated STRICTLY (the
@@ -77,8 +84,9 @@
             DIRTY state (edits pending).
         (1) SAVE STATES — the card's save bar across clean (no changes) / dirty (Save
             enabled) / saving (spinner) / saved (the "Saved" confirmation).
-        (2) THE AVATAR PICKER + THE SWITCHER CHIP — the Popover: the 18-icon preset grid +
-            the 6 colour swatches + the live preview chip + "None" (restoring mono). Then
+        (2) THE IMAGE ROW'S STATES + THE MIXED SWITCHER — set / empty / uploading /
+            remove-confirm / the two client-side rejections, and the switcher list with
+            some rows imaged and some not (the normal case once images are optional). Then
             the avatar chip as rendered in the PROJECT SWITCHER (closed trigger + open
             Popover list), and the null-fallback mono chip.
         (3) THE CHANGE-KEY MODAL — every state: clean (consequence copy), format-invalid,
@@ -520,7 +528,10 @@
         max-width: 660px;
       }
 
-      /* ── Project avatar chip (preset icon + colour, or mono fallback) ─────── */
+      /* ── A neutral 24px glyph box — now used ONLY by the Previous-keys rows for
+         their key icon. The project-mark variants (preset tints, the mono fallback
+         and the large chip) were removed with the registry (MOTIR-2675); the mark is
+         `.pimg` above. ─────────────────────────────────────────────────────────── */
       .pav {
         flex: none;
         width: 30px;
@@ -532,47 +543,8 @@
         font-size: 13px;
         font-weight: 700;
       }
-      .pav svg {
-        width: 17px;
-        height: 17px;
-      }
       /* coloured (preset) — hue in the tint bg, --el-text-strong glyph (AA, finding #35) */
-      .pav.tint {
-        color: var(--el-text-strong);
-      }
-      .pav.peach {
-        background: var(--el-tint-peach);
-      }
-      .pav.rose {
-        background: var(--el-tint-rose);
-      }
-      .pav.mint {
-        background: var(--el-tint-mint);
-      }
-      .pav.lavender {
-        background: var(--el-tint-lavender);
-      }
-      .pav.sky {
-        background: var(--el-tint-sky);
-      }
-      .pav.yellow {
-        background: var(--el-tint-yellow);
-      }
       /* mono fallback (null avatar) — the shipped identifier-letters rendering */
-      .pav.mono {
-        background: var(--el-type-task);
-        color: #fff;
-      }
-      .pav-lg {
-        width: 52px;
-        height: 52px;
-        border-radius: var(--radius-card);
-        font-size: 22px;
-      }
-      .pav-lg svg {
-        width: 28px;
-        height: 28px;
-      }
 
       /* ── Card primitive (components/ui/Card) ─────────────────────────────── */
       .card {
@@ -722,6 +694,47 @@
       }
 
       /* avatar field — chip + edit affordance */
+      /* ── The project IMAGE (MOTIR-2675, to MOTIR-2674's pinned spec) ─────────
+         Square, --radius-control, object-fit cover, overflow-hidden so the radius
+         clips the image rather than sitting behind it. 20px in the switcher, 52px
+         on the Details row — the two sizes MOTIR-2674 pinned. There is NO empty
+         variant on purpose: when a project has no image NOTHING renders, so the
+         empty state is the absence of this element, not a styled version of it. */
+      .pimg {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        flex: none;
+        border-radius: var(--radius-control);
+      }
+      .pimg img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .pimg-lg {
+        width: 52px;
+        height: 52px;
+      }
+      /* The Details row's controls cluster, mirroring profile.mock.html's `.sc`. */
+      .image-field {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      /* A LIST row with no image keeps the NAME's left edge by holding the slot
+         open. Nothing is drawn in it — no border, no fill, no glyph — so the
+         "nothing renders" rule holds exactly; what is preserved is ALIGNMENT,
+         which is a property of the list, not a mark. The BAR does not do this:
+         a single tier has no column to align to, so there the gap closes. */
+      .pimg-slot {
+        display: inline-block;
+        flex: none;
+        width: 24px;
+        height: 24px;
+      }
       .avatar-field {
         display: flex;
         align-items: center;
@@ -931,22 +944,6 @@
         color: var(--el-text-faint);
         margin-bottom: 9px;
       }
-      .icon-grid {
-        display: grid;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 6px;
-      }
-      .icon-cell {
-        aspect-ratio: 1;
-        border-radius: var(--radius-control);
-        border: 1px solid var(--el-border);
-        background: var(--el-page-bg);
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--el-text-secondary);
-        cursor: pointer;
-      }
       .icon-cell svg {
         width: 17px;
         height: 17px;
@@ -959,18 +956,6 @@
         background: color-mix(in srgb, var(--el-accent) 10%, transparent);
         color: var(--el-accent);
         box-shadow: 0 0 0 1px var(--el-accent) inset;
-      }
-      .swatch-row {
-        display: flex;
-        gap: 9px;
-      }
-      .swatch {
-        width: 30px;
-        height: 30px;
-        border-radius: 9999px;
-        cursor: pointer;
-        border: 2px solid transparent;
-        position: relative;
       }
       .swatch.sel {
         border-color: var(--el-accent);
@@ -1274,7 +1259,7 @@
         <p>
           Story 6.8 · Subtask 6.8.3 design asset — built from app/globals.css tokens. Grows the
           6.5.1 read-only Details landing into the editable surface: project <strong>name</strong>,
-          <strong>avatar</strong> (preset icon + colour, no upload), and the
+          <strong>image</strong> (an uploaded picture, or none at all), and the
           <strong>change-key</strong> flow with old-key redirects + a
           <strong>previous-keys</strong> release. EXTENDS the 6.5.1 area chrome (referenced, not
           redrawn). Avatar + key contracts come from the shipped 6.8.1 registry / errors. Mirror =
@@ -1311,9 +1296,11 @@
                 ><svg viewBox="0 0 24 24"><use href="#i-arrow-left" /></svg>Back to motir</span
               >
               <div class="proj">
-                <span class="pav lavender tint"
-                  ><svg viewBox="0 0 24 24"><use href="#i-rocket" /></svg
-                ></span>
+                <span class="pimg" style="width: 30px; height: 30px"
+                  ><img
+                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                    alt=""
+                /></span>
                 <span class="pmeta">
                   <span class="pname">motir</span>
                   <span class="pkey">PROD</span>
@@ -1405,22 +1392,27 @@
                   >
                 </div>
                 <div class="card-body">
-                  <!-- Avatar -->
+                  <!-- Image (MOTIR-2675 — replaces the preset Avatar field) -->
                   <div class="field">
                     <span class="field-label"
-                      ><svg viewBox="0 0 24 24"><use href="#i-image" /></svg>Avatar</span
+                      ><svg viewBox="0 0 24 24"><use href="#i-image" /></svg>Image</span
                     >
-                    <div class="avatar-field">
-                      <span class="pav pav-lg lavender tint"
-                        ><svg viewBox="0 0 24 24"><use href="#i-rocket" /></svg
-                      ></span>
-                      <span class="btn btn-ghost sm"
-                        ><svg viewBox="0 0 24 24"><use href="#i-pencil" /></svg>Change avatar</span
+                    <div class="image-field">
+                      <span class="pimg pimg-lg"
+                        ><img
+                          src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                          alt=""
+                      /></span>
+                      <span class="btn btn-secondary sm"
+                        ><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Change</span
+                      >
+                      <span class="btn btn-ghost sm danger"
+                        ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Remove</span
                       >
                     </div>
                     <div class="field-help">
-                      A preset icon and colour, shown on the project switcher and lists. Choose
-                      “None” to fall back to the key letters.
+                      PNG or JPG, up to 2&nbsp;MB. Shown wherever the project is named. Projects
+                      without one show their name alone.
                     </div>
                   </div>
 
@@ -1522,7 +1514,7 @@
         <code>font-mono</code> value with a <code>Change key…</code> affordance (a guarded modal,
         not a free-typing field). The Save bar is the card footer (dirty here). The Danger zone is
         the re-homed <code>ArchiveProjectCard</code>, byte-for-byte the 6.5.1 drawing. The rail’s
-        project avatar now shows the preset chip too.
+        project mark shows the uploaded IMAGE, or nothing when the project has none (MOTIR-2675).
       </p>
     </div>
 
@@ -1588,165 +1580,178 @@
       </div>
     </div>
 
-    <!-- ════════════ PANEL 2 — THE AVATAR PICKER + THE SWITCHER CHIP ════════════ -->
+    <!-- ════════════ PANEL 2 — THE IMAGE ROW'S STATES + THE MIXED SWITCHER ════════════ -->
     <div class="panel-label">
-      2 · The avatar picker (Popover) — the 18 preset icons + 6 colour swatches (mapped 1:1 to
-      <code>--el-tint-*</code>) + a live preview + “None”. Right: the chip as rendered in the
-      project switcher (closed trigger + open list), and the null-fallback mono chip.
+      2 · The <b>Image</b> row, every state — set · empty · uploading · remove-confirm · the two
+      client-side rejections. Right: the project switcher with a <b>MIXED</b> list, which is the
+      normal case once images are optional. Replaces the preset picker (18 icons + 6 swatches),
+      which has nothing left to pick from — see the notes for the reversed deviation.
     </div>
     <div class="panel">
       <div class="grid-2">
-        <!-- avatar picker -->
+        <!-- the row's states -->
         <div>
           <p class="colcap">
-            <strong>Avatar picker.</strong> Icon = one of the 18 preset keys; colour = one of 6
-            tints. The preview chip updates live; <strong>None</strong> restores the mono
-            key-letters rendering. No image upload (the recorded deviation).
+            <strong>The Image row.</strong> Composes the shipped Account › Photo row grammar
+            (<code>design/settings/profile.mock.html</code>), one entity over: label + gloss left,
+            the image and its controls right, <b>Remove</b> only when an image is set. Two
+            deliberate differences: the mark is a <b>square</b> at
+            <code>--radius-control</code> (not the user avatar's circle), and the empty state
+            renders <b>nothing</b> where the person's row renders initials.
           </p>
-          <div
-            class="stage"
-            style="
-              padding: 22px;
-              display: flex;
-              justify-content: center;
-              background: var(--el-surface);
-            "
-          >
-            <div class="popover">
-              <div class="pop-sec">
-                <div class="pop-label">Icon</div>
-                <div class="icon-grid">
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-folder" /></svg
-                  ></span>
-                  <span class="icon-cell sel"
-                    ><svg viewBox="0 0 24 24"><use href="#a-rocket" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-layers" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-box" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-compass" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-flag" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-star" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-target" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-zap" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-bug" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-code" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-sparkles" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-hexagon" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-briefcase" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-beaker" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-palette" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-globe" /></svg
-                  ></span>
-                  <span class="icon-cell"
-                    ><svg viewBox="0 0 24 24"><use href="#a-bookmark" /></svg
-                  ></span>
-                </div>
+
+          <div class="stage" style="padding: 18px; display: grid; gap: 14px">
+            <div>
+              <span class="sw-cap">Image set — Remove is present</span>
+              <div class="image-field" style="margin-top: 6px">
+                <span class="pimg" style="width: 52px; height: 52px"
+                  ><img
+                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                    alt=""
+                /></span>
+                <span class="btn btn-secondary sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Change</span
+                >
+                <span class="btn btn-ghost sm danger"
+                  ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg>Remove</span
+                >
               </div>
-              <div class="pop-sec">
-                <div class="pop-label">Colour</div>
-                <div class="swatch-row">
-                  <span class="swatch peach" style="background: var(--el-tint-peach)"></span>
-                  <span class="swatch rose" style="background: var(--el-tint-rose)"></span>
-                  <span class="swatch mint" style="background: var(--el-tint-mint)"></span>
-                  <span
-                    class="swatch lavender sel"
-                    style="background: var(--el-tint-lavender)"
-                  ></span>
-                  <span class="swatch sky" style="background: var(--el-tint-sky)"></span>
-                  <span class="swatch yellow" style="background: var(--el-tint-yellow)"></span>
-                </div>
+            </div>
+
+            <div>
+              <span class="sw-cap"
+                >NO image — nothing renders, no reserved box, no placeholder, no monogram; Remove is
+                absent</span
+              >
+              <div class="image-field" style="margin-top: 6px">
+                <span class="btn btn-secondary sm"
+                  ><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Upload</span
+                >
               </div>
-              <div class="pop-foot">
-                <span class="pop-preview"
-                  >Preview
-                  <span class="pav lavender tint"
-                    ><svg viewBox="0 0 24 24"><use href="#a-rocket" /></svg></span
-                ></span>
-                <button class="link-btn">None</button>
+            </div>
+
+            <div>
+              <span class="sw-cap"
+                >Uploading — the control is pending, the old image stays put</span
+              >
+              <div class="image-field" style="margin-top: 6px">
+                <span class="pimg" style="width: 52px; height: 52px"
+                  ><img
+                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                    alt=""
+                /></span>
+                <span class="btn btn-secondary sm" style="opacity: 0.6"
+                  ><svg viewBox="0 0 24 24"><use href="#i-camera" /></svg>Uploading…</span
+                >
+              </div>
+            </div>
+
+            <div>
+              <span class="sw-cap">Rejected — wrong type (client-side, no request is made)</span>
+              <div class="toast err" style="margin-top: 6px">
+                That file type is not supported. Use a PNG or JPG.
+              </div>
+            </div>
+
+            <div>
+              <span class="sw-cap">Rejected — too large (client-side, no request is made)</span>
+              <div class="toast err" style="margin-top: 6px">
+                That image is over 2&nbsp;MB. Choose a smaller file.
+              </div>
+            </div>
+          </div>
+
+          <p class="colcap" style="margin-top: 14px">
+            <strong>Remove asks first.</strong> A <code>Modal</code> with
+            <code>role="alertdialog"</code> and a danger confirm — the same guard the Account row
+            uses, because removing is the one action here that cannot be undone by re-picking the
+            same file.
+          </p>
+          <div class="stage" style="padding: 18px; display: flex; justify-content: center">
+            <div class="modal" style="max-width: 420px">
+              <div class="modal-body">
+                <div class="modal-head">
+                  <span class="modal-icon danger"
+                    ><svg viewBox="0 0 24 24"><use href="#i-trash" /></svg
+                  ></span>
+                  <span class="mtitle">Remove project image?</span>
+                </div>
+                <p class="modal-lede">
+                  Motir will show <strong>motir</strong> by name wherever the image appears. You can
+                  upload a new one at any time.
+                </p>
+              </div>
+              <div class="modal-foot">
+                <span class="btn btn-ghost">Cancel</span>
+                <span class="btn btn-danger">Remove image</span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- switcher chip -->
+        <!-- the switcher, mixed -->
         <div>
           <p class="colcap">
-            <strong>The project switcher.</strong> The avatar chip rides into the 1.3.4 switcher —
-            closed trigger and open <code>Popover</code> list. The active row carries the
-            <code>Check</code>; a project with no avatar shows the mono key-letters chip.
+            <strong>The project switcher — a MIXED list.</strong> Once images are optional this is
+            the ordinary case, not an edge one. <b>A LIST row keeps the NAME's left edge</b> by
+            holding the 24px slot open — nothing is drawn in it (no border, no fill, no glyph), so
+            the no-mark rule holds exactly; what is preserved is ALIGNMENT, a property of the list
+            rather than a mark. <b>The BAR does NOT do this</b>: a single tier has no column to
+            align to, so there the gap closes. Drawing it is what settled this — a ragged name edge
+            reads noticeably worse at four rows than the shell asset's list clause assumed.
           </p>
           <div class="sw-wrap">
             <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
               <span class="sw-trigger open">
-                <span class="pav lavender tint" style="width: 22px; height: 22px"
-                  ><svg viewBox="0 0 24 24" style="width: 13px; height: 13px">
-                    <use href="#a-rocket" /></svg
-                ></span>
+                <span class="pimg" style="width: 22px; height: 22px"
+                  ><img
+                    src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                    alt=""
+                /></span>
                 <span class="swn">motir</span>
                 <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
               </span>
-              <span class="sw-cap">Closed (active)</span>
+              <span class="sw-cap">Closed — active project WITH an image</span>
+            </div>
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+              <span class="sw-trigger open">
+                <span class="swn">Apex</span>
+                <svg class="chev" viewBox="0 0 24 24"><use href="#i-chevron-down" /></svg>
+              </span>
+              <span class="sw-cap">Closed — active project with NO image</span>
             </div>
             <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
               <div class="sw-pop">
                 <div class="sh">Projects</div>
                 <div class="sw-item active">
-                  <span class="pav lavender tint" style="width: 24px; height: 24px"
-                    ><svg viewBox="0 0 24 24" style="width: 14px; height: 14px">
-                      <use href="#a-rocket" /></svg
-                  ></span>
+                  <span class="pimg" style="width: 24px; height: 24px"
+                    ><img
+                      src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                      alt=""
+                  /></span>
                   <span class="sname">motir</span>
                   <svg class="chk" viewBox="0 0 24 24"><use href="#i-check" /></svg>
                 </div>
                 <div class="sw-item">
-                  <span class="pav mint tint" style="width: 24px; height: 24px"
-                    ><svg viewBox="0 0 24 24" style="width: 14px; height: 14px">
-                      <use href="#a-beaker" /></svg
-                  ></span>
+                  <span class="pimg" style="width: 24px; height: 24px"
+                    ><img
+                      src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%23384b70'/%3E%3Ccircle cx='20' cy='20' r='9' fill='%23ffd166'/%3E%3C/svg%3E"
+                      alt=""
+                  /></span>
                   <span class="sname">Labs</span>
                 </div>
                 <div class="sw-item">
-                  <span class="pav mono" style="width: 24px; height: 24px; font-size: 10px"
-                    >AP</span
-                  >
-                  <span class="sname">Apex</span>
+                  <span class="pimg-slot"></span><span class="sname">Apex</span>
+                </div>
+                <div class="sw-item">
+                  <span class="pimg-slot"></span><span class="sname">Harbour</span>
                 </div>
                 <div class="sw-div"></div>
                 <div class="sw-create">
                   <svg viewBox="0 0 24 24"><use href="#i-plus" /></svg>Create project
                 </div>
               </div>
-              <span class="sw-cap">Open — “Apex” has no avatar (mono fallback)</span>
+              <span class="sw-cap">Open — two with, two without; one left edge</span>
             </div>
           </div>
         </div>
@@ -2093,11 +2098,13 @@
               <div class="card-body">
                 <div class="field">
                   <span class="field-label"
-                    ><svg viewBox="0 0 24 24"><use href="#i-image" /></svg>Avatar</span
+                    ><svg viewBox="0 0 24 24"><use href="#i-image" /></svg>Image</span
                   >
-                  <span class="pav pav-lg lavender tint"
-                    ><svg viewBox="0 0 24 24"><use href="#i-rocket" /></svg
-                  ></span>
+                  <span class="pimg pimg-lg"
+                    ><img
+                      src="data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' fill='%232f6f5e'/%3E%3Cpath d='M8 28l8-16 8 16z' fill='%23ffffff'/%3E%3Ccircle cx='29' cy='13' r='4' fill='%23f2c14e'/%3E%3C/svg%3E"
+                      alt=""
+                  /></span>
                 </div>
                 <div class="field">
                   <span class="field-label"
@@ -2480,245 +2487,6 @@
           <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z" />
           <path d="M12 9v4" />
           <path d="M12 17h.01" />
-        </g>
-
-        <!-- avatar preset icons (the 18 registry keys) -->
-        <g
-          id="a-folder"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
-          />
-        </g>
-        <g
-          id="a-rocket"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"
-          />
-          <path
-            d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-3.95 2z"
-          />
-          <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0" />
-          <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5" />
-        </g>
-        <g
-          id="a-layers"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
-          />
-          <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
-          <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
-        </g>
-        <g
-          id="a-box"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
-          />
-          <path d="m3.3 7 8.7 5 8.7-5" />
-          <path d="M12 22V12" />
-        </g>
-        <g
-          id="a-compass"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path
-            d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"
-          />
-        </g>
-        <g
-          id="a-flag"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
-          <line x1="4" x2="4" y1="22" y2="15" />
-        </g>
-        <g
-          id="a-star"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"
-          />
-        </g>
-        <g
-          id="a-target"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <circle cx="12" cy="12" r="6" />
-          <circle cx="12" cy="12" r="2" />
-        </g>
-        <g
-          id="a-zap"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
-          />
-        </g>
-        <g
-          id="a-bug"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m8 2 1.88 1.88" />
-          <path d="M14.12 3.88 16 2" />
-          <path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1" />
-          <path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6" />
-          <path d="M12 20v-9" />
-          <path d="M6.53 9C4.6 8.8 3 7.1 3 5" />
-          <path d="M6 13H2" />
-          <path d="M3 21c0-2.1 1.7-3.9 3.8-4" />
-          <path d="M20.97 5c0 2.1-1.6 3.8-3.5 4" />
-          <path d="M22 13h-4" />
-          <path d="M17.2 17c2.1.1 3.8 1.9 3.8 4" />
-        </g>
-        <g
-          id="a-code"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m16 18 6-6-6-6" />
-          <path d="m8 6-6 6 6 6" />
-        </g>
-        <g
-          id="a-sparkles"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
-          />
-          <path d="M20 3v4" />
-          <path d="M22 5h-4" />
-          <path d="M4 17v2" />
-          <path d="M5 18H3" />
-        </g>
-        <g
-          id="a-hexagon"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"
-          />
-        </g>
-        <g
-          id="a-briefcase"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-          <rect width="20" height="14" x="2" y="6" rx="2" />
-        </g>
-        <g
-          id="a-beaker"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M4.5 3h15" />
-          <path d="M6 3v16a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V3" />
-          <path d="M6 14h12" />
-        </g>
-        <g
-          id="a-palette"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path
-            d="M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z"
-          />
-          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor" />
-          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor" />
-          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor" />
-          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor" />
-        </g>
-        <g
-          id="a-globe"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
-          <path d="M2 12h20" />
-        </g>
-        <g
-          id="a-bookmark"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
         </g>
       </defs>
     </svg>
