@@ -30,7 +30,7 @@
 
 import { test, expect } from './_helpers/acceptance-video';
 import { resetDatabase, db } from './_helpers/db-reset';
-import { signUp } from './_helpers/shell-session';
+import { createFirstProject, signUp } from './_helpers/shell-session';
 
 test.describe.configure({ timeout: 180_000 });
 
@@ -55,6 +55,11 @@ test('the pane a person opens is called Tokens — from the avatar menu to a tok
   acceptanceStory('MOTIR-2532');
 
   await signUp(page, 'tokens-acceptance@example.com');
+  // A token BINDS to a project since Story MOTIR-2572 (Subtask MOTIR-2606), so
+  // the account needs one before chapter 4 can mint anything. Done here rather
+  // than in a chapter: it is setup for this clip, not part of what MOTIR-2532
+  // is asking a reviewer to accept.
+  await createFirstProject(page, 'Acceptance');
 
   // ── 1 — the door ──────────────────────────────────────────────────────────
   await chapter('Find it the way a person does', async () => {

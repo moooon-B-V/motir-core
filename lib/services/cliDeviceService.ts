@@ -7,6 +7,11 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
+// The device flow's RFC 8628 `scope` wire parameter, which is a PROTOCOL field
+// the CLI and server agree on — not our capability vocabulary. MOTIR-2572
+// changes what a token GRANTS, not what the device handshake puts on the wire,
+// so this stays on the legacy strings deliberately.
 import { CLI_TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import {
   CLI_CLIENT_ID,
@@ -356,7 +361,10 @@ async function mintForGrant(grant: {
     minted = await apiTokensService.create(grant.userId, grant.workspaceId, {
       label: cliTokenLabel(grant.hostname),
       expiresAt: new Date(Date.now() + CLI_TOKEN_EXPIRY_DAYS * DAY_MS),
-      scopes: CLI_TOKEN_SCOPES,
+      // FIXED, not chosen — so it binds to no project and is not capped against
+      // the approver's own access. `motir login` is the one credential the
+      // product picks the grant for (ADR Amendment 1 §A.2).
+      fixedGrant: CLI_TOKEN_GRANT,
     });
   } catch (err) {
     // The approver lost access to the bound workspace between approving and the

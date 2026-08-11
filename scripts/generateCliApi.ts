@@ -14,7 +14,7 @@ import { emitOpenApiDocument, V1_API_MAJOR, V1_CONTRACT_VERSION } from '@/lib/ap
 //
 //   packages/cli/src/api/schema.d.ts    the `paths` / `components` type tree
 //   packages/cli/src/api/validators.js  Ajv validators, precompiled to plain JS
-//   packages/cli/src/api/operations.ts  operationId → method, path, scope, …
+//   packages/cli/src/api/operations.ts  operationId → method, path, permission, …
 //
 // ── Why this script lives at the ROOT and not in `packages/cli` ─────────────
 // Its input is app code behind the `@/` alias. A script inside `packages/cli`
@@ -101,7 +101,7 @@ interface OperationRow {
   operationId: string;
   method: Uppercase<HttpMethod>;
   path: string;
-  scope: string;
+  permission: string;
   successStatus: number;
   /** The component name the success body is, when it is a plain component. */
   responseComponent: string | undefined;
@@ -128,9 +128,11 @@ function collectOperations(doc: JsonObject): {
       if (!operation) continue;
 
       const id = operation['operationId'];
-      const scope = operation['x-motir-scope'];
-      if (typeof id !== 'string' || typeof scope !== 'string') {
-        throw new Error(`${method.toUpperCase()} ${path}: missing operationId or x-motir-scope`);
+      const permission = operation['x-motir-permission'];
+      if (typeof id !== 'string' || typeof permission !== 'string') {
+        throw new Error(
+          `${method.toUpperCase()} ${path}: missing operationId or x-motir-permission`,
+        );
       }
 
       const responses = (operation['responses'] ?? {}) as Record<string, JsonObject>;
@@ -152,7 +154,7 @@ function collectOperations(doc: JsonObject): {
         operationId: id,
         method: method.toUpperCase() as Uppercase<HttpMethod>,
         path,
-        scope,
+        permission,
         successStatus: Number(successStatus),
         responseComponent:
           typeof ref === 'string' && ref.startsWith('#/components/schemas/')
@@ -190,7 +192,7 @@ function compileValidators(
     // it is why the published tarball ships no validator library.
     code: { source: true, esm: true },
     // The document is OpenAPI, not pure JSON Schema: it carries annotation
-    // keywords (`example`, `x-motir-scope`) that are not validation keywords.
+    // keywords (`example`, `x-motir-permission`) that are not validation keywords.
     // Strict mode would reject the document for describing itself.
     strictSchema: false,
     // FIRST failure only (Ajv's default), stated explicitly because it is a
@@ -254,7 +256,7 @@ function renderOperations(rows: OperationRow[]): string {
         `  ${JSON.stringify(row.operationId)}: {`,
         `    method: ${JSON.stringify(row.method)},`,
         `    path: ${JSON.stringify(row.path)},`,
-        `    scope: ${JSON.stringify(row.scope)},`,
+        `    permission: ${JSON.stringify(row.permission)},`,
         `    successStatus: ${row.successStatus},`,
         `    responseComponent: ${component},`,
         `  },`,
@@ -271,13 +273,14 @@ function renderOperations(rows: OperationRow[]): string {
     '  /** The path template, dynamic segments as `{name}`. */',
     '  readonly path: string;',
     '  /**',
-    '   * The token scope this operation requires.',
+    '   * The PERMISSION this operation requires.',
     '   *',
-    "   * Read off the document's `x-motir-scope` extension, which the server",
-    "   * emits from `lib/mcp/scopes.ts`. This is where the CLI's 403 message gets",
-    "   * the scope name — never by parsing the server's English sentence.",
+    "   * Read off the document's `x-motir-permission` extension, which the server",
+    '   * emits from `lib/mcp/toolPermissions.ts` + the v1 declarations. This is where',
+    "   * the CLI's 403 message gets the permission name — never by parsing the",
+    "   * server's English sentence.",
     '   */',
-    '  readonly scope: string;',
+    '  readonly permission: string;',
     '  /** The 2xx status the happy path returns. */',
     '  readonly successStatus: number;',
     '  /**',

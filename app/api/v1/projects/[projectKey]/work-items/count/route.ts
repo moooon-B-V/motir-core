@@ -26,14 +26,17 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // A count has no position and no page size. Accepting either would invite a
 // caller to read the answer as a count of some WINDOW, which is the confusion
 // `?limit=0` would have institutionalised.
-export const GET = withV1Route<{ projectKey: string }>({ scope: 'read' }, async (ctx) => {
-  // Parse BEFORE reading, the same order the collection uses: a bad filter is
-  // the caller's to fix, and answering 422 without touching the database is
-  // both faster and honest.
-  const filter = parseFilterParam(ctx.req);
+export const GET = withV1Route<{ projectKey: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    // Parse BEFORE reading, the same order the collection uses: a bad filter is
+    // the caller's to fix, and answering 422 without touching the database is
+    // both faster and honest.
+    const filter = parseFilterParam(ctx.req);
 
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
-  const count = await workItemsService.countProjectWorkItems(project.id, filter, ctx.service);
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+    const count = await workItemsService.countProjectWorkItems(project.id, filter, ctx.service);
 
-  return NextResponse.json({ count });
-});
+    return NextResponse.json({ count });
+  },
+);

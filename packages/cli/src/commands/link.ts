@@ -58,7 +58,7 @@ export type ProjectProbeClient = Pick<MotirClient, 'listReady'>;
  * `motir link` replaced all of it with "check the project key, or your token's
  * workspace", none of which was the cause, on a token that could read the
  * project perfectly well. Every sibling error is likewise MORE specific than
- * the sentence that was overwriting it: `AuthError` says re-login, `ScopeError`
+ * the sentence that was overwriting it: `AuthError` says re-login, `PermissionError`
  * names the missing scope AND where to create a token with it, and a transport
  * failure names the host it could not reach.
  *

@@ -1,4 +1,7 @@
-import { DEFAULT_TOKEN_SCOPES, TOKEN_SCOPES, TOOL_SCOPES, type TokenScope } from '@/lib/mcp/scopes';
+import { TOOL_PERMISSIONS } from '@/lib/mcp/toolPermissions';
+import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
+import { permissionSlug, type PermissionKey } from '@/lib/permissions/catalog';
+import enMessages from '@/messages/en.json';
 import type { GuideBlock } from '@/lib/apiDocs/guide';
 
 // The MCP server documentation, AS DATA (Story MOTIR-2309 · Subtask MOTIR-2325 ·
@@ -12,12 +15,12 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
 // import `@prisma/client` and `lib/db`. None of that belongs in the dependency
 // graph of a page anybody on the internet can request (Amendment 13 Q2).
 //
-// That is also why the tool-name type below is `keyof typeof TOOL_SCOPES` rather
-// than an imported `McpToolName`: the two are the same type — `TOOL_SCOPES` is
+// That is also why the tool-name type below is `keyof typeof TOOL_PERMISSIONS` rather
+// than an imported `McpToolName`: the two are the same type — `TOOL_PERMISSIONS` is
 // declared `Record<McpToolName, TokenScope>` — but deriving it costs no import at
 // all, so the rule holds by construction and not by discipline. The totality
 // chain is unbroken: a tool added to `MCP_TOOL_NAMES` without a scope fails
-// typecheck in `scopes.ts`; adding the scope widens `keyof typeof TOOL_SCOPES`;
+// typecheck in `toolPermissions.ts`; adding it widens `keyof typeof TOOL_PERMISSIONS`;
 // and that makes {@link TOOL_SUMMARIES} below incomplete, which fails typecheck
 // here. A tool cannot reach the server undocumented.
 //
@@ -45,7 +48,7 @@ import type { GuideBlock } from '@/lib/apiDocs/guide';
  * Every tool the MCP server exposes — structurally identical to `McpToolName`,
  * derived rather than imported so this module needs no `registry.ts` reference.
  */
-export type McpCatalogueToolName = keyof typeof TOOL_SCOPES;
+export type McpCatalogueToolName = keyof typeof TOOL_PERMISSIONS;
 
 // ── The four transport facts, held ONCE ─────────────────────────────────────
 // Amendment 13 Q3a: these are OURS and a test can pin them. Every client block
@@ -288,64 +291,64 @@ export const MCP_FORK_STEER: GuideBlock = {
   text: 'Wiring an agent? Stay here. Writing software other people install? The REST API is the other half — it is the one that promises not to change under you.',
 };
 
-// ── The scope legend, derived from TOKEN_SCOPES / DEFAULT_TOKEN_SCOPES ───────
+// ── The permission legend, derived from the catalog ─────────────────────────
+//
+// ⚠️ NOTHING HERE IS AUTHORED ANY MORE (MOTIR-2581). This block used to carry a
+// hand-written `SCOPE_LABELS` table — six labels and six sentences describing
+// what each scope gated — maintained beside the ones on Roles & permissions. A
+// second hand-written description of one capability is the drift this story
+// removes: the two say the same thing on the day they are written and diverge
+// on the day someone edits one.
+//
+// So the label and the sentence are read from the SHIPPED i18n copy, by the
+// catalog's own `permissions.<slug>.label` / `.description` keys — the exact
+// strings the Roles & permissions screen renders. `en.json` is imported rather
+// than resolved through next-intl because this module builds a PUBLISHED page,
+// which has no request locale; the published reference is English, as the rest
+// of `lib/apiDocs` already is.
 
-/** What each scope gates, in the reader's terms. The ONLY authored part. */
-const SCOPE_LABELS: Record<TokenScope, { label: string; gates: string }> = {
-  read: {
-    label: 'Read',
-    gates: 'Every read — items, the ready set, search, sprints, plans, identity. Never mutates.',
-  },
-  'work_items:write': {
-    label: 'Write work items',
-    gates: 'Create, edit, transition, comment, link, re-parent — and submit a planning job.',
-  },
-  'work_items:archive': {
-    label: 'Archive & restore',
-    gates: 'Soft-remove and restore. Recoverable, so it is on by default.',
-  },
-  'work_items:delete': {
-    label: 'Delete',
-    gates: 'Irreversible subtree delete. The only scope OFF by default on a new token.',
-  },
-  'sprints:write': {
-    label: 'Sprints',
-    gates: 'The sprint lifecycle and its membership moves.',
-  },
-  integration: {
-    label: 'Integration',
-    gates: 'Mark work integrated, and close out a session branch.',
-  },
-};
+/** The shipped `permissions.*` copy, as the published page reads it. */
+const PERMISSION_COPY = enMessages.permissions as unknown as Record<
+  string,
+  { label: string; description: string }
+>;
+
+function permissionLabel(key: PermissionKey): string {
+  return PERMISSION_COPY[permissionSlug(key)]!.label;
+}
+
+function permissionDescription(key: PermissionKey): string {
+  return PERMISSION_COPY[permissionSlug(key)]!.description;
+}
 
 export interface McpScopeLegendRow {
-  scope: TokenScope;
+  permission: PermissionKey;
   label: string;
   gates: string;
-  /** From `DEFAULT_TOKEN_SCOPES` — never a second hand-written list. */
+  /** From `DEFAULT_TOKEN_GRANT` — never a second hand-written list. */
   grantedByDefault: boolean;
-  /** Derived: how many tools this scope gates. Never a literal. */
+  /** Derived: how many tools this permission gates. Never a literal. */
   toolCount: number;
 }
 
 export function mcpScopeLegend(): McpScopeLegendRow[] {
-  // Seeded TOTAL over TOKEN_SCOPES, so the lookup below cannot miss and needs no
-  // fallback arm. A scope that currently gates no tool reports 0 rather than
-  // vanishing — the legend's job is to tell a reader what every scope on their
-  // token means, including one that happens to gate nothing today.
-  const counts = Object.fromEntries(TOKEN_SCOPES.map((scope) => [scope, 0])) as Record<
-    TokenScope,
+  // Seeded TOTAL over GRANTABLE_PERMISSIONS, so the lookup below cannot miss and
+  // needs no fallback arm. A permission that currently gates no MCP tool reports
+  // 0 rather than vanishing — the legend's job is to tell a reader what every
+  // permission on their token means, including one only `/api/v1` exercises.
+  const counts = Object.fromEntries(GRANTABLE_PERMISSIONS.map((key) => [key, 0])) as Record<
+    PermissionKey,
     number
   >;
-  for (const scope of Object.values(TOOL_SCOPES)) {
-    counts[scope] += 1;
+  for (const permission of Object.values(TOOL_PERMISSIONS)) {
+    counts[permission] += 1;
   }
-  return TOKEN_SCOPES.map((scope) => ({
-    scope,
-    label: SCOPE_LABELS[scope].label,
-    gates: SCOPE_LABELS[scope].gates,
-    grantedByDefault: DEFAULT_TOKEN_SCOPES.includes(scope),
-    toolCount: counts[scope],
+  return GRANTABLE_PERMISSIONS.map((permission) => ({
+    permission,
+    label: permissionLabel(permission),
+    gates: permissionDescription(permission),
+    grantedByDefault: DEFAULT_TOKEN_GRANT.includes(permission),
+    toolCount: counts[permission],
   }));
 }
 
@@ -568,13 +571,13 @@ const TOOL_SUMMARIES: Record<McpCatalogueToolName, McpToolSummary> = {
 /** One catalogue row. */
 export interface McpToolRow {
   name: McpCatalogueToolName;
-  scope: TokenScope;
+  permission: PermissionKey;
   summary: string;
 }
 
-/** One catalogue group — a scope, and the tools it gates. */
+/** One catalogue group — a permission, and the tools it gates. */
 export interface McpCatalogueGroup {
-  scope: TokenScope;
+  permission: PermissionKey;
   label: string;
   gates: string;
   grantedByDefault: boolean;
@@ -582,27 +585,32 @@ export interface McpCatalogueGroup {
 }
 
 /**
- * The catalogue, grouped by scope.
+ * The catalogue, grouped by PERMISSION.
  *
- * The GROUPING is derived: a tool's group is its own `TOOL_SCOPES` entry, so no
- * per-tool grouping fact is authored and a new tool lands in a group the moment
- * it has a scope — which is the moment it exists. Only the six group labels and
- * their order (`TOKEN_SCOPES` order) are authored, in `SCOPE_LABELS` above.
+ * The GROUPING is derived: a tool's group is its own `TOOL_PERMISSIONS` entry, so
+ * no per-tool grouping fact is authored and a new tool lands in a group the
+ * moment it has a permission — which is the moment it exists. Since MOTIR-2581
+ * the group LABELS are derived too, from the shipped `permissions.*` copy; the
+ * only authored thing left is the ORDER, which is the catalog's own.
  *
- * Groups with no tools are dropped, so a scope that gates nothing does not render
- * an empty heading.
+ * Groups with no tools are dropped, so a permission that gates no MCP tool does
+ * not render an empty heading.
  */
 export function mcpCatalogue(): McpCatalogueGroup[] {
   const rows = (Object.keys(TOOL_SUMMARIES) as McpCatalogueToolName[])
-    .map((name) => ({ name, scope: TOOL_SCOPES[name], summary: TOOL_SUMMARIES[name].summary }))
+    .map((name) => ({
+      name,
+      permission: TOOL_PERMISSIONS[name],
+      summary: TOOL_SUMMARIES[name].summary,
+    }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return TOKEN_SCOPES.map((scope) => ({
-    scope,
-    label: SCOPE_LABELS[scope].label,
-    gates: SCOPE_LABELS[scope].gates,
-    grantedByDefault: DEFAULT_TOKEN_SCOPES.includes(scope),
-    tools: rows.filter((row) => row.scope === scope),
+  return GRANTABLE_PERMISSIONS.map((permission) => ({
+    permission,
+    label: permissionLabel(permission),
+    gates: permissionDescription(permission),
+    grantedByDefault: DEFAULT_TOKEN_GRANT.includes(permission),
+    tools: rows.filter((row) => row.permission === permission),
   })).filter((group) => group.tools.length > 0);
 }
 

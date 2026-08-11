@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
+import { ACCEPTANCE_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
@@ -10,13 +11,22 @@ import {
 
 // Shared gate for the acceptance-publish routes (MOTIR-1631/1681): both the
 // mint-token route and the register route authenticate the CI caller (keyless
-// GitHub OIDC first, else an `integration` PAT), resolve the STORY within the
-// caller's workspace, and apply the plan/toggle eligibility gate — identically.
+// GitHub OIDC first, else a PAT holding the required permission), resolve the
+// STORY within the caller's workspace, and apply the plan/toggle eligibility
+// gate — identically.
 //
 // The auth + resolve halves moved to `lib/publishAuth/ciPublishAuth.ts` when the
 // design result became a second CI publisher (MOTIR-2667); the two steps BELOW —
 // the parent-story hop and the eligibility gate — are what make this gate
 // acceptance's rather than every publisher's. Behaviour is unchanged.
+//
+// ⚠️ The PAT arm asks for `ACCEPTANCE_PUBLISH_PERMISSION`, NOT the old
+// `'integration'` scope. MOTIR-2576 made that change on `main` while the
+// extraction above was in flight, and it is the one caller that is neither MCP
+// nor `/api/v1` — the one a migration of "the two big seams" leaves behind, with
+// every story's acceptance video 403ing. The permission is threaded through the
+// shared helper rather than baked into it, so the second publisher can ask for
+// its own and neither can silently inherit the other's.
 
 export interface AcceptancePublishGate {
   ctx: { userId: string; workspaceId: string };
@@ -33,7 +43,7 @@ export async function authorizeAcceptancePublish(
   req: Request,
   identifier: string,
 ): Promise<AcceptancePublishGate | Response> {
-  const ctx = await authenticateCiPublisher(req);
+  const ctx = await authenticateCiPublisher(req, ACCEPTANCE_PUBLISH_PERMISSION);
   if (ctx instanceof Response) return ctx;
 
   const resolved = await resolveWorkItemByIdentifier(identifier, ctx);

@@ -341,7 +341,7 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
     ['integration', '/api/v1/work-items/%KEY%/integration', 'POST', { sessionBranch: 'session/x' }],
     ['work_items:write', '/api/v1/work-items/%KEY%/expansions', 'POST', undefined],
   ])(
-    'refuses a token missing the `%s` scope with 403 + INSUFFICIENT_SCOPE',
+    'refuses a token missing the `%s` scope with 403 + INSUFFICIENT_PERMISSION',
     async (_scope, template, method, body) => {
       // Once per DISTINCT scope this story uses. A token holding every OTHER
       // scope still cannot do this, which is what makes each gate load-bearing
@@ -361,7 +361,7 @@ describe('/api/v1 work-loop conformance — an external client with a real PAT',
       });
 
       expect(res.status).toBe(403);
-      expect((await json<{ code: string }>(res)).code).toBe('INSUFFICIENT_SCOPE');
+      expect((await json<{ code: string }>(res)).code).toBe('INSUFFICIENT_PERMISSION');
     },
   );
 

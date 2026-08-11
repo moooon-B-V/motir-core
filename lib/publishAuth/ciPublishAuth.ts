@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
 import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { projectsService } from '@/lib/services/projectsService';
@@ -14,8 +15,8 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 // of duplication where one copy quietly gets a fix and the other does not.
 //
 // What is genuinely shared: authenticating the caller (keyless GitHub OIDC
-// first, else an `integration` PAT) and resolving the target work item inside
-// that caller's workspace. What is NOT shared, and stays with each publisher:
+// first, else a PAT) and resolving the target work item inside that caller's
+// workspace. What is NOT shared, and stays with each publisher:
 //   · acceptance resolves a leaf key UP to its parent STORY and applies the
 //     plan/toggle eligibility gate;
 //   · a design result attaches to the card that PRODUCED it, with no
@@ -34,12 +35,21 @@ export function projectKeyOf(identifier: string): string {
 
 /**
  * Authenticate a CI publisher: keyless GitHub OIDC first (MOTIR-1650) when the
- * caller opts in via the `X-Motir-Auth: github-oidc` marker; otherwise the
- * `integration`-scoped PAT. Returns the resolved workspace context, or a ready
- * error `Response` (401/403) the route returns verbatim.
+ * caller opts in via the `X-Motir-Auth: github-oidc` marker; otherwise a PAT
+ * whose GRANT contains `requiredPermission`. Returns the resolved workspace
+ * context, or a ready error `Response` (401/403) the route returns verbatim.
+ *
+ * ⚠️ The permission is a PARAMETER, not a constant baked in here. A token used
+ * to be checked for the `'integration'` SCOPE; MOTIR-2576 replaced that with the
+ * permission the operation actually asserts, precisely because the publish route
+ * is the one token-reachable caller that is neither MCP nor `/api/v1` and so is
+ * the one a scope migration leaves behind — with every publish 403ing. Threading
+ * it through means a second publisher asks for its own and neither silently
+ * inherits the other's.
  */
 export async function authenticateCiPublisher(
   req: Request,
+  requiredPermission: PermissionKey,
 ): Promise<CiPublisherContext | Response> {
   const oidc = await authenticateGithubOidc(req);
   if (oidc) {
@@ -51,12 +61,15 @@ export async function authenticateCiPublisher(
     return { userId: oidc.userId, workspaceId: oidc.workspaceId };
   }
 
-  const auth = await authenticateApiToken(req, 'integration');
+  const auth = await authenticateApiToken(req, requiredPermission);
   if (!auth.ok) {
     return auth.reason === 'unauthenticated'
       ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })
       : NextResponse.json(
-          { code: 'FORBIDDEN', error: 'The token lacks the integration scope.' },
+          {
+            code: 'FORBIDDEN',
+            error: `The token is not granted the "${requiredPermission}" permission.`,
+          },
           { status: 403 },
         );
   }

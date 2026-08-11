@@ -1,5 +1,5 @@
 import type { z } from 'zod/v4';
-import type { TokenScope } from '@/lib/mcp/scopes';
+import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { V1ErrorStatus, V1SuccessStatus } from '@/lib/api/v1/openapi/statuses';
 
 // The v1 OPERATION descriptor (Story 11.4 · Subtask 11.4.4 — MOTIR-2185).
@@ -11,19 +11,24 @@ import type { V1ErrorStatus, V1SuccessStatus } from '@/lib/api/v1/openapi/status
 // maintains into a value the build can check.
 //
 // ── The totality discipline, copied from `lib/mcp/scopes.ts` ────────────────
-// `scope`, `response` and `errorStatuses` are REQUIRED fields, so an operation
-// that declares none of them is a COMPILE error rather than a review finding —
-// the same guarantee `TOOL_SCOPES: Record<McpToolName, TokenScope>` gives the
-// MCP surface. `tests/api/v1/openapi-registry.test.ts` pins that with
+// `permission`, `response` and `errorStatuses` are REQUIRED fields, so an
+// operation that declares none of them is a COMPILE error rather than a review
+// finding — the same guarantee `TOOL_PERMISSIONS: Record<McpToolName,
+// PermissionKey>` gives the MCP surface. `tests/api/v1/openapi-registry.test.ts` pins that with
 // `@ts-expect-error` assertions, so if a field ever became optional the
 // now-unnecessary suppression fails `pnpm typecheck`.
 //
-// ── The scope here DOCUMENTS; the route ENFORCES ────────────────────────────
-// ADR Amendment 4 Q2 pins the direction: `withV1Route({ scope })` stays the
+// ── The permission here DOCUMENTS; the route ENFORCES ───────────────────────
+// ADR Amendment 4 Q2 pins the direction: `withV1Route({ permission })` stays the
 // single enforcement point and this field is asserted EQUAL to it (Subtask
 // 11.4.6's guard), never read at request time. Sourcing enforcement from a
 // documentation artifact would turn a docs typo into a privilege bug, and would
 // delete the independent second opinion the drift guard exists to be.
+//
+// MOTIR-2577 changed WHAT is named here, not the direction: the field holds a
+// `PermissionKey` from `lib/permissions/catalog.ts` — the permission the route's
+// own service asserts — instead of one of the six retired token scopes. See
+// `docs/decisions/token-permissions.md` §3, §6.
 
 /** The HTTP verbs a v1 operation can use. */
 export const V1_METHODS = ['GET', 'POST', 'PATCH', 'DELETE'] as const;
@@ -102,8 +107,11 @@ export interface V1Operation {
   summary: string;
   /** The longer prose, for the operation's own section. */
   description: string;
-  /** The scope the ROUTE requires. Documented here, enforced there. */
-  scope: TokenScope;
+  /**
+   * The PERMISSION the route requires — the one its own service asserts.
+   * Documented here, enforced there, and published as `x-motir-permission`.
+   */
+  permission: PermissionKey;
   /** Path, query and request-header parameters. */
   parameters: readonly V1Parameter[];
   /** The request body, for the verbs that take one. */

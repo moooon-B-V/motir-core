@@ -4,7 +4,7 @@ import { join, relative } from 'node:path';
 // The `/api/v1` route-tree analyser (Story 11.1 · Subtask 11.1.5 —
 // MOTIR-1861). Source-level guards for the properties a coverage percentage
 // cannot see: that a route stays a thin adapter, that it goes through the
-// shared wrapper, and that it declares a scope.
+// shared wrapper, and that it declares a permission.
 //
 // It lives in a helper rather than inline in one test because the guards must
 // be run against TWO inputs: the real route tree (does the product hold?) and
@@ -26,11 +26,11 @@ export interface RouteViolation {
     | 'prisma-in-route'
     | 'transaction-in-route'
     | 'bypasses-wrapper'
-    | 'no-scope-declared'
+    | 'no-permission-declared'
     // ── Added by Story 11.2 · Subtask 11.2.11 (MOTIR-2053) ──────────────────
     | 'imports-mcp-tools'
     | 'reaches-cascade-delete'
-    | 'declares-delete-scope';
+    | 'declares-unexposed-permission';
   detail: string;
 }
 
@@ -77,7 +77,7 @@ export function auditV1RouteSource(file: string, source: string): RouteViolation
   }
 
   // ── Every handler export goes through the shared wrapper ─────────────────
-  // The wrapper is where auth, the scope gate, the error envelope, the request
+  // The wrapper is where auth, the permission gate, the error envelope, the request
   // id and the rate limiter live, so a route that hand-rolls an export escapes
   // ALL of them at once.
   for (const method of HTTP_METHODS) {
@@ -123,57 +123,66 @@ export function auditV1RouteSource(file: string, source: string): RouteViolation
       detail: 'a v1 route reaches deleteWorkItem — the irreversible subtree delete is not exposed',
     });
   }
-  if (/scope\s*:\s*['"]work_items:delete['"]/.test(source)) {
+  // ⚠️ `work_item:delete` now covers ARCHIVE as well as delete (ADR §3), and v1
+  // DOES expose the two archive operations. So the rule can no longer key on the
+  // permission alone: it admits the archive/restore paths by name and fails any
+  // OTHER route that declares the irreversible key — which is exactly the
+  // property the old `declares-delete-scope` rule protected (no cascade delete
+  // over v1), stated against a vocabulary where one key serves two operations.
+  const ARCHIVE_PATHS = ['/work-items/[key]/archive/', '/work-items/[key]/restore/'];
+  const isArchiveRoute = ARCHIVE_PATHS.some((p) => file.replaceAll('\\', '/').includes(p));
+  if (!isArchiveRoute && /permission\s*:\s*['"]work_item:delete['"]/.test(source)) {
     violations.push({
       file,
-      rule: 'declares-delete-scope',
-      detail: 'a v1 route declares work_items:delete, a scope v1 does not expose',
+      rule: 'declares-unexposed-permission',
+      detail:
+        'a v1 route outside archive/restore declares work_item:delete — the irreversible cascade v1 does not expose',
     });
   }
 
-  // ── Every route DECLARES its required scope ──────────────────────────────
+  // ── Every route DECLARES its required permission ─────────────────────────
   const wrapperCalls = code.match(/withV1Route\s*[<(]/g)?.length ?? 0;
-  const scopeDeclarations = source.match(/scope\s*:\s*['"][a-z_:]+['"]/g)?.length ?? 0;
-  if (wrapperCalls > 0 && scopeDeclarations < wrapperCalls) {
+  const permissionDeclarations = source.match(/permission\s*:\s*['"][a-z_:]+['"]/g)?.length ?? 0;
+  if (wrapperCalls > 0 && permissionDeclarations < wrapperCalls) {
     violations.push({
       file,
-      rule: 'no-scope-declared',
-      detail: `${wrapperCalls} wrapper call(s) but only ${scopeDeclarations} scope declaration(s)`,
+      rule: 'no-permission-declared',
+      detail: `${wrapperCalls} wrapper call(s) but only ${permissionDeclarations} permission declaration(s)`,
     });
   }
 
   return violations;
 }
 
-/** Every scope literal a route declares, in source order. */
-export function declaredScopes(source: string): string[] {
-  return (source.match(/scope\s*:\s*['"]([a-z_:]+)['"]/g) ?? []).map((m) =>
+/** Every permission literal a route declares, in source order. */
+export function declaredPermissions(source: string): string[] {
+  return (source.match(/permission\s*:\s*['"]([a-z_:]+)['"]/g) ?? []).map((m) =>
     m.replace(/.*['"]([a-z_:]+)['"].*/, '$1'),
   );
 }
 
 /**
- * The scope each exported VERB declares, keyed by method (Subtask 11.2.11).
+ * The permission each exported VERB declares, keyed by method (Subtask 11.2.11).
  *
  * Per-verb rather than per-file, because the ADR's §3 map is per OPERATION: one
  * module legitimately exports a `read` GET beside a `work_items:write` POST, and
  * a file-level check cannot tell a correct pairing from a wrong one.
  *
- * A verb whose scope cannot be read maps to `undefined` rather than being
+ * A verb whose permission cannot be read maps to `undefined` rather than being
  * dropped, so the caller can FAIL on it — silently skipping an unparseable route
  * is a hole in a guard that still reads as coverage.
  */
-export function declaredScopeByMethod(source: string): Map<string, string | undefined> {
+export function declaredPermissionByMethod(source: string): Map<string, string | undefined> {
   const found = new Map<string, string | undefined>();
   for (const method of HTTP_METHODS) {
     const declaration = new RegExp(
-      `export\\s+const\\s+${method}\\s*=\\s*withV1Route\\s*(?:<[^>]*>)?\\s*\\(\\s*\\{[^}]*?scope\\s*:\\s*['"]([a-z_:]+)['"]`,
+      `export\\s+const\\s+${method}\\s*=\\s*withV1Route\\s*(?:<[^>]*>)?\\s*\\(\\s*\\{[^}]*?permission\\s*:\\s*['"]([a-z_:]+)['"]`,
     ).exec(source);
     if (declaration) {
       found.set(method, declaration[1]);
       continue;
     }
-    // Exported but unreadable — record it as present-with-unknown-scope.
+    // Exported but unreadable — record it as present-with-unknown-permission.
     if (new RegExp(`export\\s+const\\s+${method}\\s*=`).test(source)) {
       found.set(method, undefined);
     }

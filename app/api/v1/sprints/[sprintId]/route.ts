@@ -20,10 +20,13 @@ import { sprintsService } from '@/lib/services/sprintsService';
 // `getById` is `workspaceId`-gated, so a sprint in another tenant raises the
 // same `SprintNotFoundError` as one that never existed. A 403 would confirm the
 // sprint exists — the existence oracle ADR §4 forbids.
-export const GET = withV1Route<{ sprintId: string }>({ scope: 'read' }, async (ctx) => {
-  const sprint = await sprintsService.getById(ctx.params.sprintId, ctx.service);
-  return NextResponse.json(presentSprint(sprint));
-});
+export const GET = withV1Route<{ sprintId: string }>(
+  { permission: 'project:browse' },
+  async (ctx) => {
+    const sprint = await sprintsService.getById(ctx.params.sprintId, ctx.service);
+    return NextResponse.json(presentSprint(sprint));
+  },
+);
 
 // PATCH /api/v1/sprints/{sprintId} (Story 11.3 · Subtask 11.3.5 — MOTIR-2062) —
 // rename a sprint, edit its goal, adjust its planned window.
@@ -45,15 +48,18 @@ export const GET = withV1Route<{ sprintId: string }>({ scope: 'read' }, async (c
 // Two gates, as on create: `sprints:write` AND `assertSprintAdmin`
 // (`NOT_SPRINT_ADMIN` → 403, a code distinct from a missing scope). A sprint in
 // another workspace raises `SprintNotFoundError` → 404, never 403.
-export const PATCH = withV1Route<{ sprintId: string }>({ scope: 'sprints:write' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, updateSprintBodySchema);
-  const updated = await sprintsService.updateSprint(
-    ctx.params.sprintId,
-    pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
-    ctx.service,
-  );
-  return NextResponse.json(presentSprint(updated));
-});
+export const PATCH = withV1Route<{ sprintId: string }>(
+  { permission: 'sprint:manage' },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, updateSprintBodySchema);
+    const updated = await sprintsService.updateSprint(
+      ctx.params.sprintId,
+      pickSupplied(body, ['name', 'goal', 'startDate', 'endDate']),
+      ctx.service,
+    );
+    return NextResponse.json(presentSprint(updated));
+  },
+);
 
 /**
  * Copy only the keys a caller actually SUPPLIED.

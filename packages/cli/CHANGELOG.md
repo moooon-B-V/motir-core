@@ -11,6 +11,41 @@ that distinction, which this release makes visible for the first time.
 
 ---
 
+## 0.3.0
+
+**A refused command now names a PERMISSION, not a scope.** Motir retired the six
+coarse token scopes (`read`, `work_items:write`, `work_items:archive`,
+`work_items:delete`, `sprints:write`, `integration`) in favour of the permission
+catalog the rest of the product already enforces — the same `resource:action`
+names you see on **Settings → Project → Roles & permissions**. So a 403 that used
+to read
+
+    This token lacks the 'read' scope required for getMe.
+
+now reads
+
+    This token is not granted the 'project:browse' permission required for getMe.
+
+and the hint sends you to a switch that actually exists on the create-token
+screen.
+
+**What you may have to do.** Nothing, if your token still works — every token
+minted before this change keeps exactly the authority it had; Motir expands the
+old values when it reads them, and no token was reissued or rewritten. Two
+narrowings are worth knowing about if you mint a NEW token:
+
+- **AI planning is its own permission** (`ai:plan`). It used to travel with
+  _edit work items_, which meant a token wired to file issues could also submit
+  planning jobs that spend your credits. Tick it only if you want that.
+- **Archiving now needs the same permission as deleting** (`work_item:delete`),
+  because that is the gate the server has always applied to both. A token minted
+  with the default grant can no longer archive; tick the permission if you need
+  it.
+
+`motir login` is unchanged and still mints its own narrow grant.
+
+---
+
 ## 0.2.0
 
 **The CLI now speaks Motir's public REST API.** Every command is an ordinary

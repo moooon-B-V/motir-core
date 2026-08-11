@@ -199,7 +199,7 @@ describe('POST /api/v1/sprints/{sprintId}/start', () => {
     const roleRefusal = await action(START, member, sprint.id);
 
     expect(scopeRefusal.status).toBe(403);
-    expect(((await scopeRefusal.json()) as { code: string }).code).toBe('INSUFFICIENT_SCOPE');
+    expect(((await scopeRefusal.json()) as { code: string }).code).toBe('INSUFFICIENT_PERMISSION');
     expect(roleRefusal.status).toBe(403);
     expect(((await roleRefusal.json()) as { code: string }).code).toBe('NOT_SPRINT_ADMIN');
   });

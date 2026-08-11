@@ -1,7 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import type { ReferenceOperation } from '@/lib/apiDocs/reference';
 import { CodeBlock } from './CodeBlock';
-import { MethodPill, ScopePill, StatusPill } from './MethodPill';
+import { MethodPill, PermissionPill, StatusPill } from './MethodPill';
 import { ScrollableRegion, SCROLLABLE_REGION_FOCUS } from './ScrollableRegion';
 
 // One operation, as the reference renders it (Story 11.4 · Subtask 11.4.7 —
@@ -42,7 +42,7 @@ export async function OperationSection({ operation }: { operation: ReferenceOper
         <span className="font-mono text-[15px] font-semibold break-all text-(--el-text)">
           {operation.path}
         </span>
-        <ScopePill scope={operation.scope} />
+        <PermissionPill permission={operation.permission} />
       </div>
 
       <h2 className="mb-1 font-sans text-base font-semibold text-(--el-text)">

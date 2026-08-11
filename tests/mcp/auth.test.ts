@@ -5,6 +5,8 @@ import { verifyMcpToken } from '@/lib/mcp/auth';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 
 // MCP transport-level auth gate (Subtask 7.8.4) over real Postgres. `verifyMcpToken`
 // is the function `withMcpAuth` calls per request; returning `undefined` is what
@@ -31,6 +33,7 @@ describe('verifyMcpToken', () => {
     const fx = await makeWorkItemFixture();
     const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'claude-code',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
     });
 
     // Explicit bearer (as mcp-handler passes it)…
@@ -52,23 +55,48 @@ describe('verifyMcpToken', () => {
       ownerUserId: fx.ownerId,
       name: 'Second',
     });
-    const { token } = await apiTokensService.create(fx.ownerId, second.id, { label: 'second-ws' });
+    const { token } = await apiTokensService.create(fx.ownerId, second.id, {
+      label: 'second-ws',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
+    });
 
     const info = await verifyMcpToken(reqWithBearer(), token);
     expect(info?.extra).toMatchObject({ userId: fx.ownerId, workspaceId: second.id });
     expect((info?.extra as { workspaceId: string }).workspaceId).not.toBe(fx.workspaceId);
   });
 
-  it('carries the token’s granted scopes on AuthInfo.extra (Subtask 7.7.16)', async () => {
+  it('carries the token’s resolved GRANT on AuthInfo.extra (MOTIR-2576)', async () => {
     const fx = await makeWorkItemFixture();
+    const permissions = grantForLegacyScopes(['read', 'work_items:write']);
     const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'scoped',
-      scopes: ['read', 'work_items:write'],
+      permissions,
+      projectId: fx.projectId,
     });
 
     const info = await verifyMcpToken(reqWithBearer(), token);
-    const scopes = (info?.extra as { scopes?: string[] }).scopes ?? [];
-    expect([...scopes].sort()).toEqual(['read', 'work_items:write']);
+    const grant = (info?.extra as { grant?: string[] }).grant ?? [];
+    expect([...grant].sort()).toEqual([...permissions].sort());
+  });
+
+  it('carries an EXPANDED grant for a row written before MOTIR-2572', async () => {
+    // The seam the whole compatibility promise passes through: by the time the
+    // dispatch gate reads `extra`, a legacy scope string has already become the
+    // permissions it conferred — so no gate downstream ever sees one.
+    const fx = await makeWorkItemFixture();
+    const { token, dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
+      label: 'legacy',
+      fixedGrant: ['project:browse'],
+    });
+    await db.apiToken.update({
+      where: { id: dto.id },
+      data: { scopes: ['read', 'sprints:write'] },
+    });
+
+    const info = await verifyMcpToken(reqWithBearer(), token);
+    const grant = (info?.extra as { grant?: string[] }).grant ?? [];
+    expect([...grant].sort()).toEqual(['project:browse', 'sprint:manage'].sort());
+    expect(grant).not.toContain('read');
   });
 
   it('rejects an absent / malformed / unknown token (→ 401)', async () => {
@@ -81,6 +109,7 @@ describe('verifyMcpToken', () => {
     const fx = await makeWorkItemFixture();
     const { token, dto } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'revoked',
+      fixedGrant: DEFAULT_TOKEN_GRANT,
     });
     await apiTokensService.revoke(fx.ownerId, dto.id);
     expect(await verifyMcpToken(reqWithBearer(), token)).toBeUndefined();
@@ -91,6 +120,7 @@ describe('verifyMcpToken', () => {
     const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
       label: 'expired',
       expiresAt: new Date(Date.now() - 60_000),
+      fixedGrant: DEFAULT_TOKEN_GRANT,
     });
     expect(await verifyMcpToken(reqWithBearer(), token)).toBeUndefined();
   });

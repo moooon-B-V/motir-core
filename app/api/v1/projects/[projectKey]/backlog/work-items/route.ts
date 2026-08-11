@@ -23,21 +23,24 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // history.
 //
 // Atomicity and key resolution are the sibling route's, for the same reasons.
-export const POST = withV1Route<{ projectKey: string }>({ scope: 'sprints:write' }, async (ctx) => {
-  const body = await parseV1Body(ctx.req, membershipMoveBodySchema);
-  const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
+export const POST = withV1Route<{ projectKey: string }>(
+  { permission: 'sprint:manage' },
+  async (ctx) => {
+    const body = await parseV1Body(ctx.req, membershipMoveBodySchema);
+    const project = await projectsService.getByKey(ctx.params.projectKey, ctx.service);
 
-  const keys = body.workItemKeys.map((key) => key.toUpperCase());
-  // ⚠️ The cap is the SERVICE's, imported rather than re-stated, and applied
-  // HERE only so an over-cap request does not first pay for a 100-key
-  // resolution it was always going to be refused for. Same constant, same typed
-  // error, same message — this is an ordering choice, not a second rule.
-  if (keys.length > MAX_BULK_BATCH_SIZE) {
-    throw new BulkBatchTooLargeError(keys.length, MAX_BULK_BATCH_SIZE);
-  }
+    const keys = body.workItemKeys.map((key) => key.toUpperCase());
+    // ⚠️ The cap is the SERVICE's, imported rather than re-stated, and applied
+    // HERE only so an over-cap request does not first pay for a 100-key
+    // resolution it was always going to be refused for. Same constant, same typed
+    // error, same message — this is an ordering choice, not a second rule.
+    if (keys.length > MAX_BULK_BATCH_SIZE) {
+      throw new BulkBatchTooLargeError(keys.length, MAX_BULK_BATCH_SIZE);
+    }
 
-  const itemIds = await workItemsService.resolveIdentifiersToIds(project.id, keys, ctx.service);
+    const itemIds = await workItemsService.resolveIdentifiersToIds(project.id, keys, ctx.service);
 
-  const moved = await backlogService.bulkMoveToBacklog(itemIds, ctx.service);
-  return NextResponse.json(presentMembershipMove(moved));
-});
+    const moved = await backlogService.bulkMoveToBacklog(itemIds, ctx.service);
+    return NextResponse.json(presentMembershipMove(moved));
+  },
+);

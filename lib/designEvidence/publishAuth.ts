@@ -1,4 +1,5 @@
 import type { WorkItem } from '@/generated/prisma/client';
+import { DESIGN_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
 import {
   authenticateCiPublisher,
   resolveWorkItemByIdentifier,
@@ -6,7 +7,8 @@ import {
 
 // Shared gate for the design-publish routes (Story MOTIR-2664 · Subtask
 // MOTIR-2667): both the mint-token route and the register route authenticate the
-// CI caller (keyless GitHub OIDC first, else an `integration` PAT) and resolve
+// CI caller (keyless GitHub OIDC first, else a PAT granted
+// `DESIGN_PUBLISH_PERMISSION`) and resolve
 // the target work item within that caller's workspace — identically.
 //
 // ⚠️ It is deliberately SHORTER than the acceptance gate beside it, in two ways,
@@ -37,7 +39,7 @@ export async function authorizeDesignPublish(
   req: Request,
   identifier: string,
 ): Promise<DesignPublishGate | Response> {
-  const ctx = await authenticateCiPublisher(req);
+  const ctx = await authenticateCiPublisher(req, DESIGN_PUBLISH_PERMISSION);
   if (ctx instanceof Response) return ctx;
 
   const item = await resolveWorkItemByIdentifier(identifier, ctx);

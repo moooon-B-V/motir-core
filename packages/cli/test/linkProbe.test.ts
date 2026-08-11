@@ -5,7 +5,7 @@ import {
   CliError,
   IncompatibleServerError,
   NotFoundError,
-  ScopeError,
+  PermissionError,
 } from '../src/errors.js';
 
 // `motir link`'s ACCESS PROBE, at the one seam that matters: what it does with
@@ -107,7 +107,7 @@ describe('assertProjectAccessible', () => {
 
   it.each([
     ['an auth failure', new AuthError()],
-    ['a missing scope', new ScopeError('work_items:read', 'getProjectReadySet')],
+    ['a missing permission', new PermissionError('project:browse', 'getProjectReadySet')],
     [
       'a transport failure',
       new CliError('Could not reach https://app.motir.co: fetch failed.', {

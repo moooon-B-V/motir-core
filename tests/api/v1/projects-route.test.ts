@@ -111,15 +111,15 @@ describe('GET /api/v1/projects', () => {
     expect(body).not.toContain(caller.fixture.projectId);
   });
 
-  it('refuses a token without the read scope', async () => {
-    const caller = await createV1Caller({ scopes: ['integration'] });
+  it('refuses a token without project:browse', async () => {
+    const caller = await createV1Caller({ permissions: ['work_item:edit'] });
 
     const res = await GET_LIST(listReq(caller.headers));
 
     expect(res.status).toBe(403);
     expect(await res.json()).toEqual({
-      code: 'INSUFFICIENT_SCOPE',
-      error: expect.stringContaining('read'),
+      code: 'INSUFFICIENT_PERMISSION',
+      error: expect.stringContaining('project:browse'),
     });
   });
 
@@ -314,8 +314,8 @@ describe('GET /api/v1/projects/{projectKey}', () => {
     expect(res.status).toBe(404);
   });
 
-  it('refuses a token without the read scope', async () => {
-    const caller = await createV1ProjectCaller({ scopes: ['integration'] });
+  it('refuses a token without project:browse', async () => {
+    const caller = await createV1ProjectCaller({ permissions: ['work_item:edit'] });
 
     const res = await GET_ONE(oneReq(caller.headers, caller.projectKey), params(caller.projectKey));
 

@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkItem } from '@/generated/prisma/client';
+import type { TokenScope } from '@/lib/mcp/scopes';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
 import { truncateAuthTables } from './helpers/db';
@@ -63,10 +65,15 @@ function req(path: string, token: string | null, body: unknown, identifier: stri
 
 const params = (identifier: string) => ({ params: Promise.resolve({ id: identifier }) });
 
-async function integrationToken(f: WorkItemFixture, scopes: string[] = ['integration']) {
+/**
+ * A CI token. MOTIR-2576 moved the publish off the `integration` SCOPE onto the
+ * permission the operation actually asserts, so a token is minted with a GRANT;
+ * `grantForLegacyScopes` is the same bridge the acceptance route tests use.
+ */
+async function integrationToken(f: WorkItemFixture, scopes: TokenScope[] = ['integration']) {
   const { token } = await apiTokensService.create(f.ownerId, f.workspaceId, {
     label: 'ci',
-    scopes,
+    fixedGrant: grantForLegacyScopes(scopes),
   });
   return token;
 }
