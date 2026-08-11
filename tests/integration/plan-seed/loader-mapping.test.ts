@@ -31,7 +31,7 @@ function leaf(overrides: Partial<SeedItem> & Pick<SeedItem, 'id'>): SeedItem {
 }
 
 describe('mapTypeAndExecutor — plan `type` string → the WorkItemType enum (2.7.5)', () => {
-  it('maps every one of the ten enum members to itself, seeding the default executor', () => {
+  it('maps every one of the fourteen enum members to itself, seeding the default executor', () => {
     for (const type of WORK_ITEM_TYPES) {
       expect(mapTypeAndExecutor(leaf({ id: `x.${type}`, type }))).toEqual({
         type,
@@ -40,12 +40,35 @@ describe('mapTypeAndExecutor — plan `type` string → the WorkItemType enum (2
     }
   });
 
-  it('normalises the four richer/legacy plan-vocabulary aliases DOWN to the enum', () => {
-    // The plan vocabulary is wider than the ten enum members; these collapse in.
+  it('normalises the richer/legacy plan-vocabulary aliases DOWN to the enum', () => {
+    // The plan vocabulary is wider than the enum members; these collapse in.
+    // `spike` and `doc` are the TWO aliases ADR Amendment 1 (MOTIR-2629)
+    // declared — each shares an authoring bar with the member it names, which is
+    // why neither was admitted. `e2e` and `bug` are loader-local normalisations
+    // that predate it.
     expect(mapTypeAndExecutor(leaf({ id: 'a', type: 'e2e' })).type).toBe('test');
     expect(mapTypeAndExecutor(leaf({ id: 'b', type: 'spike' })).type).toBe('research');
-    expect(mapTypeAndExecutor(leaf({ id: 'c', type: 'copy' })).type).toBe('content');
+    expect(mapTypeAndExecutor(leaf({ id: 'c', type: 'doc' })).type).toBe('content');
     expect(mapTypeAndExecutor(leaf({ id: 'd', type: 'bug' })).type).toBe('code');
+  });
+
+  it('maps `copy` to ITSELF — Amendment 1 promoted it from alias to member', () => {
+    // The regression this pins: `copy` aliased to `content` for exactly as long
+    // as `content`'s ADR gloss read "Copy, docs, and translation". Amendment 1
+    // unpacked that bundle, so a plan leaf saying `copy` must now land on the
+    // `copy` member and NOT be folded into `content` — which is the whole defect
+    // MOTIR-2622 exists to fix, in the one place it had already been encoded.
+    expect(mapTypeAndExecutor(leaf({ id: 'e', type: 'copy' }))).toEqual({
+      type: 'copy',
+      executor: 'coding_agent',
+    });
+    expect(mapTypeAndExecutor(leaf({ id: 'f', type: 'translate' })).type).toBe('translate');
+    expect(mapTypeAndExecutor(leaf({ id: 'g', type: 'verification' })).type).toBe('verification');
+    // `legal` is the one admitted member that seeds a HUMAN executor.
+    expect(mapTypeAndExecutor(leaf({ id: 'h', type: 'legal' }))).toEqual({
+      type: 'legal',
+      executor: 'human',
+    });
   });
 
   it('seeds the executor from the type default when the leaf omits one', () => {
@@ -83,8 +106,10 @@ describe('mapTypeAndExecutor — plan `type` string → the WorkItemType enum (2
     expect(() => mapTypeAndExecutor(leaf({ id: '9.9.9', type: 'kode' }))).toThrowError(
       /work item 9\.9\.9 has an unknown type "kode"/,
     );
-    // the error names the allowed set so the fix is obvious
-    expect(() => mapTypeAndExecutor(leaf({ id: 'z', type: 'translate' }))).toThrowError(
+    // the error names the allowed set so the fix is obvious.
+    // NB `translate` used to be this example — MOTIR-2629 admitted it, so the
+    // stand-in has to be a string that is still genuinely outside the vocabulary.
+    expect(() => mapTypeAndExecutor(leaf({ id: 'z', type: 'transliterate' }))).toThrowError(
       /Allowed plan types:/,
     );
   });

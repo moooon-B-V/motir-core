@@ -428,11 +428,15 @@
       "design": "Design",
       "test": "Test",
       "content": "Content",
+      "copy": "Copy",
+      "translate": "Translate",
       "research": "Research",
       "review": "Review",
+      "verification": "Verification",
       "decision": "Decision",
       "deploy": "Deploy",
       "manual": "Manual",
+      "legal": "Legal",
       "chore": "Chore"
     },
     "executor": {
@@ -465,6 +469,12 @@
       "in_review": "In Review",
       "done": "Done",
       "cancelled": "Cancelled"
+    },
+    "workItemTypeGroup": {
+      "build": "Build",
+      "author": "Author",
+      "investigate": "Investigate",
+      "govern": "Govern & operate"
     }
   },
   "issues": {

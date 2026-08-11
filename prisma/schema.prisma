@@ -1936,11 +1936,15 @@ enum WorkItemType {
   design
   test
   content
+  copy
+  translate
   research
   review
+  verification
   decision
   deploy
   manual
+  legal
   chore
 
   @@map("work_item_type")

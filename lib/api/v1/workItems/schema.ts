@@ -103,11 +103,15 @@ const WORK_ITEM_TYPES = [
   'design',
   'test',
   'content',
+  'copy',
+  'translate',
   'research',
   'review',
+  'verification',
   'decision',
   'deploy',
   'manual',
+  'legal',
   'chore',
 ] as const satisfies readonly WorkItemTypeDto[];
 const _typesTotal: AssertTotal<WorkItemTypeDto, (typeof WORK_ITEM_TYPES)[number]> = true;

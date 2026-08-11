@@ -20,21 +20,38 @@ import type { ExecutorDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/wo
 // parentValidation.test.ts convention) so these tests pin the 2.7.2 ADR's
 // contract rather than mirror the code.
 
-/** The ten members, in the canonical order the 2.7.2 ADR froze. */
+/**
+ * The fourteen members, in the canonical order the 2.7.2 ADR froze and its
+ * Amendment 1 (MOTIR-2629) extended. Transcribed from the amendment's §1b list,
+ * NOT copied from `WORK_ITEM_TYPES` — the point of this file is to pin the ADR's
+ * contract independently of the code that implements it.
+ *
+ * The four admitted members sit beside the neighbour the amendment named, so the
+ * original ten keep their relative order exactly. `doc` and `spike` are NOT here:
+ * Amendment 1 declared them aliases of `content` and `research`.
+ */
 const EXPECTED_TYPES: readonly WorkItemTypeDto[] = [
   'code',
   'design',
   'test',
   'content',
+  'copy',
+  'translate',
   'research',
   'review',
+  'verification',
   'decision',
   'deploy',
   'manual',
+  'legal',
   'chore',
 ];
 
-/** The type→executor default map, transcribed independently from the ADR §3 table. */
+/**
+ * The type→executor default map, transcribed independently from the ADR §3
+ * table as extended by Amendment 1 §3a. `legal` is the only admitted member that
+ * is always-HUMAN — a binding artifact ends in a signature.
+ */
 const EXPECTED_DEFAULTS: Record<WorkItemTypeDto, ExecutorDto> = {
   code: 'coding_agent',
   test: 'coding_agent',
@@ -42,17 +59,21 @@ const EXPECTED_DEFAULTS: Record<WorkItemTypeDto, ExecutorDto> = {
   manual: 'human',
   decision: 'human',
   review: 'human',
+  legal: 'human',
   design: 'coding_agent',
   content: 'coding_agent',
+  copy: 'coding_agent',
+  translate: 'coding_agent',
   research: 'coding_agent',
+  verification: 'coding_agent',
   chore: 'coding_agent',
 };
 
 const ALL_KINDS: readonly WorkItemKindDto[] = ['epic', 'story', 'task', 'bug', 'subtask'];
 const EXPECTED_TYPEABLE: ReadonlySet<WorkItemKindDto> = new Set(['task', 'subtask', 'bug']);
 
-describe('WORK_ITEM_TYPES — the fixed ten-member enum', () => {
-  it('is exactly the ten members in the canonical ADR order', () => {
+describe('WORK_ITEM_TYPES — the fixed fourteen-member enum', () => {
+  it('is exactly the fourteen members in the canonical ADR order', () => {
     expect([...WORK_ITEM_TYPES]).toEqual(EXPECTED_TYPES);
   });
 

@@ -29,23 +29,34 @@ export type WorkItemPlanningSourceDto = 'native' | 'mcp' | 'manual' | 'api';
 export type WorkItemImplementationSourceDto = 'hosted' | 'byok' | 'manual';
 /**
  * The work-item TYPE — the NATURE of executable work (Story 2.7). A FIXED
- * ten-member set, in the canonical order the 2.7.2 ADR
- * (docs/decisions/work-item-type-taxonomy.md) froze, mirroring the
- * `WorkItemType` Prisma enum 1:1. DISTINCT from `kind`; carried only on
- * executable leaves (task / subtask / bug) — epics/stories + legacy rows are
- * `null`. Fixed (not free text) so Story 7.6's per-type prompt generator is a
- * TOTAL function over it and the 2.7.6 filter facet is a closed set.
+ * FOURTEEN-member set, in the canonical order the 2.7.2 ADR
+ * (docs/decisions/work-item-type-taxonomy.md) froze and its **Amendment 1**
+ * (MOTIR-2629) extended, mirroring the `WorkItemType` Prisma enum 1:1.
+ * DISTINCT from `kind`; carried only on executable leaves (task / subtask /
+ * bug) — epics/stories + legacy rows are `null`. Fixed (not free text) so
+ * Story 7.6's per-type prompt generator is a TOTAL function over it and the
+ * 2.7.6 filter facet is a closed set.
+ *
+ * Amendment 1 admitted `copy` / `translate` / `legal` / `verification` and
+ * declared `doc` an alias of `content` and `spike` an alias of `research` —
+ * neither alias is a member. It also NARROWED `content` to documentation and
+ * authored long-form material, with a precedence rule: when a card fits
+ * `copy`, `translate` or `legal`, the specific member wins over `content`.
  */
 export type WorkItemTypeDto =
   | 'code'
   | 'design'
   | 'test'
   | 'content'
+  | 'copy'
+  | 'translate'
   | 'research'
   | 'review'
+  | 'verification'
   | 'decision'
   | 'deploy'
   | 'manual'
+  | 'legal'
   | 'chore';
 /**
  * WHO executes a piece of work (Story 2.7) — mirrors the `Executor` Prisma

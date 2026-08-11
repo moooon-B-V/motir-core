@@ -2518,6 +2518,21 @@
   --el-type-manual: var(--color-stone); /* stone  — human provisioning */
   --el-type-chore: var(--color-slate); /* slate  — housekeeping */
 
+  /* The four members ADR Amendment 1 (MOTIR-2629) admitted, per MOTIR-2631's
+     design (design/work-items/design-notes.md, "Q2"). The block above spent
+     ALL SEVEN mutually distinct saturated hues and all three greys at ten
+     members, and there is no eighth — inventing one is forbidden. So each
+     newcomer POINTS AT the Tier-0 hue of the member the amendment named as its
+     NEAREST NEIGHBOUR, and the GLYPH carries the difference (the chip renders
+     its label too, so hue was never the sole carrier — finding #35).
+     Each keeps its OWN token so a future palette can split them without
+     touching a component, and so WORK_ITEM_TYPE_META's per-member `hueVar`
+     shape holds. Hue names the FAMILY; the glyph names the member. */
+  --el-type-copy: var(--color-accent-teal); /* teal   — with content (Author) */
+  --el-type-translate: var(--color-accent-teal); /* teal   — with content (Author) */
+  --el-type-verification: var(--color-accent-orange); /* orange — with review (Investigate) */
+  --el-type-legal: var(--color-charcoal); /* ink    — with decision (Govern) */
+
   /* ── Chart series (Story 4.6 · the reusable viz Story 6.3 reuses) ──
      Every chart colour routes through one of these, NEVER a raw --color-*
      in chart code (the per-component growth pattern). They map to Tier-0
