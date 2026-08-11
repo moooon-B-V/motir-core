@@ -66,6 +66,9 @@ import type { ActorPermissionsDTO, RoleCatalogDTO } from '@/lib/dto/permissions'
 export interface AccessActorContext {
   userId: string;
   workspaceId: string;
+  /** See {@link ServiceContext.tokenProjectId} — the acting token's project
+   *  binding, enforced in {@link resolveInputs}. */
+  tokenProjectId?: string;
 }
 
 /**
@@ -88,6 +91,20 @@ async function resolveInputs(
   // them invisible under the non-bypass role and turn a member into a 404.
   if (!tx) return withWorkspaceContext(ctx, (t) => resolveInputs(projectId, ctx, t));
 
+  // ⚠️ THE TOKEN'S PROJECT BINDING, enforced here and nowhere else (MOTIR-2607).
+  // This function is the one place a project id meets an actor — every
+  // `assertCanBrowse` / `assertCanEdit` / `assertPermission` / `getPermissions`
+  // / `filterBrowsable` in the product resolves through it — so the two bearer
+  // seams inherit the check without either re-implementing it, and no route has
+  // to remember to ask.
+  //
+  // The refusal is NOT-FOUND, deliberately. "Forbidden" would confirm the other
+  // project exists, turning a deliberately narrowed credential into an oracle
+  // for enumerating a workspace; it is indistinguishable here from the
+  // cross-tenant case immediately below, which is the point.
+  if (ctx.tokenProjectId !== undefined && ctx.tokenProjectId !== projectId) {
+    throw new ProjectNotFoundError(projectId);
+  }
   const project = await projectRepository.findById(projectId, tx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
     throw new ProjectNotFoundError(projectId);

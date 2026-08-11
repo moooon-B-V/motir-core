@@ -4,6 +4,8 @@ import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
 import { truncateAuthTables } from './helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import type { TokenScope } from '@/lib/mcp/scopes';
 
 // POST /api/work-items/[id]/acceptance-evidence/upload-token (MOTIR-1681) — mint
 // scoped client upload tokens so CI uploads the acceptance video DIRECTLY to
@@ -60,10 +62,10 @@ function tokenReq(
   );
 }
 
-async function integrationToken(fx: WorkItemFixture, scopes: string[] = ['integration']) {
+async function integrationToken(fx: WorkItemFixture, scopes: TokenScope[] = ['integration']) {
   const { token } = await apiTokensService.create(fx.ownerId, fx.workspaceId, {
     label: 'ci',
-    scopes,
+    fixedGrant: grantForLegacyScopes(scopes),
   });
   return token;
 }

@@ -26,10 +26,10 @@ import {
   V1_RESOURCE_COMPONENTS,
   v1OperationIds,
 } from '@/lib/api/v1/openapi/registry';
-import { V1_SCOPE_EXTENSION, V1_SECURITY_SCHEME_NAME } from '@/lib/api/v1/openapi/security';
+import { V1_PERMISSION_EXTENSION, V1_SECURITY_SCHEME_NAME } from '@/lib/api/v1/openapi/security';
 import { isV1ErrorStatus, isV1Status } from '@/lib/api/v1/openapi/statuses';
 import { workItemSummarySchema } from '@/lib/api/v1/workItems/schema';
-import { declaredScopeByMethod } from '../../helpers/v1RouteAudit';
+import { declaredPermissionByMethod } from '../../helpers/v1RouteAudit';
 
 // The operation registry + the OpenAPI 3.1 emitter (Story 11.4 · Subtask 11.4.4
 // — MOTIR-2185).
@@ -125,9 +125,9 @@ describe('the registry against the SHIPPED route tree', () => {
     // reconciled. A mismatch here is a document that lies about a permission.
     for (const operation of V1_OPERATIONS) {
       const source = readFileSync(join(REPO_ROOT, routeFileFor(operation.path)), 'utf8');
-      const declared = declaredScopeByMethod(source).get(operation.method);
+      const declared = declaredPermissionByMethod(source).get(operation.method);
       expect(declared, `${operation.method} ${operation.path} declares no readable scope`).toBe(
-        operation.scope,
+        operation.permission,
       );
     }
   });
@@ -192,7 +192,7 @@ describe('the emitted document', () => {
     >;
     for (const operation of V1_OPERATIONS) {
       const emitted = paths[operation.path]?.[operation.method.toLowerCase()] ?? {};
-      expect(emitted[V1_SCOPE_EXTENSION], operation.operationId).toBe(operation.scope);
+      expect(emitted[V1_PERMISSION_EXTENSION], operation.operationId).toBe(operation.permission);
       expect(emitted['security']).toEqual([{ [V1_SECURITY_SCHEME_NAME]: [] }]);
       const parameters = (emitted['parameters'] ?? []) as { name: string }[];
       expect(parameters.map((p) => p.name)).toEqual(operation.parameters.map((p) => p.name));
@@ -462,7 +462,7 @@ describe('the operation TYPE refuses an incomplete declaration', () => {
         operationId: 'x',
         summary: 's',
         description: 'd',
-        scope: 'read',
+        permission: 'project:browse',
         parameters: [],
         errorStatuses: [],
       });
@@ -473,7 +473,7 @@ describe('the operation TYPE refuses an incomplete declaration', () => {
         operationId: 'x',
         summary: 's',
         description: 'd',
-        scope: 'read',
+        permission: 'project:browse',
         parameters: [],
         response: { status: 200, body: { kind: 'empty' }, description: 'd' },
         // @ts-expect-error — 418 is not in the error-status vocabulary.

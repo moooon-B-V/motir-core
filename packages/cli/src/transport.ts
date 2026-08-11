@@ -15,7 +15,7 @@ import {
   NotFoundError,
   RateLimitError,
   ResponseShapeError,
-  ScopeError,
+  PermissionError,
 } from './errors.js';
 
 // The `/api/v1` TRANSPORT CORE (Story 11.5 · Subtask 11.5.3 — MOTIR-2211),
@@ -365,7 +365,7 @@ export class V1Transport {
     if (response.status === 401) return new AuthError();
 
     if (response.status === 403) {
-      return new ScopeError(V1_OPERATIONS[operationId].scope, operationId);
+      return new PermissionError(V1_OPERATIONS[operationId].permission, operationId);
     }
 
     if (response.status === 429) {

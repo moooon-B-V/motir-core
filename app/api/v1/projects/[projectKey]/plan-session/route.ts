@@ -26,7 +26,7 @@ import { planChangeSessionsService } from '@/lib/services/planChangeSessionsServ
 // 200, never 201: the caller cannot tell an open from a resume, and the service
 // itself only knows which after it answers — a 201 would be a lie half the time.
 
-export const POST = withV1Route<{ projectKey: string }>({ scope: 'read' }, async (ctx) => {
+export const POST = withV1Route<{ projectKey: string }>({ permission: 'ai:plan' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, planSessionScopeBodySchema);
   const { pctx, scope } = await resolvePlanScope(
     ctx.params.projectKey,

@@ -27,17 +27,20 @@ import { workItemsService } from '@/lib/services/workItemsService';
 //
 // IDEMPOTENT: the service raises no already-archived error, it simply re-stamps.
 // Said here rather than inventing a conflict status the service does not produce.
-export const POST = withV1Route<{ key: string }>({ scope: 'work_items:archive' }, async (ctx) => {
-  const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
-  const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
+export const POST = withV1Route<{ key: string }>(
+  { permission: 'work_item:delete' },
+  async (ctx) => {
+    const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
+    const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
 
-  await workItemsService.unarchiveWorkItem(item.id, ctx.service);
+    await workItemsService.unarchiveWorkItem(item.id, ctx.service);
 
-  const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
-  const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
-  ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
-  const childEdges = await readChildDependencyEdges(detail, ctx.service);
-  return NextResponse.json(
-    presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
-  );
-});
+    const detail = await workItemsService.getIssueDetail(projectId, identifier, ctx.service);
+    const counts = await commentsService.getCommentCountsForItems([detail.item.id], ctx.service);
+    ctx.responseHeaders.set('ETag', encodeWorkItemETag(detail.item.updatedAt));
+    const childEdges = await readChildDependencyEdges(detail, ctx.service);
+    return NextResponse.json(
+      presentWorkItemDetail(detail, commentCountFor(counts, detail.item.id), childEdges),
+    );
+  },
+);

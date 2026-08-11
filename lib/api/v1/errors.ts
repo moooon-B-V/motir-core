@@ -66,14 +66,14 @@ export class UnauthenticatedError extends ApiV1Error {
  * validity) and never a 200 with an empty body: a silent empty result would
  * make a permission problem look like missing data.
  */
-export class InsufficientScopeError extends ApiV1Error {
-  constructor(requiredScope: string) {
+export class InsufficientPermissionError extends ApiV1Error {
+  constructor(requiredPermission: string) {
     super(
-      'INSUFFICIENT_SCOPE',
+      'INSUFFICIENT_PERMISSION',
       403,
-      `This token lacks the '${requiredScope}' scope required for this operation.`,
+      `This token is not granted the '${requiredPermission}' permission required for this operation.`,
     );
-    this.name = 'InsufficientScopeError';
+    this.name = 'InsufficientPermissionError';
   }
 }
 
@@ -203,9 +203,9 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
 
   // 11.3.5 (MOTIR-2062) — the sprint write pair.
   //
-  // ⚠️ 403, and DELIBERATELY a different `code` from `INSUFFICIENT_SCOPE`. Every
+  // ⚠️ 403, and DELIBERATELY a different `code` from `INSUFFICIENT_PERMISSION`. Every
   // sprint write calls `assertSprintAdmin`, so a token that DOES carry
-  // `sprints:write` is still refused when its OWNER is an ordinary project
+  // `sprint:manage` is still refused when its OWNER is an ordinary project
   // member — a scope narrows the owner's role and never widens it (ADR §3).
   // "My token has the scope and I still get 403" is the single most confusing
   // thing this endpoint can do to an integrator, and a shared code would leave
@@ -214,7 +214,7 @@ export const DOMAIN_ERROR_STATUS: Readonly<Record<string, V1ErrorStatus>> = Obje
 
   // MOTIR-2291 — the shared permission gate's 403: `PermissionDeniedError`,
   // raised by `projectAccessService.assertPermission` for a BROWSER who does not
-  // hold the key. Same 403-not-INSUFFICIENT_SCOPE reasoning as the row above, and the same
+  // hold the key. Same 403-not-INSUFFICIENT_PERMISSION reasoning as the row above, and the same
   // fix on the caller's side (a role change, never a new token) — but the message
   // NAMES the missing key, so it is a distinct code rather than a second alias.
   // A NON-browser never produces it: the gate raises the 404 first.

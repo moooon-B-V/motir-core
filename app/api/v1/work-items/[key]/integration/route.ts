@@ -33,7 +33,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 // not `integration` is refused here, and that refusal is asserted: a bleed would
 // make the scope decorative.
 
-export const POST = withV1Route<{ key: string }>({ scope: 'integration' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, integrationBodySchema);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);

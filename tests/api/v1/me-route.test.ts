@@ -3,11 +3,12 @@ import { GET } from '@/app/api/v1/me/route';
 import { REQUEST_ID_HEADER } from '@/lib/api/v1/route';
 import { createV1Caller, withTokenFor } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
 // GET /api/v1/me (Story 11.1 · Subtask 11.1.2 — MOTIR-1858). Real Postgres,
 // real PATs. The wrapper's own branches are covered in `wrapper.test.ts`
 // against a fixture route; this file asserts the ENDPOINT's contract — the
-// identity payload, the granted scopes, and that no Prisma column leaks.
+// identity payload, the granted PERMISSIONS, and that no Prisma column leaks.
 
 const URL = 'http://localhost:3000/api/v1/me';
 
@@ -20,31 +21,42 @@ describe('GET /api/v1/me', () => {
     await truncateAuthTables();
   });
 
-  it("returns the token owner's identity, bound workspace and granted scopes", async () => {
+  it("returns the token owner's identity, bound workspace and granted permissions", async () => {
     const caller = await createV1Caller({ scopes: ['read', 'work_items:write'] });
 
     const res = await GET(req(caller.headers));
 
     expect(res.status).toBe(200);
-    await expect(res.json()).resolves.toEqual({
-      user: { id: caller.user.id, name: caller.user.name, email: caller.user.email },
-      workspaceId: caller.workspace.id,
-      scopes: ['read', 'work_items:write'],
+    const body = (await res.json()) as {
+      user: { id: string; name: string; email: string };
+      workspaceId: string;
+      permissions: string[];
+    };
+    expect(body.user).toEqual({
+      id: caller.user.id,
+      name: caller.user.name,
+      email: caller.user.email,
     });
+    expect(body.workspaceId).toBe(caller.workspace.id);
+    // Compared as a SET: the wire order is the catalog's, which is a property of
+    // the catalog rather than of this response.
+    expect([...body.permissions].sort()).toEqual(
+      grantForLegacyScopes(['read', 'work_items:write']).sort(),
+    );
   });
 
-  // The scopes are what a client uses to discover its own capabilities without
+  // The grant is what a client uses to discover its own capabilities without
   // probing endpoints for 403s — so a NARROWER token must report the narrower
   // grant, not the default set.
   it('reports the token’s ACTUAL grant, not a default', async () => {
     const caller = await createV1Caller({ scopes: ['read'] });
 
-    const body = (await (await GET(req(caller.headers))).json()) as { scopes: string[] };
+    const body = (await (await GET(req(caller.headers))).json()) as { permissions: string[] };
 
-    expect(body.scopes).toEqual(['read']);
+    expect(body.permissions).toEqual(['project:browse']);
   });
 
-  it('scopes the answer to the TOKEN, not the user — two tokens, two workspaces', async () => {
+  it('binds the answer to the TOKEN, not the user — two tokens, two workspaces', async () => {
     const first = await createV1Caller({ workspaceName: 'Alpha' });
     // The same user, a second workspace, a second token bound to it.
     const secondWorkspace = await createV1Caller({
@@ -70,7 +82,7 @@ describe('GET /api/v1/me', () => {
     // Shaped by `presentMe` (MOTIR-2202), so a later migration adding a column
     // to `user` cannot silently make it public API. Asserted on the REAL
     // response the route returned, not on a fixture built from the schema.
-    expect(Object.keys(body).sort()).toEqual(['scopes', 'user', 'workspaceId']);
+    expect(Object.keys(body).sort()).toEqual(['permissions', 'user', 'workspaceId']);
     expect(Object.keys(body.user).sort()).toEqual(['email', 'id', 'name']);
   });
 

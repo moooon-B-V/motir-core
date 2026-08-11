@@ -90,7 +90,7 @@ describe('the docs surface is PUBLIC by construction', () => {
 });
 
 describe('an operation section', () => {
-  it('shows the method, path, scope, parameters, example and every status', async () => {
+  it('shows the method, path, permission, parameters, example and every status', async () => {
     const { OperationSection } = await import('@/app/(public)/docs/_components/OperationSection');
     const { toReferenceOperation } = await import('@/lib/apiDocs/reference');
     const { findV1Operation } = await import('@/lib/api/v1/openapi/registry');
@@ -106,7 +106,7 @@ describe('an operation section', () => {
     // The verb is abbreviated for width but its full name stays in the
     // accessible tree, so a screen reader is not handed a truncation.
     expect(scope.getAllByText('PATCH').length).toBeGreaterThan(0);
-    expect(scope.getByText('work_items:write')).toBeTruthy();
+    expect(scope.getByText('work_item:edit')).toBeTruthy();
     // A conditional-header parameter, a request body, and the example.
     expect(scope.getByText('If-Match')).toBeTruthy();
     expect(scope.getByText(/curl -X PATCH/)).toBeTruthy();

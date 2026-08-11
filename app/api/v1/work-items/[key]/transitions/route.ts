@@ -31,7 +31,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 
 const transitionBodySchema = z.object({ status: z.string().min(1) }).strict();
 
-export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) => {
+export const GET = withV1Route<{ key: string }>({ permission: 'project:browse' }, async (ctx) => {
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);
   const workflow = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
@@ -42,7 +42,7 @@ export const GET = withV1Route<{ key: string }>({ scope: 'read' }, async (ctx) =
   return NextResponse.json({ transitions: presentTransitionTargets(workflow, item.status) });
 });
 
-export const POST = withV1Route<{ key: string }>({ scope: 'work_items:write' }, async (ctx) => {
+export const POST = withV1Route<{ key: string }>({ permission: 'work_item:edit' }, async (ctx) => {
   const body = await parseV1Body(ctx.req, transitionBodySchema);
   const { projectId, identifier } = await resolveWorkItemKey(ctx.params.key, ctx.service);
   const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx.service);

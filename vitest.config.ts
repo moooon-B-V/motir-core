@@ -336,6 +336,29 @@ export default defineConfig({
         'lib/mappers/apiTokenMappers.ts',
         'lib/apiTokens/token.ts',
         'lib/apiTokens/errors.ts',
+
+        // Story MOTIR-2572 · Subtask MOTIR-2585 (the story gate) — what a token
+        // GRANTS, and the surfaces that offer and render it. This story replaced
+        // the six 7.7-era scope strings with the MOTIR-2254 permission catalog,
+        // and none of the code that does it was in the coverage report before.
+        //
+        // GATED, not report-only: every file here is new in this story (or, for
+        // `scopes.ts`, reduced to the legacy-expansion table this story wrote),
+        // so there is no pre-existing number that a 90 would retroactively
+        // gate — the honest-sequence caveat the blocks above give does not
+        // apply. All eight were MEASURED at or above the floor before being
+        // pinned; the lowest is `CreateTokenModal.tsx` at 90.9% branches.
+        //
+        // ⚠️ `app/**/`, NOT `app/(authed)/` — the route-group parentheses are
+        // extglob syntax to the matcher, so a literal path silently matches
+        // nothing (MOTIR-2449).
+        'lib/tokens/grant.ts',
+        'lib/mcp/toolPermissions.ts',
+        'lib/mcp/permissionGate.ts',
+        'lib/mcp/scopes.ts',
+        'app/**/settings/account/_components/permissionMeta.tsx',
+        'app/**/settings/account/_components/CreateTokenModal.tsx',
+        'app/**/settings/account/_components/apiTokensClient.ts',
         // Story 7.2 (AI infrastructure) · Subtask 7.2.11 — the org cost
         // dashboard read service: the 6.10.4 access gate + the server-side
         // scope narrowing (an admin's validated drill, a member locked to
@@ -1512,6 +1535,27 @@ export default defineConfig({
         'lib/mappers/apiTokenMappers.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/apiTokens/token.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/apiTokens/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2572 · Subtask MOTIR-2585 — the permission GRANT and the
+        // surfaces that offer it. Measured on this branch before pinning.
+        'lib/tokens/grant.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/toolPermissions.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/permissionGate.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/mcp/scopes.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/**/settings/account/_components/permissionMeta.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/settings/account/_components/CreateTokenModal.tsx': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/settings/account/_components/apiTokensClient.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // Story 7.7 · Subtask 7.7.12 — the MCP registry + every tool module.
         'lib/mcp/registry.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/mcp/tools/getWorkItem.ts': { branches: 90, functions: 90, lines: 90 },

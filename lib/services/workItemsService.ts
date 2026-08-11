@@ -2036,22 +2036,30 @@ export const workItemsService = {
    * pull request); this says only what built the work. "What built this" and
    * "where is it integrated" are independent facts that used to share one write.
    *
-   * Gated exactly like the mutation routes: tenant check + browse gate through
-   * `getWorkItem`, so a cross-tenant key 404s before anything is written.
+   * Gated exactly like the mutation routes: `getWorkItem` does the tenant check
+   * + browse gate (so a cross-tenant key 404s before anything is written), and
+   * `assertCanEdit` then gates the WRITE on `work_item:edit` — the same key
+   * `markIntegrated` and `completeSession` reach through
+   * `applyStatusTransition`. It was `getWorkItem` alone until MOTIR-2603, i.e. a
+   * read permission gating a write: a browse-only actor could stamp
+   * `implementationSource` / `harness` / `model` on any item they could see. The
+   * edit assert runs INSIDE the transaction, threaded the same `tx` as the
+   * write, so the gate reads the state the write commits against.
    */
   async reportImplementation(
     workItemId: string,
     ctx: ServiceContext,
     implementation: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
-    await workItemsService.getWorkItem(workItemId, ctx);
-    const row = await db.$transaction((tx) =>
-      workItemsService.recordImplementationProvenance(
+    const item = await workItemsService.getWorkItem(workItemId, ctx);
+    const row = await db.$transaction(async (tx) => {
+      await projectAccessService.assertCanEdit(item.projectId, ctx, tx);
+      return workItemsService.recordImplementationProvenance(
         workItemId,
         { source: implementation.source ?? 'byok', ...implementation },
         tx,
-      ),
-    );
+      );
+    });
     return toWorkItemDto(row);
   },
 

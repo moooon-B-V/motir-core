@@ -40,7 +40,7 @@ let server: McpTestServer;
  *  Story 11.1 ships no parameterised resource endpoint, so this is the only
  *  way to drive the 404-not-403 mapping END TO END rather than in-process. */
 const crossTenantFixture = {
-  GET: withV1Route({ scope: 'read' }, async () => {
+  GET: withV1Route({ permission: 'project:browse' }, async () => {
     throw Object.assign(new Error('You are not a member of this workspace.'), {
       code: 'NOT_A_MEMBER',
     });
@@ -49,7 +49,7 @@ const crossTenantFixture = {
 
 /** A fixture route that faults, to prove a 500 leaks nothing over the wire. */
 const faultingFixture = {
-  GET: withV1Route({ scope: 'read' }, async () => {
+  GET: withV1Route({ permission: 'project:browse' }, async () => {
     throw new Error(
       'Invalid `db.workspace.findMany()` invocation: connection refused at 10.0.0.4:5432',
     );
@@ -58,7 +58,7 @@ const faultingFixture = {
 
 /** A route the token's scope will never satisfy — the 403 probe. */
 const writeOnlyFixture = {
-  GET: withV1Route({ scope: 'sprints:write' }, async () => NextResponse.json({ ok: true })),
+  GET: withV1Route({ permission: 'sprint:manage' }, async () => NextResponse.json({ ok: true })),
 };
 
 beforeAll(async () => {
@@ -110,13 +110,13 @@ describe('/api/v1 conformance — the documented client journey, over a real soc
       await workspacesService.createWorkspace({ name: `J${i}`, ownerUserId: caller.user.id });
     }
 
-    // ── 2. GET /api/v1/me → 200, correct identity + granted scopes ────────
+    // ── 2. GET /api/v1/me → 200, correct identity + granted permissions ──
     const me = await call('/api/v1/me', caller.token);
     expect(me.status).toBe(200);
     expect(await me.json()).toEqual({
       user: { id: caller.user.id, name: caller.user.name, email: caller.user.email },
       workspaceId: caller.workspace.id,
-      scopes: ['read'],
+      permissions: ['project:browse'],
     });
     // The headers reached a CLIENT, not just an object in the process.
     expect(me.headers.get('x-request-id')).toBeTruthy();
@@ -173,7 +173,7 @@ describe('/api/v1 conformance — the documented client journey, over a real soc
     const forbidden = await call('/api/v1/_fixture/write-only', caller.token);
     expect(forbidden.status).toBe(403);
     const forbiddenBody = (await forbidden.json()) as { code: string; error: string };
-    expect(forbiddenBody.code).toBe('INSUFFICIENT_SCOPE');
+    expect(forbiddenBody.code).toBe('INSUFFICIENT_PERMISSION');
     expect(forbiddenBody.error).not.toMatch(/prisma|sql|stack|\/lib\//i);
 
     // ── 6. A malformed cursor → 422 with a code ───────────────────────────

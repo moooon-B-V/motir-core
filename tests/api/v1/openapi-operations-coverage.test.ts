@@ -8,7 +8,7 @@ import { V1_OPERATIONS, findV1Operation } from '@/lib/api/v1/openapi/registry';
 import { meSchema, workspaceSummarySchema } from '@/lib/api/v1/identity/schema';
 import { v1PageEnvelopeSchema } from '@/lib/api/v1/openapi/envelopes';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
-import { declaredScopeByMethod, v1RouteFiles } from '../../helpers/v1RouteAudit';
+import { declaredPermissionByMethod, v1RouteFiles } from '../../helpers/v1RouteAudit';
 import { createV1Caller, type V1Caller } from '../../fixtures/apiV1Fixtures';
 import { truncateAuthTables } from '../../helpers/db';
 
@@ -17,7 +17,7 @@ import { truncateAuthTables } from '../../helpers/db';
 //
 // The card refused to carry its own list of endpoints, and so does this suite:
 // it WALKS `app/api/v1` with the shipped `v1RouteFiles()` and reads each
-// exported verb's scope with the shipped `declaredScopeByMethod()`. A list of
+// exported verb's scope with the shipped `declaredPermissionByMethod()`. A list of
 // what exists today is wrong the first time someone adds an endpoint; an
 // instruction to go and look stays correct.
 //
@@ -39,12 +39,22 @@ function pathTemplateFor(routeFile: string): string {
 }
 
 /** Every (method, path) the shipped route tree actually exports. */
-function shippedRouteMethods(): { method: string; path: string; file: string; scope?: string }[] {
-  const found: { method: string; path: string; file: string; scope?: string }[] = [];
+function shippedRouteMethods(): {
+  method: string;
+  path: string;
+  file: string;
+  permission?: string;
+}[] {
+  const found: { method: string; path: string; file: string; permission?: string }[] = [];
   for (const file of v1RouteFiles(REPO_ROOT)) {
     const source = readFileSync(join(REPO_ROOT, file), 'utf8');
-    for (const [method, scope] of declaredScopeByMethod(source)) {
-      found.push({ method, path: pathTemplateFor(file), file, ...(scope ? { scope } : {}) });
+    for (const [method, permission] of declaredPermissionByMethod(source)) {
+      found.push({
+        method,
+        path: pathTemplateFor(file),
+        file,
+        ...(permission ? { permission } : {}),
+      });
     }
   }
   return found;
@@ -73,17 +83,17 @@ describe('every shipped /api/v1 route method has a declared operation', () => {
     expect(v1RouteFiles(REPO_ROOT).some((f) => f.includes('openapi'))).toBe(false);
   });
 
-  it('declares the scope each route file ACTUALLY declares to withV1Route', () => {
+  it('declares the permission each route file ACTUALLY declares to withV1Route', () => {
     for (const route of shippedRouteMethods()) {
       const operation = findV1Operation(route.method, route.path);
       expect(operation, `${route.method} ${route.path} undocumented`).toBeDefined();
-      // `undefined` here means the route exports a verb whose scope could not be
-      // read — a hole the audit deliberately surfaces rather than skipping.
+      // `undefined` here means the route exports a verb whose permission could
+      // not be read — a hole the audit deliberately surfaces rather than skipping.
       expect(
-        route.scope,
-        `${route.file} exports ${route.method} with no readable scope`,
+        route.permission,
+        `${route.file} exports ${route.method} with no readable permission`,
       ).toBeDefined();
-      expect(operation?.scope, `${route.method} ${route.path}`).toBe(route.scope);
+      expect(operation?.permission, `${route.method} ${route.path}`).toBe(route.permission);
     }
   });
 
@@ -171,7 +181,9 @@ describe('the identity schemas describe what the REAL routes return', () => {
     const parsed = meSchema.parse(body);
     expect(parsed.workspaceId).toBe(caller.workspace.id);
     expect(parsed.user.id).toBe(caller.user.id);
-    expect(parsed.scopes).toEqual(['read']);
+    // The fixture mints a browse-only grant, and /api/v1/me publishes the
+    // GRANT now — the same vocabulary as `x-motir-permission` and the 403s.
+    expect(parsed.permissions).toEqual(['project:browse']);
   });
 
   it('GET /api/v1/workspaces returns rows exactly as `workspaceSummarySchema` declares', async () => {

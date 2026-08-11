@@ -1,6 +1,5 @@
 import { getTranslations } from 'next-intl/server';
 import { docsPageMetadata } from '@/lib/apiDocs/pageMetadata';
-import { TOKEN_SCOPES } from '@/lib/mcp/scopes';
 import { MCP_REFERENCE_URL, mcpCatalogue, mcpToolCount } from '@/lib/apiDocs/mcp';
 import { CatalogueNav } from '../../_components/CatalogueNav';
 import { DocBlock } from '../../_components/DocBlocks';
@@ -14,13 +13,14 @@ import { DocBlock } from '../../_components/DocBlocks';
 // wiring guide (Amendment 13 Q1), and why it is the MCP sub-area's second-tier
 // row in the rail.
 //
-// ── Grouped by SCOPE, and the grouping is DERIVED ───────────────────────────
-// A tool's group is its own `TOOL_SCOPES` entry (Amendment 13 Q2), so no
-// per-tool grouping fact is authored and a new tool lands in a group the moment
-// it has a scope. It is also the axis the reader is on: the wiring page just
-// explained that a token carries scopes and that a call is refused without the
-// right one, so a catalogue on that axis answers "what do I lose if I leave this
-// one off?" by construction.
+// ── Grouped by PERMISSION, and the grouping is DERIVED ──────────────────────
+// A tool's group is its own `TOOL_PERMISSIONS` entry (Amendment 13 Q2, restated
+// in the permission vocabulary by Story MOTIR-2572), so no per-tool grouping
+// fact is authored and a new tool lands in a group the moment it has a
+// permission. It is also the axis the reader is on: the wiring page just
+// explained that a token carries permissions and that a call is refused without
+// the right one, so a catalogue on that axis answers "what do I lose if I leave
+// this one off?" by construction.
 //
 // The page holds NO tool fact of its own — every row comes from
 // `lib/apiDocs/mcp.ts`, and the count below is the length of what was derived
@@ -51,7 +51,7 @@ export default async function McpToolsPage() {
           </p>
           {total > 0 && (
             <p className="mt-2 font-mono text-[12px] text-(--el-text-secondary)">
-              {t('mcpToolsMeta', { tools: total, scopes: TOKEN_SCOPES.length })}
+              {t('mcpToolsMeta', { tools: total, permissions: groups.length })}
             </p>
           )}
         </header>
@@ -88,10 +88,10 @@ export default async function McpToolsPage() {
 
             {groups.map((group) => (
               <section
-                key={group.scope}
-                id={group.scope.replace(':', '-')}
+                key={group.permission}
+                id={group.permission.replace(':', '-')}
                 className="mb-8 scroll-mt-6"
-                data-testid={`mcp-group-${group.scope}`}
+                data-testid={`mcp-group-${group.permission}`}
               >
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <h2 className="m-0 font-sans text-sm font-semibold tracking-wide text-(--el-text) uppercase">
@@ -104,7 +104,7 @@ export default async function McpToolsPage() {
                         : 'rounded-(--radius-badge) bg-(--el-tint-peach) px-(--spacing-chip-x) py-(--spacing-chip-y) font-mono text-[11px] text-(--el-text-strong)'
                     }
                   >
-                    {group.scope}
+                    {group.permission}
                   </span>
                   {!group.grantedByDefault && (
                     <span className="text-[11.5px] text-(--el-text-secondary)">
