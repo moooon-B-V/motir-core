@@ -10,6 +10,7 @@ import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-896 — the webhook state machine's GUARD arms (the malformed
@@ -146,7 +147,7 @@ function checkRunPayload(opts: {
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
@@ -162,6 +163,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubWebhookService — malformed deliveries are typed no-ops (MOTIR-896)', () => {
@@ -316,9 +318,9 @@ describe('githubWebhookService — unresolvable deliveries against a real instal
     );
 
     expect(result).toMatchObject({ event: 'ci', outcome: 'failed', ciState: 'failing' });
-    const row = await db.workItem.findUnique({ where: { id: item.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(row!.ciState).toBe('failing');
-    const comments = await db.comment.findMany({ where: { workItemId: item.id } });
+    const comments = await adminDb.comment.findMany({ where: { workItemId: item.id } });
     expect(comments.some((c) => c.bodyMd.includes('CI failed'))).toBe(true);
 
     // A REDELIVERY of the same failing conclusion is a noop that still reports
@@ -328,7 +330,7 @@ describe('githubWebhookService — unresolvable deliveries against a real instal
       checkRunPayload({ conclusion: 'failure', headSha: 'sha2', prNumbers: [7] }),
     );
     expect(redelivered).toMatchObject({ event: 'ci', outcome: 'noop', ciState: 'failing' });
-    const after = await db.comment.findMany({ where: { workItemId: item.id } });
+    const after = await adminDb.comment.findMany({ where: { workItemId: item.id } });
     expect(after).toHaveLength(comments.length); // no duplicate comment
   });
 
@@ -410,7 +412,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
       toStatus: 'in_review',
     });
     // Attributed to the OWNER (the retry), not the denied author.
-    const revision = await db.workItemRevision.findFirst({
+    const revision = await adminDb.workItemRevision.findFirst({
       where: { workItemId: item.id },
       orderBy: { changedAt: 'desc' },
     });
@@ -432,7 +434,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
     );
 
     expect(result).toMatchObject({ event: 'ci', outcome: 'no_work_item' });
-    const comments = await db.comment.findMany({ where: { workItemId: item.id } });
+    const comments = await adminDb.comment.findMany({ where: { workItemId: item.id } });
     expect(comments).toHaveLength(0);
   });
 
@@ -463,7 +465,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
       prPayload({ action: 'opened', user: null }),
     );
     expect(result).toMatchObject({ outcome: 'transitioned', workItemId: item.id });
-    const revision = await db.workItemRevision.findFirst({
+    const revision = await adminDb.workItemRevision.findFirst({
       where: { workItemId: item.id, changedById: user.id },
       orderBy: { changedAt: 'desc' },
     });
@@ -498,7 +500,7 @@ describe('githubWebhookService — work-item resolution edges (MOTIR-896)', () =
     );
 
     expect(result).toMatchObject({ outcome: 'transitioned', workItemId: item.id });
-    const revision = await db.workItemRevision.findFirst({
+    const revision = await adminDb.workItemRevision.findFirst({
       where: { workItemId: item.id },
       orderBy: { changedAt: 'desc' },
     });

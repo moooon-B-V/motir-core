@@ -9,6 +9,7 @@ import { gitlabWebhookService } from '@/lib/services/gitlabWebhookService';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.23 · MOTIR-1479 — the CUSTOM-WORKFLOW no-match branch of the MR →
@@ -107,7 +108,7 @@ function mrPayload(opts: {
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
@@ -122,13 +123,14 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('gitlabWebhookService — custom workflow with NO matching status (MOTIR-1479)', () => {
   it('MR opened with no in_progress-category status → no_matching_status no-op', async () => {
     const { project, item } = await makeScenario('wf-a@example.com');
     await dropStatusCategory(project.id, 'in_progress');
-    const revisionsBefore = await db.workItemRevision.count({ where: { workItemId: item.id } });
+    const revisionsBefore = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
 
     const result = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',
@@ -143,7 +145,7 @@ describe('gitlabWebhookService — custom workflow with NO matching status (MOTI
     // The item stays at todo (the MR-open → in_review lifecycle needs an
     // in_progress-category status — all gone, so no transition).
     expect(await statusOf(item.id)).toBe('todo');
-    const revisionsAfter = await db.workItemRevision.count({ where: { workItemId: item.id } });
+    const revisionsAfter = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
     expect(revisionsAfter).toBe(revisionsBefore);
   });
 

@@ -8,6 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-896 — the CUSTOM-WORKFLOW no-match branch of the PR →
@@ -104,7 +105,7 @@ function prPayload(opts: {
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
@@ -119,6 +120,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubWebhookService — custom workflow with NO matching status (MOTIR-896)', () => {
@@ -130,7 +132,7 @@ describe('githubWebhookService — custom workflow with NO matching status (MOTI
     // lifecycle to resolve to — byKey misses, byCategory misses → null.
     await dropStatusCategory(project.id, 'in_progress');
     // createWorkItem writes its own `created` revision; the no-op must add none.
-    const revisionsBefore = await db.workItemRevision.count({ where: { workItemId: item.id } });
+    const revisionsBefore = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
 
     const result = await githubWebhookService.handleEvent(
       'pull_request',
@@ -144,7 +146,7 @@ describe('githubWebhookService — custom workflow with NO matching status (MOTI
     });
     // No status write, no new revision — the item is exactly where it started.
     expect(await statusOf(item.id)).toBe('todo');
-    const revisionsAfter = await db.workItemRevision.count({ where: { workItemId: item.id } });
+    const revisionsAfter = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
     expect(revisionsAfter).toBe(revisionsBefore);
   });
 

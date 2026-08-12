@@ -12,6 +12,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { inngest } from '@/lib/jobs/client';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-892 — the inbound webhook status-sync state machine, against
@@ -103,12 +104,12 @@ function prPayload(opts: {
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
 async function statusRevisions(workItemId: string) {
-  return db.workItemRevision.findMany({
+  return adminDb.workItemRevision.findMany({
     where: { workItemId },
     orderBy: { changedAt: 'asc' },
   });
@@ -126,6 +127,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubWebhookService — pull_request → status sync', () => {
@@ -144,7 +146,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     expect(await statusOf(s.item.id)).toBe('in_review');
 
     // The PR row is upserted and linked to the resolved work item.
-    const prRow = await db.githubPullRequest.findFirst({ where: { number: 7 } });
+    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
     expect(prRow).toMatchObject({ state: 'open', merged: false, workItemId: s.item.id });
 
     const merged = await githubWebhookService.handleEvent(
@@ -238,7 +240,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     for (const r of results) expect(r.event).toBe('pull_request');
 
     expect(await statusOf(s.item.id)).toBe('in_review');
-    const prRows = await db.githubPullRequest.findMany({ where: { number: 7 } });
+    const prRows = await adminDb.githubPullRequest.findMany({ where: { number: 7 } });
     expect(prRows).toHaveLength(1);
     const inReviewRevs = (await statusRevisions(s.item.id)).filter(
       (r) => (r.diff as { status?: { to?: string } }).status?.to === 'in_review',
@@ -270,7 +272,7 @@ describe('githubWebhookService — pull_request → status sync', () => {
     });
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
     expect(await statusOf(s.item.id)).toBe('in_progress'); // untouched
-    const prRow = await db.githubPullRequest.findFirst({ where: { number: 9 } });
+    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 9 } });
     // Title is captured on upsert (MOTIR-1579 — the Development surface renders it).
     expect(prRow).toMatchObject({ workItemId: null, title: 'no key here' });
   });
@@ -610,7 +612,7 @@ describe('githubWebhookService — code-graph index enqueue (MOTIR-1500)', () =>
   /** Seed the ledger row that MEANS "this repo has a code graph": a succeeded
    *  `system.code-graph-index` run carrying the repo's `output.repoRef`. */
   async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId,
         functionId: 'system.code-graph-index',

@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `github_repo` isolation — direct-DB RLS proof (MOTIR-1931), the tenancy half of
@@ -46,6 +47,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface SharedMirrorFixture {
@@ -82,7 +84,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
     ownerUserId: userB.id,
   });
 
-  const installation = await db.githubInstallation.create({
+  const installation = await adminDb.githubInstallation.create({
     data: {
       installationId: SHARED_INSTALLATION_ID,
       // The shared provisioning installation is owned by no tenant.
@@ -93,7 +95,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
     },
   });
 
-  const repoA = await db.githubRepo.create({
+  const repoA = await adminDb.githubRepo.create({
     data: {
       installationId: installation.id,
       workspaceId: wsA.id,
@@ -104,7 +106,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
       archived: false,
     },
   });
-  const repoB = await db.githubRepo.create({
+  const repoB = await adminDb.githubRepo.create({
     data: {
       installationId: installation.id,
       workspaceId: wsB.id,
@@ -115,7 +117,7 @@ async function makeSharedMirror(): Promise<SharedMirrorFixture> {
       archived: false,
     },
   });
-  const prA = await db.githubPullRequest.create({
+  const prA = await adminDb.githubPullRequest.create({
     data: { repoId: repoA.id, number: 1, state: 'open', headRef: 'feat/x' },
   });
 
@@ -196,7 +198,8 @@ describe('github_repo RLS — a shared installation, two tenants', () => {
     ).rejects.toMatchObject({ code: 'P2025' });
 
     // B's row is intact.
-    await expect(db.githubRepo.findUnique({ where: { id: fx.repoBId } })).resolves.toMatchObject({
+    const githubRepoRow = await adminDb.githubRepo.findUnique({ where: { id: fx.repoBId } });
+    expect(githubRepoRow).toMatchObject({
       name: 'bravo-web',
     });
   });

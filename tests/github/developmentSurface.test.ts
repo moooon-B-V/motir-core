@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-1579 — the Development surface's READ PATH, as an
@@ -106,6 +107,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('getQuickView().pullRequests — the Development surface read path (MOTIR-1579)', () => {
@@ -176,7 +178,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
     ]);
 
     // The detail page's read (same service method) returns the identical shape.
-    const itemRow = await db.workItem.findFirst({ where: { title: 'A tracked change' } });
+    const itemRow = await adminDb.workItem.findFirst({ where: { title: 'A tracked change' } });
     const detailPrs = await workItemsService.listLinkedPullRequests(itemRow!.id);
     expect(detailPrs).toEqual(peek.pullRequests);
   });
@@ -199,7 +201,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
       }),
     );
     // Simulate a row ingested BEFORE title capture (MOTIR-892-era data).
-    await db.githubPullRequest.updateMany({ where: { number: 7 }, data: { title: null } });
+    await adminDb.githubPullRequest.updateMany({ where: { number: 7 }, data: { title: null } });
 
     const peek = await workItemsService.getQuickView(
       s.project.id,

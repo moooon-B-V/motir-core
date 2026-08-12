@@ -8,6 +8,7 @@ import { gitlabWebhookService } from '@/lib/services/gitlabWebhookService';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.23 · MOTIR-1475 — the GitLab inbound webhook MR → work-item status sync,
@@ -129,15 +130,15 @@ function pipelinePayload(opts: {
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
 async function commentsOn(workItemId: string) {
-  return db.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
 }
 async function ciStateOf(workItemId: string): Promise<string | null> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.ciState;
 }
 
@@ -153,7 +154,7 @@ async function openMr(identifier: string, iid = 7): Promise<number> {
 }
 
 async function latestRevision(workItemId: string) {
-  const rows = await db.workItemRevision.findMany({
+  const rows = await adminDb.workItemRevision.findMany({
     where: { workItemId },
     orderBy: { changedAt: 'asc' },
   });
@@ -166,6 +167,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('gitlabWebhookService — merge_request → status sync', () => {
@@ -184,7 +186,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     expect(await statusOf(s.item.id)).toBe('in_review');
 
     // The MR row is upserted, stamped provider='gitlab', linked to the work item.
-    const mrRow = await db.githubPullRequest.findFirst({ where: { number: 7 } });
+    const mrRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
     expect(mrRow).toMatchObject({
       provider: 'gitlab',
       state: 'open',
@@ -247,7 +249,7 @@ describe('gitlabWebhookService — merge_request → status sync', () => {
     );
     expect(res).toMatchObject({ event: 'pull_request', outcome: 'no_work_item' });
     // The MR row is still recorded (unlinked) so a later manual link / rename works.
-    const mrRow = await db.githubPullRequest.findFirst({ where: { number: 7 } });
+    const mrRow = await adminDb.githubPullRequest.findFirst({ where: { number: 7 } });
     expect(mrRow).toMatchObject({ provider: 'gitlab', workItemId: null });
   });
 
@@ -369,7 +371,7 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
     expect(comments[0]!.bodyMd).toContain('CI passing');
     expect(comments[0]!.bodyMd).toContain('merge request'); // host-appropriate noun
 
-    const checkRows = await db.githubCheckRun.findMany();
+    const checkRows = await adminDb.githubCheckRun.findMany();
     expect(checkRows).toHaveLength(1);
     expect(checkRows[0]).toMatchObject({
       conclusion: 'success',
@@ -408,7 +410,8 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       outcome: 'noop',
     });
     expect(await commentsOn(s.item.id)).toHaveLength(1);
-    expect(await db.githubCheckRun.count()).toBe(1);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(1);
   });
 
   it('resolves the MR by BRANCH when the pipeline carries no merge_request', async () => {
@@ -435,7 +438,7 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       pipelinePayload({ status: 'running', sha: 'sha1', mrIid: iid }),
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
-    const rows = await db.githubCheckRun.findMany();
+    const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!).toMatchObject({ conclusion: 'pending', feedbackCommentId: null });
     expect(await commentsOn(s.item.id)).toHaveLength(0);
@@ -451,7 +454,8 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       pipelinePayload({ status: 'skipped', sha: 'sha1', mrIid: iid }),
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'ignored_pending' });
-    expect(await db.githubCheckRun.count()).toBe(0);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(0);
     expect(await commentsOn(s.item.id)).toHaveLength(0);
     expect(await ciStateOf(s.item.id)).toBeNull();
   });
@@ -474,7 +478,8 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       pipelinePayload({ status: 'success', sha: 'shaX', mrIid: 9 }),
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'no_work_item' });
-    expect(await db.githubCheckRun.count()).toBe(0);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(0);
     expect(await ciStateOf(s.item.id)).toBeNull();
   });
 
@@ -486,7 +491,8 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       pipelinePayload({ status: 'success', sha: 'sha1', mrIid: 7, projectId: '999' }),
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'unknown_repo' });
-    expect(await db.githubCheckRun.count()).toBe(0);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(0);
   });
 
   it('a pipeline before any MR is stored is a clean no_pull_request no-op', async () => {
@@ -497,7 +503,8 @@ describe('gitlabWebhookService — pipeline → CI feedback (MOTIR-1477)', () =>
       pipelinePayload({ status: 'success', sha: 'sha1', mrIid: 7 }),
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'no_pull_request' });
-    expect(await db.githubCheckRun.count()).toBe(0);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(0);
     expect(await ciStateOf(s.item.id)).toBeNull();
   });
 });

@@ -8,6 +8,7 @@ import { gitlabWebhookService } from '@/lib/services/gitlabWebhookService';
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.23 · MOTIR-1479 — the GitLab webhook state machine's GUARD arms
@@ -118,12 +119,12 @@ function pipelinePayload(opts: {
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
 async function statusRevisions(workItemId: string) {
-  return db.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
+  return adminDb.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
 }
 
 async function openMr(identifier: string, iid = 7): Promise<number> {
@@ -145,6 +146,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('gitlabWebhookService — malformed deliveries are typed no-ops (MOTIR-1479)', () => {
@@ -328,7 +330,7 @@ describe('gitlabWebhookService — concurrent redelivery + degenerate states (MO
     //    `tests/github/githubWebhookService.test.ts`).
     expect(await statusOf(s.item.id)).toBe('in_review');
 
-    const mrRows = await db.githubPullRequest.findMany({ where: { number: 7 } });
+    const mrRows = await adminDb.githubPullRequest.findMany({ where: { number: 7 } });
     expect(mrRows).toHaveLength(1);
 
     const inReviewRevs = (await statusRevisions(s.item.id)).filter(

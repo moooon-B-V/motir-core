@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // MOTIR-1961 — the OPERATOR recovery sweep for repos that never got a first code
@@ -59,7 +60,7 @@ async function connectRepos(
 
 /** The ledger row that MEANS "this repo has a code graph". */
 async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId,
       functionId: 'system.code-graph-index',
@@ -92,6 +93,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('codeGraphIndexService.sweepReposMissingFirstIndex (MOTIR-1961)', () => {
@@ -251,7 +253,7 @@ describe('codeGraphIndexService.sweepReposMissingFirstIndex (MOTIR-1961)', () =>
   it('a FAILED index run does not count as a graph — the repo is swept again', async () => {
     const { workspaceId } = await makeWorkspace('sweep-failed@example.com');
     await connectRepos(workspaceId, 'inst-1', [{ repoId: '111', name: 'motir-core' }]);
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId,
         functionId: 'system.code-graph-index',

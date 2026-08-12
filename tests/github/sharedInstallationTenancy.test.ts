@@ -19,6 +19,7 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { NormalizedWorkflowRunEvent } from '@/lib/git/types';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1931 — Motir's PROVISIONING-ORG mirror is PER-WORKSPACE.
@@ -68,7 +69,7 @@ interface Tenant {
  *  substrate MOTIR-1931 ships; MOTIR-1781 (the creation primitive) is what will
  *  write it in production. */
 async function seedSharedInstallation(): Promise<string> {
-  const row = await db.githubInstallation.upsert({
+  const row = await adminDb.githubInstallation.upsert({
     where: { installationId: SHARED_INSTALLATION_ID },
     create: {
       installationId: SHARED_INSTALLATION_ID,
@@ -115,7 +116,7 @@ async function seedTenantWithCreatedRepo(opts: {
     identifier: opts.identifier,
   });
 
-  const githubRepo = await db.githubRepo.create({
+  const githubRepo = await adminDb.githubRepo.create({
     data: {
       installationId: opts.sharedInstallationRowId,
       // The row's OWN tenancy — the whole point of the card.
@@ -128,7 +129,7 @@ async function seedTenantWithCreatedRepo(opts: {
       provider: 'github',
     },
   });
-  const projectRepo = await db.projectRepo.create({
+  const projectRepo = await adminDb.projectRepo.create({
     data: {
       workspaceId: workspace.id,
       projectId: project.id,
@@ -270,6 +271,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the shared provisioning installation holds SEVERAL tenants at once', () => {
@@ -278,9 +280,9 @@ describe('the shared provisioning installation holds SEVERAL tenants at once', (
 
     // Both rows really are on the ONE installation — this is a shared mirror, not
     // two installations that merely look alike.
-    const all = await db.githubRepo.findMany({ where: { installationId: installationRowId } });
+    const all = await adminDb.githubRepo.findMany({ where: { installationId: installationRowId } });
     expect(all).toHaveLength(2);
-    const installation = await db.githubInstallation.findUniqueOrThrow({
+    const installation = await adminDb.githubInstallation.findUniqueOrThrow({
       where: { id: installationRowId },
     });
     expect(installation.workspaceId).toBeNull();
@@ -324,10 +326,10 @@ describe('the shared provisioning installation holds SEVERAL tenants at once', (
 
     // Tenant A's created repo is untouched...
     await expect(
-      db.githubRepo.findUnique({ where: { id: a.githubRepoId } }),
+      adminDb.githubRepo.findUnique({ where: { id: a.githubRepoId } }),
     ).resolves.toMatchObject({ workspaceId: a.workspaceId, name: 'alpha-web' });
     // ...and the shared installation is still bound to nobody.
-    const shared = await db.githubInstallation.findUniqueOrThrow({
+    const shared = await adminDb.githubInstallation.findUniqueOrThrow({
       where: { installationId: SHARED_INSTALLATION_ID },
     });
     expect(shared.workspaceId).toBeNull();
@@ -405,19 +407,17 @@ describe('inbound deliveries route by REPO, not by installation', () => {
 
     // B moved; A did not. Routing by installation would have resolved the work
     // item inside whichever workspace held the installation row.
-    await expect(db.workItem.findUnique({ where: { id: itemB.id } })).resolves.toMatchObject({
-      status: 'in_review',
-    });
-    await expect(db.workItem.findUnique({ where: { id: itemA.id } })).resolves.toMatchObject({
-      status: 'in_progress',
-    });
+    const movedItem = await adminDb.workItem.findUnique({ where: { id: itemB.id } });
+    expect(movedItem).toMatchObject({ status: 'in_review' });
+    const untouchedItem = await adminDb.workItem.findUnique({ where: { id: itemA.id } });
+    expect(untouchedItem).toMatchObject({ status: 'in_progress' });
 
     // The PR row hangs off B's repo — the only one it could, since the repo is
     // what the delivery resolved through. (Its INVISIBILITY to tenant A is proved
     // in `github-repo-rls.test.ts`, which drops to the non-BYPASSRLS
     // `motir_app` role; asserting it here would assert nothing, because these
     // suites connect as the `prodect` superuser.)
-    const prRows = await db.githubPullRequest.findMany({});
+    const prRows = await adminDb.githubPullRequest.findMany({});
     expect(prRows).toHaveLength(1);
     expect(prRows[0]!.repoId).toBe(b.githubRepoId);
   });
@@ -442,7 +442,7 @@ describe('inbound deliveries route by REPO, not by installation', () => {
     });
 
     // Both tenants' repos survive, still tenanted to themselves.
-    const rows = await db.githubRepo.findMany({
+    const rows = await adminDb.githubRepo.findMany({
       where: { installationId: installationRowId },
       orderBy: { name: 'asc' },
     });
@@ -521,7 +521,7 @@ describe('inbound deliveries route by REPO, not by installation', () => {
     });
     // The user path is UNCHANGED: it syncs, and the de-selected repo is pruned.
     expect(result).toEqual({ event: 'installation_repositories', outcome: 'synced' });
-    const own = await db.githubRepo.findMany({
+    const own = await adminDb.githubRepo.findMany({
       where: { installation: { installationId: 'bravo-own-install' } },
     });
     expect(own.map((r) => r.name)).toEqual(['legacy']);
@@ -562,7 +562,7 @@ describe('the CI meter bills the workspace that OWNS the repo', () => {
     expect(usageB?.billableMinutes).toBe(10);
 
     // And each usage row points at its own project.
-    const usageRows = await db.ciWorkflowRunUsage.findMany({ orderBy: { runId: 'asc' } });
+    const usageRows = await adminDb.ciWorkflowRunUsage.findMany({ orderBy: { runId: 'asc' } });
     expect(usageRows.map((r) => r.workspaceId)).toEqual([a.workspaceId, b.workspaceId]);
   });
 });
@@ -582,7 +582,7 @@ describe('the explicit item→PR link affordance reaches a created repo', () => 
       // exact case the manual affordance exists for.
       prPayload({ identifier: 'nothing', repoHostId: b.repoHostId, number: 11 }),
     );
-    const pr = await db.githubPullRequest.findFirstOrThrow({});
+    const pr = await adminDb.githubPullRequest.findFirstOrThrow({});
 
     // Two sites the TYPE CHECKER could not flag, because both compare rather than
     // assign: the candidate search's tenant filter, and `linkPullRequest`'s gate.
