@@ -104,7 +104,9 @@ describe('access gating — the membership-direction asymmetry (6.10.2 §5)', ()
 
     // The org membership is untouched (leaving a workspace ≠ leaving the org).
     expect(
-      await organizationMembershipRepository.findByOrgAndUser(orgId, member.id),
+      await adminDb.$transaction((tx) =>
+        organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+      ),
     ).not.toBeNull();
     // w1 is now denied (no workspace membership, plain org member), but w2 still works.
     expect(await organizationsService.resolveWorkspaceAccess(member.id, w1.id)).toBeNull();
@@ -152,7 +154,11 @@ describe('membership management — idempotency + the upward auto-join', () => {
       userId: member.id,
       actorUserId: member.id, // self-leave
     });
-    expect(await organizationMembershipRepository.findByOrgAndUser(orgId, member.id)).toBeNull();
+    expect(
+      await adminDb.$transaction((tx) =>
+        organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('changeMemberRole promotes a member to admin (the happy path)', async () => {
@@ -176,9 +182,11 @@ describe('membership management — idempotency + the upward auto-join', () => {
       role: 'admin',
       actorUserId: owner.id,
     });
-    expect((await organizationMembershipRepository.findByOrgAndUser(orgId, member.id))!.role).toBe(
-      'admin',
-    );
+    expect(
+      (await adminDb.$transaction((tx) =>
+        organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+      ))!.role,
+    ).toBe('admin');
   });
 
   it('ensureOrgMembership is a no-op when the user is already a member (does NOT downgrade their role)', async () => {
@@ -205,7 +213,9 @@ describe('membership management — idempotency + the upward auto-join', () => {
     await withOrgContext({ userId: admin.id, organizationId: orgId }, (tx) =>
       organizationsService.ensureOrgMembership(admin.id, orgId, tx),
     );
-    const m = await organizationMembershipRepository.findByOrgAndUser(orgId, admin.id);
+    const m = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(orgId, admin.id, tx),
+    );
     expect(m!.role).toBe('admin');
     expect(
       await adminDb.organizationMembership.count({
@@ -580,11 +590,10 @@ describe('migration backfill (6.10.3) — one default org per workspace, idempot
     // After rollback the original service-created orgs are back and the NOT NULL
     // is restored (the schema is pristine for sibling tests).
     expect(await nullOrgWorkspaceCount(db)).toBe(0);
-    expect(
-      await organizationMembershipRepository.findByOrgAndUser(
-        await orgIdOfWorkspace(w1.id),
-        owner1.id,
-      ),
-    ).not.toBeNull();
+    const restoredOrgId = await orgIdOfWorkspace(w1.id);
+    const restoredMembership = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(restoredOrgId, owner1.id, tx),
+    );
+    expect(restoredMembership).not.toBeNull();
   });
 });

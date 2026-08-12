@@ -180,7 +180,9 @@ describe('membership direction (6.10.2 §5, asymmetric)', () => {
 
     await workspacesService.addMember({ userId: member.id, workspaceId: workspace.id });
 
-    const orgm = await organizationMembershipRepository.findByOrgAndUser(orgId, member.id);
+    const orgm = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+    );
     expect(orgm).not.toBeNull();
     expect(orgm!.role).toBe('member');
   });
@@ -332,7 +334,9 @@ describe('org admin authorization + last-owner guard', () => {
       userId: owner.id,
       actorUserId: second.id,
     });
-    const gone = await organizationMembershipRepository.findByOrgAndUser(orgId, owner.id);
+    const gone = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(orgId, owner.id, tx),
+    );
     expect(gone).toBeNull();
   });
 });
@@ -390,7 +394,9 @@ describe('provisioning + the user-orgs surface', () => {
     });
     const orgId = await orgIdOfWorkspace(workspace.id);
 
-    const orgm = await organizationMembershipRepository.findByOrgAndUser(orgId, user.id);
+    const orgm = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(orgId, user.id, tx),
+    );
     expect(orgm!.role).toBe('owner');
     const wsm = await workspaceMembershipRepository.findByUserAndWorkspace(user.id, workspace.id);
     expect(wsm!.role).toBe('owner');

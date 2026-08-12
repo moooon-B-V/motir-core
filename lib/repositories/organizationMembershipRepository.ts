@@ -5,7 +5,6 @@ import {
   Prisma,
   type User,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 
 // A membership row joined with the slice of its user the cross-workspace member
 // roster (6.10.5) renders. Kept here (not in the service) because the join shape
@@ -24,21 +23,17 @@ export type OrgMembershipWithUser = OrganizationMembership & {
 // pagination live in `organizationsService` (6.10.4).
 
 export const organizationMembershipRepository = {
-  async findByOrgAndUser(
-    organizationId: string,
-    userId: string,
-  ): Promise<OrganizationMembership | null> {
-    return db.organizationMembership.findUnique({
-      where: { organizationId_userId: { organizationId, userId } },
-    });
-  },
-
   /**
-   * Same lookup as findByOrgAndUser, but inside the caller's transaction so the
+   * The membership lookup, inside the caller's transaction so the
    * organization_membership RLS policy (keyed off the per-transaction
    * `app.organization_id` / `app.user_id` GUCs) admits the row under the
    * non-bypass `motir_app` role. Used by the 6.10.4 access gate, whose result
    * must be correct in production.
+   *
+   * The `…InTx` suffix is now vestigial and kept only so the six call sites in
+   * `organizationsService` need not churn: the un-suffixed singleton variant was
+   * retired in MOTIR-2775, having had zero production callers and returning NULL
+   * under RLS by design.
    */
   async findByOrgAndUserInTx(
     organizationId: string,

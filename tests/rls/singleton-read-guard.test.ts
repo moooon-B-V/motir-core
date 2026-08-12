@@ -72,9 +72,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'importRepository.ts#findCompletedForProject': ['unreviewed', 'MOTIR-2784'],
   'labelRepository.ts#findByIds': ['unreviewed', 'MOTIR-2784'],
   'labelRepository.ts#searchByPrefix': ['unreviewed', 'MOTIR-2784'],
-  'organizationMembershipRepository.ts#findByOrgAndUser': ['unreviewed', 'MOTIR-2775'],
-  'organizationRepository.ts#findById': ['unreviewed', 'MOTIR-2775'],
-  'organizationRepository.ts#findBySlug': ['unreviewed', 'MOTIR-2775'],
   'organizationRepository.ts#findCapContext': ['unreviewed', 'MOTIR-2784'],
   'planRepository.ts#findBySourceJobId': ['unreviewed', 'MOTIR-2784'],
   'projectRepository.ts#findAllByIdentifier': ['unreviewed', 'MOTIR-2784'],
@@ -146,7 +143,13 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
  * ⚠️ This number may only ever go DOWN. If a change makes this fail, the fix is to
  * adjudicate the site — never to raise the ceiling.
  */
-const UNREVIEWED_CEILING = 73;
+const UNREVIEWED_CEILING = 70;
+// 73 -> 70: MOTIR-2775 RETIRED three zero-caller org-tier singleton reads
+// (`organizationRepository.findById` / `findBySlug`,
+// `organizationMembershipRepository.findByOrgAndUser`) rather than adjudicating them.
+// Deleting a site is a legitimate way to lower this number — the point of the ratchet is
+// that the count of UNJUDGED reads falls, and a read that no longer exists needs no
+// verdict. Lowered in the same commit as the deletion, which is what the guard asks for.
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

@@ -52,17 +52,26 @@ describe('organizationRepository', () => {
     expect(created.name).toBe('Acme Inc');
     expect(created.slug).toBe('acme-inc');
 
-    const byId = await organizationRepository.findById(created.id);
+    const byId = await adminDb.$transaction((tx) =>
+      organizationRepository.findByIdInTx(created.id, tx),
+    );
     expect(byId).not.toBeNull();
     expect(byId!.slug).toBe('acme-inc');
 
-    const bySlug = await organizationRepository.findBySlug('acme-inc');
+    // No `findBySlugInTx` exists and nothing consumes one (MOTIR-2775), so the slug
+    // round-trip is asserted directly — the claim is that the row landed under that
+    // slug, which an unfiltered read states exactly.
+    const bySlug = await adminDb.organization.findUnique({ where: { slug: 'acme-inc' } });
     expect(bySlug).not.toBeNull();
     expect(bySlug!.id).toBe(created.id);
 
     // Misses return null, never throw.
-    expect(await organizationRepository.findById('nope')).toBeNull();
-    expect(await organizationRepository.findBySlug('nope')).toBeNull();
+    const missingById = await adminDb.$transaction((tx) =>
+      organizationRepository.findByIdInTx('nope', tx),
+    );
+    expect(missingById).toBeNull();
+    const missingBySlug = await adminDb.organization.findUnique({ where: { slug: 'nope' } });
+    expect(missingBySlug).toBeNull();
   });
 
   it('enforces the unique organization.slug (a second create on the same slug is a P2002)', async () => {
@@ -83,7 +92,10 @@ describe('organizationRepository', () => {
       organizationRepository.update(org.id, { name: 'After' }, tx),
     );
     expect(updated.name).toBe('After');
-    expect((await organizationRepository.findById(org.id))!.name).toBe('After');
+    const reread = await adminDb.$transaction((tx) =>
+      organizationRepository.findByIdInTx(org.id, tx),
+    );
+    expect(reread!.name).toBe('After');
   });
 
   it('binds the write to its transaction — a rolled-back create leaves no row', async () => {
@@ -125,12 +137,17 @@ describe('organizationMembershipRepository', () => {
     );
     expect(membership.role).toBe('admin');
 
-    const found = await organizationMembershipRepository.findByOrgAndUser(org.id, user.id);
+    const found = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(org.id, user.id, tx),
+    );
     expect(found).not.toBeNull();
     expect(found!.role).toBe('admin');
 
     // A different (org, user) pair is absent.
-    expect(await organizationMembershipRepository.findByOrgAndUser(org.id, 'someone')).toBeNull();
+    const otherPair = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(org.id, 'someone', tx),
+    );
+    expect(otherPair).toBeNull();
   });
 
   it('enforces the (organizationId, userId) uniqueness (a duplicate membership is a P2002)', async () => {
@@ -174,7 +191,10 @@ describe('organizationMembershipRepository', () => {
       organizationMembershipRepository.deleteByOrgAndUser(org.id, user.id, tx),
     );
     expect(deleted).not.toBeNull();
-    expect(await organizationMembershipRepository.findByOrgAndUser(org.id, user.id)).toBeNull();
+    const removed = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(org.id, user.id, tx),
+    );
+    expect(removed).toBeNull();
 
     // Deleting an already-gone row returns null rather than throwing (the
     // remove flow leans on this idempotency).
