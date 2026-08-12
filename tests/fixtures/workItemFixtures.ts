@@ -18,6 +18,7 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkspace } from './workspaceFixtures';
 import { createTestProject } from './projectFixtures';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Shared test fixtures — work items + links, and the bundled top-level
 // fixture every work-item test starts from (Subtask 1.4.7).
@@ -150,7 +151,18 @@ export async function createTestWorkItem(
   fx: WorkItemFixture,
   input: CreateTestWorkItemInput,
 ): Promise<WorkItem> {
-  return db.$transaction(async (tx) => {
+  // BOUND (MOTIR-2792). This opens the transaction the SERVICE layer opens —
+  // `workItemsService.createWorkItem` wraps the allocate-then-create dance in
+  // `withWorkspaceContext` — rather than a bare `db.$transaction`. Unbound, the
+  // `project` policy sees no workspace, `allocateWorkItemNumber` misses and throws
+  // `ProjectNotFoundError`, and since 284 test files reach the database through this
+  // helper that one line failed most of the suite under the non-bypass role while
+  // blaming a project that exists.
+  //
+  // NOT `adminDb`: the point of this helper is that it drives the DB through the
+  // repository edge the way production does, so it must stay on `@/lib/db` and be
+  // handed the same transaction production hands it.
+  return withWorkspaceContext(fx.ctx, async (tx) => {
     const key = await projectRepository.allocateWorkItemNumber(fx.projectId, tx);
     const parentId = input.parentId ?? null;
     return workItemRepository.create(
@@ -186,7 +198,9 @@ export interface CreateTestLinkInput {
  * throws the typed trigger error the repository edge translates).
  */
 export async function createTestLink(input: CreateTestLinkInput): Promise<WorkItemLink> {
-  return db.$transaction((tx) =>
+  // Bound for the reason above; the input already carries both halves of the context
+  // production binds (`createdById` is the actor, `workspaceId` the tenant).
+  return withWorkspaceContext({ userId: input.createdById, workspaceId: input.workspaceId }, (tx) =>
     workItemLinkRepository.create(
       {
         workspaceId: input.workspaceId,

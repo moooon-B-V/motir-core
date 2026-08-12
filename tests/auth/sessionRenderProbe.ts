@@ -140,6 +140,9 @@ async function probeAnonymous(mode: 'anonymous' | 'db-control'): Promise<void> {
     }
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { db } = require('@/lib/db');
+    // Left on `@/lib/db` deliberately (MOTIR-2792 audit): `session` is an AUTH table,
+    // not workspace-scoped, so no policy applies and there is no tenant to bind. The
+    // probe's point is that the connection can reach it at all.
     await db.session.findFirst();
     emit({ mode, outcome: 'reached-database' });
   } catch (error) {

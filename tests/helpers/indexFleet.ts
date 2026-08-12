@@ -1,12 +1,12 @@
 import { vi } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
-import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { codeGraphIndexDispatchService } from '@/lib/services/codeGraphIndexDispatchService';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
+import { adminDb } from './adminDb';
 
 // THE `system.code-graph-index` TEST WORLD (Story MOTIR-1981 · MOTIR-1992) —
 // the fake-orchestrator fixture the index-fleet suites drive the REAL job
@@ -192,7 +192,9 @@ export async function seedIndexWorkspace(
     ownerUserId: user.id,
   });
   // Drop any auto-seeded project so the count is exactly what the test asked for.
-  await db.project.deleteMany({ where: { workspaceId: workspace.id } });
+  // FIXTURE teardown (MOTIR-2792) → the admin client: a cross-tenant delete is
+  // exactly what the policies exist to refuse.
+  await adminDb.project.deleteMany({ where: { workspaceId: workspace.id } });
   const projectIds: string[] = [];
   for (let i = 0; i < projectCount; i += 1) {
     const project = await projectsService.createProject({
@@ -299,7 +301,7 @@ export function refreshEventFor(args: {
 
 /** The `system.code-graph-refresh` ledger rows, newest last. */
 export async function refreshJobRuns() {
-  return db.jobRun.findMany({
+  return adminDb.jobRun.findMany({
     where: { functionId: 'system.code-graph-refresh' },
     orderBy: { startedAt: 'asc' },
   });
@@ -327,7 +329,7 @@ export function containerExitsWith(exitCode: number | null): void {
 
 /** The `system.code-graph-index` ledger rows, newest last. */
 export async function indexJobRuns() {
-  return db.jobRun.findMany({
+  return adminDb.jobRun.findMany({
     where: { functionId: 'system.code-graph-index' },
     orderBy: { startedAt: 'asc' },
   });
