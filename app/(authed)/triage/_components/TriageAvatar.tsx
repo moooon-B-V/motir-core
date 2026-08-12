@@ -8,9 +8,12 @@ import { cn } from '@/lib/utils/cn';
 // for the accessible name. Circle → `rounded-full` (genuinely circular,
 // style-independent).
 //
-// Routed through the DEDICATED `--el-avatar-*` ramp (MOTIR-1274 · 1266.3), the
-// SAME family ProjectAvatar uses — so person + project avatars share one tunable
-// token set instead of each pulling from the generic `--el-tint-*` pool. The
+// Routed through the DEDICATED `--el-avatar-*` ramp (MOTIR-1274 · 1266.3).
+// ⚠️ It used to say "the SAME family ProjectAvatar uses". ProjectAvatar is GONE
+// (MOTIR-2679) — a project's mark is an uploaded logo now, and this ramp's
+// remaining consumers are all PERSON avatars (this component) plus the
+// `--el-avatar-fallback` initial tiles in gitSettingsPrimitives and
+// CodeAccessSettings. The ramp therefore stays; it is not orphaned. The
 // array ORDER (and the hash) are kept verbatim so each name maps to the same
 // pastel as before: `--el-avatar-*` defaults to its `--el-tint-*` value → zero
 // visual change.

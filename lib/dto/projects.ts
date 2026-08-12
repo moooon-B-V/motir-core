@@ -27,14 +27,18 @@ export interface ProjectDTO {
    */
   accessLevel: 'open' | 'limited' | 'private' | 'public';
   /**
-   * Project avatar (Story 6.8) — a preset icon key + a colour-swatch key from
-   * the avatar registry (lib/projects/avatar.ts), or null = the shipped
-   * mono-identifier rendering (the chip falls back to the identifier letters).
-   * Carried on the base DTO because the project switcher + details card both
-   * render the chip on every project read; null is the zero-config default.
+   * The project's uploaded IMAGE (MOTIR-2676) — an ABSOLUTE URL, or null when the
+   * project has no mark. The column stores an object KEY; `toProjectDTO` runs it
+   * through `storedAssetUrl` so every consumer receives something an `<img src>`
+   * can use and nothing has to know where the bucket lives (the same read-side
+   * resolution every `User.image` mapper does).
+   *
+   * `null` means the surface renders NOTHING beside the project's name — not a
+   * monogram, not a generated tile (`docs/decisions/entity-marks.md` §3). It
+   * REPLACED Story 6.8's preset icon/colour pair, dropped by MOTIR-2680 with
+   * the picker and the renderer that were its only readers.
    */
-  avatarIcon: string | null;
-  avatarColor: string | null;
+  image: string | null;
   /**
    * The immutable onboarding-ran marker (Subtask 7.4 / MOTIR-1264) — the ISO
    * timestamp the project's FIRST plan was approved + materialized, or null when

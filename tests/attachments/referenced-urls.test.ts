@@ -5,6 +5,8 @@ import {
   extractReferencedAttachmentIds,
   extractReferencedAttachmentIdsFromBodies,
   isOwnAvatarRef,
+  isOwnProjectImageRef,
+  projectImagePrefix,
   storedAssetKey,
   storedAssetUrl,
 } from '@/lib/blob/referencedUrls';
@@ -182,5 +184,60 @@ describe('isOwnAvatarRef — the gate, in both storage forms', () => {
     expect(isOwnAvatarRef(null, 'u1')).toBe(false);
     expect(isOwnAvatarRef(undefined, 'u1')).toBe(false);
     expect(isOwnAvatarRef('', 'u1')).toBe(false);
+  });
+});
+
+// ── The PROJECT-image gate (MOTIR-2676) ─────────────────────────────────────
+// The tenant-mark twin of `isOwnAvatarRef` above. Same shared reduction
+// (`ownStoredAssetKey`), so the hardening cases below are not duplicated
+// paranoia — they are the SAME code path re-asserted at the seam a project
+// image actually enters through, which is the one that decides whether project
+// A can point its mark at project B's blob.
+describe('isOwnProjectImageRef — the project-mark gate, in both storage forms', () => {
+  it('accepts our own object under THIS project, as a bare key and as an absolute URL', () => {
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', PUBLIC_BASE);
+    expect(isOwnProjectImageRef(`${projectImagePrefix('p1')}logo.png`, 'p1')).toBe(true);
+    expect(isOwnProjectImageRef(`${PUBLIC_BASE}/projects/p1/logo.png`, 'p1')).toBe(true);
+  });
+
+  it('rejects ANOTHER project\u2019s object, in both forms', () => {
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', PUBLIC_BASE);
+    expect(isOwnProjectImageRef('projects/p2/logo.png', 'p1')).toBe(false);
+    expect(isOwnProjectImageRef(`${PUBLIC_BASE}/projects/p2/logo.png`, 'p1')).toBe(false);
+  });
+
+  // The reason the gate is `startsWith` and not `includes`: the key's tail is a
+  // user-supplied FILENAME, so a containment check would let this read as p1's.
+  it('rejects a crafted FILENAME that contains this project\u2019s prefix', () => {
+    expect(isOwnProjectImageRef('projects/p2/x-projects-p1-y.png', 'p1')).toBe(false);
+  });
+
+  it('rejects a traversal or an absolute path that could escape the prefix', () => {
+    expect(isOwnProjectImageRef('projects/p1/../p2/logo.png', 'p1')).toBe(false);
+    expect(isOwnProjectImageRef('/projects/p1/logo.png', 'p1')).toBe(false);
+  });
+
+  it('rejects a non-https scheme that would otherwise reach an <img src>', () => {
+    expect(isOwnProjectImageRef('javascript:alert(1)//projects/p1/x.png', 'p1')).toBe(false);
+    expect(isOwnProjectImageRef('data:image/png;base64,AAAA', 'p1')).toBe(false);
+  });
+
+  it('rejects a foreign absolute URL and empty input', () => {
+    vi.stubEnv('MOTIR_S3_PUBLIC_BASE_URL', PUBLIC_BASE);
+    expect(isOwnProjectImageRef(GOOGLE, 'p1')).toBe(false);
+    expect(
+      isOwnProjectImageRef('http://s3.test.invalid/motir-public/projects/p1/x.png', 'p1'),
+    ).toBe(false);
+    expect(isOwnProjectImageRef(null, 'p1')).toBe(false);
+    expect(isOwnProjectImageRef(undefined, 'p1')).toBe(false);
+    expect(isOwnProjectImageRef('', 'p1')).toBe(false);
+  });
+
+  // A project's KEY changes (`changeKey`); its id does not. Prefixing by id is
+  // what stops a rename stranding every previously-stored object.
+  it('keys the prefix by the project ID, so it survives a key change', () => {
+    expect(projectImagePrefix('cmsn5vkyf01qoi2phmjopsmyu')).toBe(
+      'projects/cmsn5vkyf01qoi2phmjopsmyu/',
+    );
   });
 });

@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_PALETTE_ID, PALETTE_IDS } from '@/lib/theme/palettes';
 import { PRIORITY_OPTIONS } from '@/lib/issues/priority';
 import { LABEL_TINTS } from '@/lib/labels/labelTint';
-import { AVATAR_COLORS } from '@/lib/projects/avatar';
 import { loadTokenLayer, resolveToken, type ThemeContext } from './paletteCascade';
 import { contrast, deltaE2000, mixSrgb } from './colorMetrics';
 
@@ -37,7 +36,8 @@ import { contrast, deltaE2000, mixSrgb } from './colorMetrics';
 // text-contrast assertion below — which is the bar that actually protects a chip.
 //
 // Every family is derived from its shipped registry (`PRIORITY_OPTIONS`,
-// `LABEL_TINTS`, `AVATAR_COLORS`), never a list hand-copied here, so a registry
+// `LABEL_TINTS`, and the token layer's own `--el-avatar-*` set), never a list
+// hand-copied here, so a registry
 // that grows drags its new member into these checks automatically.
 //
 // MOTIR-2107 — and a family is measured on the value its CONSUMER paints, not
@@ -57,7 +57,7 @@ import { contrast, deltaE2000, mixSrgb } from './colorMetrics';
 //   measured on the RENDERED mix, derived from the Pill's own recipe (see
 //   `pillChipRecipe`) so the floor cannot drift from the component.
 
-const { rules, baseBlock, paletteBlock } = loadTokenLayer();
+const { rules, baseBlock, elementTokens, paletteBlock } = loadTokenLayer();
 const THEMES = ['light', 'dark'] as const;
 const CONTEXTS: ThemeContext[] = PALETTE_IDS.flatMap((palette) =>
   THEMES.map((theme) => ({ palette, theme })),
@@ -163,7 +163,24 @@ const MIN_TEXT_CONTRAST = 4.5;
 
 const PRIORITY_TOKENS = PRIORITY_OPTIONS.map((option) => `--el-priority-${option.value}`);
 const LABEL_TOKENS = LABEL_TINTS.map((_tint, index) => `--el-label-${index + 1}`);
-const AVATAR_TOKENS = AVATAR_COLORS.map((colour) => `--el-avatar-${colour}`);
+/**
+ * The `--el-avatar-*` PASTEL ramp, derived from the Tier-3 layer itself.
+ *
+ * ⚠️ It used to come from a hand-kept array in the project-avatar registry,
+ * which MOTIR-2680 deleted with the preset avatar. No TypeScript registry names these
+ * keys any more — the ramp IS its declaration in the token layer — so the
+ * stylesheet is now its shipped source, and the "derive, never hand-copy" rule
+ * this file opens with still holds: add `--el-avatar-teal` to the layer and it
+ * joins these checks with no edit here.
+ *
+ * `--el-avatar-fallback` is excluded deliberately: it is the no-hue initial
+ * tile (it rides `--color-info`, pinned to `--el-type-task` in
+ * `identityHuesTokens`), not a member of the pastel family being measured.
+ */
+const AVATAR_TOKENS = elementTokens
+  .filter((token) => token.startsWith('--el-avatar-') && token !== '--el-avatar-fallback')
+  .sort();
+const AVATAR_RAMP_KEYS = AVATAR_TOKENS.map((token) => token.slice('--el-avatar-'.length));
 const SELECTION_TOKENS = ['--el-selection-bg', '--el-droptarget-bg'];
 
 interface Family {
@@ -284,7 +301,9 @@ describe('family hue separation — each family at the floor its own surface nee
     expect(CONTEXTS).toHaveLength(PALETTE_IDS.length * 2);
     expect(PRIORITY_TOKENS).toHaveLength(PRIORITY_OPTIONS.length);
     expect(LABEL_TOKENS).toHaveLength(LABEL_TINTS.length);
-    expect(AVATAR_TOKENS).toHaveLength(AVATAR_COLORS.length);
+    // Derived from the stylesheet, so a length-vs-itself check would be
+    // vacuous — the guard is that the layer actually declares the ramp.
+    expect(AVATAR_TOKENS.length).toBeGreaterThanOrEqual(6);
     expect(PRIORITY_TOKENS.length).toBeGreaterThanOrEqual(5);
     expect(LABEL_TOKENS.length).toBeGreaterThanOrEqual(6);
     for (const ctx of CONTEXTS) {
@@ -346,7 +365,10 @@ describe('the label and avatar ramps are ONE ramp', () => {
     // `--el-avatar-<name>` are the same six colours, so any fix moves both
     // surfaces at once. Pinned so a future change cannot silently repair one
     // family and leave the other behind.
-    expect(LABEL_TINTS).toEqual([...AVATAR_COLORS]);
+    // Now a check across TWO independent sources — the label registry in
+    // TypeScript against the avatar ramp as the token layer declares it — which
+    // is stronger than the pair of hand-kept arrays it replaced.
+    expect([...LABEL_TINTS].sort()).toEqual([...AVATAR_RAMP_KEYS].sort());
     for (const [index, tint] of LABEL_TINTS.entries()) {
       const labelSource = sourceOf(`--el-label-${index + 1}`);
       const avatarSource = sourceOf(`--el-avatar-${tint}`);

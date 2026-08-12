@@ -415,10 +415,13 @@
         --el-label-4: var(--color-tint-lavender);
         --el-label-5: var(--color-tint-sky);
         --el-label-6: var(--color-tint-yellow);
-        /* Avatar ramp — KEEP the named keys (peach…yellow): lib/projects/avatar.ts persists
-           project.avatarColor ∈ these strings, so numbering them would break stored rows
-           (spec §7.1, rung-2 migration safety). The fallback fixes --el-type-* misuse #2 —
-           the mono initials tile keeps its blue but stops borrowing --el-type-task. */
+        /* Avatar ramp — KEEP the named keys (peach…yellow). The original reason was
+           migration safety (a project column persisted the colour key); MOTIR-2680
+           dropped that column, and the keys stay for a second reason that outlived
+           it — TriageAvatar hashes a name onto them BY NAME, and they are 1:1 with
+           --el-label-1..6, which numbering would hide. The fallback fixes
+           --el-type-* misuse #2 — the initials tile keeps its blue but stops
+           borrowing --el-type-task. */
         --el-avatar-peach: var(--color-tint-peach);
         --el-avatar-rose: var(--color-tint-rose);
         --el-avatar-mint: var(--color-tint-mint);

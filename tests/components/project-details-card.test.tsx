@@ -32,8 +32,8 @@ const baseProps = {
   projectId: 'p-1',
   projectName: 'Motir',
   projectIdentifier: 'PROD',
-  avatarIcon: 'rocket' as string | null,
-  avatarColor: 'lavender' as string | null,
+  // The project's LOGO — a resolved absolute URL, or null for none (MOTIR-2678).
+  image: null as string | null,
   previousKeys: [{ identifier: 'NIFR', retiredLabel: '4 June 2026' }],
 };
 
@@ -46,7 +46,7 @@ function renderCard(props: { canManage: boolean; previousKeys?: typeof baseProps
 }
 
 describe('ProjectDetailsCard (6.8.4 — editable)', () => {
-  it('renders the editable surface for an admin: name Input, Change avatar / key, save bar, danger zone', () => {
+  it('renders the editable surface for an admin: name Input, Upload logo / Change key, save bar, danger zone', () => {
     renderCard({ canManage: true });
     expect(screen.getByText('Admin')).toBeTruthy();
     expect(screen.queryByText('Read-only')).toBeNull();
@@ -56,7 +56,7 @@ describe('ProjectDetailsCard (6.8.4 — editable)', () => {
     // Key is a read-only value + a guarded change affordance (not a free input).
     expect(screen.getByText('PROD')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Change key/ })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Change avatar' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Upload logo' })).toBeTruthy();
     // The save bar + the re-homed danger zone.
     expect(screen.getByRole('button', { name: 'Save changes' })).toBeTruthy();
     expect(screen.getByText('Danger zone')).toBeTruthy();

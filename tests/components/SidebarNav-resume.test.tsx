@@ -29,8 +29,6 @@ const PROJECT = {
   key: 'PROD',
   identifier: 'PROD',
   name: 'Prodect',
-  avatarIcon: null,
-  avatarColor: null,
   archivedAt: null,
 } as unknown as ProjectDTO;
 

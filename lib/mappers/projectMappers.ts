@@ -1,5 +1,6 @@
 import type { Project, ProjectKeyAlias } from '@/generated/prisma/client';
 import type { ProjectDTO } from '@/lib/dto/projects';
+import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 
 // Prisma → DTO converter for the project domain. The service calls this
 // just before returning so no Prisma row shape leaks across the API
@@ -23,8 +24,11 @@ export function toProjectDTO(project: Project, aliases?: ProjectKeyAlias[]): Pro
     identifier: project.identifier,
     archivedAt: project.archivedAt ? project.archivedAt.toISOString() : null,
     accessLevel: project.accessLevel,
-    avatarIcon: project.avatarIcon,
-    avatarColor: project.avatarColor,
+    // The column holds an object KEY; the DTO carries an absolute URL. Resolving
+    // HERE — at the DTO boundary, like every user-image mapper — is what lets the
+    // stored value stay origin-free (MOTIR-2404's reason, applied to the project
+    // mark). null stays null: no image means nothing is rendered.
+    image: storedAssetUrl(project.image),
     onboardingRanAt: project.onboardingRanAt ? project.onboardingRanAt.toISOString() : null,
     aiGenerateExplanations: project.aiGenerateExplanations,
     ...(aliases

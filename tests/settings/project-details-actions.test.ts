@@ -78,30 +78,21 @@ async function makeFixture(slug: string, identifier = 'PROD') {
 }
 
 describe('project-details actions (6.8.4 wiring)', () => {
-  it('updateProjectDetailsAction saves name + avatar and returns the DTO', async () => {
+  // The action took a preset icon + colour alongside the name until MOTIR-2680
+  // dropped that pair; the save bar now carries the NAME alone, and the logo
+  // commits on pick through `updateProjectLogoAction` (covered below).
+  it('updateProjectDetailsAction saves the name and returns the DTO', async () => {
     await makeFixture('a');
-    const result = await updateProjectDetailsAction({
-      name: 'Renamed',
-      avatarIcon: 'rocket',
-      avatarColor: 'lavender',
-    });
+    const result = await updateProjectDetailsAction({ name: 'Renamed' });
     expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.project.name).toBe('Renamed');
-      expect(result.project.avatarIcon).toBe('rocket');
-      expect(result.project.avatarColor).toBe('lavender');
-    }
+    if (result.ok) expect(result.project.name).toBe('Renamed');
   });
 
-  it('updateProjectDetailsAction maps a blank name → INVALID_NAME and a bad icon → INVALID_AVATAR', async () => {
+  it('updateProjectDetailsAction maps a blank name → INVALID_NAME', async () => {
     await makeFixture('b');
     expect(await updateProjectDetailsAction({ name: '   ' })).toEqual({
       ok: false,
       code: 'INVALID_NAME',
-    });
-    expect(await updateProjectDetailsAction({ avatarIcon: 'not-a-real-icon' })).toEqual({
-      ok: false,
-      code: 'INVALID_AVATAR',
     });
   });
 

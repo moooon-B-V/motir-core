@@ -75,32 +75,34 @@ describe('createProject — happy path', () => {
       name: 'Motir Core',
     });
 
-    // DTO shape: id / name / slug / identifier / archivedAt / accessLevel +
-    // the Story 6.8 avatar fields ONLY — never a raw Prisma row (no createdAt,
-    // no lastWorkItemNumber). archivedAt rides on the DTO so the shell can flag
-    // an archived active project (#29.2); a freshly created project is always
-    // non-archived (null). avatarIcon/avatarColor backfill to null (the
-    // mono-identifier rendering); `previousKeys` is NOT present here — it loads
-    // only on the details-surface read path (6.8), not on a plain create.
+    // DTO shape: id / name / slug / identifier / archivedAt / accessLevel + the
+    // MARK field ONLY — never a raw Prisma row (no createdAt, no
+    // lastWorkItemNumber). archivedAt rides on the DTO so the shell can flag an
+    // archived active project (#29.2); a freshly created project is always
+    // non-archived (null). `image` (MOTIR-2676) is null on create — a new
+    // project has no mark, and the surfaces render NOTHING rather than a
+    // generated one. (Story 6.8's preset icon/colour pair sat in this list until
+    // MOTIR-2680 dropped the columns; its absence is now part of what this
+    // assertion pins.) `previousKeys` is NOT present here — it
+    // loads only on the details-surface read path (6.8), not on a plain create.
     expect(Object.keys(project).sort()).toEqual([
       'accessLevel',
       'aiGenerateExplanations',
       'archivedAt',
-      'avatarColor',
-      'avatarIcon',
       'id',
       'identifier',
+      'image',
       'name',
       'onboardingRanAt',
       'slug',
     ]);
+    // No mark on a fresh project — the null that means "render nothing".
+    expect(project.image).toBeNull();
     // A freshly created project defaults to explanations OFF (Story 7.4 / MOTIR-850).
     expect(project.aiGenerateExplanations).toBe(false);
     // A freshly created project has never onboarded — the marker is null until
     // its first plan is approved + materialized (Subtask 7.4 / MOTIR-1264).
     expect(project.onboardingRanAt).toBeNull();
-    expect(project.avatarIcon).toBeNull();
-    expect(project.avatarColor).toBeNull();
     expect(project.name).toBe('Motir Core');
     expect(project.slug).toBe('motir-core');
     expect(project.archivedAt).toBeNull();
