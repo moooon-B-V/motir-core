@@ -131,6 +131,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'profile.spec.ts': 10.8,
   'project-access.spec.ts': 8.7,
   'project-details.spec.ts': 8.0,
+  // MOTIR-2682 — new with the story, so there is no measured run to average.
+  // Estimated from its nearest sibling: four tests, one real sign-in each, the
+  // same seeded-tenant shape as `project-details.spec.ts` (8.0s over three), plus
+  // one upload round trip. Re-measure from the first two green `main` runs the
+  // way every other entry here was, and correct it then.
+  'project-logo.spec.ts': 9.0,
   'project-isolation.spec.ts': 4.9,
   'project-square-flow.spec.ts': 4.3,
   'projects-flow.spec.ts': 5.3,

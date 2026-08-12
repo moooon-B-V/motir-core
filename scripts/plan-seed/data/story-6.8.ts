@@ -4,6 +4,18 @@ import type { SeedStory } from '../types';
  * Story 6.8 — Edit project details + change project key (with old-key
  * redirects).
  *
+ * ⚠️ THE PRESET-AVATAR HALF OF THIS STORY IS RETIRED (MOTIR-2588, 2026-08-11).
+ * What 6.8 shipped as the project's mark — a preset icon library + a colour
+ * swatch, with a mono-identifier fallback when unset — no longer exists: the
+ * two columns, the registry, the picker and the renderer were all dropped by
+ * MOTIR-2680, and a project's mark is now an UPLOADED IMAGE that renders
+ * NOTHING when unset (`docs/decisions/entity-marks.md`). The prose below is
+ * left standing as the record of what was decided and built at the time —
+ * including the deviation note arguing AGAINST upload, which MOTIR-2589
+ * reversed on the evidence. Read every avatar sentence here as history, not as
+ * a description of the product. The retired identifiers are deliberately not
+ * spelled out anywhere in this file, so a grep for a dead symbol stays clean.
+ *
  * Project-admin editing of the project's details — **name, avatar, and the
  * project key** — by growing the **6.5.3 Details landing** (the read-only
  * identity page the 6.5 settings AREA lands on, expanded concurrently on
@@ -184,8 +196,9 @@ export const story_6_8: SeedStory = {
         'createdAt; `@@unique([workspaceId, identifier])`, indexed by projectId) modelled ' +
         'as a Prisma `@relation` on BOTH sides with `onDelete: Cascade` from Project ' +
         '(deletion frees the keys — the verified mirror rule; the FK-drift rule applies). ' +
-        '`Project.avatarIcon` + `Project.avatarColor` (nullable Strings — null = the ' +
-        'shipped mono-identifier rendering, so existing rows need no backfill).\n\n' +
+        'Two nullable preset-avatar columns on `Project`, an icon key and a colour ' +
+        'key (null = the shipped mono-identifier rendering, so existing rows need no ' +
+        'backfill). RETIRED — see the file header.\n\n' +
         '**Service (`projectsService`):** `updateDetails` — name (trimmed, non-empty; ' +
         '`slug` NOT regenerated — recorded decision) + avatar (icon key validated against ' +
         'the preset registry; colour against the swatch set). `changeKey` — ONE ' +
@@ -202,10 +215,10 @@ export const story_6_8: SeedStory = {
         'Jira Cloud "Previous project keys" remove). **Create-path guard:** the ' +
         'create-project identifier suffix loop ALSO checks the alias table inside its tx ' +
         '(a new project must not take a reserved key).\n\n' +
-        '**Route:** PATCH `/api/projects/[key]` accepting `{ name?, avatarIcon?, ' +
-        'avatarColor?, identifier? }` + DELETE `/api/projects/[key]/aliases/[alias]`, both ' +
+        '**Route:** PATCH `/api/projects/[key]` accepting `{ name?, identifier? }` plus the ' +
+        'two preset-avatar fields (retired) + DELETE `/api/projects/[key]/aliases/[alias]`, both ' +
         'project-admin-gated (the 6.4.3 capability, the `/api/projects/[key]/access` PATCH ' +
-        'pattern); typed errors → 400/403/409. DTO growth: `avatarIcon`/`avatarColor` + ' +
+        'pattern); typed errors → 400/403/409. DTO growth: the preset-avatar pair (retired) + ' +
         '`previousKeys` on the project DTO (the details card + switcher consumers).\n\n' +
         '## Acceptance criteria\n\n' +
         '- Migration applies cleanly; re-run reports "No difference detected" (no FK ' +

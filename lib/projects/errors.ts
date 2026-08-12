@@ -21,7 +21,7 @@ export class IdentifierCollisionError extends Error {
 // The PATCH /api/projects/[key] + DELETE .../aliases/[alias] write path throws
 // these; `projectErrorResponse` maps them:
 //   InvalidProjectNameError / InvalidIdentifierError / IdentifierUnchangedError
-//       / InvalidAvatarError                                 → 400
+//       / InvalidProjectImageError                           → 400
 //   IdentifierTakenError / IdentifierReservedError           → 409
 //   AliasNotFoundError                                       → 404
 // (admin-gating reuses NotProjectAdminError → 403 and ProjectNotFoundError → 404
@@ -117,12 +117,16 @@ export class IdentifierReservedError extends Error {
   }
 }
 
-// An avatar icon/colour key that is not in the preset registry (lib/projects/avatar.ts).
-export class InvalidAvatarError extends Error {
-  readonly code = 'INVALID_AVATAR' as const;
-  constructor(field: 'icon' | 'color', value: string) {
-    super(`"${value}" is not a valid avatar ${field}.`);
-    this.name = 'InvalidAvatarError';
+// A project `image` reference that is not one of OUR public-bucket objects under
+// THIS project's own `projects/<projectId>/` prefix (MOTIR-2676). The value the
+// caller sent is deliberately NOT echoed: a rejected ref is by definition one
+// this project may not point at, and reflecting it turns the error into an oracle
+// for probing another tenant's key space.
+export class InvalidProjectImageError extends Error {
+  readonly code = 'INVALID_PROJECT_IMAGE' as const;
+  constructor() {
+    super('A project image must be an uploaded asset belonging to this project.');
+    this.name = 'InvalidProjectImageError';
   }
 }
 

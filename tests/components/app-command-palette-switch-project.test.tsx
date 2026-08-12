@@ -48,8 +48,6 @@ function project(over: Partial<ProjectDTO> = {}): ProjectDTO {
     workspaceId: 'ws_1',
     name: 'Acme',
     identifier: 'ACME',
-    avatarIcon: null,
-    avatarColor: null,
     archivedAt: null,
     ...over,
   } as unknown as ProjectDTO;

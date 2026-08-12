@@ -65,8 +65,6 @@ const PROJECT = {
   id: 'p1',
   name: 'Motir',
   identifier: 'MOTIR',
-  avatarIcon: 'rocket',
-  avatarColor: 'lavender',
   archivedAt: null,
 } as unknown as ProjectDTO;
 

@@ -92,33 +92,33 @@ async function identifiersOf(projectId: string): Promise<string[]> {
 }
 
 describe('Story 6.8 — the project-details lifecycle, composed on one project', () => {
-  it('walks the full verification recipe end to end (rename → avatar → key change → redirect → reclaim → release)', async () => {
+  it('walks the full verification recipe end to end (rename → key change → redirect → reclaim → release)', async () => {
     const { project, ownerCtx } = await makeFixture('lifecycle');
     const [one, two] = await seedItems(project.id, ownerCtx, 2);
     expect(one?.identifier).toBe('PROD-1');
     expect(two?.identifier).toBe('PROD-2');
 
-    // ── 1. Rename + avatar (the batched updateDetails path) ──────────────────
+    // ── 1. Rename (the batched updateDetails path) ───────────────────────────
+    // This step also set a preset avatar until MOTIR-2680 dropped that pair; the
+    // mark is an uploaded image now, and it has its own coverage in
+    // `project-details-service.test.ts` (the own-project gate + the post-commit
+    // blob collection) rather than riding along here. What this journey is for
+    // is the KEY CHANGE, and the rename is its lead-in.
     const renamed = await projectsService.updateDetails({
       key: 'PROD',
       name: '  Lifecycle Renamed  ',
-      avatarIcon: 'rocket',
-      avatarColor: 'lavender',
       ctx: ownerCtx,
     });
     expect(renamed.name).toBe('Lifecycle Renamed'); // trimmed
-    expect(renamed.avatarIcon).toBe('rocket');
-    expect(renamed.avatarColor).toBe('lavender');
     expect(renamed.identifier).toBe('PROD'); // a rename does NOT touch the key
 
     // ── 2. Change the key PROD → NIF (the atomic rewrite) ────────────────────
     const moved = await projectsService.changeKey({ key: 'PROD', newKey: 'NIF', ctx: ownerCtx });
     expect(moved.identifier).toBe('NIF');
     expect(moved.previousKeys).toEqual([{ identifier: 'PROD', retiredAt: expect.any(String) }]);
-    // Every issue re-keyed, numbers preserved; the avatar/name survive the change.
+    // Every issue re-keyed, numbers preserved; the name survives the change.
     expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2']);
     expect(moved.name).toBe('Lifecycle Renamed');
-    expect(moved.avatarIcon).toBe('rocket');
 
     // ── 3. The old key still SERVES (REST shape) and issue links REDIRECT ────
     const served = await projectsService.getByKey('PROD', ownerCtx); // no throw, canonical DTO

@@ -809,41 +809,6 @@ const KNOWN_PATHS: { file: string; path: string; why: string }[] = [
     path: 'app/(authed)/settings/account/api-tokens/page.tsx',
     why: 'The same citation in the notes beside that mock — the ownership table naming where the in-app door is placed. Same move, same reason it stays.',
   },
-  // ── A path this asset SPECIFIES INTO, which its own story has not merged ──
-  // MOTIR-2674 is the DESIGN stopper of story MOTIR-2588: it ships to `main`
-  // ahead of the code it specifies, so the ADR it draws to
-  // (`docs/decisions/entity-marks.md`, MOTIR-2589) exists only on
-  // `parent/MOTIR-2588-project-image` until that story's PR lands. The asset
-  // MUST cite it — the no-fallback rule it draws is that document's decision,
-  // and a design that states a rule without naming where the rule was made is
-  // the thing this whole suite exists to prevent.
-  //
-  // The pair of MOTIR-2572 rows that used to sit here were removed by that
-  // story's own merge, exactly as their delete-on-merge note instructed —
-  // `docs/decisions/token-permissions.md` and `lib/tokens/grant.ts` both resolve
-  // on `main` now. This block is the same shape, one story behind.
-  // ⚠️ DELETE BOTH ROWS when MOTIR-2588 merges; at that point the path resolves
-  // and a lingering entry here would be muting a check rather than explaining it.
-  {
-    file: 'design/shell/design-notes.md',
-    path: 'docs/decisions/entity-marks.md',
-    why: 'The ADR (MOTIR-2589) that decides the org/workspace/project mark stance this asset draws — including the no-fallback rule. Lands with story MOTIR-2588; remove this row when it merges.',
-  },
-  {
-    file: 'design/shell/context-row.mock.html',
-    path: 'docs/decisions/entity-marks.md',
-    why: 'The same citation in Panel G, which names the decision its frames render. Same story, same reason it is deliberate, same removal.',
-  },
-  {
-    file: 'design/projects/design-notes.md',
-    path: 'docs/decisions/entity-marks.md',
-    why: 'The projects-area half of the same story (MOTIR-2675) cites the same ADR for the same reason — it draws that decision’s Image row. Lands with MOTIR-2588; remove with the two rows above.',
-  },
-  {
-    file: 'design/projects/details.mock.html',
-    path: 'docs/decisions/entity-marks.md',
-    why: 'The mock’s header block records the reversed preset deviation and names the ADR that reversed it. Same story, same removal.',
-  },
   // ── A slash in prose that is not a path ───────────────────────────────────
   {
     file: 'design/epic-privacy/design-notes.md',

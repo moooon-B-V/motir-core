@@ -536,10 +536,11 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 ### `project`
 
-| Operation                             | Verbs  | Gate today     | Permission           | Decision | Why |
-| ------------------------------------- | ------ | -------------- | -------------------- | -------- | --- |
-| `/api/projects/[key]`                 | PATCH  | workspace only | `project:administer` | existing | R15 |
-| `/api/projects/[key]/aliases/[alias]` | DELETE | workspace only | `project:administer` | existing | R15 |
+| Operation                             | Verbs  | Gate today                                        | Permission           | Decision | Why |
+| ------------------------------------- | ------ | ------------------------------------------------- | -------------------- | -------- | --- |
+| `/api/projects/[key]`                 | PATCH  | workspace only                                    | `project:administer` | existing | R15 |
+| `/api/projects/[key]/aliases/[alias]` | DELETE | workspace only                                    | `project:administer` | existing | R15 |
+| `/api/upload/project-image`           | POST   | `projectsService.uploadImage` → `assertCanManage` | `project:administer` | existing | R15 |
 
 ### `public_request`
 

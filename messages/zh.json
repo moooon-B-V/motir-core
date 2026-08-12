@@ -1395,11 +1395,8 @@
       "cardTitle": "项目详情",
       "roleAdmin": "管理员",
       "roleReadOnly": "只读",
-      "fieldAvatar": "头像",
       "fieldName": "名称",
       "fieldKey": "标识",
-      "avatarHelp": "一个预设图标和颜色，显示在项目切换器和列表中。选择“无”可回退到键首字母。",
-      "changeAvatar": "更改图标",
       "pickerIcon": "图标",
       "pickerColour": "颜色",
       "pickerPreview": "预览",
@@ -1435,7 +1432,27 @@
       "releaseBody": "释放 {ident} 会将其释出给其他项目，并断开旧的 {ident} 链接——它们将不再重定向，而是返回“未找到”。除非将键改回 {ident}，否则无法撤销。",
       "releaseButton": "释放键",
       "releasedToast": "已释放 {ident}。它现在可供其他项目使用，其旧链接也不再重定向。",
-      "releaseErrorTitle": "释放键失败，请重试。"
+      "releaseErrorTitle": "释放键失败，请重试。",
+      "logo": {
+        "help": "PNG 或 JPG，最大 2 MB。在显示项目名称的位置一并显示；未设置的项目只显示名称。",
+        "alt": "项目标识",
+        "upload": "上传标识",
+        "change": "更换",
+        "remove": "移除",
+        "updated": "项目标识已更新",
+        "removed": "项目标识已移除",
+        "removeConfirm": {
+          "title": "移除项目标识？",
+          "body": "在原本显示标识的位置，Motir 将改为显示项目名称。你可以随时重新上传。",
+          "cancel": "取消",
+          "confirm": "移除标识"
+        },
+        "errors": {
+          "invalidType": "不支持该文件类型。请使用 PNG 或 JPG。",
+          "tooLarge": "该标识超过 2 MB。请选择更小的文件。",
+          "failed": "无法更新项目标识。请重试。"
+        }
+      }
     },
     "workspace": {
       "empty": {

@@ -3,26 +3,14 @@
 import { type ReactNode, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import {
-  Check,
-  Eye,
-  Hash,
-  History,
-  Image as ImageIcon,
-  Key,
-  Loader2,
-  Shield,
-  Type,
-  Unlink,
-} from 'lucide-react';
+import { Check, Eye, Hash, History, Key, Loader2, Shield, Type, Unlink } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Pill } from '@/components/ui/Pill';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { ProjectAvatar } from '../../../_components/ProjectAvatar';
 import { ArchiveProjectCard } from './ArchiveProjectCard';
-import { AvatarPicker } from './AvatarPicker';
+import { ProjectLogoField } from './ProjectLogoField';
 import { ChangeKeyModal } from './ChangeKeyModal';
 import { ReleaseKeyModal } from './ReleaseKeyModal';
 import { updateProjectDetailsAction } from '../actions';
@@ -49,8 +37,11 @@ export interface ProjectDetailsCardProps {
   projectId: string;
   projectName: string;
   projectIdentifier: string;
-  avatarIcon: string | null;
-  avatarColor: string | null;
+  /** The project's logo — a resolved absolute URL, or null for no logo.
+   *  It is the ONLY mark prop this card takes. Story 6.8's preset icon + colour
+   *  pair was removed from the component by MOTIR-2678 and from the DTO and the
+   *  table by MOTIR-2680, so there is nothing left of it to thread. */
+  image: string | null;
   previousKeys: PreviousKeyView[];
   /** Project admin (or workspace owner/admin) — gates every editing affordance. */
   canManage: boolean;
@@ -60,8 +51,7 @@ export function ProjectDetailsCard({
   projectId,
   projectName,
   projectIdentifier,
-  avatarIcon,
-  avatarColor,
+  image,
   previousKeys,
   canManage,
 }: ProjectDetailsCardProps) {
@@ -71,17 +61,18 @@ export function ProjectDetailsCard({
     return (
       <Card header={<CardHead canManage={false} t={td} />}>
         <dl className="flex flex-col">
-          <Field
-            icon={<ImageIcon className="h-[15px] w-[15px]" aria-hidden />}
-            label={td('fieldAvatar')}
-          >
-            <ProjectAvatar
-              icon={avatarIcon}
-              color={avatarColor}
-              identifier={projectIdentifier}
-              size={52}
-            />
-          </Field>
+          {/* The LOGO, with no label and no fallback: a picture of the project's
+              logo needs no caption saying "Image", and a project without one
+              renders nothing at all (docs/decisions/entity-marks.md §3). The row
+              is omitted entirely rather than rendered empty. */}
+          {image ? (
+            <Field label="">
+              <span className="inline-flex h-[52px] w-[52px] flex-none items-center justify-center overflow-hidden rounded-(--radius-control)">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={image} alt="" className="h-full w-full object-cover" />
+              </span>
+            </Field>
+          ) : null}
           <Field icon={<Type className="h-[15px] w-[15px]" aria-hidden />} label={td('fieldName')}>
             <span className="font-sans text-[13.5px] font-medium text-(--el-text)">
               {projectName}
@@ -100,8 +91,7 @@ export function ProjectDetailsCard({
       projectId={projectId}
       projectName={projectName}
       projectIdentifier={projectIdentifier}
-      avatarIcon={avatarIcon}
-      avatarColor={avatarColor}
+      image={image}
       previousKeys={previousKeys}
     />
   );
@@ -111,8 +101,7 @@ function EditableDetails({
   projectId,
   projectName,
   projectIdentifier,
-  avatarIcon,
-  avatarColor,
+  image,
   previousKeys,
 }: Omit<ProjectDetailsCardProps, 'canManage'>) {
   const td = useTranslations('settings.details');
@@ -124,35 +113,29 @@ function EditableDetails({
   // previous-keys are read straight from props — their mutations are their own
   // modal flows that `router.refresh()` to reconcile the whole app.
   const [name, setName] = useState(projectName);
-  const [icon, setIcon] = useState<string | null>(avatarIcon);
-  const [color, setColor] = useState<string | null>(avatarColor);
-  const [saved, setSaved] = useState({ name: projectName, icon: avatarIcon, color: avatarColor });
+  const [saved, setSaved] = useState({ name: projectName });
   const [justSaved, setJustSaved] = useState(false);
   const [keyOpen, setKeyOpen] = useState(false);
   const [releasing, setReleasing] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const trimmedName = name.trim();
-  const dirty = trimmedName !== saved.name || icon !== saved.icon || color !== saved.color;
+  // The logo is NOT part of this comparison: it commits on pick, so the save bar
+  // is about the name alone now that the preset picker is gone.
+  const dirty = trimmedName !== saved.name;
   const canSave = dirty && trimmedName.length > 0 && !isPending;
 
   function handleCancel() {
     setName(saved.name);
-    setIcon(saved.icon);
-    setColor(saved.color);
     setJustSaved(false);
   }
 
   function handleSave() {
     if (!canSave) return;
     startTransition(async () => {
-      const result = await updateProjectDetailsAction({
-        name: trimmedName,
-        avatarIcon: icon,
-        avatarColor: color,
-      });
+      const result = await updateProjectDetailsAction({ name: trimmedName });
       if (result.ok) {
-        setSaved({ name: trimmedName, icon, color });
+        setSaved({ name: trimmedName });
         setName(trimmedName);
         setJustSaved(true);
         router.refresh();
@@ -177,22 +160,14 @@ function EditableDetails({
         className="p-0"
       >
         <div className="flex flex-col p-(--spacing-card-padding)">
-          {/* Avatar */}
-          <FieldStack
-            icon={<ImageIcon className="h-[15px] w-[15px]" aria-hidden />}
-            label={td('fieldAvatar')}
-            help={td('avatarHelp')}
-          >
-            <AvatarPicker
-              icon={icon}
-              color={color}
-              identifier={projectIdentifier}
+          {/* The LOGO — no label (the picture says what it is), and it commits
+              on pick rather than through the save bar below, which is the account
+              Photo row's behaviour this composes. */}
+          <FieldStack label="" help={td('logo.help')}>
+            <ProjectLogoField
+              initialLogo={image}
+              projectIdentifier={projectIdentifier}
               disabled={isPending}
-              onChange={({ icon: nextIcon, color: nextColor }) => {
-                setJustSaved(false);
-                setIcon(nextIcon);
-                setColor(nextColor);
-              }}
             />
           </FieldStack>
 
@@ -372,7 +347,17 @@ function SaveStatus({
 }
 
 // A read-only identity row (label cell + value cell) inside a <dl>.
-function Field({ icon, label, children }: { icon: ReactNode; label: string; children: ReactNode }) {
+// `icon`/`label` are optional: the logo row has neither, because a picture of
+// the project's logo needs no caption (MOTIR-2678).
+function Field({
+  icon,
+  label,
+  children,
+}: {
+  icon?: ReactNode;
+  label?: string;
+  children: ReactNode;
+}) {
   return (
     <div className="flex items-center gap-3.5 border-b border-(--el-border-soft) py-3.5 last:border-b-0">
       <dt className="flex w-[132px] flex-none items-center gap-2 font-sans text-[12.5px] text-(--el-text-muted)">
@@ -391,8 +376,8 @@ function FieldStack({
   help,
   children,
 }: {
-  icon: ReactNode;
-  label: string;
+  icon?: ReactNode;
+  label?: string;
   help?: string;
   children: ReactNode;
 }) {

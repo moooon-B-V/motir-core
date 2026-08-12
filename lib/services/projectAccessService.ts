@@ -171,12 +171,27 @@ async function resolvePublicInputs(
   // actor who is ALSO a member of the public project's workspace keeps their
   // real capabilities, and if that membership is on a custom role, that role is
   // what decides them here too.
-  const projectMembership =
-    await projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
-      actorUserId,
-      projectId,
-      tx,
-    );
+  //
+  // MOTIR-2684: `project_membership_active_workspace` keys PURELY on
+  // `app.workspace_id` — it has no "or your own" arm like the workspace-membership
+  // policy `readOwnMembership` leans on — so an unbound read of it returns nothing
+  // under `motir_app` and a real project ADMIN silently loses `canManage` on the
+  // public page (the 6.16.3 in-place Edit affordance). Binding the workspace is
+  // safe HERE and only here, in a way it is not for the project read above: the
+  // row has already come back and been proved `public`, so `project.workspaceId`
+  // is a value the database handed us, not a guess made on the reader's behalf —
+  // and the lookup is keyed on `(actorUserId, projectId)`, so the binding makes
+  // exactly the actor's own row visible and nothing else. A cross-org viewer with
+  // no membership still resolves to null, which is the same answer as before.
+  const projectMembership = await (tx
+    ? projectMembershipRepository.findByUserAndProjectWithRoleDefinition(actorUserId, projectId, tx)
+    : withWorkspaceContext({ userId: actorUserId, workspaceId: project.workspaceId }, (t) =>
+        projectMembershipRepository.findByUserAndProjectWithRoleDefinition(
+          actorUserId,
+          projectId,
+          t,
+        ),
+      ));
   return {
     accessLevel: project.accessLevel,
     workspaceRole: workspaceMembership?.role ?? null,
