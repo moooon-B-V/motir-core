@@ -12,6 +12,7 @@ import type { DispatchPromptDto } from '@/lib/dto/dispatch';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The DISPATCH-PROMPT surface over REAL Postgres (Story 7.9 · MOTIR-1802) — the
@@ -35,6 +36,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const CARD = [
@@ -53,7 +55,7 @@ const CARD = [
 /** Connect one repo to the fixture's workspace — the 7.10.3 installation mirror
  *  that `targetRepo` resolves against (same shape as `dispatchTargetRepo.test.ts`). */
 async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-${fx.workspaceId}` },
     create: {
       installationId: `inst-${fx.workspaceId}`,
@@ -64,7 +66,7 @@ async function connectRepo(fx: WorkItemFixture, name: string): Promise<void> {
     },
     update: {},
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,

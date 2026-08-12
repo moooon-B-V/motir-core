@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { InngestTestEngine } from '@inngest/test';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
+import { adminDb } from '../helpers/adminDb';
 
 // THE FIRST-AUDIT TRIGGER (MOTIR-2266) — `docs/decisions/audit-on-first-index.md`
 // option B: a repo whose code-graph index SUCCEEDS and that has no derived audit
@@ -107,7 +108,7 @@ function runIndex(args: { installationId: string; workspaceId: string; projectId
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  await db.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
   resetTarballBodyTrap();
@@ -124,6 +125,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,7 +274,7 @@ describe('system.code-graph-index — the FIRST-audit trigger', () => {
 describe('firstAuditTriggerService — the verdicts that derive nothing', () => {
   it('skips a workspace with no OWNER — there is no actor to mint a read-back token for', async () => {
     const { workspaceId } = await seedIndexWorkspace('fa-noowner', 1);
-    await db.workspaceMembership.deleteMany({ where: { workspaceId, role: 'owner' } });
+    await adminDb.workspaceMembership.deleteMany({ where: { workspaceId, role: 'owner' } });
 
     const report = await firstAuditTriggerService.deriveFirstAudit({
       workspaceId,

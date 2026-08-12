@@ -4,6 +4,7 @@ import { InngestTestEngine } from '@inngest/test';
 import { db } from '@/lib/db';
 import { inngest } from '@/lib/jobs/client';
 import { defineJob } from '@/lib/jobs/defineJob';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 
@@ -32,7 +33,9 @@ const { attachmentsService } = await import('@/lib/services/attachmentsService')
 const { jobFunctions } = await import('@/lib/jobs/registry');
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment", "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "attachment", "work_item" RESTART IDENTITY CASCADE',
+  );
   await truncateAuthTables();
   await truncateJobRuns();
 }
@@ -45,6 +48,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
@@ -54,7 +58,7 @@ async function makeAttachment(
   fx: WorkItemFixture,
   overrides: Partial<{ workItemId: string | null; blobPathname: string; createdAt: Date }> = {},
 ): Promise<Attachment> {
-  return db.attachment.create({
+  return adminDb.attachment.create({
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,
@@ -70,7 +74,8 @@ async function makeAttachment(
   });
 }
 
-const exists = async (id: string) => (await db.attachment.findUnique({ where: { id } })) !== null;
+const exists = async (id: string) =>
+  (await adminDb.attachment.findUnique({ where: { id } })) !== null;
 
 describe('the scheduled sweep (in-process Inngest run)', () => {
   it('sweeps old orphans blob-then-row; never touches young orphans or linked rows; persists the summary on the ledger row', async () => {
@@ -92,7 +97,7 @@ describe('the scheduled sweep (in-process Inngest run)', () => {
 
     // The ledger: one succeeded, untenanted, scheduled-named run carrying the
     // summary in `output` (the 5.2.7 column).
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.functionId).toBe('system.attachment-gc');
@@ -143,14 +148,16 @@ describe('attachmentsService.sweepOrphanAttachments — paging bounds', () => {
       maxBatchesPerRun: 2,
     });
     expect(capped).toEqual({ scanned: 4, deleted: 4, failed: 0 });
-    expect(await db.attachment.count()).toBe(1); // backlog never an unbounded run
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(1); // backlog never an unbounded run
 
     const rest = await attachmentsService.sweepOrphanAttachments({
       batchSize: 2,
       maxBatchesPerRun: 2,
     });
     expect(rest).toEqual({ scanned: 1, deleted: 1, failed: 0 });
-    expect(await db.attachment.count()).toBe(0);
+    const attachmentCountAfterRest = await adminDb.attachment.count();
+    expect(attachmentCountAfterRest).toBe(0);
   });
 
   it('a failing front row anchors the cursor so deeper orphans are still reached in the same run', async () => {

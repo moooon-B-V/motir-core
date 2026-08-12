@@ -8,6 +8,7 @@ import {
   DAILY_HEALTH_CHECK_PAYLOAD,
   DAILY_HEALTH_CHECK_CRON,
 } from '@/lib/jobs/definitions/dailyHealthCheck';
+import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
 import { seedHealthyJobSchedules } from '../helpers/jobs';
 
@@ -85,6 +86,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // A cron job has NO event trigger, so we invoke it WITHOUT an `events` array:
@@ -115,7 +117,7 @@ describe('system.daily-health-check scheduled job', () => {
 
     // Only the wrapper writes a row for THIS function (the seed skips it), so
     // there is exactly one and it is the one under test.
-    const runs = await db.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
+    const runs = await adminDb.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
     expect(runs).toHaveLength(1);
 
     const run = runs[0]!;

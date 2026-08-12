@@ -4,6 +4,7 @@ import { jobRunsService } from '@/lib/services/jobRunsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { Prisma } from '@/generated/prisma/client';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // MOTIR-1545 — a background inngest job can complete (or start, or terminally
@@ -24,6 +25,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTIR-1545)', () => {
@@ -43,7 +45,8 @@ describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTI
     const result = await jobRunsService.recordSuccess(started!.id, { ok: true });
     expect(result).toBeNull();
     // No row was resurrected.
-    expect(await db.jobRun.findMany()).toHaveLength(0);
+    const jobRunRows = await adminDb.jobRun.findMany();
+    expect(jobRunRows).toHaveLength(0);
   });
 
   it('recordTerminalFailure whose parent workspace was truncated is a benign no-op (no FK throw)', async () => {
@@ -74,8 +77,10 @@ describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTI
     });
     expect(result).toBeNull();
     // Neither a phantom run nor a DLQ row leaked against the dead tenant.
-    expect(await db.jobRun.findMany()).toHaveLength(0);
-    expect(await db.jobRunDlq.findMany()).toHaveLength(0);
+    const jobRunRows = await adminDb.jobRun.findMany();
+    expect(jobRunRows).toHaveLength(0);
+    const jobRunDlqRows = await adminDb.jobRunDlq.findMany();
+    expect(jobRunDlqRows).toHaveLength(0);
   });
 
   it('recordStart against a truncated parent workspace is a benign no-op (no FK throw)', async () => {
@@ -100,6 +105,7 @@ describe('job-ledger writes are benign no-ops when the run/tenant vanished (MOTI
       attempt: 0,
     });
     expect(result).toBeNull();
-    expect(await db.jobRun.findMany()).toHaveLength(0);
+    const jobRunRows = await adminDb.jobRun.findMany();
+    expect(jobRunRows).toHaveLength(0);
   });
 });

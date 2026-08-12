@@ -8,6 +8,7 @@ import { jobRunRepository } from '@/lib/repositories/jobRunRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
   containerExitsWith,
@@ -51,11 +52,11 @@ import {
 beforeEach(async () => {
   await truncateAuthTables();
   await truncateJobRuns();
-  await db.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "migrate_onboarding" RESTART IDENTITY CASCADE');
   // The admission slots are real rows and no FK cascade reaches them; a file
   // that left them behind would slowly fill the index lane and start deferring
   // its own later cases.
-  await db.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
   resetTarballBodyTrap();
@@ -69,6 +70,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The enqueue gate's view: the workspace's indexed repoRef set. */

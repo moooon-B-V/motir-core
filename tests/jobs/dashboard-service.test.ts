@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { jobsDashboardService } from '@/lib/services/jobsDashboardService';
 import { ReplayForbiddenError, DlqEntryNotFoundError } from '@/lib/jobs/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -26,7 +27,7 @@ async function seedRun(opts: {
   functionId?: string;
   eventName?: string;
 }): Promise<void> {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: opts.workspaceId,
       functionId: opts.functionId ?? 'email.send',
@@ -43,7 +44,7 @@ async function seedDlq(opts: {
   eventData: unknown;
   replayed?: boolean;
 }): Promise<string> {
-  const row = await db.jobRunDlq.create({
+  const row = await adminDb.jobRunDlq.create({
     data: {
       workspaceId: opts.workspaceId,
       functionId: 'email.send',
@@ -88,6 +89,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('jobsDashboardService.listJobRuns', () => {
@@ -196,7 +198,7 @@ describe('jobsDashboardService.replayDLQ', () => {
     expect(sent.data).toEqual({ ...eventData, idempotencyKey: `replay-key-xyz:replay:${dlqId}` });
 
     expect(result.replayedAt).not.toBeNull();
-    const reread = await db.jobRunDlq.findUnique({ where: { id: dlqId } });
+    const reread = await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } });
     expect(reread!.replayedAt).not.toBeNull();
   });
 });

@@ -12,6 +12,7 @@ import { parentStatusRollupService } from '@/lib/services/parentStatusRollupServ
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { statusDerivationOnTransitioned } from '@/lib/jobs/definitions/statusDerivation';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Story MOTIR-1615 · Subtask MOTIR-1621 — the TRIGGER SEAM for bidirectional
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const EVENT = {
@@ -215,7 +217,7 @@ describe('status-derivation/transitioned — the dispatch (MOTIR-1621)', () => {
     });
     await engine.execute();
 
-    const runs = await db.jobRun.findMany({
+    const runs = await adminDb.jobRun.findMany({
       where: { functionId: 'status-derivation/transitioned' },
     });
     expect(runs).toHaveLength(1);
