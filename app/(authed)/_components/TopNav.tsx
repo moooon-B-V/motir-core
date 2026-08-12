@@ -195,10 +195,16 @@ export async function TopNav({
             // edge says what the divider said, and that returns 9px to a row
             // measured at 69px of slack.
             //
-            // Deliberately NOT a tint: OrgControl's avatar is a 20px
-            // `--el-tint-lavender` tile and ProjectAvatar an
-            // `--el-avatar-lavender` one, so a third lavender square 20px away
-            // would read as another tier chip instead of as the brand. The
+            // Deliberately NOT a tint. The ORIGINAL reason was adjacency:
+            // OrgControl's avatar was a 20px `--el-tint-lavender` tile and
+            // ProjectAvatar an `--el-avatar-lavender` one, so a third lavender
+            // square 20px away would have read as another tier chip. MOTIR-2679
+            // deleted both of those squares, and the conclusion is re-affirmed
+            // on new grounds (MOTIR-2674, design/shell/design-notes.md § The
+            // brand tile): the tile is now the ONLY boxed element in the left
+            // cluster, so the box itself is what marks it as identity rather
+            // than as a control — a tint would re-introduce the very tier-chip
+            // reading the neutral field was chosen to avoid. The
             // glyph keeps `--el-accent-on-surface` — the token whose name is
             // literally this composition — so `.brand-glyph`'s GLOBAL rule,
             // shared with auth / explore / public / OG / the specimen, is not

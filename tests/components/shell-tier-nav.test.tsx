@@ -53,8 +53,6 @@ const project = (over: Partial<ProjectDTO> = {}) =>
     id: 'p1',
     name: 'Motir',
     identifier: 'MOTIR',
-    avatarIcon: 'rocket',
-    avatarColor: 'lavender',
     archivedAt: null,
     ...over,
   }) as unknown as ProjectDTO;
@@ -118,11 +116,28 @@ describe('the shell’s context path (MOTIR-2556)', () => {
       expect(has(wrapper, 'md:contents')).toBe(true);
     });
 
-    it('gates the org NAME one band later, at xl — the org collapses to its mark first', () => {
+    // ⚠️ AMENDED by MOTIR-2679. This used to assert the opposite — that the org
+    // NAME was `hidden xl:inline`, because the org's MARK stood in for it
+    // between `md` and `xl`. `docs/decisions/entity-marks.md` §2 deletes that
+    // mark (an organization cannot have one), so a hidden name would have left
+    // the tier as a chevron in an empty button. The name now renders from `md`:
+    // +2px against the old mark form at 768px, 0 overflow at every band
+    // (MOTIR-2674, design/shell/design-notes.md § The ladder).
+    it('renders the org NAME from md — it is no longer gated behind xl', () => {
       render();
       const name = screen.getByText('moooon B.V.');
-      expect(has(name, 'hidden')).toBe(true);
-      expect(has(name, 'xl:inline')).toBe(true);
+      expect(has(name, 'hidden')).toBe(false);
+      expect(has(name, 'xl:inline')).toBe(false);
+    });
+
+    it('renders NO org mark — not a tile, not an initial, nothing', () => {
+      const { container } = render();
+      // The retired OrgAvatar was the only `--el-tint-lavender` 20px tile in
+      // this tree; nothing replaces it.
+      expect(container.querySelector('.bg-\\(--el-tint-lavender\\)')).toBeNull();
+      // And the org tier is not a control whose only content is a chevron.
+      const org = screen.getByRole('button', { name: /organization|Organisation|org menu/i });
+      expect((org.textContent ?? '').trim().length).toBeGreaterThan(0);
     });
 
     it('gates the WORKSPACE tier at xl, separator included', () => {

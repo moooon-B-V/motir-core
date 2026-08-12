@@ -32,18 +32,6 @@ export interface OrgControlProps {
    *  menu row (Story 8.1.7, design/billing panel 1). Off-cloud the commercial
    *  surface does not exist, so the row is hidden entirely (ADR §6). */
   cloudBilling: boolean;
-  /**
-   * The breakpoint from which the org's NAME is rendered; below it the control
-   * is its avatar + chevron alone. Omitted (the default) means the name is
-   * always shown — the drawer header, where there is room for it.
-   *
-   * `"xl"` is the bar's ladder (MOTIR-2556 · `design/shell/design-notes.md`
-   * § *The context row*): the org is the first tier to give up width, because
-   * a breadcrumb collapses its ANCESTORS and keeps the most specific crumb
-   * legible. The control stays a full menu button either way — only the name
-   * goes, so nothing becomes unreachable.
-   */
-  nameFrom?: 'xl';
 }
 
 // The organization control in the app shell (Story 6.10.5, design/org-admin
@@ -53,7 +41,7 @@ export interface OrgControlProps {
 // Billing & plans (cloud only, Story 8.1.7) · New workspace, then — only when the
 // account is in ≥2 orgs — a "Switch organization" section. The WORKSPACE switcher
 // (rendered alongside by the shell only at ≥2 workspaces) is a separate control.
-export function OrgControl({ activeOrg, orgs, cloudBilling, nameFrom }: OrgControlProps) {
+export function OrgControl({ activeOrg, orgs, cloudBilling }: OrgControlProps) {
   const t = useTranslations('orgAdmin');
   const ts = useTranslations('shell');
   const router = useRouter();
@@ -100,18 +88,19 @@ export function OrgControl({ activeOrg, orgs, cloudBilling, nameFrom }: OrgContr
             aria-label={t('menu.ariaLabel')}
           >
             <span className="flex items-center gap-2">
-              <OrgAvatar name={activeOrg.name} />
-              {/* font-serif: the org name is a header IDENTITY label — it wears the
-                  headline role so the `data-type` axis re-types the header chrome
-                  too (see ProjectSwitcher). */}
-              <span
-                className={cn(
-                  'max-w-[20ch] truncate font-serif',
-                  nameFrom === 'xl' && 'hidden xl:inline',
-                )}
-              >
-                {activeOrg.name}
-              </span>
+              {/* No mark. An organization carries none — there is no way to give
+                  it one, so any mark here would be generated from the name
+                  (`docs/decisions/entity-marks.md` §2).
+                  The NAME is therefore always rendered: it used to be
+                  `hidden xl:inline`, which was only survivable while the mark
+                  stood in for it between `md` and `xl`. Removing the mark without
+                  this would leave a ghost button holding a chevron. Measured at
+                  +2px vs the old mark form at 768px, 0 overflow at every band
+                  (MOTIR-2674, `design/shell/design-notes.md` § *The ladder*).
+                  font-serif: the org name is a header IDENTITY label — it wears
+                  the headline role so the `data-type` axis re-types the header
+                  chrome too (see ProjectSwitcher). */}
+              <span className="max-w-[20ch] truncate font-serif">{activeOrg.name}</span>
             </span>
           </Button>
         </Popover.Trigger>
@@ -194,7 +183,6 @@ export function OrgControl({ activeOrg, orgs, cloudBilling, nameFrom }: OrgContr
                             <Check className="h-4 w-4" style={{ color: 'var(--el-accent)' }} />
                           ) : null}
                         </span>
-                        <OrgAvatar name={org.name} />
                         <span
                           className={cn(
                             'flex-1 truncate font-sans text-sm text-(--el-text)',
@@ -246,20 +234,6 @@ export function OrgControl({ activeOrg, orgs, cloudBilling, nameFrom }: OrgContr
         onError={() => toast({ variant: 'error', title: t('settings.saveError') })}
       />
     </>
-  );
-}
-
-// A small square initial chip for an organization — distinct from the round
-// USER avatar. `--radius-control`, lavender tint, charcoal text (AA-safe).
-function OrgAvatar({ name }: { name: string }) {
-  const initial = (name || '?').charAt(0).toUpperCase();
-  return (
-    <span
-      aria-hidden
-      className="bg-(--el-tint-lavender) text-(--el-text-strong) inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-(--radius-control) font-sans text-[0.625rem] font-semibold"
-    >
-      {initial}
-    </span>
   );
 }
 

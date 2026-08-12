@@ -118,6 +118,54 @@ export function isOwnAvatarRef(stored: string | null | undefined, userId: string
 }
 
 /**
+ * The per-PROJECT image prefix a project-image upload writes under (MOTIR-2676)
+ * — `projects/<projectId>/…`. The TENANT-mark analogue of `avatarBlobPrefix`
+ * above: a project image is project substrate, so it is keyed by the owning
+ * PROJECT, not a user or a workspace. The project-image UPLOAD route writes the
+ * blob here; `projectsService.updateDetails` accepts an `image` only if it lands
+ * here for THAT project.
+ *
+ * Keyed by the project's internal id rather than its identifier ON PURPOSE: a
+ * project's KEY is changeable (`changeKey`, with alias rows behind it), so a
+ * key-derived prefix would strand every previously-stored object the moment a
+ * project is renamed — the stored ref would stop matching its own gate.
+ */
+export function projectImagePrefix(projectId: string): string {
+  return `projects/${projectId}/`;
+}
+
+/**
+ * True iff `stored` refers to one of OUR public-bucket uploads under THIS
+ * project's own image prefix. The project-mark twin of {@link isOwnAvatarRef},
+ * and used for the same two jobs: (a) GATE an `image` update to a real
+ * own-project reference, so project A can never point its mark at project B's
+ * blob, and (b) decide whether a REPLACED/removed prior `image` is ours to
+ * delete. Anything else returns false (never throws).
+ *
+ * It takes a STORED REFERENCE, not a URL — the same two accepted forms as the
+ * avatar gate (a bare KEY, or an absolute URL on the configured public base),
+ * because both run through `ownStoredAssetKey` FIRST. That shared reduction is
+ * what rejects a `javascript:` value, a leading slash and a `..` segment before
+ * the prefix check ever reads the string.
+ *
+ * Unlike `User.image` there is no foreign-provider arm to tolerate: nothing
+ * writes a project image except our own upload route, so a value that is not
+ * ours is simply refused.
+ */
+export function isOwnProjectImageRef(
+  stored: string | null | undefined,
+  projectId: string,
+): boolean {
+  if (!stored) return false;
+  const key = ownStoredAssetKey(stored);
+  if (key === null) return false;
+  // startsWith, never includes — same reason as the avatar gate above: the key's
+  // tail is a user-supplied FILENAME, so a containment check would let
+  // `projects/<b>/x-projects-<a>-y.png` read as A's.
+  return key.startsWith(projectImagePrefix(projectId));
+}
+
+/**
  * A stored public-asset reference → the ABSOLUTE URL a browser fetches it from.
  * The resolution half of MOTIR-2404, and the reason storing a key costs no
  * external contract: every DTO that carries a user image runs its stored value

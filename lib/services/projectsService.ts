@@ -14,8 +14,8 @@ import {
   IdentifierReservedError,
   IdentifierTakenError,
   IdentifierUnchangedError,
-  InvalidAvatarError,
   InvalidIdentifierError,
+  InvalidProjectImageError,
   InvalidProjectNameError,
   ProjectNotFoundError,
   ProjectOverviewTooLongError,
@@ -23,7 +23,15 @@ import {
   ProjectTagsInvalidError,
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
-import { isValidAvatarColor, isValidAvatarIcon } from '@/lib/projects/avatar';
+import { PROJECT_IMAGE_MAX_BYTES, isProjectImageType } from '@/lib/projects/imageUpload';
+import { FileTooLargeError, UnsupportedFileTypeError } from '@/lib/blob/errors';
+import { putPublicAsset } from '@/lib/blob/uploader';
+import {
+  isOwnProjectImageRef,
+  projectImagePrefix,
+  storedAssetKey,
+} from '@/lib/blob/referencedUrls';
+import { deletePublicAsset } from '@/lib/blob/uploader';
 import {
   PUBLIC_OVERVIEW_MAX_LENGTH,
   PUBLIC_TAGLINE_MAX_LENGTH,
@@ -749,45 +757,108 @@ export const projectsService = {
    * Update a project's name and/or avatar (Story 6.8). Admin-gated. `name` is
    * trimmed + non-empty; the `slug` is NOT regenerated — it is a create-time
    * artifact no URL consumes (recorded decision), so a rename keeps every
-   * existing slug-addressed link working. Avatar icon/colour are validated
-   * against the preset registry (lib/projects/avatar.ts); `null` clears a field
-   * back to the shipped mono-identifier rendering; an absent field is left
-   * untouched. Returns the DTO with `previousKeys` (the details-surface shape).
+   * existing slug-addressed link working. `image` is the project's LOGO — an
+   * object key gated to this project's own prefix; `null` clears it (the project
+   * then renders no mark at all), and an absent field is left untouched. Returns
+   * the DTO with `previousKeys` (the details-surface shape).
    */
   async updateDetails(input: {
     key: string;
     ctx: WorkspaceContext;
     name?: string;
-    avatarIcon?: string | null;
-    avatarColor?: string | null;
+    image?: string | null;
   }): Promise<ProjectDTO> {
-    return withWorkspaceContext(input.ctx, async (tx) => {
+    // The object key of a REPLACED/removed project image, captured inside the
+    // transaction and collected only AFTER it commits (below). A blob delete is
+    // an external side effect: inside the tx it would hold the row lock across
+    // network I/O, and — the reason that actually bites — a rolled-back update
+    // would leave the row still pointing at an object we had already destroyed.
+    let oldImageKeyToDelete: string | null = null;
+
+    const dto = await withWorkspaceContext(input.ctx, async (tx) => {
       const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
       await projectAccessService.assertCanManage(project.id, input.ctx, tx);
 
-      const data: { name?: string; avatarIcon?: string | null; avatarColor?: string | null } = {};
+      const data: { name?: string; image?: string | null } = {};
       if (input.name !== undefined) {
         const trimmed = input.name.trim();
         if (!trimmed) throw new InvalidProjectNameError();
         data.name = trimmed;
       }
-      if (input.avatarIcon !== undefined) {
-        if (input.avatarIcon !== null && !isValidAvatarIcon(input.avatarIcon)) {
-          throw new InvalidAvatarError('icon', input.avatarIcon);
+      if (input.image !== undefined) {
+        const image = input.image; // string (set) | null (remove)
+        // A non-null value must be OUR object under THIS project's prefix — the
+        // gate that stops one project pointing its mark at another's blob.
+        if (image !== null && !isOwnProjectImageRef(image, project.id)) {
+          throw new InvalidProjectImageError();
         }
-        data.avatarIcon = input.avatarIcon;
-      }
-      if (input.avatarColor !== undefined) {
-        if (input.avatarColor !== null && !isValidAvatarColor(input.avatarColor)) {
-          throw new InvalidAvatarError('color', input.avatarColor);
+        data.image = image;
+        // The prior image is ours to collect iff it is actually CHANGING and it
+        // is one of our own objects. `storedAssetKey` reduces either storage form
+        // (a bare key, or an absolute URL on the configured public base) to the
+        // object the GC deletes.
+        if (project.image && project.image !== image) {
+          oldImageKeyToDelete = storedAssetKey(project.image);
         }
-        data.avatarColor = input.avatarColor;
       }
 
       const updated = await projectRepository.update(project.id, data, tx);
       const aliases = await projectKeyAliasRepository.findManyByProject(project.id, tx);
       return toProjectDTO(updated, aliases);
     });
+
+    // AFTER the commit (CLAUDE.md: external side effects live outside the
+    // transaction), so a rolled-back update can never orphan a still-referenced
+    // object. `deletePublicAsset` is idempotent, so a retry is safe.
+    if (oldImageKeyToDelete) {
+      await deletePublicAsset(oldImageKeyToDelete);
+    }
+
+    return dto;
+  },
+
+  /**
+   * Store an uploaded project LOGO and return its object KEY (MOTIR-2677) — the
+   * backend `POST /api/upload/project-image` is the thin HTTP layer over. Writes
+   * to the per-PROJECT `projects/<projectId>/` prefix so the returned key passes
+   * `updateDetails`'s `isOwnProjectImageRef` gate; the caller then PATCHes it as
+   * `image`. Returns a key rather than a URL so no hosting origin is persisted —
+   * `storedAssetUrl` composes the URL on read, at the DTO boundary.
+   *
+   * ⚠️ **ADMIN-GATED BEFORE A SINGLE BYTE IS STORED**, which is the one place
+   * this deliberately differs from `usersService.uploadAvatar`. An avatar's owner
+   * IS the session user, so that route needs no further question. A project logo
+   * lands under a prefix keyed to a PROJECT, so without this gate any signed-in
+   * member of any workspace could write objects into any project's prefix — they
+   * could never make one APPEAR (that is `updateDetails`'s gate) but they could
+   * consume storage and plant objects a later reader would read as the project's.
+   * Gate the write, not only the attach.
+   *
+   * Keeps NO audit row: a logo's lifecycle is owned entirely by `Project.image`
+   * and its GC by `updateDetails`, exactly as an avatar's is by `User.image`.
+   */
+  async uploadImage(input: {
+    key: string;
+    ctx: WorkspaceContext;
+    file: File;
+  }): Promise<{ key: string }> {
+    const projectId = await withWorkspaceContext(input.ctx, async (tx) => {
+      const project = await resolveProjectByKeyInTx(input.key, input.ctx.workspaceId, tx);
+      await projectAccessService.assertCanManage(project.id, input.ctx, tx);
+      return project.id;
+    });
+
+    // The narrow project-logo policy, not the shared attachment allowlist — see
+    // `lib/projects/imageUpload.ts` for why the two differ.
+    if (input.file.size > PROJECT_IMAGE_MAX_BYTES) {
+      throw new FileTooLargeError(PROJECT_IMAGE_MAX_BYTES);
+    }
+    if (!isProjectImageType(input.file.type)) {
+      throw new UnsupportedFileTypeError(input.file.type);
+    }
+
+    const pathname = `${projectImagePrefix(projectId)}${input.file.name}`;
+    return putPublicAsset(pathname, input.file, input.file.type);
   },
 
   /**

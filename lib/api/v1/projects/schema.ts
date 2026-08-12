@@ -30,10 +30,14 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 //     records that a rename deliberately does not regenerate it, precisely because
 //     nothing addresses a project by slug. Publishing it would freeze a vestigial
 //     field as contract.
-//   • `avatarIcon` / `avatarColor` — keys into Motir's own preset registry
-//     (`lib/projects/avatar.ts`). They are meaningless to a client that is not
-//     rendering Motir's UI, and publishing them would make that registry's key
-//     space public API.
+//   • `image` — the project's uploaded logo. A resolved asset URL is a MOTIR
+//     UI concern: it points at our own object store, its lifetime is tied to a
+//     replace/remove the client cannot observe, and a client that is not drawing
+//     Motir's chrome has nothing to do with it. (This bullet REPLACES one about
+//     the preset icon/colour pair Story 6.8 shipped, whose registry publishing
+//     would have frozen as public API. MOTIR-2680 dropped both columns with the
+//     picker and the renderer that were their only readers, so the omission is
+//     now simply that there is nothing left to omit.)
 //   • `onboardingRanAt` / `aiGenerateExplanations` — internal product
 //     configuration (which planning flow the project entered, whether the AI
 //     planner drafts explanations), not project identity. Exposing configuration

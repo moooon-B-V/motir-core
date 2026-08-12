@@ -6,7 +6,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { cn } from '@/lib/utils/cn';
 import type { ProjectDTO } from '@/lib/dto/projects';
-import { ProjectAvatar } from './ProjectAvatar';
+import { ProjectMark } from './ProjectMark';
 
 // The settings-area rail header (Story 6.5 · Subtask 6.5.2). When the rail is in
 // the project-settings area it REPLACES the SidebarHeader/ProjectSwitcher with a
@@ -48,12 +48,7 @@ export function SettingsSidebarHeader({
             <ArrowLeft className="h-4 w-4" aria-hidden />
           </Link>
         </Tooltip>
-        <ProjectAvatar
-          icon={activeProject.avatarIcon}
-          color={activeProject.avatarColor}
-          identifier={activeProject.identifier}
-          size={32}
-        />
+        <ProjectMark image={activeProject.image} size={32} />
       </div>
     );
   }
@@ -74,12 +69,7 @@ export function SettingsSidebarHeader({
       </Link>
 
       <div className="flex items-center gap-2.5 px-(--spacing-control-x) pb-0.5 pt-1.5">
-        <ProjectAvatar
-          icon={activeProject.avatarIcon}
-          color={activeProject.avatarColor}
-          identifier={activeProject.identifier}
-          size={30}
-        />
+        <ProjectMark image={activeProject.image} size={30} />
         <span className="flex min-w-0 flex-col">
           <span className="truncate font-sans text-[13.5px] font-semibold text-(--el-text)">
             {activeProject.name}

@@ -41,8 +41,6 @@ const ACME: ProjectDTO = {
   workspaceId: 'ws_1',
   name: 'Acme',
   identifier: 'ACME',
-  avatarIcon: null,
-  avatarColor: null,
   archivedAt: null,
 } as unknown as ProjectDTO;
 

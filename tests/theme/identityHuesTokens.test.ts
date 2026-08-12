@@ -9,7 +9,8 @@ import { escapeRegExp } from '@/lib/utils/regexp';
 // by 1266.7; this suite pins THIS card's contract: the tokens exist in the
 // Tier-3 base block mapped to the right Tier-0 --color-* (so every palette
 // re-skins them via its --color-* override), and the three --el-type-* MISUSES
-// (NotificationRow, ProjectAvatar mono tile, OrgUsageClient deepseek) are gone.
+// (NotificationRow, the retired ProjectAvatar mono tile, OrgUsageClient
+// deepseek) are gone.
 
 const ROOT = process.cwd();
 const read = (rel: string) => readFileSync(join(ROOT, rel), 'utf8');
@@ -103,13 +104,15 @@ describe('the --el-type-* misuse is decoupled in every consumer', () => {
     }
   });
 
-  it('ProjectAvatar uses the --el-avatar-* ramp + fallback, never --el-type-* / --el-tint-*', () => {
-    const src = read('app/(authed)/_components/ProjectAvatar.tsx');
-    expect(src).toContain('bg-(--el-avatar-fallback)');
-    expect(src).toContain('bg-(--el-avatar-peach)');
-    expect(src).not.toMatch(/bg-\(--el-type-/);
-    expect(src).not.toMatch(/bg-\(--el-tint-/);
-  });
+  // ⚠️ RETIRED with its subject (MOTIR-2679). `ProjectAvatar` rendered the
+  // preset icon-and-colour chip and its mono fallback; a project's mark is an
+  // uploaded logo now (`docs/decisions/entity-marks.md`), so there is no chip
+  // left to bind to a hue. The `--el-avatar-*` ramp is NOT orphaned by that —
+  // its consumers are `TriageAvatar` (asserted directly below) and the
+  // `--el-avatar-fallback` initial tiles in `gitSettingsPrimitives` and
+  // `CodeAccessSettings`, which the coverage test binds. Deleting the assertion
+  // rather than re-pointing it is correct here: the thing it asserted about no
+  // longer exists.
 
   it('TriageAvatar hashes onto the shared --el-avatar-* ramp, never --el-tint-*', () => {
     const src = read('app/(authed)/triage/_components/TriageAvatar.tsx');

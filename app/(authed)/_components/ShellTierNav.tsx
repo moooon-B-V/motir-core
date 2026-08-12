@@ -27,8 +27,15 @@ import type { ProjectDTO } from '@/lib/dto/projects';
 //     < md    the PROJECT alone. The ancestors are not lost: the drawer header
 //             (this component at placement="drawer") carries `org › workspace`
 //             at every width, one tap behind the hamburger.
-//     md–xl   `org › project`, the org as its MARK — its name is `xl:inline`.
+//     md–xl   `org › project`, the org as its NAME.
 //     ≥ xl    the full `org › workspace › project`.
+//
+//   ⚠️ AMENDED by MOTIR-2679: the org used to appear here as its MARK, with the
+//   name `xl:inline`. `docs/decisions/entity-marks.md` §2 deletes that mark —
+//   an organization cannot have one — and a tier whose only content WAS the mark
+//   would have become a ghost button holding a chevron. The name now renders
+//   from `md`: measured at +2px against the old mark form at 768px and +7px at
+//   1024px, with zero row overflow at any band (MOTIR-2674).
 //
 // THE RULE FOR THE NEXT TIER (design § *The ladder*): the bar's path is closed
 // at ONE tier below `md`, TWO from `md`, THREE from `xl`. A tier added to it is
@@ -118,7 +125,7 @@ export function ShellTierNav({
   return (
     <div className="flex min-w-0 items-center gap-1">
       <span className="hidden md:contents">
-        <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} nameFrom="xl" />
+        <OrgControl activeOrg={activeOrg} orgs={orgs} cloudBilling={cloudBilling} />
       </span>
       {showWorkspaceSwitcher ? (
         <span className="hidden xl:contents">
