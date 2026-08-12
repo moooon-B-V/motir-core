@@ -9,6 +9,7 @@ import {
   mapTypeAndExecutor,
 } from '@/scripts/plan-seed/mapItem';
 import type { SeedItem } from '@/scripts/plan-seed/types';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 
@@ -158,7 +159,7 @@ describe('composeDescription — the "stop emitting prose" regression guard (2.7
 
 describe('the loader mapping persists structured fields + prose-free description (repository read)', () => {
   async function truncateAll(): Promise<void> {
-    await db.$executeRawUnsafe(
+    await adminDb.$executeRawUnsafe(
       'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
     );
     await truncateAuthTables();
@@ -170,6 +171,7 @@ describe('the loader mapping persists structured fields + prose-free description
 
   afterAll(async () => {
     await db.$disconnect();
+    await adminDb.$disconnect();
   });
 
   it('writes work_item.type/executor as STRUCTURED columns with no Type:/Executor: prose', async () => {

@@ -7,6 +7,7 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import type { PlanItemStalenessDto } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Integration tests for Subtask 7.21.3 / MOTIR-1340 — `planStalenessService`,
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Seed a work item through the real service (so it carries a valid fractional
@@ -227,8 +229,8 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     ]);
     await workItemsService.updateWorkItem(targetId, { title: 'Moved on' }, fx.ctx);
 
-    const revsBefore = await db.workItemRevision.count();
-    const itemsBefore = await db.workItem.count();
+    const revsBefore = await adminDb.workItemRevision.count();
+    const itemsBefore = await adminDb.workItem.count();
 
     // Compute twice — a pure read is idempotent and side-effect-free.
     const a = await planStalenessService.computePlanStaleness(planId, fx.ctx);
@@ -237,8 +239,10 @@ describe('planStalenessService — all-clear + purity + tenancy', () => {
     expect(a.stale).toBe(true); // it WARNS …
 
     // … but changes nothing: no revisions/items written, plan still `planned`.
-    expect(await db.workItemRevision.count()).toBe(revsBefore);
-    expect(await db.workItem.count()).toBe(itemsBefore);
+    const workItemRevisionCount = await adminDb.workItemRevision.count();
+    expect(workItemRevisionCount).toBe(revsBefore);
+    const workItemCount = await adminDb.workItem.count();
+    expect(workItemCount).toBe(itemsBefore);
     expect((await plansService.getPlan(planId, fx.ctx)).status).toBe('planned');
   });
 

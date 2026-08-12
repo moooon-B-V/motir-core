@@ -23,6 +23,7 @@ import { plansService } from '@/lib/services/plansService';
 import { conventionEstablishService } from '@/lib/services/conventionEstablishService';
 import type { WorkItemEmbeddingRequestedData } from '@/lib/jobs/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 /** Capture every `work-item/embedding.requested` publish (and block the network). */
@@ -61,6 +62,7 @@ afterEach(() => vi.restoreAllMocks());
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('plansService.approvePlan — the embedding trigger (ADR §6.3.1)', () => {
@@ -74,7 +76,7 @@ describe('plansService.approvePlan — the embedding trigger (ADR §6.3.1)', () 
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    const created = await db.workItem.findMany({
+    const created = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       select: { id: true },
     });
@@ -95,7 +97,8 @@ describe('plansService.approvePlan — the embedding trigger (ADR §6.3.1)', () 
     await plansService.approvePlan(planId, fx.ctx);
 
     for (const event of events) {
-      expect(await db.workItem.findUnique({ where: { id: event.workItemId } })).not.toBeNull();
+      const workItemRow = await adminDb.workItem.findUnique({ where: { id: event.workItemId } });
+      expect(workItemRow).not.toBeNull();
     }
     expect(events).toHaveLength(1);
   });
@@ -106,7 +109,7 @@ describe('plansService.approvePlan — the embedding trigger (ADR §6.3.1)', () 
       { op: 'add', proposedFields: { title: 'Original', kind: 'task' } },
     ]);
     await plansService.approvePlan(seedPlan, fx.ctx);
-    const target = await db.workItem.findFirstOrThrow({ where: { projectId: fx.projectId } });
+    const target = await adminDb.workItem.findFirstOrThrow({ where: { projectId: fx.projectId } });
 
     const modifyPlan = await plannedPlan(fx, [
       { op: 'modify', workItemId: target.id, patch: { title: 'Rewritten by the planner' } },
@@ -123,7 +126,7 @@ describe('plansService.approvePlan — the embedding trigger (ADR §6.3.1)', () 
       { op: 'add', proposedFields: { title: 'Doomed', kind: 'task' } },
     ]);
     await plansService.approvePlan(seedPlan, fx.ctx);
-    const target = await db.workItem.findFirstOrThrow({ where: { projectId: fx.projectId } });
+    const target = await adminDb.workItem.findFirstOrThrow({ where: { projectId: fx.projectId } });
 
     const removePlan = await plannedPlan(fx, [{ op: 'remove', workItemId: target.id }]);
     const events = captureEmbeddingEvents();

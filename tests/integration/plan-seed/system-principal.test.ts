@@ -7,6 +7,7 @@ import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembe
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { MOTIR_SYSTEM_USER_EMAIL, MOTIR_SYSTEM_USER_NAME } from '@/lib/ai/systemPrincipal';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-1451 — the system-principal provisioning the seed adds (a SECOND helper
@@ -23,6 +24,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeWorkspaceAndProject(name: string, identifier: string) {
@@ -49,7 +51,7 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
       projectId: project.id,
     });
 
-    const user = await db.user.findUnique({ where: { id: userId } });
+    const user = await adminDb.user.findUnique({ where: { id: userId } });
     expect(user?.email).toBe(MOTIR_SYSTEM_USER_EMAIL);
     expect(user?.name).toBe(MOTIR_SYSTEM_USER_NAME);
 
@@ -67,12 +69,13 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
       workspaceId: workspace.id,
       projectId: project.id,
     });
-    expect(await db.account.count({ where: { userId } })).toBe(0);
+    const accountCount = await adminDb.account.count({ where: { userId } });
+    expect(accountCount).toBe(0);
   });
 
   it('does NOT enrol the principal in the org roster (infrastructure, not a member)', async () => {
     const { workspace, project } = await makeWorkspaceAndProject('moooon', 'MOTIR');
-    const org = await db.workspace.findUnique({
+    const org = await adminDb.workspace.findUnique({
       where: { id: workspace.id },
       select: { organizationId: true },
     });
@@ -80,7 +83,7 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
       workspaceId: workspace.id,
       projectId: project.id,
     });
-    const orgMembership = await db.organizationMembership.findFirst({
+    const orgMembership = await adminDb.organizationMembership.findFirst({
       where: { organizationId: org!.organizationId, userId },
     });
     expect(orgMembership).toBeNull();
@@ -102,7 +105,8 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
     });
 
     expect(secondId).toBe(firstId);
-    expect(await db.user.count({ where: { email: MOTIR_SYSTEM_USER_EMAIL } })).toBe(1);
+    const userCount = await adminDb.user.count({ where: { email: MOTIR_SYSTEM_USER_EMAIL } });
+    expect(userCount).toBe(1);
     expect(
       await workspaceMembershipRepository.findByUserAndWorkspace(secondId, second.workspace.id),
     ).not.toBeNull();

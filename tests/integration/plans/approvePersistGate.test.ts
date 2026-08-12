@@ -6,6 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { PlanGrammarError, PlanRefGraphError, PlanTargetImmutableError } from '@/lib/plans/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 7.12.5 / MOTIR-911 — the CONFIRMATION GATE at the persist boundary,
@@ -29,6 +30,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Seed a work item through the real service (valid fractional position/rank). */
@@ -70,7 +72,7 @@ async function plannedPlan(
 
 /** A snapshot of everything an approve could touch, for a byte-identical check. */
 async function treeSnapshot(fx: WorkItemFixture): Promise<unknown> {
-  const items = await db.workItem.findMany({
+  const items = await adminDb.workItem.findMany({
     where: { projectId: fx.projectId },
     orderBy: { id: 'asc' },
     select: {
@@ -85,12 +87,12 @@ async function treeSnapshot(fx: WorkItemFixture): Promise<unknown> {
       updatedAt: true,
     },
   });
-  const links = await db.workItemLink.findMany({
+  const links = await adminDb.workItemLink.findMany({
     where: { workspaceId: fx.workspaceId },
     orderBy: { id: 'asc' },
     select: { fromId: true, toId: true, kind: true },
   });
-  const revisions = await db.workItemRevision.count({
+  const revisions = await adminDb.workItemRevision.count({
     where: { workItem: { projectId: fx.projectId } },
   });
   return { items, links, revisions };
@@ -137,7 +139,8 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
 
     const err = await expectRejectedWithNoWrite(fx, planId, PlanGrammarError);
     expect((err as PlanGrammarError).reason).toBe('illegal_parent');
-    expect(await db.workItem.count({ where: { title: 'Illegal child' } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { title: 'Illegal child' } });
+    expect(workItemCount).toBe(0);
   });
 
   it('rejects an add whose INTRA-PLAN parent may not hold it', async () => {
@@ -158,7 +161,8 @@ describe('the confirmation gate — kind-parent grammar, re-validated at persist
     await plansService.markPlanned(plan.id, fx.ctx);
 
     await expectRejectedWithNoWrite(fx, plan.id, PlanGrammarError);
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
   });
 
   it('rejects a top-level subtask (a kind that requires a parent)', async () => {
@@ -248,7 +252,7 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
     );
     const bId = second.items.find((i) => i.proposedFields?.title === 'B')!.id;
     // Close the loop: A's parent is B, B's parent is A.
-    await db.planItem.update({
+    await adminDb.planItem.update({
       where: { id: first.items[0]!.id },
       data: { parentRef: `${TEMP_REF_PREFIX}${bId}` },
     });
@@ -256,7 +260,8 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
 
     const err = await expectRejectedWithNoWrite(fx, plan.id, PlanRefGraphError);
     expect((err as PlanRefGraphError).reason).toBe('cycle');
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
   });
 
   it('materializes a valid set parent-before-child regardless of proposal ORDER', async () => {
@@ -288,12 +293,12 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
     );
     // Reverse the stored read order (findByPlan is createdAt asc) so the LEAF is
     // read first and the root last — materialize must still create parent-first.
-    const stored = await db.planItem.findMany({
+    const stored = await adminDb.planItem.findMany({
       where: { planId: plan.id },
       orderBy: { createdAt: 'asc' },
     });
     for (const [i, item] of [...stored].reverse().entries()) {
-      await db.planItem.update({
+      await adminDb.planItem.update({
         where: { id: item.id },
         data: { createdAt: new Date(Date.UTC(2020, 0, 1, 0, 0, i)) },
       });
@@ -303,7 +308,7 @@ describe('the confirmation gate — the intra-plan ref graph', () => {
     const approved = await plansService.approvePlan(plan.id, fx.ctx);
     expect(approved.status).toBe('approved');
 
-    const rows = await db.workItem.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
     const byTitle = new Map(rows.map((r) => [r.title, r]));
     expect(rows).toHaveLength(3);
     expect(byTitle.get('Root epic')!.parentId).toBeNull();
@@ -323,7 +328,7 @@ describe('the confirmation gate — done-work immutability', () => {
 
     const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError);
     expect((err as PlanTargetImmutableError).workItemId).toBe(targetId);
-    const target = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Shipped work');
     expect(target.status).toBe('done');
   });
@@ -336,7 +341,7 @@ describe('the confirmation gate — done-work immutability', () => {
 
     const err = await expectRejectedWithNoWrite(fx, planId, PlanTargetImmutableError);
     expect((err as PlanTargetImmutableError).status).toBe('cancelled');
-    const target = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.archivedAt).toBeNull();
   });
 
@@ -349,7 +354,7 @@ describe('the confirmation gate — done-work immutability', () => {
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
-    const target = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Re-scoped');
   });
 
@@ -387,7 +392,7 @@ describe('the confirmation gate — done-work immutability', () => {
     const outcome = await approving;
 
     expect(outcome).toBeInstanceOf(PlanTargetImmutableError);
-    const target = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(target.title).toBe('Racing target');
     expect(target.status).toBe('done');
     const plan = await plansService.getPlan(planId, fx.ctx);
@@ -413,19 +418,21 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
     const approved = await plansService.approvePlan(planId, fx.ctx);
     expect(approved.status).toBe('approved');
 
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'New subtask' } });
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'New subtask' } });
     expect(created.parentId).toBe(storyId);
     expect(Number(created.storyPoints)).toBe(3);
     // The written-back id is on the PlanItem, and the blocked-by edge exists.
     expect(approved.items.find((i) => i.op === 'add')!.workItemId).toBe(created.id);
-    const link = await db.workItemLink.findFirstOrThrow({
+    const link = await adminDb.workItemLink.findFirstOrThrow({
       where: { fromId: created.id, toId: blockerId, kind: 'is_blocked_by' },
     });
     expect(link.toId).toBe(blockerId);
-    const renamed = await db.workItem.findUniqueOrThrow({ where: { id: blockerId } });
+    const renamed = await adminDb.workItem.findUniqueOrThrow({ where: { id: blockerId } });
     expect(renamed.title).toBe('Existing blocker (renamed)');
     expect(
-      await db.workItemRevision.count({ where: { workItemId: created.id, changeKind: 'created' } }),
+      await adminDb.workItemRevision.count({
+        where: { workItemId: created.id, changeKind: 'created' },
+      }),
     ).toBe(1);
   });
 
@@ -474,6 +481,7 @@ describe('the confirmation gate — unconditional, and non-regressive', () => {
       { op: 'add', proposedFields: { title: 'Never built', kind: 'task' } },
     ]);
     await plansService.declinePlan(planId, fx.ctx);
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
   });
 });

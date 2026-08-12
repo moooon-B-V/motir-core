@@ -11,6 +11,7 @@ import {
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { InvalidEstimateError } from '@/lib/estimation/errors';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 /** Seed a pre-existing work item through the real service, so it carries a
@@ -42,6 +43,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Create a plan, append the given proposals, and mark it `planned`. */
@@ -77,7 +79,7 @@ describe('plansService — lifecycle + proposals', () => {
     expect(withItems.items[0]!.workItemId).toBeNull();
 
     // Nothing in the work-item tree was created — the add lives only as a PlanItem.
-    const created = await db.workItem.findFirst({ where: { title: 'New task' } });
+    const created = await adminDb.workItem.findFirst({ where: { title: 'New task' } });
     expect(created).toBeNull();
   });
 
@@ -154,7 +156,8 @@ describe('plansService.approvePlan — materialize per op', () => {
     await plansService.markPlanned(plan.id, fx.ctx);
 
     // While planned, neither add exists in the tree.
-    expect(await db.workItem.findFirst({ where: { title: 'Parent story' } })).toBeNull();
+    const workItemRow = await adminDb.workItem.findFirst({ where: { title: 'Parent story' } });
+    expect(workItemRow).toBeNull();
 
     const approved = await plansService.approvePlan(plan.id, fx.ctx);
     expect(approved.status).toBe('approved');
@@ -162,8 +165,8 @@ describe('plansService.approvePlan — materialize per op', () => {
     expect(approved.decidedAt).not.toBeNull();
 
     // The story + child now exist, dispatchable (real identifier/status/reporter).
-    const story = await db.workItem.findFirst({ where: { title: 'Parent story' } });
-    const child = await db.workItem.findFirst({ where: { title: 'Child task' } });
+    const story = await adminDb.workItem.findFirst({ where: { title: 'Parent story' } });
+    const child = await adminDb.workItem.findFirst({ where: { title: 'Child task' } });
     expect(story).not.toBeNull();
     expect(child).not.toBeNull();
     expect(child!.parentId).toBe(story!.id); // intra-plan parent ref resolved
@@ -175,7 +178,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     expect(child!.reporterId).toBe(fx.ownerId);
 
     // The blocked_by link to the REAL existing blocker was created.
-    const link = await db.workItemLink.findFirst({
+    const link = await adminDb.workItemLink.findFirst({
       where: { fromId: child!.id, toId: blockerId, kind: 'is_blocked_by' },
     });
     expect(link).not.toBeNull();
@@ -183,7 +186,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     // The PlanItems carry the written-back work-item ids; a 'created' revision logged.
     const finalChild = approved.items.find((i) => i.id === childItemId)!;
     expect(finalChild.workItemId).toBe(child!.id);
-    const revisions = await db.workItemRevision.findMany({ where: { workItemId: child!.id } });
+    const revisions = await adminDb.workItemRevision.findMany({ where: { workItemId: child!.id } });
     expect(revisions).toHaveLength(1);
     expect(revisions[0]!.changeKind).toBe('created');
   });
@@ -191,7 +194,7 @@ describe('plansService.approvePlan — materialize per op', () => {
   it('normalizes a bare REAL work-item key in a materialized description to the canonical chip token (bug MOTIR-1440)', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Referenced target');
-    const target = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const target = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
 
     const planId = await plannedPlan(fx, [
       {
@@ -205,7 +208,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     ]);
     await plansService.approvePlan(planId, fx.ctx);
 
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Generated card' } });
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Generated card' } });
     // The bare key was rewritten to the chip token (resolved against the real item).
     expect(created.descriptionMd).toBe(
       `Builds on [${target.identifier}](motir:${target.id}) — see there.`,
@@ -241,19 +244,21 @@ describe('plansService.approvePlan — materialize per op', () => {
     await plansService.markPlanned(plan.id, fx.ctx);
     await plansService.approvePlan(plan.id, fx.ctx);
 
-    const a = await db.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
-    const b = await db.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
+    const a = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
     // The temp-ref token became a real chip token pointing at B's CREATED id.
     expect(a.descriptionMd).toBe(`Depends on [Sibling B](motir:${b.id}).`);
     // The now-real reference auto-created a `relates_to` edge A → B (source mention)
     // — the materialize analogue of the create-time auto-relate — plus its reciprocal.
-    const forward = await db.workItemLink.findFirst({
+    const forward = await adminDb.workItemLink.findFirst({
       where: { fromId: a.id, toId: b.id, kind: 'relates_to' },
     });
     expect(forward).not.toBeNull();
     expect(forward!.source).toBe('mention');
     expect(
-      await db.workItemLink.findFirst({ where: { fromId: b.id, toId: a.id, kind: 'relates_to' } }),
+      await adminDb.workItemLink.findFirst({
+        where: { fromId: b.id, toId: a.id, kind: 'relates_to' },
+      }),
     ).not.toBeNull();
   });
 
@@ -271,16 +276,19 @@ describe('plansService.approvePlan — materialize per op', () => {
     ]);
     // Must NOT throw — a dangling temp-ref is body text, never a materialize failure.
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Orphan ref card' } });
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Orphan ref card' },
+    });
     expect(created.descriptionMd).toBe('See [gone](motir-ref:planItem:pi_does_not_exist).');
-    expect(await db.workItemLink.count({ where: { fromId: created.id } })).toBe(0);
+    const workItemLinkCount = await adminDb.workItemLink.count({ where: { fromId: created.id } });
+    expect(workItemLinkCount).toBe(0);
   });
 
   it('normalizes a bare REAL key in a materialized MODIFY patch description (bug MOTIR-1440)', async () => {
     const fx = await makeWorkItemFixture();
     const editTargetId = await seedItem(fx, 'Edit me');
     const refId = await seedItem(fx, 'Ref target');
-    const ref = await db.workItem.findUniqueOrThrow({ where: { id: refId } });
+    const ref = await adminDb.workItem.findUniqueOrThrow({ where: { id: refId } });
 
     const planId = await plannedPlan(fx, [
       {
@@ -291,7 +299,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     ]);
     await plansService.approvePlan(planId, fx.ctx);
 
-    const modified = await db.workItem.findUniqueOrThrow({ where: { id: editTargetId } });
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: editTargetId } });
     expect(modified.descriptionMd).toBe(`Now mentions [${ref.identifier}](motir:${ref.id}).`);
   });
 
@@ -311,21 +319,21 @@ describe('plansService.approvePlan — materialize per op', () => {
     ]);
 
     // While planned, the modify/remove targets are byte-for-byte unchanged.
-    const beforeModify = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const beforeModify = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(beforeModify.title).toBe('Old title');
     expect(
-      (await db.workItem.findUniqueOrThrow({ where: { id: doomedId } })).archivedAt,
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: doomedId } })).archivedAt,
     ).toBeNull();
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    const modified = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(modified.id).toBe(targetId); // identity never re-minted
     expect(modified.title).toBe('New title');
     expect(modified.priority).toBe('high');
 
     // The edge change applied: an is_blocked_by link to the blocker now exists.
-    const link = await db.workItemLink.findFirst({
+    const link = await adminDb.workItemLink.findFirst({
       where: { fromId: targetId, toId: blockerId, kind: 'is_blocked_by' },
     });
     expect(link).not.toBeNull();
@@ -333,7 +341,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     // Exactly ONE `updated` revision for the whole modify (the seed `created`
     // one aside) — the modify lands as a single entry, same id — and the edge
     // change rides it under the existing `links` diff key.
-    const modRevisions = await db.workItemRevision.findMany({
+    const modRevisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: targetId, changeKind: 'updated' },
     });
     expect(modRevisions).toHaveLength(1);
@@ -341,7 +349,7 @@ describe('plansService.approvePlan — materialize per op', () => {
       links: { added: [{ toId: blockerId, kind: 'is_blocked_by' }] },
     });
 
-    const removed = await db.workItem.findUniqueOrThrow({ where: { id: doomedId } });
+    const removed = await adminDb.workItem.findUniqueOrThrow({ where: { id: doomedId } });
     expect(removed.archivedAt).not.toBeNull();
   });
 
@@ -349,7 +357,7 @@ describe('plansService.approvePlan — materialize per op', () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'Sized target');
     // Give the target a baseline estimate so the re-scope has a real `from`.
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: targetId },
       data: { storyPoints: 3, estimateMinutes: 60 },
     });
@@ -359,20 +367,20 @@ describe('plansService.approvePlan — materialize per op', () => {
     ]);
 
     // While planned, the target's sizing is untouched.
-    const beforeApprove = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const beforeApprove = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(Number(beforeApprove.storyPoints)).toBe(3);
     expect(beforeApprove.estimateMinutes).toBe(60);
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    const modified = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(modified.id).toBe(targetId); // identity never re-minted
     expect(Number(modified.storyPoints)).toBe(8);
     expect(modified.estimateMinutes).toBe(120);
 
     // Exactly ONE `updated` revision for the whole modify, carrying BOTH sizing
     // diff cells (the seed `created` revision aside).
-    const revisions = await db.workItemRevision.findMany({
+    const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: targetId, changeKind: 'updated' },
     });
     expect(revisions).toHaveLength(1);
@@ -385,16 +393,16 @@ describe('plansService.approvePlan — materialize per op', () => {
   it('materializes a modify that CLEARS an estimate: storyPoints → null with a diff cell (MOTIR-1532)', async () => {
     const fx = await makeWorkItemFixture();
     const targetId = await seedItem(fx, 'To unestimate');
-    await db.workItem.update({ where: { id: targetId }, data: { storyPoints: 5 } });
+    await adminDb.workItem.update({ where: { id: targetId }, data: { storyPoints: 5 } });
 
     const planId = await plannedPlan(fx, [
       { op: 'modify', workItemId: targetId, patch: { storyPoints: null } },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
 
-    const modified = await db.workItem.findUniqueOrThrow({ where: { id: targetId } });
+    const modified = await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } });
     expect(modified.storyPoints).toBeNull();
-    const revision = await db.workItemRevision.findFirstOrThrow({
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: targetId, changeKind: 'updated' },
     });
     expect(revision.diff).toMatchObject({ storyPoints: { from: 5, to: null } });
@@ -444,8 +452,8 @@ describe('plansService.approvePlan — AI-drafted explanations (MOTIR-850)', () 
     await plansService.markPlanned(plan.id, fx.ctx);
     await plansService.approvePlan(plan.id, fx.ctx);
 
-    const a = await db.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
-    const b = await db.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
+    const a = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Card A' } });
+    const b = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Sibling B' } });
     // The explanation carried through, its source is ai_draft, and its intra-plan
     // temp-ref was rewritten to a real chip token pointing at B's CREATED id
     // (the same MOTIR-1418 seam the description path uses).
@@ -453,10 +461,12 @@ describe('plansService.approvePlan — AI-drafted explanations (MOTIR-850)', () 
     expect(a.explanationSource).toBe('ai_draft');
     // The now-real reference in the EXPLANATION auto-created a relates_to edge A → B.
     expect(
-      await db.workItemLink.findFirst({ where: { fromId: a.id, toId: b.id, kind: 'relates_to' } }),
+      await adminDb.workItemLink.findFirst({
+        where: { fromId: a.id, toId: b.id, kind: 'relates_to' },
+      }),
     ).not.toBeNull();
     // The created revision records the explanation (renderers.ts has its disposition).
-    const rev = await db.workItemRevision.findFirstOrThrow({
+    const rev = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: a.id, changeKind: 'created' },
     });
     expect((rev.diff as Record<string, unknown>)['explanationMd']).toBeDefined();
@@ -476,7 +486,7 @@ describe('plansService.approvePlan — AI-drafted explanations (MOTIR-850)', () 
       },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await db.workItem.findFirstOrThrow({
+    const created = await adminDb.workItem.findFirstOrThrow({
       where: { title: 'Explicit source card' },
     });
     expect(created.explanationMd).toBe('A human already touched this.');
@@ -489,7 +499,9 @@ describe('plansService.approvePlan — AI-drafted explanations (MOTIR-850)', () 
       { op: 'add', proposedFields: { title: 'No-explanation card', kind: 'task' } },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'No-explanation card' } });
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'No-explanation card' },
+    });
     expect(created.explanationMd).toBeNull();
     expect(created.explanationSource).toBe('user_authored');
   });
@@ -503,7 +515,9 @@ describe('plansService.approvePlan — native planning provenance', () => {
       { op: 'add', proposedFields: { title: 'Pre-producer card', kind: 'task' } },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Pre-producer card' } });
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Pre-producer card' },
+    });
     // Every materialized item is native by construction; harness defaults to Motir.
     expect(created.planningSource).toBe('native');
     expect(created.planningHarness).toBe('Motir');
@@ -524,7 +538,7 @@ describe('plansService.approvePlan — native planning provenance', () => {
     ]);
     await plansService.approvePlan(planId, fx.ctx);
     // The raw ROW records the model (available for internal analysis).
-    const row = await db.workItem.findFirstOrThrow({ where: { title: 'Producer card' } });
+    const row = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Producer card' } });
     expect(row.planningSource).toBe('native');
     expect(row.planningHarness).toBe('Motir');
     expect(row.planningModel).toBe('deepseek-chat');
@@ -552,7 +566,9 @@ describe('plansService.approvePlan — native planning provenance', () => {
       },
     ]);
     await plansService.approvePlan(planId, fx.ctx);
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Forged source card' } });
+    const created = await adminDb.workItem.findFirstOrThrow({
+      where: { title: 'Forged source card' },
+    });
     // source + harness are pinned (native / Motir); only the model is carried
     // through from the trusted internal seam (recorded for analysis).
     expect(created.planningSource).toBe('native');
@@ -575,11 +591,13 @@ describe('plansService.declinePlan', () => {
     expect(declined.decidedById).toBe(fx.ownerId);
 
     // The add was never materialized; the modify target is unchanged; items dropped.
-    expect(await db.workItem.findFirst({ where: { title: 'Never created' } })).toBeNull();
-    expect((await db.workItem.findUniqueOrThrow({ where: { id: targetId } })).title).toBe(
+    const workItemRow = await adminDb.workItem.findFirst({ where: { title: 'Never created' } });
+    expect(workItemRow).toBeNull();
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: targetId } })).title).toBe(
       'Untouched',
     );
-    expect(await db.planItem.count({ where: { planId } })).toBe(0);
+    const planItemCount = await adminDb.planItem.count({ where: { planId } });
+    expect(planItemCount).toBe(0);
   });
 
   it('rejects approve/decline from a non-planned status', async () => {
@@ -617,7 +635,7 @@ describe('plansService.approvePlan — concurrency (atomic one-shot)', () => {
     );
 
     // The add materialized EXACTLY once (no double-create).
-    const created = await db.workItem.findMany({ where: { title: 'Once only' } });
+    const created = await adminDb.workItem.findMany({ where: { title: 'Once only' } });
     expect(created).toHaveLength(1);
 
     const plan = await plansService.getPlan(planId, fx.ctx);
@@ -661,8 +679,10 @@ describe('plansService.updateProposal — edit a proposed add (7.21.6)', () => {
       descriptionMd: 'Why this matters',
     });
     // Still a proposal — neither the old nor the new title exists in the tree.
-    expect(await db.workItem.findFirst({ where: { title: 'New title' } })).toBeNull();
-    expect(await db.workItem.findFirst({ where: { title: 'Old title' } })).toBeNull();
+    const workItemRow = await adminDb.workItem.findFirst({ where: { title: 'New title' } });
+    expect(workItemRow).toBeNull();
+    const workItemRow2 = await adminDb.workItem.findFirst({ where: { title: 'Old title' } });
+    expect(workItemRow2).toBeNull();
   });
 
   it('merges sparsely — an absent key is left untouched', async () => {
@@ -812,8 +832,9 @@ describe('plansService.deepenProposal — deepen a proposed add while generating
       estimateMinutes: 55,
     });
     // Still a proposal, and the plan is still open for more appends.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
-    expect((await db.plan.findFirst({ where: { id: planId } }))!.status).toBe('generating');
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
+    expect((await adminDb.plan.findFirst({ where: { id: planId } }))!.status).toBe('generating');
   });
 
   it('merges sparsely — an explicit null clears the estimate, an absent key is untouched', async () => {
@@ -920,7 +941,7 @@ describe('plansService.updateProposal — concurrency (edit vs approve)', () => 
     expect(plan.status).toBe('approved');
     // Exactly ONE work item materialized (no double-create, no orphan), titled by
     // whichever ordering won.
-    const created = await db.workItem.findMany({
+    const created = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId, title: { in: ['Race', 'Edited mid-approve'] } },
     });
     expect(created).toHaveLength(1);
@@ -935,7 +956,7 @@ describe('plansService.updateProposal — concurrency (edit vs approve)', () => 
 describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () => {
   it('stamps onboardingRanAt on the FIRST plan approve + materialize', async () => {
     const fx = await makeWorkItemFixture();
-    const before = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const before = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(before.onboardingRanAt).toBeNull(); // a fresh project never onboarded
 
     const planId = await plannedPlan(fx, [
@@ -944,7 +965,7 @@ describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () =
     const t0 = Date.now();
     await plansService.approvePlan(planId, fx.ctx);
 
-    const after = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const after = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(after.onboardingRanAt).toBeInstanceOf(Date);
     // Stamped with the approval moment (allow generous clock slack on a slow CI box).
     expect(Math.abs(after.onboardingRanAt!.getTime() - t0)).toBeLessThan(60_000);
@@ -957,7 +978,7 @@ describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () =
       { op: 'add', proposedFields: { title: 'Tree A', kind: 'task' } },
     ]);
     await plansService.approvePlan(planA, fx.ctx);
-    const firstStamp = (await db.project.findUniqueOrThrow({ where: { id: fx.projectId } }))
+    const firstStamp = (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } }))
       .onboardingRanAt;
     expect(firstStamp).toBeInstanceOf(Date);
 
@@ -967,7 +988,7 @@ describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () =
       { op: 'add', proposedFields: { title: 'Tree B', kind: 'task' } },
     ]);
     await plansService.approvePlan(planB, fx.ctx);
-    const secondStamp = (await db.project.findUniqueOrThrow({ where: { id: fx.projectId } }))
+    const secondStamp = (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } }))
       .onboardingRanAt;
     expect(secondStamp!.getTime()).toBe(firstStamp!.getTime());
   });
@@ -979,7 +1000,7 @@ describe('plansService.approvePlan — onboarding-ran marker (MOTIR-1264)', () =
     ]);
     await plansService.declinePlan(planId, fx.ctx);
 
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.onboardingRanAt).toBeNull();
   });
 });
@@ -1011,21 +1032,21 @@ describe('plansService.markPlanned — productName persistence (MOTIR-1551)', ()
   it('persists a trimmed productName onto the Plan on the final append', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlanNamed(fx, '  Recipe Keeper  ');
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.productName).toBe('Recipe Keeper');
   });
 
   it('leaves productName null when the final append carries none (reconciliation run)', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlanNamed(fx, null);
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.productName).toBeNull();
   });
 
   it('treats a blank/whitespace productName as none', async () => {
     const fx = await makeWorkItemFixture();
     const planId = await plannedPlanNamed(fx, '   ');
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.productName).toBeNull();
   });
 });
@@ -1033,47 +1054,50 @@ describe('plansService.markPlanned — productName persistence (MOTIR-1551)', ()
 describe('plansService.approvePlan — name the onboarded project (MOTIR-1551)', () => {
   it('renames a still-provisional draft to the plan productName on the first onboarding approve', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
 
     const planId = await plannedPlanNamed(fx, 'Recipe Keeper');
     await plansService.approvePlan(planId, fx.ctx, { provisionalProjectName: PROVISIONAL });
 
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.name).toBe('Recipe Keeper');
     expect(project.onboardingRanAt).toBeInstanceOf(Date); // still stamped
   });
 
   it('never clobbers a project the user already renamed during review', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({ where: { id: fx.projectId }, data: { name: 'My Cool Project' } });
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { name: 'My Cool Project' },
+    });
 
     const planId = await plannedPlanNamed(fx, 'Recipe Keeper');
     await plansService.approvePlan(planId, fx.ctx, { provisionalProjectName: PROVISIONAL });
 
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.name).toBe('My Cool Project');
   });
 
   it('is a no-op when the plan carries no productName (a null → keeps the placeholder)', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
 
     const planId = await plannedPlanNamed(fx, null);
     await plansService.approvePlan(planId, fx.ctx, { provisionalProjectName: PROVISIONAL });
 
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.name).toBe(PROVISIONAL);
   });
 
   it('does not rename on a LATER approve (onboardingRanAt already set), even if that plan carries a name', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { name: PROVISIONAL } });
 
     // First onboarding approve carries NO name → the placeholder survives, and
     // onboardingRanAt is stamped.
     const planA = await plannedPlanNamed(fx, null);
     await plansService.approvePlan(planA, fx.ctx, { provisionalProjectName: PROVISIONAL });
-    expect((await db.project.findUniqueOrThrow({ where: { id: fx.projectId } })).name).toBe(
+    expect((await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })).name).toBe(
       PROVISIONAL,
     );
 
@@ -1082,7 +1106,7 @@ describe('plansService.approvePlan — name the onboarded project (MOTIR-1551)',
     const planB = await plannedPlanNamed(fx, 'Late Name');
     await plansService.approvePlan(planB, fx.ctx, { provisionalProjectName: PROVISIONAL });
 
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.name).toBe(PROVISIONAL);
   });
 });
@@ -1122,12 +1146,12 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
     await plansService.approvePlan(plan.id, fx.ctx);
 
     // Materialize mapped the sizing onto the created WorkItem (the gate survives).
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Sized leaf' } });
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Sized leaf' } });
     expect(Number(created.storyPoints)).toBe(5);
     expect(created.estimateMinutes).toBe(55);
 
     // The 'created' revision records the sizing (mirrors the normal create diff).
-    const rev = await db.workItemRevision.findFirstOrThrow({
+    const rev = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: created.id, changeKind: 'created' },
     });
     expect(rev.diff).toMatchObject({
@@ -1143,7 +1167,7 @@ describe('plansService — leaf sizing on proposals (MOTIR-1433)', () => {
     ]);
     await plansService.approvePlan(planId, fx.ctx);
 
-    const created = await db.workItem.findFirstOrThrow({ where: { title: 'Unsized' } });
+    const created = await adminDb.workItem.findFirstOrThrow({ where: { title: 'Unsized' } });
     expect(created.storyPoints).toBeNull();
     expect(created.estimateMinutes).toBeNull();
   });

@@ -22,6 +22,7 @@ import { plansService } from '@/lib/services/plansService';
 import { projectRepoProposalService } from '@/lib/services/projectRepoProposalService';
 import { conventionEstablishService } from '@/lib/services/conventionEstablishService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 /** Create a plan, append the given proposals, and mark it `planned`. */
@@ -52,6 +53,7 @@ afterEach(() => vi.clearAllMocks());
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('plansService.approvePlan — repository-set proposal (MOTIR-1881)', () => {
@@ -117,12 +119,15 @@ describe('plansService.approvePlan — repository-set proposal (MOTIR-1881)', ()
     // approval over. The user gets an empty-but-editable set, which MOTIR-1782
     // can complete later (ADR §4.4).
     expect(approved.status).toBe('approved');
-    const item = await db.workItem.findFirst({ where: { title: 'Resilient tree' } });
+    const item = await adminDb.workItem.findFirst({ where: { title: 'Resilient tree' } });
     expect(item).not.toBeNull();
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.status).toBe('approved');
     // And the project has no set — honestly empty, not half-written.
-    expect(await db.projectRepo.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const projectRepoCount = await adminDb.projectRepo.count({
+      where: { projectId: fx.projectId },
+    });
+    expect(projectRepoCount).toBe(0);
   });
 
   it('a proposal failure does not suppress the sibling convention trigger', async () => {

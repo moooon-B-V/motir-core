@@ -17,6 +17,7 @@ import { PlanItemUnknownTargetRepoRoleError } from '@/lib/plans/errors';
 import type { ProposalInput } from '@/lib/dto/plans';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The plan → repo ROLE carrier (Story MOTIR-1775 · MOTIR-1912) over real Postgres.
@@ -61,7 +62,7 @@ async function plannedPlan(fx: WorkItemFixture, proposals: ProposalInput[]): Pro
 
 /** The work items an approved plan materialized, by title. */
 async function itemsByTitle(fx: WorkItemFixture) {
-  const rows = await db.workItem.findMany({ where: { projectId: fx.projectId } });
+  const rows = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
   return new Map(rows.map((r) => [r.title, r]));
 }
 
@@ -80,6 +81,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('approvePlan — the ROLE is recorded on the materialized item', () => {
@@ -165,7 +167,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
       { projectId: fx.projectId, kind: 'task', title: 'Moving layer' },
       fx.ctx,
     );
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: existing.id },
       data: { targetRepoRole: 'api' },
     });
@@ -175,7 +177,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
 
     await plansService.approvePlan(planId, fx.ctx);
     expect(
-      (await db.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
     ).toBe('shared');
   });
 
@@ -191,7 +193,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
       { projectId: fx.projectId, kind: 'task', title: 'Untouched' },
       fx.ctx,
     );
-    await db.workItem.updateMany({
+    await adminDb.workItem.updateMany({
       where: { id: { in: [cleared.id, untouched.id] } },
       data: { targetRepoRole: 'web' },
     });
@@ -203,9 +205,9 @@ describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
     await plansService.approvePlan(planId, fx.ctx);
 
     expect(
-      (await db.workItem.findUniqueOrThrow({ where: { id: cleared.id } })).targetRepoRole,
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: cleared.id } })).targetRepoRole,
     ).toBe(null);
-    const kept = await db.workItem.findUniqueOrThrow({ where: { id: untouched.id } });
+    const kept = await adminDb.workItem.findUniqueOrThrow({ where: { id: untouched.id } });
     expect(kept.title).toBe('Renamed only');
     expect(kept.targetRepoRole).toBe('web');
   });
@@ -226,7 +228,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins the role', () => {
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    const revision = await db.workItemRevision.findFirstOrThrow({
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: existing.id, changeKind: 'updated' },
       orderBy: { changedAt: 'desc' },
     });
@@ -316,7 +318,7 @@ describe('approvePlan — the distinct roles FEED the repo-set derivation (ADR �
     expect(set.map((r) => r.role)).toEqual(['web']);
     // …but the modify's role IS applied to its target.
     expect(
-      (await db.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
     ).toBe('infra');
   });
 });
@@ -350,7 +352,8 @@ describe('approvePlan — a role outside the vocabulary is REJECTED', () => {
     // The message names the legal vocabulary, so the producer can self-correct.
     expect(typed.message).toContain('web, api, mobile, shared, infra, other');
     // NOTHING was appended — the whole batch is validated before the transaction.
-    expect(await db.planItem.count({ where: { planId: plan.id } })).toBe(0);
+    const planItemCount = await adminDb.planItem.count({ where: { planId: plan.id } });
+    expect(planItemCount).toBe(0);
   });
 
   it("rejects `''` and a non-string too — the value arrives as untyped JSON", async () => {
@@ -366,7 +369,8 @@ describe('approvePlan — a role outside the vocabulary is REJECTED', () => {
         ),
       ).rejects.toBeInstanceOf(PlanItemUnknownTargetRepoRoleError);
     }
-    expect(await db.planItem.count({ where: { planId: plan.id } })).toBe(0);
+    const planItemCount = await adminDb.planItem.count({ where: { planId: plan.id } });
+    expect(planItemCount).toBe(0);
   });
 
   it('rejects it at APPROVE — and materializes NOTHING', async () => {
@@ -378,10 +382,10 @@ describe('approvePlan — a role outside the vocabulary is REJECTED', () => {
       { op: 'add', proposedFields: { title: 'Good', targetRepoRole: 'web' } },
       { op: 'add', proposedFields: { title: 'Bad', targetRepoRole: 'api' } },
     ]);
-    const bad = await db.planItem.findFirstOrThrow({
+    const bad = await adminDb.planItem.findFirstOrThrow({
       where: { planId, proposedFields: { path: ['title'], equals: 'Bad' } },
     });
-    await db.planItem.update({
+    await adminDb.planItem.update({
       where: { id: bad.id },
       data: { proposedFields: { title: 'Bad', targetRepoRole: 'backend' } },
     });
@@ -393,8 +397,9 @@ describe('approvePlan — a role outside the vocabulary is REJECTED', () => {
     expect((err as PlanItemUnknownTargetRepoRoleError).role).toBe('backend');
     // The tree AND the plan are byte-identical — the rejection runs before the
     // transaction opens, so the GOOD proposal beside it materialized nothing.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.status).toBe('planned');
     expect(plan.decidedAt).toBeNull();
     // …and no repository row was proposed either.
@@ -427,9 +432,10 @@ describe('approvePlan — a role outside the vocabulary is REJECTED', () => {
     expect((err as PlanItemUnknownTargetRepoRoleError).proposalLabel).toContain(existing.id);
     // Nothing about the target moved, and nothing was appended.
     expect(
-      (await db.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepoRole,
     ).toBeNull();
-    expect(await db.planItem.count({ where: { planId: plan.id } })).toBe(0);
+    const planItemCount = await adminDb.planItem.count({ where: { planId: plan.id } });
+    expect(planItemCount).toBe(0);
   });
 });
 

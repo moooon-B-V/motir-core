@@ -8,6 +8,7 @@ import {
   SEED_TEST_PROJECT_NAME,
   seedGenerationTestProject,
 } from '@/scripts/plan-seed/testProject';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 7.4.10 · MOTIR-1426 — the AI-generation TEST-BED project the seed adds
@@ -26,6 +27,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('seedGenerationTestProject (MOTIR-1426)', () => {
@@ -58,7 +60,7 @@ describe('seedGenerationTestProject (MOTIR-1426)', () => {
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
-    await db.workspaceMembership.updateMany({
+    await adminDb.workspaceMembership.updateMany({
       where: { workspaceId: workspace.id },
       data: { activeProjectId: mainProject.id },
     });
@@ -75,12 +77,12 @@ describe('seedGenerationTestProject (MOTIR-1426)', () => {
     expect(testProject.identifier).toBe(SEED_TEST_PROJECT_IDENTIFIER);
     expect(testProject.onboardingRanAt).toBeNull();
     expect(testProject.id).not.toBe(mainProject.id);
-    const persisted = await db.project.findUnique({ where: { id: testProject.id } });
+    const persisted = await adminDb.project.findUnique({ where: { id: testProject.id } });
     expect(persisted?.name).toBe(SEED_TEST_PROJECT_NAME);
     expect(persisted?.onboardingRanAt).toBeNull();
 
     // Team enrolled: owner → admin, teammate → member (the whole team can switch to it).
-    const memberships = await db.projectMembership.findMany({
+    const memberships = await adminDb.projectMembership.findMany({
       where: { projectId: testProject.id },
     });
     const roleByUser = new Map(memberships.map((m) => [m.userId, m.role]));
@@ -89,7 +91,9 @@ describe('seedGenerationTestProject (MOTIR-1426)', () => {
     expect(roleByUser.get(member.id)).toBe('member');
 
     // The active-project pin is NOT stolen — `motir` stays every member's landing project.
-    const pins = await db.workspaceMembership.findMany({ where: { workspaceId: workspace.id } });
+    const pins = await adminDb.workspaceMembership.findMany({
+      where: { workspaceId: workspace.id },
+    });
     for (const pin of pins) expect(pin.activeProjectId).toBe(mainProject.id);
   });
 });

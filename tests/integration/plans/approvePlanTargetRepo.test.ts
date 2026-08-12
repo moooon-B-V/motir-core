@@ -9,6 +9,7 @@ import { PlanItemUnknownTargetRepoError } from '@/lib/plans/errors';
 import type { ProposalInput } from '@/lib/dto/plans';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestProject } from '../../fixtures/projectFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { randomToken } from '../../helpers/random';
 
@@ -45,13 +46,14 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect one repo to the workspace — the 7.10.3 installation mirror rows a set
  *  row realizes against (mirrors `tests/projectRepos/projectRepoSetService.test.ts`). */
 async function connectRepo(workspaceId: string, name: string, owner = 'acme'): Promise<GithubRepo> {
   const installationId = `inst-${workspaceId}-github`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -62,7 +64,7 @@ async function connectRepo(workspaceId: string, name: string, owner = 'acme'): P
     },
     update: {},
   });
-  return db.githubRepo.create({
+  return adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
@@ -108,8 +110,8 @@ async function plannedPlan(fx: WorkItemFixture, proposals: ProposalInput[]): Pro
 
 /** The single work item a one-`add` plan materialized. */
 async function materializedItem(planId: string) {
-  const item = await db.planItem.findFirstOrThrow({ where: { planId, op: 'add' } });
-  return db.workItem.findUniqueOrThrow({ where: { id: item.workItemId! } });
+  const item = await adminDb.planItem.findFirstOrThrow({ where: { planId, op: 'add' } });
+  return adminDb.workItem.findUniqueOrThrow({ where: { id: item.workItemId! } });
 }
 
 describe('approvePlan — an `add` carries the repo pin onto the work item', () => {
@@ -201,7 +203,7 @@ describe('approvePlan — an `add` carries the repo pin onto the work item', () 
 
     await plansService.approvePlan(planId, fx.ctx);
     const row = await materializedItem(planId);
-    const revision = await db.workItemRevision.findFirstOrThrow({
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: row.id, changeKind: 'created' },
     });
     expect((revision.diff as Record<string, unknown>).targetRepo).toEqual({
@@ -230,9 +232,9 @@ describe('approvePlan — a `modify` patch re-pins and unpins', () => {
 
     await plansService.approvePlan(planId, fx.ctx);
 
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: existing.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } });
     expect(row.targetRepo).toBe('acme-api');
-    const revision = await db.workItemRevision.findFirstOrThrow({
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: existing.id, changeKind: 'updated' },
       orderBy: { changedAt: 'desc' },
     });
@@ -255,7 +257,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins', () => {
 
     await plansService.approvePlan(planId, fx.ctx);
     expect(
-      (await db.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepo,
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepo,
     ).toBeNull();
   });
 
@@ -273,7 +275,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins', () => {
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: existing.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } });
     expect(row.title).toBe('New title');
     expect(row.targetRepo).toBe('acme-web');
   });
@@ -290,7 +292,7 @@ describe('approvePlan — a `modify` patch re-pins and unpins', () => {
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
-    const revision = await db.workItemRevision.findFirstOrThrow({
+    const revision = await adminDb.workItemRevision.findFirstOrThrow({
       where: { workItemId: existing.id, changeKind: 'updated' },
       orderBy: { changedAt: 'desc' },
     });
@@ -305,7 +307,7 @@ describe('approvePlan — a pin outside the project’s set is REJECTED', () => 
     const planId = await plannedPlan(fx, [
       { op: 'add', proposedFields: { title: 'Typo', kind: 'task', targetRepo: 'acme-apo' } },
     ]);
-    const planItem = await db.planItem.findFirstOrThrow({ where: { planId } });
+    const planItem = await adminDb.planItem.findFirstOrThrow({ where: { planId } });
 
     const err = await plansService.approvePlan(planId, fx.ctx).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(PlanItemUnknownTargetRepoError);
@@ -326,15 +328,17 @@ describe('approvePlan — a pin outside the project’s set is REJECTED', () => 
       { op: 'add', proposedFields: { title: 'Good', kind: 'task', targetRepo: 'acme-web' } },
       { op: 'add', proposedFields: { title: 'Bad', kind: 'task', targetRepo: 'nope' } },
     ]);
-    const before = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
 
     await expect(plansService.approvePlan(planId, fx.ctx)).rejects.toBeInstanceOf(
       PlanItemUnknownTargetRepoError,
     );
 
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
-    expect(await db.workItem.findFirst({ where: { title: 'Good' } })).toBeNull();
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: planId } });
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(before);
+    const workItemRow = await adminDb.workItem.findFirst({ where: { title: 'Good' } });
+    expect(workItemRow).toBeNull();
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.status).toBe('planned');
     expect(plan.decidedAt).toBeNull();
   });
@@ -353,9 +357,9 @@ describe('approvePlan — a pin outside the project’s set is REJECTED', () => 
     await expect(plansService.approvePlan(planId, fx.ctx)).rejects.toBeInstanceOf(
       PlanItemUnknownTargetRepoError,
     );
-    expect((await db.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepo).toBe(
-      'acme-web',
-    );
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: existing.id } })).targetRepo,
+    ).toBe('acme-web');
   });
 
   it('rejects a SIBLING project’s repo — validation reads the PROJECT’s set, not the workspace’s', async () => {
@@ -441,7 +445,7 @@ describe('approvePlan — backward compatibility (no pin)', () => {
     ]);
 
     await plansService.approvePlan(planId, fx.ctx);
-    const rows = await db.workItem.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.targetRepo === null)).toBe(true);
   });
@@ -462,7 +466,7 @@ describe('approvePlan — backward compatibility (no pin)', () => {
     await plansService.approvePlan(planId, fx.ctx);
 
     const byTitle = new Map(
-      (await db.workItem.findMany({ where: { projectId: fx.projectId } })).map((r) => [
+      (await adminDb.workItem.findMany({ where: { projectId: fx.projectId } })).map((r) => [
         r.title,
         r.targetRepo,
       ]),
