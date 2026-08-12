@@ -85,7 +85,25 @@ const pillLinks = (page: Page) => page.getByRole('link', { name: 'Plan with AI',
 const planLinks = (page: Page) => page.getByRole('link', { name: /Plan with AI/ });
 const canvas = (page: Page) => page.getByTestId('roadmap-canvas');
 const rail = (page: Page) => page.getByRole('complementary', { name: 'Motir AI' });
-/** A non-interactive point OUTSIDE the panel — the outside-click dismiss target. */
+/**
+ * The page-level heading proving the authed shell is up right after `signIn()`.
+ *
+ * Sign-in lands on `/home`, not `/dashboard`, since MOTIR-2654 moved the
+ * `callbackURL` default. The assertion is unchanged in KIND — a page-level
+ * heading proving the shell rendered — only in which page it names, exactly as
+ * the non-acceptance twin `ai-callout-gate.spec.ts` was changed by that story.
+ */
+const landingHeading = (page: Page) => page.getByRole('heading', { name: 'Home', level: 1 });
+
+/**
+ * The `/dashboard` page's own heading — and the non-interactive point OUTSIDE
+ * the panel that the outside-click dismissal uses as its target.
+ *
+ * DISTINCT from {@link landingHeading} and
+ * deliberately still "Dashboards": the two later chapters `goto('/dashboard')`
+ * explicitly, so that is the page they are on. Renaming both to Home would make
+ * the spec pass for the wrong reason on the landing and fail on the dashboard.
+ */
 const dashboardHeading = (page: Page) =>
   page.getByRole('heading', { name: 'Dashboards', level: 1 });
 
@@ -144,7 +162,7 @@ test('the "M" orb opens the AI callout, and Plan with AI reaches the workspace',
   await signIn(page, seed.email, seed.password);
 
   await chapter('The floating "M" orb is on the authed shell', async () => {
-    await expect(dashboardHeading(page)).toBeVisible();
+    await expect(landingHeading(page)).toBeVisible();
 
     // The orb is present and CLOSED — a trigger, not a menu left hanging open.
     await expect(orb(page)).toBeVisible();
