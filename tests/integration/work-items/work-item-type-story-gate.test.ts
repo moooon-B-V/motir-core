@@ -15,6 +15,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 import type { WorkItemTypeDto } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 
@@ -180,6 +181,7 @@ describe('the integration seam — a type survives the whole path, on real Postg
 
   afterAll(async () => {
     await db.$disconnect();
+    await adminDb.$disconnect();
   });
 
   // Every member, not only the four admitted: the seam is what breaks when a
@@ -199,7 +201,7 @@ describe('the integration seam — a type survives the whole path, on real Postg
       expect(created.executor).toBe(defaultExecutorForType(type));
 
       // 2. The filter path — a query for this type returns exactly this row.
-      const filtered = await db.workItem.findMany({
+      const filtered = await adminDb.workItem.findMany({
         where: { projectId: fx.projectId, type },
         select: { id: true },
       });

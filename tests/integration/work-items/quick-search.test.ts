@@ -14,7 +14,9 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { usersService } from '@/lib/services/usersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, nextTestPosition } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Subtask 6.9.1 — the reusable server-side issue quick-search read.
 //
@@ -41,6 +43,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /**
@@ -57,23 +60,29 @@ async function seedItem(args: {
   title: string;
   kind?: WorkItemKind;
 }): Promise<WorkItem> {
-  return db.$transaction(async (tx) => {
-    const key = await projectRepository.allocateWorkItemNumber(args.projectId, tx);
-    return workItemRepository.create(
-      {
-        workspaceId: args.workspaceId,
-        projectId: args.projectId,
-        parentId: null,
-        kind: args.kind ?? 'task',
-        key,
-        identifier: `${args.identifier}-${key}`,
-        title: args.title,
-        reporterId: args.reporterId,
-        position: await nextTestPosition(args.projectId, tx),
-      },
-      tx,
-    );
-  });
+  // A local copy of `createTestWorkItem`'s allocate-then-create dance, so it takes the
+  // same treatment (MOTIR-2792): the transaction is the one the service opens, because
+  // `allocateWorkItemNumber` reads `project` and the policy needs the tenant bound.
+  return withWorkspaceContext(
+    { userId: args.reporterId, workspaceId: args.workspaceId },
+    async (tx) => {
+      const key = await projectRepository.allocateWorkItemNumber(args.projectId, tx);
+      return workItemRepository.create(
+        {
+          workspaceId: args.workspaceId,
+          projectId: args.projectId,
+          parentId: null,
+          kind: args.kind ?? 'task',
+          key,
+          identifier: `${args.identifier}-${key}`,
+          title: args.title,
+          reporterId: args.reporterId,
+          position: await nextTestPosition(args.projectId, tx),
+        },
+        tx,
+      );
+    },
+  );
 }
 
 describe('workItemsService.quickSearch — correctness', () => {
@@ -210,7 +219,7 @@ describe('workItemsService.quickSearch — correctness', () => {
     const fx = await makeWorkItemFixture({ identifier: 'PROD' });
     const live = await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: 'orbit live' });
     const dead = await seedItem({ ...projectOf(fx), reporterId: fx.ownerId, title: 'orbit dead' });
-    await db.workItem.update({ where: { id: dead.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: dead.id }, data: { archivedAt: new Date() } });
 
     const results = await workItemsService.quickSearch('orbit', fx.ctx);
     expect(results.map((r) => r.id)).toEqual([live.id]);

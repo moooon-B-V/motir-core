@@ -10,6 +10,7 @@ import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, createTestProject } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story 5.8 · Subtask 5.8.7 — the work-item-mention → relates_to → render
@@ -43,6 +44,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function makeItem(
@@ -86,7 +88,7 @@ describe('5.8.7 seam · writer → relationships DTO (get_work_item / detail rea
     // remove targets) — every surfaced relates_to edge is `source = mention`,
     // i.e. it was born from the reference, not hand-linked.
     for (const l of detail.relatesTo) {
-      const row = await db.workItemLink.findUnique({ where: { id: l.linkId } });
+      const row = await adminDb.workItemLink.findUnique({ where: { id: l.linkId } });
       expect(row?.source).toBe('mention');
     }
   });

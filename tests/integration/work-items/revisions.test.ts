@@ -6,6 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { toWorkItemRevisionDto } from '@/lib/mappers/workItemRevisionMappers';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 
@@ -23,7 +24,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 // pattern, since the revision row has no workspaceId of its own).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -42,6 +43,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // makeFixture (the workspace/project/owner bundle) is the shared
@@ -349,7 +351,7 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
     const items = await workItemRepository.findByProjectFiltered(fx.projectId);
     expect(items).toEqual([]);
     // And no orphan revision row exists.
-    const revCount = await db.workItemRevision.count();
+    const revCount = await adminDb.workItemRevision.count();
     expect(revCount).toBe(0);
 
     spy.mockRestore();
@@ -377,7 +379,7 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     // No revision orphaned (the revision write never ran), and no work_item.
-    const revCount = await db.workItemRevision.count();
+    const revCount = await adminDb.workItemRevision.count();
     expect(revCount).toBe(0);
     const items = await workItemRepository.findByProjectFiltered(fx.projectId);
     expect(items).toEqual([]);
@@ -447,15 +449,15 @@ describe('listByWorkItem — ordering', () => {
     // load. Stamp DISTINCT timestamps so this assertion is independent of both
     // timing and id ordering; the secondary sort is the production safety net.
     const base = Date.UTC(2026, 0, 1);
-    await db.workItemRevision.updateMany({
+    await adminDb.workItemRevision.updateMany({
       where: { workItemId: created.id, changeKind: 'created' },
       data: { changedAt: new Date(base) },
     });
-    await db.workItemRevision.updateMany({
+    await adminDb.workItemRevision.updateMany({
       where: { workItemId: created.id, changeKind: 'updated' },
       data: { changedAt: new Date(base + 1000) },
     });
-    await db.workItemRevision.updateMany({
+    await adminDb.workItemRevision.updateMany({
       where: { workItemId: created.id, changeKind: 'archived' },
       data: { changedAt: new Date(base + 2000) },
     });

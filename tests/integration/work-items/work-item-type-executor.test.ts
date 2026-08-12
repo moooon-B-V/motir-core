@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { TypeNotAllowedOnKindError } from '@/lib/workItems/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 
@@ -18,7 +19,7 @@ import { makeWorkItemFixture } from '../../fixtures';
 // facet; this pins the schema + service contract at the source.)
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('createWorkItem — type + executor', () => {

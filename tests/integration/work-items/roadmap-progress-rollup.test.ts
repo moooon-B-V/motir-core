@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -28,7 +29,7 @@ import {
 //      `done`-category status) is excluded from BOTH done and total.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   // Cascades from workspace → project → workflow_status, so the per-test custom
@@ -42,11 +43,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Direct column poke (tests may reach the db to set state — CLAUDE.md). */
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 describe('workItemsService.getProjectRoadmap — progress roll-up correctness (MOTIR-1014)', () => {
@@ -113,7 +115,7 @@ describe('workItemsService.getProjectRoadmap — progress roll-up correctness (M
     // A custom `done`-category status (NOT the default `done` key). The roll-up's
     // done-key set is derived by CATEGORY (every `done`-category status except the
     // sealed `cancelled`), so this must count toward `done`.
-    await db.workflowStatus.create({
+    await adminDb.workflowStatus.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,

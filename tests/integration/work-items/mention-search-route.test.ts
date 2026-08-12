@@ -11,6 +11,7 @@ import type { WorkItemSummaryDto } from '@/lib/dto/workItems';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture, nextTestPosition } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 5.8.4 — `GET /api/work-items/mention-search`, the candidate read behind
@@ -49,6 +50,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Sign the test in as a given actor scoped to a workspace. */

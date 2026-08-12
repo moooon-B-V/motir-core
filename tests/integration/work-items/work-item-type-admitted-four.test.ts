@@ -10,6 +10,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { PLAN_TYPE_TO_WORK_ITEM_TYPE } from '@/scripts/plan-seed/mapItem';
 import type { WorkItemTypeDto } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 
@@ -175,6 +176,7 @@ describe('the admitted four reach every contract that publishes the type set', (
 
     afterAll(async () => {
       await db.$disconnect();
+      await adminDb.$disconnect();
     });
 
     it.each(ADMITTED)('%s persists and reads back, seeding its amendment default', async (type) => {
@@ -215,7 +217,7 @@ describe('the admitted four reach every contract that publishes the type set', (
         fx.ctx,
       );
 
-      const rows = await db.workItem.findMany({
+      const rows = await adminDb.workItem.findMany({
         where: { projectId: fx.projectId, type: 'translate' },
         select: { id: true, type: true },
       });

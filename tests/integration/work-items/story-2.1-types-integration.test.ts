@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 
@@ -33,7 +34,7 @@ import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 // the matrix/service/repository suites build on.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('Story 2.1 — issue types end to end (type → validate → key)', () => {

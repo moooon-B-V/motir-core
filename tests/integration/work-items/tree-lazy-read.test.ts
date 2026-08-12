@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { DEFAULT_SORT, type IssueSort } from '@/lib/issues/issueListView';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -17,7 +18,7 @@ import {
 // each row carrying `hasChildren`, workspace-gated. Real Postgres, no mocks.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -64,7 +65,7 @@ describe('listRootIssues', () => {
   it("projects each row's work `type` (Subtask 8.8.9 — Type column)", async () => {
     const fx = await makeFixture();
     const { E, X } = await buildForest(fx);
-    await db.workItem.update({ where: { id: X.id }, data: { type: 'code' } });
+    await adminDb.workItem.update({ where: { id: X.id }, data: { type: 'code' } });
 
     const level = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
 
@@ -79,9 +80,15 @@ describe('listRootIssues', () => {
   it('projects hasDescription on a lazily-read level, both roots and children (MOTIR-2098)', async () => {
     const fx = await makeFixture();
     const { E, X, A, A1 } = await buildForest(fx);
-    await db.workItem.update({ where: { id: X.id }, data: { descriptionMd: 'Described bug.' } });
-    await db.workItem.update({ where: { id: A1.id }, data: { descriptionMd: 'Described task.' } });
-    await db.workItem.update({ where: { id: E.id }, data: { descriptionMd: '' } });
+    await adminDb.workItem.update({
+      where: { id: X.id },
+      data: { descriptionMd: 'Described bug.' },
+    });
+    await adminDb.workItem.update({
+      where: { id: A1.id },
+      data: { descriptionMd: 'Described task.' },
+    });
+    await adminDb.workItem.update({ where: { id: E.id }, data: { descriptionMd: '' } });
 
     const roots = await workItemsService.listRootIssues(fx.projectId, { sort: sort() }, fx.ctx);
     const children = await workItemsService.listChildIssues(A.id, { sort: sort() }, fx.ctx);

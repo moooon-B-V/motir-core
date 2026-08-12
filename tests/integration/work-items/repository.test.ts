@@ -10,6 +10,7 @@ import {
   WorkItemKeyConflictError,
   WorkItemNotFoundError,
 } from '@/lib/workItems/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -34,7 +35,7 @@ import {
 // changes.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
@@ -44,6 +45,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('workItemRepository.create — happy paths', () => {
@@ -60,7 +62,7 @@ describe('workItemRepository.create — happy paths', () => {
     expect(epic.priority).toBe('medium');
     expect(epic.explanationSource).toBe('user_authored');
 
-    const persisted = await db.workItem.findUnique({ where: { id: epic.id } });
+    const persisted = await adminDb.workItem.findUnique({ where: { id: epic.id } });
     expect(persisted).not.toBeNull();
     expect(persisted?.workspaceId).toBe(fx.workspace.id);
   });

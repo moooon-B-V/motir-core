@@ -7,8 +7,10 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
 import { IllegalParentTypeError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { WorkItemLinkCycleError } from '@/lib/workItems/linkErrors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../fixtures';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Service-layer integration tests for workItemsService against a REAL Postgres
 // (Yue's no-mocks rule — the single allowed spy here is vi.spyOn on a
@@ -25,7 +27,7 @@ import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../
 // unchanged.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -38,6 +40,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function createInput(
@@ -681,8 +684,10 @@ describe('linkWorkItems', () => {
     const a = await workItemsService.createWorkItem(createInput(fx, { title: 'A' }), fx.ctx);
     const b = await workItemsService.createWorkItem(createInput(fx, { title: 'B' }), fx.ctx);
 
-    // Seed ONLY the mirror B→A directly (a legacy half-pair), then link A→B.
-    await db.$transaction((tx) =>
+    // Seed ONLY the mirror B→A directly (a legacy half-pair), then link A→B. Bound
+    // (MOTIR-2792): the seed goes through the repository edge on purpose, so it needs
+    // the tenant context the service would have bound.
+    await withWorkspaceContext(fx.ctx, (tx) =>
       workItemLinkRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -793,10 +798,10 @@ describe('isReady', () => {
     );
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false);
 
-    await db.workItem.update({ where: { id: b.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: b.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false); // C still open
 
-    await db.workItem.update({ where: { id: c.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: c.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(true);
   });
 
@@ -829,7 +834,7 @@ describe('isReady', () => {
     );
 
     // C done, B still open → not ready.
-    await db.workItem.update({ where: { id: c.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: c.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(a.id, fx.ctx)).toBe(false);
 
     // Remove the open blocker B. The predicate must re-evaluate against the
