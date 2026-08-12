@@ -117,7 +117,9 @@ describe('system.daily-health-check scheduled job', () => {
 
     // Only the wrapper writes a row for THIS function (the seed skips it), so
     // there is exactly one and it is the one under test.
-    const runs = await adminDb.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
+    const runs = await adminDb.jobRun.findMany({
+      where: { functionId: 'system.daily-health-check' },
+    });
     expect(runs).toHaveLength(1);
 
     const run = runs[0]!;

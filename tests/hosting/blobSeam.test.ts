@@ -298,7 +298,9 @@ describe('seam: acceptanceEvidenceService ← the REAL uploader (a minted grant,
         fx.ctx,
       ),
     ).rejects.toMatchObject({ code: 'ACCEPTANCE_EVIDENCE_BLOB_MISSING' });
-    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } });
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count({
+      where: { workItemId: story.id },
+    });
     expect(acceptanceEvidenceCount).toBe(0);
   });
 

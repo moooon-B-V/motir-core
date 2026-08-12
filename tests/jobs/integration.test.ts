@@ -77,7 +77,9 @@ describe('scheduled job', () => {
     expect(result).toMatchObject(DAILY_HEALTH_CHECK_PAYLOAD);
 
     // The seed skips this function, so its own row is the only one.
-    const runs = await adminDb.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
+    const runs = await adminDb.jobRun.findMany({
+      where: { functionId: 'system.daily-health-check' },
+    });
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.functionId).toBe('system.daily-health-check');

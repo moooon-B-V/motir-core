@@ -293,7 +293,9 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
       { projectId: project.id, kind: 'task', title: 'a triage task', parentId: epic.id },
       ownerCtx,
     );
-    const storyChildren = await adminDb.workItem.count({ where: { parentId: epic.id, kind: 'story' } });
+    const storyChildren = await adminDb.workItem.count({
+      where: { parentId: epic.id, kind: 'story' },
+    });
     expect(storyChildren).toBe(0); // the precondition this test exists to cover
 
     const res = await post({

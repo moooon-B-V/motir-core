@@ -101,7 +101,10 @@ async function addMentioningComment(s: Scenario, mentioned: User) {
 
 /** Read the notification rows for a recipient (tests may use db directly). */
 function notificationsFor(recipientUserId: string) {
-  return adminDb.notification.findMany({ where: { recipientUserId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.notification.findMany({
+    where: { recipientUserId },
+    orderBy: { createdAt: 'asc' },
+  });
 }
 
 describe('notificationFanInService.fanIn — comment mentions', () => {

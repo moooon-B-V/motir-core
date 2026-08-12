@@ -124,7 +124,10 @@ async function statusOf(workItemId: string): Promise<string> {
 }
 
 async function statusRevisions(workItemId: string) {
-  return adminDb.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
+  return adminDb.workItemRevision.findMany({
+    where: { workItemId },
+    orderBy: { changedAt: 'asc' },
+  });
 }
 
 async function openMr(identifier: string, iid = 7): Promise<number> {

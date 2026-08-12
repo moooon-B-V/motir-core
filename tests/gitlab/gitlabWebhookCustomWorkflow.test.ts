@@ -130,7 +130,9 @@ describe('gitlabWebhookService — custom workflow with NO matching status (MOTI
   it('MR opened with no in_progress-category status → no_matching_status no-op', async () => {
     const { project, item } = await makeScenario('wf-a@example.com');
     await dropStatusCategory(project.id, 'in_progress');
-    const revisionsBefore = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
+    const revisionsBefore = await adminDb.workItemRevision.count({
+      where: { workItemId: item.id },
+    });
 
     const result = await gitlabWebhookService.handleEvent(
       'Merge Request Hook',

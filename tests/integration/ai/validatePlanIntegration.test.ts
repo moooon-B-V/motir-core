@@ -42,7 +42,8 @@ const mk = (
 const putInSprint = (id: string, sprintId: string) =>
   adminDb.workItem.update({ where: { id }, data: { sprintId } });
 
-const markDone = (id: string) => adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
+const markDone = (id: string) =>
+  adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
 function validateReq(path: string, fx: WorkItemFixture, body: unknown): Request {
   return new Request(`http://core${path}`, {

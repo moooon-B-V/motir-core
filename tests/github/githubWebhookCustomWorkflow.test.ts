@@ -132,7 +132,9 @@ describe('githubWebhookService — custom workflow with NO matching status (MOTI
     // lifecycle to resolve to — byKey misses, byCategory misses → null.
     await dropStatusCategory(project.id, 'in_progress');
     // createWorkItem writes its own `created` revision; the no-op must add none.
-    const revisionsBefore = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
+    const revisionsBefore = await adminDb.workItemRevision.count({
+      where: { workItemId: item.id },
+    });
 
     const result = await githubWebhookService.handleEvent(
       'pull_request',
