@@ -12,6 +12,7 @@ import {
 } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
 
@@ -35,6 +36,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -83,7 +85,7 @@ describe('createWorkItem seeds the workflow initial status', () => {
     });
     const ctx: ServiceContext = { userId: user.id, workspaceId: ws.workspace.id };
     // A BARE project (no auto-seed) — bypasses createProject's seed.
-    const bare = await db.project.create({
+    const bare = await adminDb.project.create({
       data: { workspaceId: ws.workspace.id, name: 'Bare', slug: 'tv-bare', identifier: 'TVB' },
     });
     await expect(
@@ -138,7 +140,7 @@ describe('updateStatus — restricted mode (the default seed)', () => {
 describe('updateStatus — open mode', () => {
   it('accepts any legal status as a transition target, even with no transition row', async () => {
     const fx = await makeFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { workflowPolicyMode: 'open' },
     });
@@ -149,7 +151,7 @@ describe('updateStatus — open mode', () => {
 
   it('still rejects an unknown status key in open mode', async () => {
     const fx = await makeFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { workflowPolicyMode: 'open' },
     });

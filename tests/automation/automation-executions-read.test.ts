@@ -11,6 +11,7 @@ import { AutomationRuleNotFoundError } from '@/lib/automation/errors';
 import { AUTOMATION_EXECUTIONS_PAGE_SIZE } from '@/lib/services/automationRulesService';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Read-side tests for the automation audit log (Story 6.6 · Subtask 6.6.6):
@@ -30,13 +31,14 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Create an automation rule directly (the engine writes executions against it;
  * this read suite doesn't exercise the create path — the service tests own it).
  * Returns the rule id. */
 async function seedRule(fx: WorkItemFixture, name = 'Rule'): Promise<string> {
-  const row = await db.automationRule.create({
+  const row = await adminDb.automationRule.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -64,7 +66,7 @@ async function seedExecution(
     createdAt?: Date;
   },
 ): Promise<string> {
-  const row = await db.automationRuleExecution.create({
+  const row = await adminDb.automationRuleExecution.create({
     data: {
       ruleId,
       status: opts.status,
@@ -208,7 +210,7 @@ describe('listExecutions — tombstone (since-deleted triggering item)', () => {
 
     // Delete the item — the FK is SetNull, so the execution row survives with a
     // null work_item_id (the key is unrecoverable → the UI renders a tombstone).
-    await db.workItem.delete({ where: { id: item.id } });
+    await adminDb.workItem.delete({ where: { id: item.id } });
 
     const page = await automationRulesService.listExecutions(
       fx.projectIdentifier,

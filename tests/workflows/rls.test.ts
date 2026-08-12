@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Row-level security + key constraints for the status-workflow tables
@@ -44,6 +45,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 let positionCounter = 0;
@@ -65,7 +67,7 @@ async function makeStatus(args: {
   category?: StatusCategory;
   isInitial?: boolean;
 }): Promise<string> {
-  const row = await db.workflowStatus.create({
+  const row = await adminDb.workflowStatus.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -85,7 +87,7 @@ async function makeTransition(args: {
   fromStatusId: string;
   toStatusId: string;
 }): Promise<string> {
-  const row = await db.workflowTransition.create({
+  const row = await adminDb.workflowTransition.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -131,10 +133,10 @@ async function makeWorkflowTenants(): Promise<WorkflowTenantFixture> {
   // BARE projects (db insert, NOT projectsService.createProject) so the manual
   // status fixtures below aren't shadowed by 2.2.2's auto-seeded default
   // workflow — this suite controls the exact rows under test.
-  const p1 = await db.project.create({
+  const p1 = await adminDb.project.create({
     data: { workspaceId: w1.workspace.id, name: 'WF P1', slug: 'wf-rls', identifier: 'WFR' },
   });
-  const p2 = await db.project.create({
+  const p2 = await adminDb.project.create({
     data: { workspaceId: w2.workspace.id, name: 'WF P2', slug: 'wf-rls', identifier: 'WFR' },
   });
 
@@ -326,7 +328,7 @@ describe('workflow_status constraints — partial-unique initial status', () => 
       name: 'WF Extra',
     });
     const w3 = await workspacesService.createWorkspace({ name: 'WF WS 3', ownerUserId: userA.id });
-    const p3 = await db.project.create({
+    const p3 = await adminDb.project.create({
       data: { workspaceId: w3.workspace.id, name: 'WF P3', slug: 'wf-rls', identifier: 'WFR' },
     });
     const id = await makeStatus({
@@ -368,7 +370,7 @@ describe('workflow_status constraints — per-project key uniqueness', () => {
     await makeWorkflowTenants();
     // Both P1 and P2 already carry a `todo` key in the fixture — distinct
     // projects, so no collision. Assert both are present (as superuser).
-    const count = await db.workflowStatus.count({ where: { key: 'todo' } });
+    const count = await adminDb.workflowStatus.count({ where: { key: 'todo' } });
     expect(count).toBe(2);
   });
 });

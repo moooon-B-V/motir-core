@@ -16,6 +16,7 @@ import {
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
 
@@ -38,6 +39,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -71,7 +73,7 @@ describe('assertProjectAdmin gate', () => {
       password: 'hunter2hunter2',
       name: 'WF Member',
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     await expect(
@@ -248,7 +250,7 @@ describe('deleteStatus protections (custom statuses)', () => {
       { projectId: fx.projectId, kind: 'task', title: 'T' },
       { userId: fx.ownerId, workspaceId: fx.workspaceId },
     );
-    await db.workItem.update({ where: { id: item.id }, data: { status: 'on_hold' } });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: 'on_hold' } });
     await expect(
       workflowsService.deleteStatus({
         userId: fx.ownerId,

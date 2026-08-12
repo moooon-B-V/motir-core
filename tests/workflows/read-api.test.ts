@@ -6,6 +6,7 @@ import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // workflowsService + workflowsRepository read API (Story 2.2 · Subtask 2.2.3).
@@ -23,6 +24,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeStatus(args: {
@@ -33,7 +35,7 @@ async function makeStatus(args: {
   position: string;
   isInitial?: boolean;
 }): Promise<string> {
-  const row = await db.workflowStatus.create({
+  const row = await adminDb.workflowStatus.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -53,7 +55,7 @@ async function makeTransition(args: {
   fromStatusId: string;
   toStatusId: string;
 }): Promise<void> {
-  await db.workflowTransition.create({
+  await adminDb.workflowTransition.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -88,7 +90,7 @@ async function makeFixture(): Promise<Fixture> {
   // A BARE project (db insert, NOT projectsService.createProject) so the
   // controlled 4-status fixture below isn't shadowed by 2.2.2's auto-seeded
   // default workflow — this suite exercises the read API against a known set.
-  const project = await db.project.create({
+  const project = await adminDb.project.create({
     data: { workspaceId: w1.workspace.id, name: 'WF Read', slug: 'wf-read', identifier: 'WFR' },
   });
 
@@ -297,7 +299,7 @@ describe('workflowsService.canTransition (the four matrix cells)', () => {
 
   it('open mode → true for any (from, to), even without a transition row', async () => {
     const fx = await makeFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { workflowPolicyMode: 'open' },
     });

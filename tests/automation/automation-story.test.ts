@@ -21,6 +21,7 @@ import {
   AUTOMATION_EXECUTION_RETENTION_DAYS,
 } from '@/lib/automation/constants';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 
@@ -60,6 +61,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function nextEventId(): string {
@@ -90,7 +92,10 @@ function readItem(fx: WorkItemFixture, id: string) {
 }
 
 function executions(ruleId: string) {
-  return db.automationRuleExecution.findMany({ where: { ruleId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.automationRuleExecution.findMany({
+    where: { ruleId },
+    orderBy: { createdAt: 'asc' },
+  });
 }
 
 function conditionParam(conditions: FilterCondition[]): string {
@@ -187,7 +192,7 @@ const ACTION_BUILDERS: Record<
     return {
       config: { type: 'add_watcher', userId: member.id },
       assertEffect: async (_fx, itemId) => {
-        const watchers = await db.watcher.findMany({ where: { workItemId: itemId } });
+        const watchers = await adminDb.watcher.findMany({ where: { workItemId: itemId } });
         expect(watchers.map((w) => w.userId)).toContain(member.id);
       },
     };
@@ -195,14 +200,14 @@ const ACTION_BUILDERS: Record<
   add_comment: async () => ({
     config: { type: 'add_comment', bodyMd: 'Verify the fix' },
     assertEffect: async (_fx, itemId) => {
-      const comments = await db.comment.findMany({ where: { workItemId: itemId } });
+      const comments = await adminDb.comment.findMany({ where: { workItemId: itemId } });
       expect(comments.map((c) => c.bodyMd)).toContain('Verify the fix');
     },
   }),
   add_label: async () => ({
     config: { type: 'add_label', name: 'needs-qa' },
     assertEffect: async (_fx, itemId) => {
-      const links = await db.workItemLabel.findMany({
+      const links = await adminDb.workItemLabel.findMany({
         where: { workItemId: itemId },
         include: { label: true },
       });
@@ -222,7 +227,7 @@ const ACTION_BUILDERS: Record<
     return {
       config: { type: 'set_custom_field', fieldId: field.id, value: option.id },
       assertEffect: async (_fx, itemId) => {
-        const value = await db.customFieldValue.findFirst({
+        const value = await adminDb.customFieldValue.findFirst({
           where: { workItemId: itemId, fieldId: field.id },
         });
         expect(value).not.toBeNull();
@@ -355,7 +360,7 @@ describe('the story invariants hold end to end', () => {
       const summary = await runEvent(fx, item.id);
       expect(summary.failed).toBe(1);
     }
-    const after = await db.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
+    const after = await adminDb.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
     expect(after.enabled).toBe(false);
     expect(after.consecutiveFailureCount).toBeGreaterThanOrEqual(AUTOMATION_AUTO_DISABLE_THRESHOLD);
     expect((await executions(rule.id)).every((r) => r.status === 'failure')).toBe(true);
@@ -366,7 +371,7 @@ describe('the story invariants hold end to end', () => {
     await makeRule(fx, { actions: [{ type: 'add_comment', bodyMd: 'auto: triaged' }] });
     const item = await newItem(fx);
     await runEvent(fx, item.id);
-    const comment = await db.comment.findFirstOrThrow({ where: { workItemId: item.id } });
+    const comment = await adminDb.comment.findFirstOrThrow({ where: { workItemId: item.id } });
     expect(comment.authorId).toBe(fx.ownerId);
   });
 
@@ -381,7 +386,7 @@ describe('the story invariants hold end to end', () => {
     const now = new Date('2026-06-12T00:00:00.000Z');
     const stale = new Date(now);
     stale.setUTCDate(stale.getUTCDate() - (AUTOMATION_EXECUTION_RETENTION_DAYS + 1));
-    await db.automationRuleExecution.create({
+    await adminDb.automationRuleExecution.create({
       data: {
         ruleId: rule.id,
         status: 'success',

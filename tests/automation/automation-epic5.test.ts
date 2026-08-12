@@ -11,6 +11,7 @@ import { customFieldsService } from '@/lib/services/customFieldsService';
 import { encodeFilterParam, customFieldFilterFieldId } from '@/lib/filters/ast';
 import type { FilterCondition } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestUser, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import type { WorkItemCommentCreatedData } from '@/lib/jobs/types';
@@ -38,6 +39,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 let evtSeq = 0;
@@ -72,7 +74,10 @@ async function addMember(fx: WorkItemFixture, email: string) {
 }
 
 function executions(ruleId: string) {
-  return db.automationRuleExecution.findMany({ where: { ruleId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.automationRuleExecution.findMany({
+    where: { ruleId },
+    orderBy: { createdAt: 'asc' },
+  });
 }
 
 function commentEvents(): CapturedJobEvent[] {
@@ -96,7 +101,7 @@ describe('Epic-5 actions execute through their owning service as the rule owner'
       eventId: nextEventId(),
     });
 
-    const watchers = await db.watcher.findMany({ where: { workItemId: item.id } });
+    const watchers = await adminDb.watcher.findMany({ where: { workItemId: item.id } });
     expect(watchers.map((w) => w.userId)).toContain(bo.id);
     const [row] = await executions(rule.id);
     expect(row?.status).toBe('success');
@@ -117,7 +122,7 @@ describe('Epic-5 actions execute through their owning service as the rule owner'
       eventId: nextEventId(),
     });
 
-    const comments = await db.comment.findMany({ where: { workItemId: item.id } });
+    const comments = await adminDb.comment.findMany({ where: { workItemId: item.id } });
     expect(comments).toHaveLength(1);
     expect(comments[0]!.bodyMd).toBe('Please verify the fix');
     expect(comments[0]!.authorId).toBe(fx.ownerId); // attributed to the owner
@@ -140,7 +145,7 @@ describe('Epic-5 actions execute through their owning service as the rule owner'
       eventId: nextEventId(),
     });
 
-    const links = await db.workItemLabel.findMany({
+    const links = await adminDb.workItemLabel.findMany({
       where: { workItemId: item.id },
       include: { label: true },
     });
@@ -171,11 +176,11 @@ describe('Epic-5 actions execute through their owning service as the rule owner'
       eventId: nextEventId(),
     });
 
-    const value = await db.customFieldValue.findFirst({
+    const value = await adminDb.customFieldValue.findFirst({
       where: { workItemId: item.id, fieldId: field.id },
     });
     expect(value).not.toBeNull();
-    const revisions = await db.workItemRevision.findMany({ where: { workItemId: item.id } });
+    const revisions = await adminDb.workItemRevision.findMany({ where: { workItemId: item.id } });
     // A create revision + the CF-set revision (attributed to the owner).
     expect(revisions.some((r) => r.changedById === fx.ownerId)).toBe(true);
   });
@@ -318,7 +323,7 @@ describe('Epic-5 condition rows gate the rule (the 6.1.2 dynamic entries)', () =
     const plain = await newItem(fx, 'bug', 'no label');
     const { labelsService } = await import('@/lib/services/labelsService');
     await labelsService.addLabel(labelled.id, 'release-blocker', fx.ctx);
-    const [link] = await db.workItemLabel.findMany({
+    const [link] = await adminDb.workItemLabel.findMany({
       where: { workItemId: labelled.id },
       include: { label: true },
     });

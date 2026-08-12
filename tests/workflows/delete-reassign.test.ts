@@ -13,6 +13,7 @@ import {
 } from '@/lib/workflows/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
 
@@ -36,6 +37,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -77,7 +79,7 @@ async function makeItemsWithStatus(fx: Fixture, statusKey: string, n: number): P
       { projectId: fx.projectId, kind: 'task', title: `T${i}` },
       { userId: fx.ownerId, workspaceId: fx.workspaceId },
     );
-    await db.workItem.update({ where: { id: item.id }, data: { status: statusKey } });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status: statusKey } });
     ids.push(item.id);
   }
   return ids;
@@ -99,12 +101,12 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
 
     // Every item migrated to the target key.
     for (const id of ids) {
-      const row = await db.workItem.findUnique({ where: { id } });
+      const row = await adminDb.workItem.findUnique({ where: { id } });
       expect(row?.status).toBe('todo');
       // Exactly one 'updated' revision per item — the migration. (createWorkItem
       // already wrote a 'created' revision whose diff ALSO carries a `status`
       // field, so we key off changeKind, not the mere presence of `status`.)
-      const revs = await db.workItemRevision.findMany({ where: { workItemId: id } });
+      const revs = await adminDb.workItemRevision.findMany({ where: { workItemId: id } });
       const statusRevs = revs.filter((r) => r.changeKind === 'updated');
       expect(statusRevs).toHaveLength(1);
       expect(statusRevs[0]!.diff).toEqual({ status: { from: 'triage', to: 'todo' } });
@@ -131,7 +133,7 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
       { projectId: fx.projectId, kind: 'task', title: 'archived' },
       { userId: fx.ownerId, workspaceId: fx.workspaceId },
     );
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: archived.id },
       data: { status: 'triage', archivedAt: new Date() },
     });
@@ -144,8 +146,10 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
       reassignToStatusId: todoId,
     });
 
-    expect((await db.workItem.findUnique({ where: { id: activeId! } }))?.status).toBe('todo');
-    expect((await db.workItem.findUnique({ where: { id: archived.id } }))?.status).toBe('todo');
+    expect((await adminDb.workItem.findUnique({ where: { id: activeId! } }))?.status).toBe('todo');
+    expect((await adminDb.workItem.findUnique({ where: { id: archived.id } }))?.status).toBe(
+      'todo',
+    );
   });
 
   it('without a target, an in-use status still throws StatusInUseError (the UI cue)', async () => {
@@ -199,7 +203,7 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
     ).rejects.toThrow(InvalidReassignTargetError);
 
     // Nothing changed: item keeps its status, the status still exists.
-    expect((await db.workItem.findUnique({ where: { id: itemId! } }))?.status).toBe('triage');
+    expect((await adminDb.workItem.findUnique({ where: { id: itemId! } }))?.status).toBe('triage');
     const wf = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
     expect(wf.statuses.map((s) => s.key)).toContain('triage');
   });
@@ -262,7 +266,7 @@ describe('deleteStatus — delete-with-reassign (2.3.1)', () => {
       password: 'hunter2hunter2',
       name: 'Member',
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     const err = await workflowsService
