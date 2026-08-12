@@ -1042,6 +1042,14 @@ export default defineConfig({
         'lib/repositories/workItemEmbeddingRepository.ts',
         'lib/services/workItemEmbeddingsService.ts',
         'lib/jobs/definitions/workItemEmbedding.ts',
+
+        // Story MOTIR-2694 · Subtask MOTIR-2697 — the semantic candidate-finder
+        // ROUTE. The whole file is new code this card wrote, so it is GATED
+        // rather than report-only. It is worth gating for a reason beyond the
+        // floor: nearly all of it is REFUSAL — the wrong-length vector, the
+        // caller-supplied project, the clamp — and an unexercised refusal branch
+        // is exactly the kind of code that quietly stops refusing.
+        'app/api/internal/ai/similar-work-items/route.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1509,6 +1517,12 @@ export default defineConfig({
         },
         'lib/services/workItemEmbeddingsService.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/jobs/definitions/workItemEmbedding.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2694 · Subtask MOTIR-2697 (see the `include` note above).
+        'app/api/internal/ai/similar-work-items/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
         // The prose-vs-graph advisory (MOTIR-1969) — an ADDITION beside the
         // finishability rules, gated on its own so a regression in it can't hide
         // inside workItemsService's blended number.
