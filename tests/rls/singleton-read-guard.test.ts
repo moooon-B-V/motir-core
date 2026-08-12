@@ -11,31 +11,42 @@ import { scanSingletonReads } from './singletonReadScan';
 // MOTIR-2774's three sites, and this card's two), every time by accident, from a
 // suite run under TEST_DB_APP_ROLE=1 rather than from anyone reading the code.
 //
-// This test is the thing that makes the fifth cheap. It does NOT decide whether a
-// site is a bug — that needs the call sites, and three legitimate reasons to read
-// unbound exist (a deliberately public read, a genuinely actorless one, and a
-// caller that simply forgot). It asserts instead that **every site has been
-// LOOKED AT**: the scanned set must equal the keys below, so adding a new
-// singleton read of a tenant table fails the build until its author writes down
-// which of the four it is.
+// This test is the thing that makes the fifth cheap. The SCANNER does not decide whether
+// a site is a bug — that needs the call sites, which is why the verdicts live here and
+// not in it. It asserts instead that **every site has been LOOKED AT**: the scanned set
+// must equal the keys below, so adding a new singleton read of a tenant table fails the
+// build until its author writes down which verdict it earns.
 //
 // Same division of labour as `tenant-root-creation-rls.test.ts`'s
 // `DELIBERATELY_UNGUARDED` map — the machine enumerates, a human adjudicates, and
 // an unadjudicated addition is a red build rather than a silent one.
 //
-// ⚠️ WHY SO MANY ARE STILL `unreviewed`, AND WHY THAT IS NOT A SHRUG.
-// A verdict needs evidence, and for most of these the evidence does not exist yet.
-// `public` in particular cannot be earned by reading the code: it is the claim that
-// the table's PUBLIC policy arm (MOTIR-2684) admits the row, and the only thing
-// that can settle it is the public-projects suite passing under the app role —
-// which it cannot do until its own fixtures are migrated (batch 16, MOTIR-2750).
-// Measured 2026-08-12: `TEST_DB_APP_ROLE=1 vitest run tests/publicProjects` is red
-// on fixture-entered failures, so a `public` verdict written today would be a guess
-// wearing a citation. The honest state is `unreviewed` plus the ratchet below.
+// ⚠️ WHAT THE ADJUDICATION FOUND (MOTIR-2789), AND WHY THE HEADLINE NUMBER MISLEADS.
+// The 69 unreviewed sites were adjudicated by locating EVERY call site of every read
+// and inspecting its enclosing service method for a context wrapper. The result was
+// not 69 scattered oversights:
 //
-// So the verdicts land as the fixture batches land, and the RATCHET is what stops
-// this from decaying: the count may fall, never rise. Rewriting the ceiling upward
-// to make a build pass is the one edit this file exists to prevent.
+//   • 55 are `unbound-read-path` — confirmed unbound, therefore confirmed BROKEN under
+//     `motir_app`. `reportsService.ts` and `savedFiltersService.ts` contain ZERO context
+//     wrappers in the entire file; `boardsService.ts` and `workItemsService.ts` have them
+//     only around their WRITE paths. This is the shape of the whole READ surface, which
+//     has never needed a binding because CI and production both run a BYPASSRLS role.
+//   •  3 are `operator-script`, •  3 are `test-only` (vacuous-pass risk),
+//   •  8 remain `unreviewed` — the public-surface reads, below.
+//
+// So `UNREVIEWED_CEILING` fell 69 → 8 while the product got no more correct. That is
+// why there are now TWO ratchets: `unreviewed` measures whether anyone has LOOKED, and
+// `UNBOUND_READ_PATH_CEILING` measures whether the reads WORK. Quoting the first alone
+// would turn a diagnosis into a false claim of repair. The second falls only when a
+// service actually binds its reads (MOTIR-2794), never by writing a verdict.
+//
+// `public` remains the one verdict that still cannot be earned by reading code: it is the
+// claim that MOTIR-2684's public policy ARM admits the row, and only the public-projects
+// suite passing under the app role can settle it. That suite is at 23 failures (from 33),
+// so a `public` verdict today would be a guess wearing a citation.
+//
+// Both ratchets may fall, never rise. Rewriting a ceiling upward to make a build pass is
+// the one edit this file exists to prevent.
 //
 // (It earned its keep before it shipped: the first run of this guard failed on four
 // sites its own author had missed while transcribing the list by hand, and on two
@@ -49,6 +60,31 @@ type Verdict =
   | 'bound'
   /** No tenant exists at read time; there is nothing to bind. */
   | 'pre-auth'
+  /**
+   * CONFIRMED UNBOUND, and confirmed BROKEN under `motir_app` (MOTIR-2789).
+   * The read filters by `workspaceId` in its own WHERE clause — the call site
+   * passes `ctx.workspaceId` — but NOTHING on the path binds the GUC the policy
+   * reads, so under the non-bypass role it returns zero rows and raises nothing.
+   * These are not oversights at the repository: the fix is one layer up, at the
+   * service method that owns the read, and it is the same fix for every site in
+   * a given service. The value names that service, because that is the unit of
+   * work. Tracked by MOTIR-2794.
+   */
+  | 'unbound-read-path'
+  /**
+   * The only caller is a `scripts/` maintenance tool, which runs on the
+   * OPERATOR's connection (the migration/owner role), not the request-path
+   * `motir_app` role. Nothing to bind and nothing to fix — but see the note on
+   * `stampOnboardingRan` below, because the boundary is narrower than it looks.
+   */
+  | 'operator-script'
+  /**
+   * No production caller at all: the read survives only because tests still call
+   * it. Under the app role it returns zero rows, so any test using it as an
+   * EXISTENCE check passes VACUOUSLY. Retire the read and move the tests to
+   * `adminDb` — the MOTIR-2775 disposition.
+   */
+  | 'test-only'
   /** Enumerated, not yet adjudicated. Only ever to be REMOVED from this file. */
   | 'unreviewed';
 
@@ -62,77 +98,194 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'rateLimitCounterRepository.ts#countAllUnsafe': ['pre-auth', 'no tenant exists at write time'],
   'rateLimitCounterRepository.ts#findCountUnsafe': ['pre-auth', 'no tenant exists at write time'],
 
-  // ── unreviewed ────────────────────────────────────────────────────────────
-  // Blocked on the fixture batches, per the header. MOTIR-2784 carries the sweep.
-  'componentRepository.ts#listByProject': ['unreviewed', 'MOTIR-2784'],
-  'customFieldDefinitionRepository.ts#listWithValuesForWorkItem': ['unreviewed', 'MOTIR-2784'],
-  'dashboardRepository.ts#listVisible': ['unreviewed', 'MOTIR-2784'],
-  'deviceCodeRepository.ts#findByUserCodeForRead': ['unreviewed', 'MOTIR-2784'],
-  'githubRepoRepository.ts#findConnectedByName': ['unreviewed', 'MOTIR-2784'],
-  'importRepository.ts#findCompletedForProject': ['unreviewed', 'MOTIR-2784'],
-  'labelRepository.ts#findByIds': ['unreviewed', 'MOTIR-2784'],
-  'labelRepository.ts#searchByPrefix': ['unreviewed', 'MOTIR-2784'],
-  'organizationRepository.ts#findCapContext': ['unreviewed', 'MOTIR-2784'],
-  'planRepository.ts#findBySourceJobId': ['unreviewed', 'MOTIR-2784'],
-  'projectRepository.ts#findAllByIdentifier': ['unreviewed', 'MOTIR-2784'],
-  'projectRepository.ts#findBySlug': ['unreviewed', 'MOTIR-2784, no caller anywhere'],
-  'projectRepository.ts#findPublicByIdentifier': ['unreviewed', 'MOTIR-2784, public arm'],
-  'projectRepository.ts#listPublic': ['unreviewed', 'MOTIR-2784, public arm'],
-  'projectRepository.ts#listPublicDirectory': ['unreviewed', 'MOTIR-2784, public arm'],
-  'projectRepository.ts#listPublicDirectoryRanked': ['unreviewed', 'MOTIR-2784, public arm'],
-  'publicRequestVoteRepository.ts#sumUpvotesByProjects': ['unreviewed', 'MOTIR-2784, public arm'],
-  'savedFilterRepository.ts#countVisible': ['unreviewed', 'MOTIR-2784'],
-  'savedFilterRepository.ts#listPage': ['unreviewed', 'MOTIR-2784'],
-  'savedFilterSubscriptionRepository.ts#countByFilter': ['unreviewed', 'MOTIR-2784'],
-  'sprintReportEntryRepository.ts#countAddedAfterStart': ['unreviewed', 'MOTIR-2784'],
-  'sprintReportEntryRepository.ts#countByCompletion': ['unreviewed', 'MOTIR-2784'],
-  'sprintReportEntryRepository.ts#findByCompletion': ['unreviewed', 'MOTIR-2784'],
-  'sprintReportEntryRepository.ts#sumPointsByCompletion': ['unreviewed', 'MOTIR-2784'],
-  'sprintRepository.ts#findByIds': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findBlockedByEdges': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findBlockedEdgesForItems': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findBlockerEdgesForItems': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findBlockerSessionBranchesForItems': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findBlockerStates': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findBlockerStatesForItems': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findByFromItem': ['unreviewed', 'MOTIR-2784'],
-  'workItemLinkRepository.ts#findByToItem': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#aggregateBoardLanesByAssignee': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#aggregateBoardLanesByEpic': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#aggregateBoardLanesByPriority': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#aggregateCreatedByBucket': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#aggregateDistribution': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#aggregateWorkloadByAssignee': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#countPublicRoadmapSubmitted': ['unreviewed', 'MOTIR-2784, public arm'],
-  'workItemRepository.ts#findAllByProjectForValidity': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findAncestorIdsForItems': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findBoundedSubtree': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findByIds': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findBySessionBranch': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findChildrenCreatedAfter': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findChildrenForItems': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findDescriptionsByIds': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findEpicAncestors': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findExpandableStubs': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findPublicRequestMatches': ['unreviewed', 'MOTIR-2784, public arm'],
-  'workItemRepository.ts#findPublicRoadmapByStatus': ['unreviewed', 'MOTIR-2784, public arm'],
-  'workItemRepository.ts#findPublicRoadmapSubmitted': ['unreviewed', 'MOTIR-2784, public arm'],
-  'workItemRepository.ts#findReadyCandidates': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findReadyLayer': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findRoadmapBlockerStubs': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#findSubtreeMembersForValidity': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#matchesAutomationCondition': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#maxActivityByProjects': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#quickSearch': ['unreviewed', 'MOTIR-2784'],
-  'workItemRepository.ts#sumStartedForSprint': ['unreviewed', 'MOTIR-2784'],
-  'workItemRevisionRepository.ts#aggregateAverageAgeByBucket': ['unreviewed', 'MOTIR-2784'],
-  'workItemRevisionRepository.ts#aggregateNetResolvedByBucket': ['unreviewed', 'MOTIR-2784'],
-  'workItemRevisionRepository.ts#aggregateResolutionTimeByBucket': ['unreviewed', 'MOTIR-2784'],
-  'workItemRevisionRepository.ts#aggregateSprintCycleByDay': ['unreviewed', 'MOTIR-2784'],
-  'workItemRevisionRepository.ts#countDisplayableByWorkItem': ['unreviewed', 'MOTIR-2784'],
-  'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': ['unreviewed', 'MOTIR-2784'],
-  'workspaceMembershipRepository.ts#findByUserAndWorkspace': ['unreviewed', 'MOTIR-2784'],
-  'workspaceRepository.ts#findBySlug': ['unreviewed', 'MOTIR-2784'],
+  // ── operator-script (3) ───────────────────────────────────────────────────
+  // `scripts/stampOnboardingRan.ts` is the sole caller of all three. It resolves a
+  // workspace by SLUG and a project by KEY across workspaces (it refuses an ambiguous
+  // match rather than guessing), so there is no single tenant to bind — the read is
+  // cross-tenant BY DESIGN, which is exactly why it belongs to an operator and not to
+  // a request path.
+  //
+  // ⚠️ The script's own header claims its write "passes under the non-bypass
+  // `motir_app` role in production" — true of the WRITE, which `withWorkspaceContext`
+  // binds, but NOT of these three resolves above it. Run that script on a `motir_app`
+  // connection and `findBySlug` returns null, so it reports `workspace_not_found` for a
+  // workspace that exists and stamps nothing. The verdict here is therefore conditional
+  // on the operator posture, and MOTIR-2794 carries making that explicit at the seam
+  // (`workspace_visible_bootstrap`, the `app.bootstrap_slug` arm, admits exactly a
+  // one-slug read and is the sanctioned mechanism if it ever needs to run as the app).
+  'projectRepository.ts#findAllByIdentifier': ['operator-script', 'stampOnboardingRan'],
+  'projectRepository.ts#findBySlug': ['operator-script', 'stampOnboardingRan'],
+  'workspaceRepository.ts#findBySlug': ['operator-script', 'stampOnboardingRan'],
+
+  // ── test-only (3) ─────────────────────────────────────────────────────────
+  // Zero production callers; only tests keep them alive. `findReadyCandidates` was
+  // REPLACED by `findReadyLayer` (see its own docstring, and the note at
+  // workItemRepository.ts:1083 — "the read that replaces the whole-table
+  // findReadyCandidates scan"), so two suites are pinning the behaviour of a read the
+  // product no longer performs. `findByUserAndWorkspace` has seven test consumers and a
+  // test that documents it "reads through the `db`" — the same shape MOTIR-2775 retired
+  // rather than adjudicated. Under the app role each returns zero rows, so a test using
+  // one as an existence check passes VACUOUSLY, which is the worst of the failure modes
+  // here: it does not go red, it goes quietly meaningless. MOTIR-2794 retires them.
+  'projectRepository.ts#listPublicDirectory': ['test-only', 'projectSquareDirectory.test'],
+  'workItemRepository.ts#findReadyCandidates': ['test-only', 'superseded by findReadyLayer'],
+  'workspaceMembershipRepository.ts#findByUserAndWorkspace': [
+    'test-only',
+    '7 suites, MOTIR-2775 shape',
+  ],
+
+  // ── unbound-read-path (55) ────────────────────────────────────────────────
+  // Measured, not guessed: every call site of every read below was located and its
+  // enclosing service method inspected for a context wrapper. NONE has one.
+  // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
+  // the entire file; `boardsService.ts` and `workItemsService.ts` have them only around
+  // their WRITE paths, and these reads sit outside every one.
+  //
+  // So this is not fifty-five separate oversights — it is the shape of the whole
+  // READ surface, which has never needed a binding because CI and production both run
+  // a BYPASSRLS role (MOTIR-2515 is the cutover that ends that). The value names the
+  // owning service because the fix is per-SERVICE, not per-read: open
+  // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
+  // Grouped by service, that is ~20 units of work, which is why MOTIR-2794 is a story
+  // and not another sweep card.
+  'componentRepository.ts#listByProject': ['unbound-read-path', 'componentsService'],
+  'customFieldDefinitionRepository.ts#listWithValuesForWorkItem': [
+    'unbound-read-path',
+    'workItemsService',
+  ],
+  'dashboardRepository.ts#listVisible': ['unbound-read-path', 'dashboardsService'],
+  'deviceCodeRepository.ts#findByUserCodeForRead': ['unbound-read-path', 'cliDeviceService'],
+  'githubRepoRepository.ts#findConnectedByName': ['unbound-read-path', 'oidcAuth'],
+  'importRepository.ts#findCompletedForProject': ['unbound-read-path', 'migrateOnboardingService'],
+  'labelRepository.ts#findByIds': ['unbound-read-path', 'workItemsService'],
+  'labelRepository.ts#searchByPrefix': ['unbound-read-path', 'labelsService'],
+  'organizationRepository.ts#findCapContext': ['unbound-read-path', 'entitlementsService'],
+  'planRepository.ts#findBySourceJobId': ['unbound-read-path', 'migrateOnboardingService'],
+  'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
+    'unbound-read-path',
+    'projectSquareService',
+  ],
+  'savedFilterRepository.ts#countVisible': ['unbound-read-path', 'savedFiltersService'],
+  'savedFilterRepository.ts#listPage': ['unbound-read-path', 'savedFiltersService'],
+  'savedFilterSubscriptionRepository.ts#countByFilter': [
+    'unbound-read-path',
+    'savedFiltersService',
+  ],
+  'sprintReportEntryRepository.ts#countAddedAfterStart': ['unbound-read-path', 'sprintsService'],
+  'sprintReportEntryRepository.ts#countByCompletion': ['unbound-read-path', 'sprintsService'],
+  'sprintReportEntryRepository.ts#findByCompletion': ['unbound-read-path', 'sprintsService'],
+  'sprintReportEntryRepository.ts#sumPointsByCompletion': [
+    'unbound-read-path',
+    'estimationService',
+  ],
+  'sprintRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
+  'workItemLinkRepository.ts#findBlockedByEdges': ['unbound-read-path', 'workItemsService'],
+  'workItemLinkRepository.ts#findBlockedEdgesForItems': ['unbound-read-path', 'workItemsService'],
+  'workItemLinkRepository.ts#findBlockerEdgesForItems': [
+    'unbound-read-path',
+    'planValidityService',
+  ],
+  'workItemLinkRepository.ts#findBlockerSessionBranchesForItems': [
+    'unbound-read-path',
+    'workItemsService',
+  ],
+  'workItemLinkRepository.ts#findBlockerStates': ['unbound-read-path', 'workItemsService'],
+  'workItemLinkRepository.ts#findBlockerStatesForItems': ['unbound-read-path', 'workItemsService'],
+  'workItemLinkRepository.ts#findByFromItem': ['unbound-read-path', 'dispatchPromptService'],
+  'workItemLinkRepository.ts#findByToItem': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#aggregateBoardLanesByAssignee': ['unbound-read-path', 'boardsService'],
+  'workItemRepository.ts#aggregateBoardLanesByEpic': ['unbound-read-path', 'boardsService'],
+  'workItemRepository.ts#aggregateBoardLanesByPriority': ['unbound-read-path', 'boardsService'],
+  'workItemRepository.ts#aggregateCreatedByBucket': ['unbound-read-path', 'reportsService'],
+  'workItemRepository.ts#aggregateDistribution': ['unbound-read-path', 'reportsService'],
+  'workItemRepository.ts#aggregateWorkloadByAssignee': ['unbound-read-path', 'reportsService'],
+  'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
+  'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
+  'workItemRepository.ts#findBySessionBranch': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
+  'workItemRepository.ts#findChildrenForItems': ['unbound-read-path', 'sprintsService'],
+  'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
+  'workItemRepository.ts#findEpicAncestors': ['unbound-read-path', 'boardsService'],
+  'workItemRepository.ts#findExpandableStubs': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#findReadyLayer': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#findRoadmapBlockerStubs': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#findSubtreeMembersForValidity': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#matchesAutomationCondition': [
+    'unbound-read-path',
+    'automationEngineService',
+  ],
+  'workItemRepository.ts#quickSearch': ['unbound-read-path', 'workItemsService'],
+  'workItemRepository.ts#sumStartedForSprint': ['unbound-read-path', 'reportsService'],
+  'workItemRevisionRepository.ts#aggregateAverageAgeByBucket': [
+    'unbound-read-path',
+    'reportsService',
+  ],
+  'workItemRevisionRepository.ts#aggregateNetResolvedByBucket': [
+    'unbound-read-path',
+    'reportsService',
+  ],
+  'workItemRevisionRepository.ts#aggregateResolutionTimeByBucket': [
+    'unbound-read-path',
+    'reportsService',
+  ],
+  'workItemRevisionRepository.ts#aggregateSprintCycleByDay': [
+    'unbound-read-path',
+    'reportsService',
+  ],
+  'workItemRevisionRepository.ts#countDisplayableByWorkItem': [
+    'unbound-read-path',
+    'activityService',
+  ],
+  'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': [
+    'unbound-read-path',
+    'aiBoundaryService',
+  ],
+
+  // ── unreviewed (8) ────────────────────────────────────────────────────────
+  // The public-surface reads, and the ONE category the header's argument still binds:
+  // a `public` verdict is the claim that MOTIR-2684's public policy ARM admits the row,
+  // and only a green public-projects suite under the app role can settle it. That suite
+  // is at 23 failures (down from 33), so the verdict is not yet earnable — writing one
+  // today would be, in the header's words, a guess wearing a citation.
+  //
+  // Two facts already narrow it. Against `pg_policies`, ONLY `project` and `work_item`
+  // carry public arms — `board`, `board_column`, `board_column_status`,
+  // `workflow_status`, `comment`, `public_request_vote` and `work_item_link` do not — and
+  // a direct probe as `motir_app` with NO GUC bound returns `projects_visible=1`,
+  // `items_visible=1`, so the two arms that exist do work. The reads below all target
+  // `project` or `work_item`, which is why they are plausibly `public` rather than
+  // plausibly broken; the suite has to say so before it is written down.
+  'projectRepository.ts#findPublicByIdentifier': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
+  'projectRepository.ts#listPublic': ['unreviewed', 'public arm, needs the green suite'],
+  'projectRepository.ts#listPublicDirectoryRanked': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
+  'workItemRepository.ts#countPublicRoadmapSubmitted': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
+  'workItemRepository.ts#findPublicRequestMatches': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
+  'workItemRepository.ts#findPublicRoadmapByStatus': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
+  'workItemRepository.ts#findPublicRoadmapSubmitted': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
+  'workItemRepository.ts#maxActivityByProjects': [
+    'unreviewed',
+    'public arm, needs the green suite',
+  ],
 };
 
 /**
@@ -142,13 +295,35 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
  * ⚠️ This number may only ever go DOWN. If a change makes this fail, the fix is to
  * adjudicate the site — never to raise the ceiling.
  */
-const UNREVIEWED_CEILING = 69;
+const UNREVIEWED_CEILING = 8;
+// 70 -> 69: MOTIR-2789 made `workspaceRepository.findById` bindable and bound the public
+// board/stats reads that were its callers.
+// 69 -> 8: MOTIR-2789 adjudicated the rest. NOT by fixing 61 reads — by locating every
+// call site, finding that none binds a context, and saying so in a verdict that names the
+// owning service. The eight that remain are the public-surface reads, which need a green
+// public-projects suite before a `public` verdict is honest rather than assumed.
+//
+// ⚠️ READ THIS BEFORE CELEBRATING THE DROP. 69 -> 8 is a gain in KNOWLEDGE, not in
+// correctness: 55 reads are now known-broken-under-`motir_app` instead of unknown, and
+// `UNBOUND_READ_PATH_CEILING` below is the number that has to fall for the product to
+// actually work. Reporting the unreviewed count alone would misrepresent this commit.
+//
 // 73 -> 70: MOTIR-2775 RETIRED three zero-caller org-tier singleton reads
 // (`organizationRepository.findById` / `findBySlug`,
 // `organizationMembershipRepository.findByOrgAndUser`) rather than adjudicating them.
 // Deleting a site is a legitimate way to lower this number — the point of the ratchet is
 // that the count of UNJUDGED reads falls, and a read that no longer exists needs no
 // verdict. Lowered in the same commit as the deletion, which is what the guard asks for.
+
+/**
+ * The second ratchet, and the one that measures the PRODUCT rather than the review.
+ * Every read counted here is confirmed to return zero rows under `motir_app`; the
+ * fix is per-service (MOTIR-2794), so this falls in steps of a service's worth.
+ *
+ * ⚠️ May only ever go DOWN — and unlike the unreviewed ceiling, it cannot be lowered
+ * by writing a verdict. It falls only when a service actually binds its reads.
+ */
+const UNBOUND_READ_PATH_CEILING = 55;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {
@@ -172,6 +347,40 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
       stale,
       'VERDICTS names a site the scanner no longer finds. If you bound or deleted ' +
         'the read, delete its entry too — a stale allowlist hides the next one.',
+    ).toEqual([]);
+  });
+
+  it('the confirmed-unbound count only ever falls', () => {
+    const unbound = Object.entries(VERDICTS)
+      .filter(([, [verdict]]) => verdict === 'unbound-read-path')
+      .map(([key]) => key);
+
+    // The ratchet that actually tracks the product working. `unreviewed` falling means
+    // someone LOOKED; this falling means a read that returned zero rows under
+    // `motir_app` now returns its rows. MOTIR-2794 drives it to zero, service by
+    // service — so it should fall in service-sized steps, not one read at a time.
+    expect(
+      unbound.length,
+      `${unbound.length} reads are confirmed unbound under the app role (ceiling ` +
+        `${UNBOUND_READ_PATH_CEILING}). If this ROSE, a new read joined an already-broken ` +
+        'service — bind the service method rather than adding an entry. If it FELL, lower ' +
+        'the ceiling in the same commit.',
+    ).toBeLessThanOrEqual(UNBOUND_READ_PATH_CEILING);
+  });
+
+  it('every unbound-read-path verdict names the service that owns the fix', () => {
+    // The value is the unit of work, not a comment: MOTIR-2794's children are cut by
+    // SERVICE, so a verdict that says `?` or `MOTIR-xxxx` cannot be planned against and
+    // would quietly drop that read from the story.
+    const nameless = Object.entries(VERDICTS)
+      .filter(([, [verdict]]) => verdict === 'unbound-read-path')
+      .filter(([, [, reason]]) => !/Service$|^[a-z]\w*(Service|Auth)$/.test(reason))
+      .map(([key, [, reason]]) => `${key} -> "${reason}"`);
+
+    expect(
+      nameless,
+      'An `unbound-read-path` verdict must name the owning service (e.g. `reportsService`), ' +
+        'because that is the unit MOTIR-2794 plans against.',
     ).toEqual([]);
   });
 
