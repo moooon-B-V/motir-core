@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `ci_container_usage` + `ci_container_period_cost` isolation — direct-DB RLS
@@ -31,7 +32,7 @@ const PERIOD = new Date('2026-08-01T00:00:00.000Z');
 const STOPPED_AT = new Date('2026-08-15T12:00:00.000Z');
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -39,6 +40,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface FleetTenantFixture {
@@ -68,7 +70,7 @@ async function makeFleetTenants(): Promise<FleetTenantFixture> {
   const a = await workspacesService.createWorkspace({ name: 'Fleet WS A', ownerUserId: userA.id });
   const b = await workspacesService.createWorkspace({ name: 'Fleet WS B', ownerUserId: userB.id });
 
-  const usageA = await db.ciContainerUsage.create({
+  const usageA = await adminDb.ciContainerUsage.create({
     data: {
       containerProvider: 'fly',
       handleId: 'machine-a',
@@ -92,7 +94,7 @@ async function makeFleetTenants(): Promise<FleetTenantFixture> {
       teardownReason: 'job_completed',
     },
   });
-  const usageB = await db.ciContainerUsage.create({
+  const usageB = await adminDb.ciContainerUsage.create({
     data: {
       containerProvider: 'fly',
       handleId: 'machine-b',
@@ -116,7 +118,7 @@ async function makeFleetTenants(): Promise<FleetTenantFixture> {
       teardownReason: 'job_completed',
     },
   });
-  const costA = await db.ciContainerPeriodCost.create({
+  const costA = await adminDb.ciContainerPeriodCost.create({
     data: {
       workspaceId: a.workspace.id,
       organizationId: a.workspace.organizationId,
@@ -126,7 +128,7 @@ async function makeFleetTenants(): Promise<FleetTenantFixture> {
       containerCount: 1,
     },
   });
-  const costB = await db.ciContainerPeriodCost.create({
+  const costB = await adminDb.ciContainerPeriodCost.create({
     data: {
       workspaceId: b.workspace.id,
       organizationId: b.workspace.organizationId,
@@ -267,7 +269,9 @@ describe('ci_container_usage RLS — write isolation', () => {
       }),
     );
     expect(count).toBe(0);
-    const untouched = await db.ciContainerUsage.findUniqueOrThrow({ where: { id: fx.usageBId } });
+    const untouched = await adminDb.ciContainerUsage.findUniqueOrThrow({
+      where: { id: fx.usageBId },
+    });
     expect(untouched.billableSeconds).toBe(600);
   });
 });

@@ -27,10 +27,10 @@ import { FLEET_CONTAINER_SIZE } from '@/lib/orchestrator/rates';
 import { RepoTarballUrlNotRedirectedError, RepoTarballUrlUnsupportedError } from '@/lib/git';
 import { MotirAiUnavailableError } from '@/lib/ai/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
-import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
@@ -1122,7 +1122,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
   let dbInput: IndexDispatchInput;
 
   beforeEach(async () => {
-    await db.$executeRawUnsafe(
+    await adminDb.$executeRawUnsafe(
       'TRUNCATE TABLE "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
     );
     await truncateAuthTables();
@@ -1156,7 +1156,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     });
 
     if (outcome.outcome !== 'settled') throw new Error('expected a settled outcome');
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row).toMatchObject({
       handleId: outcome.containerId,
       containerProvider: 'fake',
@@ -1175,7 +1175,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     });
     expect(row.containerStoppedAt).not.toBeNull();
     // And the rollup carries the same line, so index spend is separable from CI's.
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup).toMatchObject({ workload: 'index', containerCount: 1 });
     expect(rollup.containerSeconds).toBe(row.billableSeconds);
   });
@@ -1198,7 +1198,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     );
 
     expect(polled.done).toBe(false);
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     // A PARTIAL figure, read mid-run — the acceptance criterion in one assertion.
     expect(row.billableSeconds).toBe(OBSERVED_AT_MS / 1000);
     expect(row.workload).toBe('index');
@@ -1207,7 +1207,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     expect(row.containerStoppedAt).toBeNull();
     expect(row.terminalState).toBeNull();
     expect(row.teardownReason).toBeNull();
-    expect((await db.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(
+    expect((await adminDb.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(
       OBSERVED_AT_MS / 1000,
     );
   });
@@ -1235,8 +1235,9 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
       options,
     );
 
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(OBSERVED_AT_MS / 1000);
     expect(rollup.containerCount).toBe(1);
   });
@@ -1258,7 +1259,7 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
         now: () => observedAt,
       },
     );
-    expect((await db.ciContainerUsage.findFirstOrThrow()).containerStoppedAt).toBeNull();
+    expect((await adminDb.ciContainerUsage.findFirstOrThrow()).containerStoppedAt).toBeNull();
 
     const live = fakeOrchestrator.liveContainerIds();
     if (live[0]) fakeOrchestrator.completeJob(live[0], { exitCode: 0 });
@@ -1276,11 +1277,12 @@ describe('the COGS meter is WIRED to both moments (MOTIR-1995)', () => {
     });
 
     expect(settled.outcome).toBe('settled');
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.containerStoppedAt).not.toBeNull();
     expect(row.teardownReason).toBe('job_completed');
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerCount).toBe(1);
     // The rollup equals the row — the invariant a signed-delta rollup has to keep.
     expect(rollup.containerSeconds).toBe(row.billableSeconds);

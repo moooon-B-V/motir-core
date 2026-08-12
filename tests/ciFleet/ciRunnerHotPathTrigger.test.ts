@@ -18,6 +18,7 @@ import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
@@ -121,7 +122,7 @@ async function seedTenant(
     name: 'Acme',
     identifier: `A${randomInt(100, 1000)}`,
   });
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: project.id },
     data: {
       runnerGroupId: RUNNER_GROUP_ID,
@@ -147,10 +148,12 @@ async function seedTenant(
       },
     ],
   });
-  const githubRepo = await db.githubRepo.findFirstOrThrow({ where: { repoId: PROVIDER_REPO_ID } });
+  const githubRepo = await adminDb.githubRepo.findFirstOrThrow({
+    where: { repoId: PROVIDER_REPO_ID },
+  });
 
   if (options.withProjectRepo !== false) {
-    await db.projectRepo.create({
+    await adminDb.projectRepo.create({
       data: {
         workspaceId: workspace.id,
         projectId: project.id,
@@ -207,6 +210,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('a RECORDED intent dispatches its boot from the same request', () => {
@@ -218,7 +222,7 @@ describe('a RECORDED intent dispatches its boot from the same request', () => {
     const result = await handle(delivery());
 
     expect(result).toEqual({ event: 'workflow_job', outcome: 'recorded' });
-    const intent = await db.ciRunnerProvisioningIntent.findFirstOrThrow({
+    const intent = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     // `workspaceId` is `null`, not `''` — an empty string is not nullish, so it
@@ -236,7 +240,7 @@ describe('a RECORDED intent dispatches its boot from the same request', () => {
 
     await handle(delivery());
 
-    const intent = await db.ciRunnerProvisioningIntent.findFirstOrThrow({});
+    const intent = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({});
     const [hot] = bootEvents(captured.events);
     expect(hot).toEqual(ciRunnerBootEvent(intent.id));
   });
@@ -321,7 +325,7 @@ describe('a FAILING send never costs the delivery its 200', () => {
 
     expect(result).toEqual({ event: 'workflow_job', outcome: 'recorded' });
     // The intent is DURABLE and still pending — exactly what the sweep drains.
-    const intent = await db.ciRunnerProvisioningIntent.findFirstOrThrow({
+    const intent = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(intent.status).toBe('pending');
@@ -369,7 +373,7 @@ describe('a deployment that cannot boot anything dispatches nothing', () => {
     expect(result).toMatchObject({ outcome: 'recorded' });
     expect(bootEvents(captured.events)).toHaveLength(0);
     await expect(
-      db.ciRunnerProvisioningIntent.count({ where: { workspaceId: fx.workspaceId } }),
+      adminDb.ciRunnerProvisioningIntent.count({ where: { workspaceId: fx.workspaceId } }),
     ).resolves.toBe(1);
     await expect(dispatchCiRunnerBoot('any-intent')).resolves.toBe('not_configured');
   });

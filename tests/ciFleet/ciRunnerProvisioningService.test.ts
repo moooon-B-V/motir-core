@@ -9,6 +9,7 @@ import { ciRunnerProvisioningService } from '@/lib/services/ciRunnerProvisioning
 import { ciRunnerProvisioningIntentRepository } from '@/lib/repositories/ciRunnerProvisioningIntentRepository';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -127,10 +128,12 @@ async function seedTenant(options?: {
       { providerRepoId, owner: repoOwner, name: repoName, defaultBranch: 'main', archived: false },
     ],
   });
-  const githubRepo = await db.githubRepo.findFirstOrThrow({ where: { repoId: providerRepoId } });
+  const githubRepo = await adminDb.githubRepo.findFirstOrThrow({
+    where: { repoId: providerRepoId },
+  });
 
   if (options?.withProjectRepo !== false) {
-    await db.projectRepo.create({
+    await adminDb.projectRepo.create({
       data: {
         workspaceId: workspace.id,
         projectId: project.id,
@@ -167,6 +170,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the §O LABEL GATE — the whole point of the card', () => {
@@ -187,7 +191,8 @@ describe('the §O LABEL GATE — the whole point of the card', () => {
     expect(results).toEqual(
       Array.from({ length: 4 }, () => ({ event: 'workflow_job', outcome: 'not_fleet_job' })),
     );
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(0);
   });
 
   it('drops a non-fleet job BEFORE any tenant lookup — the gate is free', async () => {
@@ -208,7 +213,7 @@ describe('the §O LABEL GATE — the whole point of the card', () => {
       event: 'workflow_job',
       outcome: 'recorded',
     });
-    const intent = await db.ciRunnerProvisioningIntent.findFirstOrThrow();
+    const intent = await adminDb.ciRunnerProvisioningIntent.findFirstOrThrow();
     expect(intent.requestedLabels).toEqual(['self-hosted', MOTIR_RUNNER_LABEL]);
     expect(intent.organizationId).toBe(fx.organizationId);
   });
@@ -220,7 +225,7 @@ describe('the happy path — one attributed, persisted intent', () => {
 
     expect(await handle(delivery())).toEqual({ event: 'workflow_job', outcome: 'recorded' });
 
-    const intents = await db.ciRunnerProvisioningIntent.findMany();
+    const intents = await adminDb.ciRunnerProvisioningIntent.findMany();
     expect(intents).toHaveLength(1);
     expect(intents[0]).toMatchObject({
       provider: 'github',
@@ -257,7 +262,9 @@ describe('the happy path — one attributed, persisted intent', () => {
       });
     }
 
-    const intents = await db.ciRunnerProvisioningIntent.findMany({ orderBy: { jobId: 'asc' } });
+    const intents = await adminDb.ciRunnerProvisioningIntent.findMany({
+      orderBy: { jobId: 'asc' },
+    });
     expect(intents.map((i) => i.jobName)).toEqual(['lint', 'typecheck', 'build', 'e2e']);
   });
 
@@ -289,7 +296,8 @@ describe('attribution failures — logged, never provisioned', () => {
       event: 'workflow_job',
       outcome: 'unknown_installation',
     });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(0);
     expect(warn).toHaveBeenCalled();
   });
 
@@ -301,7 +309,8 @@ describe('attribution failures — logged, never provisioned', () => {
       event: 'workflow_job',
       outcome: 'unknown_repo',
     });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(0);
     expect(warn).toHaveBeenCalled();
   });
 
@@ -318,7 +327,8 @@ describe('attribution failures — logged, never provisioned', () => {
       event: 'workflow_job',
       outcome: 'unattributed',
     });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(0);
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('no attributable project'),
       expect.objectContaining({ repoName: 'acme-web' }),
@@ -341,7 +351,8 @@ describe('idempotency — redelivery vs. re-run', () => {
 
     expect(await handle(delivery())).toEqual({ event: 'workflow_job', outcome: 'recorded' });
     expect(await handle(delivery())).toEqual({ event: 'workflow_job', outcome: 'duplicate' });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(1);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(1);
   });
 
   it('a RE-RUN (run_attempt: 2) produces a NEW intent', async () => {
@@ -355,7 +366,7 @@ describe('idempotency — redelivery vs. re-run', () => {
       outcome: 'recorded',
     });
 
-    const intents = await db.ciRunnerProvisioningIntent.findMany({
+    const intents = await adminDb.ciRunnerProvisioningIntent.findMany({
       orderBy: { runAttempt: 'asc' },
     });
     expect(intents.map((i) => i.runAttempt)).toEqual([1, 2]);
@@ -375,7 +386,8 @@ describe('idempotency — redelivery vs. re-run', () => {
       .map((r) => (r as { outcome: string }).outcome)
       .sort((a, b) => a.localeCompare(b));
     expect(outcomes).toEqual(['duplicate', 'recorded']);
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(1);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(1);
   });
 
   it('the UNIQUE INDEX — not the pre-check — is what guarantees once', async () => {
@@ -397,7 +409,8 @@ describe('idempotency — redelivery vs. re-run', () => {
     vi.spyOn(ciRunnerProvisioningIntentRepository, 'findByJobKey').mockResolvedValueOnce(null);
 
     expect(await handle(delivery())).toEqual({ event: 'workflow_job', outcome: 'duplicate' });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(1);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(1);
   });
 });
 
@@ -408,7 +421,8 @@ describe('the event surface', () => {
       event: 'workflow_job',
       outcome: 'ignored_action',
     });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+    const ciRunnerProvisioningIntentCount2 = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount2).toBe(0);
   });
 
   it('acks — never 500s — when the write throws for a reason that is NOT a duplicate', async () => {
@@ -427,7 +441,8 @@ describe('the event surface', () => {
     );
 
     expect(await handle(delivery())).toEqual({ event: 'workflow_job', outcome: 'failed' });
-    expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+    const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+    expect(ciRunnerProvisioningIntentCount).toBe(0);
     expect(error).toHaveBeenCalled();
   });
 
