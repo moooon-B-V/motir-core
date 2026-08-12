@@ -201,8 +201,11 @@ export const automationRulesService = {
     return withWorkspaceContext(ctx, async (tx) => {
       const projectId = await resolveManageableProject(projectKey, ctx, tx);
       const rows = await automationRuleRepository.listByProject(projectId, tx);
+      // The `tx` is load-bearing (MOTIR-2784): without it this read leaves the bound
+      // transaction and every last-run glyph comes back empty, with no error.
       const latest = await automationRuleExecutionRepository.findLatestByRuleIds(
         rows.map((r) => r.id),
+        tx,
       );
       const lastRunByRule = new Map<string, AutomationRuleLastRunDto>(
         latest.map((l) => [l.ruleId, { status: l.status, at: l.createdAt.toISOString() }]),

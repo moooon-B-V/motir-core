@@ -12,7 +12,11 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { triageService, type TriageSubmissionKind } from '@/lib/services/triageService';
-import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withUserContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { toCommentDto } from '@/lib/mappers/commentMappers';
@@ -751,7 +755,13 @@ export const publicProjectsService = {
     // "Opened by" — the real submitter (a 6.12 non-member, when present) else
     // the tenant reporter. The PUBLIC comment thread (isPublic only).
     const openedById = item.submittedByUserId ?? item.reporterId;
-    const commentRows = await commentRepository.listPublicByWorkItem(item.id);
+    // Bound to the project's workspace (MOTIR-2784). `comment` has no public policy
+    // arm, so this read must name its tenant or it comes back empty and the thread
+    // silently disappears. `withWorkspaceServiceContext` binds the workspace tier
+    // alone, which is right here: a public reader has no actor.
+    const commentRows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      commentRepository.listPublicByWorkItem(item.id, tx),
+    );
     const userIds = [...new Set([openedById, ...commentRows.map((c) => c.authorId)])];
     const users = await userRepository.findByIds(userIds);
     const usersById = new Map(users.map((u) => [u.id, u]));

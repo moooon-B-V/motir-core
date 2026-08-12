@@ -4,6 +4,7 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { automationRulesService } from '@/lib/services/automationRulesService';
 import { makeWorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
@@ -132,6 +133,44 @@ describe('organizationMembershipRepository.findOrganizationsByUser — the org s
       seeded.organizationId,
     );
     expect(active?.organization.id).toBe(seeded.organizationId);
+  });
+});
+
+describe('automationRuleExecutionRepository.findLatestByRuleIds — the last-run glyph', () => {
+  it('reports a rule’s last run instead of an empty glyph', async () => {
+    const fx = await makeWorkItemFixture();
+    const rule = await automationRulesService.create(
+      fx.projectIdentifier,
+      {
+        name: 'When a bug is done, set priority high',
+        triggerType: 'transitioned',
+        triggerConfig: { toStatusId: 's-done' },
+        conditionFilterParam: null,
+        actions: [{ type: 'set_field', field: 'priority', value: 'high' }],
+      },
+      fx.ctx,
+    );
+
+    // One execution row, seeded through the ADMIN client — the point under test is
+    // the READ, and seeding through the runtime would make the fixture depend on the
+    // automation engine having run.
+    //
+    // `automation_rule_execution` carries no `workspaceId` of its own: it is scoped
+    // through its rule, and its RLS policy joins to reach the tenant. That is exactly
+    // why the singleton read was invisible rather than obviously wrong — the table
+    // has no tenant column to notice missing.
+    await adminDb.automationRuleExecution.create({
+      data: { ruleId: rule.id, status: 'success' },
+    });
+
+    // `list` opens withWorkspaceContext and then read the executions off the
+    // singleton, so `latest` came back empty and EVERY rule rendered with no
+    // last-run glyph — a project that looks like it has never run a rule.
+    const rules = await automationRulesService.list(fx.projectIdentifier, fx.ctx);
+    const listed = rules.find((r) => r.id === rule.id);
+    expect(listed).toBeDefined();
+    expect(listed?.lastRun).not.toBeNull();
+    expect(listed?.lastRun?.status).toBe('success');
   });
 });
 

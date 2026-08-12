@@ -1,0 +1,13 @@
+// Fixture schema for the singleton-read scanner's negative case
+// (MOTIR-2784). Two models: one workspace-scoped, one not, so the scanner's
+// policy-gated filter is exercised in both directions.
+
+model Widget {
+  id          String @id
+  workspaceId String
+}
+
+model GlobalSetting {
+  id    String @id
+  value String
+}

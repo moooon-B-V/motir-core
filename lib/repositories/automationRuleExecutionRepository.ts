@@ -103,9 +103,21 @@ export const automationRuleExecutionRepository = {
    * ordered newest-first, served by the `[ruleId, createdAt]` index. Empty
    * input short-circuits to `[]` (no SQL). Read-only (the `db` singleton);
    * the caller has already admin-gated the project whose rules these are. */
-  async findLatestByRuleIds(ruleIds: string[]): Promise<LatestExecutionRow[]> {
+  /**
+   * Takes an optional `tx` (MOTIR-2784). `automation_rule_execution` is
+   * workspace-scoped, and `automationRulesService.list` calls this from INSIDE its
+   * `withWorkspaceContext` transaction: unbound, the policy sees no workspace, the
+   * raw query returns no rows AND RAISES NOTHING, and every rule in the list renders
+   * with an empty last-run glyph. A silently missing glyph is the whole failure —
+   * nothing errors, so the list looks like a project that has never run a rule.
+   */
+  async findLatestByRuleIds(
+    ruleIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<LatestExecutionRow[]> {
     if (ruleIds.length === 0) return [];
-    return db.$queryRaw<LatestExecutionRow[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<LatestExecutionRow[]>`
       SELECT DISTINCT ON ("rule_id")
         "rule_id" AS "ruleId", "status", "created_at" AS "createdAt"
       FROM "automation_rule_execution"

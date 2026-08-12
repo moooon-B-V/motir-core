@@ -141,11 +141,25 @@ export const commentRepository = {
    * oldest-first so the composer's optimistic insert appends at the bottom
    * (chronological). `id` is the total-order tiebreak (same-ms writes). A thread
    * longer than the cap drops its OLDEST comments, keeping the recent activity.
-   * Read-only path (public detail) → `db` singleton directly, no `tx` param
-   * (CLAUDE.md: a read used only by a read-only service path takes no `tx`).
+   *
+   * ⚠️ This used to read: "Read-only path (public detail) → `db` singleton directly,
+   * no `tx` param (CLAUDE.md: a read used only by a read-only service path takes no
+   * `tx`)." That rule is about TRANSACTIONAL correctness and it is right, but it does
+   * not survive RLS: a read-only path still has to say which tenant it is reading.
+   *
+   * Takes a REQUIRED `tx` (MOTIR-2784). `comment` carries `comment_active_workspace`
+   * and NO public arm — MOTIR-2684 added one to `project`, not here — so an unbound
+   * read of a public request's thread returns an EMPTY LIST AND RAISES NOTHING, and
+   * the public page renders as a request nobody has replied to.
+   *
+   * Required rather than optional because there is no correct unbound caller: the
+   * only caller is the public request detail, which knows the project's workspace and
+   * can bind it. Binding the workspace tier is also why this needs no new policy —
+   * the existing arm admits the rows once it is told which tenant they belong to, and
+   * the `isPublic` filter stays where it is, in the query.
    */
-  async listPublicByWorkItem(workItemId: string): Promise<Comment[]> {
-    const rows = await db.comment.findMany({
+  async listPublicByWorkItem(workItemId: string, tx: Prisma.TransactionClient): Promise<Comment[]> {
+    const rows = await tx.comment.findMany({
       where: { workItemId, isPublic: true },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: PUBLIC_REQUEST_COMMENT_CAP,
