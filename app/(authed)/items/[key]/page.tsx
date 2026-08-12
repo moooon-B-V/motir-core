@@ -10,6 +10,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { acceptanceEvidenceService } from '@/lib/services/acceptanceEvidenceService';
+import { designEvidenceService } from '@/lib/services/designEvidenceService';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
 import { estimationService } from '@/lib/services/estimationService';
 import { componentsService } from '@/lib/services/componentsService';
@@ -35,6 +36,7 @@ import { EpicPrivacyControl } from './_components/EpicPrivacyControl';
 import { WatchControl } from './_components/WatchControl';
 import { ContentSectionCard } from './_components/ContentSectionCard';
 import { AcceptancePanel } from './_components/AcceptancePanel';
+import { DesignResultPanel } from './_components/DesignResultPanel';
 import {
   DevelopmentLinkProvider,
   LinkPullRequestDoor,
@@ -238,7 +240,19 @@ export default async function IssueDetailPage({
         workspaceId: ctx.workspaceId,
       })
     : null;
+  // Design result (Story MOTIR-2664 · Subtask MOTIR-2670): the published design
+  // artifacts of THIS card — read in the same server pass as the acceptance
+  // evidence above, so the panel needs no client fetch on first paint. A design
+  // subtask with none still renders the section, with its empty state.
+  const designEvidence = await designEvidenceService.getCurrentForWorkItem(item.id, {
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+  });
+  const isDesignCard = item.type === 'design';
+  const showDesignResult = designEvidence !== null || isDesignCard;
+
   const tAcceptance = await getTranslations('acceptance');
+  const tDesignResult = await getTranslations('designResult');
 
   // Labels + components (Story 5.4 · Subtask 5.4.8): the issue's rows ride the
   // detail read above; the rail's Components picker additionally needs the
@@ -511,6 +525,15 @@ export default async function IssueDetailPage({
                   canDecide={canEdit && item.status === 'in_review'}
                   settingsHref="/settings/organization"
                 />
+              </ContentSectionCard>
+            ) : null}
+            {/* MOTIR-2670: the design-result panel — after Acceptance, before
+              Children (per design/work-items/design-result.png panel 0). Renders
+              on any leaf with a published result, and on a `type: design` card
+              with none, whose empty state is the point. */}
+            {showDesignResult ? (
+              <ContentSectionCard title={tDesignResult('title')} subtitle={tDesignResult('gloss')}>
+                <DesignResultPanel evidence={designEvidence} isDesignCard={isDesignCard} />
               </ContentSectionCard>
             ) : null}
             {/* 2.4.3: direct children (a leaf renders nothing). MOTIR-2288 wraps

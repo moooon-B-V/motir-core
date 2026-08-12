@@ -6053,6 +6053,26 @@
     "consequence": "涉及这些仓库的计划，将在没有其既有规范的情况下生成。",
     "action": "查看代码健康度"
   },
+  "designResult": {
+    "title": "设计结果",
+    "gloss": "— 这张卡片产出的内容",
+    "openInNewTab": "在新标签页打开",
+    "frameTitle": "设计稿 — {path}",
+    "frameFailed": "无法加载设计稿",
+    "frameFailedBody": "预览链接可能已过期，文件本身没有问题。",
+    "retry": "重试",
+    "screenshots": "截图",
+    "noteTruncated": "仅显示部分内容，完整说明已作为文件发布。",
+    "downloadNote": "下载 design-notes.md",
+    "ciRun": "CI 运行",
+    "publishedBy": "发布自",
+    "empty": {
+      "title": "尚未发布设计结果",
+      "body": "当改动这张卡片设计文件的 PR 运行 CI 后，设计结果会出现在这里。",
+      "bodyDesign": "当这张卡片的 PR 运行 CI 后，设计结果会出现在这里 — 说明、页面设计稿和截图都会自动发布，无需手动上传。"
+    },
+    "frameLoading": "正在加载设计稿…"
+  },
   "home": {
     "heading": "主页",
     "subtitle": "{workspace} 中所有等待你处理的工作。",

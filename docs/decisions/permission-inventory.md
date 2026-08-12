@@ -316,6 +316,15 @@ worse failure than a gap.
 
 **R51.** A project's OWN roles — authoring one, re-permissioning it, deleting it with a reassignment (Story MOTIR-2257 · MOTIR-2474). Governed by **`project:manage_access`**, the SAME key that already governs add-member / set-role / set-access-level, and deliberately NOT a new catalog key: a role definition IS project access, and whoever may decide who is on a project may decide what the roles on it mean. Splitting the two would let an actor hand out a role they could not have authored, or author one they could not hand out — a distinction with no operational meaning that doubles the surface an admin has to reason about. There is no GET: the settings screens are server components reading through `getRoleCatalog`, and no client fetches a role list.
 
+**R52.** A DESIGN RESULT attached to a work item (Story MOTIR-2664 · MOTIR-2667) — the note, the mock and the screenshot a design PR's CI publishes. Governed by **`work_item:edit`**, the same key as R43's acceptance evidence and for the same reason: attaching evidence to an item is editing that item, and the project is resolved from the ITEM rather than from the actor's active project (the gate MOTIR-2365 added after a token-minting endpoint turned out to be reachable with a session and an id).
+
+Two things it deliberately does NOT inherit from R43, both recorded in `docs/decisions/design-result.md`:
+
+- **No parent-story hop (§3).** Acceptance rolls a leaf key UP to its story because a story has exactly one end-to-end receipt. A story has MANY designs — one per design subtask — so a design result attaches to the card that PRODUCED it, and a container target is refused 422. `resolveTarget` is therefore shorter than `resolveStory`, not a copy of it.
+- **No entitlement gate (§2).** Acceptance video is plan-gated because a 100 MB clip per story is a real storage cost. A design result is tens of kilobytes, and reading the design of the work you are reviewing is core project management rather than a paid AI feature — so there is no plan axis and no org toggle to consult here. Only the mechanical per-file and storage caps apply, at register.
+
+Both routes authenticate a CI caller (keyless GitHub OIDC first, else a PAT granted the key) through the shared `authenticateCiPublisher`, so the permission above is asked of the resolved uploader, not of an interactive session.
+
 ---
 
 ## The full table
@@ -665,6 +674,8 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 | `/api/work-items/[id]/components`                       | POST/PUT    | workspace only                                                                             | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/components/[componentId]`         | DELETE      | workspace only                                                                             | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/delete-preview`                   | GET         | `workItemsService.getDeletePreview` → `assertPermission`                                   | `work_item:delete`      | existing | R42 |
+| `/api/work-items/[id]/design-evidence`                  | POST        | `designEvidenceService` → `resolveTarget` → `assertPermission`                             | `work_item:edit`        | existing | R52 |
+| `/api/work-items/[id]/design-evidence/upload-token`     | POST        | `designEvidenceService` → `resolveTarget` → `assertPermission`                             | `work_item:edit`        | existing | R52 |
 | `/api/work-items/[id]/epic-privacy`                     | PATCH       | `assertCanManageProject`                                                                   | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/estimate`                         | PATCH       | `estimationService.setEstimate` → `assertPermission` (was workspace only)                  | `work_item:edit`        | existing | R41 |
 | `/api/work-items/[id]/labels`                           | POST/PUT    | workspace only                                                                             | `work_item:edit`        | existing | R41 |

@@ -35,6 +35,7 @@ import { ciActionsGateSweep } from './definitions/ciActionsGateSweep';
 import { ciRunnerProvisionSweep, ciRunnerBoot, ciRunnerReap } from './definitions/ciRunnerFleet';
 import { statusDerivationOnTransitioned } from './definitions/statusDerivation';
 import { migrateOnboardingSweep } from './definitions/migrateOnboardingSweep';
+import { workItemEmbeddingRequested } from './definitions/workItemEmbedding';
 
 // The list of registered Inngest functions the serve route mounts (Story 1.6 ·
 // Subtask 1.6.2). Adding a new job = define it under `definitions/` and add it
@@ -72,4 +73,5 @@ export const jobFunctions = [
   ciRunnerReap,
   statusDerivationOnTransitioned,
   migrateOnboardingSweep,
+  workItemEmbeddingRequested,
 ];

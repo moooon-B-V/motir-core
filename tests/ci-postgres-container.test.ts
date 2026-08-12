@@ -108,26 +108,64 @@ describe('the postgres composite action', () => {
     expect(action).toMatch(/using:\s*composite/);
   });
 
-  it('tries at least two mirrors before Docker Hub', () => {
-    const sources = [...action.matchAll(/^\s*"([^"]*postgres:\$\{IMAGE_TAG\})"$/gm)].map(
-      (m) => m[1]!,
-    );
+  it('tries a mirror before Docker Hub', () => {
+    // The list is DERIVED from `image-repository` now (MOTIR-2696 moved the
+    // default off the official image to `pgvector/pgvector`, a Docker Hub USER
+    // repo), so the assertion is on the derivation rather than on three frozen
+    // literals. `mirror.gcr.io` is a general Docker Hub pull-through cache and
+    // works for any repository; the `public.ecr.aws/docker/library/*` path exists
+    // only for OFFICIAL images, so it is added conditionally.
+    const sources = [
+      ...action.matchAll(/^\s*"([^"]*\$\{IMAGE_REPOSITORY\}:\$\{IMAGE_TAG\})"$/gm),
+    ].map((m) => m[1]!);
     expect(sources).toEqual([
-      'public.ecr.aws/docker/library/postgres:${IMAGE_TAG}',
-      'mirror.gcr.io/library/postgres:${IMAGE_TAG}',
-      'postgres:${IMAGE_TAG}',
+      'mirror.gcr.io/${IMAGE_REPOSITORY}:${IMAGE_TAG}',
+      '${IMAGE_REPOSITORY}:${IMAGE_TAG}',
     ]);
     // Docker Hub — the registry that went unreachable — must be the LAST
     // resort, not the first thing tried.
-    expect(sources.at(-1)).toBe('postgres:${IMAGE_TAG}');
+    expect(sources.at(-1)).toBe('${IMAGE_REPOSITORY}:${IMAGE_TAG}');
+    // The official-image mirror is still reached for, when it applies.
+    expect(action).toMatch(/public\.ecr\.aws\/docker\/library\/postgres:\$\{IMAGE_TAG\}/);
   });
 
   it('retries the pull beyond the runner built-in 3 attempts', () => {
-    // 3 sources × 3 rounds = 9 pull attempts, vs. the runner's 3 against a
-    // single registry.
+    // Sources × 3 rounds of pull attempts, vs. the runner's 3 against a single
+    // registry.
     expect(action).toMatch(/for attempt in 1 2 3/);
     expect(action).toMatch(/sleep "\$\{backoff\}"/);
-    expect(action).toMatch(/::error::Could not pull postgres/);
+    expect(action).toMatch(/::error::Could not pull \$\{IMAGE_REPOSITORY\}:\$\{IMAGE_TAG\}/);
+  });
+
+  it('keeps docker-compose on the SAME image and locale as CI', () => {
+    // Local dev and CI disagreeing about either is how a suite goes green on one
+    // and red on the other for reasons no assertion names — which is exactly what
+    // MOTIR-2696 spent a CI round learning. Both files carry a comment pointing
+    // at the other; this is the check that makes the pointer true.
+    const compose = readFileSync(join(process.cwd(), 'docker-compose.yml'), 'utf8');
+    expect(compose).toMatch(/image:\s*pgvector\/pgvector:pg16/);
+    expect(compose).toMatch(/POSTGRES_INITDB_ARGS:\s*'--locale=C\.UTF-8'/);
+  });
+
+  it('runs an image that carries pgvector (MOTIR-2696)', () => {
+    // `work_item_embedding`'s migration runs `CREATE EXTENSION vector`, which
+    // fails outright on the plain `postgres` image — so every CI job that applies
+    // migrations needs this one. Guarded here because the workflow files are not
+    // type-checked, linted or executed by any other suite.
+    expect(action).toMatch(/default:\s*pgvector\/pgvector/);
+    expect(action).toMatch(/default:\s*pg16/);
+  });
+
+  it("PINS the initdb locale to production's byte-ordering collation", () => {
+    // The other half of the image move, and the one that cost three red shards:
+    // the pgvector image is glibc, whose default `en_US.utf8` is a DICTIONARY
+    // collation, while production (Neon) is `C.UTF-8` — byte ordering, which is
+    // what every base-62 `position` / `backlogRank` column depends on. The alpine
+    // image matched production only because musl collates by byte regardless.
+    // `tests/db-collation.test.ts` asserts the resulting ORDERING at runtime;
+    // this asserts the action still asks for it.
+    expect(action).toMatch(/default:\s*C\.UTF-8/);
+    expect(action).toMatch(/POSTGRES_INITDB_ARGS="--locale=\$\{INITDB_LOCALE\}"/);
   });
 
   it('waits for the container to report healthy before yielding', () => {

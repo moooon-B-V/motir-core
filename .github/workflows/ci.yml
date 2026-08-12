@@ -163,6 +163,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      # The design-result publish authenticates KEYLESSLY off this job's GitHub
+      # Actions OIDC identity (MOTIR-2668, inheriting MOTIR-1650's mechanism), so
+      # no per-org token has to be minted or stored. GitHub denies OIDC to fork
+      # PRs, where the publisher falls back to the PAT and then no-ops.
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: pnpm/action-setup@v6
@@ -185,6 +190,48 @@ jobs:
         env:
           HUSKY: '0'
       - run: pnpm vitest run --config vitest.design.config.ts
+
+      # ── Publish the DESIGN RESULT to its work item (MOTIR-2664 / MOTIR-2668) ──
+      #
+      # ⚠️ WHY A STEP HERE AND NOT A WORKFLOW OF ITS OWN. The acceptance video
+      # needed its own file because it had no always-on host job, and a
+      # job-level `if:` still REPORTS a greyed `Skipped` check (MOTIR-1949 /
+      # MOTIR-1958). This job already runs on every PR and already exists to read
+      # `design/**`, so a step here adds NO new check anywhere — the cheaper
+      # arrangement is also the correct one.
+      #
+      # ⚠️ `pull_request` ONLY. `ci.yml` also runs on `push: main`, and
+      # re-publishing an identical result after merge is exactly what
+      # `acceptance-video.yml` avoids by having no `push:` trigger
+      # (docs/decisions/design-result.md §6). Same decision, reached with a
+      # condition because the host job is shared.
+      #
+      # ⚠️ NO `continue-on-error`. MOTIR-2499 removed one from the acceptance
+      # publish after it rewrote a failing step's conclusion to `success` for
+      # days while two stories silently lost their receipts. Both cases that
+      # would justify it are handled INSIDE the script, which returns 0 for each:
+      # no credential (a fork PR), and no resolvable target card. What is left
+      # for red to mean is a publish that should have happened and did not.
+      #
+      # The base SHA is what the diff is taken against; `tests/ci-design-guards-lane.test.ts`
+      # guards this step's presence, its condition, the permission above and the
+      # absence of `continue-on-error`.
+      - name: Publish the design result
+        if: github.event_name == 'pull_request'
+        env:
+          MOTIR_UPLOAD_TOKEN: ${{ secrets.MOTIR_UPLOAD_TOKEN }}
+          MOTIR_BASE_URL: ${{ vars.MOTIR_BASE_URL || 'https://app.motir.co' }}
+          DESIGN_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DESIGN_PR_REF: ${{ github.head_ref }}
+          DESIGN_PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+          # A pull_request checkout is the MERGE commit at depth 1, which carries
+          # both parents — so the base is normally already present. Fetch it if it
+          # is not, rather than paying `fetch-depth: 0` on every run.
+          git cat-file -e "${DESIGN_BASE_SHA}^{commit}" 2>/dev/null ||
+            git fetch --depth=1 origin "${DESIGN_BASE_SHA}"
+          node scripts/upload-design-assets.mjs
 
   build:
     name: Next.js build
@@ -422,7 +469,7 @@ jobs:
     # `fullyParallel: false` ON PURPOSE — every spec shares one Postgres and a
     # global truncate, so parallel workers IN ONE PROCESS would race. We can't
     # parallelize inside a job, so we parallelize ACROSS jobs: each matrix leg is
-    # its own runner with its OWN ephemeral `postgres:16-alpine` container
+    # its own runner with its OWN ephemeral `pgvector/pgvector:pg16` container
     # (started by ./.github/actions/postgres), so there is zero cross-leg DB
     # contention (the local shared-:5433
     # flake does not exist between CI jobs). Wall-clock goes from sum(all specs)

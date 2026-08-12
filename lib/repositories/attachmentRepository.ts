@@ -47,7 +47,10 @@ export const attachmentRepository = {
       // shield the current video from the orphan-GC; they are owned by the
       // AcceptanceEvidence lifecycle and rendered in the acceptance panel, NOT
       // the generic attachments panel — so exclude them here.
-      where: { workItemId, source: { not: 'acceptance_video' } },
+      // `design_asset` rows (MOTIR-2666) are the same shape one artifact class
+      // over: owned by the DesignEvidence lifecycle, rendered in the Design
+      // result panel, linked to the item only so the GC spares the current set.
+      where: { workItemId, source: { notIn: ['acceptance_video', 'design_asset'] } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -57,9 +60,10 @@ export const attachmentRepository = {
   /** The panel's total count ("Show more (N)" + the header badge, 5.2.2). */
   async countByWorkItem(workItemId: string, tx?: Prisma.TransactionClient): Promise<number> {
     const client = tx ?? db;
-    // Mirror listByWorkItem: acceptance videos never count toward the panel.
+    // Mirror listByWorkItem: acceptance videos and design assets never count
+    // toward the panel.
     return client.attachment.count({
-      where: { workItemId, source: { not: 'acceptance_video' } },
+      where: { workItemId, source: { notIn: ['acceptance_video', 'design_asset'] } },
     });
   },
 

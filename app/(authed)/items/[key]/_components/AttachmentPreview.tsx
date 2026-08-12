@@ -3,7 +3,6 @@
 import { useTranslations } from 'next-intl';
 import { Download, FileText, X } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
-import type { AttachmentDTO } from '@/lib/dto/attachments';
 import { formatBytes } from '@/lib/utils/bytes';
 import { downloadHref, triggerDownload } from './attachmentDownload';
 
@@ -32,7 +31,30 @@ import { downloadHref, triggerDownload } from './attachmentDownload';
 // Shape still flows through the element tokens.
 
 /** The Jira-verified preview split: images + PDFs preview, the rest download. */
-export function isPreviewable(attachment: AttachmentDTO): boolean {
+/**
+ * What the lightbox actually READS — deliberately narrower than
+ * {@link AttachmentDTO}, which satisfies it structurally so every existing
+ * caller is unchanged.
+ *
+ * Stated as its own type by MOTIR-2670, when the design-result panel needed to
+ * reuse this lightbox for a published `.png`. A design artifact's attachment
+ * source is `design_asset`, which `AttachmentDTO['source']` does not admit — and
+ * widening that union would have been the wrong fix twice over: the field is not
+ * part of this component's contract (nothing below reads it), and the attachments
+ * panel's DTO is narrow precisely BECAUSE it excludes the lifecycle-owned
+ * sources, so admitting a value that surface never receives would make its type
+ * less true, not more.
+ */
+export interface PreviewableAttachment {
+  filename: string;
+  /** The AUTHENTICATED content path (`/api/attachments/<id>/content`). */
+  blobUrl: string;
+  sizeBytes: number;
+  isImage: boolean;
+  isPdf: boolean;
+}
+
+export function isPreviewable(attachment: PreviewableAttachment): boolean {
   return attachment.isImage || attachment.isPdf;
 }
 
@@ -41,7 +63,7 @@ export function AttachmentPreview({
   onClose,
 }: {
   /** The focused attachment, or null while the lightbox is closed. */
-  attachment: AttachmentDTO | null;
+  attachment: PreviewableAttachment | null;
   onClose: () => void;
 }) {
   const t = useTranslations('attachments');

@@ -37,6 +37,7 @@ import { assignableMembersService } from '@/lib/services/assignableMembersServic
 import { watchersService } from '@/lib/services/watchersService';
 import { parseMentionIds } from '@/lib/mentions/parse';
 import { autoRelateWorkItemMentions, writeWorkItemLink } from '@/lib/workItems/autoRelateMentions';
+import { embeddingDocumentChanged } from '@/lib/workItems/embeddingDocument';
 import { attachmentsService } from '@/lib/services/attachmentsService';
 import { extractReferencedAttachmentIdsFromBodies } from '@/lib/blob/referencedUrls';
 import { sendEvent } from '@/lib/jobs/sendEvent';
@@ -1132,6 +1133,18 @@ export const workItemsService = {
       ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
     });
 
+    // Plan-tree embedding, CREATE trigger (Story MOTIR-2694 · MOTIR-2696, ADR
+    // §6.3.1). Post-commit like everything above it, and for a sharper reason
+    // than the notification events: embedding is an external call across the
+    // open-core boundary, so it must never sit inside the write transaction (ADR
+    // §6.3.2 / the repo's side-effects-outside-tx rule). Unconditional here —
+    // every new item is a fresh document — and the job carries only the id,
+    // because it re-reads the current text at run time (§6.3.3).
+    await sendEvent('work-item/embedding.requested', {
+      workspaceId,
+      workItemId: dto.id,
+    });
+
     return dto;
   },
 
@@ -1523,7 +1536,20 @@ export const workItemsService = {
       // `field.changed` emit below. Computed off `diff` (the field cells), so
       // the synthetic `attachments` cell on `revisionDiff` is naturally ignored.
       const changedFieldIds: string[] = automationFieldsFromDiffKeys(Object.keys(diff));
-      return { dto: toWorkItemDto(row), revisionId, addedDescMentionIds, changedFieldIds };
+      // Did this edit move the EMBEDDED DOCUMENT (Story MOTIR-2694 · MOTIR-2696,
+      // ADR §3)? Compared as composed DOCUMENTS rather than as `diff.title ||
+      // diff.descriptionMd`, so the 8 000-character truncation is inside the
+      // comparison: an edit that rewrites only the 9 000th character embeds
+      // identically and is correctly judged a no-op. `explanationMd` is excluded
+      // from the document, so an explanation-only edit is likewise silent.
+      const embeddingChanged = embeddingDocumentChanged(current, row);
+      return {
+        dto: toWorkItemDto(row),
+        revisionId,
+        addedDescMentionIds,
+        changedFieldIds,
+        embeddingChanged,
+      };
     });
 
     // Post-commit description-mention event (5.1.6) — same shape and rules as
@@ -1555,6 +1581,19 @@ export const workItemsService = {
         changedFields: result.changedFieldIds,
         revisionId: result.revisionId,
         ...(ctx.viaAutomationRuleId ? { viaAutomationRuleId: ctx.viaAutomationRuleId } : {}),
+      });
+    }
+
+    // Plan-tree embedding, UPDATE trigger (Story MOTIR-2694 · MOTIR-2696, ADR
+    // §6.3.1) — emitted ONLY when the embedded document actually moved. This gate
+    // is the whole answer to "an embedding goes stale on every edit": the trigger
+    // is the CONTENT, not the row (§3), so a status flip, a re-parent, a sprint
+    // move, an assignee change, a priority bump or a reorder — the overwhelming
+    // majority of work-item writes — enqueue nothing and cost nothing.
+    if (result.embeddingChanged) {
+      await sendEvent('work-item/embedding.requested', {
+        workspaceId: ctx.workspaceId,
+        workItemId: result.dto.id,
       });
     }
 

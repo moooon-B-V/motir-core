@@ -42,6 +42,21 @@ export type TokenGrant = readonly PermissionKey[];
 export const ACCEPTANCE_PUBLISH_PERMISSION: PermissionKey = 'work_item:edit';
 
 /**
+ * The permission the DESIGN-RESULT publish requires
+ * (`lib/designEvidence/publishAuth.ts`, Story MOTIR-2664) — the SECOND
+ * token-reachable operation that is neither MCP nor `/api/v1`.
+ * `designEvidenceService` resolves the target leaf and asserts `work_item:edit`,
+ * so the route asks for the same thing, exactly as the acceptance publish does.
+ *
+ * It happens to equal {@link ACCEPTANCE_PUBLISH_PERMISSION} today, and is named
+ * separately anyway for the reason that constant gives for existing at all: it
+ * is a DERIVATION SOURCE for {@link GRANTABLE_PERMISSIONS}, and the set stays
+ * total only if every such caller is named here. Aliasing the two would make the
+ * next publisher's permission look already-covered when it may not be.
+ */
+export const DESIGN_PUBLISH_PERMISSION: PermissionKey = 'work_item:edit';
+
+/**
  * Permissions reachable ONLY through `/api/v1` — i.e. asserted by some v1
  * operation and by no MCP tool and not by the publish route.
  *
@@ -77,6 +92,7 @@ export const GRANTABLE_PERMISSIONS: readonly PermissionKey[] = sortByCatalogOrde
   ...Object.values(TOOL_PERMISSIONS),
   ...V1_ONLY_PERMISSIONS,
   ACCEPTANCE_PUBLISH_PERMISSION,
+  DESIGN_PUBLISH_PERMISSION,
 ]);
 
 /**

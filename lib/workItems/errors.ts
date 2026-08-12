@@ -334,3 +334,36 @@ export class NoInitialStatusError extends Error {
     this.name = 'NoInitialStatusError';
   }
 }
+
+/**
+ * motir-ai returned a vector whose length is not the pinned column dimension
+ * (Story MOTIR-2694 · Subtask MOTIR-2696).
+ *
+ * Like {@link NoInitialStatusError} this is a SERVER INVARIANT violation, not a
+ * client error, so it is deliberately not a `WorkItemError`: both sides of the
+ * boundary pin N = 1536 from the same decision record
+ * (`motir-ai`'s `docs/decisions/embedding-provider.md`), so a disagreement means
+ * one of them was re-configured without the other.
+ *
+ * It is raised BEFORE the write rather than left to Postgres because the failure
+ * modes are not equivalent. `vector(1536)` would reject a wrong-length literal
+ * with a raw cast error naming neither the item nor the model — and, worse, a
+ * future widening of the column would let a mismatched vector land silently and
+ * rank against incomparable neighbours forever. The embedding job treats it as
+ * terminal: retrying a mis-configured provider cannot help, and the item stays
+ * "not yet a candidate", which is never an error to a user (ADR §6.3.5).
+ */
+export class EmbeddingDimensionMismatchError extends Error {
+  readonly code = 'EMBEDDING_DIMENSION_MISMATCH' as const;
+  constructor(
+    readonly expected: number,
+    readonly received: number,
+    readonly model: string,
+  ) {
+    super(
+      `Model ${model} returned a ${received}-dimension vector; the work_item_embedding ` +
+        `column is vector(${expected}).`,
+    );
+    this.name = 'EmbeddingDimensionMismatchError';
+  }
+}

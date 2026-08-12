@@ -397,6 +397,34 @@ export interface RawCiOverageDebitResponse {
   idempotent: boolean;
 }
 
+// ── Embeddings (Story MOTIR-2694 · Subtask MOTIR-2696) ───────────────────────
+//
+// `POST /v1/embeddings` — motir-ai computes vectors FOR motir-core (MOTIR-2720).
+// motir-core STORES plan-tree embeddings and cannot produce them: it holds no
+// provider credential, no gateway token and no embedding seam, and it is not
+// getting one. Giving the open repo a credential was rejected on two counts —
+// it would put an LLM key in the open-source half, and it would create a SECOND
+// metering identity for one tenant's spend (`docs/decisions/plan-tree-embeddings.md`
+// §6.2). So the vector comes from the service that already owns the gateway
+// token and the one `CreditLedger`.
+//
+// BATCH by design, so a backfill is a handful of round-trips rather than one per
+// row. motir-ai caps a request at 64 inputs / 512 000 characters and refuses an
+// over-sized batch as a 400 BEFORE any gateway call — a cap this side respects
+// by chunking rather than discovering.
+export interface RawEmbeddingBatchResponse {
+  /**
+   * The model the call ACTUALLY used, honouring motir-ai's `EMBEDDING_MODEL`
+   * override — not a constant either side assumes. Stored per row, because ADR
+   * §6.1 makes it the hard comparability filter: a channel swap that changed the
+   * model silently would corrupt every ranking that spans the swap.
+   */
+  model: string;
+  dimensions: number;
+  /** One vector per input, IN REQUEST ORDER. */
+  embeddings: number[][];
+}
+
 // ── Stripe AI-subscription lifecycle read (Subtask 8.1.13) ───────────────────
 // The raw GET /v1/stripe/subscription wire body (motir-ai's
 // stripeBillingService.SubscriptionDto). `status` is the Stripe lifecycle value

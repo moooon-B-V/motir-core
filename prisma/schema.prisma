@@ -635,6 +635,10 @@ model Workspace {
   workflowTransitions         WorkflowTransition[]
   attachments                 Attachment[]
   acceptanceEvidences         AcceptanceEvidence[]
+  // Published design results (Story MOTIR-2664 · MOTIR-2666). Cascade with the
+  // workspace, like every other tenanted lifecycle row.
+  designEvidences             DesignEvidence[]
+  designAssets                DesignAsset[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -662,6 +666,9 @@ model Workspace {
   // Cascade with the workspace, the comments pattern.
   notifications               Notification[]
   sprintReportEntries         SprintReportEntry[]
+  // Plan-tree embeddings (Story MOTIR-2694 · MOTIR-2696) — the RLS axis of the
+  // semantic-search sidecar. Derived tenant data; cascade with the workspace.
+  workItemEmbeddings          WorkItemEmbedding[]
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
   apiTokens                   ApiToken[]
@@ -981,6 +988,9 @@ model Project {
   // no drift.
   lastActiveForUsers          User[]                       @relation("LastActiveProject")
   workItems                   WorkItem[]
+  // Plan-tree embeddings for this project's items (Story MOTIR-2694 ·
+  // MOTIR-2696) — the ranking pre-filter's axis. Cascade with the project.
+  workItemEmbeddings          WorkItemEmbedding[]
   workflowStatuses            WorkflowStatus[]
   workflowTransitions         WorkflowTransition[]
   boards                      Board[]
@@ -1627,6 +1637,12 @@ model WorkItem {
   // a STORY. Cascade with the story: deleting the story removes its evidence
   // rows (the underlying video Attachment is unlinked/GC-reclaimed separately).
   acceptanceEvidences  AcceptanceEvidence[]
+  // Published design results (Story MOTIR-2664 · MOTIR-2666) — evidence rows
+  // for THIS work item. Unlike acceptance evidence, which rolls a subtask key
+  // UP to its parent story, a design result belongs to the card that produced
+  // it (docs/decisions/design-result.md §3), so this relation hangs off every
+  // leaf, not only stories. Cascade with the item.
+  designEvidences      DesignEvidence[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -1668,6 +1684,12 @@ model WorkItem {
   // mapping row goes too, so a re-import re-creates it. Modelled both sides per
   // the FK-`@relation` rule.
   importedIssues       ImportedIssue[]
+  // The semantic-search SIDECAR (Story MOTIR-2694 · MOTIR-2696, per
+  // docs/decisions/plan-tree-embeddings.md §4) — at most ONE row per item,
+  // holding the vector derived from this item's title + description. Cascade:
+  // the derivation dies with the row it describes. A MISSING row is the honest
+  // representation of "not a candidate yet" — see WorkItemEmbedding's header.
+  embedding            WorkItemEmbedding?
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1711,6 +1733,99 @@ model WorkItem {
   // created by the migration SQL (Prisma doesn't model extensions here).
   @@index([title(ops: raw("gin_trgm_ops")), descriptionMd(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("work_item")
+}
+
+/// The plan-tree SEMANTIC-SEARCH sidecar (Story MOTIR-2694 · Subtask
+/// MOTIR-2696, per `docs/decisions/plan-tree-embeddings.md` §4) — one row per
+/// work item, holding the embedding of that item's `title` + `descriptionMd`
+/// so GATE 1's "does work like this already exist?" can be answered by MEANING
+/// rather than by the 6.1.1 substring `contains` predicate.
+///
+/// A SIDECAR, not four columns on `work_item`, for three reasons the ADR
+/// argues in full: `model` / `dimensions` / `contentHash` / `embeddedAt`
+/// describe a DERIVATION rather than the card, and they do not belong on the
+/// widest, hottest table in the schema; **absence is the semantics** — "this
+/// item has no embedding yet" is most honestly a MISSING ROW, not five
+/// nullable columns that must agree with each other; and the write cadences
+/// differ (a background job writes this minutes after the item, on a different
+/// trigger, and must never appear to modify the row a user is editing).
+///
+/// ⚠️ `embedding` is `Unsupported("vector(1536)")` — the typed Prisma client
+/// can neither read, write nor order by it, exactly as in `motir-ai`'s
+/// `Lesson`. So the WHOLE row is written by `workItemEmbeddingRepository`'s
+/// `$executeRaw` upsert (row and vector land in ONE statement, so a row without
+/// a vector is never created) and ranked by a `$queryRaw` `<=>`, with the
+/// vector bound as a parameter and cast — NEVER string-concatenated. It is
+/// nullable here for the same reason it is in `motir-ai`: Prisma cannot create
+/// a required Unsupported column, and the mirror keeps `migrate diff` quiet.
+/// The ranking read still guards `embedding IS NOT NULL`, belt and braces.
+///
+/// `vector(1536)` is the literal `motir-ai` uses, for the same reason: it is
+/// the dimension `motir-ai`'s `docs/decisions/embedding-provider.md` pinned for
+/// EVERY semantic store, so a vector produced by either service is comparable.
+/// `dimensions` records it per row so a future re-dimension is a visible,
+/// rolling backfill rather than a silent mismatch.
+///
+/// Tenancy (ADR §5): `workspaceId` is NOT NULL and the RLS policy ships in the
+/// SAME migration — the no-unguarded-window rule; `projectId` is the search
+/// filter, resolved server-side from the caller's token, never from a body.
+/// Both FKs cascade (the vector is derived data, so it dies with either
+/// parent) and both are modelled as `@relation`s on BOTH sides, per the
+/// FK-`@relation` no-drift rule.
+model WorkItemEmbedding {
+  /// PK *and* FK — one embedding per work item, by construction.
+  workItemId  String @id @map("work_item_id")
+  workspaceId String @map("workspace_id")
+  projectId   String @map("project_id")
+  /// The model that produced this vector (e.g. `text-embedding-3-small`), as
+  /// REPORTED by motir-ai's `POST /v1/embeddings` — not a local constant, so an
+  /// `EMBEDDING_MODEL` override on the other side is recorded rather than
+  /// assumed. ADR §6.1 makes it a HARD ranking filter: rows embedded with a
+  /// different model are not comparable and are excluded, which turns a model
+  /// swap into a visible, rolling backfill instead of a silent collapse in
+  /// result quality.
+  model       String
+  /// The vector's length, asserted against the column type at write time.
+  dimensions  Int
+  /// SHA-256 of the §3 document (`title` + "\n\n" + `descriptionMd`, truncated
+  /// to 8 000 chars). THE RE-EMBED TRIGGER: the embedding is re-derived exactly
+  /// when this changes, so a status flip / re-parent / sprint move / assignee
+  /// change costs nothing. It is also the job's idempotency guard — a re-run
+  /// whose hash matches skips the provider call entirely.
+  contentHash String @map("content_hash")
+
+  /// When this vector was derived. `timestamptz` (ADR §4) — an instant, and the
+  /// one column here that is compared across deployments.
+  embeddedAt DateTime @map("embedded_at") @db.Timestamptz(3)
+
+  embedding Unsupported("vector(1536)")?
+
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Tenant teardown + the workspace RLS predicate.
+  @@index([workspaceId])
+  /// The ranking pre-filter AND the coverage count, which both narrow on
+  /// (project, model) before the `<=>` ordering — see the repository's
+  /// under-return note for why that pre-filter needs its own index.
+  @@index([projectId, model])
+  /// ⚠️ THE ANN INDEX, DECLARED HERE ONLY SO THE DRIFT GATE CAN SEE IT. The real
+  /// object is `CREATE INDEX … USING hnsw ("embedding" vector_cosine_ops)`, in
+  /// the migration — Prisma's index types stop at Gin/Gist/Brin/SpGist/Hash and
+  /// cannot express HNSW at all. Without this line the `build` job's
+  /// `prisma migrate diff --from-schema … --to-config-datasource --exit-code`
+  /// reports a permanent "[+] Added index on columns (embedding)", because the
+  /// differ pairs a database index to a datamodel index BY COLUMN LIST and no
+  /// datamodel index claimed this column. With it, the pair is complete and the
+  /// only thing Prisma could still disagree about is the NAME — pinned by `map`
+  /// to the literal the migration creates, so a future default-name change
+  /// cannot silently re-open the drift (the partial-index lesson, MOTIR-1960).
+  /// Nothing regenerates this as a btree: `migrate dev` diffs against a shadow
+  /// database built from the committed migrations, where the hnsw index already
+  /// holds the column list.
+  @@index([embedding], map: "work_item_embedding_embedding_idx")
+  @@map("work_item_embedding")
 }
 
 /// One upvote by one account on one public request (Story 6.12 · Subtask
@@ -2459,6 +2574,14 @@ enum AttachmentSource {
   // through the content route like the video; owned by the AcceptanceEvidence
   // lifecycle, excluded from the attachments panel listing.
   acceptance_trace
+  // A published DESIGN RESULT artifact (Story MOTIR-2664 · MOTIR-2666) — the
+  // `*.mock.html`, its `.png` export, or the extracted `design-notes.md`
+  // section text. Set ONLY on the design-publish path; `text/html` via the
+  // generic editor/panel upload is still 415 (the design-scoped allowlist in
+  // lib/blob/allowlist.ts is deliberately NOT spread into ALLOWED_UPLOAD_TYPES
+  // — docs/decisions/design-result.md §5a). Owned by the DesignEvidence
+  // lifecycle, so the attachments panel excludes this source from its listing.
+  design_asset
 
   @@map("attachment_source")
 }
@@ -2519,6 +2642,11 @@ model Attachment {
   // leaves the evidence history row intact.
   acceptanceEvidence AcceptanceEvidence? @relation("AcceptanceVideo")
   traceEvidence      AcceptanceEvidence? @relation("AcceptanceTrace")
+  // Back-relation for DesignAsset (Story MOTIR-2664 · MOTIR-2666): a
+  // `design_asset` Attachment is the stored bytes of ONE design-result asset.
+  // SetNull on that FK, same as the acceptance pair — the orphan-GC reclaiming
+  // a superseded mock's blob leaves the asset row (and its history) standing.
+  designAsset        DesignAsset?
 
   @@index([workspaceId, createdAt(sort: Desc)])
   // The paged panel read (5.2.2): an issue's attachments, newest first.
@@ -2582,6 +2710,108 @@ model AcceptanceEvidence {
   // The panel read: a story's evidence, newest first (the current is the head).
   @@index([workItemId, createdAt(sort: Desc)])
   @@map("acceptance_evidence")
+}
+
+/// What kind of design artifact a {@link DesignAsset} row stores (Story
+/// MOTIR-2664 · Subtask MOTIR-2666).
+enum DesignAssetKind {
+  /// A `*.mock.html` page/view mockup — rendered in the panel's sandboxed,
+  /// cross-origin iframe (docs/decisions/design-result.md §5).
+  mock
+  /// A `.png` export — opened in the shipped attachment lightbox.
+  image
+  /// The extracted `design-notes.md` section text as a `text/markdown` file.
+  /// ALWAYS published alongside the inline `DesignEvidence.noteMd`, which is
+  /// capped at 64 KiB for rendering — this is what makes that cap a rendering
+  /// bound rather than a data-loss bound (§1).
+  note_file
+
+  @@map("design_asset_kind")
+}
+
+/// A published DESIGN RESULT (Story MOTIR-2664 · Subtask MOTIR-2666) — what a
+/// `type: design` subtask's CI run produced, attached to the work item so a
+/// reviewer reads the design in Motir instead of opening raw files on GitHub.
+///
+/// **It hangs off the card that PRODUCED it, not the parent story** — the
+/// opposite of `AcceptanceEvidence`, whose publish path resolves a subtask key
+/// UP to its story because a story has exactly one end-to-end receipt. A story
+/// has MANY designs, one per design subtask (docs/decisions/design-result.md §3).
+///
+/// **One CURRENT result per work item.** A new publish supersedes the prior
+/// current (`isCurrent` flips to false on the old row); the partial unique index
+/// `design_evidence_one_current_per_item` enforces it at the DB level, so a
+/// concurrent double publish loses at the constraint instead of leaving two
+/// current rows. Superseded rows are KEPT as history; their asset blobs become
+/// orphaned Attachments the existing orphan-GC reclaims.
+///
+/// `noteMd` is the extracted `design-notes.md` SECTION text — not the whole
+/// per-AREA file, which on `origin/main` runs to 303,395 bytes across 29
+/// sections. Capped at 64 KiB (§1) and rendered through the single Markdown
+/// path; the full text always ships as a `note_file` asset.
+model DesignEvidence {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  /// The work item whose design this is — the design subtask itself.
+  workItemId    String   @map("work_item_id")
+  /// The extracted `design-notes.md` section(s), capped at 64 KiB. Null when
+  /// the PR changed no section (the above-the-first-heading case, §1).
+  noteMd        String?  @map("note_md") @db.Text
+  /// True when the inline copy was truncated at a section boundary; the
+  /// `note_file` asset always carries the complete text.
+  noteTruncated Boolean  @default(false) @map("note_truncated")
+  /// Provenance from the CI run that published it (the BYOK publish path).
+  commitSha     String?  @map("commit_sha")
+  ciRunUrl      String?  @map("ci_run_url")
+  /// The card key whose PR produced this result (e.g. "MOTIR-2669").
+  producedByKey String?  @map("produced_by_key")
+  /// True for exactly one row per work item (the partial unique index enforces
+  /// it); a superseded row is false.
+  isCurrent     Boolean  @default(true) @map("is_current")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem  WorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  assets    DesignAsset[]
+
+  /// The panel read: an item's results, newest first (the current is the head).
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@map("design_evidence")
+}
+
+/// ONE artifact of a {@link DesignEvidence} (Story MOTIR-2664 · Subtask
+/// MOTIR-2666). A design result is a SET, not a fixed triple: a design PR may
+/// touch several mocks and several exports, and some add no PNG — so the count
+/// comes from the PR, never from a convention. The familiar
+/// notes + mock + screenshot trio is the degenerate case.
+///
+/// `attachmentId` is nullable + SetNull so the orphan-GC removing a superseded
+/// blob leaves the row (and the record of what was published) intact.
+model DesignAsset {
+  id               String          @id @default(cuid())
+  /// Denormalized tenancy, exactly as every other RLS-gated table carries it:
+  /// the policy is then a PURE active-workspace gate with no per-row subquery
+  /// through the parent. Always equal to the parent evidence's workspace.
+  workspaceId      String          @map("workspace_id")
+  designEvidenceId String          @map("design_evidence_id")
+  kind             DesignAssetKind
+  attachmentId     String?         @unique @map("attachment_id")
+  /// The repository path the file came from, e.g.
+  /// `design/work-items/design-result.mock.html` — shown as provenance and
+  /// used to group a mock with its same-basename export.
+  sourcePath       String          @map("source_path")
+  /// Render order within the result; stable across republishes.
+  position         Int             @default(0)
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  designEvidence DesignEvidence @relation(fields: [designEvidenceId], references: [id], onDelete: Cascade)
+  attachment     Attachment?    @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+
+  /// The panel read: one result's assets in render order.
+  @@index([designEvidenceId, position])
+  @@map("design_asset")
 }
 
 /// A comment on a work item (Story 5.1 · Subtask 5.1.1) — the Activity

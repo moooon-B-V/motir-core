@@ -198,6 +198,31 @@ export interface WorkItemFieldChangedData {
 }
 
 /**
+ * The `work-item/embedding.requested` event payload (Story MOTIR-2694 · Subtask
+ * MOTIR-2696, per `docs/decisions/plan-tree-embeddings.md` §6.3) — emitted AFTER
+ * a work-item write commits, on the three triggers the ADR pins: CREATE, an
+ * UPDATE where the embedded document's hash CHANGED, and MATERIALIZE (an
+ * approved plan's proposals becoming work items).
+ *
+ * ⚠️ IT CARRIES AN ID, NOT A PAYLOAD, AND THAT IS THE DESIGN (§6.3.3). The job
+ * re-reads the item's CURRENT title and description at run time rather than
+ * embedding text captured here, so two rapid edits converge on the current text
+ * whichever order their jobs run in — and the trailing job's content hash then
+ * matches the row the leading one wrote, so it skips. No sequence number, no
+ * lock, no ordering guard. Adding a text field to this payload would quietly
+ * delete that property.
+ *
+ * A status flip, re-parent, sprint move, assignee change, priority bump or
+ * reorder emits NOTHING: the trigger is the CONTENT hash, not the row (§3), and
+ * the emit gate is applied at the call site so the overwhelming majority of
+ * work-item writes never even enqueue.
+ */
+export interface WorkItemEmbeddingRequestedData {
+  workspaceId: string;
+  workItemId: string;
+}
+
+/**
  * The `filter-subscription/deliver` event payload (Story 6.2 · Subtask 6.2.5)
  * — one per DUE subscription, enqueued by the hourly `system.filter-
  * subscription-tick` cron so each delivery retries/dead-letters independently
@@ -357,6 +382,7 @@ export interface JobEventDataMap {
   'work-item/transitioned': WorkItemTransitionedData;
   'work-item/created': WorkItemCreatedData;
   'work-item/field.changed': WorkItemFieldChangedData;
+  'work-item/embedding.requested': WorkItemEmbeddingRequestedData;
 }
 
 /** Every registered event/job name. */
