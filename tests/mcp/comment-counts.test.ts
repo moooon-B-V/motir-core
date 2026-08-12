@@ -16,6 +16,7 @@ import { runNextReady } from '@/lib/mcp/tools/nextReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The per-row COMMENT-COUNT projection for the MCP work-item reads (MOTIR-2001)
@@ -48,6 +49,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mk = (fx: WorkItemFixture, title: string) =>
@@ -60,7 +62,7 @@ const say = (fx: WorkItemFixture, itemId: string, bodyMd: string, parentCommentI
 async function countCommentQueries<T>(
   run: () => Promise<T>,
 ): Promise<{ result: T; queries: number }> {
-  const spy = vi.spyOn(db.comment, 'groupBy');
+  const spy = vi.spyOn(adminDb.comment, 'groupBy');
   const result = await run();
   const queries = spy.mock.calls.length;
   spy.mockRestore();
@@ -80,7 +82,10 @@ async function connectClient(ctx: ServiceContext): Promise<Client> {
 /** Create a sprint holding the given items and START it — `claim_next_ready`'s scope. */
 async function activeSprintWith(fx: WorkItemFixture, itemIds: string[]): Promise<void> {
   const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Active' }, fx.ctx);
-  await db.workItem.updateMany({ where: { id: { in: itemIds } }, data: { sprintId: sprint.id } });
+  await adminDb.workItem.updateMany({
+    where: { id: { in: itemIds } },
+    data: { sprintId: sprint.id },
+  });
   await sprintsService.startSprint(sprint.id, {}, fx.ctx);
 }
 

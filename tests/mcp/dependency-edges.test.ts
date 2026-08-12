@@ -14,6 +14,7 @@ import { CrossWorkspaceLinkError } from '@/lib/workItems/linkErrors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The dependency-EDGE projection for the MCP LIST reads (Subtask 7.9.0f /
@@ -46,6 +47,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mk = (fx: WorkItemFixture, title: string, projectId?: string) =>
@@ -72,13 +74,14 @@ const block = (fx: WorkItemFixture, blockedId: string, blockerId: string) =>
   );
 
 const archive = (id: string) =>
-  db.workItem.update({ where: { id }, data: { archivedAt: new Date() } });
+  adminDb.workItem.update({ where: { id }, data: { archivedAt: new Date() } });
 
-const markDone = (id: string) => db.workItem.update({ where: { id }, data: { status: 'done' } });
+const markDone = (id: string) =>
+  adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
 /** Count REAL `work_item_link` queries issued while `run` executes. */
 async function countLinkQueries<T>(run: () => Promise<T>): Promise<{ result: T; queries: number }> {
-  const spy = vi.spyOn(db.workItemLink, 'findMany');
+  const spy = vi.spyOn(adminDb.workItemLink, 'findMany');
   const result = await run();
   const queries = spy.mock.calls.length;
   spy.mockRestore();

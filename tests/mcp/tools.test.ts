@@ -8,6 +8,7 @@ import { buildMcpServer, MCP_TOOL_NAMES } from '@/lib/mcp/registry';
 import { runListReady } from '@/lib/mcp/tools/listReady';
 import { runNextReady } from '@/lib/mcp/tools/nextReady';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP read tools (Subtask 7.8.4) over real Postgres. Two layers:
@@ -25,6 +26,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function make(

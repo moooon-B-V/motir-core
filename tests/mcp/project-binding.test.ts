@@ -9,6 +9,7 @@ import { CLI_TOKEN_GRANT } from '@/lib/mcp/toolPermissions';
 import { GRANTABLE_PERMISSIONS } from '@/lib/tokens/grant';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The PROJECT BINDING at dispatch (MOTIR-2607; ADR Amendment 1 §A.6).
@@ -27,6 +28,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function textOf(content: unknown): string {

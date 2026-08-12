@@ -37,6 +37,7 @@ import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 import type { ProjectContext } from '@/lib/projects';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The plan-change CONVERSATION over MCP (Story 7.9 · MOTIR-1832) — the
@@ -103,7 +104,7 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
 }
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_change_turn", "plan_change_session", "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -119,6 +120,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('plan-session tools — registration + permission + advertised contracts', () => {
@@ -181,7 +183,8 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
     expect(again.id).toBe(opened.id);
     expect(again.turnCount).toBe(1);
     expect(again.turns.map((t) => t.body)).toEqual(['Add a billing epic.']);
-    expect(await db.planChangeSession.count()).toBe(1);
+    const planChangeSessionCount = await adminDb.planChangeSession.count();
+    expect(planChangeSessionCount).toBe(1);
     await client.close();
   });
 
@@ -227,7 +230,8 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
       }),
     );
     expect(resumed.id).toBe(onAB.id);
-    expect(await db.planChangeSession.count()).toBe(3);
+    const planChangeSessionCount = await adminDb.planChangeSession.count();
+    expect(planChangeSessionCount).toBe(3);
     await client.close();
   });
 
@@ -248,7 +252,8 @@ describe('open_plan_session — one thread per scope, resumed not forked', () =>
     });
     expect(res.isError).toBe(true);
     expect(text(res)).toContain('NOT_FOUND');
-    expect(await db.planChangeSession.count()).toBe(0);
+    const planChangeSessionCount = await adminDb.planChangeSession.count();
+    expect(planChangeSessionCount).toBe(0);
 
     // And the project itself: a project outside the caller's workspace is a
     // not-found, never a 403 leak.
@@ -286,7 +291,8 @@ describe('append_plan_turn — accumulation, and the SAME thread the web panel s
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
     expect(second.lastJobId).toBeNull();
     expect(second.lastSubmittedAt).toBeNull();
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
     await client.close();
   });
 
@@ -331,7 +337,8 @@ describe('append_plan_turn — accumulation, and the SAME thread the web panel s
       'Typed in the browser.',
       'Typed in the terminal.',
     ]);
-    expect(await db.planChangeSession.count()).toBe(1);
+    const planChangeSessionCount = await adminDb.planChangeSession.count();
+    expect(planChangeSessionCount).toBe(1);
     await client.close();
   });
 });
@@ -390,10 +397,11 @@ describe('submit_plan_session — one job for the whole thread', () => {
 
     // The proposal sink is open and bound to the job (MOTIR-1743) — and it is a
     // PLAN: the tree is untouched.
-    const plan = await db.plan.findUniqueOrThrow({ where: { id: out.planId } });
+    const plan = await adminDb.plan.findUniqueOrThrow({ where: { id: out.planId } });
     expect(plan.status).toBe('generating');
     expect(plan.sourceJobId).toBe('job_plan_1');
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
     await client.close();
   });
 
@@ -445,7 +453,8 @@ describe('submit_plan_session — one job for the whole thread', () => {
     expect(res.isError).toBe(true);
     expect(text(res)).toContain('PLAN_CHANGE_EMPTY_INTENT');
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
     await client.close();
   });
 
@@ -475,7 +484,8 @@ describe('submit_plan_session — one job for the whole thread', () => {
     expect(text(res)).toContain('MOTIR_AI_OUT_OF_CREDITS');
     // The plan is opened only AFTER a successful submit, so a refused job leaves
     // nothing behind…
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
     // …and the user's words survive: the thread is re-submittable as it stands.
     const after = session(await call(client, OPEN_PLAN_SESSION_TOOL_NAME, { projectKey: 'PROD' }));
     expect(after.turns.map((t) => t.body)).toEqual(['Add the reporting epic.']);
@@ -517,7 +527,8 @@ describe('plan-session tools — grant narrowing', () => {
     const after = await planChangeSessionsService.getOrCreateForProject(projectCtx(fx));
     expect(after.turnCount).toBe(1);
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
     await noPlanning.close();
   });
 

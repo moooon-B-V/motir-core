@@ -11,6 +11,7 @@ import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { SprintValidityDto } from '@/lib/dto/sprints';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `validate_sprint` (Subtask 7.8.15) over real Postgres — the read that reports
@@ -35,6 +36,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx` (no scope gate). */
@@ -61,9 +63,10 @@ const link = (fx: Awaited<ReturnType<typeof makeWorkItemFixture>>, fromId: strin
   workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 
 const putInSprint = (id: string, sprintId: string) =>
-  db.workItem.update({ where: { id }, data: { sprintId } });
+  adminDb.workItem.update({ where: { id }, data: { sprintId } });
 
-const markDone = (id: string) => db.workItem.update({ where: { id }, data: { status: 'done' } });
+const markDone = (id: string) =>
+  adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
 async function planSprint(
   fx: Awaited<ReturnType<typeof makeWorkItemFixture>>,
@@ -318,7 +321,7 @@ describe('sprintsService.validateSprint — the finishability rule', () => {
     const blocker = await mk(fx, 'B archived');
     await putInSprint(a.id, sprintId);
     await link(fx, a.id, blocker.id);
-    await db.workItem.update({ where: { id: blocker.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { archivedAt: new Date() } });
 
     const result = await sprintsService.validateSprint(fx.projectId, sprintId, fx.ctx);
     expect(result.valid).toBe(true);

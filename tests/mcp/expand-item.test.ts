@@ -26,6 +26,7 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `expand_item` + `get_plan_status` (Story 7.9 · MOTIR-1825) — the MCP surface
@@ -77,7 +78,7 @@ async function makeStory(fx: WorkItemFixture, title = 'Expandable story') {
 }
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -93,6 +94,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('expand_item — registration + scope', () => {
@@ -167,7 +169,8 @@ describe('expand_item — submit and return', () => {
     expect(text(res)).toContain('subtask');
     // The kind check runs BEFORE the job — a rejected target costs no credits.
     expect(vi.mocked(submitJob)).not.toHaveBeenCalled();
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
     await client.close();
   });
 
@@ -184,7 +187,8 @@ describe('expand_item — submit and return', () => {
     expect(text(res)).toContain('MOTIR_AI_OUT_OF_CREDITS');
     // The plan is opened only AFTER a successful submit, so a refused job leaves
     // nothing behind.
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
     await client.close();
   });
 
@@ -208,12 +212,13 @@ describe('expand_item — the Plan approval gate (no work item is created)', () 
     const story = await makeStory(fx);
     const client = await connectClient(fx.ctx);
 
-    const before = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     const res = await call(client, EXPAND_ITEM_TOOL_NAME, { key: story.identifier });
     const planId = (struct(res) as { planId: string }).planId;
 
     // (1) Right after the submit.
-    expect(await db.workItem.count({ where: { parentId: story.id } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { parentId: story.id } });
+    expect(workItemCount).toBe(0);
 
     // (2) After the planner's proposals actually land — the state a caller
     // polling to `planned` would see. These are PlanItems; the `add`'s
@@ -234,9 +239,12 @@ describe('expand_item — the Plan approval gate (no work item is created)', () 
 
     // The tree is byte-for-byte unchanged: no children, no new rows anywhere,
     // and every proposal still un-materialized.
-    expect(await db.workItem.count({ where: { parentId: story.id } })).toBe(0);
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
-    expect(await db.planItem.count({ where: { planId, workItemId: null } })).toBe(2);
+    const workItemCount2 = await adminDb.workItem.count({ where: { parentId: story.id } });
+    expect(workItemCount2).toBe(0);
+    const workItemCount3 = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount3).toBe(before);
+    const planItemCount = await adminDb.planItem.count({ where: { planId, workItemId: null } });
+    expect(planItemCount).toBe(2);
     await client.close();
   });
 });

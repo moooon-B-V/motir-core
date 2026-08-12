@@ -4,6 +4,7 @@ import { apiTokensService } from '@/lib/services/apiTokensService';
 import { verifyMcpToken } from '@/lib/mcp/auth';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
@@ -19,6 +20,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function reqWithBearer(token?: string): Request {
@@ -88,7 +90,7 @@ describe('verifyMcpToken', () => {
       label: 'legacy',
       fixedGrant: ['project:browse'],
     });
-    await db.apiToken.update({
+    await adminDb.apiToken.update({
       where: { id: dto.id },
       data: { scopes: ['read', 'sprints:write'] },
     });

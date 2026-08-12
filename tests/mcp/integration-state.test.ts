@@ -4,7 +4,9 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalTransitionError } from '@/lib/workItems/errors';
 import { inngest } from '@/lib/jobs/client';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Integration-state substrate (Story 7.8 · Subtask 7.8.11): the `in_review`
 // status + `work_item.session_branch` + the integrated-dep readiness rule +
@@ -20,6 +22,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Create a leaf task in `fx`'s project. */
@@ -186,7 +189,7 @@ describe('complete_session (7.8.11) — bulk close-out', () => {
     // directly): todo → done is NOT a legal default transition, so it must
     // surface as `failed` while the legal item still completes.
     const stuck = await task(fx, 'stuck-in-todo');
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: stuck.id },
       data: { sessionBranch: 'session/mixed' },
     });
@@ -206,7 +209,7 @@ describe('complete_session (7.8.11) — bulk close-out', () => {
     const fx = await makeWorkItemFixture();
     const a = await task(fx, 'already done');
     // Park a done item on the branch with a lingering field (invariant repair).
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: a.id },
       data: { status: 'done', sessionBranch: 'session/repair' },
     });
@@ -338,7 +341,7 @@ describe('implementation provenance (MOTIR-1685) — the recording seam', () => 
     const fx = await makeWorkItemFixture();
     const a = await task(fx, 'Direct stamp');
     // The reusable seam Epic 9's hosted runner will call with metered values.
-    const row = await db.$transaction((tx) =>
+    const row = await withWorkspaceContext(fx.ctx, (tx) =>
       workItemsService.recordImplementationProvenance(
         a.id,
         { source: 'hosted', harness: 'Motir', model: 'claude-opus-4-8' },

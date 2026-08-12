@@ -13,6 +13,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -34,6 +35,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx` (no scope gate). */
@@ -56,7 +58,8 @@ const mk = (
 const link = (fx: Awaited<ReturnType<typeof makeWorkItemFixture>>, fromId: string, toId: string) =>
   workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 
-const markDone = (id: string) => db.workItem.update({ where: { id }, data: { status: 'done' } });
+const markDone = (id: string) =>
+  adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
 describe('workItemsService.validateWorkItem — the subtree finishability rule', () => {
   it('a childless target with no blockers is VALID', async () => {
@@ -185,7 +188,7 @@ describe('workItemsService.validateWorkItem — the subtree finishability rule',
     const child = await mk(fx, 'Child', 'subtask', story.id);
     const external = await mk(fx, 'External archived', 'task');
     await link(fx, child.id, external.id);
-    await db.workItem.update({ where: { id: external.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: external.id }, data: { archivedAt: new Date() } });
 
     const result = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
     expect(result.valid).toBe(true);
@@ -280,7 +283,7 @@ describe('validate_work_item MCP tool round-trip', () => {
     const child = await mk(fx, 'Child', 'subtask', story.id);
     const external = await mk(fx, 'External in a sprint', 'task'); // out of subtree, todo
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S1' }, fx.ctx);
-    await db.workItem.update({ where: { id: external.id }, data: { sprintId: sprint.id } });
+    await adminDb.workItem.update({ where: { id: external.id }, data: { sprintId: sprint.id } });
     await link(fx, child.id, external.id);
 
     const client = await connectClient(fx.ctx);
@@ -606,7 +609,10 @@ describe('workItemsService.validateWorkItem — the prose-vs-graph advisory', ()
       actorUserId: fx.ownerId,
       identifier: 'SECRET',
     });
-    await db.project.update({ where: { id: secretProject.id }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({
+      where: { id: secretProject.id },
+      data: { accessLevel: 'private' },
+    });
     const secretItem = await workItemsService.createWorkItem(
       { projectId: secretProject.id, kind: 'task', title: 'Classified' },
       fx.ctx,
@@ -942,7 +948,7 @@ async function connectRepo(
   name: string,
 ): Promise<void> {
   const installationId = `inst-${fx.workspaceId}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -953,7 +959,7 @@ async function connectRepo(
     },
     update: {},
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,

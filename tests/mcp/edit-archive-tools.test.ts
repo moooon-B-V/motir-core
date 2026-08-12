@@ -10,6 +10,7 @@ import { buildMcpServer } from '@/lib/mcp/registry';
 import { runUpdateWorkItem } from '@/lib/mcp/tools/updateWorkItem';
 import { runArchiveWorkItem, runUnarchiveWorkItem } from '@/lib/mcp/tools/archiveWorkItem';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP edit + soft-remove tools (Subtask 7.8.14) over real Postgres.
@@ -32,6 +33,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

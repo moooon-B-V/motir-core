@@ -14,6 +14,7 @@ import { runListSprints } from '@/lib/mcp/tools/listSprints';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
 import type { SprintDto } from '@/lib/dto/sprints';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP sprint tools (Subtask 7.8.10) over real Postgres. The eight tools — list /
@@ -44,6 +45,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

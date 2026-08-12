@@ -21,6 +21,7 @@ import { readyItemSchema } from '@/lib/api/v1/ready/schema';
 import { projectSchema } from '@/lib/api/v1/projects/schema';
 import { sprintSchema } from '@/lib/api/v1/sprints/schema';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The STORY VITEST GATE (Story 11.6 · Subtask 11.6.7 — MOTIR-2233).
@@ -54,6 +55,7 @@ beforeEach(async () => {
 afterEach(() => vi.clearAllMocks());
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Read a tool's `structuredContent` as a plain object. */

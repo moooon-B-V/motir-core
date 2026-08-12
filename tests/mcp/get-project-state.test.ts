@@ -12,8 +12,10 @@ import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // `get_project_state` (MOTIR-1968) over real Postgres — the project-CONFIGURATION
 // read a planning agent needs to VERIFY a tenant precondition instead of
@@ -73,7 +75,7 @@ function stateOf(res: CallToolResult): ProjectStateDto {
  *  MUST share it). */
 async function seedInstallation(fx: WorkItemFixture) {
   const rand = randomToken(6);
-  return db.githubInstallation.create({
+  return adminDb.githubInstallation.create({
     data: {
       installationId: `inst-${rand}`,
       workspaceId: fx.workspaceId,
@@ -91,7 +93,7 @@ async function seedRepo(
 ): Promise<string> {
   if (!inst.workspaceId) throw new Error('seedRepo needs a workspace-bound installation');
   const rand = randomToken(6);
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: inst.workspaceId,
@@ -108,7 +110,7 @@ async function seedRepo(
 /** Seed a SUCCEEDED `system.code-graph-index` run for a repo (the ledger row the
  *  `indexed` verdict is read from). */
 async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -125,7 +127,7 @@ async function seedSucceededIndexJob(fx: WorkItemFixture, repoRef: string) {
 /** Seed a RUNNING index run — no `repoRef` (the job writes `output` only on
  *  success), which is why in-flight is a set-level flag and not per-repo. */
 async function seedRunningIndexJob(fx: WorkItemFixture) {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: fx.workspaceId,
       functionId: 'system.code-graph-index',
@@ -149,6 +151,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('get_project_state — registration', () => {
@@ -224,7 +227,7 @@ describe('get_project_state — the onboarding verdict follows `resolvePlanningH
     // Move the ONE input the gate keys on — the marker `markOnboardingRan`
     // writes — and the reported verdict must follow it, because it IS the gate's
     // verdict rather than a re-derivation that could drift from it.
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(fx.ctx, async (tx) => {
       await projectRepository.markOnboardingRan(fx.projectId, new Date(), tx);
     });
 
@@ -293,7 +296,7 @@ describe('get_project_state — the index verdict is the ledger`s', () => {
     const repoRef = await seedRepo(inst, 'moooon-B-V', 'motir-core');
     // The `{ indexed: false, reason }` shape a run writes when the workspace had
     // nothing to index: succeeded, but carrying no repoRef.
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId: fx.workspaceId,
         functionId: 'system.code-graph-index',
@@ -331,7 +334,7 @@ describe('get_project_state — the project repository SET and the onboarding ru
     const fx = await makeWorkItemFixture();
     expect(stateOf(await callTool(fx.ctx, fx.projectIdentifier)).onboarding).toBeNull();
 
-    await db.migrateOnboarding.create({
+    await adminDb.migrateOnboarding.create({
       data: {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
@@ -445,7 +448,7 @@ describe('get_project_state — the human summary', () => {
 
   it('summarizes a configured project: the gate, the index tally, the set, the run', async () => {
     const fx = await makeWorkItemFixture();
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(fx.ctx, async (tx) => {
       await projectRepository.markOnboardingRan(fx.projectId, new Date(), tx);
     });
     const inst = await seedInstallation(fx);
@@ -454,7 +457,7 @@ describe('get_project_state — the human summary', () => {
     await seedSucceededIndexJob(fx, indexed);
     await seedRunningIndexJob(fx);
     await projectRepoSetService.addRow(fx.projectId, { role: 'api', name: 'motir-core' }, fx.ctx);
-    await db.migrateOnboarding.create({
+    await adminDb.migrateOnboarding.create({
       data: {
         projectId: fx.projectId,
         workspaceId: fx.workspaceId,
