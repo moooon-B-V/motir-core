@@ -327,6 +327,7 @@ un-completable by its own PR, which is recorded as planning bug MOTIR-2538.
   (the production defect; Finding 1). `high`, 5 points, `blocked_by` MOTIR-2435.
 - **MOTIR-2528** — migrate the DB-backed fixtures onto `adminDb`, directory by directory,
   and flip the default when the last one lands (Finding 2). 8 points, `blocked_by` 2527.
+  **ARCHIVED 2026-08-12, superseded by the twenty-one cards in the section below.**
 
 Filed later, from the Finding-4 re-measurement above:
 
@@ -338,8 +339,62 @@ Filed later, from the Finding-4 re-measurement above:
 - **MOTIR-2685** — bind the userless reads (job runtime + `workspaceId`-only helpers) through
   `withWorkspaceServiceContext`. 3 points, `blocked_by` 2569.
 
-MOTIR-2528's flip is `blocked_by` 2684 and 2685 as well — an application path that cannot read
+The flip is `blocked_by` 2684 and 2685 as well — an application path that cannot read
 its own tenant is not made ready by migrating fixtures.
+
+## The fixture migration, partitioned (2026-08-12)
+
+MOTIR-2528 was one card describing several pull requests, which no single card can close. It was
+split by planning bug **MOTIR-2587** and archived. Every card named in this section, together with
+2435 / 2527 / 2569 / 2684 / 2685 / 2515, now sits under **MOTIR-2755**, the container story for the
+`motir_app` cutover; it holds the same build order this document describes. The partition below was **measured on
+`origin/main` at `9e7637cf`**, not carried over from the batch names at the top of this document —
+those are vitest filter substrings, and three of the directories they name (`tests/sprints`,
+`tests/workspaces`, `tests/projects`) do not exist.
+
+**The real surface: 464 files importing `@/lib/db`, holding 3 042 `db.` call sites.** That is every
+file under `tests/` other than the Playwright directory `tests/e2e`. Playwright's specs end in
+`.spec.ts`, and the `include` glob in `vitest.config.ts` matches only `.test.ts` / `.test.tsx`, so
+the flag never reached those 20 files and they are not in any batch. Roughly 402 of the 3 042 sites
+sit inside an `expect(...)`; those are the ones that must **stay** on `@/lib/db`, and getting that
+call wrong is the only way this work can fail silently.
+
+Each batch is one card, one PR, and independent of the other nineteen — nothing in the fixture
+layer orders them, so they can be worked in any order or in parallel.
+
+|   # | card       | paths                                                                   |   files | `db.` sites |
+| --: | ---------- | ----------------------------------------------------------------------- | ------: | ----------: |
+|   1 | MOTIR-2735 | `tests/` root — tenancy + RLS suites                                    |      14 |         195 |
+|   2 | MOTIR-2736 | `tests/` root — org / workspace / project services                      |      14 |          92 |
+|   3 | MOTIR-2737 | `tests/` root — identity, billing, route tests                          |      29 |         117 |
+|   4 | MOTIR-2738 | `tests/integration/work-items` (A–L)                                    |      24 |         164 |
+|   5 | MOTIR-2739 | `tests/integration/work-items` (M–W)                                    |      24 |         122 |
+|   6 | MOTIR-2740 | `tests/boards`                                                          |      21 |         157 |
+|   7 | MOTIR-2741 | `tests/ciFleet`                                                         |      13 |         208 |
+|   8 | MOTIR-2742 | `tests/projectRepos` + `tests/ciMetering`                               |      22 |         204 |
+|   9 | MOTIR-2743 | `tests/mcp`                                                             |      28 |          93 |
+|  10 | MOTIR-2744 | `tests/jobs` + `dispatch` + `hosting`                                   |      22 |         115 |
+|  11 | MOTIR-2745 | `tests/ai` + `tests/integration/ai`                                     |      29 |         125 |
+|  12 | MOTIR-2746 | `tests/github` + `tests/gitlab`                                         |      25 |         132 |
+|  13 | MOTIR-2747 | `tests/integration/sprints` + `tests/ready`                             |      24 |         125 |
+|  14 | MOTIR-2748 | `tests/integration/plans` + `plan-seed` + `planning`                    |      17 |         213 |
+|  15 | MOTIR-2749 | `tests/workflows` + `tests/automation`                                  |      22 |         161 |
+|  16 | MOTIR-2750 | `tests/permissions` + `publicProjects` + `api-tokens`                   |      26 |         154 |
+|  17 | MOTIR-2751 | `tests/attachments` + labels + notifications + comments + custom-fields |      19 |         211 |
+|  18 | MOTIR-2752 | `tests/integration` root + `reports` + `dashboards`                     |      31 |         172 |
+|  19 | MOTIR-2753 | `tests/work-items` + `triage` + `import` + `migrations`                 |      29 |         189 |
+|  20 | MOTIR-2754 | `tests/api/v1` + the long tail                                          |      31 |          93 |
+|     |            | **total**                                                               | **464** |   **3 042** |
+
+- **MOTIR-2734** — retire `TEST_DB_APP_ROLE` and make `motir_app` the suite's default connection.
+  `blocked_by` all twenty batches **and** 2684 and 2685. MOTIR-2515, the deployed cutover, is now
+  `blocked_by` this card rather than 2528.
+
+Two claims 2528 carried are false on `origin/main` and are not rebuilt into 2734: **no CI workflow
+has ever set the flag** (`grep -rn TEST_DB_APP_ROLE .github/` is empty), and the `gateReachable`
+guards in `membershipGate.test.ts` were already removed by 2569. The flag's whole code footprint is
+now five sites: `parallelDb.ts:109` and `:133`, `app-role-harness.test.ts:5,34,83`,
+`tenant-root-creation-rls.test.ts:6,36`, and `membershipGate.test.ts:16,78`.
 
 The chain then ends at **MOTIR-2515**, the deployed cutover — which is the point at
 which RLS actually starts executing in production. Nothing before it changes what the
