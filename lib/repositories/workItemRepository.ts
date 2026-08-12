@@ -2555,6 +2555,39 @@ export const workItemRepository = {
   },
 
   /**
+   * COUNT of a project's LIVE (non-archived) work items — the denominator of
+   * `coverage` on the semantic candidate-finder (Story MOTIR-2694 · Subtask
+   * MOTIR-2697, `docs/decisions/plan-tree-embeddings.md` §6.1).
+   *
+   * ⚠️ ITS PREDICATE IS DELIBERATELY THE EMBEDDING-RANK PREDICATE MINUS THE
+   * EMBEDDING JOIN, and that is why it is NOT
+   * {@link countProjectIssues}/{@link countArchivedByProject}'s shape: those two
+   * also exclude TRIAGE rows, and the embedding write path does not — a triaged
+   * item is embedded like any other, so it is counted by
+   * `workItemEmbeddingRepository.countRankable`. Reusing a triage-excluding count
+   * as the denominator would let `embedded` exceed `total` in any project with a
+   * triage queue, which is the one thing a coverage RATIO must never do. The pair
+   * is composed in `aiBoundaryService.findSimilarWorkItems`; change one predicate
+   * and you must change the other.
+   *
+   * `::int` casts Postgres' `bigint`. Takes the caller's `tx` because it is read
+   * inside the ranking transaction, under the workspace GUC that RLS reads.
+   */
+  async countLiveByProject(
+    projectId: string,
+    workspaceId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const rows = await tx.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(*)::int AS "count"
+        FROM "work_item" w
+        WHERE w."projectId" = ${projectId}
+          AND w."workspaceId" = ${workspaceId}
+          AND w."archivedAt" IS NULL`;
+    return rows[0]?.count ?? 0;
+  },
+
+  /**
    * Count a project's non-archived, non-triage work items grouped by workflow
    * status CATEGORY (Story 6.12 · Subtask 6.12.4) — the Overview stat strip's
    * Planned / In progress / Shipped denominators, in ONE aggregate (no
