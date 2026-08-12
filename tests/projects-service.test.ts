@@ -13,6 +13,7 @@ import { NotAMemberError } from '@/lib/workspaces/errors';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { isAppRoleTestMode } from './helpers/parallelDb';
 
 // Comprehensive service-layer tests for projectsService + the per-project
 // work-item counter on projectRepository (Subtask 1.3.5).
@@ -550,13 +551,25 @@ describe('setActiveProject — per-member, persisted, cross-workspace guarded', 
       name: 'BProject',
     });
 
+    // ROLE-DEPENDENT TAXONOMY (MOTIR-2776), asserted by mode rather than widened to
+    // accept either. Under BYPASSRLS the foreign project row is readable, so the
+    // service's explicit `workspaceId` comparison refuses it and raises
+    // `ProjectWorkspaceMismatchError`. Under `motir_app` the policy hides the row first,
+    // `!project` fires, and the refusal is `ProjectNotFoundError` — the comparison is
+    // unreachable BY DESIGN, and that is the better answer: a mismatch error confirms the
+    // id exists somewhere else, which tenant isolation should not disclose.
+    //
+    // Accepting either error unconditionally would make this test agree with the code
+    // forever and stop it saying anything, which is why the mode is named explicitly.
     await expect(
       projectsService.setActiveProject({
         userId: a.owner.id,
         workspaceId: a.workspace.id,
         projectId: projectInB.id,
       }),
-    ).rejects.toBeInstanceOf(ProjectWorkspaceMismatchError);
+    ).rejects.toBeInstanceOf(
+      isAppRoleTestMode() ? ProjectNotFoundError : ProjectWorkspaceMismatchError,
+    );
   });
 
   it('rejects setting a missing project id', async () => {
@@ -619,7 +632,10 @@ describe('renameProject', () => {
         actorUserId: a.owner.id,
         name: 'Pwned',
       }),
-    ).rejects.toBeInstanceOf(ProjectWorkspaceMismatchError);
+    ).rejects.toBeInstanceOf(
+      // Same role-dependent taxonomy as `setActiveProject` above (MOTIR-2776).
+      isAppRoleTestMode() ? ProjectNotFoundError : ProjectWorkspaceMismatchError,
+    );
   });
 });
 
