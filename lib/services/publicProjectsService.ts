@@ -950,9 +950,20 @@ export const publicProjectsService = {
     // Resolve the project row for its workspace + identifier (the gate proved it
     // exists and is public). The intake reporter is the workspace OWNER — a
     // guaranteed member who passes `createWorkItem`'s `assertReporterMember`.
+    // The project read needs no context: MOTIR-2684's `project_public_read` arm admits
+    // `accessLevel = 'public'`, which is exactly this path.
     const project = await projectRepository.findById(projectId);
     if (!project) throw new PublicProjectIntakeUnavailableError(projectId);
-    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId);
+    // The OWNER read does (MOTIR-2789). `workspace_membership` got NO public arm from
+    // MOTIR-2684 — only `project` and `work_item` did — so unbound this returned null
+    // and the intake raised `PublicProjectIntakeUnavailableError`, which reads as "this
+    // project has no owner" about a project that has one. There IS something honest to
+    // bind here, unlike the project read above: the workspace is known from the row we
+    // just resolved, so no policy work is needed. Workspace-tier only, because a public
+    // submitter is cross-org and is not the actor whose membership is being read.
+    const owner = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId, tx),
+    );
     if (!owner) throw new PublicProjectIntakeUnavailableError(projectId);
 
     // Reuse the shared triage-create authority. `ctx` carries the intake
