@@ -18,6 +18,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { normalizeBodyRefs } from '@/lib/workItems/normalizeBodyRefs';
 import { autoRelateWorkItemMentions } from '@/lib/workItems/autoRelateMentions';
 import { rewriteIntraPlanRefs } from '@/lib/mentions/workItemRefs';
+import { sendEvent } from '@/lib/jobs/sendEvent';
 
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -515,6 +516,19 @@ function resolveProposedRepoRoles(items: PlanItem[]): ProjectRepoRoleDto[] {
  * pins in `repoPins` are likewise ALREADY resolved + validated
  * (`resolveProposedTargetRepos`, outside this transaction) — this function only
  * writes them.
+ *
+ * RETURNS the ids of the work items it created or modified — the MATERIALIZE
+ * trigger of the plan-tree embedding write path (Story MOTIR-2694 · MOTIR-2696,
+ * `docs/decisions/plan-tree-embeddings.md` §6.3.1). It returns them rather than
+ * enqueueing here because the enqueue must happen AFTER this transaction commits
+ * (§6.3.2): a rolled-back approve must not leave a job embedding rows that do
+ * not exist. `remove` targets are excluded — archiving keeps the embedding row
+ * (§5), so un-archiving restores candidacy with no re-embed.
+ *
+ * A modify whose text did NOT move is included too, and that is deliberate: the
+ * job recomputes the content hash and skips, which costs one local read and no
+ * provider call. Filtering precisely here would mean a second definition of "did
+ * the document change", and two of those is how they drift apart.
  */
 async function materialize(
   items: PlanItem[],
@@ -522,7 +536,7 @@ async function materialize(
   ctx: ServiceContext,
   tx: Prisma.TransactionClient,
   repoPins: ResolvedRepoPins,
-): Promise<void> {
+): Promise<string[]> {
   const project = await projectRepository.findById(plan.projectId, tx);
   if (!project) throw new ProjectNotFoundError(plan.projectId);
   const statusKey = await workflowsService.getInitialStatusKey(plan.projectId, ctx.workspaceId);
@@ -750,10 +764,19 @@ async function materialize(
     );
   }
 
+  // Every item this pass created — the embedding trigger's first half. Collected
+  // from `createdAdds` rather than re-derived, so a create that Pass 3 rewrote
+  // is named exactly once.
+  const touchedWorkItemIds: string[] = createdAdds.map(({ created }) => created.id);
+
   // modify + remove against existing targets (locked + re-read inside the tx).
   for (const item of items) {
     if (item.op === 'modify') {
       await applyModify(item, ctx, resolveRef, tx, repoPins);
+      // `applyModify` has already thrown `PlanItemTargetMissingError` on an unset
+      // target, so this is non-null by the time we get here — asserted rather
+      // than re-guarded, which would add a branch nothing can take.
+      touchedWorkItemIds.push(resolveRef(item.workItemId!));
     } else if (item.op === 'remove') {
       if (!item.workItemId) throw new PlanItemTargetMissingError('(unset)');
       const locked = await workItemRepository.lockById(item.workItemId, tx);
@@ -765,6 +788,8 @@ async function materialize(
       );
     }
   }
+
+  return touchedWorkItemIds;
 }
 
 /** A single `modify` materialize: patch the target (same id), one revision. */
@@ -1309,75 +1334,92 @@ export const plansService = {
     // after the commit below.
     const repoRoles = resolveProposedRepoRoles(preItems);
 
-    const { row, items, firstOnboarding, projectKey } = await withWorkspaceContext(
-      { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
-      async (tx) => {
-        const locked = await planRepository.lockById(planId, tx);
-        if (!locked) throw new PlanNotFoundError(planId);
-        const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
-        if (!fresh) throw new PlanNotFoundError(planId);
-        if (fresh.status !== 'planned') {
-          throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
-        }
-        const proposals = await planItemRepository.findByPlan(planId, tx);
-        // THE GATE, under the plan lock + the targets' row locks, on the FRESH
-        // proposal set — nothing has been written yet, so a rejection here rolls
-        // back a transaction that touched no work-item row.
-        await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, tx);
-        await materialize(proposals, fresh, ctx, tx, repoPins);
-        // Read the project ONCE, before `markOnboardingRan` writes: its
-        // pre-write `onboardingRanAt` gates the rename below, and its
-        // `identifier` (the tenant projectKey) + the first-onboarding signal both
-        // feed the fresh-establish convention trigger fired after the tx commits.
-        const project = await projectRepository.findById(fresh.projectId, tx);
-        // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
-        // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
-        // apply it here — but ONLY on the FIRST onboarding approve of a draft the
-        // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
-        // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
-        // onboarding" gate; the `name === provisionalProjectName` check (the
-        // caller passes the current-locale "Untitled project" placeholder) means a
-        // user rename during review is never clobbered. A reconciliation re-plan
-        // carries no `productName`, so it never reaches here. Best-effort: rename
-        // failure would abort the tx, so keep it a plain guarded write. Done via
-        // the repo in-tx — `renameProject` opens its own workspace context.
-        if (
-          fresh.productName &&
-          fresh.productName.trim().length > 0 &&
-          opts.provisionalProjectName
-        ) {
-          if (
-            project &&
-            project.onboardingRanAt == null &&
-            project.name === opts.provisionalProjectName
-          ) {
-            await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
+    const { row, items, firstOnboarding, projectKey, touchedWorkItemIds } =
+      await withWorkspaceContext(
+        { userId: ctx.userId, workspaceId: ctx.workspaceId, projectId: plan.projectId },
+        async (tx) => {
+          const locked = await planRepository.lockById(planId, tx);
+          if (!locked) throw new PlanNotFoundError(planId);
+          const fresh = await planRepository.findById(planId, ctx.workspaceId, tx);
+          if (!fresh) throw new PlanNotFoundError(planId);
+          if (fresh.status !== 'planned') {
+            throw new PlanNotInExpectedStatusError(planId, fresh.status, 'planned');
           }
-        }
-        // Stamp the immutable onboarding-ran marker the FIRST time this project's
-        // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
-        // null-guarded write makes it set-once, so calling it on every approve is
-        // safe — only the first materialized tree writes it. This is the single
-        // source of truth the /onboarding redirect AND the roadmap planning-origin
-        // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
-        // after) IS the onboarding-completion signal the convention trigger fires on.
-        const firstOnboarding =
-          (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
-        const updated = await planRepository.update(
-          planId,
-          { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
-          tx,
-        );
-        // Re-read so the returned items carry the written-back work-item ids.
-        const finalItems = await planItemRepository.findByPlan(planId, tx);
-        return {
-          row: updated,
-          items: finalItems,
-          firstOnboarding,
-          projectKey: project?.identifier ?? null,
-        };
-      },
-    );
+          const proposals = await planItemRepository.findByPlan(planId, tx);
+          // THE GATE, under the plan lock + the targets' row locks, on the FRESH
+          // proposal set — nothing has been written yet, so a rejection here rolls
+          // back a transaction that touched no work-item row.
+          await assertProposalsPersistable(proposals, ctx, terminalStatusKeys, tx);
+          const touchedWorkItemIds = await materialize(proposals, fresh, ctx, tx, repoPins);
+          // Read the project ONCE, before `markOnboardingRan` writes: its
+          // pre-write `onboardingRanAt` gates the rename below, and its
+          // `identifier` (the tenant projectKey) + the first-onboarding signal both
+          // feed the fresh-establish convention trigger fired after the tx commits.
+          const project = await projectRepository.findById(fresh.projectId, tx);
+          // Name the onboarded project from the AI plan (MOTIR-1551). The onboarding
+          // generation (MOTIR-1554) stamped a suggested `productName` on the Plan;
+          // apply it here — but ONLY on the FIRST onboarding approve of a draft the
+          // user hasn't already named. Read BEFORE `markOnboardingRan` below (which
+          // sets `onboardingRanAt`), so `onboardingRanAt == null` is the "first
+          // onboarding" gate; the `name === provisionalProjectName` check (the
+          // caller passes the current-locale "Untitled project" placeholder) means a
+          // user rename during review is never clobbered. A reconciliation re-plan
+          // carries no `productName`, so it never reaches here. Best-effort: rename
+          // failure would abort the tx, so keep it a plain guarded write. Done via
+          // the repo in-tx — `renameProject` opens its own workspace context.
+          if (
+            fresh.productName &&
+            fresh.productName.trim().length > 0 &&
+            opts.provisionalProjectName
+          ) {
+            if (
+              project &&
+              project.onboardingRanAt == null &&
+              project.name === opts.provisionalProjectName
+            ) {
+              await projectRepository.update(project.id, { name: fresh.productName.trim() }, tx);
+            }
+          }
+          // Stamp the immutable onboarding-ran marker the FIRST time this project's
+          // plan is approved + materialized (Subtask 7.4 / MOTIR-1264). The repo's
+          // null-guarded write makes it set-once, so calling it on every approve is
+          // safe — only the first materialized tree writes it. This is the single
+          // source of truth the /onboarding redirect AND the roadmap planning-origin
+          // cluster (MOTIR-1013) read. Its return count (1 on the first approve, 0
+          // after) IS the onboarding-completion signal the convention trigger fires on.
+          const firstOnboarding =
+            (await projectRepository.markOnboardingRan(fresh.projectId, new Date(), tx)) === 1;
+          const updated = await planRepository.update(
+            planId,
+            { status: 'approved', decidedAt: new Date(), decidedById: ctx.userId },
+            tx,
+          );
+          // Re-read so the returned items carry the written-back work-item ids.
+          const finalItems = await planItemRepository.findByPlan(planId, tx);
+          return {
+            row: updated,
+            items: finalItems,
+            firstOnboarding,
+            projectKey: project?.identifier ?? null,
+            touchedWorkItemIds,
+          };
+        },
+      );
+
+    // Plan-tree embedding, MATERIALIZE trigger (Story MOTIR-2694 · MOTIR-2696,
+    // ADR §6.3.1). AFTER the commit, for the same two reasons the create path
+    // emits post-commit: the embedding is an external call that must never sit
+    // inside a write transaction (§6.3.2), and a rolled-back approve must not
+    // leave jobs embedding rows that do not exist. `sendEvent` is best-effort by
+    // construction — a dropped enqueue leaves an item "not yet a candidate",
+    // which the backfill later fills and which is never an error (§6.3.5) — so
+    // it cannot turn a materialized tree into a failed approve.
+    for (const workItemId of touchedWorkItemIds) {
+      await sendEvent('work-item/embedding.requested', {
+        workspaceId: ctx.workspaceId,
+        workItemId,
+      });
+    }
 
     // Fresh-establish the coding convention at onboarding completion (7.3.10 ·
     // MOTIR-839). The FIRST time a project's onboarding plan is approved +

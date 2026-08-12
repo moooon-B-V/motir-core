@@ -25,6 +25,7 @@ import type {
   PreplanStateQuery,
   Problem,
   RawCiOverageDebitResponse,
+  RawEmbeddingBatchResponse,
   RawJobResponse,
   RawPreplanSession,
   RawPreplanStateResponse,
@@ -291,6 +292,60 @@ export async function debitCiOverage(
   });
   if (!res.ok) throw errorFromProblem(await readProblem(res));
   return (await res.json()) as RawCiOverageDebitResponse;
+}
+
+/**
+ * POST /v1/embeddings — compute vectors for the plan-tree semantic store (Story
+ * MOTIR-2694 · MOTIR-2696; motir-ai's half is MOTIR-2720).
+ *
+ * `serviceAuth` like every other core → ai call. This repo stores embeddings and
+ * does not produce them (`docs/decisions/plan-tree-embeddings.md` §6.2), so this
+ * is the ONLY way a vector enters motir-core.
+ *
+ * BATCH: one call embeds up to `EMBEDDING_BATCH_MAX_INPUTS` texts and returns one
+ * vector per input IN REQUEST ORDER — the caller pairs them positionally, so an
+ * answer of the wrong length is a contract violation and is refused here rather
+ * than mis-attributed to the wrong work item. That check is not defensive
+ * boilerplate: a mis-paired vector is stored as if it were real and then ranks
+ * the wrong card forever, with nothing failing.
+ *
+ * THROWS a typed error on any failure — never a partial or placeholder result.
+ * Swallowing belongs at the call site, which is the layer that knows an item
+ * without an embedding is simply "not yet a candidate" (ADR §6.3.5) rather than
+ * an error, and that the job's retry budget will come back to it.
+ */
+export async function embedTexts(input: string[]): Promise<RawEmbeddingBatchResponse> {
+  const { url, serviceToken } = config();
+  const res = await aiFetch(`${url}/v1/embeddings`, {
+    method: 'POST',
+    headers: authHeaders(serviceToken),
+    body: JSON.stringify({ input }),
+  });
+  if (!res.ok) throw errorFromProblem(await readProblem(res));
+
+  // VALIDATED, not cast — the same reasoning as `offboardCodeGraph` above, for a
+  // consequence that is quieter and worse. Every field here is written straight
+  // into a durable row: a missing `model` would store `undefined` as the hard
+  // ranking filter, and a short `embeddings` array would pair vectors with the
+  // wrong items from that index on.
+  const body = (await res.json()) as Partial<RawEmbeddingBatchResponse> | null;
+  if (
+    !body ||
+    typeof body.model !== 'string' ||
+    body.model === '' ||
+    typeof body.dimensions !== 'number' ||
+    !Array.isArray(body.embeddings)
+  ) {
+    throw new MotirAiUnavailableError(
+      'motir-ai returned a malformed body from POST /v1/embeddings',
+    );
+  }
+  if (body.embeddings.length !== input.length) {
+    throw new MotirAiUnavailableError(
+      `motir-ai returned ${body.embeddings.length} embeddings for ${input.length} inputs`,
+    );
+  }
+  return { model: body.model, dimensions: body.dimensions, embeddings: body.embeddings };
 }
 
 // GET /v1/stripe/subscription — the org's AI-pool Stripe subscription lifecycle
