@@ -1050,6 +1050,33 @@ export default defineConfig({
         // caller-supplied project, the clamp — and an unexercised refusal branch
         // is exactly the kind of code that quietly stops refusing.
         'app/api/internal/ai/similar-work-items/route.ts',
+
+        // Story MOTIR-2694 · Subtask MOTIR-2698 — the two files the story CHANGED
+        // rather than wrote, which its other subtasks therefore left out of the
+        // report entirely. They are added on DIFFERENT terms, and the difference
+        // is the point:
+        //
+        // `aiBoundaryMappers.ts` is GATED (thresholds below). It holds
+        // `toSimilarWorkItemRows`, which the ADR
+        // (`docs/decisions/plan-tree-embeddings.md` §2) names as the ENFORCEMENT
+        // POINT of the keys-not-prose invariant — it constructs its three fields
+        // by name so a column added to the ranking query cannot follow the row
+        // onto the wire. A guard that load-bearing belongs behind the gate, and
+        // MOTIR-2698 covered the module's remaining fallback arms
+        // (`tests/ai/aiBoundaryMappers.test.ts`) to put it there rather than pin
+        // a number the file could not meet. Measured 100 lines / 100 functions /
+        // 92 branches on a SUBSET of the suite before pinning.
+        'lib/mappers/aiBoundaryMappers.ts',
+        // `aiBoundaryService.ts` is REPORT-ONLY, deliberately — the honest
+        // sequence this block already prescribes elsewhere: measure first, pin
+        // second. This story added ONE method to it (`findSimilarWorkItems`,
+        // fully exercised), while the two arms that hold the file under the floor
+        // are Story 7.5's defensive `ProjectNotFoundError` throws in
+        // `readPlanTree` / `getSubtree`, which this card does not own. Gating the
+        // whole file here would gate THIS story on ANOTHER story's debt, and the
+        // way that ends is with someone loosening a threshold to make a build
+        // pass. Read the number off CI and pin it when the 7.5 arms are covered.
+        'lib/services/aiBoundaryService.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1523,6 +1550,10 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+        // Story MOTIR-2694 · Subtask MOTIR-2698 — the keys-not-prose enforcement
+        // point (see the `include` note above; `aiBoundaryService.ts` is
+        // deliberately NOT here, and that note says why).
+        'lib/mappers/aiBoundaryMappers.ts': { branches: 90, functions: 90, lines: 90 },
         // The prose-vs-graph advisory (MOTIR-1969) — an ADDITION beside the
         // finishability rules, gated on its own so a regression in it can't hide
         // inside workItemsService's blended number.
