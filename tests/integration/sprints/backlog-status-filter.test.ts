@@ -5,6 +5,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Backlog status-category exclusion (Subtask 4.2.3, folded read change): the
@@ -22,7 +23,7 @@ async function backlog(fx: WorkItemFixture) {
 
 /** Set an issue's status directly (a fixture mutation; the test env bypasses RLS). */
 async function setStatus(id: string, status: string) {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 beforeEach(async () => {
@@ -31,6 +32,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('getBacklog status-category exclusion', () => {

@@ -5,6 +5,7 @@ import { backlogService, BACKLOG_PAGE_SIZE } from '@/lib/services/backlogService
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, createTestProject } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story-4.1's CLOSING test subtask (Subtask 4.1.5). The per-layer suites already
@@ -37,11 +38,19 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
-/** Activate a sprint through the repository's required-`tx` write. */
+/**
+ * Activate a sprint through the repository's required-`tx` write.
+ *
+ * Through the ADMIN client (MOTIR-2747): this file's subject is the partial unique
+ * index `sprint_one_active_per_project` — a DB backstop that bites regardless of role.
+ * A policy denial here would replace "the index rejected the second active sprint"
+ * with "the row was invisible", which is a different claim wearing the same failure.
+ */
 function activate(sprintId: string): Promise<unknown> {
-  return db.$transaction((tx) => sprintRepository.update(sprintId, { state: 'active' }, tx));
+  return adminDb.$transaction((tx) => sprintRepository.update(sprintId, { state: 'active' }, tx));
 }
 
 describe('sprint_one_active_per_project (partial unique index — the DB backstop)', () => {
@@ -50,13 +59,13 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
 
     // Two planned sprints in the SAME project (legal — the index only constrains
     // rows WHERE state = 'active').
-    const first = await db.$transaction((tx) =>
+    const first = await adminDb.$transaction((tx) =>
       sprintRepository.create(
         { workspaceId: fx.workspaceId, projectId: fx.projectId, name: 'Sprint 1', sequence: 1 },
         tx,
       ),
     );
-    const second = await db.$transaction((tx) =>
+    const second = await adminDb.$transaction((tx) =>
       sprintRepository.create(
         { workspaceId: fx.workspaceId, projectId: fx.projectId, name: 'Sprint 2', sequence: 2 },
         tx,
@@ -75,7 +84,7 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
 
     // Creating a THIRD sprint directly in the `active` state is likewise rejected.
     await expect(
-      db.$transaction((tx) =>
+      adminDb.$transaction((tx) =>
         sprintRepository.create(
           {
             workspaceId: fx.workspaceId,
@@ -91,7 +100,7 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
 
     // The first sprint is STILL the single active one — the failed writes left
     // the invariant intact.
-    const actives = await db.sprint.findMany({
+    const actives = await adminDb.sprint.findMany({
       where: { projectId: fx.projectId, state: 'active' },
     });
     expect(actives.map((s) => s.id)).toEqual([first.id]);
@@ -106,7 +115,7 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
       identifier: 'PRJB',
     });
 
-    const a = await db.$transaction((tx) =>
+    const a = await adminDb.$transaction((tx) =>
       sprintRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -120,7 +129,7 @@ describe('sprint_one_active_per_project (partial unique index — the DB backsto
     );
     // A different project may activate its own sprint at the same time — the
     // index is scoped to (project_id), not the workspace.
-    const b = await db.$transaction((tx) =>
+    const b = await adminDb.$transaction((tx) =>
       sprintRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -203,14 +212,14 @@ describe('bounded backlog at scale (finding #57 — never load-all, O(1) rank wr
     // (4) A reorder on the large set is a SINGLE-row write (fractional index):
     //     move the last issue between the first two and assert exactly ONE
     //     row's rank changed.
-    const before = await db.workItem.findMany({
+    const before = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId, sprintId: null },
       select: { id: true, backlogRank: true },
     });
     const last = ids[ids.length - 1]!;
     await backlogService.rankIssue(last, { beforeId: ids[0]!, afterId: ids[1]! }, fx.ctx);
 
-    const after = await db.workItem.findMany({
+    const after = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId, sprintId: null },
       select: { id: true, backlogRank: true },
     });

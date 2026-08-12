@@ -8,6 +8,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { NotSprintAdminError } from '@/lib/sprints/errors';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -72,7 +73,9 @@ async function makeFixture(label: string): Promise<Fixture> {
       password: PASSWORD,
       name: role ?? 'outsider',
     });
-    await db.workspaceMembership.create({ data: { userId: u.id, workspaceId, role: 'member' } });
+    await adminDb.workspaceMembership.create({
+      data: { userId: u.id, workspaceId, role: 'member' },
+    });
     if (role) {
       await projectMembersService.addMember({
         key: project.identifier,
@@ -102,6 +105,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the sprint LIFECYCLE — sprint:manage, a deliberate WIDENING', () => {
@@ -131,7 +135,7 @@ describe('the sprint LIFECYCLE — sprint:manage, a deliberate WIDENING', () => 
     const started = await sprintsService.startSprint(sprint.id, {}, fx.projectMemberCtx);
     expect(started.state).toBe('active');
     // …and the board really was provisioned, by an actor who may not configure one.
-    const boards = await db.board.findMany({ where: { projectId: fx.projectId } });
+    const boards = await adminDb.board.findMany({ where: { projectId: fx.projectId } });
     expect(boards.some((b) => b.type === 'scrum')).toBe(true);
   });
 
@@ -200,7 +204,7 @@ describe('backlog GROOMING — sprint:manage, a TIGHTENING', () => {
       PermissionDeniedError,
     );
     // and nothing was written by the refused calls
-    const after = await db.workItem.findUniqueOrThrow({ where: { id: itemId } });
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: itemId } });
     expect(after.sprintId).toBeNull();
   });
 

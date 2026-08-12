@@ -9,6 +9,7 @@ import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { CrossProjectSprintAssignmentError, SprintNotFoundError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 
@@ -46,7 +47,7 @@ async function backlogIds(fx: WorkItemFixture): Promise<string[]> {
 }
 
 async function revisionCount(workItemId: string): Promise<number> {
-  return db.workItemRevision.count({ where: { workItemId } });
+  return adminDb.workItemRevision.count({ where: { workItemId } });
 }
 
 beforeEach(async () => {
@@ -55,6 +56,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('backlogService.assignToSprint', () => {

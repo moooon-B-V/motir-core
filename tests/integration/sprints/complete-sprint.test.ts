@@ -5,6 +5,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   InvalidCarryOverTargetError,
@@ -31,6 +32,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Move an issue directly into a done-category status (the default workflow
@@ -38,12 +40,12 @@ afterAll(async () => {
  *  service — that's a sibling concern; here we only need the issue to read as
  *  finished for the done/unfinished split. */
 async function markDone(itemId: string): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { status: 'done' } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { status: 'done' } });
 }
 
 /** How many revision rows an issue has accumulated. */
 function revisionCount(workItemId: string): Promise<number> {
-  return db.workItemRevision.count({ where: { workItemId } });
+  return adminDb.workItemRevision.count({ where: { workItemId } });
 }
 
 /** Create N issues committed to `sprintId`, returning their ids in order. */
@@ -78,9 +80,9 @@ describe('sprintsService.completeSprint', () => {
     expect(completed.completedAt).not.toBeNull();
     // The done issue stayed on the sprint; the two unfinished went to the backlog.
     expect(completed.issueCount).toBe(1);
-    expect((await db.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBeNull();
-    expect((await db.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBeNull();
-    expect((await db.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBe(sprint.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBeNull();
+    expect((await adminDb.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBeNull();
+    expect((await adminDb.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBe(sprint.id);
 
     // The freed one-active slot lets a new sprint start.
     const next = await sprintsService.createSprint(fx.projectId, { name: 'Sprint 2' }, fx.ctx);
@@ -118,9 +120,9 @@ describe('sprintsService.completeSprint', () => {
     );
 
     // a + b moved into the target sprint; c (done) stayed on the completed one.
-    expect((await db.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(target.id);
-    expect((await db.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBe(target.id);
-    expect((await db.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBe(active.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(target.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBe(target.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBe(active.id);
 
     // They are appended in their original order (a before b by backlogRank).
     const page = await backlogService.getSprintIssues(target.id, {}, fx.ctx);
@@ -139,8 +141,8 @@ describe('sprintsService.completeSprint', () => {
 
     expect(completed.state).toBe('complete');
     expect(completed.issueCount).toBe(2); // both done issues stay
-    expect((await db.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(sprint.id);
-    expect((await db.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBe(sprint.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(sprint.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBe(sprint.id);
   });
 
   it('moves the WHOLE unfinished set in ONE transaction — a mid-batch failure rolls back all of it', async () => {
@@ -164,11 +166,11 @@ describe('sprintsService.completeSprint', () => {
     vi.restoreAllMocks();
 
     // Atomic rollback: the sprint is still active and NONE of the issues moved.
-    const sprintRow = await db.sprint.findUnique({ where: { id: sprint.id } });
+    const sprintRow = await adminDb.sprint.findUnique({ where: { id: sprint.id } });
     expect(sprintRow!.state).toBe('active');
     expect(sprintRow!.completedAt).toBeNull();
     for (const id of ids) {
-      expect((await db.workItem.findUnique({ where: { id } }))!.sprintId).toBe(sprint.id);
+      expect((await adminDb.workItem.findUnique({ where: { id } }))!.sprintId).toBe(sprint.id);
     }
   });
 
@@ -258,7 +260,7 @@ describe('sprintsService.completeSprint', () => {
 
     await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
 
-    const rows = await db.sprintReportEntry.findMany({
+    const rows = await adminDb.sprintReportEntry.findMany({
       where: { sprintId: sprint.id },
       orderBy: { workItemId: 'asc' },
     });
@@ -298,6 +300,9 @@ describe('sprintsService.completeSprint', () => {
       sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx),
     ).rejects.toThrow('boom');
 
-    expect(await db.sprintReportEntry.count({ where: { sprintId: sprint.id } })).toBe(0);
+    const sprintReportEntryCount = await adminDb.sprintReportEntry.count({
+      where: { sprintId: sprint.id },
+    });
+    expect(sprintReportEntryCount).toBe(0);
   });
 });

@@ -5,6 +5,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story-level lifecycle tests for Story 4.4 (the closing test Subtask 4.4.7).
@@ -25,18 +26,19 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Move an issue into a done-category status (the default workflow seeds
  *  `done`/`cancelled` as `category = done`). */
 async function markDone(itemId: string): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { status: 'done' } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { status: 'done' } });
 }
 
 /** Give an issue a story-point estimate directly (the estimation write path is a
  *  sibling Story 4.3 concern; here we only need the column populated). */
 async function setPoints(itemId: string, points: number): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
 }
 
 /** Create N issues committed to `sprintId`, returning their ids in order. */
@@ -100,8 +102,8 @@ describe('sprint lifecycle — composed journey (4.4.7)', () => {
     expect(report.completed.items.map((i) => i.id)).toEqual([a]);
     expect(report.incomplete.totalCount).toBe(2);
     expect(report.incomplete.items.map((i) => i.id).sort()).toEqual([b, c].sort());
-    expect((await db.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBeNull();
-    expect((await db.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBeNull();
+    expect((await adminDb.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBeNull();
+    expect((await adminDb.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBeNull();
   });
 
   it('carry-over INTO a planned sprint frees the slot; that next sprint then starts and reports', async () => {
@@ -117,9 +119,9 @@ describe('sprint lifecycle — composed journey (4.4.7)', () => {
 
     // Complete first, rolling the two unfinished issues into the planned next.
     await sprintsService.completeSprint(first.id, { carryOverTo: { sprintId: next.id } }, fx.ctx);
-    expect((await db.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBe(next.id);
-    expect((await db.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBe(next.id);
-    expect((await db.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(first.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: b! } }))!.sprintId).toBe(next.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: c! } }))!.sprintId).toBe(next.id);
+    expect((await adminDb.workItem.findUnique({ where: { id: a! } }))!.sprintId).toBe(first.id);
 
     // The one-active slot is freed → the next sprint starts, its baseline = the
     // two carried-in issues, and its report reads them as the live incomplete set.

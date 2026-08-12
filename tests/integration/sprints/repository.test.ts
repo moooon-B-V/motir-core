@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import type { WorkItem } from '@/generated/prisma/client';
@@ -10,6 +11,15 @@ import type { WorkItem } from '@/generated/prisma/client';
 // Repository-layer tests for the Story-4.1 sprint + backlog-rank data-access
 // leaves (Subtask 4.1.2): sprintRepository + the new work_item sprint/rank
 // methods on workItemRepository. Real Postgres (no mocks), per CLAUDE.md.
+//
+// ⚠️ THIS FILE RUNS ITS WRITES THROUGH `adminDb` ON PURPOSE (MOTIR-2739/2747).
+// Its subject, stated below, is the application's explicit `workspaceId` WHERE-clause
+// gate — asserted with RLS deliberately OUT of the picture. Under the non-bypass role
+// a cross-workspace read returns [] because the POLICY hid the row, which is the same
+// observation for a different reason and would make every gate assertion here vacuous.
+// This is the one shape where keeping the code under test on the admin client is what
+// PRESERVES the claim rather than weakening it; the policy's own behaviour is proved
+// separately, under the role, in the *-rls suites.
 //
 // These assert the repository CONTRACT — single-Prisma-op reads/writes, the
 // required-`tx` on writes (exercised inside a real `db.$transaction`), the
@@ -23,7 +33,7 @@ import type { WorkItem } from '@/generated/prisma/client';
 async function truncateAll(): Promise<void> {
   // sprint FKs workspace/project (onDelete Cascade) so the workspace truncate
   // carries it; the explicit work_item truncate mirrors the work-item repo test.
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
@@ -33,6 +43,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Insert a sprint row directly (sprintsService is 4.1.3 — not built yet; the
@@ -44,7 +55,7 @@ async function makeSprint(args: {
   sequence: number;
   state?: 'planned' | 'active' | 'complete';
 }): Promise<string> {
-  const row = await db.sprint.create({
+  const row = await adminDb.sprint.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -58,7 +69,7 @@ async function makeSprint(args: {
 
 /** Set a work item's backlogRank through the repository's required-`tx` write. */
 async function setRank(itemId: string, rank: string): Promise<void> {
-  await db.$transaction((tx) => workItemRepository.setBacklogRank(itemId, rank, tx));
+  await adminDb.$transaction((tx) => workItemRepository.setBacklogRank(itemId, rank, tx));
 }
 
 describe('sprintRepository — reads + workspace gate', () => {
@@ -170,7 +181,7 @@ describe('sprintRepository — reads + workspace gate', () => {
 describe('sprintRepository — writes (required tx) + FOR-UPDATE lock', () => {
   it('create / update / delete round-trip inside a transaction', async () => {
     const fx = await makeWorkItemFixture();
-    const created = await db.$transaction((tx) =>
+    const created = await adminDb.$transaction((tx) =>
       sprintRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -185,13 +196,13 @@ describe('sprintRepository — writes (required tx) + FOR-UPDATE lock', () => {
     expect(created.state).toBe('planned');
     expect(created.goal).toBe('Ship 4.1');
 
-    const renamed = await db.$transaction((tx) =>
+    const renamed = await adminDb.$transaction((tx) =>
       sprintRepository.update(created.id, { name: 'Renamed', state: 'active' }, tx),
     );
     expect(renamed.name).toBe('Renamed');
     expect(renamed.state).toBe('active');
 
-    const deleted = await db.$transaction((tx) => sprintRepository.delete(created.id, tx));
+    const deleted = await adminDb.$transaction((tx) => sprintRepository.delete(created.id, tx));
     expect(deleted.id).toBe(created.id);
     expect(await sprintRepository.findById(created.id, fx.workspaceId)).toBeNull();
   });
@@ -199,7 +210,7 @@ describe('sprintRepository — writes (required tx) + FOR-UPDATE lock', () => {
   it('findActiveByProjectForUpdate locks the active row, null when none active', async () => {
     const fx = await makeWorkItemFixture();
     // no active sprint yet → null
-    const none = await db.$transaction((tx) =>
+    const none = await adminDb.$transaction((tx) =>
       sprintRepository.findActiveByProjectForUpdate(fx.projectId, fx.workspaceId, tx),
     );
     expect(none).toBeNull();
@@ -211,13 +222,13 @@ describe('sprintRepository — writes (required tx) + FOR-UPDATE lock', () => {
       sequence: 1,
       state: 'active',
     });
-    const locked = await db.$transaction((tx) =>
+    const locked = await adminDb.$transaction((tx) =>
       sprintRepository.findActiveByProjectForUpdate(fx.projectId, fx.workspaceId, tx),
     );
     expect(locked?.id).toBe(active);
     // cross-workspace gate keeps the lock tenant-scoped
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTH' });
-    const foreign = await db.$transaction((tx) =>
+    const foreign = await adminDb.$transaction((tx) =>
       sprintRepository.findActiveByProjectForUpdate(fx.projectId, other.workspaceId, tx),
     );
     expect(foreign).toBeNull();
@@ -235,12 +246,12 @@ describe('workItemRepository — sprint association (setSprint)', () => {
     });
     const item = await createTestWorkItem(fx, { kind: 'task', title: 'T' });
 
-    const assigned = await db.$transaction((tx) =>
+    const assigned = await adminDb.$transaction((tx) =>
       workItemRepository.setSprint(item.id, sprintId, tx),
     );
     expect(assigned.sprintId).toBe(sprintId);
 
-    const backToBacklog = await db.$transaction((tx) =>
+    const backToBacklog = await adminDb.$transaction((tx) =>
       workItemRepository.setSprint(item.id, null, tx),
     );
     expect(backToBacklog.sprintId).toBeNull();
@@ -248,7 +259,7 @@ describe('workItemRepository — sprint association (setSprint)', () => {
 
   it('setSprint on a missing item throws WorkItemNotFoundError', async () => {
     await expect(
-      db.$transaction((tx) => workItemRepository.setSprint('nope', null, tx)),
+      adminDb.$transaction((tx) => workItemRepository.setSprint('nope', null, tx)),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
 });
@@ -258,13 +269,13 @@ describe('workItemRepository — backlog rank (setBacklogRank)', () => {
     const fx = await makeWorkItemFixture();
     const item = await createTestWorkItem(fx, { kind: 'task', title: 'T' });
     await setRank(item.id, 'a5');
-    const reread = await db.workItem.findUnique({ where: { id: item.id } });
+    const reread = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(reread?.backlogRank).toBe('a5');
   });
 
   it('setBacklogRank on a missing item throws WorkItemNotFoundError', async () => {
     await expect(
-      db.$transaction((tx) => workItemRepository.setBacklogRank('nope', 'a0', tx)),
+      adminDb.$transaction((tx) => workItemRepository.setBacklogRank('nope', 'a0', tx)),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
   });
 });
@@ -293,11 +304,11 @@ describe('workItemRepository — bounded backlog/sprint reads (finding #57)', ()
     // one issue committed to the sprint (ranked between the backlog ranks)
     const sprintItem = await createTestWorkItem(fx, { kind: 'task', title: 'InSprint' });
     await setRank(sprintItem.id, 'b0');
-    await db.$transaction((tx) => workItemRepository.setSprint(sprintItem.id, sprintId, tx));
+    await adminDb.$transaction((tx) => workItemRepository.setSprint(sprintItem.id, sprintId, tx));
     // one archived backlog issue — must be excluded from reads/counts
     const archived = await createTestWorkItem(fx, { kind: 'task', title: 'Gone' });
     await setRank(archived.id, 'a9');
-    await db.$transaction((tx) => workItemRepository.archive(archived.id, tx));
+    await adminDb.$transaction((tx) => workItemRepository.archive(archived.id, tx));
     return { fx, sprintId, backlog, sprintItem };
   }
 

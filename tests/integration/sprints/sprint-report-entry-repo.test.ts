@@ -6,6 +6,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { sprintReportEntryRepository } from '@/lib/repositories/sprintReportEntryRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Direct repository coverage for the frozen sprint-report snapshot
@@ -21,6 +22,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function addIssue(fx: WorkItemFixture, sprintId: string, title: string): Promise<string> {
@@ -40,7 +42,7 @@ describe('workItemRevisionRepository.findItemIdsAddedToSprintAfter (no tx)', () 
     await sprintsService.startSprint(sprint.id, {}, fx.ctx);
     const after = await addIssue(fx, sprint.id, 'after'); // associated after start
 
-    const row = await db.sprint.findUniqueOrThrow({
+    const row = await adminDb.sprint.findUniqueOrThrow({
       where: { id: sprint.id },
       select: { startDate: true },
     });

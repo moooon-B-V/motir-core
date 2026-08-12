@@ -12,6 +12,7 @@ import { runCreateWorkItem } from '@/lib/mcp/tools/createWorkItem';
 import { runUpdateWorkItem } from '@/lib/mcp/tools/updateWorkItem';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -52,6 +53,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect one repo to the fixture's workspace (the 7.10.3 installation mirror —
@@ -64,7 +66,7 @@ async function connectRepo(
   const rand = randomToken(8);
   const owner = opts.owner ?? 'moooon';
   const provider = opts.provider ?? 'github';
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-${fx.workspaceId}-${provider}` },
     create: {
       installationId: `inst-${fx.workspaceId}-${provider}`,
@@ -75,7 +77,7 @@ async function connectRepo(
     },
     update: {},
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -235,9 +237,9 @@ describe('targetRepo round-trips through create → read → update', () => {
 
     const cleared = await workItemsService.updateWorkItem(created.id, { targetRepo: null }, fx.ctx);
     expect(cleared.targetRepo).toBeNull();
-    expect((await db.workItem.findUniqueOrThrow({ where: { id: created.id } })).targetRepo).toBe(
-      null,
-    );
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: created.id } })).targetRepo,
+    ).toBe(null);
   });
 
   it('is null on a create that never mentions it (no write-time defaulting)', async () => {
@@ -256,7 +258,7 @@ describe('targetRepo round-trips through create → read → update', () => {
     const item = await makeReady(fx, 'audit me');
 
     await workItemsService.updateWorkItem(item.id, { targetRepo: 'motir-core' }, fx.ctx);
-    const afterChange = await db.workItemRevision.findMany({
+    const afterChange = await adminDb.workItemRevision.findMany({
       where: { workItemId: item.id, changeKind: 'updated' },
     });
     expect(afterChange).toHaveLength(1);
@@ -267,7 +269,9 @@ describe('targetRepo round-trips through create → read → update', () => {
     // Same value again → the diff is empty, so no second revision.
     await workItemsService.updateWorkItem(item.id, { targetRepo: 'motir-core' }, fx.ctx);
     expect(
-      await db.workItemRevision.count({ where: { workItemId: item.id, changeKind: 'updated' } }),
+      await adminDb.workItemRevision.count({
+        where: { workItemId: item.id, changeKind: 'updated' },
+      }),
     ).toBe(1);
   });
 
@@ -279,13 +283,16 @@ describe('targetRepo round-trips through create → read → update', () => {
       UnknownTargetRepoError,
     );
     // …and the rejected create never burned a work-item key or left a row.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
 
     const item = await makeReady(fx, 'good');
     await expect(
       workItemsService.updateWorkItem(item.id, { targetRepo: 'not-connected' }, fx.ctx),
     ).rejects.toBeInstanceOf(UnknownTargetRepoError);
-    expect((await db.workItem.findUniqueOrThrow({ where: { id: item.id } })).targetRepo).toBeNull();
+    expect(
+      (await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } })).targetRepo,
+    ).toBeNull();
   });
 });
 
