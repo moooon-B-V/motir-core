@@ -5,6 +5,7 @@ import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { toVelocityDto } from '@/lib/mappers/reportsMappers';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
@@ -48,7 +49,7 @@ async function seedCompletedSprint(
     issues: Array<{ points: number | null; done: boolean }>;
   },
 ): Promise<string> {
-  const sprint = await db.sprint.create({
+  const sprint = await adminDb.sprint.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -65,7 +66,7 @@ async function seedCompletedSprint(
       { projectId: fx.projectId, kind: 'task', title: 'issue' },
       fx.ctx,
     );
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: item.id },
       data: {
         sprintId: sprint.id,
@@ -85,6 +86,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('reportsService.getVelocity', () => {
@@ -205,7 +207,7 @@ describe('reportsService.getVelocity', () => {
 
   it('counts issues for an issue_count project (the configured statistic)', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { estimationStatistic: 'issue_count' },
     });
@@ -231,7 +233,7 @@ describe('reportsService.getVelocity', () => {
     // 4.6.4's documented narrowing: there is no committed-time snapshot, so a
     // time_estimate project's committed bar reads the committedPoints baseline.
     const fx = await makeWorkItemFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { estimationStatistic: 'time_estimate' },
     });
@@ -251,7 +253,7 @@ describe('reportsService.getVelocity', () => {
 
   it('a null committedIssueCount on an issue_count project reads as 0, never NaN (the ?? 0 guard)', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { estimationStatistic: 'issue_count' },
     });
@@ -301,7 +303,7 @@ describe('sprintRepository.listCompletedByProject (bounded read + empty-input gu
 
   it('excludes non-complete sprints and is workspace-scoped', async () => {
     const fx = await makeWorkItemFixture();
-    await db.sprint.create({
+    await adminDb.sprint.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,

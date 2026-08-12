@@ -5,6 +5,7 @@ import { estimationService } from '@/lib/services/estimationService';
 import { reportsService } from '@/lib/services/reportsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -28,7 +29,7 @@ async function addRevision(
   changedAt: Date,
   diff: Prisma.InputJsonValue,
 ): Promise<void> {
-  await db.workItemRevision.create({
+  await adminDb.workItemRevision.create({
     data: { workItemId, changedById, changeKind: 'updated', changedAt, diff },
   });
 }
@@ -39,7 +40,7 @@ async function place(
   status: string,
   storyPoints: number | null,
 ): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { sprintId, status, storyPoints } });
+  await adminDb.workItem.update({ where: { id }, data: { sprintId, status, storyPoints } });
 }
 
 async function stampSprint(
@@ -53,7 +54,7 @@ async function stampSprint(
     committedIssueCount: number | null;
   },
 ): Promise<void> {
-  await db.sprint.update({ where: { id: sprintId }, data: fields });
+  await adminDb.sprint.update({ where: { id: sprintId }, data: fields });
 }
 
 beforeEach(async () => {
@@ -62,6 +63,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('cycle-graph seam — repo aggregate read back through the service DTO', () => {

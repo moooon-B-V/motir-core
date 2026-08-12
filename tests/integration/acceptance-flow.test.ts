@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
@@ -76,7 +77,7 @@ let fx: WorkItemFixture;
 let token: string;
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -91,6 +92,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('story-acceptance flow (publish → read → board flag → gate → retention)', () => {
@@ -129,7 +131,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     expect(storyStatus).toBe('done');
     expect(evidence.status).toBe('approved');
 
-    const persisted = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
+    const persisted = await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(persisted.status).toBe('done');
     expect(
       (await acceptanceEvidenceService.findAwaitingIds([story.id], fx.ctx)).has(story.id),
@@ -141,17 +143,20 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaa' });
     await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbb' });
 
-    const currents = await db.acceptanceEvidence.count({
+    const currents = await adminDb.acceptanceEvidence.count({
       where: { workItemId: story.id, isCurrent: true },
     });
     expect(currents).toBe(1);
-    expect(await db.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(2);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count({
+      where: { workItemId: story.id },
+    });
+    expect(acceptanceEvidenceCount).toBe(2);
 
     // The current points at the newest commit; the superseded video is unlinked
     // (workItemId → null) so the orphan-GC reclaims it.
     const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
     expect(current!.commitSha).toBe('bbb');
-    const unlinked = await db.attachment.count({
+    const unlinked = await adminDb.attachment.count({
       where: { source: 'acceptance_video', workItemId: null },
     });
     expect(unlinked).toBe(1);
@@ -167,6 +172,7 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
     ).token;
     const res = await publishVia(readOnly, story, {});
     expect(res.status).toBe(403);
-    expect(await db.acceptanceEvidence.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 });

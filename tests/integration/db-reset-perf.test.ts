@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1265 — regression guard for the truncate-hook-timeout flake.
@@ -23,7 +23,7 @@ import { truncateAuthTables } from '../helpers/db';
 describe('integration DB reset — flake guard (MOTIR-1265)', () => {
   it('runs the worker DB with synchronous_commit off', async () => {
     const rows =
-      await db.$queryRawUnsafe<{ synchronous_commit: string }[]>('SHOW synchronous_commit');
+      await adminDb.$queryRawUnsafe<{ synchronous_commit: string }[]>('SHOW synchronous_commit');
     expect(rows[0]?.synchronous_commit).toBe('off');
   });
 

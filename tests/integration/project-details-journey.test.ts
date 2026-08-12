@@ -12,6 +12,7 @@ import {
   ProjectNotFoundError,
 } from '@/lib/projects/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story-closing integration journey for Story 6.8 (Subtask 6.8.5; Principle #18 —
@@ -50,6 +51,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {
@@ -87,7 +89,10 @@ async function seedItems(projectId: string, ctx: WorkspaceContext, n: number) {
 }
 
 async function identifiersOf(projectId: string): Promise<string[]> {
-  const rows = await db.workItem.findMany({ where: { projectId }, select: { identifier: true } });
+  const rows = await adminDb.workItem.findMany({
+    where: { projectId },
+    select: { identifier: true },
+  });
   return rows.map((r) => r.identifier).sort();
 }
 
@@ -189,7 +194,10 @@ describe('Story 6.8 — concurrent renames serialise on the project-row lock', (
     // and every issue is on the canonical NIF prefix.
     const finalProject = await projectsService.getByKey('NIF', ownerCtx);
     expect(finalProject.identifier).toBe('NIF');
-    expect(await db.projectKeyAlias.count({ where: { projectId: project.id } })).toBe(1);
+    const projectKeyAliasCount = await adminDb.projectKeyAlias.count({
+      where: { projectId: project.id },
+    });
+    expect(projectKeyAliasCount).toBe(1);
     expect(await identifiersOf(project.id)).toEqual(['NIF-1', 'NIF-2']);
   });
 

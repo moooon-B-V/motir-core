@@ -20,6 +20,7 @@ import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { ReportScopeDto } from '@/lib/dto/reports';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story 6.3 · Subtask 6.3.7 — the STORY-CLOSING acceptance test (Principle
@@ -89,9 +90,9 @@ async function seedRecipe(): Promise<Recipe> {
   // 5 items created two days ago; 2 of them resolved (todo → done) one day ago.
   for (let i = 0; i < 5; i++) {
     const item = await createTestWorkItem(fx, { kind: 'task', title: `Recipe item ${i}` });
-    await db.workItem.update({ where: { id: item.id }, data: { createdAt: daysAgo(2) } });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { createdAt: daysAgo(2) } });
     if (i < 2) {
-      await db.workItemRevision.create({
+      await adminDb.workItemRevision.create({
         data: {
           workItemId: item.id,
           changedById: fx.ownerId,
@@ -120,6 +121,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('Story 6.3 recipe — dashboard + three widgets, shared, read end-to-end', () => {

@@ -9,6 +9,7 @@ import { watchersService } from '@/lib/services/watchersService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureEmailEvents, captureJobEvents } from '../helpers/jobs';
 
@@ -49,6 +50,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Journey {
@@ -79,7 +81,7 @@ function embedBlobUrl(workspaceId: string): string {
 async function buildJourney(): Promise<Journey> {
   const fx = await makeWorkItemFixture();
   const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Combined journey issue' });
-  await db.workItem.update({ where: { id: issue.id }, data: { status: 'todo' } });
+  await adminDb.workItem.update({ where: { id: issue.id }, data: { status: 'todo' } });
 
   const bo = await usersService.createUser({
     email: 'collab-bo@example.com',
@@ -99,7 +101,7 @@ async function buildJourney(): Promise<Journey> {
   // The waiting editor upload — UNLINKED (workItemId null), referenced by no
   // body yet. The same shape attachmentsService.uploadAttachment writes for a
   // create-modal/editor upload before linkage resolves at body-write time.
-  const embed = await db.attachment.create({
+  const embed = await adminDb.attachment.create({
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,
@@ -140,7 +142,7 @@ describe('the combined comment write — embed link + mention persist in one tra
 
     // Seam 5.2.3 × 5.1.2: the body's referenced upload linked to THIS issue as
     // editor-sourced, inside the comment write tx.
-    const attachment = await db.attachment.findFirstOrThrow({
+    const attachment = await adminDb.attachment.findFirstOrThrow({
       where: { blobPathname: embedBlobUrl(j.fx.workspaceId) },
     });
     expect(attachment.workItemId).toBe(j.issueId);
@@ -148,7 +150,7 @@ describe('the combined comment write — embed link + mention persist in one tra
 
     // …and that link landed an `attachments.added` revision (the uniform
     // History trail — Story 5.2's fill of Jira's editor-add changelog gap).
-    const linkRevisions = await db.workItemRevision.findMany({
+    const linkRevisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: j.issueId, changeKind: 'updated' },
     });
     const addedNames = linkRevisions.flatMap(
@@ -161,7 +163,7 @@ describe('the combined comment write — embed link + mention persist in one tra
 
     // Seam 5.1.2: the mention row persisted for Bo (the viewable mentioned
     // member), and the post-commit event carried exactly that id.
-    const mentionRows = await db.commentMention.findMany({ where: { commentId: comment.id } });
+    const mentionRows = await adminDb.commentMention.findMany({ where: { commentId: comment.id } });
     expect(mentionRows.map((m) => m.mentionedUserId)).toEqual([j.bo.id]);
     const created = capture.events.filter((e) => e.name === 'work-item/comment.created');
     expect(created).toHaveLength(1);
@@ -250,34 +252,36 @@ describe('the unwind — deleting the comment leaves no orphan and fires no stal
     setup.events.length = 0;
 
     // Pre-state: 2 comments (root + reply), 2 mention rows, the embed linked.
-    expect(await db.comment.count({ where: { workItemId: j.issueId } })).toBe(2);
-    expect(await db.commentMention.count({ where: { comment: { workItemId: j.issueId } } })).toBe(
-      2,
-    );
+    const commentCount = await adminDb.comment.count({ where: { workItemId: j.issueId } });
+    expect(commentCount).toBe(2);
+    expect(
+      await adminDb.commentMention.count({ where: { comment: { workItemId: j.issueId } } }),
+    ).toBe(2);
 
     await commentsService.deleteComment(root.id, j.fx.ctx);
 
     // The thread is gone — root + reply hard-deleted (the Jira semantics).
-    expect(await db.comment.count({ where: { workItemId: j.issueId } })).toBe(0);
+    const commentCount2 = await adminDb.comment.count({ where: { workItemId: j.issueId } });
+    expect(commentCount2).toBe(0);
     // NO orphan mention rows survive the cascade (FK onDelete: Cascade, proven
     // through the service, not assumed).
-    expect(await db.commentMention.count({ where: { comment: { workItemId: j.issueId } } })).toBe(
-      0,
-    );
+    expect(
+      await adminDb.commentMention.count({ where: { comment: { workItemId: j.issueId } } }),
+    ).toBe(0);
 
     // The embed UNLINKED — the row survives (GC removes it later) but no longer
     // belongs to the issue (workItemId null), so the panel census drops it.
-    const attachment = await db.attachment.findFirstOrThrow({
+    const attachment = await adminDb.attachment.findFirstOrThrow({
       where: { blobPathname: embedBlobUrl(j.fx.workspaceId) },
     });
     expect(attachment.workItemId).toBeNull();
-    expect(await db.attachment.count({ where: { workItemId: j.issueId, source: 'editor' } })).toBe(
-      0,
-    );
+    expect(
+      await adminDb.attachment.count({ where: { workItemId: j.issueId, source: 'editor' } }),
+    ).toBe(0);
 
     // The surviving History trace: who deleted it + the reply count, never the
     // content (Story 5.5 renders this).
-    const deletion = await db.workItemRevision.findMany({
+    const deletion = await adminDb.workItemRevision.findMany({
       where: { workItemId: j.issueId, changeKind: 'comment_deleted' },
     });
     expect(deletion).toHaveLength(1);

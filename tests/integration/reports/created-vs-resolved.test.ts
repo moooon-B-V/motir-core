@@ -7,6 +7,7 @@ import { InvalidReportWindowError } from '@/lib/reports/errors';
 import { bucketAxis, bucketKey, reportWindow, type ReportPeriod } from '@/lib/reports/buckets';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -35,13 +36,13 @@ async function addRevision(
   changedAt: Date,
   diff: Prisma.InputJsonValue,
 ): Promise<void> {
-  await db.workItemRevision.create({
+  await adminDb.workItemRevision.create({
     data: { workItemId, changedById, changeKind: 'updated', changedAt, diff },
   });
 }
 
 async function setCreatedAt(id: string, createdAt: Date): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { createdAt } });
+  await adminDb.workItem.update({ where: { id }, data: { createdAt } });
 }
 
 const toDone = { status: { from: 'todo', to: 'done' } };
@@ -60,6 +61,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function expectOk(promise: ReturnType<typeof reportsService.getCreatedVsResolved>) {
@@ -186,7 +188,7 @@ describe('getCreatedVsResolved — the bucket matrix', () => {
     const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
     await setCreatedAt(a.id, daysAgo(1));
     await addRevision(a.id, fx.ownerId, daysAgo(1), toDone);
-    await db.workItem.update({ where: { id: a.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: a.id }, data: { archivedAt: new Date() } });
 
     const data = await expectOk(
       reportsService.getCreatedVsResolved(
@@ -204,8 +206,8 @@ describe('getCreatedVsResolved — saved-filter scope', () => {
     const fx = await makeWorkItemFixture();
     const hi = await createTestWorkItem(fx, { kind: 'task', title: 'hi' });
     const lo = await createTestWorkItem(fx, { kind: 'task', title: 'lo' });
-    await db.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
-    await db.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+    await adminDb.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await adminDb.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
     await setCreatedAt(hi.id, daysAgo(1));
     await setCreatedAt(lo.id, daysAgo(1));
     await addRevision(hi.id, fx.ownerId, daysAgo(0), toDone);
@@ -238,7 +240,7 @@ describe('getCreatedVsResolved — bounded shape + caps', () => {
     const fx = await makeWorkItemFixture();
     const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
     // 300 alternating resolve/reopen revisions across 10 days.
-    await db.workItemRevision.createMany({
+    await adminDb.workItemRevision.createMany({
       data: Array.from({ length: 300 }, (_, i) => ({
         workItemId: a.id,
         changedById: fx.ownerId,

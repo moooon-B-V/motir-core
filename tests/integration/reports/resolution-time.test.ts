@@ -6,6 +6,7 @@ import { InvalidReportWindowError } from '@/lib/reports/errors';
 import { bucketKey, type ReportPeriod } from '@/lib/reports/buckets';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -31,12 +32,12 @@ async function addRevision(
   changedAt: Date,
   diff: Prisma.InputJsonValue,
 ): Promise<void> {
-  await db.workItemRevision.create({
+  await adminDb.workItemRevision.create({
     data: { workItemId, changedById, changeKind: 'updated', changedAt, diff },
   });
 }
 async function setCreatedAt(id: string, createdAt: Date): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { createdAt } });
+  await adminDb.workItem.update({ where: { id }, data: { createdAt } });
 }
 const toDone = { status: { from: 'todo', to: 'done' } };
 const reopen = { status: { from: 'done', to: 'todo' } };
@@ -52,6 +53,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function expectOk(promise: ReturnType<typeof reportsService.getResolutionTime>) {
@@ -116,7 +118,7 @@ describe('getResolutionTime — the bucket matrix', () => {
     const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
     await setCreatedAt(a.id, daysAgo(4));
     await addRevision(a.id, fx.ownerId, daysAgo(1), toDone);
-    await db.workItem.update({ where: { id: a.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: a.id }, data: { archivedAt: new Date() } });
 
     const data = await expectOk(
       reportsService.getResolutionTime(
@@ -146,8 +148,8 @@ describe('getResolutionTime — the bucket matrix', () => {
     const lo = await createTestWorkItem(fx, { kind: 'task', title: 'lo' });
     await setCreatedAt(hi.id, daysAgo(4));
     await setCreatedAt(lo.id, daysAgo(4));
-    await db.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
-    await db.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+    await adminDb.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await adminDb.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
     await addRevision(hi.id, fx.ownerId, daysAgo(1), toDone);
     await addRevision(lo.id, fx.ownerId, daysAgo(1), toDone);
 

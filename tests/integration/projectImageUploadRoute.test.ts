@@ -4,6 +4,7 @@ import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import {
   PROJECT_IMAGE_ACCEPT,
@@ -65,6 +66,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture, userId = fx.ownerId) {
@@ -117,7 +119,7 @@ describe('POST /api/upload/project-image', () => {
   it('refuses a workspace member who cannot manage the project — BEFORE storing a byte', async () => {
     const fx = await makeWorkItemFixture();
     const member = await createTestUser({ email: 'member-upload@example.com' });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     signInAs(fx, member.id);
@@ -178,7 +180,7 @@ describe('POST /api/upload/project-image', () => {
     });
 
     expect(dto.image).toContain(key);
-    const row = await db.project.findUnique({
+    const row = await adminDb.project.findUnique({
       where: { id: fx.projectId },
       select: { image: true },
     });
@@ -287,7 +289,7 @@ describe('upload → persist → READ BACK, the shape the shell consumes', () =>
     ).rejects.toMatchObject({ code: 'INVALID_PROJECT_IMAGE' });
 
     // And B is unchanged — a refused write leaves no half-state.
-    const row = await db.project.findUnique({
+    const row = await adminDb.project.findUnique({
       where: { id: b.projectId },
       select: { image: true },
     });
