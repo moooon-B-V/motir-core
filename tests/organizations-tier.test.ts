@@ -6,6 +6,7 @@ import { organizationMembershipRepository } from '@/lib/repositories/organizatio
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { AlreadyOrgMemberError, LastOrgOwnerError } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
+import { withOrgContext } from '@/lib/organizations/context';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
@@ -196,7 +197,14 @@ describe('membership management — idempotency + the upward auto-join', () => {
     });
 
     // The upward auto-join must not clobber the existing 'admin' to 'member'.
-    await db.$transaction((tx) => organizationsService.ensureOrgMembership(admin.id, orgId, tx));
+    // ALTITUDE, not client (MOTIR-2777): `ensureOrgMembership` takes its caller's
+    // transaction and deliberately binds nothing itself, so the test must open the
+    // org context its production callers open. A bare `db.$transaction` reaches the
+    // service with no tenant bound, and `org_membership_insert_active_or_bootstrap`
+    // refuses the row.
+    await withOrgContext({ userId: admin.id, organizationId: orgId }, (tx) =>
+      organizationsService.ensureOrgMembership(admin.id, orgId, tx),
+    );
     const m = await organizationMembershipRepository.findByOrgAndUser(orgId, admin.id);
     expect(m!.role).toBe('admin');
     expect(
@@ -402,8 +410,12 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
 
     // Two independent transactions both racing to auto-join the same user.
     const results = await Promise.allSettled([
-      db.$transaction((tx) => organizationsService.ensureOrgMembership(u.id, orgId, tx)),
-      db.$transaction((tx) => organizationsService.ensureOrgMembership(u.id, orgId, tx)),
+      withOrgContext({ userId: u.id, organizationId: orgId }, (tx) =>
+        organizationsService.ensureOrgMembership(u.id, orgId, tx),
+      ),
+      withOrgContext({ userId: u.id, organizationId: orgId }, (tx) =>
+        organizationsService.ensureOrgMembership(u.id, orgId, tx),
+      ),
     ]);
     // Neither rejects (the duplicate-insert race is swallowed to a no-op).
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);

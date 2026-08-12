@@ -33,6 +33,24 @@ afterAll(async () => {
   await adminDb.$disconnect();
 });
 
+/**
+ * One workspace with its own org, seeded through the ADMIN client.
+ *
+ * Deliberately NOT through `workspacesService`: this file's arm-1 test needs TWO
+ * independent tenants, and seeding both through the service would make the fixture
+ * depend on the very bootstrap path other tests here are proving. Returns the
+ * workspace id.
+ */
+async function seedWorkspace(slug: string): Promise<string> {
+  const organization = await adminDb.organization.create({
+    data: { name: slug, slug },
+  });
+  const workspace = await adminDb.workspace.create({
+    data: { name: slug, slug, organizationId: organization.id },
+  });
+  return workspace.id;
+}
+
 describe.runIf(isAppRoleTestMode())('creating a tenant as the non-bypass role', () => {
   it('creates a workspace end-to-end through the service', async () => {
     const user = await adminDb.user.create({
@@ -117,6 +135,49 @@ describe.runIf(isAppRoleTestMode())('creating a tenant as the non-bypass role', 
         return tx.organization.create({ data: { name: 'Rider', slug: 'a-different-slug' } });
       }),
     ).rejects.toThrow(/row-level security/i);
+  });
+
+  it('a bound ACTIVE-workspace context admits a membership only for THAT workspace', async () => {
+    // The mirror of the two cases above, for arm 1 rather than the bootstrap arm —
+    // and the check MOTIR-2777 owes. Binding `app.workspace_id` is what makes
+    // invite-accept work; this pins that the bind is worth exactly one workspace.
+    //
+    // Without it the fix would be indistinguishable from the self-join arm the
+    // policy migration deliberately refused: both make the accept pass, and only
+    // one of them also lets a user join a workspace they were never invited to.
+    const invitee = await adminDb.user.create({
+      data: { email: 'arm1-scope@example.com', name: 'Arm One' },
+    });
+    const [a, b] = await Promise.all([seedWorkspace('arm1-a'), seedWorkspace('arm1-b')]);
+
+    // Bound to A, targeting A: admitted, exactly as the accept path relies on.
+    const admitted = await db.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${invitee.id}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${a}, true)`;
+      return tx.workspaceMembership.create({
+        data: { userId: invitee.id, workspaceId: a, role: 'member' },
+      });
+    });
+    expect(admitted.workspaceId).toBe(a);
+
+    // Bound to A, targeting B: refused. The GUC names the workspace, not the user,
+    // so holding one workspace's context buys nothing anywhere else.
+    await expect(
+      db.$transaction(async (tx) => {
+        await tx.$executeRaw`SELECT set_config('app.user_id', ${invitee.id}, true)`;
+        await tx.$executeRaw`SELECT set_config('app.workspace_id', ${a}, true)`;
+        return tx.workspaceMembership.create({
+          data: { userId: invitee.id, workspaceId: b, role: 'member' },
+        });
+      }),
+    ).rejects.toThrow(/row-level security/i);
+
+    // And it really did not land — read as the owner, so "refused" is a statement
+    // about the row rather than about what the app role can see.
+    const leaked = await adminDb.workspaceMembership.findFirst({
+      where: { userId: invitee.id, workspaceId: b },
+    });
+    expect(leaked).toBeNull();
   });
 });
 
