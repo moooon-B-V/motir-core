@@ -15,6 +15,7 @@ import {
   PublicRequestDescriptionTooLongError,
   PublicSubmissionRateLimitedError,
 } from '@/lib/publicProjects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../helpers/rateLimitWindow';
 
@@ -59,6 +60,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A fixture whose project is set PUBLIC (the make-public toggle is 6.12.8, not
@@ -66,7 +68,7 @@ afterAll(async () => {
  *  same shortcut `project-access-service.test.ts` uses). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
 }
 
@@ -85,7 +87,7 @@ describe('publicProjectsService.submitPublicRequest', () => {
     expect(result.title).toBe('Dark mode please');
     expect(result.identifier).toMatch(/^PROD-\d+$/);
 
-    const row = await db.workItem.findUnique({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: result.id } });
     expect(row).not.toBeNull();
     // Reporter = the workspace OWNER (the member intake reporter); the real
     // cross-org submitter is on submittedByUserId (the 6.11.4 seam).
@@ -114,7 +116,7 @@ describe('publicProjectsService.submitPublicRequest', () => {
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
 
     // ...and nothing was created.
-    const count = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const count = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(count).toBe(0);
   });
 
@@ -209,7 +211,7 @@ describe('publicProjectsService.submitPublicRequest', () => {
 
     // The counter is a row, not this process's memory: clearing the table restores
     // the budget. Under the module-level Map it replaced, it would not have.
-    const keys = await db.$queryRawUnsafe<Array<{ key: string }>>(
+    const keys = await adminDb.$queryRawUnsafe<Array<{ key: string }>>(
       'SELECT key FROM "rate_limit_counter"',
     );
     expect(keys.some((r) => r.key.startsWith('public-submit:'))).toBe(true);

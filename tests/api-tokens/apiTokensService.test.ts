@@ -15,6 +15,7 @@ import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 import { LEGACY_SCOPE_PERMISSIONS } from '@/lib/mcp/scopes';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
@@ -58,6 +59,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('create', () => {
@@ -83,7 +85,7 @@ describe('create', () => {
     expect(JSON.stringify(dto)).not.toContain(token);
 
     // The row stores the HASH (never the plaintext) and the bound workspace.
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.tokenHash).toBe(hashToken(token));
     expect(row.tokenHash).not.toBe(token);
     expect(row.tokenPrefix).toBe(token.slice(0, DISPLAY_PREFIX_LENGTH));
@@ -101,7 +103,8 @@ describe('create', () => {
       }),
     ).rejects.toBeInstanceOf(NotAMemberError);
     // Nothing was minted.
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('persists the provided expiry', async () => {
@@ -240,7 +243,7 @@ describe('revoke', () => {
     expect(revoked.revokedAt).not.toBeNull();
     expect(revoked.workspace.id).toBe(workspace.id);
 
-    const row = await db.apiToken.findUnique({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUnique({ where: { id: dto.id } });
     expect(row).not.toBeNull();
     expect(row!.revokedAt).not.toBeNull();
   });
@@ -267,7 +270,7 @@ describe('revoke', () => {
       ApiTokenNotFoundError,
     );
     // Bob's token is untouched.
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.revokedAt).toBeNull();
   });
 
@@ -354,12 +357,12 @@ describe('verify', () => {
     });
 
     await apiTokensService.verify(token);
-    const afterFirst = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const afterFirst = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(afterFirst.lastUsedAt).not.toBeNull();
 
     // A second verify inside the window must NOT re-write lastUsedAt.
     await apiTokensService.verify(token);
-    const afterSecond = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const afterSecond = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(afterSecond.lastUsedAt!.getTime()).toBe(afterFirst.lastUsedAt!.getTime());
   });
 
@@ -373,10 +376,10 @@ describe('verify', () => {
 
     // Simulate the previous use being > 5 minutes ago.
     const stale = new Date(Date.now() - 6 * 60 * 1000);
-    await db.apiToken.update({ where: { id: dto.id }, data: { lastUsedAt: stale } });
+    await adminDb.apiToken.update({ where: { id: dto.id }, data: { lastUsedAt: stale } });
 
     await apiTokensService.verify(token);
-    const after = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const after = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(after.lastUsedAt!.getTime()).toBeGreaterThan(stale.getTime());
   });
 });
@@ -388,7 +391,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       label: 'default',
       fixedGrant: DEFAULT_TOKEN_GRANT,
     });
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect([...row.scopes].sort()).toEqual([...DEFAULT_TOKEN_GRANT].sort());
     expect(row.scopes).not.toContain('work_item:delete');
   });
@@ -400,7 +403,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       permissions: ['project:browse', 'work_item:edit', 'project:browse'],
       projectId: project.id,
     });
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect([...row.scopes].sort()).toEqual(['project:browse', 'work_item:edit']);
   });
 
@@ -411,7 +414,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       permissions: ['project:browse', 'work_item:delete'],
       projectId: project.id,
     });
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.scopes).toContain('work_item:delete');
   });
 
@@ -422,7 +425,7 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
       permissions: [],
       projectId: project.id,
     });
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.scopes).toEqual([]);
   });
 
@@ -435,7 +438,8 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
         projectId: project.id,
       }),
     ).rejects.toBeInstanceOf(InvalidTokenGrantError);
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('REFUSES a real catalog key that is not GRANTABLE, and mints nothing', async () => {
@@ -450,7 +454,8 @@ describe('the GRANT — persist and read (MOTIR-2575)', () => {
         projectId: project.id,
       }),
     ).rejects.toBeInstanceOf(InvalidTokenGrantError);
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('names the offending keys on the typed error, so a 422 can say which', async () => {
@@ -503,7 +508,7 @@ describe('the compatibility promise — a row written BEFORE MOTIR-2572', () => 
       label: 'legacy',
       fixedGrant: ['project:browse'],
     });
-    await db.apiToken.update({ where: { id: dto.id }, data: { scopes } });
+    await adminDb.apiToken.update({ where: { id: dto.id }, data: { scopes } });
     return { token, id: dto.id, owner, workspace };
   }
 
@@ -571,7 +576,12 @@ describe('the compatibility promise — a row written BEFORE MOTIR-2572', () => 
 
 describe('repository guards', () => {
   it('findByTokenHash returns null for an unknown hash', async () => {
-    const result = await db.$transaction((tx) =>
+    // Through the ADMIN client (MOTIR-2750), and this one matters because the
+    // assertion is `toBeNull()`. This `it` seeds no tenant, so under the non-bypass
+    // role the policy hides every api_token row and the lookup returns null for ANY
+    // hash — the test would pass without the repository working at all. Unfiltered,
+    // `null` means "no such hash", which is the claim.
+    const result = await adminDb.$transaction((tx) =>
       apiTokenRepository.findByTokenHash(hashToken('nope'), tx),
     );
     expect(result).toBeNull();
@@ -617,7 +627,7 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
       permissions: ['project:browse', 'work_item:edit'],
       projectId: fx.projectId,
     });
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.projectId).toBe(fx.projectId);
     expect([...row.scopes].sort()).toEqual(['project:browse', 'work_item:edit']);
     expect(dto.project?.id).toBe(fx.projectId);
@@ -629,7 +639,7 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
       label: 'device',
       fixedGrant: CLI_TOKEN_GRANT,
     });
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.projectId).toBeNull();
     expect([...row.scopes].sort()).toEqual([...CLI_TOKEN_GRANT].sort());
     expect(dto.project).toBeNull();
@@ -643,7 +653,8 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
         permissions: ['work_item:edit'],
       }),
     ).rejects.toMatchObject({ code: 'API_TOKEN_INVALID_BINDING' });
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('FIXED with a project is REFUSED — the device flow must not acquire a binding', async () => {
@@ -655,7 +666,8 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
         projectId: fx.projectId,
       }),
     ).rejects.toMatchObject({ code: 'API_TOKEN_INVALID_BINDING' });
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('omitting permissions WITH a project means "the default for this project"', async () => {
@@ -719,7 +731,8 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
       code: 'API_TOKEN_INVALID_PERMISSION',
       invalidPermissions: ['work_item:delete'],
     });
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('…and the same viewer CAN grant what they do hold', async () => {
@@ -763,6 +776,7 @@ describe('the PROJECT binding and what a caller may confer (MOTIR-2606)', () => 
         projectId: theirs.projectId,
       }),
     ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.12 · Subtask 6.12.9 — the STORY-level integration guarantees that the
@@ -36,6 +37,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A fixture whose project is set PUBLIC (the make-public toggle is 6.12.8, not
@@ -43,7 +45,7 @@ afterAll(async () => {
  *  shortcut the sibling public-project suites use). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
 }
 
@@ -55,7 +57,7 @@ async function seedItemWithInternalFields(fx: WorkItemFixture, title: string): P
     { projectId: fx.projectId, kind: 'task', title },
     fx.ctx,
   );
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: item.id },
     // The owner is a workspace member → a legal assignee; the estimate/points are
     // internal-only fields the public projection must never surface.
@@ -262,7 +264,7 @@ describe('public WRITE matrix (6.12.9) — normal writes blocked, the three gran
     );
 
     // The item is UNCHANGED by any of the rejected writes.
-    const row = await db.workItem.findUnique({ where: { id: itemId } });
+    const row = await adminDb.workItem.findUnique({ where: { id: itemId } });
     expect(row!.title).toBe('Hands off');
     expect(row!.status).toBe('todo');
   });
@@ -275,7 +277,8 @@ describe('public WRITE matrix (6.12.9) — normal writes blocked, the three gran
     await expect(
       workItemsService.createWorkItem({ projectId: fx.projectId, kind: 'task', title: 'x' }, ctx),
     ).rejects.toThrow();
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
   });
 
   it('the three write GRANTS each succeed for a signed-in cross-org account', async () => {
@@ -300,7 +303,7 @@ describe('public WRITE matrix (6.12.9) — normal writes blocked, the three gran
       { userId: actor.id },
     );
     expect(comment.author.id).toBe(actor.id);
-    const row = await db.comment.findUnique({ where: { id: comment.id } });
+    const row = await adminDb.comment.findUnique({ where: { id: comment.id } });
     expect(row!.isPublic).toBe(true);
   });
 });

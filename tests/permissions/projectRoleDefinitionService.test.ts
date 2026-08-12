@@ -25,6 +25,7 @@ import { MAX_CUSTOM_ROLES_PER_PROJECT, MAX_ROLE_NAME_LENGTH } from '@/lib/permis
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `projectRoleDefinitionService` (Story MOTIR-2257 · Subtask MOTIR-2472) against
@@ -54,6 +55,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -157,9 +159,9 @@ describe('the gate — `project:manage_access`, and 404 before 403', () => {
       }),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
     // And nothing was written.
-    expect(await db.projectRoleDefinition.count({ where: { projectId: theirs.projectId } })).toBe(
-      0,
-    );
+    expect(
+      await adminDb.projectRoleDefinition.count({ where: { projectId: theirs.projectId } }),
+    ).toBe(0);
   });
 
   it('the gate runs on update, delete and findById too', async () => {
@@ -344,7 +346,9 @@ describe('a role is its NAME and its SET — nothing else is recorded', () => {
       ...({ basedOn: 'admin' } as Record<string, unknown>),
     });
     expect('basedOn' in role).toBe(false);
-    const stored = await db.projectRoleDefinition.findUniqueOrThrow({ where: { id: role.id } });
+    const stored = await adminDb.projectRoleDefinition.findUniqueOrThrow({
+      where: { id: role.id },
+    });
     expect('basedOn' in stored).toBe(false);
   });
 
@@ -378,7 +382,9 @@ describe('the CAP holds under REAL concurrency', () => {
       Array.from({ length: attempts }, (_, i) => createRole(fx, `Role ${i}`)),
     );
 
-    const stored = await db.projectRoleDefinition.count({ where: { projectId: fx.projectId } });
+    const stored = await adminDb.projectRoleDefinition.count({
+      where: { projectId: fx.projectId },
+    });
     expect(stored).toBe(MAX_CUSTOM_ROLES_PER_PROJECT);
 
     const fulfilled = results.filter((r) => r.status === 'fulfilled');
@@ -453,16 +459,16 @@ describe('a built-in is not a row and cannot be edited', () => {
         name: 'Stolen',
       }),
     ).rejects.toBeInstanceOf(RoleDefinitionNotFoundError);
-    expect((await db.projectRoleDefinition.findUnique({ where: { id: theirs.id } }))?.name).toBe(
-      'Theirs',
-    );
+    expect(
+      (await adminDb.projectRoleDefinition.findUnique({ where: { id: theirs.id } }))?.name,
+    ).toBe('Theirs');
   });
 });
 
 describe('DELETE refuses to strip anybody', () => {
   /** Put `userId` on `roleId` through the only sanctioned write path. */
   async function hold(fx: Fixture, userId: string, roleId: string, base: 'viewer' | 'member') {
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       projectMembershipRepository.setRoleDefinition(
         userId,
         fx.projectId,
@@ -480,7 +486,10 @@ describe('DELETE refuses to strip anybody', () => {
       roleId: role.id,
       ctx: fx.adminCtx,
     });
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).toBeNull();
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).toBeNull();
   });
 
   it('with holders and NO destination: RoleInUseError carrying the count, and NOTHING is written', async () => {
@@ -497,8 +506,14 @@ describe('DELETE refuses to strip anybody', () => {
     expect((err as RoleInUseError).roleName).toBe('Contractor');
 
     // Nothing written: the role survives and both holders still hold it.
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
-    expect(await db.projectMembership.count({ where: { roleDefinitionId: role.id } })).toBe(2);
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
+    const projectMembershipCount = await adminDb.projectMembership.count({
+      where: { roleDefinitionId: role.id },
+    });
+    expect(projectMembershipCount).toBe(2);
   });
 
   it('with a destination: every holder MOVES and the role is removed, in one transaction', async () => {
@@ -515,8 +530,11 @@ describe('DELETE refuses to strip anybody', () => {
       reassignTo: destination.id,
     });
 
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).toBeNull();
-    const moved = await db.projectMembership.findMany({
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).toBeNull();
+    const moved = await adminDb.projectMembership.findMany({
       where: { projectId: fx.projectId, roleDefinitionId: destination.id },
     });
     expect(moved).toHaveLength(2);
@@ -537,7 +555,7 @@ describe('DELETE refuses to strip anybody', () => {
       reassignTo: 'member',
     });
 
-    const survivor = await db.projectMembership.findUnique({
+    const survivor = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: fx.memberUserId, projectId: fx.projectId } },
     });
     expect(survivor?.roleDefinitionId).toBeNull();
@@ -566,8 +584,11 @@ describe('DELETE refuses to strip anybody', () => {
     ).rejects.toBe(boom);
 
     // Rolled back: the role is still there and the holder never moved.
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
-    const untouched = await db.projectMembership.findUnique({
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
+    const untouched = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: fx.memberUserId, projectId: fx.projectId } },
     });
     expect(untouched?.roleDefinitionId).toBe(role.id);
@@ -609,8 +630,14 @@ describe('DELETE refuses to strip anybody', () => {
     ).rejects.toBeInstanceOf(InvalidRoleReassignTargetError);
 
     // Untouched throughout.
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
-    expect(await db.projectMembership.count({ where: { roleDefinitionId: role.id } })).toBe(1);
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
+    const projectMembershipCount = await adminDb.projectMembership.count({
+      where: { roleDefinitionId: role.id },
+    });
+    expect(projectMembershipCount).toBe(1);
   });
 
   it('an illegal destination on an UNHELD role is still refused, not silently ignored', async () => {
@@ -626,7 +653,10 @@ describe('DELETE refuses to strip anybody', () => {
         reassignTo: foreign.id,
       }),
     ).rejects.toBeInstanceOf(InvalidRoleReassignTargetError);
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
   });
 });
 

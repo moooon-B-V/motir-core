@@ -12,6 +12,7 @@ import { PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
 import { ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import { toRoleCatalogDTO } from '@/lib/mappers/permissionMappers';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE STORY GATE for MOTIR-2282 (Subtask MOTIR-2264) — run against the merged
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type Persona = 'owner' | 'wsAdmin' | 'stranger' | 'viewer' | 'member' | 'admin';
@@ -57,7 +59,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   const ownerCtx: WorkspaceContext = { userId: owner.id, workspaceId: workspace.id };
 
   if (level === 'public') {
-    await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,
@@ -207,7 +209,7 @@ describe('the widened DTO survives the round trip through real rows', () => {
     const s = await buildScenario('open', 'seam-dto');
     const catalog = await projectAccessService.getRoleCatalog(s.projectId, s.ctxs.owner);
 
-    const seeded = await db.projectMembership.groupBy({
+    const seeded = await adminDb.projectMembership.groupBy({
       by: ['role'],
       where: { projectId: s.projectId },
       _count: { _all: true },

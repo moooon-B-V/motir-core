@@ -10,6 +10,7 @@ import {
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Public work-item DETAIL read (Story 6.14 · Subtask 6.14.11) — the read behind
@@ -23,16 +24,16 @@ import { truncateAuthTables } from '../helpers/db';
 // the full child set.
 
 async function setStatus(id: string, status = 'todo'): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function setPrivate(epicId: string, value: boolean): Promise<void> {
-  await db.workItem.update({ where: { id: epicId }, data: { publicChildrenHidden: value } });
+  await adminDb.workItem.update({ where: { id: epicId }, data: { publicChildrenHidden: value } });
 }
 
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
 }
 
@@ -43,6 +44,7 @@ describe('publicProjectsService.getWorkItemDetail (6.14.11)', () => {
 
   afterAll(async () => {
     await db.$disconnect();
+    await adminDb.$disconnect();
   });
 
   it('renders anonymously + cross-org with the public projection (no internal fields), parent + children', async () => {
@@ -60,7 +62,7 @@ describe('publicProjectsService.getWorkItemDetail (6.14.11)', () => {
     });
     for (const w of [epic, story, task]) await setStatus(w.id);
     // Internal fields set, so the projection assertions prove they are STRIPPED.
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: story.id },
       data: { assigneeId: fx.ownerId, estimateMinutes: 240, storyPoints: 5 },
     });
@@ -177,7 +179,7 @@ describe('publicProjectsService.getWorkItemDetail (6.14.11)', () => {
     ).rejects.toBeInstanceOf(PublicWorkItemNotFoundError);
 
     // An archived item → not found.
-    await db.workItem.update({ where: { id: item.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { archivedAt: new Date() } });
     await expect(
       publicProjectsService.getWorkItemDetail(fx.projectIdentifier, item.identifier, null),
     ).rejects.toBeInstanceOf(PublicWorkItemNotFoundError);
@@ -188,7 +190,7 @@ describe('publicProjectsService.getWorkItemDetail (6.14.11)', () => {
       { projectId: fx.projectId, kind: 'task', title: 'A request' },
       fx.ctx,
     );
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: triaged.id },
       data: { triagedAt: new Date() },
     });

@@ -15,6 +15,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE STORY TEST GATE for MOTIR-2256 (Subtask MOTIR-2302) — the SEAM half, against
@@ -43,6 +44,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Scenario {
@@ -87,7 +89,7 @@ async function scenario(slug: string): Promise<Scenario> {
     });
     await workspacesService.addMember({ userId: u.id, workspaceId: workspace.id });
     if (projectRole) {
-      await db.projectMembership.create({
+      await adminDb.projectMembership.create({
         data: {
           userId: u.id,
           projectId: project.id,
@@ -103,10 +105,10 @@ async function scenario(slug: string): Promise<Scenario> {
   const memberCtx = await actor('member', 'member');
   const outsiderCtx = await actor('outsider');
 
-  await db.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
+  await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'private' } });
 
-  const board = await db.board.findFirstOrThrow({ where: { projectId: project.id } });
-  const column = await db.boardColumn.findFirstOrThrow({
+  const board = await adminDb.board.findFirstOrThrow({ where: { projectId: project.id } });
+  const column = await adminDb.boardColumn.findFirstOrThrow({
     where: { boardId: board.id },
     orderBy: { position: 'asc' },
   });
@@ -245,7 +247,7 @@ describe.each(DOMAIN_WRITES)('the $domain domain, end to end', ({ domain, key, w
   it('a WORKSPACE OWNER passes on every access level — the always-pass rail', async () => {
     for (const level of ['open', 'limited', 'private'] as const) {
       const s = await scenario(`rail-${domain.replace(/\W/g, '')}-${level}`);
-      await db.project.update({ where: { id: s.projectId }, data: { accessLevel: level } });
+      await adminDb.project.update({ where: { id: s.projectId }, data: { accessLevel: level } });
       await expect(write(s, s.ownerCtx), `${domain} on a ${level} project`).resolves.toBeDefined();
     }
   });
