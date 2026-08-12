@@ -132,7 +132,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'workItemRevisionRepository.ts#countDisplayableByWorkItem': ['unreviewed', 'MOTIR-2784'],
   'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': ['unreviewed', 'MOTIR-2784'],
   'workspaceMembershipRepository.ts#findByUserAndWorkspace': ['unreviewed', 'MOTIR-2784'],
-  'workspaceRepository.ts#findById': ['unreviewed', 'MOTIR-2784'],
   'workspaceRepository.ts#findBySlug': ['unreviewed', 'MOTIR-2784'],
 };
 
@@ -143,7 +142,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
  * ⚠️ This number may only ever go DOWN. If a change makes this fail, the fix is to
  * adjudicate the site — never to raise the ceiling.
  */
-const UNREVIEWED_CEILING = 70;
+const UNREVIEWED_CEILING = 69;
 // 73 -> 70: MOTIR-2775 RETIRED three zero-caller org-tier singleton reads
 // (`organizationRepository.findById` / `findBySlug`,
 // `organizationMembershipRepository.findByOrgAndUser`) rather than adjudicating them.

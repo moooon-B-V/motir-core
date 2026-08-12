@@ -176,8 +176,15 @@ async function computeStats(
   excludeIds: readonly string[],
 ): Promise<PublicProjectStatsDto> {
   const [byCategory, publicRequests, upvotes] = await Promise.all([
-    workItemRepository.countByStatusCategory(projectId, workspaceId, { excludeIds }),
-    workItemRepository.countTriageItems(projectId, workspaceId),
+    // Bound (MOTIR-2789): this count JOINS `workflow_status` to resolve each item's
+    // category, and that table has no public arm — so unbound the join matched nothing
+    // and every stat read zero on a project full of work.
+    withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.countByStatusCategory(projectId, workspaceId, { excludeIds }, tx),
+    ),
+    withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.countTriageItems(projectId, workspaceId, tx),
+    ),
     publicRequestVoteRepository.countByProject(projectId),
   ]);
   return {
@@ -378,7 +385,10 @@ export const publicProjectsService = {
     const { project, isMember, canManage } = await resolvePublicProject(identifier, actorUserId);
     const hiddenIds = await resolveHiddenIds(project, isMember);
     const [workspace, stats] = await Promise.all([
-      workspaceRepository.findById(project.workspaceId),
+      // `workspace` has no public arm either; the project's own workspace is known here.
+      withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workspaceRepository.findById(project.workspaceId, tx),
+      ),
       computeStats(project.id, project.workspaceId, hiddenIds),
     ]);
     return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats, canManage);
@@ -439,14 +449,33 @@ export const publicProjectsService = {
     // private epic card itself is marked `childrenHidden` (the mapper).
     const hiddenIds = await resolveHiddenIds(project, isMember);
 
-    const board = await boardRepository.findDefaultForProject(projectId, workspaceId);
+    // BOUND (MOTIR-2789). MOTIR-2684 gave a public arm to `project` and `work_item` only;
+    // `board`, `board_column`, `board_column_status` and `workflow_status` never got one,
+    // so every one of these reads came back empty and the public board rendered as a
+    // project with no columns — the 404 this card's predecessor fixed became a blank page
+    // one table over.
+    //
+    // Binding rather than four more policy arms, and MOTIR-2684's own reasoning is why:
+    // it needed an arm for `project` because "the workspace is the PROJECT'S own — which
+    // is the very thing the read resolves, so binding it would presume the answer". That
+    // chicken-and-egg holds ONLY for the reads that come BEFORE the workspace is known.
+    // Here `resolvePublicProject` has already returned it, so there is something honest
+    // to bind, and binding the project's own workspace is not the cross-tenant widening
+    // that migration rejected `withSystemContext` for.
+    const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      boardRepository.findDefaultForProject(projectId, workspaceId, tx),
+    );
     if (!board) {
       return { boardId: '', name: '', columns: [], cap: PUBLIC_BOARD_CAP, truncated: false };
     }
 
     const [columns, mappings, statuses] = await Promise.all([
-      boardColumnRepository.findByBoard(board.id, workspaceId),
-      boardColumnStatusRepository.findByBoard(board.id, workspaceId),
+      withWorkspaceServiceContext(workspaceId, (tx) =>
+        boardColumnRepository.findByBoard(board.id, workspaceId, tx),
+      ),
+      withWorkspaceServiceContext(workspaceId, (tx) =>
+        boardColumnStatusRepository.findByBoard(board.id, workspaceId, tx),
+      ),
       workflowsService.listStatusesByProject(projectId, workspaceId),
     ]);
 
