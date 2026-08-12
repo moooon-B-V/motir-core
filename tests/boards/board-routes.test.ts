@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardsService } from '@/lib/services/boardsService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { encodeFilterParam, facetFilterToAst, type FilterAst } from '@/lib/filters/ast';
 import { EMPTY_FILTER } from '@/lib/issues/issueListFilter';
@@ -48,6 +49,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -264,7 +266,7 @@ describe('board API routes', () => {
 // validation/authorization behaviour itself is covered in board-config-service.
 describe('board config API routes (Subtask 3.3.3)', () => {
   async function firstColumnId(boardId: string): Promise<string> {
-    const col = await db.boardColumn.findFirstOrThrow({
+    const col = await adminDb.boardColumn.findFirstOrThrow({
       where: { boardId },
       orderBy: { position: 'asc' },
     });
@@ -310,7 +312,7 @@ describe('board config API routes (Subtask 3.3.3)', () => {
       password: 'hunter2hunter2',
       name: 'Member',
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     session.current = {

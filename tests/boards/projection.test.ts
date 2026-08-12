@@ -10,6 +10,7 @@ import { keyForAppend } from '@/lib/workItems/positioning';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // boardsService.getBoard (Story 3.1 · Subtask 3.1.4, load model corrected by
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const DEFAULT_KEYS = [
@@ -69,7 +71,7 @@ async function cardInStatus(fx: Fixture, status: string, title: string): Promise
     fx.ctx,
   );
   if (status !== 'todo') {
-    await db.workItem.update({ where: { id: item.id }, data: { status } });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status } });
   }
   return item.id;
 }
@@ -78,14 +80,14 @@ async function cardInStatus(fx: Fixture, status: string, title: string): Promise
  * fast fixture for the scale/pagination assertions (keys start at 1000 to avoid
  * colliding with service-allocated keys). */
 async function bulkCards(fx: Fixture, status: string, n: number): Promise<void> {
-  const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+  const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
   // A VALID fractional-index key per row, chained so the lexicographic position
   // sort is still the insertion order (MOTIR-2198). The old `p${padStart(4)}`
   // form sorted correctly but is a key nothing in the product can mint — head
   // `'p'` demands a 17-char integer part — so a fixture built from it seeds a
   // board state the application cannot reach.
   let position: string | null = null;
-  await db.workItem.createMany({
+  await adminDb.workItem.createMany({
     data: Array.from({ length: n }, (_, i) => {
       const key = 1000 + i;
       return {
@@ -177,10 +179,10 @@ describe('boardsService.getBoard — projection', () => {
 
   it('windows a terminal (done) column to the Done-age window; old done items are excluded but still counted (3.8.2)', async () => {
     const fx = await makeFixture('proj-doneage@example.com');
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     let donePosition: string | null = null;
     const mkDone = async (key: number, title: string) =>
-      db.workItem.create({
+      adminDb.workItem.create({
         data: {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
@@ -196,8 +198,9 @@ describe('boardsService.getBoard — projection', () => {
     const recent = await mkDone(3001, 'recent done');
     const old = await mkDone(3002, 'old done');
     // Backdate the old card past the Done-age window. `updatedAt` is @updatedAt
-    // (auto-managed), so it can only be moved via raw SQL.
-    await db.$executeRaw`
+    // (auto-managed), so it can only be moved via raw SQL — and through the ADMIN
+    // client (MOTIR-2792): this is a fixture mutation, not the behaviour under test.
+    await adminDb.$executeRaw`
       UPDATE "work_item"
          SET "updatedAt" = now() - (${DONE_AGE_WINDOW_DAYS + 6} || ' days')::interval
        WHERE "id" = ${old.id}`;
@@ -215,10 +218,10 @@ describe('boardsService.getBoard — projection', () => {
     // earlierByPosition has the EARLIER position but is touched LAST, so
     // position-order and recency-order disagree — proving the done column uses
     // recency (most-recently-updated first).
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     const earlierKey = keyForAppend(null);
     const laterKey = keyForAppend(earlierKey);
-    await db.workItem.create({
+    await adminDb.workItem.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -231,7 +234,7 @@ describe('boardsService.getBoard — projection', () => {
         position: earlierKey,
       },
     });
-    const laterPos = await db.workItem.create({
+    const laterPos = await adminDb.workItem.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -245,7 +248,7 @@ describe('boardsService.getBoard — projection', () => {
       },
     });
     // touch the later-position card so it is the most recently updated
-    await db.workItem.update({ where: { id: laterPos.id }, data: { title: 'touched' } });
+    await adminDb.workItem.update({ where: { id: laterPos.id }, data: { title: 'touched' } });
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
     const done = board.columns.find((c) => c.statusKeys[0] === 'done')!;

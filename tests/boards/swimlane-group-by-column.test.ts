@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Schema check for the `board.swimlaneGroupBy` enum column (Story 3.3 ·
@@ -25,6 +26,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function seedBoard(label = 'swimlane'): Promise<{ boardId: string }> {
@@ -42,14 +44,14 @@ async function seedBoard(label = 'swimlane'): Promise<{ boardId: string }> {
     actorUserId: user.id,
     name: 'Swimlaned',
   });
-  const board = await db.board.findFirstOrThrow({ where: { projectId: project.id } });
+  const board = await adminDb.board.findFirstOrThrow({ where: { projectId: project.id } });
   return { boardId: board.id };
 }
 
 describe('board.swimlaneGroupBy enum column (Subtask 3.3.2)', () => {
   it('defaults a freshly-seeded board to `none` (the flat 3.2 board, no backfill)', async () => {
     const { boardId } = await seedBoard('default');
-    const board = await db.board.findUniqueOrThrow({ where: { id: boardId } });
+    const board = await adminDb.board.findUniqueOrThrow({ where: { id: boardId } });
     expect(board.swimlaneGroupBy).toBe(BoardSwimlaneGroupBy.none);
   });
 
@@ -63,13 +65,13 @@ describe('board.swimlaneGroupBy enum column (Subtask 3.3.2)', () => {
       BoardSwimlaneGroupBy.none,
     ];
     for (const value of values) {
-      const updated = await db.board.update({
+      const updated = await adminDb.board.update({
         where: { id: boardId },
         data: { swimlaneGroupBy: value },
       });
       expect(updated.swimlaneGroupBy).toBe(value);
       // Re-read to prove it persisted, not just echoed by the update return.
-      const reread = await db.board.findUniqueOrThrow({ where: { id: boardId } });
+      const reread = await adminDb.board.findUniqueOrThrow({ where: { id: boardId } });
       expect(reread.swimlaneGroupBy).toBe(value);
     }
   });

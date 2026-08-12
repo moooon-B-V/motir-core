@@ -19,6 +19,7 @@ import {
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { WorkflowStatusNotFoundError } from '@/lib/workflows/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -72,18 +74,18 @@ async function makeFixture(label: string): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'Config Member',
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
   const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
   if (!board) throw new Error('expected a seeded default board');
 
-  const statuses = await db.workflowStatus.findMany({ where: { projectId: project.id } });
+  const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: project.id } });
   const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
 
   // Each seeded column maps exactly one status; index columns by that key.
-  const mappings = await db.boardColumnStatus.findMany({ where: { boardId: board.id } });
+  const mappings = await adminDb.boardColumnStatus.findMany({ where: { boardId: board.id } });
   const keyByStatusId = new Map(statuses.map((s) => [s.id, s.key]));
   const columnByStatusKey = new Map<string, string>();
   for (const m of mappings) {
@@ -109,7 +111,7 @@ async function cardInStatus(fx: Fixture, status: string, title: string): Promise
     fx.ownerCtx,
   );
   if (status !== 'todo') {
-    await db.workItem.update({ where: { id: item.id }, data: { status } });
+    await adminDb.workItem.update({ where: { id: item.id }, data: { status } });
   }
   return item.id;
 }
@@ -178,7 +180,7 @@ describe('boardsService.renameColumn (Subtask 3.6.2)', () => {
     const columnId = fx.columnByStatusKey.get('todo')!;
     const dto = await boardsService.renameColumn(columnId, 'To Triage', fx.ownerCtx);
     expect(dto).toMatchObject({ id: columnId, name: 'To Triage' });
-    const reread = await db.boardColumn.findUniqueOrThrow({ where: { id: columnId } });
+    const reread = await adminDb.boardColumn.findUniqueOrThrow({ where: { id: columnId } });
     expect(reread.name).toBe('To Triage');
   });
 
@@ -234,7 +236,7 @@ describe('boardsService.deleteColumn (Subtask 3.6.2)', () => {
 
     await boardsService.deleteColumn(columnId, fx.ownerCtx);
 
-    const gone = await db.boardColumn.findUnique({ where: { id: columnId } });
+    const gone = await adminDb.boardColumn.findUnique({ where: { id: columnId } });
     expect(gone).toBeNull();
     // its status mapping is gone → the status is unmapped now.
     const board = await boardsService.getBoard(fx.projectId, fx.ownerCtx);
@@ -252,8 +254,10 @@ describe('boardsService.deleteColumn (Subtask 3.6.2)', () => {
     );
 
     // column AND work item both still exist.
-    expect(await db.boardColumn.findUnique({ where: { id: columnId } })).not.toBeNull();
-    expect(await db.workItem.findUnique({ where: { id: cardId } })).not.toBeNull();
+    const boardColumnRow = await adminDb.boardColumn.findUnique({ where: { id: columnId } });
+    expect(boardColumnRow).not.toBeNull();
+    const workItemRow = await adminDb.workItem.findUnique({ where: { id: cardId } });
+    expect(workItemRow).not.toBeNull();
   });
 
   it('refuses deleting the board’s last column (LastColumnError)', async () => {
@@ -302,7 +306,7 @@ describe('boardsService.mapStatusToColumn (Subtask 3.6.2)', () => {
       columnId: todoColumnId,
       statusId: blockedStatusId,
     });
-    let rows = await db.boardColumnStatus.findMany({
+    let rows = await adminDb.boardColumnStatus.findMany({
       where: { boardId: fx.boardId, statusId: blockedStatusId },
     });
     expect(rows).toHaveLength(1);
@@ -310,7 +314,7 @@ describe('boardsService.mapStatusToColumn (Subtask 3.6.2)', () => {
 
     // re-map the same status to a different column → still exactly one row.
     await boardsService.mapStatusToColumn(fx.boardId, inProgColumnId, blockedStatusId, fx.ownerCtx);
-    rows = await db.boardColumnStatus.findMany({
+    rows = await adminDb.boardColumnStatus.findMany({
       where: { boardId: fx.boardId, statusId: blockedStatusId },
     });
     expect(rows).toHaveLength(1);
@@ -368,12 +372,13 @@ describe('boardsService.unmapStatus (Subtask 3.6.2)', () => {
     const todoStatusId = fx.statusIdByKey.get('todo')!;
 
     await boardsService.unmapStatus(fx.boardId, todoStatusId, fx.ownerCtx);
-    let rows = await db.boardColumnStatus.findMany({
+    let rows = await adminDb.boardColumnStatus.findMany({
       where: { boardId: fx.boardId, statusId: todoStatusId },
     });
     expect(rows).toHaveLength(0);
     // the work item still exists (config never touches work items).
-    expect(await db.workItem.findUnique({ where: { id: cardId } })).not.toBeNull();
+    const workItemRow = await adminDb.workItem.findUnique({ where: { id: cardId } });
+    expect(workItemRow).not.toBeNull();
     const board = await boardsService.getBoard(fx.projectId, fx.ownerCtx);
     expect(board.unmappedStatuses.map((s) => s.key)).toContain('todo');
 
@@ -381,7 +386,7 @@ describe('boardsService.unmapStatus (Subtask 3.6.2)', () => {
     await expect(
       boardsService.unmapStatus(fx.boardId, todoStatusId, fx.ownerCtx),
     ).resolves.toBeUndefined();
-    rows = await db.boardColumnStatus.findMany({
+    rows = await adminDb.boardColumnStatus.findMany({
       where: { boardId: fx.boardId, statusId: todoStatusId },
     });
     expect(rows).toHaveLength(0);
@@ -405,7 +410,7 @@ describe('boardsService.renameBoard (Subtask 3.6.2)', () => {
     const fx = await makeFixture('board-rename');
     const dto = await boardsService.renameBoard(fx.boardId, 'Delivery Board', fx.ownerCtx);
     expect(dto).toMatchObject({ id: fx.boardId, name: 'Delivery Board' });
-    const reread = await db.board.findUniqueOrThrow({ where: { id: fx.boardId } });
+    const reread = await adminDb.board.findUniqueOrThrow({ where: { id: fx.boardId } });
     expect(reread.name).toBe('Delivery Board');
   });
 

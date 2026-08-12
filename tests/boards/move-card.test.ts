@@ -15,6 +15,7 @@ import {
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { inngest } from '@/lib/jobs/client';
 
@@ -42,6 +43,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -79,14 +81,14 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
   const statuses = await workflowsService.listStatusesByProject(project.id, workspaceId);
   const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
 
-  const board = await db.board.create({
+  const board = await adminDb.board.create({
     data: { workspaceId, projectId: project.id, name: 'Board', type: 'kanban', position: 'a0' },
   });
 
   // One single-status column per status (the default-board projection shape).
   const columns: Record<string, string> = {};
   for (const s of statuses) {
-    const col = await db.boardColumn.create({
+    const col = await adminDb.boardColumn.create({
       data: {
         workspaceId,
         projectId: project.id,
@@ -96,7 +98,7 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
       },
     });
     columns[s.key] = col.id;
-    await db.boardColumnStatus.create({
+    await adminDb.boardColumnStatus.create({
       data: {
         workspaceId,
         projectId: project.id,
@@ -110,7 +112,7 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
   // A SECOND board (same project) hosting the multi-status + unmapped columns,
   // so they don't collide with board 1's per-status mappings under
   // `@@unique([boardId, statusId])`.
-  const multiBoard = await db.board.create({
+  const multiBoard = await adminDb.board.create({
     data: {
       workspaceId,
       projectId: project.id,
@@ -123,7 +125,7 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
   // A multi-status column mapping BOTH in_progress and in_review (the Jira
   // "merge In Progress + In Review" shape). in_progress sorts before in_review,
   // so it is the first-by-position pick.
-  const multi = await db.boardColumn.create({
+  const multi = await adminDb.boardColumn.create({
     data: {
       workspaceId,
       projectId: project.id,
@@ -133,7 +135,7 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
     },
   });
   for (const key of ['in_review', 'in_progress']) {
-    await db.boardColumnStatus.create({
+    await adminDb.boardColumnStatus.create({
       data: {
         workspaceId,
         projectId: project.id,
@@ -145,7 +147,7 @@ async function makeFixture(email = 'move-a@example.com'): Promise<Fixture> {
   }
 
   // An unmapped column — no board_column_status rows at all.
-  const unmapped = await db.boardColumn.create({
+  const unmapped = await adminDb.boardColumn.create({
     data: {
       workspaceId,
       projectId: project.id,
@@ -180,7 +182,7 @@ async function statusOf(fx: Fixture, itemId: string): Promise<string> {
 }
 
 async function positionOf(itemId: string): Promise<string> {
-  const row = await db.workItem.findUniqueOrThrow({ where: { id: itemId } });
+  const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: itemId } });
   return row.position;
 }
 

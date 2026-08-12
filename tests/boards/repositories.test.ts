@@ -5,7 +5,9 @@ import { boardColumnRepository } from '@/lib/repositories/boardColumnRepository'
 import { boardColumnStatusRepository } from '@/lib/repositories/boardColumnStatusRepository';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Repository-layer tests for the board data-access leaves (Story 3.1 ·
 // Subtask 3.1.3): boardRepository / boardColumnRepository /
@@ -30,6 +32,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 let positionCounter = 0;
@@ -46,7 +49,7 @@ async function makeStatus(args: {
   projectId: string;
   key: string;
 }): Promise<string> {
-  const row = await db.workflowStatus.create({
+  const row = await adminDb.workflowStatus.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -87,7 +90,7 @@ async function makeBoardTenant(label: string): Promise<BoardTenantFixture> {
     ownerUserId: user.id,
   });
   const workspaceId = ws.workspace.id;
-  const project = await db.project.create({
+  const project = await adminDb.project.create({
     data: { workspaceId, name: `Board P ${label}`, slug: 'board-repo', identifier: 'BRD' },
   });
   const projectId = project.id;
@@ -95,7 +98,7 @@ async function makeBoardTenant(label: string): Promise<BoardTenantFixture> {
   const status1Id = await makeStatus({ workspaceId, projectId, key: 'todo' });
   const status2Id = await makeStatus({ workspaceId, projectId, key: 'done' });
 
-  const board = await db.board.create({
+  const board = await adminDb.board.create({
     // isDefault mirrors the real auto-seed (3.1.2): a project's sole board is its
     // default, which is what findDefaultForProject now resolves on (3.7.5).
     data: {
@@ -107,16 +110,16 @@ async function makeBoardTenant(label: string): Promise<BoardTenantFixture> {
       isDefault: true,
     },
   });
-  const column1 = await db.boardColumn.create({
+  const column1 = await adminDb.boardColumn.create({
     data: { workspaceId, projectId, boardId: board.id, name: 'To Do', position: nextPosition() },
   });
-  const column2 = await db.boardColumn.create({
+  const column2 = await adminDb.boardColumn.create({
     data: { workspaceId, projectId, boardId: board.id, name: 'Done', position: nextPosition() },
   });
-  const mapping1 = await db.boardColumnStatus.create({
+  const mapping1 = await adminDb.boardColumnStatus.create({
     data: { workspaceId, projectId, boardId: board.id, columnId: column1.id, statusId: status1Id },
   });
-  const mapping2 = await db.boardColumnStatus.create({
+  const mapping2 = await adminDb.boardColumnStatus.create({
     data: { workspaceId, projectId, boardId: board.id, columnId: column2.id, statusId: status2Id },
   });
 
@@ -229,7 +232,7 @@ describe('board writes — required-tx create + delete under a transaction', () 
   it('create persists a board + column + mapping inside one transaction', async () => {
     const fx = await makeBoardTenant('a');
     // A fresh project in the same workspace, with one status to map.
-    const project = await db.project.create({
+    const project = await adminDb.project.create({
       data: {
         workspaceId: fx.workspaceId,
         name: 'Write P',
@@ -243,7 +246,10 @@ describe('board writes — required-tx create + delete under a transaction', () 
       key: 'todo',
     });
 
-    const created = await db.$transaction(async (tx) => {
+    // Bound to the workspace tier (MOTIR-2792). `withWorkspaceServiceContext` rather
+    // than `withWorkspaceContext` because this fixture carries no actor — board rows
+    // are workspace-scoped and need no user to be admitted.
+    const created = await withWorkspaceServiceContext(fx.workspaceId, async (tx) => {
       const board = await boardRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -289,7 +295,7 @@ describe('board writes — required-tx create + delete under a transaction', () 
 
   it('deleteByStatus removes only that board’s mapping for the status', async () => {
     const fx = await makeBoardTenant('a');
-    const removed = await db.$transaction((tx) =>
+    const removed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       boardColumnStatusRepository.deleteByStatus(fx.boardId, fx.status1Id, tx),
     );
     expect(removed).toBe(1);
@@ -299,7 +305,7 @@ describe('board writes — required-tx create + delete under a transaction', () 
 
   it('deleteByColumn removes the column’s mappings', async () => {
     const fx = await makeBoardTenant('a');
-    const removed = await db.$transaction((tx) =>
+    const removed = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       boardColumnStatusRepository.deleteByColumn(fx.column1Id, tx),
     );
     expect(removed).toBe(1);
@@ -309,7 +315,7 @@ describe('board writes — required-tx create + delete under a transaction', () 
 
   it('update mutates a column (rename / wip-limit) under a transaction', async () => {
     const fx = await makeBoardTenant('a');
-    const updated = await db.$transaction((tx) =>
+    const updated = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
       boardColumnRepository.update(fx.column1Id, { name: 'Backlog', wipLimit: 5 }, tx),
     );
     expect(updated.name).toBe('Backlog');

@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Row-level security + key constraints for the board tables (Story 3.1 ·
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 let positionCounter = 0;
@@ -65,7 +67,7 @@ async function makeStatus(args: {
   category?: StatusCategory;
   isInitial?: boolean;
 }): Promise<string> {
-  const row = await db.workflowStatus.create({
+  const row = await adminDb.workflowStatus.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -84,7 +86,7 @@ async function makeBoard(args: {
   projectId: string;
   name?: string;
 }): Promise<string> {
-  const row = await db.board.create({
+  const row = await adminDb.board.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -101,7 +103,7 @@ async function makeColumn(args: {
   boardId: string;
   name: string;
 }): Promise<string> {
-  const row = await db.boardColumn.create({
+  const row = await adminDb.boardColumn.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -120,7 +122,7 @@ async function makeMapping(args: {
   columnId: string;
   statusId: string;
 }): Promise<string> {
-  const row = await db.boardColumnStatus.create({
+  const row = await adminDb.boardColumnStatus.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -169,10 +171,10 @@ async function makeBoardTenants(): Promise<BoardTenantFixture> {
   // BARE projects (db insert, NOT projectsService.createProject) so the manual
   // board fixtures below aren't shadowed by 3.1.2's auto-seeded default board —
   // this suite controls the exact rows under test.
-  const p1 = await db.project.create({
+  const p1 = await adminDb.project.create({
     data: { workspaceId: w1.workspace.id, name: 'Board P1', slug: 'board-rls', identifier: 'BRL' },
   });
-  const p2 = await db.project.create({
+  const p2 = await adminDb.project.create({
     data: { workspaceId: w2.workspace.id, name: 'Board P2', slug: 'board-rls', identifier: 'BRL' },
   });
 
@@ -401,7 +403,7 @@ describe('board constraints — project_id is NOT unique', () => {
       name: 'Board 2',
     });
     expect(secondBoardId).toBeTruthy();
-    const count = await db.board.count({ where: { projectId: fx.projectP1Id } });
+    const count = await adminDb.board.count({ where: { projectId: fx.projectP1Id } });
     expect(count).toBe(2);
   });
 });

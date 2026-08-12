@@ -14,6 +14,7 @@ import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { seedLargeScrumSprint } from '../../scripts/seedLargeBoard';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Subtask 4.7.1 — the at-scale SCRUM fixture. The Scrum analogue of the 3.5.1
@@ -38,6 +39,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -78,7 +80,7 @@ async function makeFixture(): Promise<Fixture> {
 }
 
 async function setGroupBy(projectId: string, groupBy: BoardSwimlaneGroupBy): Promise<void> {
-  await db.board.updateMany({ where: { projectId }, data: { swimlaneGroupBy: groupBy } });
+  await adminDb.board.updateMany({ where: { projectId }, data: { swimlaneGroupBy: groupBy } });
 }
 
 // Small, fast distribution: ~22 spread cards over the 6 default statuses + 30
@@ -125,7 +127,7 @@ describe('sprint-shaped large seed distribution (4.7.1)', () => {
     const m = await seed(fx);
 
     // The default board is now scrum.
-    const board = await db.board.findFirstOrThrow({ where: { projectId: fx.projectId } });
+    const board = await adminDb.board.findFirstOrThrow({ where: { projectId: fx.projectId } });
     expect(board.type).toBe('scrum');
 
     // The active sprint holds the bulk of the issues; a backlog slice stays out.
@@ -133,21 +135,21 @@ describe('sprint-shaped large seed distribution (4.7.1)', () => {
     expect(m.backlogIssueCount).toBeGreaterThan(0);
     expect(m.sprintIssueCount).toBeGreaterThan(m.backlogIssueCount); // the bulk is in-sprint
 
-    const active = await db.sprint.findUniqueOrThrow({ where: { id: m.activeSprintId } });
+    const active = await adminDb.sprint.findUniqueOrThrow({ where: { id: m.activeSprintId } });
     expect(active.state).toBe('active');
     expect(active.startDate).not.toBeNull();
     expect(active.endDate).not.toBeNull();
 
     // The planned carry-over target exists (the 4.7.3 complete journey's target).
-    const target = await db.sprint.findUniqueOrThrow({ where: { id: m.targetSprintId } });
+    const target = await adminDb.sprint.findUniqueOrThrow({ where: { id: m.targetSprintId } });
     expect(target.state).toBe('planned');
     expect(target.id).not.toBe(active.id);
 
     // The DB agrees with the manifest on the in-sprint vs. backlog split.
-    const inSprint = await db.workItem.count({
+    const inSprint = await adminDb.workItem.count({
       where: { projectId: fx.projectId, sprintId: m.activeSprintId },
     });
-    const inBacklog = await db.workItem.count({
+    const inBacklog = await adminDb.workItem.count({
       where: { projectId: fx.projectId, sprintId: null },
     });
     expect(inSprint).toBe(m.sprintIssueCount);
@@ -169,10 +171,10 @@ describe('sprint-shaped large seed distribution (4.7.1)', () => {
 
     // A backlog issue (left OUTSIDE the sprint) is absent from the scrum board;
     // an in-sprint issue is present.
-    const backlogIssue = await db.workItem.findFirstOrThrow({
+    const backlogIssue = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: fx.projectId, sprintId: null },
     });
-    const sprintIssue = await db.workItem.findFirstOrThrow({
+    const sprintIssue = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: fx.projectId, sprintId: m.activeSprintId },
     });
     const onBoard = new Set(projection.columns.flatMap((c) => c.cards.map((card) => card.id)));

@@ -11,6 +11,7 @@ import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type { BoardCardDto, BoardProjectionDto } from '@/lib/dto/boards';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // boardsService.getBoard — swimlane projection (Story 3.3 · Subtask 3.3.4). Real
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -46,7 +48,7 @@ async function makeFixture(email: string): Promise<Fixture> {
 
 /** Flip the project's (single) default board to a group-by. */
 async function setGroupBy(fx: Fixture, groupBy: BoardSwimlaneGroupBy): Promise<void> {
-  await db.board.updateMany({
+  await adminDb.board.updateMany({
     where: { projectId: fx.projectId },
     data: { swimlaneGroupBy: groupBy },
   });
@@ -68,11 +70,11 @@ async function card(
 /** Set an arbitrary assignee id (the user must exist; membership isn't gated by
  * the projection). */
 async function assign(itemId: string, userId: string | null): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { assigneeId: userId } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { assigneeId: userId } });
 }
 
 async function setPriority(itemId: string, priority: 'high' | 'medium' | 'low'): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { priority } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { priority } });
 }
 
 /** Find a card across all columns of the projection. */
@@ -194,14 +196,14 @@ describe('boardsService.getBoard — swimlane projection (3.3.4)', () => {
 
   it('buckets the whole bounded set under a group-by while the lane count is the full aggregate (no load-all, 3.8.2)', async () => {
     const fx = await makeFixture('swl-bound@example.com');
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     // 120 unassigned todo cards — well past the old 50-card page size.
     // `position` is a VALID fractional-index key chained in insertion order
     // (MOTIR-2198): the old `p${padStart(4)}` form sorted correctly but is a key
     // nothing in the product can mint (head `'p'` demands a 17-char integer
     // part), so the fixture seeded a state the application cannot reach.
     let position: string | null = null;
-    await db.workItem.createMany({
+    await adminDb.workItem.createMany({
       data: Array.from({ length: 120 }, (_, i) => {
         const key = 1000 + i;
         return {

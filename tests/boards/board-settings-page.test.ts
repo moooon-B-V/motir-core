@@ -8,6 +8,7 @@ import { BoardNotFoundError } from '@/lib/boards/errors';
 import { resolveSelectedBoardId } from '@/app/(authed)/settings/project/board/page';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Board SETTINGS page resolution (Story 3.7 · Subtask 3.7.8). The per-board
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {

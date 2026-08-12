@@ -7,6 +7,7 @@ import { boardRepository } from '@/lib/repositories/boardRepository';
 import { BoardNotFoundError } from '@/lib/boards/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // boardsService.getBoard — BOARD SELECTION (Story 3.7 · Subtask 3.7.5). The read
@@ -23,6 +24,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {

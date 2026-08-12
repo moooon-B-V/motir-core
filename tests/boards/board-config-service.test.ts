@@ -15,6 +15,7 @@ import {
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -37,6 +38,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -69,13 +71,13 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'Config Member',
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
   const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
   if (!board) throw new Error('expected a seeded default board');
-  const column = await db.boardColumn.findFirstOrThrow({
+  const column = await adminDb.boardColumn.findFirstOrThrow({
     where: { boardId: board.id },
     orderBy: { position: 'asc' },
   });
@@ -96,7 +98,7 @@ describe('boardsService.setSwimlaneGroupBy (Subtask 3.3.3)', () => {
     const dto = await boardsService.setSwimlaneGroupBy(fx.boardId, 'assignee', fx.ownerCtx);
     expect(dto).toMatchObject({ id: fx.boardId, swimlaneGroupBy: 'assignee' });
 
-    const reread = await db.board.findUniqueOrThrow({ where: { id: fx.boardId } });
+    const reread = await adminDb.board.findUniqueOrThrow({ where: { id: fx.boardId } });
     expect(reread.swimlaneGroupBy).toBe(BoardSwimlaneGroupBy.assignee);
   });
 
@@ -113,7 +115,7 @@ describe('boardsService.setSwimlaneGroupBy (Subtask 3.3.3)', () => {
       boardsService.setSwimlaneGroupBy(fx.boardId, 'sprint', fx.ownerCtx),
     ).rejects.toBeInstanceOf(InvalidSwimlaneGroupByError);
     // The board is unchanged.
-    const reread = await db.board.findUniqueOrThrow({ where: { id: fx.boardId } });
+    const reread = await adminDb.board.findUniqueOrThrow({ where: { id: fx.boardId } });
     expect(reread.swimlaneGroupBy).toBe(BoardSwimlaneGroupBy.none);
   });
 
@@ -122,7 +124,7 @@ describe('boardsService.setSwimlaneGroupBy (Subtask 3.3.3)', () => {
     await expect(
       boardsService.setSwimlaneGroupBy(fx.boardId, 'priority', fx.memberCtx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
-    const reread = await db.board.findUniqueOrThrow({ where: { id: fx.boardId } });
+    const reread = await adminDb.board.findUniqueOrThrow({ where: { id: fx.boardId } });
     expect(reread.swimlaneGroupBy).toBe(BoardSwimlaneGroupBy.none);
   });
 
@@ -143,7 +145,7 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     const dto = await boardsService.setColumnWipLimit(fx.columnId, 5, fx.ownerCtx);
     expect(dto).toMatchObject({ id: fx.columnId, wipLimit: 5 });
 
-    const reread = await db.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
+    const reread = await adminDb.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
     expect(reread.wipLimit).toBe(5);
   });
 
@@ -152,7 +154,7 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     await boardsService.setColumnWipLimit(fx.columnId, 3, fx.ownerCtx);
     const dto = await boardsService.setColumnWipLimit(fx.columnId, null, fx.ownerCtx);
     expect(dto.wipLimit).toBeNull();
-    const reread = await db.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
+    const reread = await adminDb.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
     expect(reread.wipLimit).toBeNull();
   });
 
@@ -174,7 +176,7 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     await expect(
       boardsService.setColumnWipLimit(fx.columnId, 2.5, fx.ownerCtx),
     ).rejects.toBeInstanceOf(InvalidWipLimitError);
-    const reread = await db.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
+    const reread = await adminDb.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
     expect(reread.wipLimit).toBeNull();
   });
 
@@ -183,7 +185,7 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     await expect(
       boardsService.setColumnWipLimit(fx.columnId, 4, fx.memberCtx),
     ).rejects.toBeInstanceOf(PermissionDeniedError);
-    const reread = await db.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
+    const reread = await adminDb.boardColumn.findUniqueOrThrow({ where: { id: fx.columnId } });
     expect(reread.wipLimit).toBeNull();
   });
 
@@ -226,11 +228,11 @@ describe('the MOTIR-2296 WIDENING — who may configure a board, before and afte
       password: 'hunter2hunter2',
       name: label,
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: user.id, workspaceId: fx.workspaceId, role: roles.workspaceRole ?? 'member' },
     });
     if (roles.projectRole) {
-      await db.projectMembership.create({
+      await adminDb.projectMembership.create({
         data: {
           userId: user.id,
           projectId: fx.projectId,

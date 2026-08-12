@@ -16,6 +16,7 @@ import {
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -69,7 +71,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'CRUD Member',
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
@@ -105,7 +107,9 @@ describe('boardsService.createBoard (Subtask 3.7.3)', () => {
     expect(mappings).toHaveLength(cols.length);
 
     // The project's default is unchanged (still exactly one default).
-    const defaults = await db.board.count({ where: { projectId: fx.projectId, isDefault: true } });
+    const defaults = await adminDb.board.count({
+      where: { projectId: fx.projectId, isDefault: true },
+    });
     expect(defaults).toBe(1);
   });
 
@@ -163,7 +167,7 @@ describe('boardsService.setDefaultBoard (Subtask 3.7.3)', () => {
     const updated = await boardsService.setDefaultBoard(triage.id, fx.ownerCtx);
     expect(updated).toMatchObject({ id: triage.id, isDefault: true });
 
-    const rows = await db.board.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.board.findMany({ where: { projectId: fx.projectId } });
     expect(rows.filter((b) => b.isDefault)).toHaveLength(1);
     expect(rows.find((b) => b.id === triage.id)?.isDefault).toBe(true);
     expect(rows.find((b) => b.id === fx.defaultBoardId)?.isDefault).toBe(false);
@@ -173,7 +177,9 @@ describe('boardsService.setDefaultBoard (Subtask 3.7.3)', () => {
     const fx = await makeFixture('setdefault-noop');
     const updated = await boardsService.setDefaultBoard(fx.defaultBoardId, fx.ownerCtx);
     expect(updated).toMatchObject({ id: fx.defaultBoardId, isDefault: true });
-    const defaults = await db.board.count({ where: { projectId: fx.projectId, isDefault: true } });
+    const defaults = await adminDb.board.count({
+      where: { projectId: fx.projectId, isDefault: true },
+    });
     expect(defaults).toBe(1);
   });
 
@@ -210,8 +216,9 @@ describe('boardsService.deleteBoard (Subtask 3.7.3)', () => {
       0,
     );
     // …the issue survives, and the default board is untouched.
-    expect(await db.workItem.findUnique({ where: { id: item.id } })).not.toBeNull();
-    const remaining = await db.board.findMany({ where: { projectId: fx.projectId } });
+    const workItemRow = await adminDb.workItem.findUnique({ where: { id: item.id } });
+    expect(workItemRow).not.toBeNull();
+    const remaining = await adminDb.board.findMany({ where: { projectId: fx.projectId } });
     expect(remaining).toHaveLength(1);
     expect(remaining[0]?.id).toBe(fx.defaultBoardId);
     expect(remaining[0]?.isDefault).toBe(true);
@@ -225,7 +232,7 @@ describe('boardsService.deleteBoard (Subtask 3.7.3)', () => {
 
     await boardsService.deleteBoard(triage.id, fx.ownerCtx);
 
-    const rows = await db.board.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.board.findMany({ where: { projectId: fx.projectId } });
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe(fx.defaultBoardId);
     expect(rows[0]?.isDefault).toBe(true); // promoted — never a project with no default

@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // boardsService.getBoard — SCRUM sprint scope + SprintSummaryDto (Subtask 4.5.2).
@@ -24,6 +25,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -49,14 +51,14 @@ async function makeFixture(email: string): Promise<Fixture> {
   const ws = await workspacesService.createWorkspace({ name: 'Scrum WS', ownerUserId: user.id });
   const ctx: ServiceContext = { userId: user.id, workspaceId: ws.workspace.id };
   const project = await createTestProject({ workspaceId: ws.workspace.id, actorUserId: user.id });
-  const board = await db.board.findFirstOrThrow({ where: { projectId: project.id } });
+  const board = await adminDb.board.findFirstOrThrow({ where: { projectId: project.id } });
   return { ctx, workspaceId: ws.workspace.id, projectId: project.id, boardId: board.id };
 }
 
 /** Flip the seeded default board to `scrum` (it keeps its seeded columns +
  *  mappings; only the kind changes). */
 async function makeScrum(fx: Fixture): Promise<void> {
-  await db.board.update({ where: { id: fx.boardId }, data: { type: 'scrum' } });
+  await adminDb.board.update({ where: { id: fx.boardId }, data: { type: 'scrum' } });
 }
 
 /** Create a sprint directly (the 4.4 lifecycle UI is another story). `endInDays`
@@ -66,7 +68,7 @@ async function makeSprint(
   opts: { state?: 'planned' | 'active'; endInDays?: number; goal?: string | null } = {},
 ): Promise<string> {
   const { state = 'active', endInDays = 5, goal = 'Ship the thing' } = opts;
-  const sprint = await db.sprint.create({
+  const sprint = await adminDb.sprint.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -92,7 +94,7 @@ async function card(
     { projectId: fx.projectId, kind: 'task', title: opts.title },
     fx.ctx,
   );
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: item.id },
     data: {
       status: opts.status,
@@ -203,7 +205,10 @@ describe('getBoard — scrum sprint scope', () => {
   it('swimlanes compose with the sprint filter — lanes count only sprint issues', async () => {
     const fx = await makeFixture('scrum-lanes@example.com');
     await makeScrum(fx);
-    await db.board.update({ where: { id: fx.boardId }, data: { swimlaneGroupBy: 'assignee' } });
+    await adminDb.board.update({
+      where: { id: fx.boardId },
+      data: { swimlaneGroupBy: 'assignee' },
+    });
     const sprintId = await makeSprint(fx);
     await card(fx, { status: 'todo', title: 'Sprint unassigned 1', sprintId });
     await card(fx, { status: 'in_progress', title: 'Sprint unassigned 2', sprintId });
@@ -218,13 +223,16 @@ describe('getBoard — scrum sprint scope', () => {
   it('priority swimlanes are sprint-scoped', async () => {
     const fx = await makeFixture('scrum-lanes-prio@example.com');
     await makeScrum(fx);
-    await db.board.update({ where: { id: fx.boardId }, data: { swimlaneGroupBy: 'priority' } });
+    await adminDb.board.update({
+      where: { id: fx.boardId },
+      data: { swimlaneGroupBy: 'priority' },
+    });
     const sprintId = await makeSprint(fx);
     const a = await card(fx, { status: 'todo', title: 'Sprint A', sprintId });
-    await db.workItem.update({ where: { id: a }, data: { priority: 'high' } });
+    await adminDb.workItem.update({ where: { id: a }, data: { priority: 'high' } });
     // out-of-sprint high-priority issue — excluded from the lane count
     const b = await card(fx, { status: 'todo', title: 'Backlog', sprintId: null });
-    await db.workItem.update({ where: { id: b }, data: { priority: 'high' } });
+    await adminDb.workItem.update({ where: { id: b }, data: { priority: 'high' } });
 
     const board = await boardsService.getBoard(fx.projectId, fx.ctx);
     const high = board.swimlanes.find((l) => l.key === 'high')!;
@@ -234,7 +242,7 @@ describe('getBoard — scrum sprint scope', () => {
   it('epic swimlanes are sprint-scoped (catch-all counts only sprint issues)', async () => {
     const fx = await makeFixture('scrum-lanes-epic@example.com');
     await makeScrum(fx);
-    await db.board.update({ where: { id: fx.boardId }, data: { swimlaneGroupBy: 'epic' } });
+    await adminDb.board.update({ where: { id: fx.boardId }, data: { swimlaneGroupBy: 'epic' } });
     const sprintId = await makeSprint(fx);
     const epic = await workItemsService.createWorkItem(
       { projectId: fx.projectId, kind: 'epic', title: 'Epic 1' },
@@ -245,7 +253,7 @@ describe('getBoard — scrum sprint scope', () => {
       { projectId: fx.projectId, kind: 'story', title: 'Story under epic', parentId: epic.id },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: story.id }, data: { sprintId } });
+    await adminDb.workItem.update({ where: { id: story.id }, data: { sprintId } });
     // a sprint issue with NO epic ancestor → the "No epic" catch-all
     await card(fx, { status: 'todo', title: 'No-epic sprint card', sprintId });
     // out-of-sprint no-epic card — excluded from the catch-all count
