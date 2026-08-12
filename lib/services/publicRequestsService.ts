@@ -1,6 +1,9 @@
 import { Prisma } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
-import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withUserContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { publicRequestVoteRepository } from '@/lib/repositories/publicRequestVoteRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
@@ -26,11 +29,18 @@ import type { PublicRequestVoteResultDTO } from '@/lib/dto/publicRequests';
 // keys on `app.user_id` for the owner's rows + `app.system_admin` for the
 // cross-account COUNT. So the vote write runs under `withUserContext` (the voter
 // touches only their OWN vote) and the resulting tally is read under
-// `withSystemContext` (it spans every voter). The work_item lock + the
-// work_item/project/comment reads ride the app-layer `projectId`/`workspaceId`
-// gate the rest of the codebase relies on (those tables' workspace RLS is the
-// secondary defence — finding #26; the app connection isn't narrowed to the
-// cross-org voter's workspace).
+// `withSystemContext` (it spans every voter).
+//
+// MOTIR-2684 supplied the two GUCs the rest of this file was leaning on the
+// app-layer gate for. The opening `work_item` read is context-less by necessity
+// (the item id is all the route has, so its project — and therefore its
+// workspace — is what the read is FINDING); it resolves through the
+// `work_item_public_project_read` policy, which admits an unbound read of a
+// public project's items and nothing else. The comment INSERT then binds the
+// item's own workspace via `withWorkspaceServiceContext`. Both are still the
+// secondary defence behind the app-layer `projectId`/`workspaceId` gate
+// (finding #26) — what changed is that under the non-bypass `motir_app` role
+// they no longer refuse the path outright.
 
 /**
  * Resolve a public request (a `work_item` by id) and assert the caller's grant
@@ -127,7 +137,17 @@ export const publicRequestsService = {
 
     if (input.bodyMd.trim().length === 0) throw new EmptyCommentBodyError();
 
-    const row = await db.$transaction((tx) =>
+    // MOTIR-2684: `withWorkspaceServiceContext`, not a bare `db.$transaction`.
+    // `comment_active_workspace`'s WITH CHECK is `workspaceId = app.workspace_id`,
+    // and a cross-org commenter's request binds no workspace anywhere upstream —
+    // so under `motir_app` the INSERT was refused outright and the public thread
+    // was write-dead. The workspace is the ITEM'S, taken from the row the grant
+    // above has already proved belongs to a `public` project, so it is a trusted
+    // resolution and not user input — the constraint that helper documents. It is
+    // also the right helper rather than `withWorkspaceContext`: the commenter is
+    // by definition NOT a member, so there is no membership for an `app.user_id`
+    // bind to buy, and the comment policy keys on the workspace alone.
+    const row = await withWorkspaceServiceContext(item.workspaceId, (tx) =>
       commentRepository.create(
         {
           workspaceId: item.workspaceId,

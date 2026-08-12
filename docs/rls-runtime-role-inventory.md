@@ -272,6 +272,51 @@ from the call site:
 **Consequence for the chain, updated.** MOTIR-2528's default flip is now `blocked_by` MOTIR-2684 and
 MOTIR-2685 as well as by its own fixture migration.
 
+### MOTIR-2684, resolved — the arm the binding chain could not supply
+
+The public branch closed with a POLICY change rather than a binding, because there was nothing
+honest to bind. `20260811230000_public_project_read_policy` adds `project_public_read` — a
+PERMISSIVE `FOR SELECT` policy, `USING ("accessLevel" = 'public')`.
+
+**`FOR SELECT` is the load-bearing word.** Widening the existing FOR-ALL policy's `USING` would have
+widened UPDATE and DELETE with it, and DELETE has no `WITH CHECK` to catch the difference — an
+unbound caller could have deleted any public project. As a separate SELECT policy the write commands
+stay governed by `project_workspace_or_system_read` exactly as before.
+
+**Resolving the project turned out to be half the path.** Every public surface — board, roadmap,
+work-items, tree, and `publicRequestsService.resolvePublicRequest`, which opens with an unbound
+`work_item` read _before_ the grant check it exists to run — then reads `work_item` on the same
+context-less connection. With the project arm alone the 404 becomes a blank page, and a public
+request cannot be upvoted at all. So the migration adds `work_item_public_project_read` too, and
+DELIBERATELY NARROWER: publicness is inherited via the parent project rather than carried on the
+row, so the predicate is a join on the product's hottest table. It is gated on
+`coalesce(app.workspace_id, '') = ''`, so it fires only on the genuinely context-less connection —
+which is only ever the public path.
+
+**The cost of that join was measured, not assumed** (PG 15, `EXPLAIN ANALYZE`, 500 work items):
+
+| `app.workspace_id` | access path                             | the project lookup                  |
+| ------------------ | --------------------------------------- | ----------------------------------- |
+| bound              | unchanged (`work_item_projectId_*` idx) | `SubPlan 2 … (never executed)`      |
+| unbound            | unchanged                               | `SubPlan 2 … loops=1` — HASHED, one |
+
+The AND short-circuits on the row-independent GUC test, so a tenant read does not enter the join
+once across all 500 rows; an unbound read enters it once per QUERY, not per row. The qual text grows
+by a disjunct; the work does not.
+
+The `EXISTS` is itself subject to `project`'s policies (a subquery in a policy runs under the
+querying role), so it resolves through `project_public_read`: a work item is visible unbound exactly
+when its project is, and the two cannot drift.
+
+Two application reads on the same path were bound rather than policied, both with a workspace the
+database had already handed back on a row proved `public` (a trusted resolution, not a guess made on
+the reader's behalf): `resolvePublicInputs`' project-membership read — `project_membership` has no
+"or your own" arm like the workspace-membership policy, so an unbound read silently cost a real
+project ADMIN their 6.16.3 in-place Edit affordance — and `publicRequestsService.addComment`'s
+INSERT, which `comment_active_workspace`'s `WITH CHECK` refused outright, leaving the public thread
+write-dead. Both directions of all of it are pinned in
+`tests/permissions/publicProjectAccess.test.ts`, which runs identically with the flag set and unset.
+
 ## Cards filed from this inventory
 
 Both are **successors** to MOTIR-2435, not children of it — tasks under Epic 8, in a
@@ -288,7 +333,8 @@ Filed later, from the Finding-4 re-measurement above:
 - **MOTIR-2569** — route the tenant-table reads that gate or precede a gate through a bound
   context (Finding 4). `high`, 5 points, `blocked_by` MOTIR-2527. **Done.**
 - **MOTIR-2684** — give the `project` policy a public arm so the public-project path resolves
-  at all. `high`, 5 points, `blocked_by` 2569.
+  at all. `high`, 5 points, `blocked_by` 2569. **Done** — and it needed a `work_item` arm as well;
+  see the resolution note above.
 - **MOTIR-2685** — bind the userless reads (job runtime + `workspaceId`-only helpers) through
   `withWorkspaceServiceContext`. 3 points, `blocked_by` 2569.
 
