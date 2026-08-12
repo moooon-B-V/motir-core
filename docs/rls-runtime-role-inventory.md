@@ -299,7 +299,9 @@ its own tenant is not made ready by migrating fixtures.
 ## The fixture migration, partitioned (2026-08-12)
 
 MOTIR-2528 was one card describing several pull requests, which no single card can close. It was
-split by planning bug **MOTIR-2587** and archived. The partition below was **measured on
+split by planning bug **MOTIR-2587** and archived. Every card named in this section, together with
+2435 / 2527 / 2569 / 2684 / 2685 / 2515, now sits under **MOTIR-2755**, the container story for the
+`motir_app` cutover; it holds the same build order this document describes. The partition below was **measured on
 `origin/main` at `9e7637cf`**, not carried over from the batch names at the top of this document —
 those are vitest filter substrings, and three of the directories they name (`tests/sprints`,
 `tests/workspaces`, `tests/projects`) do not exist.
