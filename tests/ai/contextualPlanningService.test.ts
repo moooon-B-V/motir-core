@@ -13,6 +13,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // contextualPlanningService — the motir-core side of CONTEXTUAL PLANNING
@@ -90,6 +91,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ───────────────────────── scope canonicalization (pure) ─────────────────────────
@@ -225,12 +227,13 @@ describe('contextualPlanningService.planFromWorkItem', () => {
   });
 
   it('writes NO work item — this card submits and streams only', async () => {
-    const before = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     await contextualPlanningService.planFromWorkItem(
       { anchorId: story.id, prompt: 'Add three subtasks' },
       projectCtx(fx),
     );
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(before);
   });
 });
 
@@ -560,7 +563,8 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
       projectCtx(fx),
     );
 
-    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(1);
+    const planCount = await adminDb.plan.count({ where: { projectId: fx.projectId } });
+    expect(planCount).toBe(1);
 
     submitJobMock.mockResolvedValueOnce({ jobId: 'job-contextual-2' });
     const again = await contextualPlanningService.resubmitFromWorkItem(
@@ -569,7 +573,8 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
     );
 
     // A SECOND run is a second proposal, so a second plan — bound to its own job.
-    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(2);
+    const planCount2 = await adminDb.plan.count({ where: { projectId: fx.projectId } });
+    expect(planCount2).toBe(2);
     expect(again.planId).not.toBe(undefined);
     expect((await planRepository.findBySourceJobId('job-contextual-2', fx.workspaceId))?.id).toBe(
       again.planId,
@@ -622,7 +627,7 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
     // A decided plan is history, not a pending review — surfacing it would invite
     // a confirm of something already settled.
     for (const status of ['approved', 'declined'] as const) {
-      await db.plan.update({ where: { id: submitted.planId }, data: { status } });
+      await adminDb.plan.update({ where: { id: submitted.planId }, data: { status } });
       const resumed = await contextualPlanningService.getSessionForWorkItem(
         { anchorId: story.id },
         projectCtx(fx),
@@ -666,7 +671,8 @@ describe('the contextual seam carries the job’s planId (MOTIR-1745)', () => {
       ),
     ).rejects.toThrow('motir-ai unreachable');
 
-    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const planCount = await adminDb.plan.count({ where: { projectId: fx.projectId } });
+    expect(planCount).toBe(0);
     const resumed = await contextualPlanningService.getSessionForWorkItem(
       { anchorId: story.id },
       projectCtx(fx),

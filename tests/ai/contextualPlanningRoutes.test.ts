@@ -7,6 +7,7 @@ import {
   makeWorkItemFixture,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Route-level tests for the CONTEXTUAL-PLANNING endpoints (7.12.3 · MOTIR-909) —
@@ -97,6 +98,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/work-items/[id]/ai/plan — gates and validation', () => {

@@ -4,6 +4,7 @@ import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // GET / PATCH /api/projects/[key]/ai-settings — the HTTP surface the AI-planning
@@ -44,6 +45,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture, userId = fx.ownerId) {
@@ -230,7 +232,7 @@ describe('PATCH /api/projects/[key]/ai-settings', () => {
   it('403s a plain member’s write while still letting them READ (the read-only panel)', async () => {
     const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
     const member = await createTestUser({ email: 'member-ai-settings@example.com' });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     signInAs(fx, member.id);

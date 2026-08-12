@@ -9,6 +9,7 @@ import { POST as validatePlanSprintPOST } from '@/app/api/internal/ai/validate-p
 import type { WorkItemValidityDto } from '@/lib/dto/workItems';
 import type { SprintValidityDto } from '@/lib/dto/sprints';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // STORY-LEVEL INTEGRATION TEST (Subtask 7.28.5 / MOTIR-1389), real Postgres.
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mk = (
@@ -38,9 +40,9 @@ const mk = (
 ) => workItemsService.createWorkItem({ projectId: fx.projectId, kind, title, parentId }, fx.ctx);
 
 const putInSprint = (id: string, sprintId: string) =>
-  db.workItem.update({ where: { id }, data: { sprintId } });
+  adminDb.workItem.update({ where: { id }, data: { sprintId } });
 
-const markDone = (id: string) => db.workItem.update({ where: { id }, data: { status: 'done' } });
+const markDone = (id: string) => adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
 function validateReq(path: string, fx: WorkItemFixture, body: unknown): Request {
   return new Request(`http://core${path}`, {

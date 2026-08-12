@@ -7,6 +7,7 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
 import { PATCH as proposalsPATCH } from '@/app/api/internal/ai/plan-proposals/[itemId]/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST — the internal incremental-proposals seam (Subtask 7.4.4 ·
@@ -20,7 +21,7 @@ import { truncateAuthTables } from '../../helpers/db';
 const SERVICE_SECRET = 'core-callback-secret-test';
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function tokenFor(fx: { ctx: { userId: string; workspaceId: string }; projectId: string }): string {
@@ -96,7 +98,7 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect((items[0]!.proposedFields as { title: string }).title).toBe('Epic: Auth');
 
     // Generation NEVER materializes — no work item exists yet.
-    const workItems = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const workItems = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(workItems).toBe(0);
   });
 
@@ -145,7 +147,7 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(story!.parentRef).toBe(`planItem:${epicPlanItemId}`);
 
     // `final: true` moved the plan generating → planned.
-    const plan = await db.plan.findFirst({ where: { id: planId } });
+    const plan = await adminDb.plan.findFirst({ where: { id: planId } });
     expect(plan!.status).toBe('planned');
   });
 
@@ -161,7 +163,7 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     const body = await res.json();
     expect(body.planItemIds).toEqual([]);
     expect(body.planned).toBe(true);
-    const plan = await db.plan.findFirst({ where: { id: planId } });
+    const plan = await adminDb.plan.findFirst({ where: { id: planId } });
     expect(plan!.status).toBe('planned');
   });
 
@@ -183,7 +185,7 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
     expect(body.planned).toBe(true);
     expect(body.planItemIds).toEqual([]);
 
-    const plan = await db.plan.findFirstOrThrow({ where: { id: planId } });
+    const plan = await adminDb.plan.findFirstOrThrow({ where: { id: planId } });
     expect(plan.productName).toBe('Recipe Keeper');
   });
 
@@ -204,7 +206,7 @@ describe('POST /api/internal/ai/plan-proposals — incremental generation seam',
       }),
     );
 
-    const plan = await db.plan.findFirstOrThrow({ where: { id: planId } });
+    const plan = await adminDb.plan.findFirstOrThrow({ where: { id: planId } });
     expect(plan.productName).toBeNull();
   });
 
@@ -338,8 +340,9 @@ describe('PATCH /api/internal/ai/plan-proposals/[itemId] — generation-time dee
     expect((item!.proposedFields as { descriptionMd?: string }).descriptionMd).toBe(
       'Full body written in Phase 2.',
     );
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
-    const plan = await db.plan.findFirst({ where: { sourceJobId: jobId } });
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
+    const plan = await adminDb.plan.findFirst({ where: { sourceJobId: jobId } });
     expect(plan!.status).toBe('generating');
   });
 
@@ -514,11 +517,12 @@ describe('POST /api/internal/ai/plan-proposals — generate_tree RE-RUN isolatio
     // partial proposals — the re-run never appended into it.
     const itemsA = await planItemRepository.findByPlan(planA);
     expect(itemsA).toHaveLength(3);
-    const abandoned = await db.plan.findFirst({ where: { id: planA } });
+    const abandoned = await adminDb.plan.findFirst({ where: { id: planA } });
     expect(abandoned!.status).toBe('generating');
 
     // Generation NEVER materializes — neither run created a WorkItem (the partial
     // proposal set was never dispatchable; materialize-on-approve is Story 7.21).
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
   });
 });

@@ -13,6 +13,7 @@ import {
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // planChangeSessionsService — the plan-change CONVERSATION seam (Story 7.30 ·
@@ -75,6 +76,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('buildAccumulatedIntent', () => {
@@ -142,7 +144,7 @@ describe('planChangeSessionsService — open + resume', () => {
     // Both callers get the SAME thread — get-or-create is idempotent, so a lost
     // create-race resolves to the winner's row, not an error.
     expect(a.id).toBe(b.id);
-    const rows = await db.planChangeSession.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.planChangeSession.findMany({ where: { projectId: fx.projectId } });
     expect(rows).toHaveLength(1);
   });
 

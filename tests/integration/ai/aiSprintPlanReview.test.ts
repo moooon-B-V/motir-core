@@ -17,6 +17,7 @@ import { aiSprintPlanningService } from '@/lib/services/aiSprintPlanningService'
 import { SprintAssignmentValidationError } from '@/lib/ai/sprintAssignment';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemFixture } from '../../fixtures';
 import type { ProjectContext } from '@/lib/projects';
@@ -41,7 +42,7 @@ import type { SprintAssignmentDelta } from '@/lib/ai/types';
 // than half-rendered.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -55,6 +56,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function projectCtx(fx: WorkItemFixture): ProjectContext {
@@ -242,8 +244,10 @@ describe('AI sprint-plan review — resolving the packing for render (MOTIR-1750
 
     await aiSprintPlanningService.reviewSprintPlan('job_sprint_1', projectCtx(fx));
 
-    expect(await db.sprint.count()).toBe(0);
-    expect(await db.workItem.count({ where: { sprintId: { not: null } } })).toBe(0);
+    const sprintCount = await adminDb.sprint.count();
+    expect(sprintCount).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { sprintId: { not: null } } });
+    expect(workItemCount).toBe(0);
   });
 });
 

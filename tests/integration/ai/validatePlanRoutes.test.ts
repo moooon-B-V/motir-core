@@ -8,6 +8,7 @@ import { POST as validatePlanPOST } from '@/app/api/internal/ai/validate-plan/ro
 import { POST as validatePlanSprintPOST } from '@/app/api/internal/ai/validate-plan-sprint/route';
 import { POST as validatePlanForestPOST } from '@/app/api/internal/ai/validate-plan-forest/route';
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST — the two pre-commit plan-validation endpoints (Subtask 7.28.2)
@@ -25,6 +26,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function req(path: string, opts: { bearer?: string; token?: string; body: unknown }): Request {
@@ -221,7 +223,7 @@ describe('POST /api/internal/ai/validate-plan-sprint', () => {
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S1' }, fx.ctx);
     await sprintsService.startSprint(sprint.id, {}, fx.ctx);
     const inSprint = await mk(fx, 'In sprint', 'task');
-    await db.workItem.update({ where: { id: inSprint.id }, data: { sprintId: sprint.id } });
+    await adminDb.workItem.update({ where: { id: inSprint.id }, data: { sprintId: sprint.id } });
     const backlog = await mk(fx, 'Backlog blocker', 'task');
     const planId = await planBlocking(fx, inSprint.id, backlog.id);
 

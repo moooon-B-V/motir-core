@@ -24,6 +24,7 @@ import {
   plannerModelToChoice,
 } from '@/lib/projectAiSettings/plannerModels';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 
@@ -60,7 +61,7 @@ import type { ProjectContext } from '@/lib/projects';
 // They are not repeated here.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -73,6 +74,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The workspace-scoped context the settings service takes. */
@@ -131,7 +133,7 @@ describe('7.13 seam — the planner-model picker round-trips through the REAL se
     // The COLUMN is null — the deployment's PLANNER_MODEL applies. If the
     // sentinel string ever reached the DB, motir-ai would be asked to run a
     // model literally named "default".
-    const row = await db.project.findUnique({
+    const row = await adminDb.project.findUnique({
       where: { id: fx.projectId },
       select: { aiPlannerModel: true },
     });
@@ -146,7 +148,7 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     // a non-Error. If `errorMessage` assumed `.message`, the run-ledger summary
     // the 1.6.5 dashboard renders would read "undefined" for every such outage.
     const fx = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { aiAutoPlanEnabled: true, aiAutoPlanThreshold: 5 },
     });
@@ -178,8 +180,10 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     }
 
     // And the failure wrote nothing: no Plan opened, no tree change.
-    expect(await db.plan.count()).toBe(0);
-    expect(await db.workItem.count()).toBe(1);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
+    const workItemCount = await adminDb.workItem.count();
+    expect(workItemCount).toBe(1);
   });
 
   it('rejects a NON-STRING planner model with the typed error, and writes nothing', async () => {
@@ -196,7 +200,7 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     ).rejects.toThrowError(InvalidAiSettingsError);
 
     // Validation runs BEFORE the transaction opens — the column is untouched.
-    const row = await db.project.findUnique({
+    const row = await adminDb.project.findUnique({
       where: { id: fx.projectId },
       select: { aiPlannerModel: true },
     });
@@ -221,7 +225,7 @@ describe('7.13 residue — the boundary error paths the happy fixtures miss (MOT
     // another's project. The submit must refuse before it ever reaches motir-ai.
     const mine = await makeWorkItemFixture({ name: 'Acme', identifier: 'PROD' });
     const theirs = await makeWorkItemFixture({ name: 'Other Co', identifier: 'OTHR' });
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: theirs.projectId },
       data: { aiSprintPlanningEnabled: true },
     });

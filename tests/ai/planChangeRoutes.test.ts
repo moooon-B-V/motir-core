@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Route-level tests for the plan-change conversation endpoints (Story 7.30 ·
@@ -78,6 +79,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('plan-change routes — gates', () => {

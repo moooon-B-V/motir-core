@@ -20,6 +20,7 @@ import { submitJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { BugAnalysisContext } from '@/lib/ai/types';
 import { makeWorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 beforeEach(async () => {
@@ -38,6 +39,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('aiBugTelemetryService.dispatchOutwardAnalysis', () => {

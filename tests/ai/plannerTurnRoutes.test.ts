@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { PlanChangeSessionDto } from '@/lib/dto/planChange';
 
@@ -81,6 +82,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Open a thread, put a turn on it, and submit — the state the recording needs. */

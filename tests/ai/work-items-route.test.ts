@@ -12,6 +12,7 @@ import {
 } from '@/lib/ai/plannerBugHome';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { POST } from '@/app/api/internal/ai/work-items/route';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1450 — the internal service-auth bug-filing route `POST
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A META workspace + `MOTIR` project + the system principal — the seed's shape. */
@@ -82,7 +84,7 @@ describe('POST /api/internal/ai/work-items — success', () => {
     const json = (await res.json()) as { key: string; id: string };
     expect(json.key).toMatch(/^MOTIR-\d+$/);
 
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.kind).toBe('bug');
     expect(row?.projectId).toBe(project.id);
     expect(row?.reporterId).toBe(systemUserId);
@@ -109,7 +111,7 @@ describe('POST /api/internal/ai/work-items — success', () => {
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.parentId).toBe(story.id);
   });
 });
@@ -266,7 +268,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.parentId).toBe(home.id); // the home story, not the epic, not root
   });
 
@@ -291,7 +293,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
       { projectId: project.id, kind: 'task', title: 'a triage task', parentId: epic.id },
       ownerCtx,
     );
-    const storyChildren = await db.workItem.count({ where: { parentId: epic.id, kind: 'story' } });
+    const storyChildren = await adminDb.workItem.count({ where: { parentId: epic.id, kind: 'story' } });
     expect(storyChildren).toBe(0); // the precondition this test exists to cover
 
     const res = await post({
@@ -302,7 +304,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.parentId).toBe(home.id);
   });
 
@@ -317,7 +319,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.parentId).toBe(home.id);
   });
 
@@ -340,7 +342,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.parentId).toBe(home.id); // still the home story, now under `elsewhere`
   });
 
@@ -355,7 +357,7 @@ describe('POST /api/internal/ai/work-items — planner-bug-home marker (MOTIR-14
     });
     expect(res.status).toBe(201);
     const json = (await res.json()) as { id: string };
-    const row = await db.workItem.findUnique({ where: { id: json.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: json.id } });
     expect(row?.parentId).toBe(home.id);
   });
 

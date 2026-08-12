@@ -22,6 +22,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 
@@ -91,6 +92,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('resolveCodeContext', () => {

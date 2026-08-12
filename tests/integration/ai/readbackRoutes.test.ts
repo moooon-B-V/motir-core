@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { GET as planTreeGET } from '@/app/api/internal/ai/plan-tree/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST — the open side's read-back surface end-to-end through the REAL
@@ -18,7 +19,7 @@ import { truncateAuthTables } from '../../helpers/db';
 const SERVICE_SECRET = 'core-callback-secret-test';
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -31,6 +32,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function planTreeReq(opts: { bearer?: string; token?: string }): Request {
