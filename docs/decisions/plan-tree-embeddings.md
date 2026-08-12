@@ -277,7 +277,7 @@ service bearer + job token, never a cookie, never CORS-exposed.
   either suppresses real candidates or admits noise, and this story produces exactly
   the data needed to choose one — the before/after in **MOTIR-2698**. Until then the
   endpoint returns the top-N and the caller filters. **MOTIR-2698 owns the question of
-  whether a default is warranted.**
+  whether a default is warranted.** → **ANSWERED: no. See Amendment 1.**
 
 #### 6.2 Who computes the vector — `motir-ai` does, for both sides
 
@@ -421,3 +421,46 @@ majority of work-item writes — cost nothing (§3).
   `internal/ai` boundary and takes a pre-computed vector, so any future in-product
   semantic search needs its own decision about who embeds the user's query — and it
   should cite this ADR when it makes it.
+
+## Amendment 1 (2026-08-12) — NO default `minScore`. The `limit` is the bound, and the threshold stays the caller's
+
+**§6.1 named MOTIR-2698 as the owner of "is a default threshold warranted". The answer
+is no, and this records why so the question is closed rather than re-opened by the next
+reader who notices the field is optional.**
+
+**The cost asymmetry decides it, and this ADR already states the asymmetry — in §3, for
+a different purpose.** §3 admits the `descriptionMd` into the embedded document on the
+grounds that _"recall matters more than precision here, because a spurious candidate
+costs one keyed read and is discarded, while a missed candidate costs a duplicate branch
+of the plan."_ A default `minScore` is that trade run backwards: its only possible effect
+is to convert cheap errors into the expensive one. And it would do so **invisibly** — a
+suppressed candidate and an absent candidate are the same empty list at the wire, which
+is precisely the false negative (_"nothing matches"_, reported honestly and wrongly) that
+the whole story exists to remove. Re-creating it inside the fix would be a poor trade
+even if the number were well chosen.
+
+**And the number could not be well chosen here.** A cosine cutoff is a property of the
+model AND of the corpus, and this repo holds neither: `motir-core` stores vectors and
+does not produce them (§6.2), so it has no way to calibrate one and no standing to. The
+before/after MOTIR-2698 produces demonstrates that the GAP is real — a card returned by
+meaning that the `contains` filter cannot see — which is a statement about ordering, not
+about where on the score scale a cut belongs. Reading a threshold off it would be
+inventing data, not using it.
+
+**So the contract is unchanged and now deliberate rather than pending:**
+
+- The endpoint returns the top-N by similarity. **`limit` (1–50, default 10) is the only
+  bound applied by default.**
+- **`minScore` remains optional, with no default.** The CALLER may pass one — it knows
+  what it asked and, per §2, reads every candidate through a keyed tool anyway, so a
+  threshold there is a decision made with context rather than a constant compiled into
+  the producer.
+- Pinned by test in `tests/integration/ai/semanticSearchStoryGate.test.ts` (_"returns the
+  top-N with NO default threshold"_): an orthogonal candidate at score 0 is returned,
+  a caller-supplied `minScore` still filters, and `limit` still bounds.
+
+**What would re-open this.** Evidence from a real corpus that low-scoring candidates are
+crowding out real ones inside the caller's `limit` — i.e. a PRECISION complaint measured
+on production traffic, not a tidiness argument. That evidence would belong to the caller
+(MOTIR-2691's GATE 1), and the fix would still more likely be a larger `limit` plus a
+caller-side threshold than a producer-side default.

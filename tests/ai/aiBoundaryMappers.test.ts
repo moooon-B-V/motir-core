@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { toPlanTreeSkeleton, toSearchResultRows } from '@/lib/mappers/aiBoundaryMappers';
+import {
+  toPlanTreeSkeleton,
+  toSearchResultRows,
+  toBlockingEdges,
+  toSimilarWorkItemRows,
+} from '@/lib/mappers/aiBoundaryMappers';
 import type { WorkItemListItemDto, WorkItemSummaryDto } from '@/lib/dto/workItems';
+import type { WorkItemEmbeddingRankRow } from '@/lib/repositories/workItemEmbeddingRepository';
 
 function summary(over: Partial<WorkItemSummaryDto>): WorkItemSummaryDto {
   return {
@@ -144,5 +150,95 @@ describe('toSearchResultRows', () => {
 
   it('maps an empty page to an empty list', () => {
     expect(toSearchResultRows([], new Map())).toEqual([]);
+  });
+});
+
+// ── Story MOTIR-2694 · Subtask MOTIR-2698 ────────────────────────────────────
+// The two projections this file did not reach. Both matter for the same reason
+// the ones above do — they are the only place a boundary payload's SHAPE is
+// decided — and until this card neither was in the coverage report at all:
+// MOTIR-2696/2697 gated the five files they wrote whole and left this module,
+// which they only ADDED to, un-included. It is gated from here (`vitest.config.ts`).
+
+describe('toBlockingEdges', () => {
+  it('maps both endpoints of an edge through the id→key map', () => {
+    const idToKey = new Map([
+      ['id_a', 'MOTIR-1'],
+      ['id_b', 'MOTIR-2'],
+    ]);
+    expect(toBlockingEdges([{ blockedId: 'id_a', blockerId: 'id_b' }], idToKey)).toEqual([
+      { blockedKey: 'MOTIR-1', blockerKey: 'MOTIR-2' },
+    ]);
+  });
+
+  it('falls back to the raw id on EITHER endpoint the map does not carry', () => {
+    // Never happens for a well-formed closure — every endpoint is the root or a
+    // returned node — so this arm exists so a MALFORMED one degrades to an
+    // unresolvable id rather than to `undefined` in the payload. Both endpoints
+    // are exercised: the two `??` are separate branches, and a fallback that
+    // worked on one side only would still emit `undefined` on the other.
+    expect(
+      toBlockingEdges(
+        [
+          { blockedId: 'ghost', blockerId: 'id_b' },
+          { blockedId: 'id_b', blockerId: 'phantom' },
+        ],
+        new Map([['id_b', 'MOTIR-2']]),
+      ),
+    ).toEqual([
+      { blockedKey: 'ghost', blockerKey: 'MOTIR-2' },
+      { blockedKey: 'MOTIR-2', blockerKey: 'phantom' },
+    ]);
+  });
+
+  it('maps an empty closure to no edges', () => {
+    expect(toBlockingEdges([], new Map())).toEqual([]);
+  });
+});
+
+describe('toSimilarWorkItemRows — THE keys-not-prose enforcement point (ADR §2)', () => {
+  it('names exactly key / title / score, and converts distance to similarity once', () => {
+    const rows: WorkItemEmbeddingRankRow[] = [
+      { workItemId: 'id_1', identifier: 'MOTIR-1', title: 'Nearest', distance: 0 },
+      { workItemId: 'id_2', identifier: 'MOTIR-2', title: 'Orthogonal', distance: 1 },
+      { workItemId: 'id_3', identifier: 'MOTIR-3', title: 'Opposite', distance: 2 },
+    ];
+    // Two units, ONE conversion, in one named place: the repository ranks by
+    // cosine DISTANCE (lower = closer) and the wire carries SIMILARITY (higher =
+    // closer), so a caller filtering on `minScore` never has to remember which
+    // way the number runs.
+    expect(toSimilarWorkItemRows(rows)).toEqual([
+      { key: 'MOTIR-1', title: 'Nearest', score: 1 },
+      { key: 'MOTIR-2', title: 'Orthogonal', score: 0 },
+      { key: 'MOTIR-3', title: 'Opposite', score: -1 },
+    ]);
+  });
+
+  it('is INERT to a field added to the ranked row — the mapper is the choke point', () => {
+    // `docs/decisions/plan-tree-embeddings.md` §2: a fourth content field on this
+    // payload is a change to the ADR, not a change to the endpoint. The mechanism
+    // that makes that true is HERE — the mapper names its three fields instead of
+    // spreading the row, so the day someone adds a column to the ranking query
+    // for a perfectly good internal reason, the wire shape does not follow it out
+    // of the building. A spread would; this is that difference, exercised rather
+    // than commented. (The same claim is proven over the whole route, against a
+    // real Postgres, in `tests/integration/ai/semanticSearchStoryGate.test.ts`.)
+    const widened = [
+      {
+        workItemId: 'id_1',
+        identifier: 'MOTIR-1',
+        title: 'Nearest',
+        distance: 0,
+        descriptionMd: 'PROSE THAT MUST NOT CROSS',
+        snippet: 'nor this',
+      } as unknown as WorkItemEmbeddingRankRow,
+    ];
+    const out = toSimilarWorkItemRows(widened);
+    expect(Object.keys(out[0]!).sort()).toEqual(['key', 'score', 'title']);
+    expect(JSON.stringify(out)).not.toContain('MUST NOT CROSS');
+  });
+
+  it('maps an empty ranking to an empty projection', () => {
+    expect(toSimilarWorkItemRows([])).toEqual([]);
   });
 });
