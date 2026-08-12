@@ -88,6 +88,11 @@ export interface RankSimilarResult {
   /** How many of the project's items are rankable for this model — ADR §6.1's
    *  `coverage.embedded`, and the denominator the under-return check uses. */
   rankable: number;
+  /** How many LIVE items the project holds at all — ADR §6.1's `coverage.total`.
+   *  Read in the SAME transaction as `rankable` so the pair is one snapshot: a
+   *  ratio assembled from two transactions can report 413/412 while a backfill
+   *  runs, and a coverage number nobody can trust is worse than none. */
+  total: number;
   /** True when the approximate pass under-returned and the exact re-run was
    *  needed. Surfaced so the behaviour is observable in tests and in a job
    *  ledger rather than being an invisible internal retry. */
@@ -310,6 +315,15 @@ export const workItemEmbeddingsService = {
         input.model,
         tx,
       );
+      // ADR §6.1's `coverage.total`. Read HERE, inside the same transaction, so
+      // the caller cannot assemble the ratio from two snapshots — see
+      // `workItemRepository.countLiveByProject` for why this particular count and
+      // not one of the triage-excluding ones beside it.
+      const total = await workItemRepository.countLiveByProject(
+        input.projectId,
+        input.workspaceId,
+        tx,
+      );
       const query = {
         projectId: input.projectId,
         model: input.model,
@@ -318,12 +332,12 @@ export const workItemEmbeddingsService = {
       };
       const approximate = await workItemEmbeddingRepository.rankByEmbedding(query, tx);
       if (approximate.length >= Math.min(input.limit, rankable)) {
-        return { results: approximate, rankable, exactFallbackUsed: false };
+        return { results: approximate, rankable, total, exactFallbackUsed: false };
       }
 
       await workItemEmbeddingRepository.disableOrderedIndexScan(tx);
       const exact = await workItemEmbeddingRepository.rankByEmbedding(query, tx);
-      return { results: exact, rankable, exactFallbackUsed: true };
+      return { results: exact, rankable, total, exactFallbackUsed: true };
     });
   },
 };

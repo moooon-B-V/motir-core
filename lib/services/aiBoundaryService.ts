@@ -2,12 +2,15 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { commentsService } from '@/lib/services/commentsService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { organizationsService } from '@/lib/services/organizationsService';
+import { projectAccessService } from '@/lib/services/projectAccessService';
+import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 import {
   toPlanTreeSkeleton,
   toSkeletonRows,
   toSearchResultRows,
   toBlockingEdges,
   toOrgContextResponse,
+  toSimilarWorkItemRows,
 } from '@/lib/mappers/aiBoundaryMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
@@ -22,6 +25,7 @@ import type {
   SubtreeResponse,
   BlockingClosureResponse,
   SearchWorkItemsResponse,
+  SimilarWorkItemsResponse,
 } from '@/lib/dto/ai';
 import { readProject } from '@/lib/workspaces/tenantRead';
 
@@ -233,6 +237,86 @@ export const aiBoundaryService = {
       items: toSearchResultRows(items, revisionByItemId),
       total: result.total,
       nextCursor,
+    };
+  },
+
+  // POST /api/internal/ai/similar-work-items (Story MOTIR-2694 · Subtask
+  // MOTIR-2697) — the SEMANTIC sibling of `searchWorkItems` above, and the whole
+  // reason this story exists: `search-work-items` is a `contains` SUBSTRING
+  // predicate, so a query for "persist UI preferences" cannot see a card titled
+  // "Board columns remember their collapsed state", and GATE 1 reports "nothing
+  // matches" — honestly, by its own evidence, and wrongly.
+  //
+  // The two are deliberately complementary, not rivals: this one PROPOSES
+  // candidates by meaning, the keyed reads beside it DISPOSE of them against the
+  // real record. It therefore returns `key` / `title` / `score` and nothing else
+  // (ADR §2 — see `SimilarWorkItemRow`).
+  //
+  // THE PROJECT IS NEVER A PARAMETER. `projectId` is the JOB TOKEN's project,
+  // resolved server-side by the route's `authenticateAndLimitJobRequest`, and
+  // `assertCanBrowse` re-checks it against the acting user (`resolveInputs` is the
+  // one place a project id meets an actor, MOTIR-2607) — so a planner cannot reach
+  // another tenant's tree however it phrases the call, and a project it may not
+  // browse is a 404, never a 403 (finding #26).
+  //
+  // ⚠️ DEGRADATION IS A 200, NEVER A 5xx (ADR §6.1). A planning job must not fail
+  // because a candidate-finder had nothing to offer, so an unreadable embedding
+  // store — no `vector` extension on a self-hosted build, a table that predates
+  // the migration, a ranking query that errors — resolves to an EMPTY result with
+  // `coverage: { embedded: 0, total: 0 }`, which the caller reads as "the store
+  // could not be read" and distinguishes from `{ embedded: 0, total: 419 }` ("a
+  // real project nothing has indexed yet"). Falling back to the relational
+  // `contains` search is the CALLER's move (MOTIR-2691), because the caller is the
+  // one that knows what it was looking for.
+  //
+  // The AUTHORIZATION gate deliberately sits OUTSIDE that catch: a caller who may
+  // not browse the project must get its 404, never an empty 200 that reads as "I
+  // looked and there was nothing here."
+  async findSimilarWorkItems(
+    projectId: string,
+    opts: { queryEmbedding: number[]; model: string; limit: number; minScore?: number },
+    ctx: ServiceContext,
+  ): Promise<SimilarWorkItemsResponse> {
+    await projectAccessService.assertCanBrowse(projectId, ctx);
+
+    let ranked;
+    try {
+      ranked = await workItemEmbeddingsService.rankSimilar({
+        workspaceId: ctx.workspaceId,
+        projectId,
+        model: opts.model,
+        queryEmbedding: opts.queryEmbedding,
+        limit: opts.limit,
+      });
+    } catch (err) {
+      // LOGGED, not merely swallowed. A degraded read is indistinguishable from
+      // an empty project at the wire if nothing records it, and "the embedding
+      // store has been unreadable for a week" is exactly the condition that would
+      // otherwise be discovered by someone wondering why the planner stopped
+      // finding duplicates. `coverage: 0/0` is the caller's signal; this is the
+      // operator's.
+      console.error('[aiBoundaryService] semantic search degraded to an empty result', {
+        projectId,
+        model: opts.model,
+        err,
+      });
+      return { results: [], model: opts.model, coverage: { embedded: 0, total: 0 } };
+    }
+
+    // The threshold is applied AFTER the top-N, never as a SQL predicate: the
+    // ranking's under-return guarantee is stated in rows (`min(limit, rankable)`),
+    // and a WHERE on the score would silently reopen the short-read the exact
+    // fallback exists to close. No DEFAULT `minScore` is pinned — MOTIR-2698 owns
+    // the question of whether one is warranted, and a threshold chosen without
+    // data either suppresses real candidates or admits noise (ADR §6.1).
+    const { minScore } = opts;
+    const rows = toSimilarWorkItemRows(ranked.results);
+    const results = minScore === undefined ? rows : rows.filter((r) => r.score >= minScore);
+
+    return {
+      results,
+      model: opts.model,
+      coverage: { embedded: ranked.rankable, total: ranked.total },
     };
   },
 };

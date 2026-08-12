@@ -4,7 +4,9 @@ import type {
   BlockingEdge,
   OrgContextResponse,
   SearchResultRow,
+  SimilarWorkItemRow,
 } from '@/lib/dto/ai';
+import type { WorkItemEmbeddingRankRow } from '@/lib/repositories/workItemEmbeddingRepository';
 import type { OrgFootprintDTO } from '@/lib/dto/organizations';
 
 // The structural minimum every skeleton projection needs — the fields shared by
@@ -86,6 +88,31 @@ export function toSearchResultRows(
     status: i.status,
     priority: i.priority,
     revision: revisionByItemId.get(i.id) ?? null,
+  }));
+}
+
+// Map the ranked embedding rows to the semantic candidate projection (ADR §6.1,
+// Subtask MOTIR-2697), converting cosine DISTANCE to cosine SIMILARITY.
+//
+// ⚠️ THIS FUNCTION IS THE KEYS-NOT-PROSE INVARIANT'S ENFORCEMENT POINT (ADR §2),
+// which is why it names all three fields explicitly instead of spreading the row.
+// A spread would make the wire shape a function of whatever the ranking query
+// happens to SELECT, so the day someone adds a column to that query for a
+// perfectly good internal reason, body text starts crossing the boundary silently
+// and no test that was written against today's row would notice. Constructing the
+// object field-by-field means a new field on {@link WorkItemEmbeddingRankRow} is
+// inert here until someone deliberately adds it — and adding it is a change to
+// the ADR.
+//
+// Two units, ONE conversion, in one named place: the repository ranks by `<=>`
+// (distance, lower = closer, mirroring `motir-ai`'s `lessonRepository`); the wire
+// carries similarity (higher = closer), because a caller filtering on a
+// `minScore` should not have to remember which way the number runs.
+export function toSimilarWorkItemRows(rows: WorkItemEmbeddingRankRow[]): SimilarWorkItemRow[] {
+  return rows.map((r) => ({
+    key: r.identifier,
+    title: r.title,
+    score: 1 - r.distance,
   }));
 }
 

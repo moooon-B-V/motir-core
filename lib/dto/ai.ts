@@ -124,6 +124,56 @@ export interface SearchWorkItemsResponse {
   nextCursor: string | null;
 }
 
+// POST /api/internal/ai/similar-work-items (Story MOTIR-2694 · Subtask
+// MOTIR-2697) — one SEMANTIC candidate.
+//
+// ⚠️ THREE FIELDS, AND THE LIST IS THE CONTRACT, not a current selection
+// (`docs/decisions/plan-tree-embeddings.md` §2): `key`, `title`, `score` — no
+// `descriptionMd`, no `explanationMd`, no comment, no acceptance criterion, no
+// excerpt, no snippet. **Adding a fourth content field is a change to that ADR,
+// not a change to this type.**
+//
+// The reason is the whole shape of the feature. Semantic search PROPOSES; the
+// existing keyed reads (`get-item` / `get-subtree` / `search-work-items`) DISPOSE
+// — so no text ever enters a planning prompt because a cosine distance happened
+// to be small, and every claim that reaches a plan traces to a keyed read of the
+// real record. That is what makes this an EXTENSION of the product's no-RAG
+// stance rather than an abandonment of it.
+//
+// `title` is in the contract and is not a violation of it: a title is the item's
+// IDENTITY (the string the key resolves to, and the one every keyed read returns
+// first), not its content. Returning a bare key would force a second read per
+// candidate purely to render a name.
+export interface SimilarWorkItemRow {
+  key: string; // e.g. "MOTIR-2694"
+  title: string;
+  /** Cosine SIMILARITY in [-1, 1] — `1 - distance`, higher is closer. The
+   *  repository ranks by `<=>` DISTANCE; the conversion happens exactly once,
+   *  here at the DTO boundary (ADR §6.1). */
+  score: number;
+}
+
+// The semantic candidate-finder's response (ADR §6.1). `model` echoes the model
+// the ranking actually ran IN — a HARD filter, not a label, since two vectors
+// from different models are not comparable.
+//
+// `coverage` is two integers and no prose. It exists so a caller can tell "I
+// searched a fully-indexed project and there is genuinely nothing" apart from "I
+// searched a project that is 3% indexed" — reporting the first when the second is
+// true is the exact false "nothing matches" this whole story was written to
+// remove, and a candidate-finder that cannot distinguish them reintroduces it one
+// layer up. `embedded` counts the project's RANKABLE rows (this model, not
+// archived); `total` counts the same population before the embedding join.
+//
+// `{ embedded: 0, total: 0 }` is the DEGRADED reading — the embedding store could
+// not be read at all — and is deliberately distinguishable from `{ embedded: 0,
+// total: 419 }`, which is a real project that nothing has indexed yet.
+export interface SimilarWorkItemsResponse {
+  results: SimilarWorkItemRow[];
+  model: string;
+  coverage: { embedded: number; total: number };
+}
+
 // One applied operation's result — the resolved key + id core assigned.
 export interface PlanDeltaAppliedEntry {
   op: 'create' | 'update';
