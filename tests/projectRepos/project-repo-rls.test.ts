@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `project_repository` isolation — direct-DB RLS proof (Story MOTIR-1775 ·
@@ -38,6 +39,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface RepoSetTenantFixture {
@@ -87,7 +89,7 @@ async function makeRepoSetTenants(): Promise<RepoSetTenantFixture> {
     name: 'Bravo',
     identifier: 'BRAVO',
   });
-  const rowA = await db.projectRepo.create({
+  const rowA = await adminDb.projectRepo.create({
     data: {
       workspaceId: a.workspace.id,
       projectId: projectA.id,
@@ -97,7 +99,7 @@ async function makeRepoSetTenants(): Promise<RepoSetTenantFixture> {
       position: 'a0',
     },
   });
-  const rowB = await db.projectRepo.create({
+  const rowB = await adminDb.projectRepo.create({
     data: {
       workspaceId: b.workspace.id,
       projectId: projectB.id,
@@ -201,7 +203,7 @@ describe('project_repository RLS — write isolation', () => {
     ).rejects.toMatchObject({ code: 'P2025' });
 
     // Sanity (as superuser): B's row is untouched.
-    const b = await db.projectRepo.findUnique({ where: { id: fx.rowBId } });
+    const b = await adminDb.projectRepo.findUnique({ where: { id: fx.rowBId } });
     expect(b?.name).toBe('bravo-web');
   });
 
@@ -211,7 +213,8 @@ describe('project_repository RLS — write isolation', () => {
       tx.projectRepo.deleteMany({ where: { id: fx.rowBId } }),
     );
     expect(deleted.count).toBe(0);
-    expect(await db.projectRepo.findUnique({ where: { id: fx.rowBId } })).not.toBeNull();
+    const projectRepoRow = await adminDb.projectRepo.findUnique({ where: { id: fx.rowBId } });
+    expect(projectRepoRow).not.toBeNull();
   });
 
   it('INSERT with a workspace_id not matching the active GUC is denied (42501)', async () => {
@@ -237,7 +240,9 @@ describe('project_repository RLS — write isolation', () => {
 
     // Sanity (as superuser): no smuggled row landed in B's project.
     expect(
-      await db.projectRepo.findFirst({ where: { projectId: fx.projectBId, name: 'smuggled' } }),
+      await adminDb.projectRepo.findFirst({
+        where: { projectId: fx.projectBId, name: 'smuggled' },
+      }),
     ).toBeNull();
   });
 
@@ -253,7 +258,7 @@ describe('project_repository RLS — write isolation', () => {
         }),
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
-    const a = await db.projectRepo.findUnique({ where: { id: fx.rowAId } });
+    const a = await adminDb.projectRepo.findUnique({ where: { id: fx.rowAId } });
     expect(a?.workspaceId).toBe(fx.workspaceAId);
   });
 });

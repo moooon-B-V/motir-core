@@ -21,6 +21,7 @@ import {
 } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -52,6 +53,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect one repo to the fixture's workspace — the 7.10.3 installation mirror
@@ -64,7 +66,7 @@ async function connectRepo(
   const owner = opts.owner ?? 'acme';
   const provider = opts.provider ?? 'github';
   const installationId = `inst-${workspaceId}-${provider}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -75,7 +77,7 @@ async function connectRepo(
     },
     update: {},
   });
-  return db.githubRepo.create({
+  return adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
@@ -242,7 +244,7 @@ describe('the derivation signal a row records', () => {
     ).toBeNull();
     // NULL in the DB, not the string "null" or an empty string — a consumer
     // branches on absence.
-    const persisted = await db.projectRepo.findUnique({ where: { id: row.id } });
+    const persisted = await adminDb.projectRepo.findUnique({ where: { id: row.id } });
     expect(persisted!.proposalSignal).toBeNull();
   });
 
@@ -399,7 +401,7 @@ describe('uniqueness — one row per (project, name)', () => {
       fx.ctx,
     );
     await expect(
-      db.projectRepo.create({
+      adminDb.projectRepo.create({
         data: {
           workspaceId: fx.workspaceId,
           projectId: fx.projectId,
@@ -410,7 +412,10 @@ describe('uniqueness — one row per (project, name)', () => {
         },
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
-    expect(await db.projectRepo.count({ where: { projectId: fx.projectId } })).toBe(1);
+    const projectRepoCount = await adminDb.projectRepo.count({
+      where: { projectId: fx.projectId },
+    });
+    expect(projectRepoCount).toBe(1);
     expect(first.name).toBe('acme-web');
   });
 
@@ -459,7 +464,7 @@ describe('uniqueness — a realized repo is claimed by AT MOST ONE project row',
       projectRepoSetService.attachRealizedRepo(rowB.id, repo.id, fx.ctx),
     ).rejects.toBeInstanceOf(RealizedRepoAlreadyClaimedError);
     // A's claim is untouched.
-    const stillA = await db.projectRepo.findUnique({ where: { id: rowA.id } });
+    const stillA = await adminDb.projectRepo.findUnique({ where: { id: rowA.id } });
     expect(stillA?.githubRepoId).toBe(repo.id);
   });
 
@@ -479,7 +484,7 @@ describe('uniqueness — a realized repo is claimed by AT MOST ONE project row',
     );
     await projectRepoSetService.attachRealizedRepo(rowA.id, repo.id, fx.ctx);
     await expect(
-      db.projectRepo.create({
+      adminDb.projectRepo.create({
         data: {
           workspaceId: fx.workspaceId,
           projectId: other.id,
@@ -666,7 +671,9 @@ describe('the establish machine — the transitions it REJECTS', () => {
         }),
       ).rejects.toBeInstanceOf(ProjectRepoStateTransitionError);
     }
-    expect((await db.projectRepo.findUnique({ where: { id: row.id } }))?.state).toBe('skipped');
+    expect((await adminDb.projectRepo.findUnique({ where: { id: row.id } }))?.state).toBe(
+      'skipped',
+    );
   });
 
   it('refuses to RE-ATTACH a different repo to a settled row — no silent overwrite', async () => {
@@ -684,7 +691,7 @@ describe('the establish machine — the transitions it REJECTS', () => {
     await expect(
       projectRepoSetService.attachRealizedRepo(row.id, second.id, fx.ctx),
     ).rejects.toBeInstanceOf(ProjectRepoStateTransitionError);
-    expect((await db.projectRepo.findUnique({ where: { id: row.id } }))?.githubRepoId).toBe(
+    expect((await adminDb.projectRepo.findUnique({ where: { id: row.id } }))?.githubRepoId).toBe(
       first.id,
     );
   });
@@ -726,7 +733,7 @@ describe('the establish machine — the transitions it REJECTS', () => {
     expect((rejected as PromiseRejectedResult).reason).toBeInstanceOf(
       ProjectRepoStateTransitionError,
     );
-    const persisted = await db.projectRepo.findUnique({ where: { id: row.id } });
+    const persisted = await adminDb.projectRepo.findUnique({ where: { id: row.id } });
     expect(persisted?.state).toBe(
       (fulfilled[0] as PromiseFulfilledResult<{ state: string }>).value.state,
     );
@@ -862,8 +869,10 @@ describe('editing the set', () => {
     await projectRepoSetService.attachRealizedRepo(row.id, repo.id, fx.ctx);
 
     await projectRepoSetService.removeRow(row.id, fx.ctx);
-    expect(await db.projectRepo.findUnique({ where: { id: row.id } })).toBeNull();
-    expect(await db.githubRepo.findUnique({ where: { id: repo.id } })).not.toBeNull();
+    const projectRepoRow = await adminDb.projectRepo.findUnique({ where: { id: row.id } });
+    expect(projectRepoRow).toBeNull();
+    const githubRepoRow = await adminDb.githubRepo.findUnique({ where: { id: repo.id } });
+    expect(githubRepoRow).not.toBeNull();
     // …and a double-submit is a no-op, not a 404.
     await expect(projectRepoSetService.removeRow(row.id, fx.ctx)).resolves.toBeUndefined();
 
@@ -995,16 +1004,25 @@ describe('delete contracts', () => {
     const fx = await makeWorkItemFixture();
     await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
     await projectRepoSetService.addRow(fx.projectId, { role: 'api', name: 'acme-api' }, fx.ctx);
-    expect(await db.projectRepo.count({ where: { projectId: fx.projectId } })).toBe(2);
-    await db.project.delete({ where: { id: fx.projectId } });
-    expect(await db.projectRepo.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const projectRepoCount = await adminDb.projectRepo.count({
+      where: { projectId: fx.projectId },
+    });
+    expect(projectRepoCount).toBe(2);
+    await adminDb.project.delete({ where: { id: fx.projectId } });
+    const projectRepoCount2 = await adminDb.projectRepo.count({
+      where: { projectId: fx.projectId },
+    });
+    expect(projectRepoCount2).toBe(0);
   });
 
   it('deleting a WORKSPACE removes its projects’ set rows', async () => {
     const fx = await makeWorkItemFixture();
     await projectRepoSetService.addRow(fx.projectId, { role: 'web', name: 'acme-web' }, fx.ctx);
-    await db.workspace.delete({ where: { id: fx.workspaceId } });
-    expect(await db.projectRepo.count({ where: { workspaceId: fx.workspaceId } })).toBe(0);
+    await adminDb.workspace.delete({ where: { id: fx.workspaceId } });
+    const projectRepoCount = await adminDb.projectRepo.count({
+      where: { workspaceId: fx.workspaceId },
+    });
+    expect(projectRepoCount).toBe(0);
   });
 
   it('deleting a GithubRepo leaves the row with a NULL realized repo — not a lost plan', async () => {
@@ -1021,7 +1039,7 @@ describe('delete contracts', () => {
     await projectRepoSetService.markCreating(row.id, fx.ctx);
     await projectRepoSetService.attachRealizedRepo(row.id, repo.id, fx.ctx);
 
-    await db.githubRepo.delete({ where: { id: repo.id } });
+    await adminDb.githubRepo.delete({ where: { id: repo.id } });
 
     const rows = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
     expect(rows).toHaveLength(1);
@@ -1061,7 +1079,8 @@ describe('access gating', () => {
     await expect(
       projectRepoSetService.addRow(b.projectId, { role: 'web', name: 'sneaky' }, a.ctx),
     ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
-    expect(await db.projectRepo.count({ where: { projectId: b.projectId } })).toBe(0);
+    const projectRepoCount = await adminDb.projectRepo.count({ where: { projectId: b.projectId } });
+    expect(projectRepoCount).toBe(0);
   });
 
   it('refuses a WRITE from a workspace member who may only browse', async () => {
@@ -1070,13 +1089,13 @@ describe('access gating', () => {
     // `work_item:edit` on a `limited` project — so what moved is the error CLASS:
     // `PROJECT_ACCESS_DENIED`/`edit` → `PERMISSION_DENIED` naming the key.
     const fx = await makeWorkItemFixture();
-    const viewer = await db.user.create({
+    const viewer = await adminDb.user.create({
       data: { email: 'repo-set-viewer@example.com', name: 'Viewer', emailVerified: true },
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: viewer.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'limited' } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'limited' } });
     const viewerCtx = { userId: viewer.id, workspaceId: fx.workspaceId };
 
     // They CAN read the set…
@@ -1094,13 +1113,13 @@ describe('access gating', () => {
     // writes were `assertCanEdit`, so any project MEMBER could detach a
     // project's repository. They can edit work items and they are refused here.
     const fx = await makeWorkItemFixture();
-    const member = await db.user.create({
+    const member = await adminDb.user.create({
       data: { email: 'repo-set-member@example.com', name: 'Member', emailVerified: true },
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         userId: member.id,
         projectId: fx.projectId,
@@ -1127,13 +1146,13 @@ describe('access gating', () => {
 
   it('a NON-BROWSER gets 404, not 403', async () => {
     const fx = await makeWorkItemFixture();
-    const outsider = await db.user.create({
+    const outsider = await adminDb.user.create({
       data: { email: 'repo-set-outsider@example.com', name: 'Out', emailVerified: true },
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: outsider.id, workspaceId: fx.workspaceId, role: 'member' },
     });
-    await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
     await expect(
       projectRepoSetService.addRow(
         fx.projectId,

@@ -13,6 +13,7 @@ import { ciWorkflowRunUsageRepository } from '@/lib/repositories/ciWorkflowRunUs
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { NormalizedWorkflowRunEvent } from '@/lib/git/types';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -135,11 +136,13 @@ async function seedTenant(options?: {
       { providerRepoId, owner: repoOwner, name: repoName, defaultBranch: 'main', archived: false },
     ],
   });
-  const githubRepo = await db.githubRepo.findFirstOrThrow({ where: { repoId: providerRepoId } });
+  const githubRepo = await adminDb.githubRepo.findFirstOrThrow({
+    where: { repoId: providerRepoId },
+  });
 
   let projectRepoId = '';
   if (options?.withProjectRepo !== false) {
-    const projectRepo = await db.projectRepo.create({
+    const projectRepo = await adminDb.projectRepo.create({
       data: {
         workspaceId: workspace.id,
         projectId: project.id,
@@ -154,7 +157,7 @@ async function seedTenant(options?: {
   }
 
   if (options?.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -197,6 +200,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('meterWorkflowRun — the happy path (§3, §4.5, §5.2)', () => {
@@ -218,7 +222,7 @@ describe('meterWorkflowRun — the happy path (§3, §4.5, §5.2)', () => {
       JULY_2026.toISOString(),
     );
 
-    const row = await db.ciWorkflowRunUsage.findFirstOrThrow({ where: { runId: '7001' } });
+    const row = await adminDb.ciWorkflowRunUsage.findFirstOrThrow({ where: { runId: '7001' } });
     expect(row).toMatchObject({
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -237,7 +241,7 @@ describe('meterWorkflowRun — the happy path (§3, §4.5, §5.2)', () => {
       expect.objectContaining({ family: 'linux_x64', multiplier: 1, unpriced: false }),
     ]);
 
-    const rollup = await db.ciPeriodUsage.findFirstOrThrow({
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(rollup.periodStart.toISOString()).toBe(JULY_2026.toISOString());
@@ -266,13 +270,16 @@ describe('meterWorkflowRun — the happy path (§3, §4.5, §5.2)', () => {
     await ciMinutesMeterService.meterWorkflowRun(runEvent({ runId: '2' }), INSTALLATION_ID);
     await ciMinutesMeterService.meterWorkflowRun(runEvent({ runId: '3' }), INSTALLATION_ID);
 
-    const rollup = await db.ciPeriodUsage.findFirstOrThrow({
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(rollup.runCount).toBe(3);
     expect(rollup.billableMinutes).toBe(STARTER_BILLABLE_MINUTES * 3);
     // Exactly one rollup row — the whole point of the table.
-    expect(await db.ciPeriodUsage.count({ where: { workspaceId: fx.workspaceId } })).toBe(1);
+    const ciPeriodUsageCount = await adminDb.ciPeriodUsage.count({
+      where: { workspaceId: fx.workspaceId },
+    });
+    expect(ciPeriodUsageCount).toBe(1);
   });
 
   it('files runs from DIFFERENT months in different period rows', async () => {
@@ -285,7 +292,7 @@ describe('meterWorkflowRun — the happy path (§3, §4.5, §5.2)', () => {
       INSTALLATION_ID,
     );
 
-    const rows = await db.ciPeriodUsage.findMany({
+    const rows = await adminDb.ciPeriodUsage.findMany({
       where: { workspaceId: fx.workspaceId },
       orderBy: { periodStart: 'asc' },
     });
@@ -307,9 +314,12 @@ describe('meterWorkflowRun — idempotency (§5.8, the duplicate-report criterio
 
     expect(first.outcome).toBe('metered');
     expect(second).toEqual({ outcome: 'duplicate', runId: '7001', runAttempt: 1 });
-    expect(await db.ciWorkflowRunUsage.count({ where: { runId: '7001' } })).toBe(1);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count({
+      where: { runId: '7001' },
+    });
+    expect(ciWorkflowRunUsageCount).toBe(1);
 
-    const rollup = await db.ciPeriodUsage.findFirstOrThrow({
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(rollup.runCount).toBe(1);
@@ -331,8 +341,11 @@ describe('meterWorkflowRun — idempotency (§5.8, the duplicate-report criterio
 
     // Either ordering is legitimate; what must hold is exactly one of each.
     expect(results.map((r) => r.outcome).sort()).toEqual(['duplicate', 'metered']);
-    expect(await db.ciWorkflowRunUsage.count({ where: { runId: '7001' } })).toBe(1);
-    const rollup = await db.ciPeriodUsage.findFirstOrThrow({
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count({
+      where: { runId: '7001' },
+    });
+    expect(ciWorkflowRunUsageCount).toBe(1);
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(rollup.runCount).toBe(1);
@@ -353,8 +366,11 @@ describe('meterWorkflowRun — idempotency (§5.8, the duplicate-report criterio
     const second = await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID);
 
     expect(second).toEqual({ outcome: 'duplicate', runId: '7001', runAttempt: 1 });
-    expect(await db.ciWorkflowRunUsage.count({ where: { runId: '7001' } })).toBe(1);
-    const rollup = await db.ciPeriodUsage.findFirstOrThrow({
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count({
+      where: { runId: '7001' },
+    });
+    expect(ciWorkflowRunUsageCount).toBe(1);
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(rollup.runCount).toBe(1);
@@ -372,8 +388,11 @@ describe('meterWorkflowRun — idempotency (§5.8, the duplicate-report criterio
     );
 
     expect(rerun.outcome).toBe('metered');
-    expect(await db.ciWorkflowRunUsage.count({ where: { runId: '7001' } })).toBe(2);
-    const rollup = await db.ciPeriodUsage.findFirstOrThrow({
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count({
+      where: { runId: '7001' },
+    });
+    expect(ciWorkflowRunUsageCount).toBe(2);
+    const rollup = await adminDb.ciPeriodUsage.findFirstOrThrow({
       where: { workspaceId: fx.workspaceId },
     });
     expect(rollup.runCount).toBe(2);
@@ -403,7 +422,8 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
     );
 
     expect(result).toEqual({ outcome: 'not_metered', reason: 'foreign_owner' });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(0);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(0);
     // The gate short-circuits BEFORE any API call — GitHub bills the user here.
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -424,7 +444,9 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
 
     expect(afterTransfer).toEqual({ outcome: 'not_metered', reason: 'foreign_owner' });
     // Minutes metered BEFORE the transfer stay attributed and stay charged.
-    const rows = await db.ciWorkflowRunUsage.findMany({ where: { workspaceId: fx.workspaceId } });
+    const rows = await adminDb.ciWorkflowRunUsage.findMany({
+      where: { workspaceId: fx.workspaceId },
+    });
     expect(rows.map((r) => r.runId)).toEqual(['before']);
   });
 
@@ -436,7 +458,8 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
     expect(await ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID)).toEqual({
       outcome: 'disabled',
     });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(0);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(0);
   });
 
   it('is inert when no provisioning org is configured (MOTIR-1779 has not run)', async () => {
@@ -459,7 +482,8 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
       outcome: 'bypassed_meta',
       organizationId: fx.organizationId,
     });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(0);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(0);
   });
 
   it('LOGS a Motir-owned repo with no attributable project rather than swallowing it (§5.4)', async () => {
@@ -480,7 +504,8 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
       expect.stringContaining('no attributable project'),
       expect.objectContaining({ repoName: 'acme-web', runId: '7001' }),
     );
-    expect(await db.ciWorkflowRunUsage.count()).toBe(0);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(0);
   });
 
   it('reports an unknown installation and an unknown repo distinctly', async () => {
@@ -506,7 +531,8 @@ describe('meterWorkflowRun — the §5.1 gate and its edges', () => {
       outcome: 'no_billable_jobs',
       runId: '7001',
     });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(0);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(0);
   });
 
   it('LOGS an unpriced runner but still meters it at x1.00 (§3.4)', async () => {
@@ -593,11 +619,11 @@ describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {
     // free tier's one-workspace entitlement cap would reject it. The cap is a
     // real product rule and not what this test is about — the fixture is a
     // multi-workspace org, which a paid org legitimately has.
-    const owner = await db.user.findFirstOrThrow({ where: { email: 'org-ws-a@example.com' } });
-    const secondWorkspace = await db.workspace.create({
+    const owner = await adminDb.user.findFirstOrThrow({ where: { email: 'org-ws-a@example.com' } });
+    const secondWorkspace = await adminDb.workspace.create({
       data: { name: 'Second WS', slug: 'second-ws-ci-meter', organizationId: a.organizationId },
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { workspaceId: secondWorkspace.id, userId: owner.id, role: 'owner' },
     });
     const second = { workspace: secondWorkspace };
@@ -624,8 +650,8 @@ describe('getOrgPeriodConsumption — the ONE read MOTIR-1901 consumes', () => {
         },
       ],
     });
-    const repo2 = await db.githubRepo.findFirstOrThrow({ where: { repoId: '99003' } });
-    await db.projectRepo.create({
+    const repo2 = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: '99003' } });
+    await adminDb.projectRepo.create({
       data: {
         workspaceId: second.workspace.id,
         projectId: project.id,
@@ -720,7 +746,8 @@ describe('meterWorkflowRun — failures that are NOT idempotency', () => {
     await expect(
       ciMinutesMeterService.meterWorkflowRun(runEvent(), INSTALLATION_ID),
     ).rejects.toThrow('connection terminated unexpectedly');
-    expect(await db.ciPeriodUsage.count()).toBe(0);
+    const ciPeriodUsageCount = await adminDb.ciPeriodUsage.count();
+    expect(ciPeriodUsageCount).toBe(0);
   });
 });
 
@@ -783,7 +810,8 @@ describe('the webhook seam — githubWebhookService.handleWorkflowRun', () => {
     const result = await githubWebhookService.handleEvent('workflow_run', delivery());
 
     expect(result).toEqual({ event: 'workflow_run', outcome: 'metered' });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(1);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(1);
   });
 
   it('ignores a run that has not completed — nothing billable yet (§5.7)', async () => {
@@ -793,7 +821,8 @@ describe('the webhook seam — githubWebhookService.handleWorkflowRun', () => {
     expect(
       await githubWebhookService.handleEvent('workflow_run', delivery({ action: 'in_progress' })),
     ).toEqual({ event: 'workflow_run', outcome: 'ignored_action' });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(0);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(0);
   });
 
   it('ACKS rather than 500s when metering throws — a retry cannot fix an API outage', async () => {

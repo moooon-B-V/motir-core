@@ -19,6 +19,7 @@ import {
 } from '@/lib/projectRepos/vocabulary';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 import {
@@ -214,6 +215,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('a ONE-row set', () => {
@@ -234,11 +236,11 @@ describe('a ONE-row set', () => {
     // IN THE INSTALLATION — the mirror row exists under the SHARED provisioning
     // installation, which is bound to NO workspace, while the repo row carries
     // the creating project's tenancy (MOTIR-1931).
-    const installation = await db.githubInstallation.findUniqueOrThrow({
+    const installation = await adminDb.githubInstallation.findUniqueOrThrow({
       where: { installationId: INSTALLATION_ID },
     });
     expect(installation).toMatchObject({ workspaceId: null, accountLogin: MOTIR_ORG });
-    const mirrored = await db.githubRepo.findFirstOrThrow({ where: { name: 'acme-web' } });
+    const mirrored = await adminDb.githubRepo.findFirstOrThrow({ where: { name: 'acme-web' } });
     expect(mirrored).toMatchObject({
       installationId: installation.id,
       workspaceId: fx.workspaceId,
@@ -279,7 +281,7 @@ describe('a TWO-row set is seeded PER ROLE', () => {
     expect(webId).not.toBe(apiId);
 
     // Each in the installation, each tenanted to this workspace.
-    const mirrored = await db.githubRepo.findMany({ orderBy: { name: 'asc' } });
+    const mirrored = await adminDb.githubRepo.findMany({ orderBy: { name: 'asc' } });
     expect(mirrored.map((r) => r.name)).toEqual(['acme-api', 'acme-web']);
     expect(new Set(mirrored.map((r) => r.workspaceId))).toEqual(new Set([fx.workspaceId]));
 
@@ -330,7 +332,8 @@ describe('PARTIAL FAILURE is the main event', () => {
     // Nothing rolled back — row 1's repository is a real artifact and stays one.
     expect(await readState(oneId, fx)).toMatchObject({ state: 'created', established: true });
     expect(await readState(threeId, fx)).toMatchObject({ state: 'created', established: true });
-    expect(await db.githubRepo.count()).toBe(2);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(2);
 
     // Row 2 is `failed` WITH ITS REASON — a failed row that cannot say why is the
     // whole defect the state carries a reason to prevent.
@@ -387,7 +390,8 @@ describe('PARTIAL FAILURE is the main event', () => {
         !c.url.includes('/actions/variables'),
     );
     expect(createsAfter).toHaveLength(3);
-    expect(await db.githubRepo.count()).toBe(2);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(2);
     // The retried row's stale failure reason is cleared by the settle.
     expect(await readState(twoId, fx)).toMatchObject({
       state: 'created',
@@ -411,11 +415,14 @@ describe('PARTIAL FAILURE is the main event', () => {
     // realizes the repository that already existed.
     expect(row).toMatchObject({ name: 'acme-api', state: 'created', established: true });
     expect(row.realizedRepo).toMatchObject({ name: 'acme-api' });
-    expect(await db.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } })).toMatchObject({
+    expect(
+      await adminDb.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } }),
+    ).toMatchObject({
       repoId: '424242',
     });
     // Exactly one repository, and one create ATTEMPT — the 422 was the answer.
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
   });
 
   it('refuses to adopt (and MOVE) a repository another tenant already holds', async () => {
@@ -439,9 +446,10 @@ describe('PARTIAL FAILURE is the main event', () => {
     // The critical assertion: the first tenant's repo was NOT re-stamped onto the
     // second workspace. `upsert` re-stamps `workspace_id`, so mirroring another
     // tenant's repo would not merely mis-record it — it would MOVE it.
-    const mirrored = await db.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } });
+    const mirrored = await adminDb.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } });
     expect(mirrored.workspaceId).toBe(other.workspaceId);
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
   });
 });
 
@@ -562,7 +570,7 @@ describe('the shipped chain is used, not extended', () => {
 
     // Both survive behind the ONE installation. A reconcile (`deleteExcept`) here
     // would have deleted the repos it did not fetch and leaked the ones it did.
-    const rows = await db.githubRepo.findMany({ orderBy: { name: 'asc' } });
+    const rows = await adminDb.githubRepo.findMany({ orderBy: { name: 'asc' } });
     expect(rows.map((r) => [r.name, r.workspaceId])).toEqual([
       ['acme-web', fx.workspaceId],
       ['other-web', other.workspaceId],
@@ -599,7 +607,8 @@ describe('the establish run is honest about what it did NOT do', () => {
       [skippedId, 'already_settled'],
       [liveId, 'created'],
     ]);
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
   });
 
   it('fails every row, without throwing, when provisioning is not configured', async () => {
@@ -650,7 +659,8 @@ describe('the establish run is honest about what it did NOT do', () => {
     // The loser left the row exactly as the winner holds it, and never created.
     expect(await readState(twoId, fx)).toMatchObject({ state: 'creating' });
     expect(existingRepos.has('acme-api')).toBe(false);
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
   });
 
   it('two runs racing the same set: one creates, the other backs off — never two repositories', async () => {
@@ -672,7 +682,8 @@ describe('the establish run is honest about what it did NOT do', () => {
     expect(outcomes.filter((o) => o === 'created')).toHaveLength(1);
     expect(await readState(rowId, fx)).toMatchObject({ state: 'created', established: true });
     // The one assertion that matters: ONE repository.
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
     expect(existingRepos.size).toBe(1);
   });
 
@@ -703,7 +714,8 @@ describe('the establish run is honest about what it did NOT do', () => {
     expect(result.rows[0]!.failureReason).toContain('was created');
     expect(result.rows[0]!.row).toBeNull();
     // The repository exists and is mirrored; only the row is gone.
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
   });
 
   it('skips a row REMOVED before its claim, and still finishes the siblings', async () => {
@@ -735,7 +747,8 @@ describe('the establish run is honest about what it did NOT do', () => {
     // A non-race claim failure is a real defect signal, so it is logged.
     expect(logged).toHaveBeenCalled();
     // Row 1 still got its repository; row 2 never reached GitHub.
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
     expect(existingRepos.has('acme-api')).toBe(false);
   });
 
@@ -766,7 +779,8 @@ describe('the establish run is honest about what it did NOT do', () => {
     expect(rows.find((r) => r.id === rowId)).toMatchObject({ state: 'failed', established: false });
     // The first project keeps its repository, and there is still exactly one.
     expect(await readState(first.id, fx)).toMatchObject({ state: 'created', established: true });
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
   });
 
   it('reports honestly when the actor loses ACCESS mid-run — the repository still exists', async () => {
@@ -784,7 +798,7 @@ describe('the establish run is honest about what it did NOT do', () => {
       vi.fn(async (url: string, init?: RequestInit) => {
         const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
         if (body?.['name'] === 'acme-web') {
-          await db.workspaceMembership.deleteMany({
+          await adminDb.workspaceMembership.deleteMany({
             where: { userId: fx.ownerId, workspaceId: fx.workspaceId },
           });
         }
@@ -808,10 +822,11 @@ describe('the establish run is honest about what it did NOT do', () => {
     expect(logged).toHaveBeenCalled();
     // The repository exists and is mirrored. Read raw: the actor can no longer
     // read through the service at all.
-    expect(await db.githubRepo.count()).toBe(1);
-    await expect(db.projectRepo.findUniqueOrThrow({ where: { id: rowId } })).resolves.toMatchObject(
-      { state: 'creating' },
-    );
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
+    await expect(
+      adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } }),
+    ).resolves.toMatchObject({ state: 'creating' });
   });
 
   it('returns an empty result for a project with no set at all', async () => {

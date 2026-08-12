@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `ci_workflow_run_usage` + `ci_period_usage` isolation — direct-DB RLS proof
@@ -34,6 +35,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface MeterTenantFixture {
@@ -63,7 +65,7 @@ async function makeMeterTenants(): Promise<MeterTenantFixture> {
   const a = await workspacesService.createWorkspace({ name: 'Meter WS A', ownerUserId: userA.id });
   const b = await workspacesService.createWorkspace({ name: 'Meter WS B', ownerUserId: userB.id });
 
-  const runA = await db.ciWorkflowRunUsage.create({
+  const runA = await adminDb.ciWorkflowRunUsage.create({
     data: {
       workspaceId: a.workspace.id,
       organizationId: a.workspace.organizationId,
@@ -80,7 +82,7 @@ async function makeMeterTenants(): Promise<MeterTenantFixture> {
       runnerBreakdown: [],
     },
   });
-  const runB = await db.ciWorkflowRunUsage.create({
+  const runB = await adminDb.ciWorkflowRunUsage.create({
     data: {
       workspaceId: b.workspace.id,
       organizationId: b.workspace.organizationId,
@@ -97,7 +99,7 @@ async function makeMeterTenants(): Promise<MeterTenantFixture> {
       runnerBreakdown: [],
     },
   });
-  const periodA = await db.ciPeriodUsage.create({
+  const periodA = await adminDb.ciPeriodUsage.create({
     data: {
       workspaceId: a.workspace.id,
       organizationId: a.workspace.organizationId,
@@ -108,7 +110,7 @@ async function makeMeterTenants(): Promise<MeterTenantFixture> {
       runCount: 1,
     },
   });
-  const periodB = await db.ciPeriodUsage.create({
+  const periodB = await adminDb.ciPeriodUsage.create({
     data: {
       workspaceId: b.workspace.id,
       organizationId: b.workspace.organizationId,
@@ -247,7 +249,7 @@ describe('ci_workflow_run_usage RLS — write isolation', () => {
       ),
     ).rejects.toMatchObject({ code: 'P2025' });
 
-    const b = await db.ciWorkflowRunUsage.findUnique({ where: { id: fx.runBId } });
+    const b = await adminDb.ciWorkflowRunUsage.findUnique({ where: { id: fx.runBId } });
     expect(b?.billableMinutes).toBe(40);
   });
 
@@ -257,7 +259,10 @@ describe('ci_workflow_run_usage RLS — write isolation', () => {
       tx.ciWorkflowRunUsage.deleteMany({ where: { id: fx.runBId } }),
     );
     expect(deleted.count).toBe(0);
-    expect(await db.ciWorkflowRunUsage.findUnique({ where: { id: fx.runBId } })).not.toBeNull();
+    const ciWorkflowRunUsageRow = await adminDb.ciWorkflowRunUsage.findUnique({
+      where: { id: fx.runBId },
+    });
+    expect(ciWorkflowRunUsageRow).not.toBeNull();
   });
 
   it('INSERT with a workspace_id not matching the active GUC is denied (42501)', async () => {
@@ -286,7 +291,10 @@ describe('ci_workflow_run_usage RLS — write isolation', () => {
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
 
-    expect(await db.ciWorkflowRunUsage.findFirst({ where: { runId: 'smuggled' } })).toBeNull();
+    const ciWorkflowRunUsageRow = await adminDb.ciWorkflowRunUsage.findFirst({
+      where: { runId: 'smuggled' },
+    });
+    expect(ciWorkflowRunUsageRow).toBeNull();
   });
 
   it('a tenant cannot MOVE its own metered run into another workspace', async () => {
@@ -301,7 +309,7 @@ describe('ci_workflow_run_usage RLS — write isolation', () => {
         }),
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
-    const a = await db.ciWorkflowRunUsage.findUnique({ where: { id: fx.runAId } });
+    const a = await adminDb.ciWorkflowRunUsage.findUnique({ where: { id: fx.runAId } });
     expect(a?.workspaceId).toBe(fx.workspaceAId);
   });
 });
@@ -316,7 +324,7 @@ describe('ci_period_usage RLS — write isolation', () => {
       }),
     );
     expect(updated.count).toBe(0);
-    const b = await db.ciPeriodUsage.findUnique({ where: { id: fx.periodBId } });
+    const b = await adminDb.ciPeriodUsage.findUnique({ where: { id: fx.periodBId } });
     expect(b?.billableMinutes).toBe(40);
   });
 

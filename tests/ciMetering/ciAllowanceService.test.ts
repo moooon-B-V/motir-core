@@ -10,6 +10,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { periodStartFor } from '@/lib/ciMetering/period';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -92,7 +93,7 @@ async function seedOrg(options?: { members?: number; isMeta?: boolean }): Promis
   }
 
   if (options?.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -202,6 +203,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the pool is derived from MEMBERSHIP (§1, §4.2, §4.3)', () => {
@@ -368,11 +370,11 @@ describe('consumption BEYOND the pool debits exactly the excess (§2, §4.6)', (
 
     // A member leaves → the pool drops to 1,000, BELOW the 1,200 already consumed.
     // A period re-sum would now bill 200 minutes that were free when they ran.
-    const members = await db.organizationMembership.findMany({
+    const members = await adminDb.organizationMembership.findMany({
       where: { organizationId: fx.organizationId, role: 'member' },
       take: 1,
     });
-    await db.organizationMembership.delete({ where: { id: members[0]!.id } });
+    await adminDb.organizationMembership.delete({ where: { id: members[0]!.id } });
 
     await meter(fx, 50);
     const result = await ciAllowanceService.chargeForMeteredRun({

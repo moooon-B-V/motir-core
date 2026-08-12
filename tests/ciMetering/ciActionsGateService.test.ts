@@ -20,6 +20,7 @@ import {
 } from '@/lib/github/actionsPermissions';
 import { SEED_SOURCE_PLATFORM_STARTER } from '@/lib/projectRepos/vocabulary';
 import type { CiEntitlementStateDTO } from '@/lib/dto/ciAllowance';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -67,7 +68,7 @@ async function seedTenant(opts?: { isMeta?: boolean }): Promise<Tenant> {
     identifier: `P${seq}X`,
   });
   if (opts?.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -95,7 +96,7 @@ async function seedRepo(
 ): Promise<{ rowId: string }> {
   const owner = opts?.owner ?? MOTIR_ORG;
   const installationId = `inst-${tenant.workspaceId}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -106,7 +107,7 @@ async function seedRepo(
     },
     update: {},
   });
-  const mirror = await db.githubRepo.create({
+  const mirror = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: tenant.workspaceId,
@@ -118,7 +119,7 @@ async function seedRepo(
       provider: 'github',
     },
   });
-  const row = await db.projectRepo.create({
+  const row = await adminDb.projectRepo.create({
     data: {
       workspaceId: tenant.workspaceId,
       projectId: tenant.projectId,
@@ -154,7 +155,7 @@ function stateOf(state: CiEntitlementStateDTO['state']): CiEntitlementStateDTO {
 }
 
 async function readRow(rowId: string) {
-  const row = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+  const row = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
   return {
     disabled: row.ciActionsDisabled,
     intentAt: row.ciActionsIntentAt,
@@ -180,6 +181,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('ciActionsGateService — the exhausted stop', () => {

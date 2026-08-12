@@ -14,6 +14,7 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 import {
@@ -237,6 +238,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('establishing a set invites the approving user', () => {
@@ -466,12 +468,12 @@ describe('acceptance is OBSERVED, never assumed', () => {
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
     collaborators.add(`acme-web:${LOGIN}`);
     await projectRepoAccessService.refreshAccess(fx.projectId, fx.ctx);
-    const first = await db.projectRepoCollaborator.findFirstOrThrow({
+    const first = await adminDb.projectRepoCollaborator.findFirstOrThrow({
       where: { projectRepoId: rowId },
     });
 
     await projectRepoAccessService.refreshAccess(fx.projectId, fx.ctx);
-    const second = await db.projectRepoCollaborator.findFirstOrThrow({
+    const second = await adminDb.projectRepoCollaborator.findFirstOrThrow({
       where: { projectRepoId: rowId },
     });
 
@@ -534,7 +536,7 @@ describe('concurrency — two grant passes race', () => {
       projectRepoAccessService.grantAccess(fx.projectId, fx.ctx),
     ]);
 
-    const stored = await db.projectRepoCollaborator.findFirstOrThrow({
+    const stored = await adminDb.projectRepoCollaborator.findFirstOrThrow({
       where: { projectRepoId: rowId },
     });
     expect(stored.acceptedAt).not.toBeNull();

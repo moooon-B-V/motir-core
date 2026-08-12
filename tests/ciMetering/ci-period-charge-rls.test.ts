@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `ci_period_charge` isolation — direct-DB RLS proof (Story MOTIR-1775 ·
@@ -34,6 +35,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface ChargeTenantFixture {
@@ -66,7 +68,7 @@ async function makeChargeTenants(): Promise<ChargeTenantFixture> {
     ownerUserId: userB.id,
   });
 
-  const chargeA = await db.ciPeriodCharge.create({
+  const chargeA = await adminDb.ciPeriodCharge.create({
     data: {
       organizationId: wsA.organizationId,
       periodStart: PERIOD,
@@ -76,7 +78,7 @@ async function makeChargeTenants(): Promise<ChargeTenantFixture> {
       debitedCredits: 500,
     },
   });
-  const chargeB = await db.ciPeriodCharge.create({
+  const chargeB = await adminDb.ciPeriodCharge.create({
     data: {
       organizationId: wsB.organizationId,
       periodStart: PERIOD,
@@ -174,7 +176,9 @@ describe('ci_period_charge RLS — write isolation', () => {
     );
     expect(updated.count).toBe(0);
 
-    const untouched = await db.ciPeriodCharge.findUniqueOrThrow({ where: { id: fx.chargeBId } });
+    const untouched = await adminDb.ciPeriodCharge.findUniqueOrThrow({
+      where: { id: fx.chargeBId },
+    });
     expect(untouched.chargedCredits).toBe(1000);
   });
 
@@ -199,6 +203,7 @@ describe('ci_period_charge RLS — write isolation', () => {
       tx.ciPeriodCharge.deleteMany({ where: { id: fx.chargeBId } }),
     );
     expect(deleted.count).toBe(0);
-    expect(await db.ciPeriodCharge.count()).toBe(2);
+    const ciPeriodChargeCount = await adminDb.ciPeriodCharge.count();
+    expect(ciPeriodChargeCount).toBe(2);
   });
 });

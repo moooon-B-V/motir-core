@@ -9,8 +9,10 @@ import {
   createTestWorkItem,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // RESOLVING a pinned ROLE to a real repository, over real Postgres (Story
 // MOTIR-1775 · MOTIR-1913) — the step that makes a two-repo project's agents
@@ -39,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect one repo to the fixture's workspace — the 7.10.3 mirror row a set row
@@ -49,7 +52,7 @@ async function connectRepo(
   opts: { archived?: boolean } = {},
 ): Promise<GithubRepo> {
   const installationId = `inst-${workspaceId}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -60,7 +63,7 @@ async function connectRepo(
     },
     update: {},
   });
-  return db.githubRepo.create({
+  return adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId,
@@ -83,11 +86,11 @@ async function itemWithRole(
   targetRepo: string | null = null,
 ): Promise<WorkItem> {
   const item = await createTestWorkItem(fx, { kind: 'task', title });
-  return db.workItem.update({ where: { id: item.id }, data: { targetRepoRole, targetRepo } });
+  return adminDb.workItem.update({ where: { id: item.id }, data: { targetRepoRole, targetRepo } });
 }
 
 async function pinOf(id: string): Promise<string | null> {
-  return (await db.workItem.findUniqueOrThrow({ where: { id } })).targetRepo;
+  return (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).targetRepo;
 }
 
 /** ESTABLISH a row the way the creation primitive does: claim it, then attach the
@@ -142,7 +145,7 @@ describe('a project whose plan pinned `web` + `api`', () => {
 
     await establish(fx, web.id, await connectRepo(fx.workspaceId, 'acme-web'));
 
-    const revisions = await db.workItemRevision.findMany({ where: { workItemId: item.id } });
+    const revisions = await adminDb.workItemRevision.findMany({ where: { workItemId: item.id } });
     expect(revisions).toHaveLength(1);
     expect(revisions[0]!.changeKind).toBe('updated');
     expect(revisions[0]!.diff).toEqual({ targetRepo: { from: null, to: 'acme-web' } });
@@ -264,7 +267,10 @@ describe('a role that resolves to no repository', () => {
       // Not pinned to EITHER — not after the first row established, and not after
       // the second. Guessing would send an agent into the wrong checkout.
       expect(await pinOf(item.id)).toBeNull();
-      expect(await db.workItemRevision.count({ where: { workItemId: item.id } })).toBe(0);
+      const workItemRevisionCount = await adminDb.workItemRevision.count({
+        where: { workItemId: item.id },
+      });
+      expect(workItemRevisionCount).toBe(0);
       // The reason is RECORDED, not swallowed: the log names the rows.
       expect(warn).toHaveBeenCalled();
       expect(warn.mock.calls.flat().join(' ')).toContain(billing.id);
@@ -351,7 +357,7 @@ describe('a role whose repository is ARCHIVED', () => {
     await establish(fx, api.id, repo);
     expect(await pinOf(item.id)).toBeNull();
 
-    await db.githubRepo.update({ where: { id: repo.id }, data: { archived: false } });
+    await adminDb.githubRepo.update({ where: { id: repo.id }, data: { archived: false } });
     const result = await projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
 
     expect(await pinOf(item.id)).toBe('acme-api');
@@ -378,7 +384,7 @@ describe('a role whose repository is ARCHIVED', () => {
     await establish(fx, api.id, repo);
     expect(await pinOf(item.id)).toBe('acme-api');
 
-    await db.githubRepo.update({ where: { id: repo.id }, data: { archived: true } });
+    await adminDb.githubRepo.update({ where: { id: repo.id }, data: { archived: true } });
     await projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
 
     expect(await pinOf(item.id)).toBe('acme-api');
@@ -405,7 +411,10 @@ describe('re-running the resolution', () => {
       leftUnpinned: 0,
     });
     // One revision, from the first pass — the second wrote no row, so it logged none.
-    expect(await db.workItemRevision.count({ where: { workItemId: item.id } })).toBe(1);
+    const workItemRevisionCount = await adminDb.workItemRevision.count({
+      where: { workItemId: item.id },
+    });
+    expect(workItemRevisionCount).toBe(1);
   });
 
   it('never overwrites a pin that was set EXPLICITLY', async () => {
@@ -425,7 +434,10 @@ describe('re-running the resolution', () => {
 
     expect(await pinOf(handPinned.id)).toBe('acme-legacy');
     expect(await pinOf(derived.id)).toBe('acme-web');
-    expect(await db.workItemRevision.count({ where: { workItemId: handPinned.id } })).toBe(0);
+    const workItemRevisionCount = await adminDb.workItemRevision.count({
+      where: { workItemId: handPinned.id },
+    });
+    expect(workItemRevisionCount).toBe(0);
   });
 
   it('does NOT un-pin when the row later leaves the established states', async () => {
@@ -439,7 +451,7 @@ describe('re-running the resolution', () => {
     );
     const item = await itemWithRole(fx, 'The board', 'web');
     await establish(fx, web.id, await connectRepo(fx.workspaceId, 'acme-web'));
-    await db.projectRepo.update({ where: { id: web.id }, data: { state: 'failed' } });
+    await adminDb.projectRepo.update({ where: { id: web.id }, data: { state: 'failed' } });
 
     await projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
     expect(await pinOf(item.id)).toBe('acme-web');
@@ -491,7 +503,10 @@ describe('a PARTIALLY established set (ADR §4 — rows are independent)', () =>
     await establish(fx, api.id, await connectRepo(fx.workspaceId, 'acme-api'));
     expect(await pinOf(apiItem.id)).toBe('acme-api');
     expect(await pinOf(webItem.id)).toBe('acme-web');
-    expect(await db.workItemRevision.count({ where: { workItemId: webItem.id } })).toBe(1);
+    const workItemRevisionCount = await adminDb.workItemRevision.count({
+      where: { workItemId: webItem.id },
+    });
+    expect(workItemRevisionCount).toBe(1);
   });
 });
 
@@ -531,11 +546,17 @@ describe('two SIMULTANEOUS establish calls', () => {
 
     for (const item of webItems) {
       expect(await pinOf(item.id)).toBe('acme-web');
-      expect(await db.workItemRevision.count({ where: { workItemId: item.id } })).toBe(1);
+      const workItemRevisionCount = await adminDb.workItemRevision.count({
+        where: { workItemId: item.id },
+      });
+      expect(workItemRevisionCount).toBe(1);
     }
     for (const item of apiItems) {
       expect(await pinOf(item.id)).toBe('acme-api');
-      expect(await db.workItemRevision.count({ where: { workItemId: item.id } })).toBe(1);
+      const workItemRevisionCount2 = await adminDb.workItemRevision.count({
+        where: { workItemId: item.id },
+      });
+      expect(workItemRevisionCount2).toBe(1);
     }
   });
 
@@ -566,7 +587,12 @@ describe('two SIMULTANEOUS establish calls', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const addSecondRow = db.$transaction(
+    // Bound (MOTIR-2792): the probe locks `project_repository` rows with FOR UPDATE.
+    // Unbound the policy hides them, the lock is taken on an EMPTY set, and the
+    // contention this test exists to prove simply never happens — it would pass while
+    // asserting nothing.
+    const addSecondRow = withWorkspaceServiceContext(
+      fx.workspaceId,
       async (tx) => {
         await tx.$queryRaw`
           SELECT "id" FROM "project_repository"
@@ -585,7 +611,7 @@ describe('two SIMULTANEOUS establish calls', () => {
         });
         await held;
       },
-      { timeout: 20_000 },
+      { timeoutMs: 20_000, maxWaitMs: 20_000 },
     );
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -635,7 +661,9 @@ describe('two SIMULTANEOUS establish calls', () => {
     const held = new Promise<void>((resolve) => {
       release = resolve;
     });
-    const handEdit = db.$transaction(
+    // Bound for the reason above.
+    const handEdit = withWorkspaceServiceContext(
+      fx.workspaceId,
       async (tx) => {
         await tx.$queryRaw`SELECT "id" FROM "work_item" WHERE "id" = ${contended.id} FOR UPDATE`;
         await tx.workItem.update({
@@ -644,7 +672,7 @@ describe('two SIMULTANEOUS establish calls', () => {
         });
         await held;
       },
-      { timeout: 20_000 },
+      { timeoutMs: 20_000, maxWaitMs: 20_000 },
     );
 
     const pass = projectRepoPinService.resolvePins(fx.projectId, fx.ctx);
@@ -657,7 +685,10 @@ describe('two SIMULTANEOUS establish calls', () => {
 
     // The hand edit stands, and the pass says nothing about it.
     expect(await pinOf(contended.id)).toBe('acme-legacy');
-    expect(await db.workItemRevision.count({ where: { workItemId: contended.id } })).toBe(0);
+    const workItemRevisionCount = await adminDb.workItemRevision.count({
+      where: { workItemId: contended.id },
+    });
+    expect(workItemRevisionCount).toBe(0);
     // Its siblings are pinned normally — the contention costs nothing else.
     for (const item of others) expect(await pinOf(item.id)).toBe('acme-web');
     expect(result.pinned).toBe(others.length);
@@ -695,7 +726,10 @@ describe('two SIMULTANEOUS establish calls', () => {
 
     for (const item of items) {
       expect(await pinOf(item.id)).toBe('acme-web');
-      expect(await db.workItemRevision.count({ where: { workItemId: item.id } })).toBe(1);
+      const workItemRevisionCount = await adminDb.workItemRevision.count({
+        where: { workItemId: item.id },
+      });
+      expect(workItemRevisionCount).toBe(1);
     }
   });
 });

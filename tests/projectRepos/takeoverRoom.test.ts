@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '@/lib/db';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectRepoRoomService } from '@/lib/services/projectRepoRoomService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
@@ -10,6 +9,7 @@ import { userOrgsClient, GithubUserOrgsError } from '@/lib/github/userOrgs';
 import { encryptToken } from '@/lib/github/tokenCrypto';
 import { GET as getOrganizations } from '@/app/api/github/organizations/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE TAKE-IT-OVER ROOM's reads (Story MOTIR-1775 · MOTIR-1939) — the two things
@@ -296,7 +296,7 @@ describe('projectRepoRoomService.getRoomView', () => {
 
   it('names the OTHER projects Motir hosts, and never this one', async () => {
     const fx = await makeWorkItemFixture();
-    const sibling = await db.project.create({
+    const sibling = await adminDb.project.create({
       data: {
         workspaceId: fx.workspaceId,
         name: 'Acme internal tools',
@@ -317,7 +317,7 @@ describe('projectRepoRoomService.getRoomView', () => {
 
   it('counts a CONNECTED row as the user’s own, not as something Motir hosts', async () => {
     const fx = await makeWorkItemFixture();
-    const sibling = await db.project.create({
+    const sibling = await adminDb.project.create({
       data: {
         workspaceId: fx.workspaceId,
         name: 'Acme marketing site',
@@ -349,7 +349,7 @@ function signIn(fx: WorkItemFixture): void {
 }
 
 async function connectIdentity(fx: WorkItemFixture, avatarUrl?: string): Promise<void> {
-  await db.githubIdentity.create({
+  await adminDb.githubIdentity.create({
     data: {
       userId: fx.ownerId,
       githubUserId: `gh-${fx.ownerId}`,
@@ -364,7 +364,7 @@ async function connectIdentity(fx: WorkItemFixture, avatarUrl?: string): Promise
  *  (`proposed → creating → created`) so the fixture cannot manufacture an
  *  ownership the product could not. */
 async function motirOwnedRow(fx: WorkItemFixture, name: string): Promise<void> {
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-${MOTIR_ORG}` },
     create: {
       installationId: `inst-${MOTIR_ORG}`,
@@ -374,7 +374,7 @@ async function motirOwnedRow(fx: WorkItemFixture, name: string): Promise<void> {
     },
     update: {},
   });
-  const mirror = await db.githubRepo.create({
+  const mirror = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -392,7 +392,7 @@ async function motirOwnedRow(fx: WorkItemFixture, name: string): Promise<void> {
 
 /** A row realized by CONNECTING a repository the user already owned. */
 async function connectedRow(fx: WorkItemFixture, name: string): Promise<void> {
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-user-${fx.workspaceId}` },
     create: {
       installationId: `inst-user-${fx.workspaceId}`,
@@ -402,7 +402,7 @@ async function connectedRow(fx: WorkItemFixture, name: string): Promise<void> {
     },
     update: {},
   });
-  const mirror = await db.githubRepo.create({
+  const mirror = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,

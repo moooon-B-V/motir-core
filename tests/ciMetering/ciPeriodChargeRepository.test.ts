@@ -4,6 +4,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ciPeriodChargeRepository } from '@/lib/repositories/ciPeriodChargeRepository';
 import { withOrgServiceWriteContext } from '@/lib/organizations/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -34,6 +35,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('ensureRow + lockForUpdate', () => {
@@ -83,7 +85,8 @@ describe('ensureRow + lockForUpdate', () => {
       pendingDebitRef: null,
       pendingDebitCredits: 0,
     });
-    expect(await db.ciPeriodCharge.count()).toBe(1);
+    const ciPeriodChargeCount = await adminDb.ciPeriodCharge.count();
+    expect(ciPeriodChargeCount).toBe(1);
   });
 
   it('two concurrent ensureRow calls settle on ONE row', async () => {
@@ -96,7 +99,8 @@ describe('ensureRow + lockForUpdate', () => {
         ),
       ),
     );
-    expect(await db.ciPeriodCharge.count()).toBe(1);
+    const ciPeriodChargeCount = await adminDb.ciPeriodCharge.count();
+    expect(ciPeriodChargeCount).toBe(1);
   });
 });
 

@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 
 // MOTIR-1960 — the two properties the drift fix has to keep TRUE together, read
 // off the live catalog rather than asserted about the SQL text.
@@ -32,6 +33,7 @@ import { db } from '@/lib/db';
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface IndexRow {
