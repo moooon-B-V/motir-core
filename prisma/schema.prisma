@@ -666,6 +666,9 @@ model Workspace {
   // Cascade with the workspace, the comments pattern.
   notifications               Notification[]
   sprintReportEntries         SprintReportEntry[]
+  // Plan-tree embeddings (Story MOTIR-2694 · MOTIR-2696) — the RLS axis of the
+  // semantic-search sidecar. Derived tenant data; cascade with the workspace.
+  workItemEmbeddings          WorkItemEmbedding[]
   // Workspace-scoped API tokens (Story 7.8 · bug 7.21) — a PAT belongs to ONE
   // workspace (the Linear mirror). Cascade with the workspace.
   apiTokens                   ApiToken[]
@@ -985,6 +988,9 @@ model Project {
   // no drift.
   lastActiveForUsers          User[]                       @relation("LastActiveProject")
   workItems                   WorkItem[]
+  // Plan-tree embeddings for this project's items (Story MOTIR-2694 ·
+  // MOTIR-2696) — the ranking pre-filter's axis. Cascade with the project.
+  workItemEmbeddings          WorkItemEmbedding[]
   workflowStatuses            WorkflowStatus[]
   workflowTransitions         WorkflowTransition[]
   boards                      Board[]
@@ -1678,6 +1684,12 @@ model WorkItem {
   // mapping row goes too, so a re-import re-creates it. Modelled both sides per
   // the FK-`@relation` rule.
   importedIssues       ImportedIssue[]
+  // The semantic-search SIDECAR (Story MOTIR-2694 · MOTIR-2696, per
+  // docs/decisions/plan-tree-embeddings.md §4) — at most ONE row per item,
+  // holding the vector derived from this item's title + description. Cascade:
+  // the derivation dies with the row it describes. A MISSING row is the honest
+  // representation of "not a candidate yet" — see WorkItemEmbedding's header.
+  embedding            WorkItemEmbedding?
 
   @@unique([projectId, key])
   @@unique([projectId, identifier])
@@ -1721,6 +1733,99 @@ model WorkItem {
   // created by the migration SQL (Prisma doesn't model extensions here).
   @@index([title(ops: raw("gin_trgm_ops")), descriptionMd(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("work_item")
+}
+
+/// The plan-tree SEMANTIC-SEARCH sidecar (Story MOTIR-2694 · Subtask
+/// MOTIR-2696, per `docs/decisions/plan-tree-embeddings.md` §4) — one row per
+/// work item, holding the embedding of that item's `title` + `descriptionMd`
+/// so GATE 1's "does work like this already exist?" can be answered by MEANING
+/// rather than by the 6.1.1 substring `contains` predicate.
+///
+/// A SIDECAR, not four columns on `work_item`, for three reasons the ADR
+/// argues in full: `model` / `dimensions` / `contentHash` / `embeddedAt`
+/// describe a DERIVATION rather than the card, and they do not belong on the
+/// widest, hottest table in the schema; **absence is the semantics** — "this
+/// item has no embedding yet" is most honestly a MISSING ROW, not five
+/// nullable columns that must agree with each other; and the write cadences
+/// differ (a background job writes this minutes after the item, on a different
+/// trigger, and must never appear to modify the row a user is editing).
+///
+/// ⚠️ `embedding` is `Unsupported("vector(1536)")` — the typed Prisma client
+/// can neither read, write nor order by it, exactly as in `motir-ai`'s
+/// `Lesson`. So the WHOLE row is written by `workItemEmbeddingRepository`'s
+/// `$executeRaw` upsert (row and vector land in ONE statement, so a row without
+/// a vector is never created) and ranked by a `$queryRaw` `<=>`, with the
+/// vector bound as a parameter and cast — NEVER string-concatenated. It is
+/// nullable here for the same reason it is in `motir-ai`: Prisma cannot create
+/// a required Unsupported column, and the mirror keeps `migrate diff` quiet.
+/// The ranking read still guards `embedding IS NOT NULL`, belt and braces.
+///
+/// `vector(1536)` is the literal `motir-ai` uses, for the same reason: it is
+/// the dimension `motir-ai`'s `docs/decisions/embedding-provider.md` pinned for
+/// EVERY semantic store, so a vector produced by either service is comparable.
+/// `dimensions` records it per row so a future re-dimension is a visible,
+/// rolling backfill rather than a silent mismatch.
+///
+/// Tenancy (ADR §5): `workspaceId` is NOT NULL and the RLS policy ships in the
+/// SAME migration — the no-unguarded-window rule; `projectId` is the search
+/// filter, resolved server-side from the caller's token, never from a body.
+/// Both FKs cascade (the vector is derived data, so it dies with either
+/// parent) and both are modelled as `@relation`s on BOTH sides, per the
+/// FK-`@relation` no-drift rule.
+model WorkItemEmbedding {
+  /// PK *and* FK — one embedding per work item, by construction.
+  workItemId  String @id @map("work_item_id")
+  workspaceId String @map("workspace_id")
+  projectId   String @map("project_id")
+  /// The model that produced this vector (e.g. `text-embedding-3-small`), as
+  /// REPORTED by motir-ai's `POST /v1/embeddings` — not a local constant, so an
+  /// `EMBEDDING_MODEL` override on the other side is recorded rather than
+  /// assumed. ADR §6.1 makes it a HARD ranking filter: rows embedded with a
+  /// different model are not comparable and are excluded, which turns a model
+  /// swap into a visible, rolling backfill instead of a silent collapse in
+  /// result quality.
+  model       String
+  /// The vector's length, asserted against the column type at write time.
+  dimensions  Int
+  /// SHA-256 of the §3 document (`title` + "\n\n" + `descriptionMd`, truncated
+  /// to 8 000 chars). THE RE-EMBED TRIGGER: the embedding is re-derived exactly
+  /// when this changes, so a status flip / re-parent / sprint move / assignee
+  /// change costs nothing. It is also the job's idempotency guard — a re-run
+  /// whose hash matches skips the provider call entirely.
+  contentHash String @map("content_hash")
+
+  /// When this vector was derived. `timestamptz` (ADR §4) — an instant, and the
+  /// one column here that is compared across deployments.
+  embeddedAt DateTime @map("embedded_at") @db.Timestamptz(3)
+
+  embedding Unsupported("vector(1536)")?
+
+  workItem  WorkItem  @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  /// Tenant teardown + the workspace RLS predicate.
+  @@index([workspaceId])
+  /// The ranking pre-filter AND the coverage count, which both narrow on
+  /// (project, model) before the `<=>` ordering — see the repository's
+  /// under-return note for why that pre-filter needs its own index.
+  @@index([projectId, model])
+  /// ⚠️ THE ANN INDEX, DECLARED HERE ONLY SO THE DRIFT GATE CAN SEE IT. The real
+  /// object is `CREATE INDEX … USING hnsw ("embedding" vector_cosine_ops)`, in
+  /// the migration — Prisma's index types stop at Gin/Gist/Brin/SpGist/Hash and
+  /// cannot express HNSW at all. Without this line the `build` job's
+  /// `prisma migrate diff --from-schema … --to-config-datasource --exit-code`
+  /// reports a permanent "[+] Added index on columns (embedding)", because the
+  /// differ pairs a database index to a datamodel index BY COLUMN LIST and no
+  /// datamodel index claimed this column. With it, the pair is complete and the
+  /// only thing Prisma could still disagree about is the NAME — pinned by `map`
+  /// to the literal the migration creates, so a future default-name change
+  /// cannot silently re-open the drift (the partial-index lesson, MOTIR-1960).
+  /// Nothing regenerates this as a btree: `migrate dev` diffs against a shadow
+  /// database built from the committed migrations, where the hnsw index already
+  /// holds the column list.
+  @@index([embedding], map: "work_item_embedding_embedding_idx")
+  @@map("work_item_embedding")
 }
 
 /// One upvote by one account on one public request (Story 6.12 · Subtask

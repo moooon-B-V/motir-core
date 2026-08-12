@@ -26,6 +26,7 @@ import { fleetPreflightService } from '@/lib/services/fleetPreflightService';
 import { parentStatusRollupService } from '@/lib/services/parentStatusRollupService';
 import { childStatusCascadeService } from '@/lib/services/childStatusCascadeService';
 import { migrateOnboardingService } from '@/lib/services/migrateOnboardingService';
+import { workItemEmbeddingsService } from '@/lib/services/workItemEmbeddingsService';
 
 // The service-layer injection bag handed to every job handler as its 2nd arg
 // (Story 1.6 · Subtask 1.6.2). This is the seam that keeps the 4-layer rule
@@ -67,6 +68,7 @@ export const jobServices = {
   parentStatusRollup: parentStatusRollupService,
   childStatusCascade: childStatusCascadeService,
   migrateOnboarding: migrateOnboardingService,
+  workItemEmbeddings: workItemEmbeddingsService,
 };
 
 export type JobServices = typeof jobServices;

@@ -1033,6 +1033,15 @@ export default defineConfig({
         // literal route-group path matches no reported file (the note above),
         // so the threshold would pass vacuously.
         'app/**/home/_components/**',
+        // Story MOTIR-2694 · Subtask MOTIR-2696 — the plan-tree embedding write
+        // path. Every one of these is new code this card wrote and tested, so
+        // all four are GATED in `thresholds` below rather than report-only;
+        // measured at 100 lines / 100 functions / 100 branches on this branch
+        // before being pinned, per the note above.
+        'lib/workItems/embeddingDocument.ts',
+        'lib/repositories/workItemEmbeddingRepository.ts',
+        'lib/services/workItemEmbeddingsService.ts',
+        'lib/jobs/definitions/workItemEmbedding.ts',
       ],
       reporter: ['text', 'text-summary'],
       // Per-file thresholds keyed by glob: each of the six modules gates
@@ -1491,6 +1500,15 @@ export default defineConfig({
         'lib/jobs/definitions/notificationFanIn.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/notifications/errors.ts': { branches: 90, functions: 90, lines: 90 },
         'lib/services/workItemsService.ts': { branches: 90, functions: 90, lines: 90 },
+        // Story MOTIR-2694 · Subtask MOTIR-2696 (see the `include` note above).
+        'lib/workItems/embeddingDocument.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/workItemEmbeddingRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/services/workItemEmbeddingsService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/jobs/definitions/workItemEmbedding.ts': { branches: 90, functions: 90, lines: 90 },
         // The prose-vs-graph advisory (MOTIR-1969) — an ADDITION beside the
         // finishability rules, gated on its own so a regression in it can't hide
         // inside workItemsService's blended number.

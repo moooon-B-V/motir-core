@@ -23,34 +23,61 @@ inputs:
     description: Host port to publish 5432 on. DATABASE_URL must match.
     required: false
     default: '5432'
+  image-repository:
+    description: >-
+      Postgres image repository. Keep in sync with docker-compose.yml. Defaults
+      to pgvector/pgvector — the plain `postgres` image has no pgvector, and
+      MOTIR-2696's `work_item_embedding` migration runs `CREATE EXTENSION
+      vector`, so every CI job that applies migrations needs it.
+    required: false
+    default: pgvector/pgvector
   image-tag:
     description: Postgres image tag. Keep in sync with docker-compose.yml.
     required: false
-    default: 16-alpine
+    default: pg16
   container-name:
     description: Docker container name (one Postgres per job, so the default is fine).
     required: false
     default: ci-postgres
+  initdb-locale:
+    description: >-
+      The locale the cluster is initialised with. Pinned to production's
+      (`C.UTF-8` on Neon, verified 2026-08-12), i.e. BYTE ordering — see the
+      note on the run step for why this is load-bearing rather than cosmetic.
+    required: false
+    default: C.UTF-8
 
 runs:
   using: composite
   steps:
-    # Three INDEPENDENT sources for the same official image, tried in order, the
-    # whole list retried 3× with backoff — so the pull fails only if all three
-    # registries are unreachable at once, not when Docker Hub alone blips.
-    # public.ecr.aws/docker/library/* and mirror.gcr.io/library/* are the
-    # official-image mirrors AWS and Google publish; Docker Hub stays last as
-    # the canonical source.
+    # INDEPENDENT sources for the same image, tried in order, the whole list
+    # retried 3× with backoff — so the pull fails only if every registry is
+    # unreachable at once, not when Docker Hub alone blips (MOTIR-1742).
+    #
+    # ⚠️ THE SOURCE LIST IS DERIVED FROM THE REPOSITORY, and it shrank when
+    # MOTIR-2696 moved the default off the official image. `public.ecr.aws` and
+    # `mirror.gcr.io/library/*` publish the OFFICIAL library images only, and
+    # `pgvector/pgvector` is a Docker Hub USER repository — those two paths do not
+    # exist for it. `mirror.gcr.io` is a general Docker Hub pull-through cache, so
+    # the un-prefixed form still works for any repository and stays first; the ECR
+    # mirror is added only when the repository IS an official one, which keeps a
+    # caller that passes `image-repository: postgres` on the full three-source
+    # list it had before. A source that 404s costs one warning and falls through
+    # to the next — the retry loop is unchanged.
     - name: Pull the Postgres image (mirror first, retried)
       shell: bash
       env:
+        IMAGE_REPOSITORY: ${{ inputs.image-repository }}
         IMAGE_TAG: ${{ inputs.image-tag }}
       run: |
         set -uo pipefail
-        sources=(
-          "public.ecr.aws/docker/library/postgres:${IMAGE_TAG}"
-          "mirror.gcr.io/library/postgres:${IMAGE_TAG}"
-          "postgres:${IMAGE_TAG}"
+        sources=()
+        if [ "${IMAGE_REPOSITORY}" = "postgres" ]; then
+          sources+=("public.ecr.aws/docker/library/postgres:${IMAGE_TAG}")
+        fi
+        sources+=(
+          "mirror.gcr.io/${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+          "${IMAGE_REPOSITORY}:${IMAGE_TAG}"
         )
         for attempt in 1 2 3; do
           for src in "${sources[@]}"; do
@@ -69,11 +96,26 @@ runs:
             sleep "${backoff}"
           fi
         done
-        echo "::error::Could not pull postgres:${IMAGE_TAG} from any of: ${sources[*]}"
+        echo "::error::Could not pull ${IMAGE_REPOSITORY}:${IMAGE_TAG} from any of: ${sources[*]}"
         exit 1
 
     # The health flags mirror what the old `services:` block declared, so the
     # readiness semantics are unchanged — only the retry surface is new.
+    #
+    # ⚠️ `POSTGRES_INITDB_ARGS` PINS THE COLLATION TO PRODUCTION'S, AND IT IS
+    # LOAD-BEARING. Neon runs `datcollate = 'C.UTF-8'` — BYTE ordering — and this
+    # repo's ordering depends on it: `lib/workItems/positioning.ts` mints base-62
+    # fractional keys for `work_item.position` / `backlogRank` and every other
+    # `position` column, and base-62 mixes cases (`Zz` < `a0`). Under glibc's
+    # default `en_US.utf8` the dictionary collation ignores case at the primary
+    # level and `ORDER BY position` returns a different order.
+    #
+    # It was never expressed before because `postgres:16-alpine` is musl, which
+    # collates by byte whatever the locale says — so CI matched production by
+    # accident. MOTIR-2696 moved the image to a glibc base for pgvector and
+    # eleven ordering tests went red across three shards. `tests/db-collation.test.ts`
+    # asserts the result at runtime, so a future image change fails on the FACT
+    # rather than on a scattering of ordering assertions.
     - name: Start Postgres and wait for it to report healthy
       shell: bash
       env:
@@ -82,12 +124,14 @@ runs:
         POSTGRES_PASSWORD: ${{ inputs.password }}
         POSTGRES_DB: ${{ inputs.database }}
         HOST_PORT: ${{ inputs.port }}
+        INITDB_LOCALE: ${{ inputs.initdb-locale }}
       run: |
         set -uo pipefail
         docker run --detach --name "${CONTAINER}" \
           --env POSTGRES_USER="${POSTGRES_USER}" \
           --env POSTGRES_PASSWORD="${POSTGRES_PASSWORD}" \
           --env POSTGRES_DB="${POSTGRES_DB}" \
+          --env POSTGRES_INITDB_ARGS="--locale=${INITDB_LOCALE}" \
           --publish "${HOST_PORT}:5432" \
           --health-cmd "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" \
           --health-interval 2s \

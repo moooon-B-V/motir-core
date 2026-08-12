@@ -296,7 +296,8 @@ should not need a local checkout to see the change.
 **The existing gates run FIRST; the deploy follows them.** In order:
 
 1. **vitest** and the **119 Playwright specs**, exactly as they are today — their
-   own ephemeral `postgres:16-alpine` per leg, their own web servers,
+   own ephemeral Postgres container per leg (`pgvector/pgvector:pg16` since
+   MOTIR-2696; `postgres:16-alpine` when this was written), their own web servers,
    `resetDatabase()` in `beforeEach`, nine parallel legs. **This Story changes
    none of it** (Yue, 2026-08-07). They are the gate.
 2. **Build the image and deploy**, on the default branch only, `needs:` those
