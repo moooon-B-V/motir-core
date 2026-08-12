@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
+import { adminDb } from './helpers/adminDb';
 
 // The audit-COVERAGE read (MOTIR-2248) — "which connected repos have no derived
 // audit". The motir-ai HTTP client is the one sanctioned boundary mock; the
@@ -86,6 +87,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('auditCoverageService.getCoverage', () => {

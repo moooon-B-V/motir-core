@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import { createTestUser } from './fixtures/userFixtures';
 import {
@@ -59,6 +60,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('usersService.updateProfile — name', () => {
@@ -132,7 +134,7 @@ describe('usersService.updateProfile — avatar', () => {
 
     // The point of the card, asserted on the STORED value rather than the
     // response: no scheme, no host — nothing a hosting change could strand.
-    const stored = await db.user.findUniqueOrThrow({ where: { id: user.id } });
+    const stored = await adminDb.user.findUniqueOrThrow({ where: { id: user.id } });
     expect(stored.image).toBe(key);
     expect(stored.image).not.toMatch(/^https?:/);
   });
@@ -153,7 +155,7 @@ describe('usersService.updateProfile — avatar', () => {
   it('accepts a pre-MOTIR-2404 ABSOLUTE row, passes it through, and still GCs it', async () => {
     const user = await createTestUser();
     const legacy = absoluteAvatarUrl(user.id, 'old.png');
-    await db.user.update({ where: { id: user.id }, data: { image: legacy } });
+    await adminDb.user.update({ where: { id: user.id }, data: { image: legacy } });
 
     // Read tolerance: an absolute value is returned untouched, never re-prefixed.
     expect((await usersService.getProfile(user.id))?.image).toBe(legacy);
@@ -224,7 +226,7 @@ describe('usersService.updateProfile — avatar', () => {
     const user = await createTestUser();
     // Simulate an OAuth signup whose image is a Google-hosted URL (not our blob).
     const google = 'https://lh3.googleusercontent.com/a/abc123';
-    await db.user.update({ where: { id: user.id }, data: { image: google } });
+    await adminDb.user.update({ where: { id: user.id }, data: { image: google } });
 
     const key = ownAvatarKey(user.id, 'now-ours.png');
     const dto = await usersService.updateProfile(user.id, { image: key });

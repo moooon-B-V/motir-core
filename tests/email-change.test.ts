@@ -10,6 +10,7 @@ import {
   InvalidEmailError,
   SameEmailError,
 } from '@/lib/users/errors';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import { captureEmailEvents } from './helpers/jobs';
 
@@ -35,6 +36,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {
@@ -55,7 +57,7 @@ describe('requestEmailChange', () => {
     expect(row!.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
     // The user's live email is unchanged until they confirm.
-    const stillOld = await db.user.findUnique({ where: { id: user.id } });
+    const stillOld = await adminDb.user.findUnique({ where: { id: user.id } });
     expect(stillOld!.email).toBe('old@example.com');
 
     // Exactly one cross-workspace email.send was enqueued, keyed by the token,
@@ -152,7 +154,7 @@ describe('requestEmailChange — concurrency (the uniqueness race)', () => {
     expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(EmailTakenError);
 
     // Exactly one pending row for the contested address.
-    const rows = await db.emailChangeRequest.findMany({
+    const rows = await adminDb.emailChangeRequest.findMany({
       where: { newEmail: 'contested@example.com' },
     });
     expect(rows).toHaveLength(1);
@@ -167,13 +169,13 @@ describe('confirmEmailChange', () => {
     const result = await usersService.confirmEmailChange(token);
     expect(result).toEqual({ userId: user.id, newEmail: 'new@example.com' });
 
-    const updated = await db.user.findUnique({ where: { id: user.id } });
+    const updated = await adminDb.user.findUnique({ where: { id: user.id } });
     expect(updated!.email).toBe('new@example.com');
     expect(updated!.emailVerified).toBe(true);
 
     // The credential account's accountId tracks the new email, so the freed old
     // address can be reused at signup without a (providerId, accountId) clash.
-    const credential = await db.account.findFirst({
+    const credential = await adminDb.account.findFirst({
       where: { userId: user.id, providerId: 'credential' },
     });
     expect(credential!.accountId).toBe('new@example.com');
@@ -198,7 +200,7 @@ describe('confirmEmailChange', () => {
     const user = await makeUser('old@example.com');
     const { token } = await usersService.requestEmailChange(user.id, 'new@example.com');
     // Force the row past its expiry.
-    await db.emailChangeRequest.update({
+    await adminDb.emailChangeRequest.update({
       where: { token },
       data: { expiresAt: new Date(Date.now() - 1000) },
     });
@@ -208,7 +210,7 @@ describe('confirmEmailChange', () => {
     );
     // Consumed even though it was expired — no replay.
     expect(await emailChangeRequestRepository.findByTokenUnsafe(token)).toBeNull();
-    const unchanged = await db.user.findUnique({ where: { id: user.id } });
+    const unchanged = await adminDb.user.findUnique({ where: { id: user.id } });
     expect(unchanged!.email).toBe('old@example.com');
   });
 
@@ -225,7 +227,7 @@ describe('confirmEmailChange', () => {
     await makeUser('new@example.com');
 
     await expect(usersService.confirmEmailChange(token)).rejects.toBeInstanceOf(EmailTakenError);
-    const unchanged = await db.user.findUnique({ where: { id: user.id } });
+    const unchanged = await adminDb.user.findUnique({ where: { id: user.id } });
     expect(unchanged!.email).toBe('old@example.com');
   });
 });

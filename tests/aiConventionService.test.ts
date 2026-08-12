@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
+import { adminDb } from './helpers/adminDb';
 import type {
   RawConvention,
   RawConventionSurface,
@@ -139,6 +140,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('aiConventionService — project-admin gate', () => {

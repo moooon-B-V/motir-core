@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { makeWorkItemFixture } from './fixtures/workItemFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Route-level transport tests for the AI sprint-planning API (Subtask 7.13.5 ·
@@ -98,7 +99,7 @@ async function seedActiveProject(opts: { sprintPlanning?: boolean } = {}) {
   await truncateAuthTables();
   const fx = await makeWorkItemFixture();
   if (opts.sprintPlanning !== false) {
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { aiSprintPlanningEnabled: true, aiSprintLengthDays: 2 },
     });
@@ -123,6 +124,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/ai/plan/sprint', () => {

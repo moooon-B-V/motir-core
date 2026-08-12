@@ -15,6 +15,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding } from './helpers/db';
 
 // THE CODE-GRAPH OFFBOARDING QUEUE (MOTIR-2166 ·
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeWorkspace(email: string, name: string) {
@@ -271,8 +273,10 @@ describe('the queue row OUTLIVES its workspace (§14.5)', () => {
     });
 
     // The workspace and its projects really are gone…
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
-    expect(await db.project.findUnique({ where: { id: project.id } })).toBeNull();
+    const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(workspaceRow).toBeNull();
+    const projectRow = await adminDb.project.findUnique({ where: { id: project.id } });
+    expect(projectRow).toBeNull();
 
     // …and the row naming their code graph is still here, which is the ONLY
     // reason anything can ever remove that graph.
@@ -524,7 +528,7 @@ describe('a failing enqueue never fails the user action (§14.5, `notes.html` #3
 
     // The archive COMMITTED. Coupling a mutation's success to a side effect's
     // success is what turns a saved change into a reported failure.
-    const row = await db.project.findUnique({ where: { id: project.id } });
+    const row = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(row?.archivedAt).not.toBeNull();
     expect(await allRows()).toEqual([]);
     boom.mockRestore();
@@ -542,7 +546,8 @@ describe('a failing enqueue never fails the user action (§14.5, `notes.html` #3
       workspacesService.deleteWorkspace({ workspaceId: workspace.id, actorUserId: owner.id }),
     ).resolves.toBeUndefined();
 
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
+    const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(workspaceRow).toBeNull();
     boom.mockRestore();
   });
 

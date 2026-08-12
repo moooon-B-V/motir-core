@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawSubscriptionResponse, RawUsageResponse } from '@/lib/ai/types';
+import { adminDb } from './helpers/adminDb';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Subtask 8.1.9 (MOTIR-1151) — the billing-boundary DTO key-drift SEAM guard.
@@ -132,8 +133,9 @@ async function makeOrg() {
     name: 'Acme',
     ownerUserId: owner.id,
   });
-  const organizationId = (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
-    .organizationId;
+  const organizationId = (
+    await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } })
+  ).organizationId;
   return { organizationId, owner };
 }
 
@@ -154,6 +156,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('billing boundary contract — getBillingStatus consumes motir-ai usage+subscription', () => {

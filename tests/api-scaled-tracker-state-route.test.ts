@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Transport tests for POST /api/internal/billing/scaled-tracker-state (Subtask
@@ -21,6 +22,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const { POST } = await import('@/app/api/internal/billing/scaled-tracker-state/route');
@@ -44,7 +46,8 @@ async function makeOrg(): Promise<string> {
     name: 'Acme',
     ownerUserId: owner.id,
   });
-  return (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).organizationId;
+  return (await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
+    .organizationId;
 }
 
 describe('POST /api/internal/billing/scaled-tracker-state — auth gate', () => {

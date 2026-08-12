@@ -7,6 +7,7 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { OrganizationNotFoundError } from '@/lib/organizations/errors';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service test for billingPropagationService.setScaledTrackerState (Subtask
@@ -22,6 +23,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const STATE: ScaledTrackerSubscription = {
@@ -38,13 +40,14 @@ async function makeOrg(): Promise<string> {
     name: 'Acme',
     ownerUserId: owner.id,
   });
-  return (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).organizationId;
+  return (await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
+    .organizationId;
 }
 
 // Read the raw column back. The default test role is BYPASSRLS, so this sees the
 // row regardless of context — it's the ground-truth assertion of what persisted.
 async function readColumn(orgId: string): Promise<unknown> {
-  const org = await db.organization.findUniqueOrThrow({ where: { id: orgId } });
+  const org = await adminDb.organization.findUniqueOrThrow({ where: { id: orgId } });
   return org.scaledTrackerSubscription;
 }
 

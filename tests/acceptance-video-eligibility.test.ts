@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 import { db } from '@/lib/db';
 import { createTestWorkspace } from './fixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // acceptanceVideoEligibilityService + organizationsService.setAcceptanceVideoEnabled
@@ -41,7 +42,7 @@ function access(partial: Partial<AiAccessDTO>): AiAccessDTO {
 
 async function seed() {
   const { workspace, owner } = await createTestWorkspace({ name: 'Elig WS' });
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } });
   return { workspaceId: workspace.id, ownerId: owner.id, organizationId: ws.organizationId };
 }
 
@@ -52,6 +53,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('acceptanceVideoEligibilityService.resolve', () => {
@@ -133,7 +135,7 @@ describe('organizationsService.setAcceptanceVideoEnabled', () => {
     });
     expect(dto.acceptanceVideoEnabled).toBe(false);
 
-    const row = await db.organization.findUniqueOrThrow({ where: { id: fx.organizationId } });
+    const row = await adminDb.organization.findUniqueOrThrow({ where: { id: fx.organizationId } });
     expect(row.acceptanceVideoEnabled).toBe(false);
   });
 

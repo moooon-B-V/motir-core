@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawUsageResponse } from '@/lib/ai/types';
+import { adminDb } from './helpers/adminDb';
 
 // The motir-ai boundary client is an external HTTP leaf — mock it (the one
 // legitimate boundary mock, like a network call) and seed the rest (org /
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('aiUsageService.getUsage', () => {
@@ -96,7 +98,7 @@ describe('aiUsageService.getUsage', () => {
 
   it('flags the META org (moooon B.V.) so the dashboard shows the balance as Unlimited', async () => {
     const { workspace, owner } = await createTestWorkspace();
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
