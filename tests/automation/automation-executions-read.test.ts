@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import type { AutomationExecutionStatus } from '@/generated/prisma/client';
+import type { AutomationExecutionStatus, Prisma } from '@/generated/prisma/client';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { usersService } from '@/lib/services/usersService';
@@ -302,8 +302,21 @@ describe('list — lastRun attach (latest per rule)', () => {
 });
 
 describe('automationRuleExecutionRepository — direct', () => {
-  it('findLatestByRuleIds short-circuits empty input to []', async () => {
-    expect(await automationRuleExecutionRepository.findLatestByRuleIds([])).toEqual([]);
+  it('findLatestByRuleIds short-circuits empty input to [] without touching the client', async () => {
+    // `tx` is required, but the empty-input arm must return before it is used —
+    // that is the claim under test. Passing a client whose every method throws
+    // proves no SQL is issued, which a real `tx` could not distinguish from a
+    // query that happened to return no rows.
+    const exploding = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('findLatestByRuleIds([]) issued SQL — the short-circuit is gone');
+        },
+      },
+    ) as Prisma.TransactionClient;
+
+    expect(await automationRuleExecutionRepository.findLatestByRuleIds([], exploding)).toEqual([]);
   });
 
   it('listByRule joins the work item identifier + title', async () => {

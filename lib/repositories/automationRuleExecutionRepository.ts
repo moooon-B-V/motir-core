@@ -104,7 +104,10 @@ export const automationRuleExecutionRepository = {
    * input short-circuits to `[]` (no SQL). Read-only (the `db` singleton);
    * the caller has already admin-gated the project whose rules these are. */
   /**
-   * Takes an optional `tx` (MOTIR-2784). `automation_rule_execution` is
+   * REQUIRES `tx` (MOTIR-2784, tightened from optional by MOTIR-2755 — the
+   * `?? db` arm had no caller and could not be honestly tested, since the bound
+   * and unbound answers differ so no assertion is true of both).
+   * `automation_rule_execution` is
    * workspace-scoped, and `automationRulesService.list` calls this from INSIDE its
    * `withWorkspaceContext` transaction: unbound, the policy sees no workspace, the
    * raw query returns no rows AND RAISES NOTHING, and every rule in the list renders
@@ -113,11 +116,10 @@ export const automationRuleExecutionRepository = {
    */
   async findLatestByRuleIds(
     ruleIds: string[],
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<LatestExecutionRow[]> {
     if (ruleIds.length === 0) return [];
-    const client = tx ?? db;
-    return client.$queryRaw<LatestExecutionRow[]>`
+    return tx.$queryRaw<LatestExecutionRow[]>`
       SELECT DISTINCT ON ("rule_id")
         "rule_id" AS "ruleId", "status", "created_at" AS "createdAt"
       FROM "automation_rule_execution"

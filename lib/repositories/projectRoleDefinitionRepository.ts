@@ -1,5 +1,4 @@
 import { type Prisma, type ProjectRoleDefinition } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 
 // ProjectRoleDefinition repository — single Prisma operations on the
 // `project_role_definition` table (Story MOTIR-2257 · Subtask MOTIR-2467). The
@@ -20,24 +19,29 @@ import { db } from '@/lib/db';
 //
 // RLS: `project_role_definition` carries its own `workspace_id` and a FOR ALL
 // policy keyed on the per-transaction `app.workspace_id` GUC that
-// withWorkspaceContext binds. So every read here takes an optional `tx` for the
-// same reason projectMembershipRepository's do — outside a workspace-context
-// transaction the non-bypass `motir_app` role sees zero rows. Writes require
-// `tx` per the 4-layer rule.
+// withWorkspaceContext binds. Outside a workspace-context transaction the
+// non-bypass `motir_app` role sees zero rows.
+//
+// So every read here REQUIRES `tx`, exactly as the writes do (MOTIR-2755). It
+// used to be optional with a `tx ?? db` fallback; that arm returned an empty
+// result under `motir_app` and RAISED NOTHING, which is the silent-empty failure
+// this whole cutover exists to remove — and it was unreachable in practice, since
+// every caller already binds. A branch that cannot be honestly exercised in both
+// role modes (the bound answer and the unbound answer differ, so no assertion is
+// true of both) is a branch that should not exist.
 
 export const projectRoleDefinitionRepository = {
   /**
    * Every custom role a project has defined, ordered by name so the catalog's
    * order is a property of the READ rather than a sort re-done in a component
-   * (MOTIR-2478's deterministic ordering rests on this). Optionally takes `tx`
-   * for the RLS-GUC reason above.
+   * (MOTIR-2478's deterministic ordering rests on this). Requires `tx` for the
+   * RLS-GUC reason above.
    */
   async findManyByProject(
     projectId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<ProjectRoleDefinition[]> {
-    const client = tx ?? db;
-    return client.projectRoleDefinition.findMany({
+    return tx.projectRoleDefinition.findMany({
       where: { projectId },
       orderBy: { name: 'asc' },
     });
@@ -50,9 +54,8 @@ export const projectRoleDefinitionRepository = {
    * writing. Takes `tx` when the caller is inside the transaction that will
    * write, so the read and the write share one snapshot and one workspace GUC.
    */
-  async findById(id: string, tx?: Prisma.TransactionClient): Promise<ProjectRoleDefinition | null> {
-    const client = tx ?? db;
-    return client.projectRoleDefinition.findUnique({ where: { id } });
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<ProjectRoleDefinition | null> {
+    return tx.projectRoleDefinition.findUnique({ where: { id } });
   },
 
   /**
@@ -62,11 +65,10 @@ export const projectRoleDefinitionRepository = {
    */
   async findManyByIds(
     ids: string[],
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<ProjectRoleDefinition[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
-    return client.projectRoleDefinition.findMany({ where: { id: { in: ids } } });
+    return tx.projectRoleDefinition.findMany({ where: { id: { in: ids } } });
   },
 
   /**
