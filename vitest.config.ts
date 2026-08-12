@@ -992,6 +992,34 @@ export default defineConfig({
         // clamped index's `?? 0` in `percentileMs`, which
         // `noUncheckedIndexedAccess` requires and the clamp makes unreachable.
         'tests/e2e/_helpers/acceptance-diagnostics.ts',
+
+        // Story MOTIR-2664 · Subtask MOTIR-2671 — the design-result surface. The
+        // four feature cards each shipped their own unit tests, but NONE of them
+        // touched this file, so not one of the story's new modules had ever
+        // entered the coverage report and the ≥90% per-file gate had never
+        // applied to any of it. That is this card's first job: put the surface
+        // under the floor, MEASURE it, then pin the numbers in `thresholds`.
+        //
+        // ⚠️ The two app paths are written `app/**/…` deliberately. The files
+        // live under the `(authed)` route group, and a literal `(authed)` in a
+        // glob is parsed as an extglob alternation, so the pattern silently
+        // matches NOTHING — an include that quietly covers zero files, plus a
+        // threshold that quietly gates zero files.
+        //
+        // `lib/dto/designEvidence.ts` is deliberately ABSENT: it declares types
+        // only (no runtime export), so it emits no statements to cover and a
+        // floor on it would be a floor on nothing.
+        'lib/services/designEvidenceService.ts',
+        'lib/repositories/designEvidenceRepository.ts',
+        'lib/mappers/designEvidenceMappers.ts',
+        'lib/designEvidence/errors.ts',
+        'lib/designEvidence/publishAuth.ts',
+        'lib/publishAuth/ciPublishAuth.ts',
+        'lib/acceptanceEvidence/publishAuth.ts',
+        'lib/blob/allowlist.ts',
+        'app/api/work-items/**/design-evidence/route.ts',
+        'app/api/work-items/**/design-evidence/upload-token/route.ts',
+        'app/**/_components/DesignResultPanel.tsx',
         // Story MOTIR-2649 · Subtask MOTIR-2655 — every executable file the Home
         // story adds, named so the ≥90% per-file gate applies to code that is
         // brand new rather than only to code that was already reported.
@@ -1947,6 +1975,44 @@ export default defineConfig({
           functions: 90,
           lines: 90,
         },
+
+        // Story MOTIR-2664 · Subtask MOTIR-2671 — the design-result surface,
+        // MEASURED on this branch before being pinned (263 tests across the 22
+        // suites that touch these modules). Every file clears 90 on every axis;
+        // the two tightest are `designEvidenceService.ts` and
+        // `DesignResultPanel.tsx`, both at 90.9% branches, so the floor is real
+        // rather than decorative — a couple of uncovered branches would breach
+        // it. See the matching block in `include` above for why the two `app/**`
+        // keys must not be written with a literal `(authed)`.
+        'lib/services/designEvidenceService.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/repositories/designEvidenceRepository.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'lib/mappers/designEvidenceMappers.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/designEvidence/errors.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/designEvidence/publishAuth.ts': { branches: 90, functions: 90, lines: 90 },
+        // The shared CI-publisher gate MOTIR-2667 extracted, plus the acceptance
+        // caller it was extracted FROM. Pinning both is the point: the extraction
+        // is only safe for as long as the older caller keeps exercising it.
+        'lib/publishAuth/ciPublishAuth.ts': { branches: 90, functions: 90, lines: 90 },
+        'lib/acceptanceEvidence/publishAuth.ts': { branches: 90, functions: 90, lines: 90 },
+        // The allowlist is the file the one-directional `text/html` policy lives
+        // in; a floor here is what keeps a future edit from widening the generic
+        // list without a test noticing.
+        'lib/blob/allowlist.ts': { branches: 90, functions: 90, lines: 90 },
+        'app/api/work-items/**/design-evidence/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/api/work-items/**/design-evidence/upload-token/route.ts': {
+          branches: 90,
+          functions: 90,
+          lines: 90,
+        },
+        'app/**/_components/DesignResultPanel.tsx': { branches: 90, functions: 90, lines: 90 },
         // Story MOTIR-2649 · Subtask MOTIR-2655 — MEASURED before being pinned,
         // on this branch, with `tests/integration/home/`: 100 branches / 100
         // functions / 100 lines on the service and the mapper, and 100 / 100 /

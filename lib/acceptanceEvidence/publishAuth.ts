@@ -1,28 +1,36 @@
 import { NextResponse } from 'next/server';
 import type { WorkItem } from '@/generated/prisma/client';
-import { authenticateApiToken } from '@/lib/apiTokens/routeAuth';
 import { ACCEPTANCE_PUBLISH_PERMISSION } from '@/lib/tokens/grant';
-import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
-import { projectsService } from '@/lib/services/projectsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { acceptanceVideoEligibilityService } from '@/lib/services/acceptanceVideoEligibilityService';
-import { ProjectNotFoundError } from '@/lib/projects/errors';
+import {
+  authenticateCiPublisher,
+  resolveWorkItemByIdentifier,
+} from '@/lib/publishAuth/ciPublishAuth';
 
 // Shared gate for the acceptance-publish routes (MOTIR-1631/1681): both the
 // mint-token route and the register route authenticate the CI caller (keyless
-// GitHub OIDC first, else an `integration` PAT), resolve the STORY within the
-// caller's workspace, and apply the plan/toggle eligibility gate — identically.
+// GitHub OIDC first, else a PAT holding the required permission), resolve the
+// STORY within the caller's workspace, and apply the plan/toggle eligibility
+// gate — identically.
+//
+// The auth + resolve halves moved to `lib/publishAuth/ciPublishAuth.ts` when the
+// design result became a second CI publisher (MOTIR-2667); the two steps BELOW —
+// the parent-story hop and the eligibility gate — are what make this gate
+// acceptance's rather than every publisher's. Behaviour is unchanged.
+//
+// ⚠️ The PAT arm asks for `ACCEPTANCE_PUBLISH_PERMISSION`, NOT the old
+// `'integration'` scope. MOTIR-2576 made that change on `main` while the
+// extraction above was in flight, and it is the one caller that is neither MCP
+// nor `/api/v1` — the one a migration of "the two big seams" leaves behind, with
+// every story's acceptance video 403ing. The permission is threaded through the
+// shared helper rather than baked into it, so the second publisher can ask for
+// its own and neither can silently inherit the other's.
 
 export interface AcceptancePublishGate {
   ctx: { userId: string; workspaceId: string };
   story: WorkItem;
-}
-
-/** Derive the owning project key from a `MOTIR-7`-style identifier. */
-function projectKeyOf(identifier: string): string {
-  const dash = identifier.lastIndexOf('-');
-  return dash > 0 ? identifier.slice(0, dash) : identifier;
 }
 
 /**
@@ -35,57 +43,12 @@ export async function authorizeAcceptancePublish(
   req: Request,
   identifier: string,
 ): Promise<AcceptancePublishGate | Response> {
-  // Auth: keyless GitHub OIDC first (MOTIR-1650) when the caller opts in via the
-  // `X-Motir-Auth: github-oidc` marker; otherwise a PAT holding the permission the
-  // publish actually needs. MOTIR-2576: this was `'integration'`, the one caller
-  // that is neither MCP nor `/api/v1` and the one a migration of "the two big
-  // seams" would leave behind — with every story's acceptance video 403ing.
-  // `acceptanceEvidenceService` asserts `work_item:edit` on the resolved story,
-  // so that is what the route asks for (ADR §5's forward map sends `integration`
-  // to the same key, so no already-minted CI token loses the publish).
-  let ctx: { userId: string; workspaceId: string };
-  const oidc = await authenticateGithubOidc(req);
-  if (oidc) {
-    if (!oidc.ok) {
-      return oidc.status === 401
-        ? NextResponse.json({ code: 'UNAUTHENTICATED', reason: oidc.reason }, { status: 401 })
-        : NextResponse.json({ code: 'FORBIDDEN', reason: oidc.reason }, { status: 403 });
-    }
-    ctx = { userId: oidc.userId, workspaceId: oidc.workspaceId };
-  } else {
-    const auth = await authenticateApiToken(req, ACCEPTANCE_PUBLISH_PERMISSION);
-    if (!auth.ok) {
-      return auth.reason === 'unauthenticated'
-        ? NextResponse.json({ code: 'UNAUTHENTICATED' }, { status: 401 })
-        : NextResponse.json(
-            {
-              code: 'FORBIDDEN',
-              error: `The token is not granted the "${ACCEPTANCE_PUBLISH_PERMISSION}" permission.`,
-            },
-            { status: 403 },
-          );
-    }
-    ctx = { userId: auth.userId, workspaceId: auth.workspaceId };
-  }
+  const ctx = await authenticateCiPublisher(req, ACCEPTANCE_PUBLISH_PERMISSION);
+  if (ctx instanceof Response) return ctx;
 
-  let story: WorkItem | null;
-  try {
-    const project = await projectsService.getByKey(projectKeyOf(identifier), ctx);
-    story = await withWorkspaceContext(ctx, (tx) =>
-      workItemRepository.findByIdentifier(project.id, identifier, tx),
-    );
-  } catch (err) {
-    if (err instanceof ProjectNotFoundError) {
-      return NextResponse.json({ code: err.code, error: err.message }, { status: 404 });
-    }
-    throw err;
-  }
-  if (!story) {
-    return NextResponse.json(
-      { code: 'WORK_ITEM_NOT_FOUND', error: `${identifier} was not found.` },
-      { status: 404 },
-    );
-  }
+  const resolved = await resolveWorkItemByIdentifier(identifier, ctx);
+  if (resolved instanceof Response) return resolved;
+  let story: WorkItem = resolved;
 
   // Acceptance evidence is a STORY-level artifact (Principle #18 — review at the
   // Story level). When the CI caller passes a non-story LEAF (a subtask / bug /

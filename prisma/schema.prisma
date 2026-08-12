@@ -635,6 +635,10 @@ model Workspace {
   workflowTransitions         WorkflowTransition[]
   attachments                 Attachment[]
   acceptanceEvidences         AcceptanceEvidence[]
+  // Published design results (Story MOTIR-2664 · MOTIR-2666). Cascade with the
+  // workspace, like every other tenanted lifecycle row.
+  designEvidences             DesignEvidence[]
+  designAssets                DesignAsset[]
   boards                      Board[]
   boardColumns                BoardColumn[]
   boardColumnStatuses         BoardColumnStatus[]
@@ -1627,6 +1631,12 @@ model WorkItem {
   // a STORY. Cascade with the story: deleting the story removes its evidence
   // rows (the underlying video Attachment is unlinked/GC-reclaimed separately).
   acceptanceEvidences  AcceptanceEvidence[]
+  // Published design results (Story MOTIR-2664 · MOTIR-2666) — evidence rows
+  // for THIS work item. Unlike acceptance evidence, which rolls a subtask key
+  // UP to its parent story, a design result belongs to the card that produced
+  // it (docs/decisions/design-result.md §3), so this relation hangs off every
+  // leaf, not only stories. Cascade with the item.
+  designEvidences      DesignEvidence[]
   // Organisation joins + watchers (Subtask 5.4.1). All three cascade with
   // the issue: label/component joins are pure association rows, watcher rows
   // are notification substrate.
@@ -2459,6 +2469,14 @@ enum AttachmentSource {
   // through the content route like the video; owned by the AcceptanceEvidence
   // lifecycle, excluded from the attachments panel listing.
   acceptance_trace
+  // A published DESIGN RESULT artifact (Story MOTIR-2664 · MOTIR-2666) — the
+  // `*.mock.html`, its `.png` export, or the extracted `design-notes.md`
+  // section text. Set ONLY on the design-publish path; `text/html` via the
+  // generic editor/panel upload is still 415 (the design-scoped allowlist in
+  // lib/blob/allowlist.ts is deliberately NOT spread into ALLOWED_UPLOAD_TYPES
+  // — docs/decisions/design-result.md §5a). Owned by the DesignEvidence
+  // lifecycle, so the attachments panel excludes this source from its listing.
+  design_asset
 
   @@map("attachment_source")
 }
@@ -2519,6 +2537,11 @@ model Attachment {
   // leaves the evidence history row intact.
   acceptanceEvidence AcceptanceEvidence? @relation("AcceptanceVideo")
   traceEvidence      AcceptanceEvidence? @relation("AcceptanceTrace")
+  // Back-relation for DesignAsset (Story MOTIR-2664 · MOTIR-2666): a
+  // `design_asset` Attachment is the stored bytes of ONE design-result asset.
+  // SetNull on that FK, same as the acceptance pair — the orphan-GC reclaiming
+  // a superseded mock's blob leaves the asset row (and its history) standing.
+  designAsset        DesignAsset?
 
   @@index([workspaceId, createdAt(sort: Desc)])
   // The paged panel read (5.2.2): an issue's attachments, newest first.
@@ -2582,6 +2605,108 @@ model AcceptanceEvidence {
   // The panel read: a story's evidence, newest first (the current is the head).
   @@index([workItemId, createdAt(sort: Desc)])
   @@map("acceptance_evidence")
+}
+
+/// What kind of design artifact a {@link DesignAsset} row stores (Story
+/// MOTIR-2664 · Subtask MOTIR-2666).
+enum DesignAssetKind {
+  /// A `*.mock.html` page/view mockup — rendered in the panel's sandboxed,
+  /// cross-origin iframe (docs/decisions/design-result.md §5).
+  mock
+  /// A `.png` export — opened in the shipped attachment lightbox.
+  image
+  /// The extracted `design-notes.md` section text as a `text/markdown` file.
+  /// ALWAYS published alongside the inline `DesignEvidence.noteMd`, which is
+  /// capped at 64 KiB for rendering — this is what makes that cap a rendering
+  /// bound rather than a data-loss bound (§1).
+  note_file
+
+  @@map("design_asset_kind")
+}
+
+/// A published DESIGN RESULT (Story MOTIR-2664 · Subtask MOTIR-2666) — what a
+/// `type: design` subtask's CI run produced, attached to the work item so a
+/// reviewer reads the design in Motir instead of opening raw files on GitHub.
+///
+/// **It hangs off the card that PRODUCED it, not the parent story** — the
+/// opposite of `AcceptanceEvidence`, whose publish path resolves a subtask key
+/// UP to its story because a story has exactly one end-to-end receipt. A story
+/// has MANY designs, one per design subtask (docs/decisions/design-result.md §3).
+///
+/// **One CURRENT result per work item.** A new publish supersedes the prior
+/// current (`isCurrent` flips to false on the old row); the partial unique index
+/// `design_evidence_one_current_per_item` enforces it at the DB level, so a
+/// concurrent double publish loses at the constraint instead of leaving two
+/// current rows. Superseded rows are KEPT as history; their asset blobs become
+/// orphaned Attachments the existing orphan-GC reclaims.
+///
+/// `noteMd` is the extracted `design-notes.md` SECTION text — not the whole
+/// per-AREA file, which on `origin/main` runs to 303,395 bytes across 29
+/// sections. Capped at 64 KiB (§1) and rendered through the single Markdown
+/// path; the full text always ships as a `note_file` asset.
+model DesignEvidence {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  /// The work item whose design this is — the design subtask itself.
+  workItemId    String   @map("work_item_id")
+  /// The extracted `design-notes.md` section(s), capped at 64 KiB. Null when
+  /// the PR changed no section (the above-the-first-heading case, §1).
+  noteMd        String?  @map("note_md") @db.Text
+  /// True when the inline copy was truncated at a section boundary; the
+  /// `note_file` asset always carries the complete text.
+  noteTruncated Boolean  @default(false) @map("note_truncated")
+  /// Provenance from the CI run that published it (the BYOK publish path).
+  commitSha     String?  @map("commit_sha")
+  ciRunUrl      String?  @map("ci_run_url")
+  /// The card key whose PR produced this result (e.g. "MOTIR-2669").
+  producedByKey String?  @map("produced_by_key")
+  /// True for exactly one row per work item (the partial unique index enforces
+  /// it); a superseded row is false.
+  isCurrent     Boolean  @default(true) @map("is_current")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workItem  WorkItem      @relation(fields: [workItemId], references: [id], onDelete: Cascade)
+  assets    DesignAsset[]
+
+  /// The panel read: an item's results, newest first (the current is the head).
+  @@index([workItemId, createdAt(sort: Desc)])
+  @@map("design_evidence")
+}
+
+/// ONE artifact of a {@link DesignEvidence} (Story MOTIR-2664 · Subtask
+/// MOTIR-2666). A design result is a SET, not a fixed triple: a design PR may
+/// touch several mocks and several exports, and some add no PNG — so the count
+/// comes from the PR, never from a convention. The familiar
+/// notes + mock + screenshot trio is the degenerate case.
+///
+/// `attachmentId` is nullable + SetNull so the orphan-GC removing a superseded
+/// blob leaves the row (and the record of what was published) intact.
+model DesignAsset {
+  id               String          @id @default(cuid())
+  /// Denormalized tenancy, exactly as every other RLS-gated table carries it:
+  /// the policy is then a PURE active-workspace gate with no per-row subquery
+  /// through the parent. Always equal to the parent evidence's workspace.
+  workspaceId      String          @map("workspace_id")
+  designEvidenceId String          @map("design_evidence_id")
+  kind             DesignAssetKind
+  attachmentId     String?         @unique @map("attachment_id")
+  /// The repository path the file came from, e.g.
+  /// `design/work-items/design-result.mock.html` — shown as provenance and
+  /// used to group a mock with its same-basename export.
+  sourcePath       String          @map("source_path")
+  /// Render order within the result; stable across republishes.
+  position         Int             @default(0)
+  createdAt        DateTime        @default(now()) @map("created_at")
+
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  designEvidence DesignEvidence @relation(fields: [designEvidenceId], references: [id], onDelete: Cascade)
+  attachment     Attachment?    @relation(fields: [attachmentId], references: [id], onDelete: SetNull)
+
+  /// The panel read: one result's assets in render order.
+  @@index([designEvidenceId, position])
+  @@map("design_asset")
 }
 
 /// A comment on a work item (Story 5.1 · Subtask 5.1.1) — the Activity

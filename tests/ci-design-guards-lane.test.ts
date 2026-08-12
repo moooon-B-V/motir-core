@@ -192,6 +192,51 @@ describe('the design-asset guard lane (MOTIR-2442)', () => {
     ).toEqual([]);
   });
 
+  // ── The design-result publish step (MOTIR-2664 / MOTIR-2668) ──────────────
+  //
+  // The step lives in THIS job rather than a workflow of its own, so that a
+  // design PR gains no new check. That arrangement is only safe while four
+  // things hold, and none of them is visible to a typechecker or a linter — a
+  // workflow file is not executed by any suite, so this is where they are
+  // stated.
+
+  it('publishes the design result from THIS job — no second workflow, no new check', () => {
+    expect(guardCode).toContain('scripts/upload-design-assets.mjs');
+
+    // A sibling workflow would mean a new PR check on every design PR, which is
+    // the cost the step-in-an-existing-job arrangement exists to avoid.
+    const workflows = readdirSync(join(ROOT, '.github/workflows'));
+    expect(workflows).not.toContain('design-result.yml');
+    expect(workflows).not.toContain('design-assets.yml');
+  });
+
+  it('requests `id-token: write`, or the keyless publish cannot authenticate', () => {
+    // Without it GitHub injects no OIDC request token, the script finds no
+    // identity, and every publish silently degrades to the PAT fallback — which
+    // on a repo with no secret set means: no receipts, no error, forever.
+    expect(guardCode).toMatch(/permissions:[\s\S]*id-token:\s*write/);
+  });
+
+  it('publishes on `pull_request` ONLY — never again on the push to `main`', () => {
+    // ci.yml runs on both. Re-publishing an identical result after merge is the
+    // behaviour acceptance-video.yml avoids by having no `push:` trigger at all;
+    // this lane shares its host workflow, so it needs the condition instead.
+    expect(ci).toMatch(/^on:\s*$/m);
+    expect(ci).toMatch(/^\s{2}push:\s*$/m);
+
+    const publishStep = guardCode.slice(guardCode.indexOf('Publish the design result'));
+    expect(publishStep).toMatch(/if:\s*github\.event_name == 'pull_request'/);
+  });
+
+  it('carries NO `continue-on-error` — a lost publish must be able to go red', () => {
+    // MOTIR-2499 removed one from the acceptance publish after it rewrote a
+    // failing step's conclusion to `success` for days while two stories lost
+    // their receipts. The cases that would justify one (no credential, no
+    // resolvable target) are handled inside the script, which exits 0 for each.
+    const publishStep = guardCode.slice(guardCode.indexOf('Publish the design result'));
+    expect(publishStep).not.toContain('continue-on-error');
+  });
+
   it('keeps the exclusion list honest in both directions', () => {
     // The same tightness `design-asset-addresses.test.ts` holds its own KNOWN
     // table to: a row that no longer describes a real reader is a mute button
