@@ -54,9 +54,21 @@ export const organizationMembershipRepository = {
    * The organizations a user belongs to, ordered by membership.createdAt asc so
    * the auto-provisioned default org (6.10.4 signup flow) lands first in the
    * switcher list (6.10.5). Mirrors workspaceMembershipRepository.findWorkspacesByUser.
+   *
+   * Takes `tx` for the same reason `findMembersByOrg` below does, and it is REQUIRED
+   * rather than optional (MOTIR-2774): both call sites already ran inside
+   * `withUserContext`, and both discarded the transaction it handed them, so the read
+   * went to the `@/lib/db` singleton where the membership policy sees no
+   * `app.user_id`. It then returned an EMPTY ARRAY AND RAISED NOTHING — the org
+   * switcher rendered empty and `resolveActiveOrganization` reported that the user
+   * belonged to no organization at all. An optional `tx` would have left exactly that
+   * mistake available to the next caller; a required one makes it a type error.
    */
-  async findOrganizationsByUser(userId: string): Promise<Organization[]> {
-    const rows = await db.organizationMembership.findMany({
+  async findOrganizationsByUser(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization[]> {
+    const rows = await tx.organizationMembership.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
       include: { organization: true },

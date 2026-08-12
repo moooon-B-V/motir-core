@@ -461,8 +461,8 @@ export const organizationsService = {
 
   /** Every organization the user belongs to (for the org switcher). */
   async listUserOrganizations(userId: string): Promise<OrganizationDTO[]> {
-    const orgs = await withUserContext(userId, () =>
-      organizationMembershipRepository.findOrganizationsByUser(userId),
+    const orgs = await withUserContext(userId, (tx) =>
+      organizationMembershipRepository.findOrganizationsByUser(userId, tx),
     );
     return orgs.map(toOrganizationDTO);
   },
@@ -489,7 +489,7 @@ export const organizationsService = {
           if (org) return toCurrentOrganizationDTO(org, pinned.role);
         }
       }
-      const orgs = await organizationMembershipRepository.findOrganizationsByUser(userId);
+      const orgs = await organizationMembershipRepository.findOrganizationsByUser(userId, tx);
       const first = orgs[0];
       if (!first) return null;
       const membership = await organizationMembershipRepository.findByOrgAndUserInTx(

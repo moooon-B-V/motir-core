@@ -501,8 +501,19 @@ export const workspacesService = {
     return readMembership(userId, workspaceId);
   },
 
+  /**
+   * Every workspace the user belongs to (the shell switcher, the v1 identity read,
+   * the API-token scope list).
+   *
+   * OPENS the user context rather than merely threading one (MOTIR-2774): unlike the
+   * org-tier mirror this had no binding caller at all, so the membership read went out
+   * on the singleton and the policy returned nothing. This is the exact shape
+   * `organizationsService.listUserOrganizations` uses.
+   */
   async listUserWorkspaces(userId: string): Promise<Workspace[]> {
-    return workspaceMembershipRepository.findWorkspacesByUser(userId);
+    return withUserContext(userId, (tx) =>
+      workspaceMembershipRepository.findWorkspacesByUser(userId, tx),
+    );
   },
 
   /**

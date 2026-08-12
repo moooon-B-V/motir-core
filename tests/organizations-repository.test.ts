@@ -186,7 +186,12 @@ describe('organizationMembershipRepository', () => {
 
   it('findOrganizationsByUser returns the empty array for a user in no org (the empty-input branch)', async () => {
     const user = await createTestUser();
-    expect(await organizationMembershipRepository.findOrganizationsByUser(user.id)).toEqual([]);
+    // MOTIR-2774 made the `tx` required — the empty-set branch is asserted through a
+    // transaction now, exactly as `withUserContext` supplies one in production.
+    const orgs = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findOrganizationsByUser(user.id, tx),
+    );
+    expect(orgs).toEqual([]);
   });
 });
 
