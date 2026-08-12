@@ -1,7 +1,7 @@
 import type { Prisma, Project, WorkItem } from '@/generated/prisma/client';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The tenant-table read that OPENS a service — always context-bound.
 //
@@ -93,4 +93,73 @@ export async function readWorkItem(
 ): Promise<WorkItem | null> {
   if (tx) return workItemRepository.findById(workItemId, tx);
   return withWorkspaceContext(ctx, (t) => workItemRepository.findById(workItemId, t));
+}
+
+// ─── The USERLESS tier (MOTIR-2685) ────────────────────────────────────────────
+//
+// The readers above bind `{ userId, workspaceId }`, which covers every read whose
+// caller carries an acting user. A tail of reads does not, and it is not a tail of
+// stragglers — it is a distinct KIND of caller. A GitHub webhook, a scheduled
+// notification sweep, an automation rule firing on a change nobody is watching:
+// each belongs to exactly one workspace and has no person attached. There is no
+// `userId` to invent, and inventing one would be worse than the bug (it would
+// attribute a job's reach to a user who never asked for it).
+//
+// So they bind the WORKSPACE tier instead — `withWorkspaceServiceContext`, which
+// sets `app.workspace_id` and nothing else. That is sufficient here and no more
+// than sufficient: `project_workspace_or_system_read` and `work_item_active_workspace`
+// key purely on that GUC, and the restrictive `work_item_project_narrow` passes on
+// its `coalesce(current_setting('app.project_id', true), '') = ''` branch when the
+// GUC is unbound (the full argument is in that helper's docstring). It is NOT
+// `withSystemContext`: `app.system_admin` is a cross-table, cross-TENANT flag, and
+// a fan-out that reached the wrong workspace's watchers is a far worse outcome
+// than one that reaches nobody.
+//
+// ⚠️ SECURITY — the workspace id must come from a TRUSTED resolution, never from
+// user input (`withWorkspaceServiceContext`'s own constraint). Every caller added
+// with this tier takes it off a job event envelope or a service argument the layer
+// above already resolved, and each call site says so.
+//
+// ⚠️ The caller's explicit `workspaceId` comparison MUST STAY, exactly as it must
+// for the actor-carrying readers above: under a BYPASSRLS role — what CI runs today
+// and what production runs until MOTIR-2515 — RLS is inert and a foreign row comes
+// back. Deleting the check because "RLS handles it" would split the behaviour by
+// role, which is precisely what this chain exists to remove.
+
+/**
+ * A project by id for a caller that has a workspace but NO acting user, read inside
+ * a transaction that binds `app.workspace_id`.
+ *
+ * Pass `tx` when the caller is ALREADY inside a context-bound transaction — the read
+ * then shares that snapshot and its GUCs. **Do not pass a transaction that binds no
+ * GUCs** (a bare `db.$transaction`): the read would see NULL context and return the
+ * same false miss this function exists to remove.
+ */
+export async function readProjectForService(
+  projectId: string,
+  workspaceId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<Project | null> {
+  if (tx) return projectRepository.findById(projectId, tx);
+  return withWorkspaceServiceContext(workspaceId, (t) => projectRepository.findById(projectId, t));
+}
+
+/**
+ * A work item by id for a caller that has a workspace but NO acting user. Nothing
+ * binds `app.project_id`, so `work_item_project_narrow` imposes no restriction and
+ * every project in the workspace stays visible — which is what these callers need:
+ * they resolve the item BEFORE they know its project (the automation engine's
+ * `resolveProjectId` literally exists to learn it from the row).
+ *
+ * Same `tx` contract as {@link readProjectForService}.
+ */
+export async function readWorkItemForService(
+  workItemId: string,
+  workspaceId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<WorkItem | null> {
+  if (tx) return workItemRepository.findById(workItemId, tx);
+  return withWorkspaceServiceContext(workspaceId, (t) =>
+    workItemRepository.findById(workItemId, t),
+  );
 }

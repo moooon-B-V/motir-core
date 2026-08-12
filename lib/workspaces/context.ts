@@ -101,20 +101,42 @@ export async function withSystemContext<T>(
  * `withOrgServiceWriteContext` (lib/organizations/context.ts): the context for a
  * TRUSTED path that operates within ONE workspace WITHOUT an acting user.
  *
- * The caller today is the CI-minutes meter (Story MOTIR-1775 · MOTIR-1896),
+ * The first caller was the CI-minutes meter (Story MOTIR-1775 · MOTIR-1896),
  * which resolves a GitHub `workflow_run` delivery to its tenant. A webhook has
  * no session, so there is no user to bind — but `withSystemContext` would be the
  * WRONG tool: `system_admin` is a cross-table, cross-tenant flag, and the meter
  * needs to read exactly one workspace's rows. Binding the workspace id keeps the
  * reach row-scoped, so RLS itself enforces that a repo can only be attributed
- * inside the tenant that holds its installation.
+ * inside the tenant that holds its installation. MOTIR-2685 added the rest of
+ * the userless paths — the notification / automation job runtime and the
+ * `workspaceId`-only service helpers — through `readProjectForService` /
+ * `readWorkItemForService` (`lib/workspaces/tenantRead.ts`).
  *
- * Sufficient for tables whose policy gates PURELY on `workspace_id` — the
- * `project_repository` / `sprint` / `plan` shape, and the `workspace_active`
- * SELECT policy. NOT sufficient for a policy that also reads `app.user_id`
- * (membership-gated rows) or `app.project_id` (the `work_item` project
- * narrowing), which is deliberate: a path that needs those has an acting user
- * and should use `withWorkspaceContext`.
+ * SUFFICIENCY, table by table. Sufficient for every policy that gates PURELY on
+ * `workspace_id` — the `project_repository` / `sprint` / `plan` shape, the
+ * `workspace_active` SELECT policy, `workflow_status` / `workflow_transition`,
+ * `project` (`project_workspace_or_system_read`, whose other arm is the
+ * system-admin one), and `work_item`. NOT sufficient for a policy that also
+ * reads `app.user_id` (membership-gated rows), which is deliberate: a path that
+ * needs one has an acting user and should use `withWorkspaceContext`.
+ *
+ * `work_item` is the case worth spelling out, because this note used to claim
+ * the opposite. Its permissive policy `work_item_active_workspace` keys purely
+ * on `app.workspace_id`; the RESTRICTIVE `work_item_project_narrow` AND'd onto
+ * it reads `app.project_id`, but it is satisfied — not defeated — when the GUC
+ * is unbound, because its first branch is
+ *
+ *     coalesce(current_setting('app.project_id', true), '') = ''
+ *     OR "projectId" = current_setting('app.project_id', true)
+ *
+ * (`prisma/migrations/20260601074342_add_work_item_rls/migration.sql`). An
+ * unbound GUC coalesces to `''`, the branch is true, and the policy imposes no
+ * restriction — every project in the workspace stays visible, which is exactly
+ * what a userless caller resolving an item BEFORE it knows the project needs.
+ * Narrowing is opt-IN, so not opting in is not a hole. (Reading "the policy
+ * reads `app.project_id`" as "the context must bind it" is the mis-inference
+ * this paragraph exists to stop: a shipped comment that contradicts the shipped
+ * SQL is how the next reader re-derives the wrong answer.)
  *
  * SECURITY: the workspace id must come from a TRUSTED resolution (the meter
  * takes it from the stored `github_installation` row the delivery's installation

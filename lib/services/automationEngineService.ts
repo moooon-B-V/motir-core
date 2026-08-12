@@ -5,6 +5,7 @@ import { automationRuleRepository } from '@/lib/repositories/automationRuleRepos
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
 import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsService';
 import { watchersService } from '@/lib/services/watchersService';
 import { commentsService } from '@/lib/services/commentsService';
@@ -283,7 +284,14 @@ export const automationEngineService = {
    * caller treats the run as a clean no-op). One indexed read.
    */
   async resolveProjectId(input: AutomationEngineEventInput): Promise<string | null> {
-    const item = await workItemRepository.findById(input.workItemId);
+    // USERLESS (MOTIR-2685): an automation rule fires on a change nobody is watching,
+    // so there is no session and the read binds the WORKSPACE tier. `input.workspaceId`
+    // rides the automation event envelope — a trusted resolution, never wire input.
+    // Nothing binds `app.project_id`, which is required here rather than merely
+    // tolerable: this method exists to LEARN the project from the row, so a narrowed
+    // bind would hide the row it is resolving. Unbound entirely, it returned null and
+    // the caller treated a live rule as a clean no-op.
+    const item = await readWorkItemForService(input.workItemId, input.workspaceId);
     if (!item || item.workspaceId !== input.workspaceId) return null;
     return item.projectId;
   },

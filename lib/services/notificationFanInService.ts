@@ -1,6 +1,6 @@
 import { Prisma, type WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
@@ -300,7 +300,13 @@ export const notificationFanInService = {
 
     // The issue must still exist in this workspace (hard-deleted → nothing to
     // link to). Mirrors the 5.1.6 fan-out's scoping gate.
-    const item = await workItemRepository.findById(event.workItemId);
+    //
+    // USERLESS (MOTIR-2685): fan-in runs from a job with no session, so the read binds
+    // the WORKSPACE tier. `event.workspaceId` is part of the notification source event
+    // the writer emitted — a trusted resolution, never wire input. Unbound, every
+    // in-app notification for every registered event type resolved to NO_OP under
+    // `motir_app`, which reads as "nothing to notify about" rather than as a failure.
+    const item = await readWorkItemForService(event.workItemId, event.workspaceId);
     if (!item || item.workspaceId !== event.workspaceId) return NO_OP;
 
     const plan = await descriptor.buildPlan(event, item);

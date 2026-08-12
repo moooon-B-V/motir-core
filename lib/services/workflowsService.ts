@@ -9,7 +9,12 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { toWorkflowStatusDto, toWorkflowTransitionDto } from '@/lib/mappers/workflowMappers';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
+import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import {
   DEFAULT_STATUSES,
@@ -151,17 +156,36 @@ export interface RestoreDefaultsInput {
 // the repository reads filter `WHERE workspaceId = $ws`. RLS (forced in 2.2.1)
 // is defense-in-depth, NOT the sole gate — it is inert under the dev/CI
 // superuser (BYPASSRLS), so the explicit filter is the actual gate. The
-// project-scoped reads (policyMode) reuse `projectRepository.findById` + a
+// project-scoped reads (policyMode) reuse the bound `readProjectForService` + a
 // service-level `workspaceId` check, mirroring `workItemsService.getWorkItem`'s
 // no-existence-leak gate (a cross-tenant projectId 404s, indistinguishable
 // from never-existed).
+//
+// This service is USERLESS by signature: every method takes a `workspaceId` and none
+// takes an actor, so where a read must be context-bound it binds the WORKSPACE tier
+// (`withWorkspaceServiceContext`) — MOTIR-2685. `requirePolicyMode` and
+// `canTransition` are the two that needed it; see each for what it binds and why.
 
-/** Resolve a project's policy mode, gated to the workspace; 404 if foreign. */
+/**
+ * Resolve a project's policy mode, gated to the workspace; 404 if foreign.
+ *
+ * USERLESS (MOTIR-2685): this helper takes a `workspaceId` and no actor, so the read
+ * binds the WORKSPACE tier (`readProjectForService` → `withWorkspaceServiceContext`),
+ * not `withWorkspaceContext`. The `workspaceId` is a service argument the layer above
+ * resolved from the session or the job envelope — never caller-supplied input — which
+ * is what `withWorkspaceServiceContext`'s security note requires. Unbound, the
+ * `project_workspace_or_system_read` policy compared against NULL under `motir_app`,
+ * the row was invisible, and every caller was told a project it can see does not
+ * exist — so a `restricted` project's policy mode could not be read at all.
+ *
+ * The explicit `workspaceId` comparison stays: under BYPASSRLS the foreign row still
+ * comes back, and this is the gate that refuses it.
+ */
 async function requirePolicyMode(
   projectId: string,
   workspaceId: string,
 ): Promise<WorkflowPolicyModeDto> {
-  const project = await projectRepository.findById(projectId);
+  const project = await readProjectForService(projectId, workspaceId);
   if (!project || project.workspaceId !== workspaceId) {
     throw new ProjectNotFoundError(projectId);
   }
@@ -327,6 +351,22 @@ export const workflowsService = {
    *   - the policy is `restricted` AND a transition row exists for the pair.
    * False otherwise (incl. unknown status keys, or a cross-workspace project —
    * a move in a project you can't see is never legal).
+   *
+   * USERLESS (MOTIR-2685): `workspaceId` and no actor, so the whole body runs in ONE
+   * `withWorkspaceServiceContext` transaction and every read inside it takes that `tx`.
+   * It is the WHOLE body deliberately, not just the project read: `workflow_status` and
+   * `workflow_transition` carry workspace-keyed policies of their own
+   * (`workflow_status_active_workspace` / `workflow_transition_active_workspace`), so
+   * binding only the project read would move the false miss two statements later and
+   * leave the failure looking identical — a legal transition reported as illegal, with
+   * no RLS denial logged, because nothing was denied: the query succeeded and returned
+   * zero rows. This method's answer is a CONJUNCTION of four reads; the binding has to
+   * cover all four or it covers none of them.
+   *
+   * The `workspaceId` is a service argument resolved by the layer above (a session or a
+   * job envelope), never caller-supplied input — `withWorkspaceServiceContext`'s
+   * security constraint. The explicit `project.workspaceId` comparison and the
+   * repositories' own `workspaceId` filters stay: under BYPASSRLS they are the gate.
    */
   async canTransition(
     projectId: string,
@@ -334,27 +374,32 @@ export const workflowsService = {
     toKey: string,
     workspaceId: string,
   ): Promise<boolean> {
+    // A no-op move is legal in every mode and needs no read — short-circuit before
+    // opening a transaction rather than inside one.
     if (fromKey === toKey) return true;
 
-    const project = await projectRepository.findById(projectId);
-    if (!project || project.workspaceId !== workspaceId) return false;
-    if (project.workflowPolicyMode === 'open') return true;
+    return withWorkspaceServiceContext(workspaceId, async (tx) => {
+      const project = await projectRepository.findById(projectId, tx);
+      if (!project || project.workspaceId !== workspaceId) return false;
+      if (project.workflowPolicyMode === 'open') return true;
 
-    // Restricted: both statuses must exist and a transition row must connect
-    // them. Resolve keys → status ids (the transition table is keyed by id).
-    const [fromStatus, toStatus] = await Promise.all([
-      workflowsRepository.findStatusByKey(projectId, fromKey, workspaceId),
-      workflowsRepository.findStatusByKey(projectId, toKey, workspaceId),
-    ]);
-    if (!fromStatus || !toStatus) return false;
+      // Restricted: both statuses must exist and a transition row must connect
+      // them. Resolve keys → status ids (the transition table is keyed by id).
+      const [fromStatus, toStatus] = await Promise.all([
+        workflowsRepository.findStatusByKey(projectId, fromKey, workspaceId, tx),
+        workflowsRepository.findStatusByKey(projectId, toKey, workspaceId, tx),
+      ]);
+      if (!fromStatus || !toStatus) return false;
 
-    const transition = await workflowsRepository.findTransition(
-      projectId,
-      fromStatus.id,
-      toStatus.id,
-      workspaceId,
-    );
-    return transition !== null;
+      const transition = await workflowsRepository.findTransition(
+        projectId,
+        fromStatus.id,
+        toStatus.id,
+        workspaceId,
+        tx,
+      );
+      return transition !== null;
+    });
   },
 
   /**

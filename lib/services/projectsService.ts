@@ -7,6 +7,7 @@ import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { entitlementsService } from '@/lib/services/entitlementsService';
 import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
+import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { NotAMemberError } from '@/lib/workspaces/errors';
 import {
   AliasNotFoundError,
@@ -543,11 +544,26 @@ export const projectsService = {
    * Asserts the project exists and belongs to the given workspace. Guards
    * cross-workspace writes (a member of workspace A can't rename/archive a
    * project that lives in workspace B). Returns the Project for callers
-   * that want it. Uses the `db` singleton — only safe under the BYPASSRLS
-   * dev role; the in-tx variant below is what production code paths use.
+   * that want it.
+   *
+   * USERLESS (MOTIR-2685): the signature carries a `workspaceId` and no actor, so the
+   * read binds the WORKSPACE tier — `readProjectForService` → `withWorkspaceServiceContext`.
+   * It used to say "uses the `db` singleton — only safe under the BYPASSRLS dev role",
+   * which was accurate and was also a defect left standing: unbound, the
+   * `project_workspace_or_system_read` policy compared against NULL under `motir_app`,
+   * so this gate threw `ProjectNotFoundError` for a project the caller owns rather than
+   * admitting it. The `workspaceId` comes from the caller's already-resolved service
+   * context, never off the wire (`withWorkspaceServiceContext`'s security constraint);
+   * the in-tx variant below is still what a caller inside a bound transaction uses.
+   *
+   * Both refusals stay and are still distinguishable: a genuinely absent project is
+   * `ProjectNotFoundError`, a cross-workspace one is `ProjectWorkspaceMismatchError`.
+   * That distinction is deliberate (see `getByKey` below for why the caller-supplied
+   * path must NOT make it) and RLS does not blur it — under `motir_app` a foreign row
+   * is invisible, but the explicit comparison is what still refuses it under BYPASSRLS.
    */
   async assertProjectInWorkspace(projectId: string, workspaceId: string): Promise<Project> {
-    const project = await projectRepository.findById(projectId);
+    const project = await readProjectForService(projectId, workspaceId);
     if (!project) throw new ProjectNotFoundError(projectId);
     if (project.workspaceId !== workspaceId) {
       throw new ProjectWorkspaceMismatchError(projectId, workspaceId);
