@@ -10,6 +10,8 @@ import {
   ProjectWorkspaceMismatchError,
 } from '@/lib/projects/errors';
 import { NotAMemberError } from '@/lib/workspaces/errors';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Comprehensive service-layer tests for projectsService + the per-project
@@ -50,6 +52,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'Owner') {
@@ -111,7 +114,7 @@ describe('createProject — happy path', () => {
     expect(project.identifier).toBe('MOTIR');
 
     // The row IS persisted with the bookkeeping fields, just not in the DTO.
-    const persisted = await db.project.findUnique({ where: { id: project.id } });
+    const persisted = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(persisted).not.toBeNull();
     expect(persisted?.workspaceId).toBe(workspace.id);
     expect(persisted?.lastWorkItemNumber).toBe(0);
@@ -385,13 +388,19 @@ describe('allocateWorkItemNumber — monotonic + independent per project', () =>
       name: 'P',
     });
 
-    const n1 = await db.$transaction((tx) =>
+    // `allocateWorkItemNumber` is a repository method and every production
+    // caller reaches it through withWorkspaceContext, which binds the GUCs the
+    // `project` policy reads. Keep the repository under test on `@/lib/db` and
+    // hand it the transaction it gets in production, rather than a bare one with
+    // no tenant bound.
+    const ctx = { userId: owner.id, workspaceId: workspace.id };
+    const n1 = await withWorkspaceContext(ctx, (tx) =>
       projectRepository.allocateWorkItemNumber(project.id, tx),
     );
-    const n2 = await db.$transaction((tx) =>
+    const n2 = await withWorkspaceContext(ctx, (tx) =>
       projectRepository.allocateWorkItemNumber(project.id, tx),
     );
-    const n3 = await db.$transaction((tx) =>
+    const n3 = await withWorkspaceContext(ctx, (tx) =>
       projectRepository.allocateWorkItemNumber(project.id, tx),
     );
 
@@ -414,26 +423,34 @@ describe('allocateWorkItemNumber — monotonic + independent per project', () =>
     });
 
     // Advance A's counter several times — B's counter must not move.
-    await db.$transaction((tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
-    await db.$transaction((tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
-    await db.$transaction((tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
+    const ctx = { userId: owner.id, workspaceId: workspace.id };
+    await withWorkspaceContext(ctx, (tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
+    await withWorkspaceContext(ctx, (tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
+    await withWorkspaceContext(ctx, (tx) => projectRepository.allocateWorkItemNumber(a.id, tx));
 
-    const bRowBefore = await db.project.findUnique({ where: { id: b.id } });
+    const bRowBefore = await adminDb.project.findUnique({ where: { id: b.id } });
     expect(bRowBefore?.lastWorkItemNumber).toBe(0);
 
     // Now allocate B's first number — it must be 1, not 4.
-    const b1 = await db.$transaction((tx) => projectRepository.allocateWorkItemNumber(b.id, tx));
+    const b1 = await withWorkspaceContext(ctx, (tx) =>
+      projectRepository.allocateWorkItemNumber(b.id, tx),
+    );
     expect(b1).toBe(1);
 
     // Confirm A's counter is at 3 (unaffected by B's allocation).
-    const aRow = await db.project.findUnique({ where: { id: a.id } });
+    const aRow = await adminDb.project.findUnique({ where: { id: a.id } });
     expect(aRow?.lastWorkItemNumber).toBe(3);
   });
 
   it('throws ProjectNotFoundError when allocating against a missing project id', async () => {
-    await expect(
-      db.$transaction((tx) => projectRepository.allocateWorkItemNumber('does-not-exist', tx)),
-    ).rejects.toBeInstanceOf(ProjectNotFoundError);
+    // A real tenant asking for an id that does not exist — the context is bound
+    // exactly as production binds it, so the miss is the project's absence and
+    // not an unbound read.
+    const { owner, workspace } = await makeWorkspace('owner@example.com', 'Acme');
+    const missing = withWorkspaceContext({ userId: owner.id, workspaceId: workspace.id }, (tx) =>
+      projectRepository.allocateWorkItemNumber('does-not-exist', tx),
+    );
+    await expect(missing).rejects.toBeInstanceOf(ProjectNotFoundError);
   });
 });
 
@@ -452,7 +469,7 @@ describe('setActiveProject — per-member, persisted, cross-workspace guarded', 
       projectId: project.id,
     });
 
-    const row = await db.workspaceMembership.findUnique({ where: { id: membership.id } });
+    const row = await adminDb.workspaceMembership.findUnique({ where: { id: membership.id } });
     expect(row?.activeProjectId).toBe(project.id);
   });
 
@@ -474,7 +491,7 @@ describe('setActiveProject — per-member, persisted, cross-workspace guarded', 
       projectId: null,
     });
 
-    const row = await db.workspaceMembership.findUnique({ where: { id: membership.id } });
+    const row = await adminDb.workspaceMembership.findUnique({ where: { id: membership.id } });
     expect(row?.activeProjectId).toBeNull();
   });
 
@@ -514,10 +531,10 @@ describe('setActiveProject — per-member, persisted, cross-workspace guarded', 
       projectId: beta.id,
     });
 
-    const ownerRow = await db.workspaceMembership.findUnique({
+    const ownerRow = await adminDb.workspaceMembership.findUnique({
       where: { id: ownerMembership.id },
     });
-    const secondRow = await db.workspaceMembership.findUnique({
+    const secondRow = await adminDb.workspaceMembership.findUnique({
       where: { id: secondMembership.id },
     });
     expect(ownerRow?.activeProjectId).toBe(alpha.id);
@@ -575,7 +592,7 @@ describe('renameProject', () => {
     expect(renamed.slug).toBe(project.slug); // stable
     expect(renamed.identifier).toBe(project.identifier); // stable
 
-    const persisted = await db.project.findUnique({ where: { id: project.id } });
+    const persisted = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(persisted?.name).toBe('New Name');
   });
 
@@ -634,7 +651,7 @@ describe('archiveProject + listProjects', () => {
     const after = await projectsService.listProjects(workspace.id, owner.id);
     expect(after.map((p) => p.id)).toEqual([keep.id]);
 
-    const archivedRow = await db.project.findUnique({ where: { id: drop.id } });
+    const archivedRow = await adminDb.project.findUnique({ where: { id: drop.id } });
     expect(archivedRow?.archivedAt).not.toBeNull();
   });
 
@@ -662,7 +679,7 @@ describe('archiveProject + listProjects', () => {
       }),
     ).rejects.toBeInstanceOf(NotProjectAdminError);
     // Not archived by the rejected attempt.
-    const stillActive = await db.project.findUnique({ where: { id: project.id } });
+    const stillActive = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(stillActive?.archivedAt).toBeNull();
 
     // The owner (always-pass tier) archives successfully.
@@ -671,7 +688,7 @@ describe('archiveProject + listProjects', () => {
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
-    const archived = await db.project.findUnique({ where: { id: project.id } });
+    const archived = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(archived?.archivedAt).not.toBeNull();
   });
 
@@ -692,7 +709,7 @@ describe('archiveProject + listProjects', () => {
       workspaceId: workspace.id,
       actorUserId: owner.id,
     });
-    const firstStamp = await db.project.findUnique({ where: { id: project.id } });
+    const firstStamp = await adminDb.project.findUnique({ where: { id: project.id } });
     const firstArchivedAt = firstStamp?.archivedAt;
     expect(firstArchivedAt).not.toBeNull();
 
@@ -706,7 +723,7 @@ describe('archiveProject + listProjects', () => {
         actorUserId: owner.id,
       }),
     ).resolves.toBeUndefined();
-    const secondStamp = await db.project.findUnique({ where: { id: project.id } });
+    const secondStamp = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(secondStamp?.archivedAt).not.toBeNull();
     // Project remains hidden from listProjects either way.
     const list = await projectsService.listProjects(workspace.id, owner.id);
@@ -730,9 +747,11 @@ describe('cascade: deleting the parent workspace removes its projects', () => {
       identifier: 'BBBB',
     });
 
-    expect(await db.project.count({ where: { workspaceId: workspace.id } })).toBe(2);
-    await db.workspace.delete({ where: { id: workspace.id } });
-    expect(await db.project.count({ where: { workspaceId: workspace.id } })).toBe(0);
+    const seeded = await adminDb.project.count({ where: { workspaceId: workspace.id } });
+    expect(seeded).toBe(2);
+    await adminDb.workspace.delete({ where: { id: workspace.id } });
+    const remaining = await adminDb.project.count({ where: { workspaceId: workspace.id } });
+    expect(remaining).toBe(0);
   });
 });
 
@@ -750,16 +769,16 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
       projectId: project.id,
     });
 
-    const beforeRow = await db.workspaceMembership.findUnique({
+    const beforeRow = await adminDb.workspaceMembership.findUnique({
       where: { id: membership.id },
     });
     expect(beforeRow?.activeProjectId).toBe(project.id);
 
     // Hard delete bypasses the soft-delete service path — this exercises the
     // FK-level onDelete: SetNull declared on WorkspaceMembership.activeProject.
-    await db.project.delete({ where: { id: project.id } });
+    await adminDb.project.delete({ where: { id: project.id } });
 
-    const afterRow = await db.workspaceMembership.findUnique({
+    const afterRow = await adminDb.workspaceMembership.findUnique({
       where: { id: membership.id },
     });
     expect(afterRow?.activeProjectId).toBeNull();
@@ -789,7 +808,7 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
       actorUserId: owner.id,
     });
 
-    const row = await db.workspaceMembership.findUnique({
+    const row = await adminDb.workspaceMembership.findUnique({
       where: { id: membership.id },
     });
     expect(row?.activeProjectId).toBeNull();
@@ -809,7 +828,7 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
 
     // A second member who has the same project pinned.
     const other = await makeUser('other@example.com', 'Other');
-    const otherMembership = await db.workspaceMembership.create({
+    const otherMembership = await adminDb.workspaceMembership.create({
       data: {
         userId: other.id,
         workspaceId: workspace.id,
@@ -825,7 +844,7 @@ describe('SetNull: hard-deleting a project clears the member’s activeProjectId
       actorUserId: owner.id,
     });
 
-    const otherRow = await db.workspaceMembership.findUnique({
+    const otherRow = await adminDb.workspaceMembership.findUnique({
       where: { id: otherMembership.id },
     });
     expect(otherRow?.activeProjectId).toBe(project.id);
@@ -873,7 +892,7 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
       workspaceId: workspace.id,
       projectId: pinned.id,
     });
-    await db.project.update({ where: { id: pinned.id }, data: { archivedAt: new Date() } });
+    await adminDb.project.update({ where: { id: pinned.id }, data: { archivedAt: new Date() } });
 
     const resolved = await projectsService.getActiveProject(owner.id, workspace.id);
     expect(resolved?.id).toBe(pinned.id);
@@ -894,7 +913,7 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
       name: 'Second',
     });
     // createProject does NOT pin; ensure the pointer really is null.
-    await db.workspaceMembership.update({
+    await adminDb.workspaceMembership.update({
       where: { id: membership.id },
       data: { activeProjectId: null },
     });
@@ -903,7 +922,7 @@ describe('getActiveProject — resolution, archived surfacing (#29.2), recovery 
     expect(resolved?.id).toBe(first.id);
 
     // The recovery self-heals the pointer so subsequent reads don't re-recover.
-    const row = await db.workspaceMembership.findUnique({ where: { id: membership.id } });
+    const row = await adminDb.workspaceMembership.findUnique({ where: { id: membership.id } });
     expect(row?.activeProjectId).toBe(first.id);
   });
 

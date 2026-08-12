@@ -4,6 +4,7 @@ import { organizationRepository } from '@/lib/repositories/organizationRepositor
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Repository + model tests for the org tier (Story 6.10 · Subtask 6.10.7 —
@@ -14,8 +15,24 @@ import { truncateAuthTables } from './helpers/db';
 // the required-`tx` write contract (a write is bound to its transaction, so a
 // rollback un-does it).
 //
-// These run as the default `prodect` (superuser) role, which bypasses RLS — the
-// RLS-policy enforcement is covered separately in organization-rls.test.ts.
+// The subject here is the DATA layer, not visibility: column round-trips, the
+// (organizationId, userId) uniqueness, the required-`tx` write contract, the
+// Workspace.organizationId relation and the FK cascades. Every one of those
+// holds identically under either Postgres role, so the transactions these
+// repository methods are handed come from the ADMIN client — an RLS denial there
+// would replace the signal with noise (a uniqueness test that fails with a
+// policy error proves nothing about uniqueness). RLS-policy enforcement is
+// covered separately, and under the non-bypass role, in organization-rls.test.ts.
+//
+// ⚠️ The three SINGLETON-read variants this file also exercises —
+// organizationRepository.findById / findBySlug and
+// organizationMembershipRepository.findByOrgAndUser — are hardwired to
+// `@/lib/db` and take no `tx`, so they cannot be handed the admin transaction.
+// Under TEST_DB_APP_ROLE=1 they return null by documented design (see
+// findByIdInTx's docstring). They are left on `db` rather than bent: the
+// residual is a real finding, not a fixture defect, and is filed as its own
+// card. All three have ZERO production callers — every production read moved to
+// the `…InTx` variant in MOTIR-2527 / MOTIR-2569.
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -23,11 +40,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('organizationRepository', () => {
   it('create + findById + findBySlug round-trip an organization', async () => {
-    const created = await db.$transaction((tx) =>
+    const created = await adminDb.$transaction((tx) =>
       organizationRepository.create({ name: 'Acme Inc', slug: 'acme-inc' }, tx),
     );
     expect(created.id).toBeTruthy();
@@ -48,21 +66,20 @@ describe('organizationRepository', () => {
   });
 
   it('enforces the unique organization.slug (a second create on the same slug is a P2002)', async () => {
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       organizationRepository.create({ name: 'Acme', slug: 'dup-slug' }, tx),
     );
-    await expect(
-      db.$transaction((tx) =>
-        organizationRepository.create({ name: 'Other', slug: 'dup-slug' }, tx),
-      ),
-    ).rejects.toMatchObject({ code: 'P2002' });
+    const duplicateSlug = adminDb.$transaction((tx) =>
+      organizationRepository.create({ name: 'Other', slug: 'dup-slug' }, tx),
+    );
+    await expect(duplicateSlug).rejects.toMatchObject({ code: 'P2002' });
   });
 
   it('update changes the name', async () => {
-    const org = await db.$transaction((tx) =>
+    const org = await adminDb.$transaction((tx) =>
       organizationRepository.create({ name: 'Before', slug: 'rename-me' }, tx),
     );
-    const updated = await db.$transaction((tx) =>
+    const updated = await adminDb.$transaction((tx) =>
       organizationRepository.update(org.id, { name: 'After' }, tx),
     );
     expect(updated.name).toBe('After');
@@ -72,31 +89,35 @@ describe('organizationRepository', () => {
   it('binds the write to its transaction — a rolled-back create leaves no row', async () => {
     const ROLLBACK = new Error('rollback sentinel');
     let id: string | undefined;
-    await expect(
-      db.$transaction(async (tx) => {
-        const org = await organizationRepository.create({ name: 'Ghost', slug: 'ghost-org' }, tx);
-        id = org.id;
-        // The row is visible to this transaction…
-        expect(await tx.organization.findUnique({ where: { id: org.id } })).not.toBeNull();
-        // …then we abort, so it must never have committed.
-        throw ROLLBACK;
-      }),
-    ).rejects.toBe(ROLLBACK);
+    const rolledBack = adminDb.$transaction(async (tx) => {
+      const org = await organizationRepository.create({ name: 'Ghost', slug: 'ghost-org' }, tx);
+      id = org.id;
+      // The row is visible to this transaction…
+      const insideTx = await tx.organization.findUnique({ where: { id: org.id } });
+      expect(insideTx).not.toBeNull();
+      // …then we abort, so it must never have committed.
+      throw ROLLBACK;
+    });
+    await expect(rolledBack).rejects.toBe(ROLLBACK);
 
     expect(id).toBeTruthy();
-    expect(await organizationRepository.findById(id!)).toBeNull();
-    expect(await organizationRepository.findBySlug('ghost-org')).toBeNull();
+    // Read back through the ADMIN client: "the row never committed" is a claim
+    // about storage, and a policy-filtered read cannot tell absent from hidden.
+    const ghostById = await adminDb.organization.findUnique({ where: { id: id! } });
+    expect(ghostById).toBeNull();
+    const ghostBySlug = await adminDb.organization.findUnique({ where: { slug: 'ghost-org' } });
+    expect(ghostBySlug).toBeNull();
   });
 });
 
 describe('organizationMembershipRepository', () => {
   it('create + findByOrgAndUser round-trip a membership, and the role defaults are honoured', async () => {
     const user = await createTestUser();
-    const org = await db.$transaction((tx) =>
+    const org = await adminDb.$transaction((tx) =>
       organizationRepository.create({ name: 'Acme', slug: 'm-roundtrip' }, tx),
     );
 
-    const membership = await db.$transaction((tx) =>
+    const membership = await adminDb.$transaction((tx) =>
       organizationMembershipRepository.create(
         { organizationId: org.id, userId: user.id, role: 'admin' },
         tx,
@@ -114,43 +135,42 @@ describe('organizationMembershipRepository', () => {
 
   it('enforces the (organizationId, userId) uniqueness (a duplicate membership is a P2002)', async () => {
     const user = await createTestUser();
-    const org = await db.$transaction((tx) =>
+    const org = await adminDb.$transaction((tx) =>
       organizationRepository.create({ name: 'Acme', slug: 'm-unique' }, tx),
     );
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       organizationMembershipRepository.create(
         { organizationId: org.id, userId: user.id, role: 'member' },
         tx,
       ),
     );
-    await expect(
-      db.$transaction((tx) =>
-        organizationMembershipRepository.create(
-          { organizationId: org.id, userId: user.id, role: 'owner' },
-          tx,
-        ),
+    const duplicateMembership = adminDb.$transaction((tx) =>
+      organizationMembershipRepository.create(
+        { organizationId: org.id, userId: user.id, role: 'owner' },
+        tx,
       ),
-    ).rejects.toMatchObject({ code: 'P2002' });
+    );
+    await expect(duplicateMembership).rejects.toMatchObject({ code: 'P2002' });
   });
 
   it('updateRole and deleteByOrgAndUser mutate the row; delete of an absent row is a no-op (null)', async () => {
     const user = await createTestUser();
-    const org = await db.$transaction((tx) =>
+    const org = await adminDb.$transaction((tx) =>
       organizationRepository.create({ name: 'Acme', slug: 'm-mutate' }, tx),
     );
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       organizationMembershipRepository.create(
         { organizationId: org.id, userId: user.id, role: 'member' },
         tx,
       ),
     );
 
-    const promoted = await db.$transaction((tx) =>
+    const promoted = await adminDb.$transaction((tx) =>
       organizationMembershipRepository.updateRole(org.id, user.id, 'owner', tx),
     );
     expect(promoted.role).toBe('owner');
 
-    const deleted = await db.$transaction((tx) =>
+    const deleted = await adminDb.$transaction((tx) =>
       organizationMembershipRepository.deleteByOrgAndUser(org.id, user.id, tx),
     );
     expect(deleted).not.toBeNull();
@@ -158,7 +178,7 @@ describe('organizationMembershipRepository', () => {
 
     // Deleting an already-gone row returns null rather than throwing (the
     // remove flow leans on this idempotency).
-    const again = await db.$transaction((tx) =>
+    const again = await adminDb.$transaction((tx) =>
       organizationMembershipRepository.deleteByOrgAndUser(org.id, user.id, tx),
     );
     expect(again).toBeNull();
@@ -180,7 +200,7 @@ describe('Workspace.organizationId relation', () => {
     });
 
     // workspace → organization
-    const wsWithOrg = await db.workspace.findUniqueOrThrow({
+    const wsWithOrg = await adminDb.workspace.findUniqueOrThrow({
       where: { id: workspace.id },
       include: { organization: true },
     });
@@ -188,7 +208,7 @@ describe('Workspace.organizationId relation', () => {
     expect(wsWithOrg.organization.id).toBe(wsWithOrg.organizationId);
 
     // organization → workspaces (the back-relation)
-    const orgWithWs = await db.organization.findUniqueOrThrow({
+    const orgWithWs = await adminDb.organization.findUniqueOrThrow({
       where: { id: wsWithOrg.organizationId },
       include: { workspaces: true },
     });
@@ -201,14 +221,15 @@ describe('Workspace.organizationId relation', () => {
       name: 'Acme',
       ownerUserId: owner.id,
     });
-    const orgId = (await db.workspace.findUniqueOrThrow({ where: { id: w1.id } })).organizationId;
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: w1.id } }))
+      .organizationId;
     const { workspace: w2 } = await workspacesService.createWorkspace({
       name: 'Beta',
       ownerUserId: owner.id,
       organizationId: orgId,
     });
 
-    const org = await db.organization.findUniqueOrThrow({
+    const org = await adminDb.organization.findUniqueOrThrow({
       where: { id: orgId },
       include: { workspaces: true },
     });
@@ -221,13 +242,17 @@ describe('Workspace.organizationId relation', () => {
       name: 'Acme',
       ownerUserId: owner.id,
     });
-    const orgId = (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
+    const orgId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
       .organizationId;
 
     // The FK is ON DELETE CASCADE both ways (org → workspace, org → membership).
-    await db.$transaction((tx) => tx.organization.delete({ where: { id: orgId } }));
+    await adminDb.$transaction((tx) => tx.organization.delete({ where: { id: orgId } }));
 
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
-    expect(await db.organizationMembership.count({ where: { organizationId: orgId } })).toBe(0);
+    const cascadedWorkspace = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(cascadedWorkspace).toBeNull();
+    const cascadedMemberships = await adminDb.organizationMembership.count({
+      where: { organizationId: orgId },
+    });
+    expect(cascadedMemberships).toBe(0);
   });
 });

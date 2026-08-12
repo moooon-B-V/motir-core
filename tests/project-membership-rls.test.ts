@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Schema + tenancy proof for Story 6.4 · Subtask 6.4.2 — the project-access
@@ -24,8 +25,11 @@ import { truncateAuthTables } from './helpers/db';
 // non-bypass `motir_app` role (the asAppRole helper, a local copy per the
 // convention each RLS suite carries its own); it binds the same app.workspace_id
 // GUC withWorkspaceContext binds, then reverts at txn end. Constraint tests
-// (uniqueness, cascade, defaults) run as the superuser via the `db` singleton —
-// they assert DB constraints, which bite regardless of role.
+// (uniqueness, cascade, defaults) run through the ADMIN client (`adminDb`) —
+// they assert DB constraints, which bite regardless of role, so the policies
+// are noise there rather than signal. Fixtures and teardown use the same client
+// for the reason `tests/helpers/adminDb.ts` documents: a two-tenant seed writes
+// across tenants, which is precisely what the policies exist to refuse.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -36,6 +40,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface MembershipTenantFixture {
@@ -69,16 +74,16 @@ async function makeMembershipTenants(): Promise<MembershipTenantFixture> {
   // BARE projects (db insert, NOT projectsService.createProject) so the
   // auto-seeded default workflow/board don't clutter the fixture — this suite
   // controls the exact rows under test.
-  const p1 = await db.project.create({
+  const p1 = await adminDb.project.create({
     data: { workspaceId: w1.workspace.id, name: 'PM P1', slug: 'pm-rls', identifier: 'PMR' },
   });
-  const p2 = await db.project.create({
+  const p2 = await adminDb.project.create({
     data: { workspaceId: w2.workspace.id, name: 'PM P2', slug: 'pm-rls', identifier: 'PMR' },
   });
-  const m1 = await db.projectMembership.create({
+  const m1 = await adminDb.projectMembership.create({
     data: { workspaceId: w1.workspace.id, projectId: p1.id, userId: userA.id, role: 'admin' },
   });
-  const m2 = await db.projectMembership.create({
+  const m2 = await adminDb.projectMembership.create({
     data: { workspaceId: w2.workspace.id, projectId: p2.id, userId: userB.id, role: 'member' },
   });
 
@@ -123,7 +128,7 @@ describe('project.accessLevel — default', () => {
       name: 'PM Default WS',
       ownerUserId: user.id,
     });
-    const project = await db.project.create({
+    const project = await adminDb.project.create({
       data: { workspaceId: ws.workspace.id, name: 'Defaulted', slug: 'def', identifier: 'DEF' },
     });
     expect(project.accessLevel).toBe('open');
@@ -139,7 +144,7 @@ describe('project.accessLevel — default', () => {
       name: 'PM Levels WS',
       ownerUserId: user.id,
     });
-    const priv = await db.project.create({
+    const priv = await adminDb.project.create({
       data: {
         workspaceId: ws.workspace.id,
         name: 'Private',
@@ -149,7 +154,7 @@ describe('project.accessLevel — default', () => {
       },
     });
     expect(priv.accessLevel).toBe('private');
-    const updated = await db.project.update({
+    const updated = await adminDb.project.update({
       where: { id: priv.id },
       data: { accessLevel: 'limited' },
     });
@@ -168,7 +173,7 @@ describe('workspace_membership.role — member_role enum', () => {
       name: 'PM Owner WS',
       ownerUserId: user.id,
     });
-    const membership = await db.workspaceMembership.findUnique({
+    const membership = await adminDb.workspaceMembership.findUnique({
       where: { userId_workspaceId: { userId: user.id, workspaceId: ws.workspace.id } },
     });
     expect(membership?.role).toBe('owner');
@@ -186,14 +191,14 @@ describe('project_membership — round-trip + role default', () => {
       name: 'PM Roundtrip WS',
       ownerUserId: user.id,
     });
-    const project = await db.project.create({
+    const project = await adminDb.project.create({
       data: { workspaceId: ws.workspace.id, name: 'RT', slug: 'rt', identifier: 'RTP' },
     });
-    const created = await db.projectMembership.create({
+    const created = await adminDb.projectMembership.create({
       data: { workspaceId: ws.workspace.id, projectId: project.id, userId: user.id },
     });
     expect(created.role).toBe('member'); // column default
-    const read = await db.projectMembership.findUnique({
+    const read = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: user.id, projectId: project.id } },
     });
     expect(read?.id).toBe(created.id);
@@ -266,34 +271,33 @@ describe('project_membership — constraints', () => {
   it('duplicate (userId, projectId) is rejected', async () => {
     const fx = await makeMembershipTenants();
     // fx already added userA1 to P1.
-    await expect(
-      db.projectMembership.create({
-        data: {
-          workspaceId: fx.workspaceW1Id,
-          projectId: fx.projectP1Id,
-          userId: fx.userA1Id,
-          role: 'member',
-        },
-      }),
-    ).rejects.toThrow();
+    const duplicate = adminDb.projectMembership.create({
+      data: {
+        workspaceId: fx.workspaceW1Id,
+        projectId: fx.projectP1Id,
+        userId: fx.userA1Id,
+        role: 'member',
+      },
+    });
+    await expect(duplicate).rejects.toThrow();
   });
 
   it('deleting a project cascades away its memberships', async () => {
     const fx = await makeMembershipTenants();
-    await db.project.delete({ where: { id: fx.projectP1Id } });
-    const remaining = await db.projectMembership.findMany({
+    await adminDb.project.delete({ where: { id: fx.projectP1Id } });
+    const remaining = await adminDb.projectMembership.findMany({
       where: { projectId: fx.projectP1Id },
     });
     expect(remaining).toEqual([]);
     // W2's membership is untouched.
-    const w2 = await db.projectMembership.findUnique({ where: { id: fx.membershipW2Id } });
+    const w2 = await adminDb.projectMembership.findUnique({ where: { id: fx.membershipW2Id } });
     expect(w2?.id).toBe(fx.membershipW2Id);
   });
 
   it('deleting a user cascades away their project memberships', async () => {
     const fx = await makeMembershipTenants();
-    await db.user.delete({ where: { id: fx.userA1Id } });
-    const remaining = await db.projectMembership.findMany({ where: { userId: fx.userA1Id } });
+    await adminDb.user.delete({ where: { id: fx.userA1Id } });
+    const remaining = await adminDb.projectMembership.findMany({ where: { userId: fx.userA1Id } });
     expect(remaining).toEqual([]);
   });
 });

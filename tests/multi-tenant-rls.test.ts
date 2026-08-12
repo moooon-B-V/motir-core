@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 const { createUser } = usersService;
@@ -32,6 +33,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface TenantFixture {
@@ -167,8 +169,10 @@ describe('multi-tenant RLS — write isolation', () => {
       cause: { code: '42501' },
     });
 
-    // Sanity: no cross-tenant membership leaked in (asserted as superuser).
-    const leaked = await db.workspaceMembership.findFirst({
+    // Sanity: no cross-tenant membership leaked in — read through the ADMIN
+    // client, so an ABSENT row and a row merely HIDDEN from A are not the same
+    // observation.
+    const leaked = await adminDb.workspaceMembership.findFirst({
       where: { userId: fx.userAId, workspaceId: fx.workspaceBId },
     });
     expect(leaked).toBeNull();
@@ -190,15 +194,17 @@ describe('multi-tenant RLS — write isolation', () => {
       code: 'P2025',
     });
 
-    // Sanity: B's workspace name is untouched (asserted as superuser).
-    const b = await db.workspace.findUnique({ where: { id: fx.workspaceBId } });
+    // Sanity: B's workspace name is untouched — read through the ADMIN client,
+    // because the claim is about the ROW rather than about A's visibility.
+    const b = await adminDb.workspace.findUnique({ where: { id: fx.workspaceBId } });
     expect(b?.name).toBe('Workspace B');
   });
 });
 
 describe('multi-tenant — FK cascade (independent of RLS)', () => {
-  // Cascades are FK-level and apply regardless of role, so these run as the
-  // default superuser. They back the hard-delete contract: deleting a
+  // Cascades are FK-level and apply regardless of role, so these run through
+  // the ADMIN client — a tenant-scoped count with nothing bound would read zero
+  // for a reason unrelated to the cascade. They back the hard-delete contract: deleting a
   // workspace or a user removes the dependent membership rows.
 
   it('deleting a workspace cascades its membership rows away', async () => {
@@ -211,12 +217,19 @@ describe('multi-tenant — FK cascade (independent of RLS)', () => {
       name: 'Cascade WS Workspace',
       ownerUserId: userA.id,
     });
-    expect(await db.workspaceMembership.count({ where: { workspaceId: workspace.id } })).toBe(1);
+    const seeded = await adminDb.workspaceMembership.count({
+      where: { workspaceId: workspace.id },
+    });
+    expect(seeded).toBe(1);
 
-    await db.workspace.delete({ where: { id: workspace.id } });
+    await adminDb.workspace.delete({ where: { id: workspace.id } });
 
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
-    expect(await db.workspaceMembership.count({ where: { workspaceId: workspace.id } })).toBe(0);
+    const deleted = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(deleted).toBeNull();
+    const remaining = await adminDb.workspaceMembership.count({
+      where: { workspaceId: workspace.id },
+    });
+    expect(remaining).toBe(0);
   });
 
   it('deleting a user cascades their membership rows away', async () => {
@@ -229,12 +242,15 @@ describe('multi-tenant — FK cascade (independent of RLS)', () => {
       name: 'Cascade User Workspace',
       ownerUserId: userA.id,
     });
-    expect(await db.workspaceMembership.count({ where: { userId: userA.id } })).toBe(1);
+    const seeded = await adminDb.workspaceMembership.count({ where: { userId: userA.id } });
+    expect(seeded).toBe(1);
 
-    await db.user.delete({ where: { id: userA.id } });
+    await adminDb.user.delete({ where: { id: userA.id } });
 
-    expect(await db.workspaceMembership.count({ where: { userId: userA.id } })).toBe(0);
+    const remaining = await adminDb.workspaceMembership.count({ where: { userId: userA.id } });
+    expect(remaining).toBe(0);
     // The workspace itself survives (only the membership cascaded).
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).not.toBeNull();
+    const survivor = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(survivor).not.toBeNull();
   });
 });

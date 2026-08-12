@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 const { createUser } = usersService;
 const { createWorkspace, addMember } = workspacesService;
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // RLS verification suite. Two layers under test:
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface RlsFixture {
@@ -162,8 +164,10 @@ describe('workspace RLS — mutation', () => {
       code: 'P2025',
     });
 
-    // Sanity: the stranger workspace's name is unchanged.
-    const stranger = await db.workspace.findUnique({
+    // Sanity: the stranger workspace's name is unchanged. Read through the
+    // ADMIN client — the question is whether the ROW changed, which no policy
+    // should be able to answer for us.
+    const stranger = await adminDb.workspace.findUnique({
       where: { id: fx.strangerWorkspaceId },
     });
     expect(stranger?.name).toBe('Stranger Workspace');

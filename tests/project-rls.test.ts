@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Project isolation — direct-DB RLS proof (Subtask 1.3.6).
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface ProjectTenantFixture {
@@ -168,8 +170,10 @@ describe('project RLS — write isolation', () => {
       code: 'P2025',
     });
 
-    // Sanity (as superuser): B's project name is untouched.
-    const b = await db.project.findUnique({ where: { id: fx.projectBId } });
+    // Sanity (through the ADMIN client): B's project name is untouched. The
+    // claim is about the ROW, not about what A can see, so it must be read by a
+    // client no policy applies to.
+    const b = await adminDb.project.findUnique({ where: { id: fx.projectBId } });
     expect(b?.name).toBe('Bravo');
   });
 
@@ -196,8 +200,10 @@ describe('project RLS — write isolation', () => {
       cause: { code: '42501' },
     });
 
-    // Sanity (as superuser): no smuggled row landed in B's workspace.
-    const leaked = await db.project.findFirst({
+    // Sanity (through the ADMIN client): no smuggled row landed in B's
+    // workspace. Read as a client no policy hides rows from — otherwise an
+    // absent row and an invisible row are the same observation.
+    const leaked = await adminDb.project.findFirst({
       where: { workspaceId: fx.workspaceBId, identifier: 'SMUG' },
     });
     expect(leaked).toBeNull();
@@ -205,8 +211,9 @@ describe('project RLS — write isolation', () => {
 });
 
 describe('project FK cascade (independent of RLS)', () => {
-  // Cascades are FK-level and apply regardless of role, so this runs as
-  // the default superuser. The cascade contract — deleting a workspace
+  // Cascades are FK-level and apply regardless of role, so this runs through
+  // the ADMIN client — the policies would only obscure the count. The cascade
+  // contract — deleting a workspace
   // removes its projects (and, once Story 1.4 lands the WorkItem table,
   // their work items too via the project → work-item FK) — is the
   // structural backstop behind hard workspace deletion. The same
@@ -240,11 +247,16 @@ describe('project FK cascade (independent of RLS)', () => {
       name: 'P2',
       identifier: 'PTWO',
     });
-    expect(await db.project.count({ where: { workspaceId: workspace.id } })).toBe(2);
+    const seeded = await adminDb.project.count({ where: { workspaceId: workspace.id } });
+    expect(seeded).toBe(2);
 
-    await db.workspace.delete({ where: { id: workspace.id } });
+    await adminDb.workspace.delete({ where: { id: workspace.id } });
 
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
-    expect(await db.project.count({ where: { workspaceId: workspace.id } })).toBe(0);
+    const deletedWorkspace = await adminDb.workspace.findUnique({
+      where: { id: workspace.id },
+    });
+    expect(deletedWorkspace).toBeNull();
+    const remaining = await adminDb.project.count({ where: { workspaceId: workspace.id } });
+    expect(remaining).toBe(0);
   });
 });

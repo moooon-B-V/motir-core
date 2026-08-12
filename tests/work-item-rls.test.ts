@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Work-item + work-item-link RLS — direct-DB tenancy proof (Subtask 1.4.5).
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface WorkItemTenantFixture {
@@ -88,7 +90,7 @@ async function makeWorkItem(args: {
   key: number;
   parentId?: string | null;
 }): Promise<string> {
-  const row = await db.workItem.create({
+  const row = await adminDb.workItem.create({
     data: {
       workspaceId: args.workspaceId,
       projectId: args.projectId,
@@ -187,7 +189,7 @@ async function makeWorkItemTenants(): Promise<WorkItemTenantFixture> {
   // W1 link: a CROSS-PROJECT relates_to (P1 item ↔ P1b item) inside one
   // workspace — exactly the v1 use case the link table must allow and the
   // project narrowing must NOT hide. W2 link: a within-project relates_to.
-  const linkW1 = await db.workItemLink.create({
+  const linkW1 = await adminDb.workItemLink.create({
     data: {
       workspaceId: w1.workspace.id,
       fromId: itemP1a,
@@ -196,7 +198,7 @@ async function makeWorkItemTenants(): Promise<WorkItemTenantFixture> {
       createdById: userA.id,
     },
   });
-  const linkW2 = await db.workItemLink.create({
+  const linkW2 = await adminDb.workItemLink.create({
     data: {
       workspaceId: w2.workspace.id,
       fromId: itemP2a,
@@ -373,8 +375,9 @@ describe('work_item RLS — write isolation (WITH CHECK)', () => {
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
 
-    // Sanity (superuser): nothing landed in W2.
-    const leaked = await db.workItem.findFirst({
+    // Sanity (ADMIN client): nothing landed in W2. Read by a client no policy
+    // hides rows from, so absent and invisible stay distinguishable.
+    const leaked = await adminDb.workItem.findFirst({
       where: { workspaceId: fx.workspaceW2Id, identifier: 'WI-SMUGGLE' },
     });
     expect(leaked).toBeNull();
@@ -391,8 +394,8 @@ describe('work_item RLS — write isolation (WITH CHECK)', () => {
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
 
-    // Sanity (superuser): the row still belongs to W1.
-    const row = await db.workItem.findUnique({ where: { id: fx.itemP1aId } });
+    // Sanity (ADMIN client): the row still belongs to W1.
+    const row = await adminDb.workItem.findUnique({ where: { id: fx.itemP1aId } });
     expect(row?.workspaceId).toBe(fx.workspaceW1Id);
   });
 
@@ -426,8 +429,8 @@ describe('work_item_link RLS — write isolation (WITH CHECK)', () => {
       ),
     ).rejects.toMatchObject({ cause: { code: '42501' } });
 
-    // Sanity (superuser): no smuggled link in W2.
-    const leaked = await db.workItemLink.findFirst({
+    // Sanity (ADMIN client): no smuggled link in W2.
+    const leaked = await adminDb.workItemLink.findFirst({
       where: { workspaceId: fx.workspaceW2Id, kind: 'duplicates' },
     });
     expect(leaked).toBeNull();
@@ -508,11 +511,11 @@ describe('PRODECT_FINDINGS #19 — work_item triggers fire under RLS', () => {
 describe('PRODECT_FINDINGS #19 — work_item_link triggers fire under RLS', () => {
   it('cycle prevention still rejects an is_blocked_by cycle under RLS (existing link visible to the CTE)', async () => {
     const fx = await makeWorkItemTenants();
-    // Seed A is_blocked_by B (superuser; valid). Then under RLS as motir_app
+    // Seed A is_blocked_by B (ADMIN client; valid). Then under RLS as motir_app
     // attempt B is_blocked_by A — a 2-cycle. The cycle trigger's recursive CTE
     // must SELECT the seed link row; if RLS hid it the cycle would go
     // undetected and WRONGLY pass. We assert it rejects.
-    await db.workItemLink.create({
+    await adminDb.workItemLink.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         fromId: fx.itemP1aId,
