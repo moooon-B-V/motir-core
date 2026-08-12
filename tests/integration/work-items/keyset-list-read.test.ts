@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
@@ -8,6 +7,7 @@ import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import { MAX_PAGE_LIMIT } from '@/lib/api/v1/pagination';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The KEYSET-paged project work-item read (Story 11.2 · Subtask 11.2.3 —
@@ -125,7 +125,7 @@ describe('listProjectWorkItemsPage — the keyset read', () => {
       // makes an OFFSET pager skip a row, because every later page shifts by one.
       if (inserted >= 2) return;
       const row = await createTestWorkItem(fx, { kind: 'task', title: `Injected ${inserted}` });
-      await db.workItem.update({
+      await adminDb.workItem.update({
         where: { id: row.id },
         data: { createdAt: new Date(Date.now() - 60 * 60 * 1000) },
       });
@@ -155,7 +155,7 @@ describe('listProjectWorkItemsPage — the keyset read', () => {
       // Remove a row from the FIRST page — an offset pager would slide the
       // whole tail forward and re-show a row that was already returned.
       const victim = all[0] as string;
-      await db.workItem.deleteMany({ where: { identifier: victim, projectId: fx.projectId } });
+      await adminDb.workItem.deleteMany({ where: { identifier: victim, projectId: fx.projectId } });
       removed += 1;
     });
 
@@ -269,8 +269,8 @@ describe('listProjectWorkItemsPage — the keyset read', () => {
     const live = await createTestWorkItem(fx, { kind: 'task', title: 'Live' });
     const archived = await createTestWorkItem(fx, { kind: 'task', title: 'Archived' });
     const triaged = await createTestWorkItem(fx, { kind: 'task', title: 'In triage' });
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
-    await db.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
 
     const seen = await walkKeyset(fx, { limit: 50 });
 
@@ -319,7 +319,7 @@ describe('findProjectIssuesKeyset — the repository read', () => {
     const a = await createTestWorkItem(fx, { kind: 'task', title: 'A' });
     const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
     const c = await createTestWorkItem(fx, { kind: 'task', title: 'C' });
-    await db.workItem.updateMany({
+    await adminDb.workItem.updateMany({
       where: { id: { in: [a.id, b.id, c.id] } },
       data: { createdAt: collide },
     });

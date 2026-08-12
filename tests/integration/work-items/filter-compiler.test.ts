@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { UnknownFilterFieldError } from '@/lib/filters/errors';
 import type { FilterAst } from '@/lib/filters/ast';
 import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser } from '../../fixtures';
 import {
@@ -21,7 +22,7 @@ import {
 // bound-parameter inspection lives in tests/filters/filterRegistry.test.ts.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const SORT = { column: 'key', direction: 'asc' } as const;
@@ -75,11 +77,11 @@ async function seedProject(): Promise<SeededProject> {
     parentId: velocity.id,
   });
 
-  const sprint = await db.sprint.create({
+  const sprint = await adminDb.sprint.create({
     data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name: 'Sprint 1', sequence: 1 },
   });
 
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: bug.id },
     data: {
       status: 'todo',
@@ -91,11 +93,11 @@ async function seedProject(): Promise<SeededProject> {
       descriptionMd: 'Stack trace points at the token refresh path.',
     },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: board.id },
     data: { status: 'in_progress', priority: 'medium', dueDate: daysFromNow(-5), storyPoints: 2 },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: velocity.id },
     data: {
       status: 'done',
@@ -105,7 +107,7 @@ async function seedProject(): Promise<SeededProject> {
       descriptionMd: 'Needs oauth scopes documented for the chart read.',
     },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: polish.id },
     data: { status: 'todo', priority: 'high', dueDate: daysFromNow(10), sprintId: sprint.id },
   });
@@ -404,8 +406,10 @@ describe('safety', () => {
 
   it('a LIKE metacharacter in the text value matches literally (pattern escape)', async () => {
     const seeded = await seedProject();
-    await db.workItem.update({
-      where: { id: (await db.workItem.findFirst({ where: { title: 'Board drag stutter' } }))!.id },
+    await adminDb.workItem.update({
+      where: {
+        id: (await adminDb.workItem.findFirst({ where: { title: 'Board drag stutter' } }))!.id,
+      },
       data: { descriptionMd: 'Reproduces 50%_of the time' },
     });
     expect(
@@ -421,7 +425,11 @@ describe('the trgm index (finding #57)', () => {
   it('EXPLAIN shows the contains-match using the GIN index, not a table scan', async () => {
     const seeded = await seedProject();
     void seeded;
-    const plan = await db.$transaction(async (tx) => {
+    // The ADMIN client: this asserts the INDEX exists and serves the predicate, which
+    // is a property of the schema and not of any tenant. Run as the app role the plan
+    // also carries the RLS filter and the seeded rows are invisible, which would make
+    // the assertion about visibility instead of about the index.
+    const plan = await adminDb.$transaction(async (tx) => {
       // The seeded table is tiny, so force the planner's hand — the assert is
       // "the index EXISTS and serves this predicate", not a cost decision.
       // (jit off: disabling seqscan inflates plan cost past the JIT threshold,

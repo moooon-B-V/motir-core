@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { createTestProject, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 1.4.7 — cross-project links WITHIN one workspace.
@@ -35,7 +36,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // helper the RLS suites each carry.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -47,6 +48,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function asAppRole<T>(
@@ -126,7 +128,7 @@ describe('cross-project links — service path (same workspace, different projec
     expect(await workItemsService.isReady(itemAId, fx.ctx)).toBe(false);
     // 2.3.6/finding #46: status is no longer a free-form updateWorkItem patch —
     // park the blocker at a terminal status via a direct write for setup.
-    await db.workItem.update({ where: { id: itemBId }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: itemBId }, data: { status: 'done' } });
     expect(await workItemsService.isReady(itemAId, fx.ctx)).toBe(true);
   });
 

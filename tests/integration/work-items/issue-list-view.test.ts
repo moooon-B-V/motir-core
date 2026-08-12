@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { toIssueListRows } from '@/app/(authed)/items/_components/issueRows';
 import { DEFAULT_SORT, type IssueSort } from '@/lib/issues/issueListView';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -19,7 +20,7 @@ import {
 // per column, the cross-workspace gate, and the shared row shaping.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -31,6 +32,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const ids = (rows: { identifier: string }[]) => rows.map((r) => r.identifier);
@@ -56,7 +58,7 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     const fx = await makeFixture();
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
     const task = await createWorkItem(fx, { kind: 'task', title: 'Task' });
-    await db.workItem.update({ where: { id: task.id }, data: { type: 'code' } });
+    await adminDb.workItem.update({ where: { id: task.id }, data: { type: 'code' } });
 
     const { items: rows } = await workItemsService.getProjectIssuesList(
       fx.projectId,
@@ -77,11 +79,11 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     const described = await createWorkItem(fx, { kind: 'task', title: 'Described' });
     const emptied = await createWorkItem(fx, { kind: 'task', title: 'Emptied' });
     const never = await createWorkItem(fx, { kind: 'task', title: 'Never' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: described.id },
       data: { descriptionMd: 'Some prose.' },
     });
-    await db.workItem.update({ where: { id: emptied.id }, data: { descriptionMd: '' } });
+    await adminDb.workItem.update({ where: { id: emptied.id }, data: { descriptionMd: '' } });
 
     const { items: rows } = await workItemsService.getProjectIssuesList(
       fx.projectId,
@@ -118,9 +120,9 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     const low = await createWorkItem(fx, { kind: 'task', title: 'low' });
     const highest = await createWorkItem(fx, { kind: 'bug', title: 'highest' });
     const medium = await createWorkItem(fx, { kind: 'task', title: 'medium' });
-    await db.workItem.update({ where: { id: low.id }, data: { priority: 'low' } });
-    await db.workItem.update({ where: { id: highest.id }, data: { priority: 'highest' } });
-    await db.workItem.update({ where: { id: medium.id }, data: { priority: 'medium' } });
+    await adminDb.workItem.update({ where: { id: low.id }, data: { priority: 'low' } });
+    await adminDb.workItem.update({ where: { id: highest.id }, data: { priority: 'highest' } });
+    await adminDb.workItem.update({ where: { id: medium.id }, data: { priority: 'medium' } });
 
     const { items: desc } = await workItemsService.getProjectIssuesList(
       fx.projectId,
@@ -142,11 +144,14 @@ describe('getProjectIssuesList (flat sorted List read)', () => {
     const noDue = await createWorkItem(fx, { kind: 'task', title: 'no due' });
     const early = await createWorkItem(fx, { kind: 'task', title: 'early' });
     const late = await createWorkItem(fx, { kind: 'task', title: 'late' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: early.id },
       data: { dueDate: new Date('2026-06-07') },
     });
-    await db.workItem.update({ where: { id: late.id }, data: { dueDate: new Date('2026-06-20') } });
+    await adminDb.workItem.update({
+      where: { id: late.id },
+      data: { dueDate: new Date('2026-06-20') },
+    });
 
     const { items: asc } = await workItemsService.getProjectIssuesList(
       fx.projectId,
@@ -268,11 +273,11 @@ describe('toIssueListRows (flat shaping over the live reads)', () => {
     const fx = await makeFixture();
     const assigned = await createWorkItem(fx, { kind: 'task', title: 'Assigned' });
     const unassigned = await createWorkItem(fx, { kind: 'task', title: 'Unassigned' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: assigned.id },
       data: { status: 'in_progress', assigneeId: fx.ownerId },
     });
-    await db.workItem.update({ where: { id: unassigned.id }, data: { status: 'todo' } });
+    await adminDb.workItem.update({ where: { id: unassigned.id }, data: { status: 'todo' } });
 
     const [items, workflow, members] = await Promise.all([
       workItemsService.getProjectIssuesList(fx.projectId, { sort: DEFAULT_SORT }, fx.ctx),
@@ -300,7 +305,7 @@ describe('toIssueListRows (flat shaping over the live reads)', () => {
     const fx = await makeFixture();
     const described = await createWorkItem(fx, { kind: 'task', title: 'Described' });
     await createWorkItem(fx, { kind: 'task', title: 'Bare' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: described.id },
       data: { descriptionMd: 'Some prose.' },
     });

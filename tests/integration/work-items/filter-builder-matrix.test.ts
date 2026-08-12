@@ -8,6 +8,7 @@ import {
   type CustomFieldFilterType,
 } from '@/lib/filters/registry';
 import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser } from '../../fixtures';
 import {
@@ -35,7 +36,7 @@ import {
 // every cell") is verified end to end through the shipped service.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "custom_field_value", "custom_field_option", "custom_field_definition", ' +
       '"work_item_label", "label", "work_item_component", "component", ' +
       '"work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
@@ -49,6 +50,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const SORT = { column: 'key', direction: 'asc' } as const;
@@ -100,11 +102,11 @@ async function seedMatrix(): Promise<Seeded> {
   const c = await createWorkItem(fx, { kind: 'story', title: 'Velocity chart' });
   const d = await createWorkItem(fx, { kind: 'task', title: 'Chart polish pass', parentId: c.id });
 
-  const sprint = await db.sprint.create({
+  const sprint = await adminDb.sprint.create({
     data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name: 'Sprint 1', sequence: 1 },
   });
 
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: a.id },
     data: {
       status: 'todo',
@@ -119,7 +121,7 @@ async function seedMatrix(): Promise<Seeded> {
       type: 'code',
     },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: b.id },
     data: {
       status: 'in_progress',
@@ -133,7 +135,7 @@ async function seedMatrix(): Promise<Seeded> {
       type: 'manual',
     },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: c.id },
     data: {
       status: 'done',
@@ -147,7 +149,7 @@ async function seedMatrix(): Promise<Seeded> {
       descriptionMd: 'Needs oauth scopes documented for the chart read.',
     },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: d.id },
     data: {
       status: 'todo',
@@ -163,29 +165,29 @@ async function seedMatrix(): Promise<Seeded> {
 
   // ── Custom fields — one of every type (5.3.1 typed-EAV) ──────────────────
   const defCommon = { workspaceId: fx.workspaceId, projectId: fx.projectId };
-  const severity = await db.customFieldDefinition.create({
+  const severity = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'severity', label: 'Severity', fieldType: 'select', position: 'a0' },
   });
-  const effort = await db.customFieldDefinition.create({
+  const effort = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'effort', label: 'Effort', fieldType: 'number', position: 'a1' },
   });
-  const golive = await db.customFieldDefinition.create({
+  const golive = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'golive', label: 'Go-live', fieldType: 'date', position: 'a2' },
   });
-  const owner = await db.customFieldDefinition.create({
+  const owner = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'owner', label: 'Owner', fieldType: 'user', position: 'a3' },
   });
-  const notes = await db.customFieldDefinition.create({
+  const notes = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'notes', label: 'Notes', fieldType: 'text', position: 'a4' },
   });
 
-  const high = await db.customFieldOption.create({
+  const high = await adminDb.customFieldOption.create({
     data: { fieldId: severity.id, label: 'High', position: 'a0' },
   });
-  const low = await db.customFieldOption.create({
+  const low = await adminDb.customFieldOption.create({
     data: { fieldId: severity.id, label: 'Low', position: 'a1' },
   });
-  const legacy = await db.customFieldOption.create({
+  const legacy = await adminDb.customFieldOption.create({
     data: { fieldId: severity.id, label: 'Legacy', position: 'a2', archived: true },
   });
 
@@ -194,7 +196,7 @@ async function seedMatrix(): Promise<Seeded> {
     workItemId,
     fieldId,
   });
-  await db.customFieldValue.createMany({
+  await adminDb.customFieldValue.createMany({
     data: [
       { ...value(a.id, severity.id), valueOptionId: high.id },
       { ...value(b.id, severity.id), valueOptionId: legacy.id },
@@ -212,13 +214,13 @@ async function seedMatrix(): Promise<Seeded> {
 
   // ── Labels + components — the 5.4.1 join probes ──────────────────────────
   const labelCommon = { workspaceId: fx.workspaceId, projectId: fx.projectId };
-  const perf = await db.label.create({
+  const perf = await adminDb.label.create({
     data: { ...labelCommon, name: 'perf-q3', nameLower: 'perf-q3' },
   });
-  const infra = await db.label.create({
+  const infra = await adminDb.label.create({
     data: { ...labelCommon, name: 'infra', nameLower: 'infra' },
   });
-  await db.workItemLabel.createMany({
+  await adminDb.workItemLabel.createMany({
     data: [
       { workItemId: a.id, labelId: perf.id },
       { workItemId: c.id, labelId: perf.id },
@@ -226,13 +228,13 @@ async function seedMatrix(): Promise<Seeded> {
     ],
   });
 
-  const api = await db.component.create({
+  const api = await adminDb.component.create({
     data: { ...labelCommon, name: 'API', nameLower: 'api' },
   });
-  const web = await db.component.create({
+  const web = await adminDb.component.create({
     data: { ...labelCommon, name: 'Web', nameLower: 'web' },
   });
-  await db.workItemComponent.createMany({
+  await adminDb.workItemComponent.createMany({
     data: [
       { workItemId: a.id, componentId: api.id },
       { workItemId: d.id, componentId: api.id },

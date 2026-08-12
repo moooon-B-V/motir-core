@@ -11,6 +11,7 @@ import {
 } from '@/lib/workItems/errors';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { inngest } from '@/lib/jobs/client';
@@ -49,7 +50,7 @@ import { inngest } from '@/lib/jobs/client';
 //         └─ subtask PROD-5  depth 4   ← the blocker
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -69,6 +70,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The status `{ from, to }` cells of an item's 'updated' revisions, in
@@ -268,7 +270,7 @@ describe('Epic-2 lifecycle — archive is a no-cascade soft-delete reflected in 
     expect(archived.archivedAt).not.toBeNull();
 
     // No cascade: the direct child (and the whole subtree) rows are untouched.
-    const childRows = await db.workItem.findMany({
+    const childRows = await adminDb.workItem.findMany({
       where: { id: { in: [t.task.id, t.bug.id, t.subtask.id] } },
       select: { archivedAt: true },
     });
