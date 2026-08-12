@@ -1,4 +1,4 @@
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -74,7 +74,15 @@ export const mentionNotificationsService = {
     // The issue must still exist in this workspace (hard-deleted → nothing to
     // link to, nothing to notify). The workspace check mirrors the service
     // read paths' scoping gate.
-    const item = await workItemRepository.findById(input.workItemId);
+    //
+    // USERLESS (MOTIR-2685): this runs inside the mentionNotify JOB, which has no
+    // session — so the read binds the WORKSPACE tier, not `{ userId, workspaceId }`.
+    // `input.workspaceId` comes off the job event envelope the writer stamped, not
+    // off the wire, which is what `withWorkspaceServiceContext` requires. Unbound,
+    // `work_item_active_workspace` compared against NULL under `motir_app` and this
+    // read returned nothing — indistinguishable, at this line, from the deletion
+    // race it is here to absorb, so every mention email was silently dropped.
+    const item = await readWorkItemForService(input.workItemId, input.workspaceId);
     if (!item || item.workspaceId !== input.workspaceId) return { notifiedUserIds: [] };
 
     // For a comment mention, the comment must still exist too (5.1's delete is

@@ -1,4 +1,5 @@
-import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { readWorkItemForService } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
@@ -106,7 +107,14 @@ export const watcherNotificationsService = {
     // The issue must still exist in this workspace (hard-deleted → nothing to
     // link to, nothing to notify). The workspace check mirrors the service
     // read paths' scoping gate.
-    const item = await workItemRepository.findById(input.workItemId);
+    //
+    // USERLESS (MOTIR-2685): the watcher fan-out runs as a JOB with no session, so
+    // the read binds the WORKSPACE tier. `input.workspaceId` is stamped on the job
+    // event by the transition/comment writer — a trusted resolution, never wire
+    // input (`withWorkspaceServiceContext`'s constraint). Unbound, this returned
+    // nothing under `motir_app` and the whole watcher roster was dropped as though
+    // the issue had been deleted.
+    const item = await readWorkItemForService(input.workItemId, input.workspaceId);
     if (!item || item.workspaceId !== input.workspaceId) return { notifiedUserIds: [] };
 
     // Resolve the event-specific email inputs up front (one read each, before
@@ -146,7 +154,22 @@ export const watcherNotificationsService = {
     const notifiedUserIds: string[] = [];
     let cursor: string | undefined;
     do {
-      const page = await watcherRepository.listByWorkItem(item.id, { take: pageSize, cursor });
+      // USERLESS (MOTIR-2685), and the read the card's own enumeration missed: `watcher`
+      // carries a workspace-keyed policy too — `watcher_active_workspace`, an EXISTS over
+      // `work_item` keyed on `app.workspace_id` — so an unbound roster read returns an
+      // empty page for a fully-populated roster. Binding only the item read above would
+      // have moved the failure two statements later without removing it, which is the
+      // sub-shape MOTIR-2569's re-measurement named ("fixing only its opening read moved
+      // the failure four gates later"): the fan-out would still silently drop every
+      // recipient, which is this card's own statement of the defect.
+      //
+      // Bound PER PAGE, not around the walk: the loop enqueues sends between pages, and a
+      // transaction held across those would be a lock held on live rows for the length of
+      // an email fan-out. One short read transaction per page keeps the bound scope to the
+      // read that needs it.
+      const page = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+        watcherRepository.listByWorkItem(item.id, { take: pageSize, cursor }, tx),
+      );
       cursor = page.length === pageSize ? page[page.length - 1]!.id : undefined;
 
       const candidates = page.filter((w) => !excluded.has(w.userId));

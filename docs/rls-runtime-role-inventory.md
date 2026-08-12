@@ -262,15 +262,16 @@ from the call site:
   reader is anonymous or cross-org, so there is no user to bind and no workspace to bind that would
   not presume the answer — and no arm admits the row regardless. A binding cannot fix it; the policy
   needs a public arm, which MOTIR-2569's scope excludes. **Every public-project surface 404s after
-  the cutover, including a team's own logged-out view.**
+  the cutover, including a team's own logged-out view.** **Done — see below.**
 - **MOTIR-2685 — the USERLESS reads.** The job runtime and the `workspaceId`-only helpers
   (`workflowsService.requirePolicyMode` / `canTransition`,
   `projectsService.assertProjectInWorkspace`, whose own docstring already says it is
   "only safe under the BYPASSRLS dev role") have a workspace but no actor, so they want
-  `withWorkspaceServiceContext`, not these readers.
+  `withWorkspaceServiceContext`, not these readers. **Done — see below.**
 
 **Consequence for the chain, updated.** MOTIR-2528's default flip is now `blocked_by` MOTIR-2684 and
-MOTIR-2685 as well as by its own fixture migration.
+MOTIR-2685 as well as by its own fixture migration — and, once MOTIR-2685 landed and surfaced it, by
+MOTIR-2757 (`workflowsService`'s read surface; the last section below).
 
 ### MOTIR-2684, resolved — the arm the binding chain could not supply
 
@@ -316,6 +317,64 @@ project ADMIN their 6.16.3 in-place Edit affordance — and `publicRequestsServi
 INSERT, which `comment_active_workspace`'s `WITH CHECK` refused outright, leaving the public thread
 write-dead. Both directions of all of it are pinned in
 `tests/permissions/publicProjectAccess.test.ts`, which runs identically with the flag set and unset.
+
+### MOTIR-2685, resolved — the userless branch, closed
+
+`lib/workspaces/tenantRead.ts` gained a second TIER beside MOTIR-2569's actor-carrying readers:
+`readProjectForService` / `readWorkItemForService`, binding `withWorkspaceServiceContext`
+(`app.workspace_id`, no user). Eight sites moved onto it or onto that context directly — the five
+job-runtime reads (`mentionNotificationsService`, `notificationFanInService`,
+`watcherNotificationsService`, `automationEngineService.resolveProjectId`,
+`autoPlanCadenceService.runForProject`) and the three `workspaceId`-only helpers
+(`workflowsService.requirePolicyMode` / `canTransition`, `projectsService.assertProjectInWorkspace`).
+`tests/permissions/userlessTenantRead.test.ts` pins all of them in both directions and, like its
+MOTIR-2569 sibling, passes identically with the flag set and unset.
+
+Three things are worth carrying forward rather than leaving in the diff:
+
+- **`withWorkspaceServiceContext` IS sufficient for `work_item`, and its docstring said the
+  opposite.** It read "NOT sufficient for a policy that also reads … `app.project_id` (the
+  `work_item` project narrowing)". The restrictive `work_item_project_narrow` policy does read that
+  GUC — and is SATISFIED, not defeated, when it is unbound, because its first branch is
+  `coalesce(current_setting('app.project_id', true), '') = ''`. Narrowing is opt-IN, so not opting in
+  is not a hole; and it is the behaviour these callers need, since they resolve an item before they
+  know its project. The docstring now quotes the clause. _"The policy reads `app.project_id`"_ → _"the
+  context must bind it"_ is a one-step inference that is wrong, and a shipped comment asserting it is
+  how the next reader re-derives the wrong answer.
+
+- **The enumeration by `findById` missed a read in the same path, and binding only the enumerated one
+  would have left the defect in place.** The card listed the `project` / `work_item` reads, found by
+  grepping `findById(`. `watcherNotificationsService`'s roster walk is a `findMany` on a THIRD table —
+  `watcher`, whose `watcher_active_workspace` policy is an `EXISTS` over `work_item` keyed on
+  `app.workspace_id` — so an unbound page read returns `[]` for a fully populated roster. Binding the
+  item read alone moves the failure two statements later and the fan-out still drops every recipient,
+  which is the card's own statement of the defect. Same sub-shape MOTIR-2569 recorded for
+  `createWorkItem`'s key allocation. **The lesson is about the SEARCH, not this one line:** a grep for
+  one repository method finds reads of the tables that method serves, and a path is not audited until
+  every table it touches has been.
+
+- **One refusal is role-dependent, and that is the shipped posture, not a gap.**
+  `assertProjectInWorkspace` throws `ProjectWorkspaceMismatchError` under the owner role (the foreign
+  row comes back and the explicit comparison refuses it) and `ProjectNotFoundError` under `motir_app`
+  (RLS hides it first). `tests/e2e/project-isolation.spec.ts` already records exactly this for the
+  in-tx variant — "Either typed error" — and the collapse is the BETTER posture: it is the
+  no-existence-leak `getByKey` deliberately makes. The test asserts what holds in both roles.
+
+**Still open in this family, and NOT part of MOTIR-2685** — filed as its own card rather than
+absorbed, because nothing in 2685's criteria reaches it: **`workflowsService`'s READ SURFACE**.
+`getWorkflow` (`findStatuses` + `findTransitions`), `listStatusesByProject` and `getStatusByKey` all
+read `workflow_status` / `workflow_transition` on the `db` singleton, and both tables carry pure
+`app.workspace_id` policies. Measured on this branch, one seeded status, same fixture, both roles:
+
+| role                               | `getWorkflow(...).statuses.length` | `policyMode` |
+| ---------------------------------- | ---------------------------------: | ------------ |
+| owner (flag unset — what CI runs)  |                                  1 | `restricted` |
+| `motir_app` (`TEST_DB_APP_ROLE=1`) |                              **0** | `restricted` |
+
+So this is NOT a degradation — after the cutover the board renders no columns and every status picker
+is empty, while the policy mode beside them reads correctly, because 2685 bound that one read and not
+these. `getStatusByKey` is the milder member (its null falls back to the raw event key, so a watcher
+email says `doing` instead of `Doing`). Each is a one-line bind on the same tier as the readers above.
 
 ## Cards filed from this inventory
 

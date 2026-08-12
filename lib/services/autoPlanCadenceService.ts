@@ -1,4 +1,5 @@
 import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
@@ -269,7 +270,15 @@ export const autoPlanCadenceService = {
       // Reading it here means a vanished project is a clean skip rather than a
       // ProjectNotFoundError thrown out of the first gate — and the row is
       // needed anyway to build the ProjectContext the submit takes.
-      const row = await projectRepository.findById(project.id);
+      //
+      // USERLESS (MOTIR-2685): a cron tick has no session, and the workspace OWNER the
+      // actor note above describes is resolved AFTER this read — so this one read binds
+      // the WORKSPACE tier, not `{ userId, workspaceId }`. `project.workspaceId` comes
+      // off the scan page this tick produced (`listAutoPlanEnabled`), a trusted
+      // resolution, never wire input. Unbound, `project_workspace_or_system_read`
+      // compared against NULL under `motir_app` and EVERY project read as `project_gone`
+      // — the cadence silently skipped the entire fleet on every tick.
+      const row = await readProjectForService(project.id, project.workspaceId);
       if (!row) return { projectId: project.id, status: 'skipped', reason: 'project_gone' };
 
       const owner = await workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId);
