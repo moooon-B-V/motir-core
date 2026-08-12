@@ -71,8 +71,10 @@ test('with Motir AI not configured there is no orb and no callout', async ({ pag
   await signIn(page, email, PASSWORD);
 
   // The shell RENDERED — everything below is a meaningful absence, not a blank
-  // page passing by default.
-  await expect(page.getByRole('heading', { name: 'Dashboards', level: 1 })).toBeVisible();
+  // page passing by default. Sign-in lands on `/home` since MOTIR-2654; the
+  // assertion is unchanged in KIND (a page-level heading proving the shell is
+  // up), only in which page it names.
+  await expect(page.getByRole('heading', { name: 'Home', level: 1 })).toBeVisible();
 
   // No orb: no trigger to click, so no orphan control and no way to reach an
   // empty menu. Addressed by the callout's own accessible name (MOTIR-1812).

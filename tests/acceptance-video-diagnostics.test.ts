@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildClientDiagnostics,
+  buildContentionReport,
+  buildContentionSamples,
+  describeContention,
   DIAGNOSTIC_TAIL,
   isCancelledRscPrefetch,
+  LONG_TASK_MS,
+  percentileMs,
+  type ContentionDrain,
+  type ContentionNavigationMark,
+  type ContentionReading,
   type DiagnosticEvent,
 } from './e2e/_helpers/acceptance-diagnostics';
 
@@ -297,5 +305,382 @@ describe('the diagnostic buffers are bounded (MOTIR-2600)', () => {
     // shard's report artifact for no diagnostic gain.
     expect(DIAGNOSTIC_TAIL).toBeGreaterThan(0);
     expect(DIAGNOSTIC_TAIL).toBeLessThanOrEqual(500);
+  });
+});
+
+// ── The CONTENTION sidecar (MOTIR-2646) ──────────────────────────────────────
+//
+// The report above fires on a red run. This one fires always, and it exists
+// because the stall it characterises happens on ~1 run in 30 — a base rate that
+// makes the event itself unmeasurable and forces the measurement onto the
+// CONDITION instead. These are the shaping helpers that turn what the page
+// hands back into that distribution; they are the whole instrument, so they are
+// tested at the same altitude as the verdict is.
+
+/** A reading with the fields a test does not care about already filled in. */
+function reading(patch: Partial<ContentionReading> = {}): ContentionReading {
+  return {
+    timeOrigin: 1_000,
+    nowMs: 10_000,
+    navigations: [],
+    longTasks: [],
+    resourceEndsMs: [],
+    resourceBufferFull: false,
+    probeAtMs: [],
+    ...patch,
+  };
+}
+
+function navigation(
+  atMs: number,
+  url = '/docs/mcp',
+  kind: 'document' | 'soft' = 'soft',
+): ContentionNavigationMark {
+  return { atMs, url, kind };
+}
+
+function drain(patch: Partial<ContentionDrain> = {}): ContentionDrain {
+  return {
+    at: '2026-08-11T12:00:00.000Z',
+    tSeconds: 1,
+    latencyMs: 3,
+    timedOut: false,
+    ...patch,
+  };
+}
+
+describe('percentileMs — nearest rank (MOTIR-2646)', () => {
+  it('reports zero for an empty signal rather than a null the sidecar would carry', () => {
+    expect(percentileMs([], 0.5)).toBe(0);
+    expect(percentileMs([], 0.9)).toBe(0);
+  });
+
+  it('takes a real sample, never an interpolated one', () => {
+    // Interpolation would answer 25 for the median here — a value no navigation
+    // produced. At ~20 samples per recording that invention is most of the answer.
+    expect(percentileMs([10, 20, 30, 40], 0.5)).toBe(20);
+    expect(percentileMs([10, 20, 30, 40], 0.9)).toBe(40);
+  });
+
+  it('sorts before ranking — the caller hands over samples in navigation order', () => {
+    expect(percentileMs([40, 10, 30, 20], 0.5)).toBe(20);
+  });
+
+  it('clamps both ends: fraction 0 is the floor, fraction 1 is the max', () => {
+    expect(percentileMs([5, 9, 11], 0)).toBe(5);
+    expect(percentileMs([5, 9, 11], 1)).toBe(11);
+  });
+
+  it('answers a single sample with that sample', () => {
+    expect(percentileMs([46_228], 0.5)).toBe(46_228);
+  });
+});
+
+describe('describeContention (MOTIR-2646)', () => {
+  it('summarises one signal as median / p90 / max over its count', () => {
+    expect(describeContention([100, 200, 300, 4_000])).toEqual({
+      count: 4,
+      medianMs: 200,
+      p90Ms: 4_000,
+      maxMs: 4_000,
+    });
+  });
+
+  it('reports zeroes for a signal nothing contributed to', () => {
+    // A recording that never navigated still writes a well-formed summary; the
+    // reader distinguishes "quiet" from "absent" by `count`, not by a null.
+    expect(describeContention([])).toEqual({ count: 0, medianMs: 0, p90Ms: 0, maxMs: 0 });
+  });
+});
+
+describe('buildContentionSamples — one sample per navigation (MOTIR-2646)', () => {
+  it('closes each window at the NEXT navigation, and the last one at the read', () => {
+    const samples = buildContentionSamples(
+      reading({ navigations: [navigation(1_000), navigation(3_000)], nowMs: 9_000 }),
+    );
+    expect(samples.map((sample) => sample.windowMs)).toEqual([2_000, 6_000]);
+    expect(samples.map((sample) => sample.atMs)).toEqual([1_000, 3_000]);
+  });
+
+  it('reads the mcp-docs shape: payload in, then nothing, for the whole window', () => {
+    // The capture that closed MOTIR-2621 said `sinceLastResourceMs: 46228`. This
+    // is that number, computed for a navigation that PASSED — which is the entire
+    // point: the same quantity, read continuously instead of once.
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(7_400, '/docs/mcp')],
+        resourceEndsMs: [7_421],
+        nowMs: 53_649,
+      }),
+    );
+    expect(sample?.idleGapMs).toBe(46_228);
+  });
+
+  it('measures the longest gap BETWEEN completions, not only the trailing one', () => {
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(0)], resourceEndsMs: [100, 8_000, 8_100], nowMs: 8_500 }),
+    );
+    expect(sample?.idleGapMs).toBe(7_900);
+  });
+
+  it('ignores completions from OUTSIDE the window on either side', () => {
+    // The first window is [1000, 2000): the completions at 10 and 500 belong to
+    // whatever came before it, and the one at 5000 belongs to the window AFTER
+    // it — so its gap is 1400→2000, not 1400→5000. Getting this wrong in the
+    // other direction is how a busy run would read as a quiet one.
+    const samples = buildContentionSamples(
+      reading({
+        navigations: [navigation(1_000), navigation(2_000)],
+        resourceEndsMs: [10, 500, 1_400, 5_000],
+        nowMs: 6_000,
+      }),
+    );
+    expect(samples[0]?.idleGapMs).toBe(600);
+    expect(samples[1]?.idleGapMs).toBe(3_000);
+  });
+
+  it('sorts marks and completions the page handed over in whatever order', () => {
+    const samples = buildContentionSamples(
+      reading({
+        navigations: [navigation(3_000), navigation(1_000)],
+        resourceEndsMs: [2_800, 1_100],
+        nowMs: 4_000,
+      }),
+    );
+    expect(samples.map((sample) => sample.atMs)).toEqual([1_000, 3_000]);
+    expect(samples[0]?.idleGapMs).toBe(1_700);
+  });
+
+  it('windows the long tasks, and charges only the blocking part of each', () => {
+    // The Long Tasks API's own definition: a task blocks for what it costs ABOVE
+    // the 50 ms threshold. 220 → 170, 90 → 40; the third task is the next
+    // window's.
+    const samples = buildContentionSamples(
+      reading({
+        navigations: [navigation(0), navigation(1_000)],
+        longTasks: [
+          { atMs: 100, durationMs: 220 },
+          { atMs: 500, durationMs: 90 },
+          { atMs: 1_500, durationMs: 60 },
+        ],
+        nowMs: 2_000,
+      }),
+    );
+    expect(samples[0]).toMatchObject({ longestTaskMs: 220, blockingMs: 210, longTaskCount: 2 });
+    expect(samples[1]).toMatchObject({ longestTaskMs: 60, blockingMs: 10, longTaskCount: 1 });
+  });
+
+  it('reports zero CPU rather than a hole when the browser gives no long tasks', () => {
+    // `longtask` is Chromium-only and the observer is wrapped in a try/catch, so
+    // an empty task list is a supported outcome and not a bug to signal.
+    const [sample] = buildContentionSamples(reading({ navigations: [navigation(0)] }));
+    expect(sample).toMatchObject({ longestTaskMs: 0, blockingMs: 0, longTaskCount: 0 });
+  });
+
+  it('carries the truncation flag onto every sample the document produced', () => {
+    // Once the resource-timing buffer fills, the browser stops recording — so a
+    // gap measured after that point is an artefact of the buffer, not of the
+    // runner. The reader has to be able to see that.
+    const samples = buildContentionSamples(
+      reading({ navigations: [navigation(0), navigation(10)], resourceBufferFull: true }),
+    );
+    expect(samples.every((sample) => sample.resourcesTruncated)).toBe(true);
+  });
+
+  it('keeps the url and the navigation KIND — a soft transition is the suspect one', () => {
+    const samples = buildContentionSamples(
+      reading({
+        navigations: [navigation(0, '/', 'document'), navigation(500, '/docs/mcp/tools', 'soft')],
+      }),
+    );
+    expect(samples.map((sample) => [sample.kind, sample.url])).toEqual([
+      ['document', '/'],
+      ['soft', '/docs/mcp/tools'],
+    ]);
+  });
+
+  it('does not go negative when the read raced ahead of the last mark', () => {
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(9_000)], nowMs: 8_000 }),
+    );
+    expect(sample?.windowMs).toBe(0);
+    expect(sample?.idleGapMs).toBe(0);
+  });
+
+  it('contributes nothing for a document that never navigated', () => {
+    expect(buildContentionSamples(reading())).toEqual([]);
+  });
+});
+
+describe('idleToProbeMs — the gap with the lane’s own pacing taken out (MOTIR-2646)', () => {
+  it('stops at the first PROBE after the navigation, not at the next one', () => {
+    // The shape this measure exists for. A chapter body navigates at 1,000 and
+    // finishes at 3,000, where the drain fires; the 2.5 s hold and a 4 s beat
+    // then pass with nothing on the wire before the next navigation at 10,000.
+    // The raw gap charges all of that to the navigation; the probe-bounded one
+    // charges the 2,000 ms the page actually had.
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(1_000), navigation(10_000)],
+        probeAtMs: [3_000, 7_500],
+        nowMs: 12_000,
+      }),
+    );
+    expect(sample?.idleGapMs).toBe(9_000);
+    expect(sample?.idleToProbeMs).toBe(2_000);
+    expect(sample?.windowToProbeMs).toBe(2_000);
+  });
+
+  it('is the measure that would still see a stall', () => {
+    // The mcp-docs occurrence, had it been sampled rather than caught: the
+    // assertion sat on the dead transition for its whole budget, so the probe
+    // that follows it is 46 s away and the decontaminated gap says so too.
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(7_400, '/docs/mcp')],
+        resourceEndsMs: [7_421],
+        probeAtMs: [53_649],
+        nowMs: 53_649,
+      }),
+    );
+    expect(sample?.idleToProbeMs).toBe(46_228);
+  });
+
+  it('ignores a probe that fired BEFORE the navigation', () => {
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(5_000)], probeAtMs: [1_000, 6_000], nowMs: 9_000 }),
+    );
+    expect(sample?.idleToProbeMs).toBe(1_000);
+  });
+
+  it('falls back to the full window when the navigation got no probe of its own', () => {
+    // Two navigations inside one chapter body, or a spec that ended straight
+    // after navigating. Over-reporting is the conservative direction — inventing
+    // a shorter window would understate contention, which is the one error this
+    // instrument must not make.
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(1_000)], probeAtMs: [], nowMs: 5_000 }),
+    );
+    expect(sample?.idleToProbeMs).toBe(4_000);
+    expect(sample?.windowToProbeMs).toBe(4_000);
+  });
+
+  it('never runs past the window, even when the next probe is later than the next navigation', () => {
+    const [sample] = buildContentionSamples(
+      reading({
+        navigations: [navigation(1_000), navigation(2_000)],
+        probeAtMs: [8_000],
+        nowMs: 9_000,
+      }),
+    );
+    expect(sample?.windowToProbeMs).toBe(1_000);
+    expect(sample?.idleToProbeMs).toBe(1_000);
+  });
+
+  it('sorts probe instants the fixture appended in drain order', () => {
+    const [sample] = buildContentionSamples(
+      reading({ navigations: [navigation(0)], probeAtMs: [9_000, 2_000], nowMs: 12_000 }),
+    );
+    expect(sample?.idleToProbeMs).toBe(2_000);
+  });
+
+  it('ranks the report’s WORST navigation on it, not on the paced gap', () => {
+    // Ranking on `idleGapMs` would nominate whichever recording held the
+    // longest, on every single run.
+    const report = buildContentionReport({
+      test: 'spec',
+      status: 'passed',
+      readings: [
+        reading({
+          navigations: [navigation(0, '/held-a-long-time'), navigation(30_000, '/actually-slow')],
+          probeAtMs: [1_000, 40_000],
+          nowMs: 40_000,
+        }),
+      ],
+      drains: [],
+    });
+    expect(report.idleGap.maxMs).toBe(30_000);
+    expect(report.worst?.url).toBe('/actually-slow');
+    expect(report.idleToProbe.maxMs).toBe(10_000);
+  });
+});
+
+describe('buildContentionReport — the sidecar (MOTIR-2646)', () => {
+  it('orders documents by their time origin, so a hard navigation does not shuffle the run', () => {
+    // One reading per DOCUMENT, keyed by `performance.timeOrigin`: a sign-in
+    // reload starts a new origin whose page clock restarts at ~0, so the origin
+    // is the only thing that orders them.
+    const report = buildContentionReport({
+      test: 'acceptance-mcp-docs.spec.ts › the MCP docs',
+      status: 'passed',
+      readings: [
+        reading({ timeOrigin: 2_000, navigations: [navigation(10, '/second')], nowMs: 20 }),
+        reading({ timeOrigin: 1_000, navigations: [navigation(10, '/first')], nowMs: 20 }),
+      ],
+      drains: [],
+    });
+    expect(report.samples.map((sample) => sample.url)).toEqual(['/first', '/second']);
+    expect(report.navigations).toBe(2);
+  });
+
+  it('names the WORST navigation — the run’s closest approach to the stall', () => {
+    const report = buildContentionReport({
+      test: 'spec',
+      status: 'passed',
+      readings: [
+        reading({
+          navigations: [navigation(0, '/quiet'), navigation(1_000, '/slow')],
+          resourceEndsMs: [900],
+          nowMs: 40_000,
+        }),
+      ],
+      drains: [],
+    });
+    expect(report.worst?.url).toBe('/slow');
+    expect(report.idleGap.maxMs).toBe(39_000);
+  });
+
+  it('summarises drain latency over the drains that ANSWERED, and counts the rest', () => {
+    // A probe that never came back is not a missing sample — it is the strongest
+    // reading the instrument can take, so it is counted rather than averaged in.
+    const report = buildContentionReport({
+      test: 'spec',
+      status: 'passed',
+      readings: [],
+      drains: [
+        drain({ latencyMs: 2 }),
+        drain({ latencyMs: 40 }),
+        drain({ latencyMs: 2_001, timedOut: true }),
+      ],
+    });
+    expect(report.drainLatency).toEqual({ count: 2, medianMs: 2, p90Ms: 40, maxMs: 40 });
+    expect(report.unresponsiveDrains).toBe(1);
+    expect(report.drains).toHaveLength(3);
+  });
+
+  it('stamps itself with the card and the test, and survives a recording with nothing in it', () => {
+    const report = buildContentionReport({
+      test: 'spec › nothing happened',
+      status: 'passed',
+      readings: [],
+      drains: [],
+    });
+    expect(report).toMatchObject({
+      card: 'MOTIR-2646',
+      test: 'spec › nothing happened',
+      status: 'passed',
+      navigations: 0,
+      unresponsiveDrains: 0,
+      worst: null,
+    });
+  });
+});
+
+describe('the long-task threshold is the API’s own (MOTIR-2646)', () => {
+  it('stays at 50 ms — the value the browser reports against', () => {
+    // Not a tuning knob: the browser decides what to emit, and blocking time is
+    // defined against the same number. Moving it here would silently redefine
+    // `blockingMs` into something no other tool computes.
+    expect(LONG_TASK_MS).toBe(50);
   });
 });

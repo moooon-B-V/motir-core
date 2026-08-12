@@ -11,6 +11,7 @@ import {
   Columns3,
   GitBranch,
   History,
+  House,
   Inbox,
   LayoutDashboard,
   LayoutList,
@@ -217,6 +218,23 @@ export function SidebarNav({
   if (hasProject) {
     const primaryItems: SidebarItem[] = [
       {
+        // The signed-in landing surface (Story MOTIR-2649 · Subtask
+        // MOTIR-2654, design/home/ Panel A) — the FIRST primary entry, above
+        // Dashboard, because it is where signing in now lands and where a
+        // reader goes to ask "what is waiting on me". `/dashboard` keeps its
+        // route AND the row below: nothing is re-homed.
+        //
+        // ⚠️ WORKSPACE-scoped, not project-scoped — which is why the same row
+        // is ALSO rendered in the no-project state further down. Every other
+        // entry in this list needs a project; Home does not, and a reader who
+        // has just signed in without one still has to be able to get back to
+        // the page they landed on.
+        icon: <House />,
+        label: t('nav.home'),
+        href: '/home',
+        active: isActive(pathname, '/home'),
+      },
+      {
         icon: <LayoutDashboard />,
         label: t('nav.dashboard'),
         href: '/dashboard',
@@ -324,6 +342,26 @@ export function SidebarNav({
       (item) => item.href === ONBOARDING_RESUME_PATH || canOfferNavDestination(item.href, held),
     );
     sections.push({ id: 'primary', items: offered });
+  }
+
+  // NO ACTIVE PROJECT — Home is still reachable (Subtask MOTIR-2654). Every
+  // other primary entry is project-scoped and correctly absent here, but Home is
+  // workspace-scoped: it works with no project (it renders its empty state), and
+  // signing in lands here, so a reader in this state would otherwise have no nav
+  // row back to the page they arrived on. One row, no section label — the same
+  // shape the primary section takes when a project IS active.
+  if (!hasProject) {
+    sections.push({
+      id: 'primary',
+      items: [
+        {
+          icon: <House />,
+          label: t('nav.home'),
+          href: '/home',
+          active: isActive(pathname, '/home'),
+        },
+      ],
+    });
   }
 
   // THE AREA DOOR (Subtask MOTIR-2468, design panel 1). With an active project

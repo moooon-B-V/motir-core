@@ -1,5 +1,11 @@
 import { Prisma, type Watcher } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
+import {
+  HOME_WORK_ITEM_SELECT,
+  homeKeysetWhere,
+  type HomeCursor,
+  type HomeWorkItemRow,
+} from '@/lib/repositories/workItemRepository';
 
 // Watcher repository — single Prisma operations on the `watcher` table
 // (Story 5.4 · Subtask 5.4.1). The persistence leaf under watchersService
@@ -65,6 +71,98 @@ export const watcherRepository = {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+  },
+
+  /**
+   * One PAGE of the items a USER watches, within a workspace — the Watching tab
+   * of Home (Story MOTIR-2649 · Subtask MOTIR-2651). The read this repository
+   * did not have: every method above answers a question about ONE item's
+   * roster; this one answers "what am I watching", which is the axis
+   * `model Watcher`'s `@@index([userId])` was added for (its own comment says
+   * so: *"the issues I watch read path"*).
+   *
+   * Projects the SAME {@link HomeWorkItemRow} the My work read returns, through
+   * the `workItem` relation, so the two tabs cannot drift into different
+   * columns — and orders by the same total `(workItem.updatedAt DESC,
+   * workItem.id DESC)` keyset, so both tabs page by identical rules and one
+   * cursor type serves both.
+   *
+   * `projectIds` is the actor's BROWSABLE set, passed IN by `homeService` for
+   * the same reason as the My work read: filtering after the query shortens
+   * pages instead of erroring. An empty set short-circuits.
+   *
+   * ⚠️ Watching is NOT a partition of My work. An item the reader owns AND
+   * watches is returned by both reads, deliberately — they answer different
+   * questions about the same item.
+   *
+   * ⚠️ `tx` is REQUIRED even though this is a read, for the same reason
+   * `quickLinkRepository`'s reads are: `work_item` is RLS-gated on
+   * `app.workspace_id`, and that GUC is bound by `withWorkspaceContext`'s
+   * transaction — so the same call through the `db` singleton would run with an
+   * unset GUC and, under the non-bypass runtime role, return NOTHING. An
+   * optional `tx` here is an invitation to write a read that silently yields an
+   * empty list in production and passes every test, since tests connect as the
+   * superuser and bypass RLS. `take` is required for a duller reason: the page
+   * size is `homeService`'s to decide (`HOME_PAGE_SIZE`), and a second default
+   * here would be a number nobody reads.
+   *
+   * The trailing `.map` is a PROJECTION, not logic: one Prisma op, unwrapped to
+   * the row shape the mapper takes.
+   */
+  async listByUser(
+    userId: string,
+    workspaceId: string,
+    options: {
+      projectIds: readonly string[];
+      take: number;
+      cursor?: HomeCursor | null;
+    },
+    tx: Prisma.TransactionClient,
+  ): Promise<HomeWorkItemRow[]> {
+    const { projectIds, take, cursor } = options;
+    if (projectIds.length === 0) return [];
+    const rows = await tx.watcher.findMany({
+      where: {
+        userId,
+        workItem: {
+          workspaceId,
+          projectId: { in: [...projectIds] },
+          archivedAt: null,
+          triagedAt: null, // read-exclusion (6.11.3), same as every list read
+          ...homeKeysetWhere(cursor),
+        },
+      },
+      select: { workItem: { select: HOME_WORK_ITEM_SELECT } },
+      orderBy: [{ workItem: { updatedAt: 'desc' } }, { workItem: { id: 'desc' } }],
+      take,
+    });
+    return rows.map((r) => r.workItem);
+  },
+
+  /**
+   * How many items the Watching read would return — the tab's count badge
+   * (Subtask MOTIR-2653). Same predicate as {@link listByUser} minus the
+   * keyset, so the number beside the tab is the number the tab will show.
+   * Required `tx` for the same RLS reason as {@link listByUser}.
+   */
+  async countByUser(
+    userId: string,
+    workspaceId: string,
+    projectIds: readonly string[],
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    if (projectIds.length === 0) return 0;
+    return tx.watcher.count({
+      where: {
+        userId,
+        workItem: {
+          workspaceId,
+          projectId: { in: [...projectIds] },
+          archivedAt: null,
+          triagedAt: null,
+        },
+      },
     });
   },
 

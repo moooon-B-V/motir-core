@@ -746,6 +746,7 @@
   },
   "shell": {
     "nav": {
+      "home": "Home",
       "dashboard": "Dashboard",
       "issues": "Work Items",
       "ready": "Ready",
@@ -6058,5 +6059,47 @@
       "bodyDesign": "A design result appears here when this card’s pull request runs CI — the note, the page/view mock and the screenshot are published automatically. Nothing to upload."
     },
     "frameLoading": "Loading the mock…"
+  },
+  "home": {
+    "heading": "Home",
+    "subtitle": "Everything across {workspace} that is waiting on you.",
+    "tabs": {
+      "label": "Home views",
+      "myWork": "My work",
+      "watching": "Watching"
+    },
+    "columns": {
+      "title": "Title",
+      "project": "Project",
+      "role": "Your role",
+      "assignee": "Assignee",
+      "status": "Status"
+    },
+    "row": {
+      "unassigned": "Unassigned",
+      "agentExecuting": "An agent is executing this item",
+      "role": {
+        "assigned": "Assigned",
+        "reported": "Reported",
+        "both": "Both",
+        "watching": "Watching"
+      }
+    },
+    "empty": {
+      "myWork": {
+        "title": "Nothing is waiting on you",
+        "body": "Work you are assigned or filed will show up here. Pick something up from Ready to get started.",
+        "action": "Find something to start"
+      },
+      "watching": {
+        "title": "You are not watching anything",
+        "body": "Watch an item from its detail page to follow it without owning it."
+      }
+    },
+    "pager": {
+      "next": "Next",
+      "startOver": "Back to the top",
+      "end": "That's everything."
+    }
   }
 }

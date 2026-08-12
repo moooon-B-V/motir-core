@@ -100,6 +100,11 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'filter-builder.spec.ts': 20.0,
   'github.spec.ts': 7.1,
   'gitlab.spec.ts': 4.9,
+  // Story MOTIR-2649 · Subtask MOTIR-2656 — three tests: the journey, the two
+  // shell affordances (rail + bell), and the workspace-scope check. Seeds two
+  // projects and five items through the services, so the cost is mostly fixture
+  // build; measured against the other seed-then-signIn specs of this shape.
+  'home.spec.ts': 8.0,
   'import.spec.ts': 7.4,
   'issue-create-edit-flow.spec.ts': 14.1,
   'issue-detail-flow.spec.ts': 46.7,

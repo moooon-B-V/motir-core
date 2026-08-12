@@ -1,6 +1,5 @@
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { githubIdentityService } from '@/lib/services/githubIdentityService';
@@ -16,6 +15,7 @@ import type {
   ProjectRepoTeamAccessDto,
   ProjectRepoTeamAccessRowDto,
 } from '@/lib/dto/projectRepos';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // COLLABORATOR ACCESS — getting the TEAM into the code Motir made them (Story
 // MOTIR-1775 · MOTIR-1900, generalised by MOTIR-1910).
@@ -479,7 +479,7 @@ async function resolveCandidates(projectId: string, ctx: ServiceContext): Promis
   // level that scopes the enumeration), and every caller has already been gated —
   // `listByProject` asserts browse, `grantTeamAccess` asserts edit — so routing it
   // through a second gating service would re-run a check that has already passed.
-  const project = await projectRepository.findById(projectId);
+  const project = await readProject(projectId, ctx);
   if (!project || project.workspaceId !== ctx.workspaceId) return [];
   const members = await assignableMembersService.list({
     projectId,

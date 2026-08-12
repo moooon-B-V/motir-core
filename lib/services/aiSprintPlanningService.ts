@@ -11,7 +11,6 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
 
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -19,6 +18,7 @@ import { backlogService } from '@/lib/services/backlogService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // AI SPRINT PLANNING (Story 7.13 · Subtask 7.13.5 · MOTIR-918) — the motir-core
 // half of the `plan_sprint` seam: SUBMIT the packing job, STREAM its progress,
@@ -111,7 +111,7 @@ const SCHEDULABLE_KINDS = new Set(['subtask', 'task', 'bug']);
  * thing `autoPlanCadenceService` does for the auto-plan columns).
  */
 async function loadProjectSettings(ctx: ProjectContext) {
-  const project = await projectRepository.findById(ctx.projectId);
+  const project = await readProject(ctx.projectId, ctx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
     throw new ProjectNotFoundError(ctx.projectId);
   }

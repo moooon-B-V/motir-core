@@ -124,7 +124,10 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(ORIGINAL_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-  await page.waitForURL('**/dashboard');
+  // SIGN-IN lands on `/home` (MOTIR-2654); sign-UP still lands on `/dashboard`
+  // (see the wait after "Create account" above). The two are deliberately
+  // different destinations, so this file waits for each on its own.
+  await page.waitForURL('**/home');
   // See assertSignedInAs docstring (Finding #17) — same re-anchor onto
   // the Account-menu popover as the post-sign-up assertion above.
   await assertSignedInAs(page, TEST_EMAIL);
@@ -166,7 +169,7 @@ test('@smoke credentials happy path: sign-up, sign-out, sign-in, reset, new-pass
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByPlaceholder('Password').fill(NEW_PASSWORD);
   await page.getByRole('button', { name: /^(Continue|Signing in…)$/ }).click();
-  await page.waitForURL('**/dashboard');
+  await page.waitForURL('**/home');
 
   // Sign-in attempt with the OLD password fails with the inline error.
   await signOut(page);

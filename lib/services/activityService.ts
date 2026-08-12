@@ -60,6 +60,7 @@ import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
+import { readWorkItem } from '@/lib/workspaces/tenantRead';
 
 /** Displayable entries per page — the History tab's "Show more" stride. */
 export const ACTIVITY_PAGE_SIZE = 20;
@@ -255,7 +256,7 @@ export const activityService = {
     ctx: ServiceContext,
   ): Promise<ActivityHistoryPageDto> {
     const order = options.order ?? 'desc';
-    const item = await workItemRepository.findById(workItemId);
+    const item = await readWorkItem(workItemId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(workItemId);
     }
@@ -308,7 +309,7 @@ export const activityService = {
     const order = options.order ?? 'desc';
     const cursor = decodeAllCursor(options.cursor);
 
-    const item = await workItemRepository.findById(workItemId);
+    const item = await readWorkItem(workItemId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(workItemId);
     }

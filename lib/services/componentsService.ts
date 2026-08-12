@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { componentRepository } from '@/lib/repositories/componentRepository';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
@@ -28,6 +27,7 @@ import type {
   UpdateComponentInput,
 } from '@/lib/dto/components';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { readProject, readProjectByIdentifier } from '@/lib/workspaces/tenantRead';
 
 // componentsService (Story 5.4 · Subtask 5.4.3) — the taxonomy half: the
 // admin-managed component CRUD (Jira company-managed "Project settings →
@@ -89,7 +89,7 @@ function normalizeComponentName(raw: string): string {
  */
 async function resolveProject(key: string, ctx: WorkspaceContext): Promise<Project> {
   const identifier = key.trim().toUpperCase();
-  const project = await projectRepository.findByIdentifier(ctx.workspaceId, identifier);
+  const project = await readProjectByIdentifier(identifier, ctx);
   if (!project) throw new ProjectNotFoundError(key);
   return project;
 }
@@ -319,7 +319,7 @@ export const componentsService = {
 
     const pre = await resolveComponent(componentId, ctx);
     if (patch.defaultAssigneeId != null) {
-      const project = await projectRepository.findById(pre.projectId);
+      const project = await readProject(pre.projectId, ctx);
       if (!project) throw new ProjectNotFoundError(pre.projectId);
       await assertDefaultAssigneeEligible(patch.defaultAssigneeId, project, ctx);
     }

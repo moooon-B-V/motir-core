@@ -3,12 +3,12 @@ import 'server-only';
 import { submitJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { projectRepository } from '@/lib/repositories/projectRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { BugAnalysisContext, BugAnalysisPlanNode } from '@/lib/ai/types';
+import { readProject } from '@/lib/workspaces/tenantRead';
 
 // The OUTWARD self-improving loop's INPUT arm (Story 7.6 · MOTIR-1481) — the
 // DISPATCH side of the boundary for user-bug telemetry. The `work-item/created`
@@ -88,7 +88,7 @@ export const aiBugTelemetryService = {
     if (bug.kind !== 'bug') return { dispatched: false, reason: 'not-a-bug' };
 
     // The bug's project key gates the meta-project skip AND rides the tenant.
-    const project = await projectRepository.findById(trigger.projectId);
+    const project = await readProject(trigger.projectId, ctx);
     const projectKey = project?.identifier;
     if (!projectKey) return { dispatched: false, reason: 'not-a-bug' };
     if (projectKey === META_PROJECT_KEY) return { dispatched: false, reason: 'meta-project' };
