@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemDetailSchema } from '@/lib/api/v1/workItems/schema';
 import { workItemsService } from '@/lib/services/workItemsService';
@@ -7,6 +6,7 @@ import { isValidOrderKey } from '@/lib/workItems/positioning';
 import { createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // POST /api/v1/projects/{projectKey}/work-items + PATCH /api/v1/work-items/{key}
@@ -87,7 +87,7 @@ describe('POST /api/v1/projects/{projectKey}/work-items', () => {
     const res = await post(caller, { kind: 'task', title: 'Attributed' });
     const { key } = (await res.json()) as { key: string };
 
-    const row = await db.workItem.findFirst({ where: { identifier: key } });
+    const row = await adminDb.workItem.findFirst({ where: { identifier: key } });
 
     expect(row?.planningSource).toBe('api');
   });
@@ -143,7 +143,7 @@ describe('POST /api/v1/projects/{projectKey}/work-items', () => {
 
     expect(res.status, JSON.stringify(body)).toBe(201);
 
-    const rows = await db.workItem.findMany({
+    const rows = await adminDb.workItem.findMany({
       where: { projectId: caller.fixture.projectId, parentId: null },
       orderBy: { position: 'asc' },
       select: { identifier: true, position: true },

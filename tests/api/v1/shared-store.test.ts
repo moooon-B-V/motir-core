@@ -19,6 +19,7 @@ import {
 import { rateLimitCounterRepository } from '@/lib/repositories/rateLimitCounterRepository';
 import { rateLimitService } from '@/lib/services/rateLimitService';
 import { createV1Caller, withTokenFor } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../../helpers/db';
 import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../../helpers/rateLimitWindow';
 
@@ -102,6 +103,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the wrapper counts through the SHARED store by default', () => {

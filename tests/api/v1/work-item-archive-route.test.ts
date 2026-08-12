@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { resetRateLimitStore } from '@/lib/api/v1/rateLimit';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { createTestWorkItem } from '../../fixtures';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // POST /api/v1/work-items/{key}/archive and /restore
@@ -59,12 +59,14 @@ describe('POST /api/v1/work-items/{key}/archive and /restore', () => {
     const archived = await call(ARCHIVE, 'POST', item.identifier, caller);
     expect(archived.status).toBe(200);
     await expect(archived.json()).resolves.toMatchObject({ archivedAt: expect.any(String) });
-    expect((await db.workItem.findUnique({ where: { id: item.id } }))?.archivedAt).not.toBeNull();
+    expect(
+      (await adminDb.workItem.findUnique({ where: { id: item.id } }))?.archivedAt,
+    ).not.toBeNull();
 
     const restored = await call(RESTORE, 'POST', item.identifier, caller);
     expect(restored.status).toBe(200);
     await expect(restored.json()).resolves.toMatchObject({ archivedAt: null });
-    expect((await db.workItem.findUnique({ where: { id: item.id } }))?.archivedAt).toBeNull();
+    expect((await adminDb.workItem.findUnique({ where: { id: item.id } }))?.archivedAt).toBeNull();
   });
 
   it('does NOT touch children — archive is single-node', async () => {
@@ -77,7 +79,7 @@ describe('POST /api/v1/work-items/{key}/archive and /restore', () => {
 
     await call(ARCHIVE, 'POST', parent.identifier, caller);
 
-    expect((await db.workItem.findUnique({ where: { id: child.id } }))?.archivedAt).toBeNull();
+    expect((await adminDb.workItem.findUnique({ where: { id: child.id } }))?.archivedAt).toBeNull();
   });
 
   it('an archived item LEAVES the collection and returns on restore', async () => {
@@ -158,7 +160,8 @@ describe('POST /api/v1/work-items/{key}/archive and /restore', () => {
     await call(ARCHIVE, 'POST', item.identifier, caller);
 
     // Archived, NOT deleted — the row is still there and restorable.
-    expect(await db.workItem.findUnique({ where: { id: item.id } })).not.toBeNull();
+    const workItemRow = await adminDb.workItem.findUnique({ where: { id: item.id } });
+    expect(workItemRow).not.toBeNull();
     await call(RESTORE, 'POST', item.identifier, caller);
     const restored = await workItemsService.getWorkItemByIdentifier(
       caller.fixture.projectId,

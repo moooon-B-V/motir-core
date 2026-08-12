@@ -5,8 +5,8 @@ import type { MembershipMoveResult } from '@/lib/api/v1/sprints/membership';
 import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
-import { db } from '@/lib/db';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // POST /api/v1/sprints/{sprintId}/work-items and
@@ -248,14 +248,14 @@ describe('POST /api/v1/projects/{projectKey}/backlog/work-items', () => {
   it('is a NO-OP with no revision for an item already in the backlog', async () => {
     const caller = await writer();
     const item = await makeItem(caller, 'already here');
-    const before = await db.workItemRevision.count({ where: { workItemId: item.id } });
+    const before = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
 
     const res = await intoBacklog(caller, caller.projectKey, [item.identifier]);
 
     expect(res.status).toBe(200);
     // No write means no history entry: a client that re-sends a batch must not
     // pollute the item's revision trail.
-    const after = await db.workItemRevision.count({ where: { workItemId: item.id } });
+    const after = await adminDb.workItemRevision.count({ where: { workItemId: item.id } });
     expect(after).toBe(before);
   });
 
