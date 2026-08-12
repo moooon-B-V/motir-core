@@ -14,6 +14,7 @@ import {
   InvalidSnoozeUntilError,
 } from '@/lib/triage/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Triage ACTIONS (Subtask 6.11.5, per docs/decisions/triage-model.md §4/§5):
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function createItem(
@@ -42,11 +44,11 @@ async function createItem(
 
 /** Stand-in for the 6.11.4 intake path (not built yet): stamp the marker. */
 async function markTriage(id: string, snoozedUntil: Date | null = null): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { triagedAt: new Date(), snoozedUntil } });
+  await adminDb.workItem.update({ where: { id }, data: { triagedAt: new Date(), snoozedUntil } });
 }
 
 async function read(id: string) {
-  const row = await db.workItem.findUniqueOrThrow({ where: { id } });
+  const row = await adminDb.workItem.findUniqueOrThrow({ where: { id } });
   return row;
 }
 
@@ -165,7 +167,7 @@ describe('triageService.markDuplicateTriageItem', () => {
 
     // Give the duplicate a comment + an attachment to fold.
     await commentsService.addComment(duplicate.id, { bodyMd: 'I hit this too' }, fx.ctx);
-    await db.attachment.create({
+    await adminDb.attachment.create({
       data: {
         workspaceId: fx.workspaceId,
         uploaderUserId: fx.ctx.userId,

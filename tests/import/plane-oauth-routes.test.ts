@@ -9,6 +9,7 @@ import { planeImportOAuthService } from '@/lib/services/planeImportOAuthService'
 import { createTokenCrypto } from '@/lib/crypto/tokenCrypto';
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.16 · MOTIR-1656 — HTTP smoke for the two Plane import "Connect" OAuth
@@ -111,6 +112,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/import/plane/oauth/start', () => {

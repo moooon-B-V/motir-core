@@ -18,6 +18,7 @@ import { usersService } from '@/lib/services/usersService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture } from '../fixtures';
 
@@ -28,7 +29,7 @@ import { makeWorkItemFixture } from '../fixtures';
 // error.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 beforeEach(truncateAll);
@@ -87,7 +88,8 @@ describe('importService', () => {
     );
     expect(result.counts).toEqual({ create: 2, update: 0, skip: 0 });
     // No writes happened.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
 
     const after = await importService.getImport(draft.id, fx.ctx);
     expect(after.status).toBe('previewed');
@@ -111,7 +113,7 @@ describe('importService', () => {
     for await (const p of gen) if (p.type === 'summary') summary = p.counts;
     expect(summary?.created).toBe(2);
 
-    const items = await db.workItem.findMany({ where: { projectId: fx.projectId } });
+    const items = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
     expect(items).toHaveLength(2);
     const finished = await importService.getImport(draft.id, fx.ctx);
     expect(finished.status).toBe('succeeded');
@@ -155,7 +157,8 @@ describe('importService', () => {
     expect(result.vocabulary.priorities).toContain('Medium');
     expect(result.vocabulary.priorities).toContain('High');
     // No writes happened (read-only probe).
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
   });
 
   it('a live source with no connected identity is rejected (ImportSourceNotConnectedError)', async () => {
@@ -614,7 +617,7 @@ describe('importService.buildConnector — the GitHub identity', () => {
   /** The identity the 7.10 OAuth grant writes — the row the wizard's badge and
    *  (now) the importer both read. */
   async function connectGithub(userId: string, token = TOKEN): Promise<void> {
-    await db.githubIdentity.create({
+    await adminDb.githubIdentity.create({
       data: {
         userId,
         githubUserId: `gh-${userId}`,
@@ -701,7 +704,7 @@ describe('importService — the import:run gate', () => {
         password: 'hunter2hunter2',
         name: slug,
       });
-      await db.workspaceMembership.create({
+      await adminDb.workspaceMembership.create({
         data: { userId: user.id, workspaceId: fx.workspaceId, role: 'member' },
       });
       await projectMembersService.addMember({

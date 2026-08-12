@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-2221 — the `clear_cancelled_manual_provenance` forward data migration.
@@ -37,11 +38,11 @@ const MIGRATION_SQL = readFileSync(
  * make comment-stripping unsafe).
  */
 async function runMigration(): Promise<void> {
-  await db.$executeRawUnsafe(MIGRATION_SQL);
+  await adminDb.$executeRawUnsafe(MIGRATION_SQL);
 }
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "github_pull_request", "github_repo", "github_installation", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -53,6 +54,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A work item in a given terminal state, carrying a given stamp/branch. */
@@ -66,7 +68,7 @@ async function seedItem(
   },
 ) {
   const item = await createTestWorkItem(fx, { kind: 'task', title });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: item.id },
     data: {
       status: over.status ?? 'cancelled',
@@ -81,7 +83,7 @@ async function seedItem(
 
 /** A connected repo + a PR row pointing at `workItemId` (the byok evidence). */
 async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: number) {
-  const inst = await db.githubInstallation.create({
+  const inst = await adminDb.githubInstallation.create({
     data: {
       installationId: `inst-2221-${number}`,
       workspaceId: fx.workspaceId,
@@ -90,7 +92,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: 
       provider: 'github',
     },
   });
-  const repo = await db.githubRepo.create({
+  const repo = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -102,7 +104,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: 
       provider: 'github',
     },
   });
-  await db.githubPullRequest.create({
+  await adminDb.githubPullRequest.create({
     data: {
       provider: 'github',
       repoId: repo.id,
@@ -116,7 +118,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string, number: 
 }
 
 const stampOf = async (id: string) =>
-  (await db.workItem.findUniqueOrThrow({ where: { id } })).implementationSource;
+  (await adminDb.workItem.findUniqueOrThrow({ where: { id } })).implementationSource;
 
 describe('clear_cancelled_manual_provenance — clears exactly the rows the bug wrote', () => {
   it('clears the false stamp from a cancelled, manual-stamped, evidence-free row', async () => {
@@ -127,7 +129,7 @@ describe('clear_cancelled_manual_provenance — clears exactly the rows the bug 
 
     expect(await stampOf(abandoned.id)).toBeNull();
     // Only the stamp moved — the migration is not a status or lifecycle write.
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: abandoned.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: abandoned.id } });
     expect(row.status).toBe('cancelled');
     expect(row.archivedAt).toBeNull();
   });
@@ -138,14 +140,23 @@ describe('clear_cancelled_manual_provenance — clears exactly the rows the bug 
     await seedItem(fx, 'Done, legitimately manual', { status: 'done' });
     await seedItem(fx, 'Cancelled but agent-reported', { implementationSource: 'byok' });
 
-    const affected = await db.$executeRawUnsafe(MIGRATION_SQL);
+    // The MIGRATION's own SQL, replayed as the owner (MOTIR-2753) — a `DO` block is DDL-
+    // adjacent and the runtime role must never be able to run one.
+    const affected = await adminDb.$executeRawUnsafe(MIGRATION_SQL);
     // A `DO` block returns no row count of its own, so assert the effect: three
     // cleared, and nothing else touched. (The block RAISEs the same number as a
     // NOTICE, which is what a release log shows the operator.)
     expect(affected).toBe(0);
-    expect(await db.workItem.count({ where: { implementationSource: 'manual' } })).toBe(1);
-    expect(await db.workItem.count({ where: { implementationSource: null } })).toBe(3);
-    expect(await db.workItem.count({ where: { implementationSource: 'byok' } })).toBe(1);
+    const workItemCount = await adminDb.workItem.count({
+      where: { implementationSource: 'manual' },
+    });
+    expect(workItemCount).toBe(1);
+    const workItemCount2 = await adminDb.workItem.count({ where: { implementationSource: null } });
+    expect(workItemCount2).toBe(3);
+    const workItemCount3 = await adminDb.workItem.count({
+      where: { implementationSource: 'byok' },
+    });
+    expect(workItemCount3).toBe(1);
   });
 
   it('writes ZERO on a second apply — the clear falls out of its own predicate', async () => {
@@ -153,10 +164,10 @@ describe('clear_cancelled_manual_provenance — clears exactly the rows the bug 
     const abandoned = await seedItem(fx, 'Cancelled', {});
 
     await runMigration();
-    const afterFirst = await db.workItem.findUniqueOrThrow({ where: { id: abandoned.id } });
+    const afterFirst = await adminDb.workItem.findUniqueOrThrow({ where: { id: abandoned.id } });
 
     await runMigration();
-    const afterSecond = await db.workItem.findUniqueOrThrow({ where: { id: abandoned.id } });
+    const afterSecond = await adminDb.workItem.findUniqueOrThrow({ where: { id: abandoned.id } });
 
     expect(afterSecond.implementationSource).toBeNull();
     // Idempotent means UNWRITTEN, not merely "same value": a re-write would bump
@@ -168,7 +179,10 @@ describe('clear_cancelled_manual_provenance — clears exactly the rows the bug 
     const fx = await makeWorkItemFixture();
     await seedItem(fx, 'Plain todo', { status: 'todo', implementationSource: null });
     await runMigration();
-    expect(await db.workItem.count({ where: { implementationSource: { not: null } } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({
+      where: { implementationSource: { not: null } },
+    });
+    expect(workItemCount).toBe(0);
   });
 });
 
@@ -226,7 +240,7 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
 
   it('an unlinked PR row (workItemId null) shields nothing', async () => {
     const fx = await makeWorkItemFixture();
-    const inst = await db.githubInstallation.create({
+    const inst = await adminDb.githubInstallation.create({
       data: {
         installationId: 'inst-2221-unlinked',
         workspaceId: fx.workspaceId,
@@ -235,7 +249,7 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
         provider: 'github',
       },
     });
-    const repo = await db.githubRepo.create({
+    const repo = await adminDb.githubRepo.create({
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
@@ -247,7 +261,7 @@ describe('clear_cancelled_manual_provenance — every other row is left alone', 
         provider: 'github',
       },
     });
-    await db.githubPullRequest.create({
+    await adminDb.githubPullRequest.create({
       data: {
         provider: 'github',
         repoId: repo.id,

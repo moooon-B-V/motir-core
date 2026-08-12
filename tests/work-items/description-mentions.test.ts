@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import type { WorkItemMentionedData } from '@/lib/jobs/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Description-mention parity (Story 5.1 · Subtask 5.1.6): mentions in a work
@@ -32,6 +33,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Capture every `work-item/mentioned` publish (and block the network). */
@@ -88,14 +90,15 @@ describe('createWorkItem — description mentions', () => {
     expect(evt.authorId).toBe(s.fx.ownerId);
     expect(evt.mentionedUserIds).toEqual([s.member.id]);
 
-    const revision = await db.workItemRevision.findFirst({
+    const revision = await adminDb.workItemRevision.findFirst({
       where: { workItemId: dto.id, changeKind: 'created' },
     });
     expect(revision).not.toBeNull();
     expect(evt.revisionId).toBe(revision!.id);
 
     // Notification-only: NO comment_mention substrate for description mentions.
-    expect(await db.commentMention.count()).toBe(0);
+    const commentMentionCount = await adminDb.commentMention.count();
+    expect(commentMentionCount).toBe(0);
   });
 
   it('silently drops non-member ids and emits nothing when none survive', async () => {
@@ -196,7 +199,7 @@ describe('updateWorkItem — description-mention diff', () => {
     expect(events).toHaveLength(1);
     expect(events[0]!.mentionedUserIds).toEqual([second.id]);
 
-    const updateRevision = await db.workItemRevision.findFirst({
+    const updateRevision = await adminDb.workItemRevision.findFirst({
       where: { workItemId: dto.id, changeKind: 'updated' },
     });
     expect(events[0]!.revisionId).toBe(updateRevision!.id);

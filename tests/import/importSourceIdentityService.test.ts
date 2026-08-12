@@ -7,6 +7,7 @@ import { importSourceIdentityService } from '@/lib/services/importSourceIdentity
 import { importSourceIdentityRepository } from '@/lib/repositories/importSourceIdentityRepository';
 import { createTokenCrypto } from '@/lib/crypto/tokenCrypto';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.16 · MOTIR-1653 — the per-user import-source OAuth identity store,
@@ -73,6 +74,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('importSourceIdentityService.upsertIdentity', () => {

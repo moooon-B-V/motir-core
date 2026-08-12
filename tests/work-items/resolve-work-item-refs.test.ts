@@ -6,6 +6,7 @@ import { parseWorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Read-side reference resolution (Story 5.8 · Subtask 5.8.6) — the batched
@@ -27,6 +28,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function makeItem(

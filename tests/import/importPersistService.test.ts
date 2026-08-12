@@ -16,6 +16,7 @@ import type {
   SourceIssuePage,
 } from '@/lib/import/connectors/types';
 import { UnknownStatusError, IllegalTransitionError } from '@/lib/workItems/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures/workItemFixtures';
@@ -30,7 +31,7 @@ import type { WorkItemFixture } from '../fixtures/workItemFixtures';
 // done-category status.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "work_item" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
 }
 
@@ -83,7 +84,7 @@ function fakeConnector(
 }
 
 async function makeDraftImport(fx: WorkItemFixture, source = 'jira' as const): Promise<string> {
-  const row = await db.$transaction((tx) =>
+  const row = await adminDb.$transaction((tx) =>
     importRepository.create(
       { workspaceId: fx.workspaceId, projectId: fx.projectId, source, createdById: fx.ownerId },
       tx,
@@ -144,7 +145,7 @@ describe('importPersistService.runImport', () => {
     expect(summary.status).toBe('succeeded');
 
     // Both items exist — through the real service (so tenant + validation ran).
-    const items = await db.workItem.findMany({
+    const items = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       orderBy: { key: 'asc' },
     });
@@ -166,7 +167,7 @@ describe('importPersistService.runImport', () => {
     expect(imp?.createdCount).toBe(2);
 
     // Labels were applied via the sibling service.
-    const labels = await db.label.findMany({ where: { workspaceId: fx.workspaceId } });
+    const labels = await adminDb.label.findMany({ where: { workspaceId: fx.workspaceId } });
     expect(labels.map((l) => l.name).sort()).toEqual(['imported', 'ux']);
   });
 
@@ -190,7 +191,7 @@ describe('importPersistService.runImport', () => {
       ),
     );
     expect(run1.counts).toMatchObject({ created: 2, updated: 0 });
-    const afterFirst = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const afterFirst = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(afterFirst).toBe(2);
 
     // Second run, IDENTICAL issues — all skip, zero new work items.
@@ -205,7 +206,8 @@ describe('importPersistService.runImport', () => {
       ),
     );
     expect(run2.counts).toMatchObject({ created: 0, updated: 0, skipped: 2 });
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(2);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(2);
 
     // Third run — ACME-1 changed at source → UPDATE the SAME work item, still no dupe.
     const mapBefore = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
@@ -223,11 +225,12 @@ describe('importPersistService.runImport', () => {
       ),
     );
     expect(run3.counts).toMatchObject({ created: 0, updated: 1, skipped: 1 });
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(2);
+    const workItemCount2 = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount2).toBe(2);
     const mapAfter = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'ACME-1');
     // Same mapped work item; the edited title is now on it.
     expect(mapAfter?.workItemId).toBe(mapBefore?.workItemId);
-    const edited = await db.workItem.findUnique({ where: { id: mapAfter!.workItemId } });
+    const edited = await adminDb.workItem.findUnique({ where: { id: mapAfter!.workItemId } });
     expect(edited?.title).toBe('First (edited)');
   });
 
@@ -257,7 +260,7 @@ describe('importPersistService.runImport', () => {
 
     const parentMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'PARENT');
     const childMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'CHILD');
-    const child = await db.workItem.findUnique({ where: { id: childMap!.workItemId } });
+    const child = await adminDb.workItem.findUnique({ where: { id: childMap!.workItemId } });
     // Restored to subtask AND parented to the story (the deferred-parent path).
     expect(child?.kind).toBe('subtask');
     expect(child?.parentId).toBe(parentMap!.workItemId);
@@ -299,7 +302,7 @@ describe('importPersistService.runImport', () => {
     expect(warned).toBe(true);
     // The child of the (illegal) subtask parent was left unparented (not 500'd).
     const cMap = await importedIssueRepository.findBySourceId(fx.projectId, 'jira', 'C');
-    const c = await db.workItem.findUnique({ where: { id: cMap!.workItemId } });
+    const c = await adminDb.workItem.findUnique({ where: { id: cMap!.workItemId } });
     expect(c?.parentId).toBeNull();
   });
 
@@ -329,7 +332,8 @@ describe('importPersistService.runImport', () => {
     const summary = summaryOf(events);
     expect(summary.counts).toMatchObject({ created: 2, failed: 1 });
     expect(summary.status).toBe('partially_failed');
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(2);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(2);
     const failed = events.find((e) => e.type === 'item' && e.error);
     expect(failed && failed.type === 'item' && failed.externalId).toBe('BAD');
   });
@@ -361,7 +365,9 @@ describe('importPersistService.runImport', () => {
     const fx = await makeWorkItemFixture();
     const importId = await makeDraftImport(fx);
     // Mark it running out-of-band to simulate an in-flight run.
-    await db.$transaction((tx) => importRepository.update(importId, { status: 'running' }, tx));
+    await adminDb.$transaction((tx) =>
+      importRepository.update(importId, { status: 'running' }, tx),
+    );
 
     const gen = importPersistService.runImport({
       importId,

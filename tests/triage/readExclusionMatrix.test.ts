@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { boardsService } from '@/lib/services/boardsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // 6.11.8 — the COMPREHENSIVE read-exclusion guard (per docs/decisions/
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const SORT = { column: 'key', direction: 'asc' } as const;
@@ -67,7 +69,7 @@ async function createItem(
  *  `triagedAt`, so a tests-may-write-the-db marker is the faithful probe (the
  *  6.11.4 intake path produces the same column state). */
 async function markTriage(id: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { triagedAt: new Date() } });
+  await adminDb.workItem.update({ where: { id }, data: { triagedAt: new Date() } });
 }
 
 interface Matrix {

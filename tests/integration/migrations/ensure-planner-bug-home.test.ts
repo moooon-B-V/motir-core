@@ -9,6 +9,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { PLANNER_BUG_HOME_EPIC_TITLE, PLANNER_BUG_HOME_STORY_TITLE } from '@/lib/ai/plannerBugHome';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-1466 (follow-up) — the `ensure_planner_bug_home` data migration is the
@@ -38,7 +39,7 @@ async function runMigration(): Promise<void> {
     .map((s) => s.trim())
     .filter((s) => /\binsert\b/i.test(s)); // each of the two statements ends in an INSERT
   for (const stmt of statements) {
-    await db.$executeRawUnsafe(stmt);
+    await adminDb.$executeRawUnsafe(stmt);
   }
 }
 
@@ -48,6 +49,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A META tenant: `moooon` org with isMeta=true, a `motir` project, + the system
@@ -62,7 +64,7 @@ async function makeMetaTenant() {
     name: 'moooon',
     ownerUserId: owner.id,
   });
-  await db.$transaction((tx: Prisma.TransactionClient) =>
+  await adminDb.$transaction((tx: Prisma.TransactionClient) =>
     organizationRepository.update(workspace.organizationId, { isMeta: true }, tx),
   );
   const project = await projectsService.createProject({
@@ -76,10 +78,10 @@ async function makeMetaTenant() {
 }
 
 async function homeItems(projectId: string) {
-  const epic = await db.workItem.findFirst({
+  const epic = await adminDb.workItem.findFirst({
     where: { projectId, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
   });
-  const stories = await db.workItem.findMany({
+  const stories = await adminDb.workItem.findMany({
     where: { projectId, kind: 'story', ...(epic ? { parentId: epic.id } : {}) },
     orderBy: { key: 'asc' },
   });
@@ -103,7 +105,7 @@ describe('ensure_planner_bug_home migration (MOTIR-1466)', () => {
     // Identifiers derived from the project key + allocated number.
     expect(epic!.identifier).toMatch(/^MOTIR-\d+$/);
     // Reporter is the seeded system principal.
-    const sysUser = await db.user.findUnique({ where: { email: 'system@motir.internal' } });
+    const sysUser = await adminDb.user.findUnique({ where: { email: 'system@motir.internal' } });
     expect(epic!.reporterId).toBe(sysUser!.id);
   });
 
@@ -113,7 +115,7 @@ describe('ensure_planner_bug_home migration (MOTIR-1466)', () => {
     await runMigration();
 
     const { stories } = await homeItems(project.id);
-    const epics = await db.workItem.count({
+    const epics = await adminDb.workItem.count({
       where: { projectId: project.id, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
     });
     expect(epics).toBe(1);
@@ -132,11 +134,11 @@ describe('ensure_planner_bug_home migration (MOTIR-1466)', () => {
 
     await runMigration();
 
-    const epics = await db.workItem.count({
+    const epics = await adminDb.workItem.count({
       where: { projectId: project.id, kind: 'epic', title: PLANNER_BUG_HOME_EPIC_TITLE },
     });
     expect(epics).toBe(1); // adopted, not duplicated
-    const stories = await db.workItem.findMany({
+    const stories = await adminDb.workItem.findMany({
       where: { projectId: project.id, kind: 'story', parentId: epic.id },
     });
     expect(stories).toHaveLength(1);
@@ -165,7 +167,7 @@ describe('ensure_planner_bug_home migration (MOTIR-1466)', () => {
 
     await runMigration();
 
-    const stories = await db.workItem.findMany({
+    const stories = await adminDb.workItem.findMany({
       where: { projectId: project.id, kind: 'story', parentId: epic.id },
     });
     expect(stories).toHaveLength(1); // the existing child is adopted; none created
@@ -191,7 +193,7 @@ describe('ensure_planner_bug_home migration (MOTIR-1466)', () => {
 
     await runMigration(); // must not throw
 
-    const count = await db.workItem.count({ where: { projectId: project.id } });
+    const count = await adminDb.workItem.count({ where: { projectId: project.id } });
     expect(count).toBe(0);
   });
 });

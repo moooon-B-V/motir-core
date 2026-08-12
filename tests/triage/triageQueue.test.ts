@@ -14,6 +14,7 @@ import {
 } from '@/lib/triage/triageQueue';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Triage schema + read-exclusion invariant + the queue read (Subtask 6.11.3,
@@ -34,6 +35,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function createItem(
@@ -67,7 +69,7 @@ async function markTriage(
     submittedByUserId?: string;
   } = {},
 ) {
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id },
     data: {
       triagedAt: opts.triagedAt ?? new Date(),
