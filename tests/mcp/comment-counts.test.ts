@@ -58,11 +58,19 @@ const mk = (fx: WorkItemFixture, title: string) =>
 const say = (fx: WorkItemFixture, itemId: string, bodyMd: string, parentCommentId?: string) =>
   commentsService.addComment(itemId, { bodyMd, parentCommentId }, fx.ctx);
 
-/** Count REAL comment-aggregate queries issued while `run` executes. */
+/**
+ * Count REAL comment-aggregate queries issued while `run` executes.
+ *
+ * ⚠️ The spy MUST sit on `db` — the `@/lib/db` singleton the code under test
+ * reads through — NOT on `adminDb`. `adminDb` is for fixtures, teardown and
+ * existence-readbacks only (MOTIR-2513's two-client model); a spy on it counts
+ * a client the service never touches, so every assertion here silently
+ * measures 0 and passes only where 0 is expected.
+ */
 async function countCommentQueries<T>(
   run: () => Promise<T>,
 ): Promise<{ result: T; queries: number }> {
-  const spy = vi.spyOn(adminDb.comment, 'groupBy');
+  const spy = vi.spyOn(db.comment, 'groupBy');
   const result = await run();
   const queries = spy.mock.calls.length;
   spy.mockRestore();

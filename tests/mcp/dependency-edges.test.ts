@@ -79,9 +79,17 @@ const archive = (id: string) =>
 const markDone = (id: string) =>
   adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
-/** Count REAL `work_item_link` queries issued while `run` executes. */
+/**
+ * Count REAL `work_item_link` queries issued while `run` executes.
+ *
+ * ⚠️ The spy MUST sit on `db` — the `@/lib/db` singleton the code under test
+ * reads through — NOT on `adminDb`. `adminDb` is for fixtures, teardown and
+ * existence-readbacks only (MOTIR-2513's two-client model); a spy on it counts
+ * a client the repository never touches, so every assertion here silently
+ * measures 0 and passes only where 0 is expected.
+ */
 async function countLinkQueries<T>(run: () => Promise<T>): Promise<{ result: T; queries: number }> {
-  const spy = vi.spyOn(adminDb.workItemLink, 'findMany');
+  const spy = vi.spyOn(db.workItemLink, 'findMany');
   const result = await run();
   const queries = spy.mock.calls.length;
   spy.mockRestore();
