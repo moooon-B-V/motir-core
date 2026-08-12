@@ -6,6 +6,7 @@ import { organizationMembershipRepository } from '@/lib/repositories/organizatio
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { AlreadyOrgMemberError, LastOrgOwnerError } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // The exhaustive org-tier matrix (Story 6.10 · Subtask 6.10.7). Picks up the
@@ -21,10 +22,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function orgIdOfWorkspace(workspaceId: string): Promise<string> {
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   return ws.organizationId;
 }
 
@@ -198,7 +200,9 @@ describe('membership management — idempotency + the upward auto-join', () => {
     const m = await organizationMembershipRepository.findByOrgAndUser(orgId, admin.id);
     expect(m!.role).toBe('admin');
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, userId: admin.id } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: admin.id },
+      }),
     ).toBe(1);
   });
 });
@@ -302,7 +306,9 @@ describe('concurrency — the last-owner guard under a WARM pool (bug-org-last-o
     expect(rejected[0]!.reason).toBeInstanceOf(LastOrgOwnerError);
     // The invariant: exactly one owner survives — the org is never orphaned.
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, role: 'owner' },
+      }),
     ).toBe(1);
   });
 
@@ -341,7 +347,9 @@ describe('concurrency — the last-owner guard under a WARM pool (bug-org-last-o
     expect(rejected).toHaveLength(1);
     expect(rejected[0]!.reason).toBeInstanceOf(LastOrgOwnerError);
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, role: 'owner' },
+      }),
     ).toBe(1);
   });
 });
@@ -377,7 +385,9 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
     expect(rejected[0]!.reason).toBeInstanceOf(AlreadyOrgMemberError);
     // The unique (organizationId, userId) index left exactly one row.
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, userId: u.id } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: u.id },
+      }),
     ).toBe(1);
   });
 
@@ -398,7 +408,9 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
     // Neither rejects (the duplicate-insert race is swallowed to a no-op).
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, userId: u.id } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: u.id },
+      }),
     ).toBe(1);
   });
 
@@ -429,7 +441,9 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
       organizationsService.removeMember({ organizationId: orgId, userId: b.id, actorUserId: b.id }),
     ).rejects.toBeInstanceOf(LastOrgOwnerError);
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, role: 'owner' },
+      }),
     ).toBe(1);
   });
 });
@@ -489,10 +503,14 @@ describe('migration backfill (6.10.3) — one default org per workspace, idempot
     await workspacesService.createWorkspace({ name: 'Beta', ownerUserId: owner2.id });
     await workspacesService.addMember({ userId: member.id, workspaceId: w1.id });
 
-    const w1Slug = (await db.workspace.findUniqueOrThrow({ where: { id: w1.id } })).slug;
+    const w1Slug = (await adminDb.workspace.findUniqueOrThrow({ where: { id: w1.id } })).slug;
 
     try {
-      await db.$transaction(
+      // The ADMIN client: this block runs `ALTER TABLE` (which needs table
+      // OWNERSHIP) and `DELETE FROM "organization"` across every tenant. Both are
+      // privileges the runtime role must never hold, and the subject here is the
+      // migration SQL rather than anything about visibility.
+      await adminDb.$transaction(
         async (tx) => {
           // Reconstruct the legacy pre-org state: drop the NOT NULL, null every
           // workspace's org, then delete the orgs (org_membership cascades).

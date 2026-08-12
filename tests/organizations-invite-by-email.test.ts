@@ -8,6 +8,7 @@ import {
   OrgInviteeNotFoundError,
 } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for the 6.10.5 org-admin UI's "invite by email" backing —
@@ -21,10 +22,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function orgIdOfWorkspace(workspaceId: string): Promise<string> {
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   return ws.organizationId;
 }
 
@@ -45,7 +47,7 @@ describe('organizationsService.addMemberByEmail', () => {
       actorUserId: owner.id,
     });
 
-    const membership = await db.organizationMembership.findFirst({
+    const membership = await adminDb.organizationMembership.findFirst({
       where: { organizationId, userId: invitee.id },
     });
     expect(membership).not.toBeNull();
@@ -68,7 +70,7 @@ describe('organizationsService.addMemberByEmail', () => {
       actorUserId: owner.id,
     });
 
-    const membership = await db.organizationMembership.findFirst({
+    const membership = await adminDb.organizationMembership.findFirst({
       where: { organizationId, userId: invitee.id },
     });
     expect(membership).not.toBeNull();

@@ -7,6 +7,7 @@ import { canvasNodePositionRepository } from '@/lib/repositories/canvasNodePosit
 import { InvalidCanvasPositionError } from '@/lib/canvasLayout/errors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectAccessLevel } from '@/generated/prisma/client';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Real-Postgres tests for the canvas-layout persistence (MOTIR-1237) — the
@@ -18,6 +19,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Tenant {
@@ -38,7 +40,7 @@ async function makeTenant(label: string, accessLevel?: ProjectAccessLevel): Prom
     name: `Canvas WS ${label} ${seq}`,
     ownerUserId: user.id,
   });
-  const project = await db.project.create({
+  const project = await adminDb.project.create({
     data: {
       workspaceId: ws.workspace.id,
       name: `Canvas P ${label}`,

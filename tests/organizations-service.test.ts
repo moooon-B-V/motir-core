@@ -11,6 +11,7 @@ import {
   OrgForbiddenError,
 } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for Story 6.10.4 — the org tier's access gate +
@@ -26,11 +27,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // Resolve a workspace's organizationId without going through the gate.
 async function orgIdOfWorkspace(workspaceId: string): Promise<string> {
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   return ws.organizationId;
 }
 
