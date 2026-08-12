@@ -38,7 +38,7 @@ import { scanSingletonReads } from './singletonReadScan';
 // why there are now TWO ratchets: `unreviewed` measures whether anyone has LOOKED, and
 // `UNBOUND_READ_PATH_CEILING` measures whether the reads WORK. Quoting the first alone
 // would turn a diagnosis into a false claim of repair. The second falls only when a
-// service actually binds its reads (MOTIR-2794), never by writing a verdict.
+// service actually binds its reads (MOTIR-2796), never by writing a verdict.
 //
 // `public` remains the one verdict that still cannot be earned by reading code: it is the
 // claim that MOTIR-2684's public policy ARM admits the row, and only the public-projects
@@ -68,7 +68,7 @@ type Verdict =
    * These are not oversights at the repository: the fix is one layer up, at the
    * service method that owns the read, and it is the same fix for every site in
    * a given service. The value names that service, because that is the unit of
-   * work. Tracked by MOTIR-2794.
+   * work. Tracked by MOTIR-2796.
    */
   | 'unbound-read-path'
   /**
@@ -110,7 +110,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // binds, but NOT of these three resolves above it. Run that script on a `motir_app`
   // connection and `findBySlug` returns null, so it reports `workspace_not_found` for a
   // workspace that exists and stamps nothing. The verdict here is therefore conditional
-  // on the operator posture, and MOTIR-2794 carries making that explicit at the seam
+  // on the operator posture, and MOTIR-2796 carries making that explicit at the seam
   // (`workspace_visible_bootstrap`, the `app.bootstrap_slug` arm, admits exactly a
   // one-slug read and is the sanctioned mechanism if it ever needs to run as the app).
   'projectRepository.ts#findAllByIdentifier': ['operator-script', 'stampOnboardingRan'],
@@ -126,7 +126,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // test that documents it "reads through the `db`" — the same shape MOTIR-2775 retired
   // rather than adjudicated. Under the app role each returns zero rows, so a test using
   // one as an existence check passes VACUOUSLY, which is the worst of the failure modes
-  // here: it does not go red, it goes quietly meaningless. MOTIR-2794 retires them.
+  // here: it does not go red, it goes quietly meaningless. MOTIR-2796 retires them.
   'projectRepository.ts#listPublicDirectory': ['test-only', 'projectSquareDirectory.test'],
   'workItemRepository.ts#findReadyCandidates': ['test-only', 'superseded by findReadyLayer'],
   'workspaceMembershipRepository.ts#findByUserAndWorkspace': [
@@ -146,7 +146,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // a BYPASSRLS role (MOTIR-2515 is the cutover that ends that). The value names the
   // owning service because the fix is per-SERVICE, not per-read: open
   // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
-  // Grouped by service, that is ~20 units of work, which is why MOTIR-2794 is a story
+  // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
   // and not another sweep card.
   'componentRepository.ts#listByProject': ['unbound-read-path', 'componentsService'],
   'customFieldDefinitionRepository.ts#listWithValuesForWorkItem': [
@@ -318,7 +318,7 @@ const UNREVIEWED_CEILING = 8;
 /**
  * The second ratchet, and the one that measures the PRODUCT rather than the review.
  * Every read counted here is confirmed to return zero rows under `motir_app`; the
- * fix is per-service (MOTIR-2794), so this falls in steps of a service's worth.
+ * fix is per-service (MOTIR-2796), so this falls in steps of a service's worth.
  *
  * ⚠️ May only ever go DOWN — and unlike the unreviewed ceiling, it cannot be lowered
  * by writing a verdict. It falls only when a service actually binds its reads.
@@ -357,7 +357,7 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
 
     // The ratchet that actually tracks the product working. `unreviewed` falling means
     // someone LOOKED; this falling means a read that returned zero rows under
-    // `motir_app` now returns its rows. MOTIR-2794 drives it to zero, service by
+    // `motir_app` now returns its rows. MOTIR-2796 drives it to zero, service by
     // service — so it should fall in service-sized steps, not one read at a time.
     expect(
       unbound.length,
@@ -369,7 +369,7 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
   });
 
   it('every unbound-read-path verdict names the service that owns the fix', () => {
-    // The value is the unit of work, not a comment: MOTIR-2794's children are cut by
+    // The value is the unit of work, not a comment: MOTIR-2796's children are cut by
     // SERVICE, so a verdict that says `?` or `MOTIR-xxxx` cannot be planned against and
     // would quietly drop that read from the story.
     const nameless = Object.entries(VERDICTS)
@@ -380,7 +380,7 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
     expect(
       nameless,
       'An `unbound-read-path` verdict must name the owning service (e.g. `reportsService`), ' +
-        'because that is the unit MOTIR-2794 plans against.',
+        'because that is the unit MOTIR-2796 plans against.',
     ).toEqual([]);
   });
 
