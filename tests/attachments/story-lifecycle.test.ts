@@ -9,6 +9,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story-5.2 closer (Subtask 5.2.8, Principle #18): the CROSS-CUTTING lifecycle
@@ -50,18 +51,18 @@ const fileOf = (name: string, type: string, bytes = 4) =>
 // or a raw blob pathname to its row.
 const rowByUrl = (ref: string) => {
   const m = ref.match(/\/api\/attachments\/([a-z0-9]+)\/content/i);
-  return db.attachment.findFirstOrThrow({ where: m ? { id: m[1]! } : { blobPathname: ref } });
+  return adminDb.attachment.findFirstOrThrow({ where: m ? { id: m[1]! } : { blobPathname: ref } });
 };
 
 const revisionsOf = (workItemId: string) =>
-  db.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
+  adminDb.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
 
 const attachmentsDiffOf = (rev: { diff: unknown }) =>
   (rev.diff as { attachments?: { added?: unknown[]; removed?: unknown[] } }).attachments;
 
 /** Age a row past the GC safety window (orphan age is the row's createdAt). */
 async function agePastWindow(id: string): Promise<void> {
-  await db.attachment.update({
+  await adminDb.attachment.update({
     where: { id },
     data: { createdAt: new Date(Date.now() - ORPHAN_SAFETY_WINDOW_MS - 60_000) },
   });
@@ -115,7 +116,7 @@ async function buildCast(): Promise<Cast> {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   vi.mocked(deleteAttachmentBlob).mockReset();
   vi.mocked(deleteAttachmentBlob).mockResolvedValue(undefined);
@@ -129,6 +130,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
@@ -242,7 +244,8 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     expect(summary).toEqual({ scanned: 2, deleted: 2, failed: 0 });
     expect(deleteAttachmentBlob).toHaveBeenCalledWith(stray.blobPathname);
     expect(deleteAttachmentBlob).toHaveBeenCalledWith(failed.blobPathname);
-    expect(await db.attachment.count()).toBe(1); // only the young orphan
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(1); // only the young orphan
     await expect(rowByUrl(young.url)).resolves.toMatchObject({ workItemId: null });
 
     // The trail outlives the rows (the ids stay queryable post-hard-delete).
@@ -301,10 +304,10 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     // A row delete is the SetNull trigger (the product only archives today —
     // the destructive delete is the 5.2.1 FK contract, driven directly like
     // that subtask's repository test does).
-    await db.workItem.delete({ where: { id: issue.id } });
+    await adminDb.workItem.delete({ where: { id: issue.id } });
 
     // SetNull, not cascade: both rows survive unlinked, blobs untouched.
-    const orphans = await db.attachment.findMany();
+    const orphans = await adminDb.attachment.findMany();
     expect(orphans).toHaveLength(2);
     expect(orphans.every((row) => row.workItemId === null)).toBe(true);
     expect(deleteAttachmentBlob).not.toHaveBeenCalled();
@@ -313,7 +316,8 @@ describe('Story 5.2 — the full attachment lifecycle, end to end', () => {
     for (const row of orphans) await agePastWindow(row.id);
     const summary = await attachmentsService.sweepOrphanAttachments();
     expect(summary).toEqual({ scanned: 2, deleted: 2, failed: 0 });
-    expect(await db.attachment.count()).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
     // The GC deletes each orphan's blob by its stored private pathname.
     for (const row of orphans) expect(deleteAttachmentBlob).toHaveBeenCalledWith(row.blobPathname);
   });

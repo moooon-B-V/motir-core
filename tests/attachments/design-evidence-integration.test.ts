@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The design-result INTEGRATION gate (Story MOTIR-2664 · Subtask MOTIR-2671).
@@ -106,6 +107,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -355,7 +357,7 @@ describe('the publish → read seam', () => {
     expect(url).toMatch(/^\/api\/attachments\/[^/]+\/content$/);
     expect(url).not.toMatch(/^https?:/);
 
-    const rows = await db.attachment.findMany({ where: { workItemId: item.id } });
+    const rows = await adminDb.attachment.findMany({ where: { workItemId: item.id } });
     expect(url).toBe(designAssetContentPath(rows[0]!.id));
   });
 

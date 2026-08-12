@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // acceptanceEvidenceService (Story MOTIR-1627 · Subtask MOTIR-1629) against a
@@ -32,7 +33,7 @@ async function makeStory(fx: WorkItemFixture) {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('acceptanceEvidenceService.recordFromUpload', () => {
@@ -72,12 +74,12 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
 
     // The Attachment is source acceptance_video, LINKED to the story (so the
     // orphan-GC leaves the current video alone).
-    const att = await db.attachment.findFirstOrThrow({ where: { workItemId: story.id } });
+    const att = await adminDb.attachment.findFirstOrThrow({ where: { workItemId: story.id } });
     expect(att.source).toBe('acceptance_video');
     expect(att.workItemId).toBe(story.id);
 
     // Exactly one current evidence row.
-    const current = await db.acceptanceEvidence.count({
+    const current = await adminDb.acceptanceEvidence.count({
       where: { workItemId: story.id, isCurrent: true },
     });
     expect(current).toBe(1);
@@ -99,21 +101,24 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
     expect(second.id).not.toBe(first.id);
 
     // Invariant: exactly one current, and it's the newest.
-    const currents = await db.acceptanceEvidence.findMany({
+    const currents = await adminDb.acceptanceEvidence.findMany({
       where: { workItemId: story.id, isCurrent: true },
     });
     expect(currents).toHaveLength(1);
     expect(currents[0]!.id).toBe(second.id);
 
     // History retained (two rows total).
-    expect(await db.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(2);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count({
+      where: { workItemId: story.id },
+    });
+    expect(acceptanceEvidenceCount).toBe(2);
 
     // The superseded video Attachment is UNLINKED (workItemId → null) so the
     // orphan-GC reclaims its blob; the new one stays linked.
-    const firstEvidence = await db.acceptanceEvidence.findUniqueOrThrow({
+    const firstEvidence = await adminDb.acceptanceEvidence.findUniqueOrThrow({
       where: { id: first.id },
     });
-    const firstAtt = await db.attachment.findUniqueOrThrow({
+    const firstAtt = await adminDb.attachment.findUniqueOrThrow({
       where: { id: firstEvidence.attachmentId! },
     });
     expect(firstAtt.workItemId).toBeNull();
@@ -129,8 +134,10 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
         fx.ctx,
       ),
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE', status: 415 });
-    expect(await db.acceptanceEvidence.count()).toBe(0);
-    expect(await db.attachment.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
   });
 
   it('an oversized video → FileTooLargeError (413), no evidence written', async () => {
@@ -140,7 +147,8 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
     await expect(
       acceptanceEvidenceService.recordFromUpload({ workItemId: story.id, video: big }, fx.ctx),
     ).rejects.toMatchObject({ code: 'FILE_TOO_LARGE', status: 413 });
-    expect(await db.acceptanceEvidence.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 
   it('recording against a NON-story → AcceptanceEvidenceNotAStoryError (422)', async () => {
@@ -149,7 +157,8 @@ describe('acceptanceEvidenceService.recordFromUpload', () => {
     await expect(
       acceptanceEvidenceService.recordFromUpload({ workItemId: bug.id, video: videoOf() }, fx.ctx),
     ).rejects.toMatchObject({ code: 'ACCEPTANCE_EVIDENCE_NOT_A_STORY', status: 422 });
-    expect(await db.acceptanceEvidence.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 
   it('the acceptance video is EXCLUDED from the generic attachments panel listing', async () => {

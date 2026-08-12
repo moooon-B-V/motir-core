@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { AcceptanceEvidenceNotInReviewError } from '@/lib/acceptanceEvidence/errors';
 
@@ -50,14 +51,14 @@ async function storyWithEvidence(fx: WorkItemFixture, status: 'in_review' | 'in_
 }
 
 const statusKeyOf = async (id: string): Promise<string> => {
-  const row = await db.workItem.findUniqueOrThrow({ where: { id } });
+  const row = await adminDb.workItem.findUniqueOrThrow({ where: { id } });
   return row.status;
 };
 
 let fx: WorkItemFixture;
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -66,6 +67,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('acceptanceEvidenceService.decide', () => {

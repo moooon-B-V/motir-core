@@ -21,6 +21,7 @@ import {
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // labelsService (Story 5.4 · Subtask 5.4.2) — the folksonomy BUSINESS rules
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface LabelScenario {
@@ -92,7 +94,7 @@ async function labelDiffsOf(workItemId: string): Promise<unknown[]> {
 }
 
 async function labelRowCount(): Promise<number> {
-  return db.label.count();
+  return adminDb.label.count();
 }
 
 /** First element, asserted present (noUncheckedIndexedAccess-safe). */
@@ -265,7 +267,8 @@ describe('labelsService.removeLabel — delete-on-last-use', () => {
     ]);
 
     expect(await labelRowCount()).toBe(0);
-    expect(await db.workItemLabel.count()).toBe(0);
+    const workItemLabelCount = await adminDb.workItemLabel.count();
+    expect(workItemLabelCount).toBe(0);
   });
 });
 

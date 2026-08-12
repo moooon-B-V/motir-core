@@ -14,6 +14,7 @@ import { WatchersForbiddenError, WatcherTargetCannotViewError } from '@/lib/watc
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // watchersService (Story 5.4 · Subtask 5.4.4) — the watch BUSINESS rules over
@@ -41,6 +42,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface WatcherScenario {
@@ -246,7 +248,7 @@ describe('listWatchers — paged, view-gated, manage flag', () => {
 
     // Arrange the roster directly at the repo layer (the sanctioned test
     // reach) — listWatchers itself never re-gates each target.
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       for (let i = 0; i < total; i += 1) {
         const u = await createTestUser({ email: `w${i}@ex.com`, name: `Watcher ${i}` });
         await watcherRepository.add(s.issue.id, u.id, tx);
@@ -339,7 +341,7 @@ describe('auto-watch hooks (the verified create-or-comment rule, constant-on)', 
       { projectId: fx.projectId, kind: 'task', title: 'Not a legal parent of an epic' },
       fx.ctx,
     );
-    const before = await db.watcher.count();
+    const before = await adminDb.watcher.count();
     // An illegal parent aborts createWorkItem INSIDE its flow — nothing,
     // watcher row included, may survive.
     await expect(
@@ -348,6 +350,7 @@ describe('auto-watch hooks (the verified create-or-comment rule, constant-on)', 
         fx.ctx,
       ),
     ).rejects.toThrow();
-    expect(await db.watcher.count()).toBe(before);
+    const watcherCount = await adminDb.watcher.count();
+    expect(watcherCount).toBe(before);
   });
 });

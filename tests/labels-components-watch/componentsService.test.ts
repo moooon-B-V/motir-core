@@ -29,6 +29,7 @@ import {
   makeWorkItemFixture,
 } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // componentsService (Story 5.4 · Subtask 5.4.3) — the taxonomy BUSINESS
@@ -51,6 +52,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface ComponentScenario {

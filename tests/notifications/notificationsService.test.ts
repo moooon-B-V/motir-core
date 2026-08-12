@@ -8,6 +8,7 @@ import { NotificationNotFoundError } from '@/lib/notifications/errors';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Service-layer tests for notificationsService (Story 5.7 · Subtask 5.7.4) —
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Scenario {
@@ -248,7 +250,7 @@ describe('notificationsService.markRead', () => {
     const s = await makeScenario();
     const other = await createTestUser({ name: 'Other' });
     await seed(s, other.id, [{ dedupeKey: 'theirs' }]);
-    const theirRow = await db.notification.findFirstOrThrow({
+    const theirRow = await adminDb.notification.findFirstOrThrow({
       where: { recipientUserId: other.id },
     });
 
@@ -256,14 +258,14 @@ describe('notificationsService.markRead', () => {
       NotificationNotFoundError,
     );
     // Untouched — the cross-user mark didn't leak through.
-    const after = await db.notification.findUniqueOrThrow({ where: { id: theirRow.id } });
+    const after = await adminDb.notification.findUniqueOrThrow({ where: { id: theirRow.id } });
     expect(after.readAt).toBeNull();
   });
 
   it('reads as 404 for a notification in another workspace', async () => {
     const s = await makeScenario();
     await seed(s, s.recipient.id, [{ dedupeKey: 'mine' }]);
-    const row = await db.notification.findFirstOrThrow({
+    const row = await adminDb.notification.findFirstOrThrow({
       where: { recipientUserId: s.recipient.id },
     });
     const otherWorkspaceCtx: ServiceContext = {
