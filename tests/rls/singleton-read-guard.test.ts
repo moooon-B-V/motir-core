@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (52) ────────────────────────────────────────────────
+  // ── unbound-read-path (44) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -190,9 +190,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'workItemRepository.ts#aggregateBoardLanesByAssignee': ['unbound-read-path', 'boardsService'],
   'workItemRepository.ts#aggregateBoardLanesByEpic': ['unbound-read-path', 'boardsService'],
   'workItemRepository.ts#aggregateBoardLanesByPriority': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#aggregateCreatedByBucket': ['unbound-read-path', 'reportsService'],
-  'workItemRepository.ts#aggregateDistribution': ['unbound-read-path', 'reportsService'],
-  'workItemRepository.ts#aggregateWorkloadByAssignee': ['unbound-read-path', 'reportsService'],
   'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
@@ -211,23 +208,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'automationEngineService',
   ],
   'workItemRepository.ts#quickSearch': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#sumStartedForSprint': ['unbound-read-path', 'reportsService'],
-  'workItemRevisionRepository.ts#aggregateAverageAgeByBucket': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#aggregateNetResolvedByBucket': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#aggregateResolutionTimeByBucket': [
-    'unbound-read-path',
-    'reportsService',
-  ],
-  'workItemRevisionRepository.ts#aggregateSprintCycleByDay': [
-    'unbound-read-path',
-    'reportsService',
-  ],
   'workItemRevisionRepository.ts#countDisplayableByWorkItem': [
     'unbound-read-path',
     'activityService',
@@ -320,8 +300,10 @@ const UNREVIEWED_CEILING = 8;
  * 55 -> 52: MOTIR-2805 bound `savedFiltersService` — `listPage`, `countVisible` and
  * `countByFilter`. Lowered BY SUBTRACTION of this card's three, never restated as an
  * absolute: sibling cards edit this same line, and an absolute would discard theirs.
+ * 52 -> 44: MOTIR-2800 bound `reportsService` — its eight aggregates, all raw SQL.
+ * Same subtraction discipline.
  */
-const UNBOUND_READ_PATH_CEILING = 52;
+const UNBOUND_READ_PATH_CEILING = 44;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

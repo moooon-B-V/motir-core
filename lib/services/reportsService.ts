@@ -1,4 +1,4 @@
-import type { EstimationStatistic, Sprint } from '@/generated/prisma/client';
+import type { EstimationStatistic, Prisma, Sprint } from '@/generated/prisma/client';
 import { customFieldDefinitionRepository } from '@/lib/repositories/customFieldDefinitionRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
@@ -59,6 +59,7 @@ import type {
   WorkloadMeasureDto,
 } from '@/lib/dto/reports';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Reports service (Story 4.6) — the read-only analytics layer over the data
 // Stories 4.1 / 4.3 / 4.4 / 1.4.6 already ship: NO new write model, NO
@@ -71,6 +72,21 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 // bounded repository reads + the shipped `estimationService.rollupForSprint`
 // aggregate, and maps to a DTO via `reportsMappers`. Repositories stay single-op
 // leaves; the route is a thin HTTP transport.
+//
+// BOUND READS (MOTIR-2800): this file used to contain ZERO context wrappers, so
+// under the non-bypass `motir_app` role every aggregate below returned an empty
+// result and every chart drew a flat zero line — the WHERE clause was correctly
+// scoped by `workspaceId`, but nothing bound the per-TRANSACTION GUC the RLS
+// policy reads. Each report method now opens ONE
+// `withWorkspaceServiceContext(ctx.workspaceId, …)` at its own boundary and
+// threads that `tx` into its reads, per
+// `docs/decisions/bound-read-transaction-shape.md`. The WORKSPACE tier is
+// sufficient and no more than sufficient: every table these aggregates touch
+// (`work_item`, `work_item_revision`, `workflow_status`, `sprint`,
+// `custom_field_*`, `label`, `component`) keys purely on `app.workspace_id`,
+// read from `pg_policies` rather than from the migrations. The restrictive
+// `work_item_project_narrow` passes on its `coalesce(…) = ''` branch when
+// `app.project_id` is unbound, which is what these project-scoped reads want.
 //
 // TENANCY (finding #26): every path carries an explicit `workspaceId` — the
 // project / sprint is gated by id + workspaceId (a cross-workspace entity is an
@@ -119,16 +135,22 @@ export const reportsService = {
     await projectAccessService.assertPermission(input.projectId, ctx, 'report:view');
 
     const limit = clampLastN(input.lastN);
-    // The configured statistic, resolved ONCE for the project (the same default
-    // `rollupForSprint` uses); picks which committed baseline column to read and
-    // labels the chart's Y axis.
-    const statistic = await resolveStatistic(input.projectId);
-
-    // Bounded read: the last N completed sprints, newest first (LIMIT N).
-    const sprints = await sprintRepository.listCompletedByProject(
-      input.projectId,
+    // ONE bound transaction for this method's own two reads: the configured
+    // statistic (which picks the committed-baseline column and labels the Y
+    // axis) and the bounded `LIMIT N` page of completed sprints. The per-sprint
+    // roll-ups below are SERVICE calls and open their own — see the
+    // call-into-another-service clause in the transaction-shape ADR.
+    const { statistic, sprints } = await withWorkspaceServiceContext(
       ctx.workspaceId,
-      limit,
+      async (tx) => ({
+        statistic: await resolveStatistic(input.projectId, tx),
+        sprints: await sprintRepository.listCompletedByProject(
+          input.projectId,
+          ctx.workspaceId,
+          limit,
+          tx,
+        ),
+      }),
     );
 
     // Per sprint: committed = the O(1) stored baseline; completed = the bounded
@@ -184,7 +206,9 @@ export const reportsService = {
   async getSprintCycleGraph(sprintId: string, ctx: ServiceContext): Promise<CycleGraphDto> {
     // Tenancy gate (finding #26): a missing / cross-workspace sprint is an
     // indistinguishable 404 (finding #26).
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(sprintId, ctx.workspaceId, tx),
+    );
     if (!sprint) throw new SprintNotFoundError(sprintId);
     // `report:view` (MOTIR-2351) — a burndown is a report; it was mapped to
     // `sprint:manage` only because it lives under a sprint URL, and a URL is not
@@ -199,7 +223,9 @@ export const reportsService = {
 
     // The configured statistic + the authoritative present roll-up (4.3.3) — the
     // latter decides whether the sprint has POINTS work to draw (`committed > 0`).
-    const projectStatistic = await resolveStatistic(sprint.projectId);
+    const projectStatistic = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      resolveStatistic(sprint.projectId, tx),
+    );
     const rollup = await estimationService.rollupForSprint(sprintId, ctx);
 
     // Draw the POINTS cycle graph when the project measures points AND the sprint
@@ -215,23 +241,36 @@ export const reportsService = {
     // it is already in the series unit; otherwise re-read the sums in that unit.
     let currentScope: number;
     let currentCompleted: number;
+    let currentStarted: number;
+    // ONE bound transaction for this method's own reads. `rollupForSprint` above
+    // is a SERVICE call with its own gate and its own context — it is not pulled
+    // inside, because nesting a service inside a transaction it knows nothing
+    // about is how a second `BEGIN` gets attempted.
     if (seriesStat === projectStatistic) {
       currentScope = rollup.committed;
       currentCompleted = rollup.completed;
-    } else {
-      const sums = await workItemRepository.sumPointsForSprint(
-        sprintId,
-        ctx.workspaceId,
-        seriesStat,
+      currentStarted = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.sumStartedForSprint(sprintId, ctx.workspaceId, seriesStat, tx),
       );
-      currentScope = sums.committed;
-      currentCompleted = sums.completed;
+    } else {
+      const both = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+        sums: await workItemRepository.sumPointsForSprint(
+          sprintId,
+          ctx.workspaceId,
+          seriesStat,
+          tx,
+        ),
+        started: await workItemRepository.sumStartedForSprint(
+          sprintId,
+          ctx.workspaceId,
+          seriesStat,
+          tx,
+        ),
+      }));
+      currentScope = both.sums.committed;
+      currentCompleted = both.sums.completed;
+      currentStarted = both.started;
     }
-    const currentStarted = await workItemRepository.sumStartedForSprint(
-      sprintId,
-      ctx.workspaceId,
-      seriesStat,
-    );
 
     // Window. The axis ends at the planned end (else completedAt, else now); the
     // ACTUAL series are drawn to completedAt (complete) or now (active).
@@ -243,11 +282,14 @@ export const reportsService = {
     );
 
     // The bounded per-day deltas (finding #57) — events up to the actual cutoff.
-    const dailyDeltas = await workItemRevisionRepository.aggregateSprintCycleByDay(
-      sprintId,
-      ctx.workspaceId,
-      { start, end: actualCutoff },
-      useCount,
+    const dailyDeltas = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateSprintCycleByDay(
+        sprintId,
+        ctx.workspaceId,
+        { start, end: actualCutoff },
+        useCount,
+        tx,
+      ),
     );
 
     // Reconstruct each SERIES baseline: `current − Σ delta`. Cumulating a series
@@ -325,22 +367,31 @@ export const reportsService = {
     const { start, end } = reportWindow(new Date(), config.daysBack);
     const axis = bucketAxis(config.period, start, end);
     const filter = await scopeAstFilter(resolved, ctx);
-    const [created, resolvedRows] = await Promise.all([
-      workItemRepository.aggregateCreatedByBucket(
-        resolved.projectId,
-        ctx.workspaceId,
-        config.period,
-        { start, end },
-        filter,
-      ),
-      workItemRevisionRepository.aggregateNetResolvedByBucket(
-        resolved.projectId,
-        ctx.workspaceId,
-        config.period,
-        { start, end },
-        filter,
-      ),
-    ]);
+    // The file's only real fan-out, and the one place the chosen shape costs
+    // something measurable: +4 ms (MOTIR-2799's bench). It buys the two series a
+    // SHARED SNAPSHOT, which is what stops a concurrent write leaving the chart
+    // showing more resolved than were ever created.
+    const { created, resolvedRows } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        created: await workItemRepository.aggregateCreatedByBucket(
+          resolved.projectId,
+          ctx.workspaceId,
+          config.period,
+          { start, end },
+          filter,
+          tx,
+        ),
+        resolvedRows: await workItemRevisionRepository.aggregateNetResolvedByBucket(
+          resolved.projectId,
+          ctx.workspaceId,
+          config.period,
+          { start, end },
+          filter,
+          tx,
+        ),
+      }),
+    );
 
     return {
       state: 'ok',
@@ -383,11 +434,14 @@ export const reportsService = {
     const axis = bucketAxis(config.period, start, end);
     const ends = bucketEnds(config.period, axis, end);
     const filter = await scopeAstFilter(resolved, ctx);
-    const rows = await workItemRevisionRepository.aggregateAverageAgeByBucket(
-      resolved.projectId,
-      ctx.workspaceId,
-      axis.map((key, i) => ({ key, end: ends[i]! })),
-      filter,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateAverageAgeByBucket(
+        resolved.projectId,
+        ctx.workspaceId,
+        axis.map((key, i) => ({ key, end: ends[i]! })),
+        filter,
+        tx,
+      ),
     );
 
     return {
@@ -424,12 +478,15 @@ export const reportsService = {
     const { start, end } = reportWindow(new Date(), config.daysBack);
     const axis = bucketAxis(config.period, start, end);
     const filter = await scopeAstFilter(resolved, ctx);
-    const rows = await workItemRevisionRepository.aggregateResolutionTimeByBucket(
-      resolved.projectId,
-      ctx.workspaceId,
-      config.period,
-      { start, end },
-      filter,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.aggregateResolutionTimeByBucket(
+        resolved.projectId,
+        ctx.workspaceId,
+        config.period,
+        { start, end },
+        filter,
+        tx,
+      ),
     );
 
     return {
@@ -463,10 +520,13 @@ export const reportsService = {
     if (resolved.state !== 'ok') return resolved;
 
     const filter = await scopeAstFilter(resolved, ctx);
-    const rows = await workItemRepository.aggregateWorkloadByAssignee(
-      resolved.projectId,
-      ctx.workspaceId,
-      filter,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.aggregateWorkloadByAssignee(
+        resolved.projectId,
+        ctx.workspaceId,
+        filter,
+        tx,
+      ),
     );
 
     return { state: 'ok', data: toWorkloadDto(config.measure, rows) };
@@ -501,7 +561,9 @@ export const reportsService = {
     if (parsed.kind === 'builtin') {
       groupBy = parsed.def.groupBy;
     } else {
-      const def = await customFieldDefinitionRepository.findById(parsed.fieldId, ctx.workspaceId);
+      const def = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        customFieldDefinitionRepository.findById(parsed.fieldId, ctx.workspaceId, tx),
+      );
       // A deleted — or cross-project, indistinguishable to this scope — field
       // is a stale referent: the widget degrades, the dashboard survives.
       if (!def || def.projectId !== resolved.projectId) {
@@ -517,11 +579,14 @@ export const reportsService = {
     }
 
     const filter = await scopeAstFilter(resolved, ctx);
-    const rows = await workItemRepository.aggregateDistribution(
-      resolved.projectId,
-      ctx.workspaceId,
-      groupBy,
-      filter,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.aggregateDistribution(
+        resolved.projectId,
+        ctx.workspaceId,
+        groupBy,
+        filter,
+        tx,
+      ),
     );
     return { state: 'ok', data: toDistributionDto(statistic, rows) };
   },
@@ -646,7 +711,9 @@ async function resolveReportScope(
   // The filter row locates its project (filters are addressed per-project in
   // 6.2's routes; a widget holds only the id). A missing or cross-workspace
   // row reads as deleted — the stale card, no cross-tenant leak.
-  const row = await savedFilterRepository.findByIdWithStars(scope.savedFilterId, ctx.userId);
+  const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    savedFilterRepository.findByIdWithStars(scope.savedFilterId, ctx.userId, tx),
+  );
   if (!row) return { state: 'stale', reason: 'filter_missing' };
   const project = await readProject(row.projectId, ctx);
   if (!project || project.workspaceId !== ctx.workspaceId) {
@@ -718,7 +785,10 @@ function clampLastN(lastN: number | undefined): number {
  * `estimationService`'s roll-ups use, kept here as a read-only reference lookup
  * (the project's / sprint's own tenancy gate already ran in the caller).
  */
-async function resolveStatistic(projectId: string): Promise<EstimationStatistic> {
-  const config = await projectRepository.findEstimationConfig(projectId);
+async function resolveStatistic(
+  projectId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<EstimationStatistic> {
+  const config = await projectRepository.findEstimationConfig(projectId, tx);
   return config?.estimationStatistic ?? 'story_points';
 }

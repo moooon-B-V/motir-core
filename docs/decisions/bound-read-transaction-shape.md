@@ -188,6 +188,17 @@ raising the ceiling, and bring the measurement.
 - **Never open a second transaction inside one.** Where a read already sits inside
   a write transaction, thread THAT `tx`. Prisma rejects nesting, and a read given a
   bound `tx` needs no context of its own.
+- **A CALL INTO ANOTHER SERVICE ENDS THE TRANSACTION; it is not pulled inside.**
+  (Added by MOTIR-2800, the first card to apply this document, because every
+  binding card meets it.) "One transaction per service method" means one per
+  CONTIGUOUS RUN of the method's own repository reads. A called service runs its
+  own gate and opens its own context, so enclosing it would attempt a second
+  `BEGIN` on a connection already inside one — the nesting Prisma rejects — and
+  would also put another service's permission check inside a snapshot it did not
+  ask for. `reportsService.getSprintCycleGraph` is the worked example: the sprint
+  read, then `estimationService.rollupForSprint` (a service, outside), then the
+  two sums and the daily deltas. Two transactions, and the boundary is drawn by
+  the call, not by preference.
 - **Bind every CALL SITE of a read, not just the owning service's.** The ratchet
   counts the READ; a read bound at one caller and unbound at another is recorded as
   fixed while a live path stays dark.

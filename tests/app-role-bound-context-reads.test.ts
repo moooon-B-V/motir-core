@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
+import { reportsService } from '@/lib/services/reportsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { encodeFilterParam } from '@/lib/filters/ast';
@@ -360,5 +361,143 @@ describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
       expect(total).toBe(1);
       expect(subs).toBe(1);
     }
+  });
+});
+
+// ── MOTIR-2800 · reportsService ───────────────────────────────────────────────
+//
+// The first of the two services that contained ZERO context wrappers anywhere in
+// the file. Unbound, every aggregate returned an empty result set and the charts
+// drew flat zero lines — no error, no log, just a project that appears to hold
+// no work at all.
+//
+// ⚠️ EVERY ASSERTION BELOW IS ON PRESENCE OF SPECIFIC SEEDED DATA. A report
+// asserting a count of zero passes VACUOUSLY under the app role, which is the
+// exact failure mode this story exists to remove, so an assertion shaped like
+// `expect(rows.length).toBeGreaterThanOrEqual(0)` would be worse than no test.
+
+describe('reportsService — the aggregates that drew flat zero lines', () => {
+  /**
+   * One open item (assigned, 5 points) and one item resolved two days ago. The
+   * resolution is seeded as a REVISION through `adminDb` rather than driven
+   * through `updateStatus`, for the reason the reports suite does the same: the
+   * done-category series read the 1.4.6 trail, and the trail is the fixture.
+   */
+  async function seedReportable(identifier: string) {
+    const fx = await makeWorkItemFixture({ identifier });
+    const assignee = await usersService.createUser({
+      email: `reports-${identifier.toLowerCase()}@example.com`,
+      password: 'hunter2hunter2',
+      name: `Reporter ${identifier}`,
+    });
+    const open = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Open work' },
+      fx.ctx,
+    );
+    const closed = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'bug', title: 'Closed work' },
+      fx.ctx,
+    );
+    const fourDaysAgo = new Date(Date.now() - 4 * 24 * 60 * 60 * 1000);
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    await adminDb.workItem.update({
+      where: { id: open.id },
+      data: { assigneeId: assignee.id, storyPoints: 5, createdAt: fourDaysAgo },
+    });
+    await adminDb.workItem.update({
+      where: { id: closed.id },
+      data: { createdAt: fourDaysAgo },
+    });
+    await adminDb.workItemRevision.create({
+      data: {
+        workItemId: closed.id,
+        changedById: fx.ownerId,
+        changeKind: 'updated',
+        changedAt: twoDaysAgo,
+        diff: { status: { from: 'todo', to: 'done' } },
+      },
+    });
+    await adminDb.workItem.update({ where: { id: closed.id }, data: { status: 'done' } });
+    return { fx, assigneeName: `Reporter ${identifier}` };
+  }
+
+  it('getWorkload returns the assignee’s open points, not an empty ranking', async () => {
+    const { fx, assigneeName } = await seedReportable('RPA');
+
+    const result = await reportsService.getWorkload(
+      { projectId: fx.projectId },
+      { measure: 'story_points' },
+      fx.ctx,
+    );
+
+    expect(result.state).toBe('ok');
+    if (result.state !== 'ok') throw new Error('unreachable');
+    expect(result.data.assignees.map((a) => [a.name, a.points])).toContainEqual([assigneeName, 5]);
+  });
+
+  it('getDistribution returns populated kind segments, not an empty donut', async () => {
+    const { fx } = await seedReportable('RPB');
+
+    const result = await reportsService.getDistribution(
+      { projectId: fx.projectId },
+      'kind',
+      fx.ctx,
+    );
+
+    expect(result.state).toBe('ok');
+    if (result.state !== 'ok') throw new Error('unreachable');
+    const byId = new Map(result.data.segments.map((seg) => [seg.id, seg.count]));
+    expect(byId.get('task')).toBe(1);
+    expect(byId.get('bug')).toBe(1);
+    expect(result.data.total).toBe(2);
+  });
+
+  it('getCreatedVsResolved returns both series populated in one snapshot', async () => {
+    const { fx } = await seedReportable('RPC');
+
+    const result = await reportsService.getCreatedVsResolved(
+      { projectId: fx.projectId },
+      { period: 'day', daysBack: 7, cumulative: false },
+      fx.ctx,
+    );
+
+    expect(result.state).toBe('ok');
+    if (result.state !== 'ok') throw new Error('unreachable');
+    // Two seeded items, one of them transitioned into a done-category status.
+    // Both series come from DIFFERENT repositories in the SAME transaction.
+    expect(result.data.buckets.reduce((n, b) => n + b.created, 0)).toBe(2);
+    expect(result.data.buckets.reduce((n, b) => n + b.resolved, 0)).toBe(1);
+  });
+
+  it('getAverageAge counts the still-open item rather than reporting no open work', async () => {
+    const { fx } = await seedReportable('RPD');
+
+    const result = await reportsService.getAverageAge(
+      { projectId: fx.projectId },
+      { period: 'day', daysBack: 7 },
+      fx.ctx,
+    );
+
+    expect(result.state).toBe('ok');
+    if (result.state !== 'ok') throw new Error('unreachable');
+    const latest = result.data.buckets[result.data.buckets.length - 1];
+    // Exactly the OPEN item: the resolved one drops out of a point-in-time read.
+    expect(latest?.count).toBe(1);
+    expect(result.data.windowAverage).not.toBeNull();
+  });
+
+  it('getResolutionTime counts the resolved item rather than an empty bar', async () => {
+    const { fx } = await seedReportable('RPE');
+
+    const result = await reportsService.getResolutionTime(
+      { projectId: fx.projectId },
+      { period: 'day', daysBack: 7 },
+      fx.ctx,
+    );
+
+    expect(result.state).toBe('ok');
+    if (result.state !== 'ok') throw new Error('unreachable');
+    expect(result.data.buckets.reduce((n, b) => n + b.count, 0)).toBe(1);
+    expect(result.data.windowAverage).not.toBeNull();
   });
 });

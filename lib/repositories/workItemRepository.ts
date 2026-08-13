@@ -3238,11 +3238,13 @@ export const workItemRepository = {
     period: 'day' | 'week' | 'month',
     window: { start: Date; end: Date },
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ bucket: string; count: number }>> {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    return db.$queryRaw<Array<{ bucket: string; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ bucket: string; count: number }>>`
       SELECT
         to_char(date_trunc(${period}, w."createdAt"), 'YYYY-MM-DD') AS "bucket",
         COUNT(*)::int AS "count"
@@ -3284,12 +3286,14 @@ export const workItemRepository = {
     workspaceId: string,
     groupBy: DistributionGroupBy,
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string | null; label: string | null; count: number }>> {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
     const { idExpr, labelExpr, joinSql } = distributionGroupBySql(groupBy);
-    return db.$queryRaw<Array<{ id: string | null; label: string | null; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ id: string | null; label: string | null; count: number }>>`
       SELECT ${idExpr} AS "id", ${labelExpr} AS "label", COUNT(*)::int AS "count"
       FROM "work_item" w
       ${joinSql}
@@ -3321,13 +3325,15 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     filter?: { ast?: FilterAst; referents?: ProjectFilterReferents },
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
   > {
     const astSql = filter?.ast
       ? compileFilterConditionsSql(filter.ast, filter.referents)
       : Prisma.sql`TRUE`;
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ assigneeId: string | null; name: string | null; points: number; count: number }>
     >`
       SELECT
@@ -3568,6 +3574,7 @@ export const workItemRepository = {
     sprintId: string,
     workspaceId: string,
     statistic: EstimationStatistic,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
     const startedFilter = Prisma.sql` FILTER (WHERE ws."category" IS NOT NULL AND ws."category" <> 'todo')`;
     const expr =
@@ -3576,7 +3583,8 @@ export const workItemRepository = {
         : statistic === 'story_points'
           ? Prisma.sql`COALESCE(SUM(w."storyPoints")${startedFilter}, 0)`
           : Prisma.sql`COALESCE(SUM(w."estimateMinutes")${startedFilter}, 0)`;
-    const rows = await db.$queryRaw<Array<{ started: number }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ started: number }>>`
       SELECT ${expr}::float8 AS "started"
         FROM "work_item" w
         LEFT JOIN "workflow_status" ws
