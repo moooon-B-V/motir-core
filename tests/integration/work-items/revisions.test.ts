@@ -9,6 +9,7 @@ import type { CreateWorkItemInput } from '@/lib/dto/workItems';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Service-layer integration tests for the work-item REVISION audit trail
 // (Subtask 1.4.6) against a REAL Postgres (Yue's no-mocks rule — the single
@@ -348,7 +349,9 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
     expect(spy).toHaveBeenCalledTimes(1);
 
     // The work_item write rolled back — nothing landed in the project.
-    const items = await workItemRepository.findByProjectFiltered(fx.projectId);
+    const items = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(fx.projectId, undefined, tx),
+    );
     expect(items).toEqual([]);
     // And no orphan revision row exists.
     const revCount = await adminDb.workItemRevision.count();
@@ -381,7 +384,9 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
     // No revision orphaned (the revision write never ran), and no work_item.
     const revCount = await adminDb.workItemRevision.count();
     expect(revCount).toBe(0);
-    const items = await workItemRepository.findByProjectFiltered(fx.projectId);
+    const items = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(fx.projectId, undefined, tx),
+    );
     expect(items).toEqual([]);
 
     spy.mockRestore();
@@ -408,7 +413,9 @@ describe('atomicity — revision write failure rolls back the mutation', () => {
     ).rejects.toThrow('injected revision failure on update');
 
     // The title is unchanged (the work_item update rolled back).
-    const row = await workItemRepository.findById(created.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(created.id, tx),
+    );
     expect(row?.title).toBe('Before');
     // Only the original 'created' revision survives — no 'updated' orphan.
     const revs = await workItemRevisionRepository.listByWorkItem(created.id);

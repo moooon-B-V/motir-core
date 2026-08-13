@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -45,7 +46,9 @@ describe('createWorkItem — type + executor', () => {
     expect(task.executor).toBe('coding_agent');
 
     // Verified by a repository read — the STRUCTURED columns are set, not prose.
-    const row = await workItemRepository.findById(task.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(task.id, tx),
+    );
     expect(row?.type).toBe('code');
     expect(row?.executor).toBe('coding_agent');
   });
