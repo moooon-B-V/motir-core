@@ -30,6 +30,39 @@ import { db } from '@/lib/db';
 // interpolation (SQL injection risk). set_config() is a function call
 // that accepts parameters, so Prisma's tagged-template $executeRaw
 // binds userId/workspaceId safely.
+//
+// ⚠️ THE SHAPE OF A BOUND READ PATH — ONE TRANSACTION PER SERVICE METHOD.
+// Decided and MEASURED in docs/decisions/bound-read-transaction-shape.md
+// (MOTIR-2799). Because the GUCs are transaction-local, every read of a
+// policy-gated table needs a transaction, and a method with N reads could
+// open one transaction (N sequential reads) or N transactions (still
+// parallel). The convention is ONE, at the SERVICE-METHOD boundary, with
+// `tx` threaded into every read beneath it:
+//
+//   * A repository read of a policy-gated table takes `tx?:
+//     Prisma.TransactionClient` LAST and resolves `const client = tx ?? db`.
+//     That is also the form tests/rls/singletonReadScan.ts treats as
+//     BINDABLE, so adding it removes the read from the scan.
+//   * A `Promise.all` inside the boundary collapses to sequential awaits.
+//     That is the accepted cost: measured on a 10 000-item corpus, the
+//     widest fan-out that can be built from reportsService's reads goes
+//     58 ms -> 118 ms, while total pooled-connection TIME is unchanged —
+//     one transaction per method holds ONE Neon pool slot per request
+//     instead of N, and the pooler (measured: ~98 server connections, then
+//     it QUEUES rather than erroring) turns N-at-once into a request whose
+//     latency is the MAX of N queue waits.
+//   * A read already inside a bound transaction threads THAT `tx`. Never
+//     open a second — Prisma rejects nesting.
+//   * Read paths do NOT pass `options`. 118 ms against a 5 s default is a
+//     38x margin; see {@link TransactionBudget}, whose single shipped
+//     caller is a very different justification.
+//
+// The ONE sanctioned exception is STRUCTURAL, never performance: a fan-out
+// whose members need DIFFERENT bindings. `publicProjectsService` is it —
+// `work_item_public_project_read` fires only when `app.workspace_id` is
+// UNSET, so its page mixes bound and deliberately unbound reads and no
+// single transaction can express both. Wanting (B) for speed requires a
+// measurement in the PR showing this shape past a stated budget.
 
 export interface WorkspaceContext {
   userId: string;
