@@ -86,3 +86,36 @@ export class AcceptanceEvidenceBlobMissingError extends AcceptanceEvidenceError 
     this.name = 'AcceptanceEvidenceBlobMissingError';
   }
 }
+
+/**
+ * The story's CURRENT receipt is `approved` — a human watched that recording and
+ * signed it — so it is FROZEN and a publish may not supersede it (MOTIR-2764).
+ *
+ * This is the layer that cannot be bypassed. `markSupersededByWorkItem` carries
+ * no status predicate, so before this error existed ANY publish flipped the
+ * approved row `isCurrent: false`, unlinked its attachments, and left the
+ * orphan-GC to reclaim the very bytes the approval was given on — triggered by
+ * something as small as a one-line fix to an `acceptance*.spec.ts`.
+ *
+ * **This is NOT a failure condition.** An accepted story is the expected steady
+ * state for most specs most of the time, so the CI publisher recognises this
+ * `code`, reports the skip and exits 0 (MOTIR-2768). It is a 409 because the
+ * request conflicts with the resource's current state — the caller is not wrong,
+ * there is simply nothing left to write.
+ *
+ * `pending` and `changes_requested` receipts remain freely replaceable: a story
+ * still in review must keep getting the current truth on every run.
+ *
+ * Policy: `docs/decisions/acceptance-receipt-lifecycle.md` §2 and §4.
+ */
+export class AcceptanceEvidenceAlreadyApprovedError extends AcceptanceEvidenceError {
+  readonly code = 'ACCEPTANCE_EVIDENCE_ALREADY_APPROVED' as const;
+  readonly status = 409;
+  constructor(
+    /** The story whose receipt is frozen — the CI log names it, so a reader can act. */
+    readonly storyKey: string,
+  ) {
+    super(`${storyKey} has an approved acceptance receipt; it is frozen and was not superseded.`);
+    this.name = 'AcceptanceEvidenceAlreadyApprovedError';
+  }
+}
