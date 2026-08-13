@@ -10,6 +10,7 @@ import path from 'node:path';
 // The BYOK uploader (Subtask MOTIR-1632; direct-to-Blob MOTIR-1681) — pure
 // logic, no DB. Tests the no-op (red-run) path + the mint/upload/register flow.
 import {
+  ALREADY_APPROVED_CODE,
   assessArtifactSizes,
   assessWatchability,
   DEFAULT_MAX_ARTIFACT_BYTES,
@@ -22,6 +23,7 @@ import {
   resolveStoryKey,
   uploadAcceptanceVideo,
 } from '../scripts/upload-acceptance-video.mjs';
+import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'acc-video-'));
@@ -753,7 +755,9 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
     return JSON.parse(call?.[1]?.body ?? '{}') as Record<string, unknown>;
   }
 
-  function stubFetch(onRegister?: (storyKey: string) => { ok: boolean; status?: number }) {
+  function stubFetch(
+    onRegister?: (storyKey: string) => { ok: boolean; status?: number; body?: string },
+  ) {
     const fetchMock = vi.fn(async (url: string, init?: { body?: string; method?: string }) => {
       if (init?.method === 'PUT') return { ok: true, status: 200, text: async () => '' };
       if (url.endsWith('/upload-token')) {
@@ -776,7 +780,11 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       const storyKey = /work-items\/([^/]+)\//.exec(url)?.[1] ?? '';
       const verdict = onRegister?.(storyKey) ?? { ok: true };
       if (!verdict.ok) {
-        return { ok: false, status: verdict.status ?? 500, text: async () => 'boom' };
+        return {
+          ok: false,
+          status: verdict.status ?? 500,
+          text: async () => verdict.body ?? 'boom',
+        };
       }
       return { ok: true, json: async () => ({ evidence: { id: `ev-${storyKey}` } }) };
     });
@@ -1367,6 +1375,108 @@ describe('main — one publish per recording (MOTIR-1734)', () => {
       await main();
 
       expect(exit).not.toHaveBeenCalled();
+    });
+
+    // ── THE FROZEN-RECEIPT SKIP (MOTIR-2768) ────────────────────────────────
+    //
+    // MOTIR-2764 makes the service REFUSE to supersede an approved receipt. That
+    // refusal arrives here as a non-2xx, and without this branch the leg would go
+    // red on a story whose only fault is being finished — a fix that turned a
+    // silent data loss into a noisy false failure would have moved the problem
+    // rather than solved it.
+
+    const approvedBody = JSON.stringify({
+      code: ALREADY_APPROVED_CODE,
+      error: 'MOTIR-2258 has an approved acceptance receipt; it is frozen.',
+    });
+
+    it('an ACCEPTED story is SKIPPED — exit 0, counted apart, and said out loud', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      process.env['GITHUB_ACTIONS'] = 'true'; // so ciAnnotate actually emits
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch(() => ({ ok: false, status: 409, body: approvedBody }));
+
+      await main();
+
+      // Not a failure: the leg stays green.
+      expect(exit).not.toHaveBeenCalled();
+      const out = logSpy.mock.calls.flat().join('\n');
+      // Counted as neither a publish nor a failure — the third tally.
+      expect(out).toContain('Published 0 of 1 owned acceptance recording(s)');
+      expect(out).toContain('1 skipped — the story is accepted and its receipt is frozen');
+      // Legible to a person reading the run, naming the story and the reason.
+      expect(out).toContain('::notice::');
+      expect(out).toContain('MOTIR-2258 is accepted');
+      expect(console.error).not.toHaveBeenCalled();
+    });
+
+    it('the counts distinguish published / skipped / failed in ONE run', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-a-chromium', { storyKey: 'MOTIR-1' });
+      writeRecording(dir, 'acceptance-b-chromium', { storyKey: 'MOTIR-2' });
+      writeRecording(dir, 'acceptance-c-chromium', { storyKey: 'MOTIR-3' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      // `writeRecording` owns each spec by default, so this run owns all three —
+      // which is what puts all three outcomes through the same summary line.
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+      stubFetch((storyKey) => {
+        if (storyKey === 'MOTIR-2') return { ok: false, status: 409, body: approvedBody };
+        if (storyKey === 'MOTIR-3') return { ok: false, status: 500 };
+        return { ok: true };
+      });
+
+      await main();
+
+      const out = logSpy.mock.calls.flat().join('\n');
+      // One published, one skipped, one failed — and the skip inflates neither.
+      expect(out).toContain('Published 1 of 3 owned acceptance recording(s)');
+      expect(out).toContain('1 skipped');
+      // The real failure still fails the run.
+      expect(exit).toHaveBeenCalledWith(1);
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('1 publish failure(s)'));
+    });
+
+    it('recognises the refusal by CODE — the same 409 with another code still FAILS', async () => {
+      // The status number is shared with unrelated conflicts, so branching on it
+      // would silently swallow them. This is the arm that proves it does not.
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      stubFetch(() => ({
+        ok: false,
+        status: 409,
+        body: JSON.stringify({ code: 'SOMETHING_ELSE_ENTIRELY', error: 'nope' }),
+      }));
+
+      await main();
+
+      expect(exit).toHaveBeenCalledWith(1);
+    });
+
+    it('a non-JSON body at the same status is NOT a skip either', async () => {
+      const dir = tmpDir();
+      writeRecording(dir, 'acceptance-permission-gated-ui-chromium', { storyKey: 'MOTIR-2258' });
+      process.env['ACCEPTANCE_OUTPUT_DIR'] = dir;
+      const exit = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+      stubFetch(() => ({ ok: false, status: 409, body: '<html>gateway</html>' }));
+
+      await main();
+
+      expect(exit).toHaveBeenCalledWith(1);
+    });
+
+    it('the recognised code is PINNED to the service error — the two cannot drift', () => {
+      // A `.mjs` run by CI cannot import the TS class, so the constant is
+      // duplicated by necessity. This is what stops the duplicate from rotting:
+      // rename the error's `code` and this fails, naming both sides.
+      expect(ALREADY_APPROVED_CODE).toBe(
+        new AcceptanceEvidenceAlreadyApprovedError('MOTIR-1').code,
+      );
     });
 
     // ── The mint CONTRACT check (MOTIR-2499) ────────────────────────────────
