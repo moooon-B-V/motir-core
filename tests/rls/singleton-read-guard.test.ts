@@ -85,6 +85,15 @@ type Verdict =
    * `adminDb` — the MOTIR-2775 disposition.
    */
   | 'test-only'
+  /**
+   * The read runs UNBOUND on purpose, and a PUBLIC POLICY ARM admits its rows.
+   *
+   * ⚠️ THE ONE VERDICT THAT CANNOT BE EARNED BY READING CODE — this file's header
+   * says so, and it was true until MOTIR-2811. It is the claim that a specific
+   * policy admits the row with NO GUC bound, so it needs the policy to exist and
+   * a test to have watched it work. Both halves are named in the reason.
+   */
+  | 'public'
   /** Enumerated, not yet adjudicated. Only ever to be REMOVED from this file. */
   | 'unreviewed';
 
@@ -134,7 +143,19 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (1) ─────────────────────────────────────────────────
+  // ── public (1) ────────────────────────────────────────────────────────────
+  // The project square's demand counts, read by an anonymous visitor across many
+  // projects in many workspaces. There is no workspace to bind — inventing one
+  // would presume the answer the page computes — so MOTIR-2811 gave the table a
+  // public SELECT arm instead of a `tx`. The FIRST verdict of this kind: the
+  // header's "a `public` verdict today would be a guess wearing a citation" held
+  // until the arm and its tests existed together.
+  'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
+    'public',
+    'public_request_vote_public_project_read (20260813210000) · publicProjectAccess.test',
+  ],
+
+  // ── unbound-read-path (0) — the class is EMPTY ────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -148,10 +169,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
   // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
   // and not another sweep card.
-  'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
-    'unbound-read-path',
-    'projectSquareService',
-  ],
 
   // ── unreviewed (8) ────────────────────────────────────────────────────────
   // The public-surface reads, and the ONE category the header's argument still binds:

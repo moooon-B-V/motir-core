@@ -169,6 +169,73 @@ describe('the policies', () => {
   });
 });
 
+describe('the vote arm (MOTIR-2811)', () => {
+  // The project square renders each public project's DEMAND — how many people
+  // upvoted its requests — to a reader with no account. Before this arm the only
+  // policy on `public_request_vote` admitted the vote's OWNER or the system flag,
+  // and an anonymous square reader is neither, so every project showed zero.
+  //
+  // It is the one read in MOTIR-2796 a binding cannot fix: the square is
+  // cross-project and cross-TENANT by construction, so there is no single
+  // workspace to bind and inventing one would presume the answer.
+
+  it('ADMITS a public project’s votes with no workspace bound', async () => {
+    await seedVote(host);
+    const rows = await asAppRole({}, (tx) => selectVotes(tx, host.workItemId));
+    expect(rows).toHaveLength(1);
+  });
+
+  it('admits NOTHING ELSE unbound — a vote on a non-public project stays invisible', async () => {
+    // The direction that makes this a public arm rather than a hole. A vote is a
+    // row about a PERSON's interest, so a too-wide arm here leaks who wants what.
+    await seedVote(neighbour);
+    const rows = await asAppRole({}, (tx) => selectVotes(tx, neighbour.workItemId));
+    expect(rows).toHaveLength(0);
+
+    // And on the SAME row, so the only variable is the project's accessLevel:
+    // flipping the host project off `public` must take its votes back out of view.
+    await seedVote(host);
+    for (const level of ['open', 'limited', 'private'] as const) {
+      await adminDb.project.update({ where: { id: host.projectId }, data: { accessLevel: level } });
+      const hidden = await asAppRole({}, (tx) => selectVotes(tx, host.workItemId));
+      expect(hidden, `accessLevel=${level} must hide its votes unbound`).toHaveLength(0);
+    }
+  });
+
+  it('leaves a WORKSPACE-BOUND read exactly as it was', async () => {
+    // The arm is gated on there being NO bound workspace, so a tenant session
+    // keeps precisely the visible set it had: its own votes are governed by the
+    // owner-or-system policy, which the outsider's vote does not satisfy, and a
+    // neighbour's votes stay invisible either way.
+    await seedVote(host);
+    await seedVote(neighbour);
+
+    const own = await asAppRole({ workspaceId: host.workspaceId, userId: host.ownerId }, (tx) =>
+      selectVotes(tx, host.workItemId),
+    );
+    expect(own, 'a bound session does not gain the public arm').toHaveLength(0);
+
+    const foreign = await asAppRole({ workspaceId: host.workspaceId }, (tx) =>
+      selectVotes(tx, neighbour.workItemId),
+    );
+    expect(foreign).toHaveLength(0);
+  });
+
+  it('leaves the WRITE path untouched — an unbound INSERT is still refused', async () => {
+    // `FOR SELECT` only. The row is now readable unbound; casting one is not.
+    await expect(
+      asAppRole(
+        {},
+        (tx) =>
+          tx.$executeRaw`
+          INSERT INTO "public_request_vote" ("id", "work_item_id", "user_id", "created_at")
+          VALUES (${'vote-smuggled'}, ${host.workItemId}, ${outsiderId}, now())
+        `,
+      ),
+    ).rejects.toMatchObject({ meta: { driverAdapterError: { cause: { code: '42501' } } } });
+  });
+});
+
 describe('the service path — resolvePublicInputs', () => {
   it('RESOLVES a public project for an ANONYMOUS actor', async () => {
     const caps = await projectAccessService.getPublicCapabilities(host.projectId, null);
@@ -311,6 +378,18 @@ function selectProject(tx: Prisma.TransactionClient, id: string) {
 
 function selectWorkItem(tx: Prisma.TransactionClient, id: string) {
   return tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "work_item" WHERE "id" = ${id}`;
+}
+
+function selectVotes(tx: Prisma.TransactionClient, workItemId: string) {
+  return tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "public_request_vote" WHERE "work_item_id" = ${workItemId}`;
+}
+
+/** One upvote on a tenant's seeded request, cast by the outsider account. */
+async function seedVote(tenant: Tenant): Promise<void> {
+  await adminDb.publicRequestVote.create({
+    data: { workItemId: tenant.workItemId, userId: outsiderId },
+  });
 }
 
 /** The full tenant root chain the app builds at signup, plus one project and one item. */
