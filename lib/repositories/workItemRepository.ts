@@ -878,9 +878,11 @@ export const workItemRepository = {
     parentIds: string[],
     workspaceId: string,
     after: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (parentIds.length === 0) return [];
-    return db.workItem.findMany({
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: {
         parentId: { in: parentIds },
         workspaceId,
@@ -1709,6 +1711,7 @@ export const workItemRepository = {
   async findAllByProjectForValidity(
     projectId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       id: string;
@@ -1719,7 +1722,8 @@ export const workItemRepository = {
       projectId: string;
     }>
   > {
-    return db.workItem.findMany({
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: { projectId, workspaceId, archivedAt: null, triagedAt: null },
       select: {
         id: true,
@@ -1998,6 +2002,7 @@ export const workItemRepository = {
   async findDescriptionsByIds(
     ids: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       id: string;
@@ -2011,7 +2016,8 @@ export const workItemRepository = {
     // `type` / `executor` ride along for the prose advisory's ORDERING exemption
     // (MOTIR-2175), and `targetRepo` for the REPO-STRADDLE check's pin side
     // (MOTIR-2177) — the same rows, a few columns wider, rather than more reads.
-    return db.workItem.findMany({
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: { id: { in: ids }, workspaceId },
       select: { id: true, descriptionMd: true, type: true, executor: true, targetRepo: true },
     });

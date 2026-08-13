@@ -937,3 +937,69 @@ describe('workItemsService — search, subtree and the item’s decorations', ()
     expect(detail.labels.map((l) => l.name)).toEqual(['needs-review']);
   });
 });
+
+// ── MOTIR-2808 · planValidityService + planStalenessService ───────────────────
+//
+// The queries behind the product's OPINION of a plan: is it valid, has it gone
+// stale. Unbound they gathered nothing — and a validity check over an empty set
+// does not report "I could not tell". Every rule is satisfied by an absence:
+// no cycles in no graph, no unsatisfied blockers among no items. So the product
+// looked at a plan with real problems and pronounced it healthy.
+//
+// That is the confident-wrong shape, and it is worse than a blank report. A
+// blank report makes someone investigate; a clean bill of health makes them
+// stop looking.
+
+describe('planValidityService — the verdict that was wrong and certain', () => {
+  it('reports a subtree INVALID when a member is blocked by work outside it', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'VAL' });
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The container' },
+      fx.ctx,
+    );
+    const child = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Inside', parentId: story.id },
+      fx.ctx,
+    );
+    const outsider = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Outside and not done' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: child.id, toId: outsider.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+
+    const verdict = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+
+    // Unbound this returned `valid: true` with an EMPTY blocker list — the plan
+    // pronounced healthy because the check could not see any of it.
+    expect(verdict.valid).toBe(false);
+    expect(verdict.blockers.map((b) => b.blockedBy)).toContain(outsider.identifier);
+  });
+
+  it('and reports it VALID once the outside blocker is done — the control', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'VAB' });
+    const story = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The container' },
+      fx.ctx,
+    );
+    const child = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Inside', parentId: story.id },
+      fx.ctx,
+    );
+    const outsider = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Outside but finished' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: child.id, toId: outsider.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({ where: { id: outsider.id }, data: { status: 'done' } });
+
+    const verdict = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
+    expect(verdict.valid).toBe(true);
+    expect(verdict.blockers).toEqual([]);
+  });
+});

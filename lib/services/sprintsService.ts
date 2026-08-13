@@ -969,9 +969,9 @@ async function computeSprintValidity(
     for (const ancestorId of ancestorsByItem.get(m.id) ?? []) gate(ancestorId, m.id);
   }
 
-  const edges = await workItemLinkRepository.findBlockerEdgesForItems([
-    ...gatedMembersByProbe.keys(),
-  ]);
+  const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerEdgesForItems([...gatedMembersByProbe.keys()], undefined, tx),
+  );
   // The parent-ready cascade: a not-done in-sprint item is also gated by its OWN
   // not-done children (a parent can only be finished once every child is done).
   // Keyed on the not-done MEMBERS directly (not the ancestor probe set) — this is

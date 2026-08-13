@@ -422,10 +422,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
   ],
-  'lib/services/workItemsService.ts#workItemRepository.findByIdentifier': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
   'lib/services/workItemsService.ts#workItemRepository.findByIdentifiers': [
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
@@ -540,8 +536,10 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * 189 -> 177: MOTIR-2802 bound `workItemsService`'s link-edge reads and the
  * item-detail fan-out they sit inside.
  * 177 -> 174: MOTIR-2803 bound the tree / search / stub half of the same file.
+ * 174 -> 172: MOTIR-2808 bound the plan-health verdicts and the identifier resolve
+ * their subtree read opens on.
  */
-const UNBOUND_CALL_SITE_CEILING = 174;
+const UNBOUND_CALL_SITE_CEILING = 172;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.

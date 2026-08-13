@@ -1,4 +1,5 @@
 import { gatingItemSatisfied } from '@/lib/workItems/validity';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { plansService, TEMP_REF_PREFIX } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
@@ -123,9 +124,12 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
   const projectId = plan.projectId;
 
   // The project's live node set + the initial status an `add` would be created in.
-  const liveItems = await workItemRepository.findAllByProjectForValidity(
-    projectId,
-    ctx.workspaceId,
+  // The plan-health verdict's whole input, in ONE bound transaction. Unbound
+  // these returned nothing, and a validity check over an empty set does not
+  // report "I could not tell" — every rule is satisfied by an absence, so a plan
+  // with real problems was pronounced healthy.
+  const liveItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findAllByProjectForValidity(projectId, ctx.workspaceId, tx),
   );
   const initialStatus =
     (await workflowsService.getInitialStatusKey(projectId, ctx.workspaceId)) ?? '';
@@ -146,8 +150,12 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
   // cross-project (a block can span projects) — carry it in as a node from the
   // edge's own fields so its done-ness/membership is judged against its OWN project.
   const blockedBy = new Map<string, Set<string>>();
-  const liveEdges = await workItemLinkRepository.findBlockerEdgesForItems(
-    liveItems.map((it) => it.id),
+  const liveEdges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerEdgesForItems(
+      liveItems.map((it) => it.id),
+      undefined,
+      tx,
+    ),
   );
   for (const e of liveEdges) {
     if (!nodes.has(e.blockerId)) {
@@ -340,12 +348,10 @@ async function projectedProseAdvisories(
   // neither), so the read is keyed on "is this node real", not on "is its body
   // projected" — one batched read either way.
   const needsStoredRow = scanned.filter((n) => !n.id.startsWith(TEMP_REF_PREFIX)).map((n) => n.id);
-  const storedRows = new Map(
-    (await workItemRepository.findDescriptionsByIds(needsStoredRow, ctx.workspaceId)).map((r) => [
-      r.id,
-      r,
-    ]),
+  const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findDescriptionsByIds(needsStoredRow, ctx.workspaceId, tx),
   );
+  const storedRows = new Map(rows.map((r) => [r.id, r] as [string, (typeof rows)[number]]));
 
   const subjects = scanned.map((node) => {
     const exemptIds = new Set<string>([node.id]);

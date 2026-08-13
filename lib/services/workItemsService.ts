@@ -3321,7 +3321,9 @@ export const workItemsService = {
     let depth = 0;
 
     while (frontier.length > 0 && depth < maxDepth) {
-      const edgeRows = await workItemLinkRepository.findBlockerEdgesForItems(frontier);
+      const edgeRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemLinkRepository.findBlockerEdgesForItems(frontier, undefined, tx),
+      );
       const next: string[] = [];
       for (const e of edgeRows) {
         if (e.blockerProjectId !== root.projectId) continue; // out-of-project → out of scope
@@ -3565,7 +3567,9 @@ export const workItemsService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const row = await workItemRepository.findByIdentifier(projectId, identifier);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(projectId, identifier, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
@@ -3590,7 +3594,9 @@ export const workItemsService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<WorkItemLineageDto> {
-    const row = await workItemRepository.findByIdentifier(projectId, identifier);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(projectId, identifier, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     const ancestorRows = await workItemRepository.findAncestors(row.id, ctx.workspaceId);
@@ -4887,7 +4893,13 @@ async function computeWorkItemValidity(
     return { key: root.identifier, valid: true, blockers: [], advisories: [] };
   }
 
-  const edges = await workItemLinkRepository.findBlockerEdgesForItems(notDone.map((m) => m.id));
+  const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerEdgesForItems(
+      notDone.map((m) => m.id),
+      undefined,
+      tx,
+    ),
+  );
   // Per-project terminal sets — a block can be cross-project, so each blocker's
   // done-ness is judged against its OWN project (finding #21).
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
@@ -4958,9 +4970,12 @@ async function computeSubtreeProseAdvisories(
 
   const bodies = new Map(
     (
-      await workItemRepository.findDescriptionsByIds(
-        notDone.map((m) => m.id),
-        ctx.workspaceId,
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findDescriptionsByIds(
+          notDone.map((m) => m.id),
+          ctx.workspaceId,
+          tx,
+        ),
       )
     ).map((r) => [r.id, r]),
   );

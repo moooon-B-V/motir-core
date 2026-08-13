@@ -1,4 +1,5 @@
 import type { PlanItem, WorkItem } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -175,10 +176,13 @@ export const planStalenessService: PlanStalenessService = {
 
     const newChildrenByParent = new Map<string, WorkItem[]>();
     if (plan.plannedAt && realParentIds.size > 0) {
-      const children = await workItemRepository.findChildrenCreatedAfter(
-        [...realParentIds],
-        ctx.workspaceId,
-        plan.plannedAt,
+      const children = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findChildrenCreatedAfter(
+          [...realParentIds],
+          ctx.workspaceId,
+          plan.plannedAt as Date,
+          tx,
+        ),
       );
       for (const child of children) {
         if (!child.parentId) continue;

@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (14) ────────────────────────────────────────────────
+  // ── unbound-read-path (11) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -160,9 +160,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-read-path',
     'projectSquareService',
   ],
-  'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
-  'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
-  'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#matchesAutomationCondition': [
     'unbound-read-path',
     'automationEngineService',
