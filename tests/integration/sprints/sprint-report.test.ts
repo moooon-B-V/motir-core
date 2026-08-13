@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -340,25 +341,37 @@ describe('workItemRepository done-membership reads (empty done-category set)', (
     await addIssue(fx, sprint.id, 'a');
     await addIssue(fx, sprint.id, 'b');
 
-    const completedCount = await workItemRepository.countSprintIssuesByDoneMembership(
-      sprint.id,
-      fx.workspaceId,
-      { statusKeys: [], include: true },
+    const completedCount = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countSprintIssuesByDoneMembership(
+        sprint.id,
+        fx.workspaceId,
+        { statusKeys: [], include: true },
+        tx,
+      ),
     );
-    const incompleteCount = await workItemRepository.countSprintIssuesByDoneMembership(
-      sprint.id,
-      fx.workspaceId,
-      { statusKeys: [], include: false },
+    const incompleteCount = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countSprintIssuesByDoneMembership(
+        sprint.id,
+        fx.workspaceId,
+        { statusKeys: [], include: false },
+        tx,
+      ),
     );
-    const completedRows = await workItemRepository.findSprintIssuesByDoneMembership(
-      sprint.id,
-      fx.workspaceId,
-      { statusKeys: [], include: true, take: 50 },
+    const completedRows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssuesByDoneMembership(
+        sprint.id,
+        fx.workspaceId,
+        { statusKeys: [], include: true, take: 50 },
+        tx,
+      ),
     );
-    const incompleteRows = await workItemRepository.findSprintIssuesByDoneMembership(
-      sprint.id,
-      fx.workspaceId,
-      { statusKeys: [], include: false, take: 50 },
+    const incompleteRows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findSprintIssuesByDoneMembership(
+        sprint.id,
+        fx.workspaceId,
+        { statusKeys: [], include: false, take: 50 },
+        tx,
+      ),
     );
 
     expect(completedCount).toBe(0);

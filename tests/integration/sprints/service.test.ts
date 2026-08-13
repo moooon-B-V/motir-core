@@ -1,4 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import type { SprintState } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { sprintsService, assertSprintTransition } from '@/lib/services/sprintsService';
@@ -234,11 +235,19 @@ describe('sprintsService.deleteSprint', () => {
     // A SEED, not the claim: the assertion below is `countSprintIssues`. Through the
     // admin client so the seed cannot be the thing that fails (MOTIR-2747).
     await adminDb.$transaction((tx) => workItemRepository.setSprint(item.id, sprint.id, tx));
-    expect(await workItemRepository.countSprintIssues(sprint.id, fx.workspaceId)).toBe(1);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countSprintIssues(sprint.id, fx.workspaceId, undefined, tx),
+      ),
+    ).toBe(1);
 
     await sprintsService.deleteSprint(sprint.id, fx.ownerCtx);
 
-    expect(await sprintRepository.findById(sprint.id, fx.workspaceId)).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        sprintRepository.findById(sprint.id, fx.workspaceId, tx),
+      ),
+    ).toBeNull();
     const reloaded = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(reloaded?.sprintId).toBeNull(); // fell back to the backlog, not deleted
   });

@@ -50,7 +50,8 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  * batch's progress, which is invisible in the diff and looks exactly like
  * agreement.
  */
-const IN_SCOPE_CEILING = 375;
+// 375 - 39 (MOTIR-2834, tests/integration/sprints) = 336
+const IN_SCOPE_CEILING = 336;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
