@@ -48,9 +48,11 @@ export const workItemRevisionRepository = {
   async listByWorkItem(
     workItemId: string,
     options: { take?: number; cursor?: string; order?: 'asc' | 'desc' } = {},
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItemRevision[]> {
     const { take = 50, cursor, order = 'desc' } = options;
-    return db.workItemRevision.findMany({
+    const client = tx ?? db;
+    return client.workItemRevision.findMany({
       where: { workItemId },
       // `id` is a required secondary sort: `changedAt` alone is not a total
       // order — two revisions written in the same millisecond tie, and an
@@ -126,8 +128,13 @@ export const workItemRevisionRepository = {
    * `jsonb_typeof` guards the (never-written, but JSON-typed) non-object diff.
    * Read-only path → `db` singleton.
    */
-  async countDisplayableByWorkItem(workItemId: string, suppressedKeys: string[]): Promise<number> {
-    const rows = await db.$queryRaw<Array<{ count: bigint }>>`
+  async countDisplayableByWorkItem(
+    workItemId: string,
+    suppressedKeys: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ count: bigint }>>`
       SELECT count(*) AS count
       FROM "work_item_revision" r
       WHERE r."workItemId" = ${workItemId}

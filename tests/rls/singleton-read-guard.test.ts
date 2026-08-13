@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (31) ────────────────────────────────────────────────
+  // ── unbound-read-path (30) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -192,10 +192,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'automationEngineService',
   ],
   'workItemRepository.ts#quickSearch': ['unbound-read-path', 'workItemsService'],
-  'workItemRevisionRepository.ts#countDisplayableByWorkItem': [
-    'unbound-read-path',
-    'activityService',
-  ],
   'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': [
     'unbound-read-path',
     'aiBoundaryService',
@@ -296,8 +292,11 @@ const UNREVIEWED_CEILING = 8;
  * the batch together and binding one without the other fixes nothing.
  * 32 -> 31: `workItemLinkRepository.findByToItem`, the IN-edge mirror, for the
  * same reason.
+ * 31 -> 30: MOTIR-2806 bound `activityService` — `countDisplayableByWorkItem`.
+ * Its other named read, `sprintRepository.findByIds`, landed with MOTIR-2807,
+ * which needed it for the same feed.
  */
-const UNBOUND_READ_PATH_CEILING = 31;
+const UNBOUND_READ_PATH_CEILING = 30;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

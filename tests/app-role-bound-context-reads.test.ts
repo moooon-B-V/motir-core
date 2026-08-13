@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
+import { activityService } from '@/lib/services/activityService';
 import { boardsService } from '@/lib/services/boardsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { reportsService } from '@/lib/services/reportsService';
@@ -770,4 +771,31 @@ describe('workItemRepository.findByIds — one read, five consuming surfaces', (
   // MOTIR-2803's. `findByIds` is bound at those call sites already; proving them
   // end-to-end needs those cards, and writing a test that passes only once a
   // sibling lands would report this card's state dishonestly.
+});
+
+// ── MOTIR-2806 · activityService ──────────────────────────────────────────────
+//
+// The activity feed hydrates the entities its events name, and counts the
+// item's displayable revisions to decide whether a "show more" control appears
+// at all. Unbound, the count read 0 — so an item with a long history rendered a
+// short one with NO affordance to see the rest. Not a broken screen: a missing
+// door, which nobody thinks to report.
+
+describe('activityService — the feed that lost its history', () => {
+  it('reports the item’s real revision total, not zero', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'ACT' });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Has a history' },
+      fx.ctx,
+    );
+    await workItemsService.updateWorkItem(item.id, { title: 'Renamed once' }, fx.ctx);
+    await workItemsService.updateWorkItem(item.id, { title: 'Renamed twice' }, fx.ctx);
+
+    const page = await activityService.listHistory(item.id, {}, fx.ctx);
+
+    // A specific figure, because `toBe(0)` is what the unbound read passes and
+    // `toBeGreaterThanOrEqual(0)` would pass either way. Created + two renames.
+    expect(page.totalCount).toBe(3);
+    expect(page.entries.length).toBe(3);
+  });
 });
