@@ -10,6 +10,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Board SETTINGS page resolution (Story 3.7 · Subtask 3.7.8). The per-board
 // settings page reads `?board=<id>` and builds its config model from THAT board's
@@ -51,7 +52,9 @@ async function makeFixture(label: string): Promise<Fixture> {
   });
   const workspaceId = ws.workspace.id;
   const project = await createTestProject({ workspaceId, actorUserId: user.id });
-  const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
+  const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    boardRepository.findDefaultForProject(project.id, workspaceId, tx),
+  );
   if (!board) throw new Error('expected a seeded default board');
   return {
     ctx: { userId: user.id, workspaceId },

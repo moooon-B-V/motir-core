@@ -18,6 +18,7 @@ import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // boardsService.setSwimlaneGroupBy / setColumnWipLimit (Story 3.3 · Subtask
 // 3.3.3) — the board-config write path. Real Postgres (no mocks), per CLAUDE.md.
@@ -75,7 +76,9 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
-  const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
+  const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    boardRepository.findDefaultForProject(project.id, workspaceId, tx),
+  );
   if (!board) throw new Error('expected a seeded default board');
   const column = await adminDb.boardColumn.findFirstOrThrow({
     where: { boardId: board.id },
@@ -201,7 +204,9 @@ describe('boardsService.setColumnWipLimit (Subtask 3.3.3)', () => {
     // The write goes through the tx-required repo method; a no-op sanity check
     // that the seeded column resolves via the workspace-scoped read.
     const fx = await makeFixture('wip-repo');
-    const column = await boardColumnRepository.findById(fx.columnId, fx.workspaceId);
+    const column = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      boardColumnRepository.findById(fx.columnId, fx.workspaceId, tx),
+    );
     expect(column?.id).toBe(fx.columnId);
   });
 });
