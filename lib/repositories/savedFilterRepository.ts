@@ -87,8 +87,12 @@ export const savedFilterRepository = {
    * the order is total and the id cursor is stable), `take + 1` row-peek for
    * `nextCursor`, star facts aggregated in the same query.
    */
-  async listPage(args: SavedFilterListArgs): Promise<SavedFilterWithStars[]> {
-    return db.savedFilter.findMany({
+  async listPage(
+    args: SavedFilterListArgs,
+    tx?: Prisma.TransactionClient,
+  ): Promise<SavedFilterWithStars[]> {
+    const client = tx ?? db;
+    return client.savedFilter.findMany({
       where: listWhere(args),
       include: starsInclude(args.actorUserId),
       orderBy: { nameLower: 'asc' },
@@ -98,8 +102,12 @@ export const savedFilterRepository = {
   },
 
   /** The view's total (the directory's count header), same predicate. */
-  async countVisible(args: Omit<SavedFilterListArgs, 'cursor' | 'take'>): Promise<number> {
-    return db.savedFilter.count({ where: listWhere({ ...args, take: 0 }) });
+  async countVisible(
+    args: Omit<SavedFilterListArgs, 'cursor' | 'take'>,
+    tx?: Prisma.TransactionClient,
+  ): Promise<number> {
+    const client = tx ?? db;
+    return client.savedFilter.count({ where: listWhere({ ...args, take: 0 }) });
   },
 
   /**

@@ -5,8 +5,14 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
+import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
+import { encodeFilterParam } from '@/lib/filters/ast';
+import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
+import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { makeWorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from './helpers/adminDb';
+import { isAppRoleTestMode } from './helpers/parallelDb';
 import { truncateAuthTables } from './helpers/db';
 
 // A tenant read reached from inside a BOUND context must run ON that context
@@ -29,6 +35,12 @@ import { truncateAuthTables } from './helpers/db';
 // under the app role ONLY once the `tx` is threaded — so the same test is a live
 // CI path in the default mode and the discriminator in flag mode. Every one of
 // them fails under the flag on the commit before this card.
+
+/** A trivially-valid stored filter — the criteria are not what these cases test. */
+const KIND_TASK_FILTER_PARAM = encodeFilterParam({
+  combinator: 'and',
+  conditions: [{ field: 'kind', operator: 'is_any_of', value: ['task'] }],
+});
 
 beforeEach(async () => {
   await truncateAuthTables();
@@ -197,5 +209,156 @@ describe('workItemLinkRepository.findById — reached by unlinkWorkItems', () =>
 
     const remaining = await adminDb.workItemLink.findUnique({ where: { id: link.id } });
     expect(remaining).toBeNull();
+  });
+});
+
+// ── MOTIR-2805 · savedFiltersService ──────────────────────────────────────────
+//
+// The second of the two services that contained ZERO context wrappers anywhere
+// in the file. Unbound, `listPage` / `countVisible` / `countByFilter` each
+// returned the empty answer and nothing raised, so every user's saved-filter
+// directory was empty and every delete warned about zero dependents.
+//
+// These sit here rather than in `tests/integration/saved-filters` for the reason
+// this file's header gives: written unconditionally they pass trivially under the
+// bypass role and are the discriminator under `TEST_DB_APP_ROLE=1`.
+
+describe('savedFilterRepository.listPage / countVisible — the filter directory', () => {
+  it('lists the project’s filters WITH a total that agrees with the page', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SFA' });
+    for (const name of ['Alpha', 'Beta', 'Gamma']) {
+      await savedFiltersService.create(
+        fx.projectIdentifier,
+        { name, visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
+        fx.ctx,
+      );
+    }
+
+    const page = await savedFiltersService.list(fx.projectIdentifier, {}, fx.ctx);
+
+    // Unbound, `items` was [] and `total` was 0 — a directory that renders as
+    // "no saved filters" for a project that has three.
+    expect(page.items.map((f) => f.name)).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(page.total).toBe(3);
+    // The page and its count are separate reads presented as one answer. Two
+    // transactions can disagree ("1–20 of 0"); one cannot.
+    expect(page.total).toBe(page.items.length);
+  });
+
+  it('pages and counts consistently when the page is smaller than the total', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SFB' });
+    for (const name of ['One', 'Two', 'Three']) {
+      await savedFiltersService.create(
+        fx.projectIdentifier,
+        { name, visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
+        fx.ctx,
+      );
+    }
+
+    const page = await savedFiltersService.list(fx.projectIdentifier, { limit: 2 }, fx.ctx);
+
+    expect(page.items).toHaveLength(2);
+    expect(page.nextCursor).not.toBeNull();
+    // The TOTAL is the whole visible set, not the page — the assertion that
+    // catches a count read in a different snapshot from the page.
+    expect(page.total).toBe(3);
+  });
+});
+
+describe('savedFilterSubscriptionRepository.countByFilter — the delete warning', () => {
+  it('counts the subscriptions a delete would remove', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SFC' });
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'Watched', visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
+      fx.ctx,
+    );
+    await savedFilterSubscriptionsService.subscribe(
+      fx.projectIdentifier,
+      filter.id,
+      { schedule: 'daily', hour: 9 },
+      fx.ctx,
+    );
+
+    // Unbound this returned 0, so the delete dialog promised nothing would be
+    // lost while a live subscription was about to be cascaded away.
+    const dependents = await savedFiltersService.getDependents(
+      fx.projectIdentifier,
+      filter.id,
+      fx.ctx,
+    );
+    expect(dependents.subscriptionCount).toBe(1);
+  });
+
+  it('reads back the actor’s own subscription rather than reporting none', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SFD' });
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'Mine', visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
+      fx.ctx,
+    );
+    await savedFilterSubscriptionsService.subscribe(
+      fx.projectIdentifier,
+      filter.id,
+      { schedule: 'weekly', weekday: 2, hour: 8 },
+      fx.ctx,
+    );
+
+    // `getMine` resolved the project through an unbound read, so it threw
+    // ProjectNotFoundError for a project the actor owns.
+    const mine = await savedFilterSubscriptionsService.getMine(
+      fx.projectIdentifier,
+      filter.id,
+      fx.ctx,
+    );
+    expect(mine).toEqual({ schedule: 'weekly', weekday: 2, hour: 8 });
+  });
+});
+
+describe('the `tx ?? db` fallback arm of the saved-filter reads', () => {
+  // ⚠️ DELIBERATELY UNBOUND, and both arms are asserted. The optional `tx` is what
+  // `tests/rls/singletonReadScan.ts` recognises as BINDABLE, so it has to stay —
+  // but once every production call site threads a `tx`, the `db` arm has no
+  // caller left and would go uncovered against the file's ≥90% branch floor.
+  //
+  // The assertion is split by role rather than weakened, because the two answers
+  // are BOTH the contract: on the bypass role the fallback reads normally; on
+  // `motir_app` it binds nothing, the policy sees NULL, and the honest answer is
+  // the EMPTY one. Asserting rows here would be asserting that a path with no
+  // binding at all somehow works — the vacuous-pass shape this story exists to
+  // remove.
+  it('resolves to the singleton, and returns the empty answer under the app role', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SFE' });
+    const filter = await savedFiltersService.create(
+      fx.projectIdentifier,
+      { name: 'Fallback', visibility: 'private', filterParam: KIND_TASK_FILTER_PARAM },
+      fx.ctx,
+    );
+    await savedFilterSubscriptionsService.subscribe(
+      fx.projectIdentifier,
+      filter.id,
+      { schedule: 'daily', hour: 9 },
+      fx.ctx,
+    );
+
+    const listArgs = {
+      projectId: fx.projectId,
+      actorUserId: fx.ownerId,
+      actorIsAdmin: true,
+      view: 'all' as const,
+    };
+    const rows = await savedFilterRepository.listPage({ ...listArgs, take: 10 });
+    const total = await savedFilterRepository.countVisible(listArgs);
+    const subs = await savedFilterSubscriptionRepository.countByFilter(filter.id);
+
+    if (isAppRoleTestMode()) {
+      expect(rows).toEqual([]);
+      expect(total).toBe(0);
+      expect(subs).toBe(0);
+    } else {
+      expect(rows.map((r) => r.name)).toEqual(['Fallback']);
+      expect(total).toBe(1);
+      expect(subs).toBe(1);
+    }
   });
 });

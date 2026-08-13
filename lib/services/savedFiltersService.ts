@@ -1,5 +1,4 @@
 import { Prisma, type Project, type SavedFilterVisibility } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import type { SavedFilterListView } from '@/lib/repositories/savedFilterRepository';
 import { savedFilterStarRepository } from '@/lib/repositories/savedFilterStarRepository';
@@ -58,6 +57,7 @@ import type {
   SavedFilterSummaryDto,
 } from '@/lib/dto/savedFilters';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { readProjectByIdentifier } from '@/lib/workspaces/tenantRead';
 
 // Saved-filters service (Story 6.2 · Subtask 6.2.1) — persistence +
@@ -229,8 +229,12 @@ function resolveStoredEnvelope(envelope: unknown): {
 
 /** The project's done-CATEGORY status keys — the per-resolve input the
  * Open/Done built-ins compile against (read fresh, never stored). */
-async function doneStatusKeys(project: Project, ctx: ServiceContext): Promise<string[]> {
-  const statuses = await workflowsRepository.findStatuses(project.id, ctx.workspaceId);
+async function doneStatusKeys(
+  project: Project,
+  ctx: ServiceContext,
+  tx?: Prisma.TransactionClient,
+): Promise<string[]> {
+  const statuses = await workflowsRepository.findStatuses(project.id, ctx.workspaceId, tx);
   return statuses.filter((s) => s.category === 'done').map((s) => s.key);
 }
 
@@ -301,7 +305,7 @@ export const savedFiltersService = {
     const ast = parseIncomingFilterParam(input.filterParam);
 
     return retryOnceOnUniqueRace(() =>
-      db.$transaction(async (tx) => {
+      withWorkspaceContext(ctx, async (tx) => {
         const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
         await assertCanManageSavedFilters(pc.project.id, ctx, tx);
         if (!canCreateSavedFilter(pc.caps, input.visibility)) {
@@ -349,26 +353,35 @@ export const savedFiltersService = {
     input: ListSavedFiltersInput,
     ctx: ServiceContext,
   ): Promise<SavedFilterPageDto> {
-    const pc = await resolveProjectAndCaps(projectKey, ctx);
     const view = input.view ?? 'all';
     const take = Math.min(
       Math.max(input.limit ?? SAVED_FILTER_PAGE_SIZE, 1),
       SAVED_FILTER_PAGE_MAX,
     );
-    const listArgs = {
-      projectId: pc.project.id,
-      actorUserId: ctx.userId,
-      actorIsAdmin: pc.caps.isAdmin,
-      view,
-      q: input.q,
-    };
-    const rows = await savedFilterRepository.listPage({
-      ...listArgs,
-      cursor: input.cursor,
-      take: take + 1,
+    // ONE bound transaction for the gate, the page and its total
+    // (docs/decisions/bound-read-transaction-shape.md). The page and the count
+    // are two reads of the same predicate presented as one answer, so sharing a
+    // snapshot is not just the convention here — it is what stops the directory
+    // rendering "1–20 of 0" when a filter is created or deleted between them.
+    const { rows, page, total } = await withWorkspaceContext(ctx, async (tx) => {
+      const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+      const listArgs = {
+        projectId: pc.project.id,
+        actorUserId: ctx.userId,
+        actorIsAdmin: pc.caps.isAdmin,
+        view,
+        q: input.q,
+      };
+      const rowsInTx = await savedFilterRepository.listPage(
+        { ...listArgs, cursor: input.cursor, take: take + 1 },
+        tx,
+      );
+      return {
+        rows: rowsInTx,
+        page: rowsInTx.slice(0, take),
+        total: await savedFilterRepository.countVisible(listArgs, tx),
+      };
     });
-    const page = rows.slice(0, take);
-    const total = await savedFilterRepository.countVisible(listArgs);
 
     const q = input.q?.trim().toLowerCase() ?? '';
     const builtins =
@@ -411,27 +424,31 @@ export const savedFiltersService = {
     filterId: string,
     ctx: ServiceContext,
   ): Promise<ResolvedSavedFilterDto> {
-    const pc = await resolveProjectAndCaps(projectKey, ctx);
+    // One bound transaction for the whole resolve — the gate, the built-in's
+    // status read and the row read all sit inside it.
+    return withWorkspaceContext(ctx, async (tx) => {
+      const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
 
-    if (isBuiltinFilterId(filterId)) {
-      const def = builtinFilterById(filterId);
-      if (!def) throw new SavedFilterNotFoundError(filterId);
-      return resolveBuiltin(def, await doneStatusKeys(pc.project, ctx), pc.caps, ctx);
-    }
+      if (isBuiltinFilterId(filterId)) {
+        const def = builtinFilterById(filterId);
+        if (!def) throw new SavedFilterNotFoundError(filterId);
+        return resolveBuiltin(def, await doneStatusKeys(pc.project, ctx, tx), pc.caps, ctx);
+      }
 
-    const row = await getVisibleFilter(filterId, pc, ctx);
-    const facts = rowFacts(row, ctx.userId);
-    const manage = canManageSavedFilter(pc.caps, facts);
-    return {
-      filter: toSavedFilterSummaryDto(row),
-      ...resolveStoredEnvelope(row.astEnvelope),
-      capabilities: {
-        canManage: manage,
-        canDelete: manage,
-        canChangeOwner: canChangeSavedFilterOwner(pc.caps, facts),
-        canShare: pc.caps.canShare,
-      },
-    };
+      const row = await getVisibleFilter(filterId, pc, ctx, tx);
+      const facts = rowFacts(row, ctx.userId);
+      const manage = canManageSavedFilter(pc.caps, facts);
+      return {
+        filter: toSavedFilterSummaryDto(row),
+        ...resolveStoredEnvelope(row.astEnvelope),
+        capabilities: {
+          canManage: manage,
+          canDelete: manage,
+          canChangeOwner: canChangeSavedFilterOwner(pc.caps, facts),
+          canShare: pc.caps.canShare,
+        },
+      };
+    });
   },
 
   /**
@@ -456,7 +473,7 @@ export const savedFiltersService = {
       input.filterParam === undefined ? undefined : parseIncomingFilterParam(input.filterParam);
 
     return retryOnceOnUniqueRace(() =>
-      db.$transaction(async (tx) => {
+      withWorkspaceContext(ctx, async (tx) => {
         const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
         await assertCanManageSavedFilters(pc.project.id, ctx, tx);
         await savedFilterRepository.lockById(filterId, tx);
@@ -511,7 +528,7 @@ export const savedFiltersService = {
     ctx: ServiceContext,
   ): Promise<SavedFilterSummaryDto> {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
       await assertCanManageSavedFilters(pc.project.id, ctx, tx);
       await savedFilterRepository.lockById(filterId, tx);
@@ -543,7 +560,7 @@ export const savedFiltersService = {
    */
   async delete(projectKey: string, filterId: string, ctx: ServiceContext): Promise<void> {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
       await assertCanManageSavedFilters(pc.project.id, ctx, tx);
       await savedFilterRepository.lockById(filterId, tx);
@@ -571,13 +588,15 @@ export const savedFiltersService = {
     ctx: ServiceContext,
   ): Promise<SavedFilterDependentsDto> {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
-    const pc = await resolveProjectAndCaps(projectKey, ctx);
-    const row = await getVisibleFilter(filterId, pc, ctx);
-    const widgetCount = await dashboardWidgetRepository.countBySavedFilter(row.id);
-    // Subscriptions (Subtask 6.2.5) FK-cascade with the row; the delete warning
-    // names them. They die in the same delete transaction (the FK Cascade).
-    const subscriptionCount = await savedFilterSubscriptionRepository.countByFilter(row.id);
-    return { subscriptionCount, widgetCount };
+    return withWorkspaceContext(ctx, async (tx) => {
+      const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
+      const row = await getVisibleFilter(filterId, pc, ctx, tx);
+      const widgetCount = await dashboardWidgetRepository.countBySavedFilter(row.id, tx);
+      // Subscriptions (Subtask 6.2.5) FK-cascade with the row; the delete warning
+      // names them. They die in the same delete transaction (the FK Cascade).
+      const subscriptionCount = await savedFilterSubscriptionRepository.countByFilter(row.id, tx);
+      return { subscriptionCount, widgetCount };
+    });
   },
 
   /**
@@ -596,7 +615,7 @@ export const savedFiltersService = {
   ): Promise<SavedFilterSummaryDto> {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
     return retryOnceOnUniqueRace(() =>
-      db.$transaction(async (tx) => {
+      withWorkspaceContext(ctx, async (tx) => {
         const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
         await assertCanManageSavedFilters(pc.project.id, ctx, tx);
         const row = await getVisibleFilter(filterId, pc, ctx, tx);
@@ -621,7 +640,7 @@ export const savedFiltersService = {
     ctx: ServiceContext,
   ): Promise<SavedFilterSummaryDto> {
     if (isBuiltinFilterId(filterId)) throw new BuiltinSavedFilterImmutableError();
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const pc = await resolveProjectAndCaps(projectKey, ctx, tx);
       await assertCanManageSavedFilters(pc.project.id, ctx, tx);
       const row = await getVisibleFilter(filterId, pc, ctx, tx);

@@ -42,8 +42,9 @@ export const savedFilterSubscriptionRepository = {
   },
 
   /** Count a filter's subscriptions — the 6.2.1 dependents warning. */
-  async countByFilter(savedFilterId: string): Promise<number> {
-    return db.savedFilterSubscription.count({ where: { savedFilterId } });
+  async countByFilter(savedFilterId: string, tx?: Prisma.TransactionClient): Promise<number> {
+    const client = tx ?? db;
+    return client.savedFilterSubscription.count({ where: { savedFilterId } });
   },
 
   /**

@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (55) ────────────────────────────────────────────────
+  // ── unbound-read-path (52) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -164,12 +164,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
     'unbound-read-path',
     'projectSquareService',
-  ],
-  'savedFilterRepository.ts#countVisible': ['unbound-read-path', 'savedFiltersService'],
-  'savedFilterRepository.ts#listPage': ['unbound-read-path', 'savedFiltersService'],
-  'savedFilterSubscriptionRepository.ts#countByFilter': [
-    'unbound-read-path',
-    'savedFiltersService',
   ],
   'sprintReportEntryRepository.ts#countAddedAfterStart': ['unbound-read-path', 'sprintsService'],
   'sprintReportEntryRepository.ts#countByCompletion': ['unbound-read-path', 'sprintsService'],
@@ -322,8 +316,12 @@ const UNREVIEWED_CEILING = 8;
  *
  * ⚠️ May only ever go DOWN — and unlike the unreviewed ceiling, it cannot be lowered
  * by writing a verdict. It falls only when a service actually binds its reads.
+ *
+ * 55 -> 52: MOTIR-2805 bound `savedFiltersService` — `listPage`, `countVisible` and
+ * `countByFilter`. Lowered BY SUBTRACTION of this card's three, never restated as an
+ * absolute: sibling cards edit this same line, and an absolute would discard theirs.
  */
-const UNBOUND_READ_PATH_CEILING = 55;
+const UNBOUND_READ_PATH_CEILING = 52;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

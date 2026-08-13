@@ -3,8 +3,11 @@ import {
   type Project,
   type SavedFilterSubscriptionSchedule,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
-import { withSystemContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
@@ -168,11 +171,13 @@ export const savedFilterSubscriptionsService = {
     filterId: string,
     ctx: ServiceContext,
   ): Promise<SavedFilterSubscriptionDto | null> {
-    const { savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx);
-    const row = await savedFilterSubscriptionRepository.findByFilterAndUser(
-      savedFilterId,
-      ctx.userId,
-    );
+    // ONE bound transaction for the gate and the row read
+    // (docs/decisions/bound-read-transaction-shape.md). Unbound, the project
+    // resolve returned nothing and this reported a 404 for a filter that exists.
+    const row = await withWorkspaceContext(ctx, async (tx) => {
+      const { savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx, tx);
+      return savedFilterSubscriptionRepository.findByFilterAndUser(savedFilterId, ctx.userId, tx);
+    });
     return row ? toSavedFilterSubscriptionDto(row) : null;
   },
 
@@ -189,7 +194,7 @@ export const savedFilterSubscriptionsService = {
     ctx: ServiceContext,
   ): Promise<SavedFilterSubscriptionDto> {
     const { weekday } = normalizeSchedule(input);
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const { project, savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx, tx);
       await assertCanManageSavedFilters(project.id, ctx, tx);
       const existing = await savedFilterSubscriptionRepository.findByFilterAndUser(
@@ -221,7 +226,7 @@ export const savedFilterSubscriptionsService = {
   /** Unsubscribe the actor from a visible filter (in-app). Idempotent — a
    * never-subscribed filter is a no-op. */
   async unsubscribe(projectKey: string, filterId: string, ctx: ServiceContext): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       const { project, savedFilterId } = await resolveVisibleFilter(projectKey, filterId, ctx, tx);
       await assertCanManageSavedFilters(project.id, ctx, tx);
       await savedFilterSubscriptionRepository.deleteByFilterAndUser(savedFilterId, ctx.userId, tx);
@@ -294,10 +299,20 @@ export const savedFilterSubscriptionsService = {
    * (zero results; a report, not an alert).
    */
   async deliver(input: FilterSubscriptionDeliverInput): Promise<DeliveryOutcome> {
-    const sub = await savedFilterSubscriptionRepository.findById(input.subscriptionId);
-    if (!sub) return { status: 'skipped', reason: 'subscription_gone' };
-
-    const filterRow = await savedFilterRepository.findByIdWithStars(sub.savedFilterId, sub.userId);
+    // The delivery job has a workspace and no acting user until `sub` is read,
+    // so the two opening reads bind the WORKSPACE tier — one transaction for
+    // both (docs/decisions/bound-read-transaction-shape.md). Unbound they
+    // returned nothing and every delivery reported `subscription_gone`.
+    const opening = await withWorkspaceServiceContext(input.workspaceId, async (tx) => {
+      const row = await savedFilterSubscriptionRepository.findById(input.subscriptionId, tx);
+      if (!row) return null;
+      return {
+        sub: row,
+        filterRow: await savedFilterRepository.findByIdWithStars(row.savedFilterId, row.userId, tx),
+      };
+    });
+    if (!opening) return { status: 'skipped', reason: 'subscription_gone' };
+    const { sub, filterRow } = opening;
     if (!filterRow) return { status: 'skipped', reason: 'filter_gone' };
     // MOTIR-2569: the subscriber context is built BEFORE the project read, so the
     // read can bind it. A delivery runs off a job, but it acts AS the subscriber —
@@ -345,7 +360,9 @@ export const savedFilterSubscriptionsService = {
 
     // Status KEY → display label (the List ships the key; the email shows the
     // workflow's stored label, falling back to the key for a since-deleted one).
-    const statuses = await workflowsRepository.findStatuses(project.id, input.workspaceId);
+    const statuses = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      workflowsRepository.findStatuses(project.id, input.workspaceId, tx),
+    );
     const labelByKey = new Map(statuses.map((s) => [s.key, s.label]));
     const items = pageResult.items.map((i) => ({
       identifier: i.identifier,
