@@ -1103,13 +1103,15 @@ export const workItemRepository = {
     projectId: string,
     workspaceId: string,
     parentIds: string[] | null,
+    tx?: Prisma.TransactionClient,
   ): Promise<ReadyLayerRow[]> {
     if (parentIds !== null && parentIds.length === 0) return [];
     const parentPred =
       parentIds === null
         ? Prisma.sql`w."parentId" IS NULL`
         : Prisma.sql`w."parentId" = ANY(${parentIds})`;
-    return db.$queryRaw<ReadyLayerRow[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<ReadyLayerRow[]>`
       SELECT w.*,
              ws."category"::text AS "statusCategory",
              au."name"           AS "assigneeName",
@@ -1153,8 +1155,10 @@ export const workItemRepository = {
   async findExpandableStubs(
     projectId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ identifier: string; title: string; kind: string; priority: string }>> {
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ identifier: string; title: string; kind: string; priority: string }>
     >`
       SELECT w."identifier", w."title", w."kind"::text AS "kind", w."priority"::text AS "priority"
@@ -1462,6 +1466,7 @@ export const workItemRepository = {
     query: string,
     limit: number,
     excludeIds: string[] = [],
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItem[]> {
     if (projectIds.length === 0) return [];
     const exact = query.toLowerCase();
@@ -1486,7 +1491,8 @@ export const workItemRepository = {
     const excludeSql = excludeIds.length
       ? Prisma.sql`AND w."id" <> ALL(${excludeIds})`
       : Prisma.empty;
-    return db.$queryRaw<WorkItem[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<WorkItem[]>`
       SELECT w.*
         FROM "work_item" w
         WHERE w."workspaceId" = ${workspaceId}
@@ -1899,8 +1905,10 @@ export const workItemRepository = {
     rootId: string,
     workspaceId: string,
     maxDepth: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkItemSubtreeRow[]> {
-    return db.$queryRaw<WorkItemSubtreeRow[]>`
+    const client = tx ?? db;
+    return client.$queryRaw<WorkItemSubtreeRow[]>`
       WITH RECURSIVE subtree AS (
         SELECT w."id", w."parentId", w."kind", w."key", w."identifier",
                w."title", w."status", w."position", 1 AS depth
@@ -1953,8 +1961,10 @@ export const workItemRepository = {
   async findSubtreeMembersForValidity(
     rootId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ id: string; identifier: string; status: string; parentId: string | null }>> {
-    return db.$queryRaw<
+    const client = tx ?? db;
+    return client.$queryRaw<
       Array<{ id: string; identifier: string; status: string; parentId: string | null }>
     >`
       WITH RECURSIVE subtree AS (
@@ -2147,10 +2157,12 @@ export const workItemRepository = {
   async findAncestorIdsForItems(
     itemIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Map<string, string[]>> {
     const byItem = new Map<string, string[]>(itemIds.map((id) => [id, []]));
     if (itemIds.length === 0) return byItem;
-    const rows = await db.$queryRaw<Array<{ seedId: string; ancestorId: string }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ seedId: string; ancestorId: string }>>`
       WITH RECURSIVE chain AS (
         SELECT w."id" AS "seedId", w."parentId" AS "ancestorId"
           FROM "work_item" w

@@ -1,4 +1,5 @@
 import { Prisma, type Label, type WorkItem } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { workItemLabelRepository } from '@/lib/repositories/workItemLabelRepository';
@@ -335,7 +336,9 @@ export const labelsService = {
       }
       throw err;
     }
-    const rows = await labelRepository.findByIds([...new Set(ids)], project.id);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      labelRepository.findByIds([...new Set(ids)], project.id, tx),
+    );
     return rows.map(toLabelDto);
   },
 };

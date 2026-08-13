@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (21) ────────────────────────────────────────────────
+  // ── unbound-read-path (14) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -153,7 +153,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'deviceCodeRepository.ts#findByUserCodeForRead': ['unbound-read-path', 'cliDeviceService'],
   'githubRepoRepository.ts#findConnectedByName': ['unbound-read-path', 'oidcAuth'],
   'importRepository.ts#findCompletedForProject': ['unbound-read-path', 'migrateOnboardingService'],
-  'labelRepository.ts#findByIds': ['unbound-read-path', 'workItemsService'],
   'labelRepository.ts#searchByPrefix': ['unbound-read-path', 'labelsService'],
   'organizationRepository.ts#findCapContext': ['unbound-read-path', 'entitlementsService'],
   'planRepository.ts#findBySourceJobId': ['unbound-read-path', 'migrateOnboardingService'],
@@ -162,18 +161,12 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'projectSquareService',
   ],
   'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
-  'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
   'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
-  'workItemRepository.ts#findExpandableStubs': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findReadyLayer': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findSubtreeMembersForValidity': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#matchesAutomationCondition': [
     'unbound-read-path',
     'automationEngineService',
   ],
-  'workItemRepository.ts#quickSearch': ['unbound-read-path', 'workItemsService'],
   'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': [
     'unbound-read-path',
     'aiBoundaryService',
@@ -282,8 +275,12 @@ const UNREVIEWED_CEILING = 8;
  * contiguous run fixes nothing — `findBlockerEdgesForItems` (MOTIR-2808 owns its
  * other caller), `customFieldDefinitionRepository.listWithValuesForWorkItem`, and
  * the item-detail fan-out they sit in.
+ * 21 -> 14: MOTIR-2803 bound the other half of `workItemsService` — the tree
+ * walks, quick search, expandable stubs, the ready-layer descent and
+ * `labelRepository.findByIds` — at every caller, including the three in
+ * `sprintsService`, `autoPlanCadenceService` and `labelsService`.
  */
-const UNBOUND_READ_PATH_CEILING = 21;
+const UNBOUND_READ_PATH_CEILING = 14;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {
@@ -396,7 +393,11 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
     // (MOTIR-2807 took the population 51 -> 48), so keep it comfortably below the
     // live count rather than pinned to it.
     expect(scanned.length).toBeGreaterThan(20);
-    expect(scanned.map((r) => r.key)).toContain('workItemRepository.ts#quickSearch');
+    // A KNOWN site, chosen because it must survive the story: `matchesAutomationCondition`
+    // is a `pre-auth`-adjacent read the automation engine issues and it stays on
+    // the singleton for now. (`quickSearch` used to stand here and was bound by
+    // MOTIR-2803 — a canary has to name something the scan still finds.)
+    expect(scanned.map((r) => r.key)).toContain('workItemRepository.ts#matchesAutomationCondition');
     // And that the `tx ?? db` fallback is genuinely excluded — `findStatuses` uses it,
     // so if this ever appears the scanner has stopped distinguishing bindable reads
     // from unbound ones and every verdict above is meaningless.

@@ -473,14 +473,25 @@ export async function loadFilterReferents(
 ): Promise<ProjectFilterReferents | undefined> {
   if (!astHasEpic5Conditions(ast)) return undefined;
   const ids = collectFilterReferentIds(ast);
-  const [definitions, options, labels, components] = await Promise.all([
-    ids.customFieldIds.length > 0
-      ? customFieldDefinitionRepository.listByProject(projectId, workspaceId)
-      : [],
-    customFieldOptionRepository.findByIds(ids.customFieldValueIds, projectId, workspaceId),
-    labelRepository.findByIds(ids.labelIds, projectId),
-    componentRepository.findByIds(ids.componentIds),
-  ]);
+  // Four reads of four policy-gated tables, resolved together to decorate ONE
+  // filter — so they share one bound transaction rather than four.
+  const { definitions, options, labels, components } = await withWorkspaceServiceContext(
+    workspaceId,
+    async (tx) => ({
+      definitions:
+        ids.customFieldIds.length > 0
+          ? await customFieldDefinitionRepository.listByProject(projectId, workspaceId, tx)
+          : [],
+      options: await customFieldOptionRepository.findByIds(
+        ids.customFieldValueIds,
+        projectId,
+        workspaceId,
+        tx,
+      ),
+      labels: await labelRepository.findByIds(ids.labelIds, projectId, tx),
+      components: await componentRepository.findByIds(ids.componentIds, tx),
+    }),
+  );
 
   const customFields = new Map<string, ProjectFilterCustomField>();
   for (const def of definitions) {
@@ -2582,10 +2593,8 @@ export const workItemsService = {
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(rootId);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     const effectiveDepth = clampBound(depth, 0, MAX_SUBTREE_DEPTH, DEFAULT_SUBTREE_DEPTH);
-    const rows = await workItemRepository.findBoundedSubtree(
-      rootId,
-      row.workspaceId,
-      effectiveDepth,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findBoundedSubtree(rootId, row.workspaceId, effectiveDepth, tx),
     );
     return { nodes: rows.map(toWorkItemSubtreeDto), depth: effectiveDepth };
   },
@@ -3417,9 +3426,8 @@ export const workItemsService = {
     // Cascade (Subtask 7.0.13): also gate on the ANCESTOR chain — ready only when
     // every ancestor is ready too. Checked even when the node has no own blocker,
     // because an unready ancestor still holds it out of the ready set.
-    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
-      [workItemId],
-      ctx.workspaceId,
+    const ancestorsByItem = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestorIdsForItems([workItemId], ctx.workspaceId, tx),
     );
     const ancestors = ancestorsByItem.get(workItemId) ?? [];
     let ancestorsReady = true;
@@ -3463,9 +3471,8 @@ export const workItemsService = {
     // ancestor unready) holds the whole subtree out of the ready set — the
     // mirror of 7.0.10 (a parent-with-children is excluded; its children wait
     // until it is ready).
-    const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
-      itemIds,
-      ctx.workspaceId,
+    const ancestorsByItem = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestorIdsForItems(itemIds, ctx.workspaceId, tx),
     );
     const union = new Set<string>(itemIds);
     for (const chain of ancestorsByItem.values()) for (const a of chain) union.add(a);
@@ -4084,15 +4091,20 @@ export const workItemsService = {
     );
     // The Story 6.4 gate, batched (one workspace-role + one membership query —
     // no N+1), so the search only ever spans projects the actor may browse.
-    const projects = await projectRepository.findByWorkspace(ctx.workspaceId);
+    const projects = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      projectRepository.findByWorkspace(ctx.workspaceId, tx),
+    );
     const browsable = await projectAccessService.filterBrowsable(projects, ctx);
     if (browsable.length === 0) return [];
-    const rows = await workItemRepository.quickSearch(
-      ctx.workspaceId,
-      browsable.map((p) => p.id),
-      trimmed,
-      limit,
-      opts.excludeIds ?? [],
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.quickSearch(
+        ctx.workspaceId,
+        browsable.map((p) => p.id),
+        trimmed,
+        limit,
+        opts.excludeIds ?? [],
+        tx,
+      ),
     );
     return rows.map(toWorkItemSummaryDto);
   },
@@ -4436,7 +4448,9 @@ export const workItemsService = {
     const { count } = await this.countReady(projectId, {}, ctx);
     if (count >= EXPANSION_NUDGE_THRESHOLD) return null;
 
-    const stubs = await workItemRepository.findExpandableStubs(projectId, ctx.workspaceId);
+    const stubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findExpandableStubs(projectId, ctx.workspaceId, tx),
+    );
     if (stubs.length === 0) return null;
 
     const nominated = stubs[0]!;
@@ -4576,7 +4590,9 @@ async function collectReadyLeaves(
   facets: { kinds?: WorkItemKind[]; assigneeId?: string | null; priority?: WorkItemPriority[] },
 ): Promise<ReadyLayerRow[]> {
   const leaves: ReadyLayerRow[] = [];
-  let frontier = await workItemRepository.findReadyLayer(projectId, workspaceId, null);
+  let frontier = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findReadyLayer(projectId, workspaceId, null, tx),
+  );
   for (let depth = 0; depth < READY_MAX_TREE_DEPTH && frontier.length > 0; depth++) {
     const ownReady = await computeOwnBlockerReadiness(
       frontier.map((r) => r.id),
@@ -4590,7 +4606,9 @@ async function collectReadyLeaves(
       else if (row.statusCategory === 'todo') leaves.push(row); // ready, childless, to-start
     }
     frontier = descend.length
-      ? await workItemRepository.findReadyLayer(projectId, workspaceId, descend)
+      ? await withWorkspaceServiceContext(workspaceId, (tx) =>
+          workItemRepository.findReadyLayer(projectId, workspaceId, descend, tx),
+        )
       : [];
   }
   let out = leaves;
@@ -4852,7 +4870,9 @@ async function computeWorkItemValidity(
   condition: ValidityCondition,
 ): Promise<WorkItemValidityDto> {
   // The containing set S: the root + every non-archived descendant.
-  const members = await workItemRepository.findSubtreeMembersForValidity(root.id, ctx.workspaceId);
+  const members = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findSubtreeMembersForValidity(root.id, ctx.workspaceId, tx),
+  );
   const memberIds = new Set(members.map((m) => m.id));
   const membersById = new Map(members.map((m) => [m.id, m]));
 

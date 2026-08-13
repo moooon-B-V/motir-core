@@ -870,3 +870,70 @@ describe('workItemsService — readiness, the invariant that fails while soundin
   // that sibling, and a test that only passes once it lands would report this
   // card's state dishonestly.
 });
+
+// ── MOTIR-2803 · workItemsService, the tree / search / decoration half ────────
+//
+// A broader spread of small losses rather than one dramatic one: search finds
+// nothing for text that is definitely there, an item's detail loses its labels
+// and custom-field values, and walking a tree returns nothing so hierarchy
+// features quietly flatten. Together that is most of what makes the product feel
+// like it knows about your work rather than just storing it.
+
+describe('workItemsService — search, subtree and the item’s decorations', () => {
+  it('quick search FINDS a work item by title', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'QSR' });
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Unmistakable haystack needle' },
+      fx.ctx,
+    );
+
+    const hits = await workItemsService.quickSearch('haystack', fx.ctx);
+
+    // The emptiness-shaped one: a search box that finds nothing is what a person
+    // tries twice and then stops using.
+    expect(hits.map((h) => h.title)).toEqual(['Unmistakable haystack needle']);
+  });
+
+  it('walks a BOUNDED SUBTREE rather than reporting a leaf', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SUB' });
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'The container' },
+      fx.ctx,
+    );
+    await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'The child', parentId: parent.id },
+      fx.ctx,
+    );
+
+    const subtree = await workItemsService.getBoundedSubtree(parent.id, fx.ctx, 2);
+    expect(subtree.nodes.map((n) => n.title)).toContain('The child');
+  });
+
+  it('decorates the item DETAIL with its labels and custom-field values', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'DEC' });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Decorated' },
+      fx.ctx,
+    );
+    // Seeded through the ADMIN client: the point under test is the detail READ,
+    // and `labelsService.setLabels` opens a bare `db.$transaction` of its own
+    // (MOTIR-2846's), so driving the fixture through it would make this test
+    // depend on a defect a different card owns.
+    const label = await adminDb.label.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'needs-review',
+        nameLower: 'needs-review',
+      },
+    });
+    await adminDb.workItemLabel.create({
+      data: { workItemId: item.id, labelId: label.id },
+    });
+
+    const detail = await workItemsService.getIssueDetail(fx.projectId, item.identifier, fx.ctx);
+
+    // Not "the panel rendered": the specific label the item carries.
+    expect(detail.labels.map((l) => l.name)).toEqual(['needs-review']);
+  });
+});

@@ -1,4 +1,8 @@
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { readProjectForService } from '@/lib/workspaces/tenantRead';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
@@ -305,7 +309,9 @@ export const autoPlanCadenceService = {
       // (highest-priority childless, non-terminal epic/story). A project with a
       // drained ready set and nothing left to expand fires nothing — expanding
       // is not always the answer, and a false nag every tick would be worse.
-      const stubs = await workItemRepository.findExpandableStubs(project.id, project.workspaceId);
+      const stubs = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workItemRepository.findExpandableStubs(project.id, project.workspaceId, tx),
+      );
       const nominated = stubs[0];
       if (!nominated)
         return { projectId: project.id, status: 'skipped', reason: 'no_expandable_stub' };

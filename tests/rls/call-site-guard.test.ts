@@ -374,14 +374,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
   ],
-  'lib/services/workItemsService.ts#customFieldDefinitionRepository.listByProject': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#projectRepository.findByWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
   'lib/services/workItemsService.ts#sprintRepository.findActiveByProject': [
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
@@ -547,8 +539,9 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  *
  * 189 -> 177: MOTIR-2802 bound `workItemsService`'s link-edge reads and the
  * item-detail fan-out they sit inside.
+ * 177 -> 174: MOTIR-2803 bound the tree / search / stub half of the same file.
  */
-const UNBOUND_CALL_SITE_CEILING = 177;
+const UNBOUND_CALL_SITE_CEILING = 174;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.

@@ -951,9 +951,12 @@ async function computeSprintValidity(
   // child inherits its ancestors' blockers). `gatedMembersByProbe` maps every
   // probe id back to the in-sprint not-done member(s) it gates, so a violating
   // blocker is reported at the in-sprint item, not the ancestor.
-  const ancestorsByItem = await workItemRepository.findAncestorIdsForItems(
-    notDone.map((m) => m.id),
-    ctx.workspaceId,
+  const ancestorsByItem = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findAncestorIdsForItems(
+      notDone.map((m) => m.id),
+      ctx.workspaceId,
+      tx,
+    ),
   );
   const gatedMembersByProbe = new Map<string, Set<string>>();
   const gate = (probeId: string, memberId: string) => {

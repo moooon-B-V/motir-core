@@ -58,9 +58,14 @@ export const labelRepository = {
    * value lists, never a load-all. Read-only path → `db` singleton. Empty
    * input is an empty result by contract (coverage gate).
    */
-  async findByIds(ids: string[], projectId: string): Promise<Label[]> {
+  async findByIds(
+    ids: string[],
+    projectId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Label[]> {
     if (ids.length === 0) return [];
-    return db.label.findMany({ where: { id: { in: ids }, projectId } });
+    const client = tx ?? db;
+    return client.label.findMany({ where: { id: { in: ids }, projectId } });
   },
 
   /**
