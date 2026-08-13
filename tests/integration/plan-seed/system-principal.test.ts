@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { projectMembershipRepository } from '@/lib/repositories/projectMembershipRepository';
 import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { MOTIR_SYSTEM_USER_EMAIL, MOTIR_SYSTEM_USER_NAME } from '@/lib/ai/systemPrincipal';
@@ -56,7 +55,9 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
     expect(user?.name).toBe(MOTIR_SYSTEM_USER_NAME);
 
     expect(
-      await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspace.id),
+      await adminDb.workspaceMembership.findUnique({
+        where: { userId_workspaceId: { userId, workspaceId: workspace.id } },
+      }),
     ).not.toBeNull();
     expect(
       await projectMembershipRepository.findByUserAndProject(userId, project.id),
@@ -108,7 +109,9 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
     const userCount = await adminDb.user.count({ where: { email: MOTIR_SYSTEM_USER_EMAIL } });
     expect(userCount).toBe(1);
     expect(
-      await workspaceMembershipRepository.findByUserAndWorkspace(secondId, second.workspace.id),
+      await adminDb.workspaceMembership.findUnique({
+        where: { userId_workspaceId: { userId: secondId, workspaceId: second.workspace.id } },
+      }),
     ).not.toBeNull();
   });
 });

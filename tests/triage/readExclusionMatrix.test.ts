@@ -205,12 +205,12 @@ describe('triage read-exclusion — the exhaustive read-set guard (6.11.8)', () 
         name: 'findReadyCandidates (ready set)',
         // Ready = leaf items (the epic has a child, so it is not a leaf).
         present: [m.normalRoot, m.normalChild],
+        // MOTIR-2812: `findReadyCandidates` was RETIRED — `findReadyLayer` replaced
+        // it, and the product's ready set is `workItemsService.listReady`. Probing the
+        // service is also the stronger check: it is the surface a triaged item would
+        // actually leak into.
         ids: async () =>
-          (
-            await workItemRepository.findReadyCandidates(fx.projectId, fx.workspaceId, {
-              limit: 100,
-            })
-          ).map((r) => r.id),
+          (await workItemsService.listReady(fx.projectId, {}, fx.ctx)).items.map((r) => r.id),
       },
       {
         name: 'quickSearch (cmd-K / link picker)',

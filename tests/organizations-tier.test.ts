@@ -3,7 +3,6 @@ import { db } from '@/lib/db';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationMembershipRepository } from '@/lib/repositories/organizationMembershipRepository';
-import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { AlreadyOrgMemberError, LastOrgOwnerError } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
 import { withOrgContext } from '@/lib/organizations/context';
@@ -76,10 +75,14 @@ describe('access gating — the membership-direction asymmetry (6.10.2 §5)', ()
     expect(await organizationsService.resolveWorkspaceAccess(member.id, w1.id)).toBeNull();
     expect(await organizationsService.resolveWorkspaceAccess(member.id, w2.id)).toBeNull();
     expect(
-      await workspaceMembershipRepository.findByUserAndWorkspace(member.id, w1.id),
+      await adminDb.workspaceMembership.findUnique({
+        where: { userId_workspaceId: { userId: member.id, workspaceId: w1.id } },
+      }),
     ).not.toBeNull();
     expect(
-      await workspaceMembershipRepository.findByUserAndWorkspace(member.id, w2.id),
+      await adminDb.workspaceMembership.findUnique({
+        where: { userId_workspaceId: { userId: member.id, workspaceId: w2.id } },
+      }),
     ).not.toBeNull();
   });
 
