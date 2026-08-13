@@ -41,26 +41,47 @@ import {
 const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites');
 
 /**
- * The in-scope ratchet — the work MOTIR-2797 has left.
+ * ── THE CLASS IS CLOSED (MOTIR-2829) ──────────────────────────────────────
  *
- * ⚠️ This number may only ever go DOWN, and each batch lowers it BY SUBTRACTION
- * from whatever the line then reads — never by restating an absolute. Twelve
- * cards edit this line; a merge conflict here is EXPECTED and is resolved by
- * applying BOTH subtractions. Restating an absolute silently discards a sibling
- * batch's progress, which is invisible in the diff and looks exactly like
- * agreement.
+ * There is no in-scope ratchet any more. While MOTIR-2797 was running, a
+ * ceiling tracked how many unbound test call sites remained and a test kept it
+ * from rising; that is the right instrument mid-migration. It reached zero, and
+ * a number that CAN be edited is a weaker statement than an assertion that the
+ * set is empty. So the constant is gone and the assertion below is absolute.
+ *
+ * The path it took, kept because the arithmetic is the audit trail:
+ *   458 measured → 375 after the adjudication sweep → 336 → 283 → 243 → 194
+ *   → 152 → 105 → 25 → 0, each step a batch subtracting what it fixed.
+ *
+ * ── FOUR THINGS THE NEXT AUTHOR SHOULD INHERIT, not re-derive ─────────────
+ *
+ * 1. THE `db.` PREFIX BLIND SPOT. A sweep keyed on the CLIENT's name cannot see
+ *    a call that reaches the client through a named wrapper. That is why this
+ *    class survived twenty fixture batches: `workItemRepository.countByStatus(…)`
+ *    carries no `db.` anywhere on the line.
+ *
+ * 2. THE VACUOUS PASS. An assertion of `0` / `null` / `[]` passes when the
+ *    policy hid everything. It does not go red; it goes quietly meaningless.
+ *    "The suite is green" was never sufficient evidence on this story, and the
+ *    only proof a binding did something is that reverting it goes RED.
+ *
+ * 3. MULTI-LINE SIGNATURES. A single-line regex read `countBacklog` as
+ *    unbindable because its `tx?` sits on its own line, inflating the first
+ *    measurement by ~60 sites. Hence an AST walk, and hence the test pinning
+ *    that exact method at txIndex 4.
+ *
+ * 4. A MEASUREMENT DECAYS. The original count fell 577 → 458 with no work done,
+ *    because a sibling story bound many of these reads while the plan sat still.
+ *    A number in a card is a claim about a moving world; the scanner is the only
+ *    current answer. (MOTIR-2844.)
+ *
+ * ── WHAT THIS GUARD DOES NOT READ ────────────────────────────────────────
+ *
+ * `tests/` only. Its sibling `singleton-read-guard.test.ts` reads
+ * `lib/repositories/`. NEITHER reads `app/` or `scripts/`. Saying so is the
+ * sentence whose absence on the earlier scanner let this whole class stay
+ * invisible — do not delete it.
  */
-// 375 - 39 (MOTIR-2834, tests/integration/sprints) = 336
-// 336 - 53 (MOTIR-2835, tests/integration/work-items) = 283
-// 283 - 40 (MOTIR-2836, comments + notifications + attachments) = 243
-// 243 - 49 (MOTIR-2837, backlog + import) = 194
-// 194 - 42 (MOTIR-2838, tests/triage) = 152
-// 152 - 47 (MOTIR-2839, tests/boards) = 105
-// 105 - 80 (MOTIR-2840 + 2841 + 2842: ai/mcp/plan-seed, custom-fields/labels,
-//            saved-filters/workflows/publicProjects) = 25
-// 25 - 25 (MOTIR-2843, the long tail) = 0  ← the story's work is complete.
-// MOTIR-2829 replaces this ratchet with a hard `toBe(0)` and deletes the constant.
-const IN_SCOPE_CEILING = 0;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
@@ -70,6 +91,13 @@ const IN_SCOPE_CEILING = 0;
  * "fixing" one contradicts a recorded decision and is indistinguishable from
  * real work in a diff. This counts the out-of-scope sites that pass no `tx`, so
  * a batch that helpfully binds one fails the build instead of passing review.
+ *
+ * ⚠️ THIS ONE SURVIVES, and does NOT become zero. The two ratchets measure
+ * opposite things: the in-scope assertion above is now absolute because that
+ * work is FINISHED, while this floor guards work that must never be done at
+ * all. A card that zeroed the first and dropped the second would leave the
+ * suite less safe than it found it — the risk it covers is the inverse one, a
+ * future tidy-up "fixing" a line that was never broken.
  *
  * ⚠️ It may only ever go UP or stay. It is NOT the count of out-of-scope sites
  * (244) — 95 of those legitimately pass a `tx` already, because a write method
@@ -186,19 +214,25 @@ describe('the test call-site classifier rules on every shape', () => {
 });
 
 describe('the ratchets over the real test suite', () => {
-  it('the in-scope count only ever falls', () => {
+  it('NO test call site reads a gated table unbound — the class is closed', () => {
     const { sites } = scanTestCallSites();
-    const inScope = sites.filter((s) => s.verdict === 'in-scope').length;
+    const inScope = sites.filter((s) => s.verdict === 'in-scope');
 
     expect(
-      inScope,
-      `in-scope test call sites rose to ${inScope} (ceiling ${IN_SCOPE_CEILING}).\n` +
-        `If you BOUND sites, LOWER the ceiling BY THE NUMBER YOU FIXED — subtract ` +
-        `from whatever the line reads when you get there, do NOT restate an ` +
-        `absolute. Twelve cards edit it; a conflict is expected and both ` +
-        `subtractions apply.\n` +
-        `If you ADDED an unbound gated call, bind it instead of raising this.`,
-    ).toBeLessThanOrEqual(IN_SCOPE_CEILING);
+      inScope.map((s) => `${s.key} ${s.repository}.${s.method}`),
+      `A test call site reads a policy-gated table with no bound \`tx\`.\n\n` +
+        `Under \`motir_app\` that read returns an EMPTY result and RAISES NOTHING. ` +
+        `If your assertion expects rows it will fail confusingly; if it expects ` +
+        `emptiness it will PASS while checking nothing, which is worse.\n\n` +
+        `Wrap it: withWorkspaceServiceContext(wsId, (tx) => repo.method(…, tx)).\n` +
+        `Bind the workspace the ASSERTION is about — for a cross-workspace gate ` +
+        `test that is the OWN workspace, not the foreign one being read, or the ` +
+        `policy hides the row too and the gate stops being tested.\n\n` +
+        `If the read is correct unbound, it belongs in a verdict, not here: ` +
+        `\`not-gated\`, \`pre-auth\` (singleton-read-guard's VERDICTS), or ` +
+        `ADJUDICATED_UNBOUND_FILES with the card that decided it. Do NOT ` +
+        `re-introduce a ceiling.`,
+    ).toEqual([]);
   });
 
   it('no out-of-scope call site has been given a `tx`', () => {
