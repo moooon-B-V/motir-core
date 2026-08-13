@@ -138,6 +138,21 @@ export default defineConfig({
         // the number off the first CI run and add the four `thresholds` entries.
         'lib/permissions/**',
         'lib/services/projectAccessService.ts',
+        // Story MOTIR-2765 · Subtask MOTIR-2771 — the acceptance-receipt freeze.
+        // Same finding as the block above, on a different surface: the evidence
+        // service, its repository and its typed errors were NOT in the coverage
+        // report at all, so the ≥90% per-file gate never applied to the code that
+        // decides whether a human's approval can be overwritten. MOTIR-2764 put a
+        // refusal there; this makes the number visible.
+        //
+        // ⚠️ REPORT-ONLY for the same reason and by the same rule: added to
+        // `include`, deliberately NOT to `thresholds`, so CI publishes a number
+        // nobody has measured yet rather than pinning one blind. Read it off the
+        // first CI run and pin then — `tests/coverage-gate-globs.test.ts` fails
+        // the build on a key that reaches no file, so the pin cannot be vacuous.
+        'lib/acceptanceEvidence/**',
+        'lib/services/acceptanceEvidenceService.ts',
+        'lib/repositories/acceptanceEvidenceRepository.ts',
 
         // Story MOTIR-2554 · Subtask MOTIR-2558 — the shell's CONTEXT PATH.
         // `ShellTierNav` decides which tiers a person sees at which width (the
