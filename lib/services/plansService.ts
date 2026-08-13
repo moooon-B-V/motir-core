@@ -8,7 +8,7 @@ import {
 
 import { keyForAppend } from '@/lib/workItems/positioning';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 import { planRepository } from '@/lib/repositories/planRepository';
 import { planItemRepository } from '@/lib/repositories/planItemRepository';
@@ -1183,7 +1183,9 @@ export const plansService = {
     ctx: ServiceContext,
   ): Promise<string | null> {
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
     if (!plan || plan.projectId !== projectId) return null;
     if (plan.status === 'approved' || plan.status === 'declined') return null;
     return plan.id;
@@ -1204,7 +1206,9 @@ export const plansService = {
    * same no-existence-leak contract the pending sibling keeps.
    */
   async findPlanIdForJob(jobId: string, ctx: ServiceContext): Promise<string | null> {
-    const plan = await planRepository.findBySourceJobId(jobId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(jobId, ctx.workspaceId, tx),
+    );
     if (!plan) return null;
     await projectAccessService.assertCanBrowse(plan.projectId, ctx);
     return plan.id;

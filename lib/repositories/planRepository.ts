@@ -24,8 +24,13 @@ export const planRepository = {
    * — a cross-tenant lookup returns `null` (→ 404, never 403). Newest-first so a
    * re-submitted job resolves to its latest plan. Read-only.
    */
-  async findBySourceJobId(sourceJobId: string, workspaceId: string): Promise<Plan | null> {
-    return db.plan.findFirst({
+  async findBySourceJobId(
+    sourceJobId: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Plan | null> {
+    const client = tx ?? db;
+    return client.plan.findFirst({
       where: { sourceJobId, workspaceId },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });

@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (3) ─────────────────────────────────────────────────
+  // ── unbound-read-path (1) ─────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -148,8 +148,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
   // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
   // and not another sweep card.
-  'importRepository.ts#findCompletedForProject': ['unbound-read-path', 'migrateOnboardingService'],
-  'planRepository.ts#findBySourceJobId': ['unbound-read-path', 'migrateOnboardingService'],
   'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
     'unbound-read-path',
     'projectSquareService',

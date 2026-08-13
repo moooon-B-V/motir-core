@@ -19,6 +19,8 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { encodeFilterParam } from '@/lib/filters/ast';
+import { importRepository } from '@/lib/repositories/importRepository';
+import { planRepository } from '@/lib/repositories/planRepository';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
@@ -1147,5 +1149,66 @@ describe('the nine single-read services', () => {
     // The anchor every AI edit is validated against: unbound the map was empty
     // and every node came back with no `baseRevision` to write against.
     expect(latest.get(item.id)).toBeTruthy();
+  });
+});
+
+// ── MOTIR-2810 · migrateOnboardingService ─────────────────────────────────────
+//
+// Both reads answer "has this already happened?", and code that asks that uses
+// the answer to decide whether to SKIP a step. So an empty result does not read
+// as an error — it reads as "no, not yet", and the flow does the work again. For
+// an import or a plan generation, doing it again is duplicate content, not a
+// harmless retry.
+//
+// ⚠️ THE JOB-PATH QUESTION, answered rather than assumed. `findBySourceJobId` is
+// reached from a background job as well as a request, and the card asks whether
+// that path has a workspace to bind at all. It does: every one of its eight call
+// sites takes `ctx.workspaceId` from a `ServiceContext` the layer above already
+// resolved — the job envelope carries the workspace, there is simply no acting
+// USER. So the WORKSPACE tier is right everywhere and `withSystemContext` is
+// wrong: `app.system_admin` is cross-tenant, and a plan lookup that could reach
+// another tenant's plan is a worse outcome than one that reaches none.
+
+describe('migrateOnboardingService — the "already done?" reads', () => {
+  it('FINDS a completed import, so the flow skips rather than repeats it', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'IMP' });
+    await adminDb.import.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        source: 'jira',
+        status: 'succeeded',
+        createdById: fx.ownerId,
+      },
+    });
+
+    const found = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      importRepository.findCompletedForProject(fx.projectId, fx.workspaceId, tx),
+    );
+
+    // The idempotence direction: unbound this was null, the step read as
+    // "not yet done", and the import ran a second time.
+    expect(found?.status).toBe('succeeded');
+  });
+
+  it('FINDS the plan a job produced, rather than reporting it produced nothing', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PLN' });
+    await adminDb.plan.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        status: 'planned',
+        sourceJobId: 'job-abc-123',
+      },
+    });
+
+    const plan = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId('job-abc-123', fx.workspaceId, tx),
+    );
+
+    // The single most damaging read in the story by measured blast radius:
+    // unbound, the generation path looked up the plan it had just written and
+    // concluded it had produced nothing.
+    expect(plan?.status).toBe('planned');
   });
 });

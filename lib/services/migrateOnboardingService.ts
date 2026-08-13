@@ -182,9 +182,8 @@ const IMPORT: StepWiring = {
     // Already marked done (skip or completion persisted on a prior advance).
     if (run.importSkipped || run.importCompleted) return { ready: true };
     // Poll: has any import completed for this project?
-    const completed = await importRepository.findCompletedForProject(
-      run.projectId,
-      ctx.workspaceId,
+    const completed = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      importRepository.findCompletedForProject(run.projectId, ctx.workspaceId, tx),
     );
     if (completed) {
       return { ready: true, patch: { importCompleted: true } };
@@ -305,9 +304,8 @@ const GENERATE: StepWiring = {
     // imported backlog (MOTIR-1643).
     const genInput: Parameters<typeof aiGenerationService.startGeneration>[1] = {};
     if (run.importCompleted) {
-      const completedImport = await importRepository.findCompletedForProject(
-        run.projectId,
-        pctx.workspaceId,
+      const completedImport = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+        importRepository.findCompletedForProject(run.projectId, pctx.workspaceId, tx),
       );
       if (completedImport) {
         genInput.prompt =
@@ -327,7 +325,10 @@ const GENERATE: StepWiring = {
   },
   async checkExit({ run, ctx }) {
     if (!run.generateJobId) return { ready: false };
-    const plan = await planRepository.findBySourceJobId(run.generateJobId, ctx.workspaceId);
+    const generateJobId = run.generateJobId;
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(generateJobId, ctx.workspaceId, tx),
+    );
     return { ready: plan?.status === 'planned' || plan?.status === 'approved' };
   },
 };
@@ -345,7 +346,10 @@ const REVIEW: StepWiring = {
   to: 'done',
   async checkExit({ run, ctx }) {
     if (!run.generateJobId) return { ready: false };
-    const plan = await planRepository.findBySourceJobId(run.generateJobId, ctx.workspaceId);
+    const generateJobId = run.generateJobId;
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findBySourceJobId(generateJobId, ctx.workspaceId, tx),
+    );
     return { ready: plan?.status === 'approved' };
   },
 };
