@@ -9,6 +9,7 @@ import { stampOnboardingRan } from '@/scripts/stampOnboardingRan';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
+import { isAppRoleTestMode } from '../../helpers/parallelDb';
 
 // MOTIR-1799 — the onboarding-ran marker for the dogfood project. Two
 // deliverables, both covered here against a real Postgres (the seed-test
@@ -109,12 +110,19 @@ describe('the seed change — markDogfoodProjectEstablished (MOTIR-1799)', () =>
 
 describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   it('--dry-run reports exactly what it would stamp and writes nothing', async () => {
-    const { project } = await makeTenant({
+    const { project, workspace } = await makeTenant({
       workspaceName: 'moooon',
       projectKey: 'MOTIR',
     });
 
-    const outcome = await stampOnboardingRan({ projectKey: 'MOTIR', dryRun: true });
+    // Through the `--workspace` arm (MOTIR-2813): it binds `app.bootstrap_slug`,
+    // so this asserts the SAME behaviour under either role. The bare form needs
+    // the operator connection and is covered on its own below.
+    const outcome = await stampOnboardingRan({
+      projectKey: 'MOTIR',
+      workspaceSlug: workspace.slug,
+      dryRun: true,
+    });
 
     expect(outcome.kind).toBe('would_stamp');
     if (outcome.kind === 'would_stamp') expect(outcome.project.id).toBe(project.id);
@@ -123,18 +131,24 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   });
 
   it('a real run stamps the project; a second consecutive run reports zero writes', async () => {
-    const { project } = await makeTenant({
+    const { project, workspace } = await makeTenant({
       workspaceName: 'moooon',
       projectKey: 'MOTIR',
     });
     const at = new Date('2026-07-31T12:00:00.000Z');
 
-    const first = await stampOnboardingRan({ projectKey: 'MOTIR', dryRun: false, now: at });
+    const first = await stampOnboardingRan({
+      projectKey: 'MOTIR',
+      workspaceSlug: workspace.slug,
+      dryRun: false,
+      now: at,
+    });
     expect(first.kind).toBe('stamped');
     expect(await readMarker(project.id)).toEqual(at);
 
     const second = await stampOnboardingRan({
       projectKey: 'MOTIR',
+      workspaceSlug: workspace.slug,
       dryRun: false,
       now: new Date('2026-08-05T09:30:00.000Z'),
     });
@@ -156,7 +170,11 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
       actorUserId: owner.id,
     });
 
-    const outcome = await stampOnboardingRan({ projectKey: 'MOTIR', dryRun: false });
+    const outcome = await stampOnboardingRan({
+      projectKey: 'MOTIR',
+      workspaceSlug: workspace.slug,
+      dryRun: false,
+    });
 
     expect(outcome.kind).toBe('stamped');
     expect(await readMarker(project.id)).not.toBeNull();
@@ -167,7 +185,16 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
     const a = await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
     const b = await makeTenant({ workspaceName: 'other-tenant', projectKey: 'MOTIR' });
 
-    const outcome = await stampOnboardingRan({ projectKey: 'MOTIR', dryRun: false });
+    // Ambiguity is a property of the CROSS-TENANT search, which only the
+    // operator connection can run (MOTIR-2813) — so this asserts per ROLE.
+    const run = stampOnboardingRan({ projectKey: 'MOTIR', dryRun: false });
+    if (isAppRoleTestMode()) {
+      await expect(run).rejects.toThrow(/OPERATOR connection/);
+      expect(await readMarker(a.project.id)).toBeNull();
+      expect(await readMarker(b.project.id)).toBeNull();
+      return;
+    }
+    const outcome = await run;
 
     expect(outcome.kind).toBe('ambiguous');
     if (outcome.kind === 'ambiguous') {
@@ -195,12 +222,16 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   });
 
   it('reports an unknown project key without writing', async () => {
-    const { project } = await makeTenant({
+    const { project, workspace } = await makeTenant({
       workspaceName: 'moooon',
       projectKey: 'MOTIR',
     });
 
-    const outcome = await stampOnboardingRan({ projectKey: 'NOPE', dryRun: false });
+    const outcome = await stampOnboardingRan({
+      projectKey: 'NOPE',
+      workspaceSlug: workspace.slug,
+      dryRun: false,
+    });
 
     expect(outcome.kind).toBe('project_not_found');
     expect(await readMarker(project.id)).toBeNull();
@@ -220,5 +251,47 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
 
     expect(outcome.kind).toBe('workspace_not_found');
     expect(await readMarker(project.id)).toBeNull();
+  });
+
+  // ── MOTIR-2813: the ROLE posture the script's header used to get wrong ──────
+
+  it('resolves by --workspace slug under the NON-BYPASS role', async () => {
+    // The `--workspace` arm binds `app.bootstrap_slug`, and
+    // `workspace_visible_bootstrap` admits exactly the row carrying it. So this
+    // arm works under EITHER role — which is the point: before MOTIR-2813 the
+    // slug resolve was unbound, returned null under `motir_app`, and the script
+    // reported `workspace_not_found` for a workspace that plainly exists.
+    const { workspace, project } = await makeTenant({
+      workspaceName: 'moooon',
+      projectKey: 'MOTIR',
+    });
+
+    const outcome = await stampOnboardingRan({
+      projectKey: 'MOTIR',
+      workspaceSlug: workspace.slug,
+      dryRun: false,
+    });
+
+    expect(outcome.kind).toBe('stamped');
+    expect(await readMarker(project.id)).not.toBeNull();
+  });
+
+  it('the cross-tenant key search REFUSES a non-bypass connection, loudly', async () => {
+    // The other half. `findAllByIdentifier` searches every workspace, and there
+    // is no policy arm for that — so under `motir_app` it would silently find
+    // nothing and report the project missing. `assertOperatorConnection` reads
+    // `pg_roles.rolbypassrls` and turns that into an accurate error instead.
+    //
+    // ⚠️ Asserted per ROLE rather than per mode, because the two outcomes are
+    // both correct: under the owner the search runs, under `motir_app` it must
+    // refuse. A single expectation here would be wrong in one of the two modes.
+    await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
+
+    const run = stampOnboardingRan({ projectKey: 'MOTIR', dryRun: true });
+    if (isAppRoleTestMode()) {
+      await expect(run).rejects.toThrow(/OPERATOR connection/);
+    } else {
+      await expect(run).resolves.toMatchObject({ kind: 'would_stamp' });
+    }
   });
 });

@@ -107,41 +107,41 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'rateLimitCounterRepository.ts#countAllUnsafe': ['pre-auth', 'no tenant exists at write time'],
   'rateLimitCounterRepository.ts#findCountUnsafe': ['pre-auth', 'no tenant exists at write time'],
 
-  // ── operator-script (3) ───────────────────────────────────────────────────
-  // `scripts/stampOnboardingRan.ts` is the sole caller of all three. It resolves a
-  // workspace by SLUG and a project by KEY across workspaces (it refuses an ambiguous
-  // match rather than guessing), so there is no single tenant to bind — the read is
-  // cross-tenant BY DESIGN, which is exactly why it belongs to an operator and not to
-  // a request path.
+  // ── operator-script (2) ───────────────────────────────────────────────────
+  // `scripts/stampOnboardingRan.ts` is the sole caller of both. It searches for a
+  // project key ACROSS workspaces — that is the point, since it refuses an
+  // ambiguous match rather than guessing — so there is no single tenant to bind
+  // and no policy arm for a cross-tenant search (nor should there be).
   //
-  // ⚠️ The script's own header claims its write "passes under the non-bypass
-  // `motir_app` role in production" — true of the WRITE, which `withWorkspaceContext`
-  // binds, but NOT of these three resolves above it. Run that script on a `motir_app`
-  // connection and `findBySlug` returns null, so it reports `workspace_not_found` for a
-  // workspace that exists and stamps nothing. The verdict here is therefore conditional
-  // on the operator posture, and MOTIR-2796 carries making that explicit at the seam
-  // (`workspace_visible_bootstrap`, the `app.bootstrap_slug` arm, admits exactly a
-  // one-slug read and is the sanctioned mechanism if it ever needs to run as the app).
-  'projectRepository.ts#findAllByIdentifier': ['operator-script', 'stampOnboardingRan'],
-  'projectRepository.ts#findBySlug': ['operator-script', 'stampOnboardingRan'],
-  'workspaceRepository.ts#findBySlug': ['operator-script', 'stampOnboardingRan'],
-
-  // ── test-only (3) ─────────────────────────────────────────────────────────
-  // Zero production callers; only tests keep them alive. `findReadyCandidates` was
-  // REPLACED by `findReadyLayer` (see its own docstring, and the note at
-  // workItemRepository.ts:1083 — "the read that replaces the whole-table
-  // findReadyCandidates scan"), so two suites are pinning the behaviour of a read the
-  // product no longer performs. `findByUserAndWorkspace` has seven test consumers and a
-  // test that documents it "reads through the `db`" — the same shape MOTIR-2775 retired
-  // rather than adjudicated. Under the app role each returns zero rows, so a test using
-  // one as an existence check passes VACUOUSLY, which is the worst of the failure modes
-  // here: it does not go red, it goes quietly meaningless. MOTIR-2796 retires them.
-  'projectRepository.ts#listPublicDirectory': ['test-only', 'projectSquareDirectory.test'],
-  'workItemRepository.ts#findReadyCandidates': ['test-only', 'superseded by findReadyLayer'],
-  'workspaceMembershipRepository.ts#findByUserAndWorkspace': [
-    'test-only',
-    '7 suites, MOTIR-2775 shape',
+  // ⚠️ THE VERDICT IS NO LONGER CONDITIONAL. It used to carry a caveat: the
+  // script's header claimed non-bypass safety it did not have, so under
+  // `motir_app` these returned nothing and it reported the project missing.
+  // MOTIR-2813 closed that two ways — the header now scopes its claim to the
+  // WRITE, and `assertOperatorConnection()` reads `pg_roles.rolbypassrls` and
+  // refuses LOUDLY rather than answering wrongly. `workspaceRepository.findBySlug`
+  // left this list entirely: the `--workspace` arm binds `app.bootstrap_slug`
+  // (`withBootstrapSlugContext`) and now works under EITHER role.
+  'projectRepository.ts#findAllByIdentifier': [
+    'operator-script',
+    'stampOnboardingRan — cross-tenant search, refused loudly under motir_app',
   ],
+  'projectRepository.ts#findBySlug': [
+    'operator-script',
+    'stampOnboardingRan — cross-tenant search, refused loudly under motir_app',
+  ],
+
+  // ── test-only (0) — RETIRED, not adjudicated ──────────────────────────────
+  // MOTIR-2812 DELETED all three: `workItemRepository.findReadyCandidates`,
+  // `workspaceMembershipRepository.findByUserAndWorkspace` and
+  // `projectRepository.listPublicDirectory`. Each had zero production callers
+  // across `app`, `lib`, `scripts` AND `packages`, and each was a live
+  // vacuous-pass risk — under `motir_app` they returned nothing, so a test using
+  // one as an EXISTENCE check did not go red, it went quietly meaningless.
+  //
+  // Deleting a site is a legitimate way to leave this list (the MOTIR-2775
+  // precedent). No entry replaces them: a read that no longer exists needs no
+  // verdict, and `tests/permissions/membershipGateRouting.test.ts` is now a
+  // TOMBSTONE that fails the build if the sharpest of the three comes back.
 
   // ── public (1) ────────────────────────────────────────────────────────────
   // The project square's demand counts, read by an anonymous visitor across many

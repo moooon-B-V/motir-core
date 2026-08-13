@@ -17,8 +17,9 @@ export const workspaceRepository = {
     return client.workspace.findUnique({ where: { id } });
   },
 
-  async findBySlug(slug: string): Promise<Workspace | null> {
-    return db.workspace.findUnique({ where: { slug } });
+  async findBySlug(slug: string, tx?: Prisma.TransactionClient): Promise<Workspace | null> {
+    const client = tx ?? db;
+    return client.workspace.findUnique({ where: { slug } });
   },
 
   /**

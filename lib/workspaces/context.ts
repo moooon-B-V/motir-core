@@ -196,6 +196,35 @@ export async function withWorkspaceServiceContext<T>(
 }
 
 /**
+ * Opens a Prisma transaction binding ONLY `app.bootstrap_slug`, then invokes `fn`
+ * with the transaction client. The narrowest context in this file: it admits
+ * exactly ONE row — the workspace (or organization) whose `slug` equals the bound
+ * value — through the `*_visible_bootstrap` policies from
+ * `20260810001000_tenant_root_insert_policies`.
+ *
+ * Two callers, and they are the same shape from opposite ends:
+ *   * `workspacesService.createWorkspace`, which must READ BACK the tenant root it
+ *     is creating before any `app.workspace_id` exists to bind (it binds the slug
+ *     inline, as part of a larger transaction).
+ *   * `scripts/stampOnboardingRan.ts` (MOTIR-2813), which resolves a workspace by
+ *     slug as an OPERATOR — no active workspace, and the slug IS the handle.
+ *
+ * SECURITY: the slug is a HANDLE, not an authorisation. Binding it grants sight of
+ * that one row and nothing else — no items, no projects, no memberships — which is
+ * why it is safe for a resolve that has no tenant yet and why it must never be
+ * used as a substitute for `withWorkspaceContext` once one is known.
+ */
+export async function withBootstrapSlugContext<T>(
+  slug: string,
+  fn: (tx: Prisma.TransactionClient) => Promise<T>,
+): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT set_config('app.bootstrap_slug', ${slug}, true)`;
+    return fn(tx);
+  });
+}
+
+/**
  * An explicit, raised budget for an interactive transaction.
  *
  * Prisma's default is `timeout: 5000` / `maxWait: 2000`, and that default is
