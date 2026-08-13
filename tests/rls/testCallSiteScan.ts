@@ -87,6 +87,23 @@ const GUARD_FIXTURE = 'tests/rls/singleton-read-guard.fixture.ts';
  * VERDICTS map: the machine enumerates, a human adjudicates.
  */
 export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
+  // ── MOTIR-2751: the repository-CONTRACT + migration-CONSTRAINT suites ──────
+  // Four files, one header, one argument: their subject is the repository contract
+  // and the migration-built constraints, with RLS deliberately inert. Bound, a
+  // cross-workspace read returns [] because the POLICY hid the row, and a
+  // constraint test that fails with a policy error proves nothing about the
+  // constraint. "The admin client is what PRESERVES these claims rather than
+  // weakening them."
+  'tests/comments/repositories.test.ts':
+    'MOTIR-2751: repository contract + migration constraints, RLS deliberately inert.',
+  'tests/custom-fields/repositories.test.ts':
+    'MOTIR-2751: repository contract + migration constraints, RLS deliberately inert.',
+  'tests/labels-components-watch/repositories.test.ts':
+    'MOTIR-2751: repository contract + migration constraints, RLS deliberately inert.',
+  'tests/notifications/repositories.test.ts':
+    'MOTIR-2751: repository contract + migration constraints, RLS deliberately inert.',
+
+  // ── MOTIR-2739/2747: the sprint/backlog repository leaves ─────────────────
   'tests/integration/sprints/repository.test.ts':
     "MOTIR-2739/2747: the file's subject is the explicit `workspaceId` WHERE-clause gate, " +
     'asserted with RLS deliberately out of the picture. Bound, a cross-workspace read ' +

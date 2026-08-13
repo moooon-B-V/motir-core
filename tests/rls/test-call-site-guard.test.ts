@@ -50,7 +50,7 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  * batch's progress, which is invisible in the diff and looks exactly like
  * agreement.
  */
-const IN_SCOPE_CEILING = 432;
+const IN_SCOPE_CEILING = 375;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
@@ -224,8 +224,12 @@ describe('the ratchets over the real test suite', () => {
     // site looks exactly like in-scope work and only the FILE's subject says
     // otherwise. So the set is pinned, and a new entry fails here until somebody
     // adds it on purpose — an entry silently converts real work into "leave it".
-    expect(Object.keys(ADJUDICATED_UNBOUND_FILES)).toEqual([
+    expect(Object.keys(ADJUDICATED_UNBOUND_FILES).sort()).toEqual([
+      'tests/comments/repositories.test.ts',
+      'tests/custom-fields/repositories.test.ts',
       'tests/integration/sprints/repository.test.ts',
+      'tests/labels-components-watch/repositories.test.ts',
+      'tests/notifications/repositories.test.ts',
     ]);
     for (const [file, reason] of Object.entries(ADJUDICATED_UNBOUND_FILES)) {
       expect(existsSync(path.join(process.cwd(), file)), `${file} does not exist`).toBe(true);
