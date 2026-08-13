@@ -303,10 +303,17 @@ export const workflowsService = {
   async getTerminalStatusKeysByProjects(
     projectIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Map<string, Set<string>>> {
     const unique = [...new Set(projectIds)];
     const map = new Map<string, Set<string>>(unique.map((pid) => [pid, new Set<string>()]));
-    const statuses = await workflowsRepository.findStatusesByProjects(unique, workspaceId);
+    // Bound (MOTIR-2802). This is the READINESS path's terminal-status
+    // vocabulary: unbound it returned no statuses, so nothing counted as done and
+    // a blocker that HAD landed still read as open. The mirror of the unbound
+    // edge read, and just as silent.
+    const statuses = await withWorkspaceServiceContext(workspaceId, (t) =>
+      workflowsRepository.findStatusesByProjects(unique, workspaceId, tx ?? t),
+    );
     for (const s of statuses) {
       if (s.category === 'done') map.get(s.projectId)?.add(s.key);
     }

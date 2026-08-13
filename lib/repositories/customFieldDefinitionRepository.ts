@@ -120,8 +120,10 @@ export const customFieldDefinitionRepository = {
     projectId: string,
     workspaceId: string,
     workItemId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<CustomFieldDefinitionWithItemValue[]> {
-    return db.customFieldDefinition.findMany({
+    const client = tx ?? db;
+    return client.customFieldDefinition.findMany({
       where: { projectId, workspaceId },
       orderBy: { position: 'asc' },
       include: {

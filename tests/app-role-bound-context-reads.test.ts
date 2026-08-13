@@ -799,3 +799,74 @@ describe('activityService — the feed that lost its history', () => {
     expect(page.entries.length).toBe(3);
   });
 });
+
+// ── MOTIR-2802 · workItemsService, the link-edge half ─────────────────────────
+//
+// THE HIGHEST-CONSEQUENCE GROUP IN THE STORY, and the reason is that its failure
+// does not look like one. Everywhere else an unbound read produces a visibly
+// empty screen. Here an empty edge set does not render as "unknown" — it renders
+// as NOT BLOCKED. So under `motir_app` a blocked item reports itself READY, and
+// `claim_next_ready` hands out work whose prerequisites are unbuilt.
+//
+// An empty screen tells you something is wrong. A plan that says everything is
+// ready looks exactly like a plan going well, and the consequence surfaces days
+// later as confusing failures somewhere else.
+
+describe('workItemsService — readiness, the invariant that fails while sounding certain', () => {
+  async function seedBlockedItem(identifier: string) {
+    const fx = await makeWorkItemFixture({ identifier });
+    const blocked = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Cannot start yet' },
+      fx.ctx,
+    );
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Must land first' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: blocked.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    return { fx, blocked, blocker };
+  }
+
+  it('an item with an OPEN blocker is NOT ready', async () => {
+    const { fx, blocked, blocker } = await seedBlockedItem('RDY');
+
+    const verdict = await workItemsService.getReadiness(blocked.id, fx.ctx);
+
+    // Unbound, `ready` was TRUE and `openBlockerIds` was empty — the product
+    // asserting, with no hedge, the opposite of the truth.
+    expect(verdict.ready).toBe(false);
+    expect([...verdict.openBlockerIds]).toEqual([blocker.id]);
+  });
+
+  it('and becomes ready only once the blocker actually reaches a terminal status', async () => {
+    const { fx, blocked, blocker } = await seedBlockedItem('RDZ');
+
+    // The control for the case above: a test that only ever asserts `false`
+    // would pass against a service that always says `false`.
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+
+    const verdict = await workItemsService.getReadiness(blocked.id, fx.ctx);
+    expect(verdict.ready).toBe(true);
+    expect([...verdict.openBlockerIds]).toEqual([]);
+  });
+
+  it('reports the item’s open blockers on the RELATIONSHIPS read too', async () => {
+    const { fx, blocked, blocker } = await seedBlockedItem('RDB');
+
+    // `findBlockedEdgesForItems` / `findBlockerEdgesForItems` are the BATCHED
+    // edge reads behind the list-page decoration: unbound, a whole page of items
+    // renders with no dependency arrows at all.
+    const edges = await workItemsService.getDependencyEdgesForItems([blocked.id], fx.ctx);
+    expect(edges[blocked.id]?.blockedBy.map((e) => e.key)).toEqual([blocker.identifier]);
+  });
+
+  // ⚠️ `listReady` — the surface `claim_next_ready` actually sits on, and the
+  // sharpest form of this defect — is NOT asserted here. It opens on
+  // `workItemRepository.findReadyLayer`, which is MOTIR-2803's read; the edge
+  // reads it then consults are bound by this card. Proving it end-to-end needs
+  // that sibling, and a test that only passes once it lands would report this
+  // card's state dishonestly.
+});

@@ -898,7 +898,10 @@ export const workItemRepository = {
    * `identifier` + `title` + the title of the container it lives in (its parent
    * story/epic). ONE query with the parent relation; empty input → `[]`.
    */
-  async findRoadmapBlockerStubs(ids: string[]): Promise<
+  async findRoadmapBlockerStubs(
+    ids: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<
     Array<{
       id: string;
       identifier: string;
@@ -909,7 +912,8 @@ export const workItemRepository = {
     }>
   > {
     if (ids.length === 0) return [];
-    const rows = await db.workItem.findMany({
+    const client = tx ?? db;
+    const rows = await client.workItem.findMany({
       where: { id: { in: ids } },
       select: {
         id: true,
@@ -938,8 +942,13 @@ export const workItemRepository = {
    * its per-item result list are deterministic. Rides the
    * `work_item_sessionBranch` index. Read-only path → `db` singleton.
    */
-  async findBySessionBranch(sessionBranch: string, workspaceId: string): Promise<WorkItem[]> {
-    return db.workItem.findMany({
+  async findBySessionBranch(
+    sessionBranch: string,
+    workspaceId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItem[]> {
+    const client = tx ?? db;
+    return client.workItem.findMany({
       where: { sessionBranch, workspaceId },
       orderBy: { key: 'asc' },
     });

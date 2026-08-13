@@ -2170,7 +2170,9 @@ export const workItemsService = {
     ctx: ServiceContext,
     implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<CompleteSessionResultDto> {
-    const items = await workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId);
+    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findBySessionBranch(sessionBranch, ctx.workspaceId, tx),
+    );
     if (items.length === 0) return { sessionBranch, results: [] };
 
     const { results, transitions } = await db.$transaction(async (tx) => {
@@ -2771,7 +2773,12 @@ export const workItemsService = {
 
     // The `is_blocked_by` edges FROM this level's items (the canvas draws the
     // within-level ones as arrows; an off-level blocker flags a cross-story dep).
-    const edges = await workItemLinkRepository.findBlockedByEdges(rows.map((r) => r.id));
+    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockedByEdges(
+        rows.map((r) => r.id),
+        tx,
+      ),
+    );
 
     // A blocker NOT on this level needs a NAMING stub so the canvas can anchor the
     // signal to a chip (MOTIR-1331). The stub carries `isDone` + `inActiveSprint`
@@ -2782,7 +2789,9 @@ export const workItemsService = {
     const offLevelIds = [
       ...new Set(edges.map((e) => e.blockerId).filter((id) => !levelIds.has(id))),
     ];
-    const offLevelStubs = await workItemRepository.findRoadmapBlockerStubs(offLevelIds);
+    const offLevelStubs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findRoadmapBlockerStubs(offLevelIds, tx),
+    );
     const offLevelBlockers = offLevelStubs.map((s) => ({
       id: s.id,
       identifier: s.identifier,
@@ -3381,7 +3390,13 @@ export const workItemsService = {
     // detail. (`openBlockerIds` stays the node's OWN blockers — the relationships
     // banner highlights those; the cascade cause is surfaced separately as
     // `blockedByAncestorId`, the nearest own-blocked ancestor. Card 7.0.13's "may".)
-    const blockers = await workItemLinkRepository.findBlockerStates(workItemId);
+    // THE assertion this whole story turns on: an empty edge set does not render
+    // as "unknown", it renders as NOT BLOCKED — so unbound, every blocked item
+    // reported itself READY and `claim_next_ready` would hand out work whose
+    // prerequisites are unbuilt.
+    const blockers = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockerStates(workItemId, tx),
+    );
     let ownReady = true;
     let openBlockerIds = new Set<string>();
     let inheritedSessionBranch: string | null = null;
@@ -3655,12 +3670,18 @@ export const workItemsService = {
     identifier: string,
     ctx: ServiceContext,
   ): Promise<IssueDetailDto> {
-    const item = await workItemRepository.findByIdentifier(projectId, identifier);
+    const item = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifier(projectId, identifier, tx),
+    );
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(identifier);
     }
     await projectAccessService.assertCanBrowse(item.projectId, ctx);
 
+    // The detail fan-out is ONE contiguous run of this method's own reads, so it
+    // opens ONE bound transaction (docs/decisions/bound-read-transaction-shape.md).
+    // `workflowsService.getWorkflow` is a SERVICE call and stays outside it.
+    const workflow = await workflowsService.getWorkflow(projectId, ctx.workspaceId);
     const [
       ancestorRows,
       childRows,
@@ -3669,45 +3690,44 @@ export const workItemsService = {
       relatesLinks,
       duplicatesLinks,
       clonesLinks,
-      workflow,
       labelRows,
       componentRows,
       customFieldRows,
       watcherCount,
       viewerIsWatching,
-    ] = await Promise.all([
+    ] = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => [
       // The breadcrumb chain (root→self, item excluded) — one CTE, workspace-
       // scoped. The immediate parent is `ancestors`' last element; we surface it
       // separately too so the 2.4.2 rail's Parent field need not re-derive it.
-      workItemRepository.findAncestors(item.id, ctx.workspaceId),
-      workItemRepository.findChildren(item.id),
-      workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
-      workItemLinkRepository.findByToItem(item.id, 'is_blocked_by'),
-      workItemLinkRepository.findByFromItem(item.id, 'relates_to'),
-      workItemLinkRepository.findByFromItem(item.id, 'duplicates'),
-      workItemLinkRepository.findByFromItem(item.id, 'clones'),
-      workflowsService.getWorkflow(projectId, ctx.workspaceId),
+      await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
+      await workItemRepository.findChildren(item.id, tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
+      await workItemLinkRepository.findByToItem(item.id, 'is_blocked_by', tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'relates_to', tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'duplicates', tx),
+      await workItemLinkRepository.findByFromItem(item.id, 'clones', tx),
       // The issue's labels (5.4.2) — one bounded query riding the same
       // fan-out (no extra round-trip; capped per-issue by labelsService).
-      labelRepository.listByWorkItem(item.id),
+      await labelRepository.listByWorkItem(item.id, tx),
       // The issue's components (5.4.3) — the same bounded-slot shape as
       // labels: one query riding the fan-out, name-ordered, bounded by the
       // admin-curated taxonomy.
-      componentRepository.listByWorkItem(item.id),
+      await componentRepository.listByWorkItem(item.id, tx),
       // The project's custom-field definitions + THIS issue's values (5.3.3)
       // — ONE bounded query (≤50 defs by the project cap, ≤1 value row per
       // def by the pair unique), options + value relations resolved in the
       // same operation. No N+1, no second round-trip.
-      customFieldDefinitionRepository.listWithValuesForWorkItem(
+      await customFieldDefinitionRepository.listWithValuesForWorkItem(
         item.projectId,
         ctx.workspaceId,
         item.id,
+        tx,
       ),
       // The header eye-count + the caller's own watch state (5.4.4) — two
       // point reads riding the same fan-out, so the watch control renders
       // from the detail read with no extra round-trip.
-      watcherRepository.countByWorkItem(item.id),
-      watcherRepository.existsFor(item.id, ctx.userId),
+      await watcherRepository.countByWorkItem(item.id, tx),
+      await watcherRepository.existsFor(item.id, ctx.userId, tx),
     ]);
 
     // The five relationship batches are THIS method's own reads and share ONE
@@ -4018,13 +4038,18 @@ export const workItemsService = {
 
     const linkedIds =
       relationship === 'blocks'
-        ? (await workItemLinkRepository.findByToItem(currentItemId, 'is_blocked_by')).map(
-            (l) => l.fromId,
-          )
+        ? (
+            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              workItemLinkRepository.findByToItem(currentItemId, 'is_blocked_by', tx),
+            )
+          ).map((l) => l.fromId)
         : (
-            await workItemLinkRepository.findByFromItem(
-              currentItemId,
-              relationship === 'blocked_by' ? 'is_blocked_by' : relationship,
+            await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+              workItemLinkRepository.findByFromItem(
+                currentItemId,
+                relationship === 'blocked_by' ? 'is_blocked_by' : relationship,
+                tx,
+              ),
             )
           ).map((l) => l.toId);
 
@@ -4175,9 +4200,8 @@ export const workItemsService = {
     for (const id of itemIds) byItem[id] = null;
     if (itemIds.length === 0) return byItem;
 
-    const rows = await workItemLinkRepository.findBlockerSessionBranchesForItems(
-      itemIds,
-      ctx.workspaceId,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockerSessionBranchesForItems(itemIds, ctx.workspaceId, tx),
     );
     const branches = new Map<string, Set<string>>();
     for (const row of rows) {
@@ -4222,10 +4246,21 @@ export const workItemsService = {
     for (const id of itemIds) edges[id] = { blockedBy: [], blocks: [] };
     if (itemIds.length === 0) return edges;
 
-    const [blockerRows, blockedRows] = await Promise.all([
-      workItemLinkRepository.findBlockerEdgesForItems(itemIds, ctx.workspaceId),
-      workItemLinkRepository.findBlockedEdgesForItems(itemIds, ctx.workspaceId),
-    ]);
+    const { blockerRows, blockedRows } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        blockerRows: await workItemLinkRepository.findBlockerEdgesForItems(
+          itemIds,
+          ctx.workspaceId,
+          tx,
+        ),
+        blockedRows: await workItemLinkRepository.findBlockedEdgesForItems(
+          itemIds,
+          ctx.workspaceId,
+          tx,
+        ),
+      }),
+    );
 
     for (const row of blockerRows) {
       edges[row.fromId]?.blockedBy.push({
@@ -4770,7 +4805,11 @@ async function computeOwnBlockerReadiness(
 ): Promise<Map<string, boolean>> {
   const ready = new Map<string, boolean>(itemIds.map((id) => [id, true]));
   if (itemIds.length === 0) return ready;
-  const blockers = await workItemLinkRepository.findBlockerStatesForItems(itemIds);
+  // The batched form of the readiness read — same consequence, one query for a
+  // whole list, so unbound an ENTIRE backlog reports itself ready.
+  const blockers = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemLinkRepository.findBlockerStatesForItems(itemIds, tx),
+  );
   if (blockers.length === 0) return ready;
   const terminalByProject = await workflowsService.getTerminalStatusKeysByProjects(
     blockers.map((b) => b.projectId),

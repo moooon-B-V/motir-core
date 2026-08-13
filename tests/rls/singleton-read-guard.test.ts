@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (30) ────────────────────────────────────────────────
+  // ── unbound-read-path (21) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -149,10 +149,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
   // and not another sweep card.
   'componentRepository.ts#listByProject': ['unbound-read-path', 'componentsService'],
-  'customFieldDefinitionRepository.ts#listWithValuesForWorkItem': [
-    'unbound-read-path',
-    'workItemsService',
-  ],
   'dashboardRepository.ts#listVisible': ['unbound-read-path', 'dashboardsService'],
   'deviceCodeRepository.ts#findByUserCodeForRead': ['unbound-read-path', 'cliDeviceService'],
   'githubRepoRepository.ts#findConnectedByName': ['unbound-read-path', 'oidcAuth'],
@@ -165,27 +161,13 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-read-path',
     'projectSquareService',
   ],
-  'workItemLinkRepository.ts#findBlockedByEdges': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findBlockedEdgesForItems': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findBlockerEdgesForItems': [
-    'unbound-read-path',
-    'planValidityService',
-  ],
-  'workItemLinkRepository.ts#findBlockerSessionBranchesForItems': [
-    'unbound-read-path',
-    'workItemsService',
-  ],
-  'workItemLinkRepository.ts#findBlockerStates': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findBlockerStatesForItems': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findBySessionBranch': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
   'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#findExpandableStubs': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findReadyLayer': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findRoadmapBlockerStubs': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findSubtreeMembersForValidity': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#matchesAutomationCondition': [
     'unbound-read-path',
@@ -295,8 +277,13 @@ const UNREVIEWED_CEILING = 8;
  * 31 -> 30: MOTIR-2806 bound `activityService` — `countDisplayableByWorkItem`.
  * Its other named read, `sprintRepository.findByIds`, landed with MOTIR-2807,
  * which needed it for the same feed.
+ * 30 -> 21: MOTIR-2802 bound `workItemsService`'s eight link-edge reads. Three
+ * more came with them because they share a call site and binding half of a
+ * contiguous run fixes nothing — `findBlockerEdgesForItems` (MOTIR-2808 owns its
+ * other caller), `customFieldDefinitionRepository.listWithValuesForWorkItem`, and
+ * the item-detail fan-out they sit in.
  */
-const UNBOUND_READ_PATH_CEILING = 30;
+const UNBOUND_READ_PATH_CEILING = 21;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

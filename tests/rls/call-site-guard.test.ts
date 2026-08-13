@@ -50,10 +50,6 @@ type Verdict =
  * three places carries one entry and the scan counts three sites.
  */
 const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
-  'lib/services/workItemsService.ts#workItemLinkRepository.findByToItem': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
   'lib/services/aiBugTelemetryService.ts#workItemLinkRepository.findByFromItem': [
     'unbound-call-site',
     'MOTIR-2846 · aiBugTelemetryService',
@@ -378,15 +374,7 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
   ],
-  'lib/services/workItemsService.ts#componentRepository.listByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
   'lib/services/workItemsService.ts#customFieldDefinitionRepository.listByProject': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#labelRepository.listByWorkItem': [
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
   ],
@@ -459,10 +447,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'MOTIR-2802/2803 · workItemsService',
   ],
   'lib/services/workItemsService.ts#workItemRepository.findByProjectKindAndTitle': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findChildren': [
     'unbound-call-site',
     'MOTIR-2802/2803 · workItemsService',
   ],
@@ -560,8 +544,11 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * that caused it named here.** Anything else is a regression and the fix is to
  * pass the `tx`. Never raise this number to make a build pass — that is the one
  * edit both of these files exist to prevent.
+ *
+ * 189 -> 177: MOTIR-2802 bound `workItemsService`'s link-edge reads and the
+ * item-detail fan-out they sit inside.
  */
-const UNBOUND_CALL_SITE_CEILING = 189;
+const UNBOUND_CALL_SITE_CEILING = 177;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.
