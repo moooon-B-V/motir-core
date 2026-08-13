@@ -91,7 +91,7 @@ function sprintPlanSse(itemCount: number, sprintCount: number): string {
  */
 async function stubSprintPlanJob(page: Page, seed: AiCadenceSeed): Promise<void> {
   const delta = recordedSprintPacking(seed);
-  const review = await buildSprintPlanReview(seed.projectId, delta);
+  const review = await buildSprintPlanReview(seed.projectId, delta, seed.ctx.workspaceId);
 
   await page.route('**/api/ai/plan/sprint', async (route) => {
     if (route.request().method() !== 'POST') {

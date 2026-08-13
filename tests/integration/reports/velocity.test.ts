@@ -8,6 +8,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Stub ONLY `getWorkspaceContext` (the cookie-derived resolver the test env
 // can't supply) — the single allowed mock, per CLAUDE.md. The service-level
@@ -283,7 +284,9 @@ describe('reportsService.getVelocity', () => {
 describe('sprintRepository.listCompletedByProject (bounded read + empty-input guard)', () => {
   it('returns [] for a project with no completed sprints', async () => {
     const fx = await makeWorkItemFixture();
-    const rows = await sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 7);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 7, tx),
+    );
     expect(rows).toEqual([]);
   });
 
@@ -297,7 +300,9 @@ describe('sprintRepository.listCompletedByProject (bounded read + empty-input gu
       committedIssueCount: 1,
       issues: [],
     });
-    const rows = await sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 0);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 0, tx),
+    );
     expect(rows).toEqual([]);
   });
 
@@ -312,7 +317,9 @@ describe('sprintRepository.listCompletedByProject (bounded read + empty-input gu
         sequence: 1,
       },
     });
-    const rows = await sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 7);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      sprintRepository.listCompletedByProject(fx.projectId, fx.workspaceId, 7, tx),
+    );
     expect(rows).toEqual([]); // the active sprint is not a completed one
   });
 });

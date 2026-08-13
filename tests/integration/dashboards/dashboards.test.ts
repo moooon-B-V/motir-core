@@ -61,6 +61,7 @@ import type { WorkItemFixture } from '../../fixtures';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.3 · Subtask 6.3.1 — the dashboard + widget substrate. Real
 // Postgres (no mocks except getWorkspaceContext for the route transport),
@@ -861,8 +862,16 @@ describe('route transport — the HTTP layer enforces the same matrix', () => {
 describe('repo empty-input guards (the coverage-gate rule)', () => {
   it('blank ids read as null / empty / zero, never a throw', async () => {
     const t = await makeTeam();
-    expect(await dashboardRepository.findByIdWithFacts('', 'x')).toBeNull();
-    expect(await dashboardRepository.findByIdWithFacts(t.fx.workspaceId, '')).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        dashboardRepository.findByIdWithFacts('', 'x', tx),
+      ),
+    ).toBeNull();
+    expect(
+      await withWorkspaceServiceContext(t.fx.workspaceId, (tx) =>
+        dashboardRepository.findByIdWithFacts(t.fx.workspaceId, '', tx),
+      ),
+    ).toBeNull();
     expect(await dashboardRepository.listVisible('', t.fx.ownerId, 10)).toEqual([]);
     expect(await dashboardRepository.listVisible(t.fx.workspaceId, '', 10)).toEqual([]);
     expect(await dashboardWidgetRepository.listByDashboard('')).toEqual([]);

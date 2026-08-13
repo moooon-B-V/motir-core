@@ -38,6 +38,7 @@ import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessio
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 test.describe.configure({ timeout: 120_000 });
 
@@ -110,13 +111,18 @@ async function stubPlannerTurn(
   await page.route('**/api/ai/plan-change/session/planner-turn', async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
 
-    const session = await planChangeSessionRepository.findByProjectAndScope(
-      ctx.projectId,
-      PROJECT_SCOPE_KEY,
-      ctx.workspaceId,
+    const session = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        ctx.projectId,
+        PROJECT_SCOPE_KEY,
+        ctx.workspaceId,
+        tx,
+      ),
     );
     if (session) {
-      const existing = await planChangeTurnRepository.listBySessionId(session.id, ctx.workspaceId);
+      const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        planChangeTurnRepository.listBySessionId(session.id, ctx.workspaceId, tx),
+      );
       // Idempotent, exactly as the real route is: a reload replays this call.
       const already = existing.some((t) => t.role === 'assistant' && t.body === utterance.message);
       if (!already) {

@@ -58,7 +58,9 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
 // 152 - 47 (MOTIR-2839, tests/boards) = 105
 // 105 - 80 (MOTIR-2840 + 2841 + 2842: ai/mcp/plan-seed, custom-fields/labels,
 //            saved-filters/workflows/publicProjects) = 25
-const IN_SCOPE_CEILING = 25;
+// 25 - 25 (MOTIR-2843, the long tail) = 0  ← the story's work is complete.
+// MOTIR-2829 replaces this ratchet with a hard `toBe(0)` and deletes the constant.
+const IN_SCOPE_CEILING = 0;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
@@ -239,6 +241,7 @@ describe('the ratchets over the real test suite', () => {
       'tests/labels-components-watch/repositories.test.ts',
       'tests/mcp/comment-counts.test.ts',
       'tests/notifications/repositories.test.ts',
+      'tests/project-details-service.test.ts',
     ]);
     for (const [file, reason] of Object.entries(ADJUDICATED_UNBOUND_FILES)) {
       expect(existsSync(path.join(process.cwd(), file)), `${file} does not exist`).toBe(true);

@@ -103,6 +103,16 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   'tests/notifications/repositories.test.ts':
     'MOTIR-2751: repository contract + migration constraints, RLS deliberately inert.',
 
+  // ── MOTIR-2843: a test whose SUBJECT is the unbound branch itself ─────────
+  // `projectKeyAliasRepository.findManyByProject` still carries a `tx ?? db`
+  // fallback, and this file's own comment says the read exercises "the repo's
+  // no-tx read path (the `?? db` branch)". Binding it does not improve the test,
+  // it DELETES it -- and drops the branch's coverage with it. The durable fix is
+  // to retire the fallback, as MOTIR-2755 did for projectRoleDefinitionRepository
+  // once every caller bound; that is a lib/ change and belongs to MOTIR-2796.
+  'tests/project-details-service.test.ts':
+    "MOTIR-2843/2796: the test's subject IS the `?? db` branch; binding deletes it. Retire the fallback instead.",
+
   // ── MOTIR-2755 / MOTIR-2840: the batched-read QUERY COUNT ─────────────────
   // A different incompatibility from the others. This file's subject is how MANY
   // queries a batched read issues (the N+1 guard), measured by spying on

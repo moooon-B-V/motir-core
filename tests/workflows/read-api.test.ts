@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // workflowsService + workflowsRepository read API (Story 2.2 · Subtask 2.2.3).
 // Real Postgres (no mocks) — runs in CI. Seeds workflow rows DIRECTLY (2.2.2's
@@ -335,22 +336,24 @@ describe('workflowsService.canTransition (the four matrix cells)', () => {
 describe('workflowsRepository — explicit workspaceId filter (finding #26)', () => {
   it('findStatuses with the wrong workspaceId returns []', async () => {
     const fx = await makeFixture();
-    const rows = await workflowsRepository.findStatuses(fx.projectId, fx.otherWorkspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workflowsRepository.findStatuses(fx.projectId, fx.otherWorkspaceId, tx),
+    );
     expect(rows).toEqual([]);
   });
 
   it('findTransitions with the wrong workspaceId returns []', async () => {
     const fx = await makeFixture();
-    const rows = await workflowsRepository.findTransitions(fx.projectId, fx.otherWorkspaceId);
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workflowsRepository.findTransitions(fx.projectId, fx.otherWorkspaceId, tx),
+    );
     expect(rows).toEqual([]);
   });
 
   it('findStatusByKey with the wrong workspaceId returns null', async () => {
     const fx = await makeFixture();
-    const row = await workflowsRepository.findStatusByKey(
-      fx.projectId,
-      'todo',
-      fx.otherWorkspaceId,
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workflowsRepository.findStatusByKey(fx.projectId, 'todo', fx.otherWorkspaceId, tx),
     );
     expect(row).toBeNull();
   });

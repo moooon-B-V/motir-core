@@ -6,6 +6,7 @@ import { planRepository } from '@/lib/repositories/planRepository';
 import { makeWorkItemFixture } from './fixtures/workItemFixtures';
 import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Route-level transport tests for the generation API (Subtask 7.4.4 · MOTIR-846):
 //   - POST /api/ai/plan/generate              — opens a Plan + submits generate_tree,
@@ -165,7 +166,9 @@ describe('POST /api/ai/plan/generate', () => {
     expect(actor).toEqual({ userId: fx.ownerId });
 
     // The Plan really exists, is `generating`, and is bound to the job (sourceJobId).
-    const plan = await planRepository.findById(body.planId, fx.workspaceId);
+    const plan = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planRepository.findById(body.planId, fx.workspaceId, tx),
+    );
     expect(plan).not.toBeNull();
     expect(plan!.status).toBe('generating');
     expect(plan!.sourceJobId).toBe('job_gen_1');

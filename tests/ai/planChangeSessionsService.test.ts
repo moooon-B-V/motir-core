@@ -212,10 +212,13 @@ describe('planChangeSessionsService — append concurrency', () => {
 
     const rows = await withWorkspaceServiceContext(fx.workspaceId, async (tx) =>
       planChangeTurnRepository.listBySessionId(
-        (await planChangeSessionRepository.findByProjectAndScope(
-          fx.projectId,
-          PROJECT_SCOPE_KEY,
-          fx.workspaceId,
+        (await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          planChangeSessionRepository.findByProjectAndScope(
+            fx.projectId,
+            PROJECT_SCOPE_KEY,
+            fx.workspaceId,
+            tx,
+          ),
         ))!.id,
         fx.workspaceId,
         tx,
