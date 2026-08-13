@@ -1,7 +1,9 @@
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  ADJUDICATED_UNBOUND_FILES,
   countByVerdict,
   preAuthKeys,
   repositoryIndex,
@@ -48,7 +50,7 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  * batch's progress, which is invisible in the diff and looks exactly like
  * agreement.
  */
-const IN_SCOPE_CEILING = 458;
+const IN_SCOPE_CEILING = 432;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
@@ -96,6 +98,7 @@ describe('the test call-site classifier rules on every shape', () => {
       'pre-auth': 1,
       'needs-binding-first': 1,
       'already-bound': 2,
+      'adjudicated-unbound': 0,
     });
   });
 
@@ -214,6 +217,29 @@ describe('the ratchets over the real test suite', () => {
         `usually because the method was renamed or removed:\n` +
         unclassifiable.map((u) => `  ${u.file}:${u.line} ${u.callee}`).join('\n'),
     ).toEqual([]);
+  });
+
+  it('the file-level adjudication is exactly what a human put there', () => {
+    // `adjudicated-unbound` is the one verdict a parser cannot derive: the call
+    // site looks exactly like in-scope work and only the FILE's subject says
+    // otherwise. So the set is pinned, and a new entry fails here until somebody
+    // adds it on purpose — an entry silently converts real work into "leave it".
+    expect(Object.keys(ADJUDICATED_UNBOUND_FILES)).toEqual([
+      'tests/integration/sprints/repository.test.ts',
+    ]);
+    for (const [file, reason] of Object.entries(ADJUDICATED_UNBOUND_FILES)) {
+      expect(existsSync(path.join(process.cwd(), file)), `${file} does not exist`).toBe(true);
+      expect(reason, `${file}'s adjudication must cite the card that decided it`).toMatch(
+        /MOTIR-\d+/,
+      );
+    }
+
+    const { sites } = scanTestCallSites();
+    const adjudicated = sites.filter((s) => s.verdict === 'adjudicated-unbound');
+    expect(adjudicated.length).toBeGreaterThan(0);
+    // A write in an adjudicated file still requires its `tx` and still reads as
+    // bound: the decision is "do not bind these READS", not "this file is exempt".
+    expect(adjudicated.every((s) => !s.bound)).toBe(true);
   });
 
   it('the pre-auth adjudication is actually being read', () => {

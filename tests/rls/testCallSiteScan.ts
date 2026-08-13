@@ -58,6 +58,43 @@ const GUARD = 'tests/rls/singleton-read-guard.test.ts';
  */
 const GUARD_FIXTURE = 'tests/rls/singleton-read-guard.fixture.ts';
 
+/**
+ * Test files whose reads are DELIBERATELY unbound, with the reason.
+ *
+ * ── Why this channel has to exist ──────────────────────────────────────────
+ * The other four leave-alone verdicts are properties of the METHOD: not gated,
+ * pre-auth, not yet bindable, already bound. This one is a property of the
+ * FILE's INTENT, which no amount of parsing can recover — the call site looks
+ * exactly like in-scope work, and only the test's own subject says otherwise.
+ *
+ * The shape, from the instance that forced it: a file whose subject is the
+ * application's explicit `workspaceId` WHERE-clause gate asserts that a read
+ * for a FOREIGN workspace comes back empty. Bind that read and the RLS policy
+ * filters it too — so it still comes back empty, for a second reason, and the
+ * assertion stops distinguishing a working gate from a broken one. Binding does
+ * not break the test; it makes it VACUOUS. That is the same failure this whole
+ * story exists to remove, arriving from the opposite direction.
+ *
+ * ⚠️ The adjudication is checked AFTER `already-bound`, not before. A write in
+ * such a file still REQUIRES its `tx` and still reads as bound — the decision is
+ * "do not bind these READS", not "this file is exempt from the model". Checking
+ * it first mislabelled 13 legitimate write calls in the one adjudicated file.
+ *
+ * ⚠️ An entry here is an ADJUDICATION, not a TODO. Adding one silently converts
+ * real work into "leave it", so each carries the card that decided it, and the
+ * guard asserts the set is exactly this — a new entry fails the build until a
+ * human adds it here on purpose. Same division of labour as MOTIR-2784's
+ * VERDICTS map: the machine enumerates, a human adjudicates.
+ */
+export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
+  'tests/integration/sprints/repository.test.ts':
+    "MOTIR-2739/2747: the file's subject is the explicit `workspaceId` WHERE-clause gate, " +
+    'asserted with RLS deliberately out of the picture. Bound, a cross-workspace read ' +
+    'returns [] because the POLICY hid the row — the same observation for a different ' +
+    "reason — which makes every gate assertion in the file vacuous. The policy's own " +
+    'behaviour is proved separately, under the role, in the *-rls suites.',
+};
+
 /** Client identifiers a repository method may address a model through. */
 const CLIENTS = new Set(['db', 'tx', 'client', 'adminDb', 't']);
 
@@ -71,7 +108,13 @@ export type TestCallSiteVerdict =
   /** Gated, but the method has no `tx` parameter to pass yet (MOTIR-2830). */
   | 'needs-binding-first'
   /** Gated, bindable, and this call already passes a `tx`. Nothing to do. */
-  | 'already-bound';
+  | 'already-bound'
+  /**
+   * Gated and bindable, but the FILE has a recorded adjudication that its reads
+   * stay unbound — because binding them would make the file's own claim vacuous.
+   * LEAVE IT. See `ADJUDICATED_UNBOUND_FILES`.
+   */
+  | 'adjudicated-unbound';
 
 export interface TestCallSite {
   /** repo-relative, e.g. `tests/publicProjects/publicProjectionStats.test.ts` */
@@ -297,7 +340,9 @@ export function scanTestCallSites(root = process.cwd()): {
                 ? 'needs-binding-first'
                 : bound
                   ? 'already-bound'
-                  : 'in-scope';
+                  : rel in ADJUDICATED_UNBOUND_FILES
+                    ? 'adjudicated-unbound'
+                    : 'in-scope';
           sites.push({
             file: rel,
             line,
@@ -326,6 +371,7 @@ export function countByVerdict(sites: TestCallSite[]): Record<TestCallSiteVerdic
     'pre-auth': 0,
     'needs-binding-first': 0,
     'already-bound': 0,
+    'adjudicated-unbound': 0,
   };
   for (const s of sites) counts[s.verdict] += 1;
   return counts;
