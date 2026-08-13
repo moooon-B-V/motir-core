@@ -18,6 +18,7 @@ import {
 import { createTestUser } from '../fixtures/userFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.14 · Subtask 6.14.8 — the load-bearing GUARANTEE suite for epic
 // privacy on public projects. It locks the single security promise the whole
@@ -423,7 +424,13 @@ describe('6.14.8 — the admin toggle drives enforcement live (through the real 
     await expect(workItemsService.setEpicPrivacy(task.id, true, fx.ctx)).rejects.toBeInstanceOf(
       NotEpicError,
     );
-    expect((await workItemRepository.findById(task.id))?.publicChildrenHidden).toBe(false);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(task.id, tx),
+        )
+      )?.publicChildrenHidden,
+    ).toBe(false);
   });
 
   it('the admin guard: a NON-ADMIN (plain workspace member) is rejected (403 / NotProjectAdminError) and writes nothing', async () => {
@@ -434,7 +441,13 @@ describe('6.14.8 — the admin toggle drives enforcement live (through the real 
     await expect(workItemsService.setEpicPrivacy(epic.id, true, member.ctx)).rejects.toBeInstanceOf(
       NotProjectAdminError,
     );
-    expect((await workItemRepository.findById(epic.id))?.publicChildrenHidden).toBe(false);
+    expect(
+      (
+        await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+          workItemRepository.findById(epic.id, tx),
+        )
+      )?.publicChildrenHidden,
+    ).toBe(false);
   });
 
   it('the already-set guard: a redundant set is an idempotent no-op (no updatedAt bump)', async () => {

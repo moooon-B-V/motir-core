@@ -56,7 +56,9 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
 // 243 - 49 (MOTIR-2837, backlog + import) = 194
 // 194 - 42 (MOTIR-2838, tests/triage) = 152
 // 152 - 47 (MOTIR-2839, tests/boards) = 105
-const IN_SCOPE_CEILING = 105;
+// 105 - 80 (MOTIR-2840 + 2841 + 2842: ai/mcp/plan-seed, custom-fields/labels,
+//            saved-filters/workflows/publicProjects) = 25
+const IN_SCOPE_CEILING = 25;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
@@ -235,6 +237,7 @@ describe('the ratchets over the real test suite', () => {
       'tests/custom-fields/repositories.test.ts',
       'tests/integration/sprints/repository.test.ts',
       'tests/labels-components-watch/repositories.test.ts',
+      'tests/mcp/comment-counts.test.ts',
       'tests/notifications/repositories.test.ts',
     ]);
     for (const [file, reason] of Object.entries(ADJUDICATED_UNBOUND_FILES)) {

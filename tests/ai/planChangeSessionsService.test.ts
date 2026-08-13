@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import {
@@ -210,21 +210,27 @@ describe('planChangeSessionsService — append concurrency', () => {
       planChangeSessionsService.appendTurn('B', ctx),
     ]);
 
-    const rows = await planChangeTurnRepository.listBySessionId(
-      (await planChangeSessionRepository.findByProjectAndScope(
-        fx.projectId,
-        PROJECT_SCOPE_KEY,
+    const rows = await withWorkspaceServiceContext(fx.workspaceId, async (tx) =>
+      planChangeTurnRepository.listBySessionId(
+        (await planChangeSessionRepository.findByProjectAndScope(
+          fx.projectId,
+          PROJECT_SCOPE_KEY,
+          fx.workspaceId,
+        ))!.id,
         fx.workspaceId,
-      ))!.id,
-      fx.workspaceId,
+        tx,
+      ),
     );
     expect(rows.map((r) => r.seq)).toEqual([0, 1]);
     expect(rows.map((r) => r.body).sort()).toEqual(['A', 'B']);
 
-    const session = await planChangeSessionRepository.findByProjectAndScope(
-      fx.projectId,
-      PROJECT_SCOPE_KEY,
-      fx.workspaceId,
+    const session = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      planChangeSessionRepository.findByProjectAndScope(
+        fx.projectId,
+        PROJECT_SCOPE_KEY,
+        fx.workspaceId,
+        tx,
+      ),
     );
     expect(session!.turnCount).toBe(2);
   });
@@ -286,17 +292,23 @@ describe('planChangeSessionsService — tenant isolation', () => {
 
     // The row exists — but not for tenant A's workspace scope.
     expect(
-      await planChangeSessionRepository.findByProjectAndScope(
-        other.projectId,
-        PROJECT_SCOPE_KEY,
-        fx.workspaceId,
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findByProjectAndScope(
+          other.projectId,
+          PROJECT_SCOPE_KEY,
+          fx.workspaceId,
+          tx,
+        ),
       ),
     ).toBeNull();
     expect(
-      await planChangeSessionRepository.findByProjectAndScope(
-        other.projectId,
-        PROJECT_SCOPE_KEY,
-        other.workspaceId,
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        planChangeSessionRepository.findByProjectAndScope(
+          other.projectId,
+          PROJECT_SCOPE_KEY,
+          other.workspaceId,
+          tx,
+        ),
       ),
     ).not.toBeNull();
   });

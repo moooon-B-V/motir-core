@@ -103,6 +103,15 @@ export const ADJUDICATED_UNBOUND_FILES: Record<string, string> = {
   'tests/notifications/repositories.test.ts':
     'MOTIR-2751: repository contract + migration constraints, RLS deliberately inert.',
 
+  // ── MOTIR-2755 / MOTIR-2840: the batched-read QUERY COUNT ─────────────────
+  // A different incompatibility from the others. This file's subject is how MANY
+  // queries a batched read issues (the N+1 guard), measured by spying on
+  // `db.comment.groupBy`. Binding relocates the query onto the tx client, which
+  // the spy cannot see, so every count reads 0 and the guard silently stops
+  // guarding. Its cross-workspace pair (a/b) is the WHERE-clause shape as well.
+  'tests/mcp/comment-counts.test.ts':
+    'MOTIR-2755/2840: subject is the QUERY COUNT; a bound read leaves the client the spy watches.',
+
   // ── MOTIR-2739/2747: the sprint/backlog repository leaves ─────────────────
   'tests/integration/sprints/repository.test.ts':
     "MOTIR-2739/2747: the file's subject is the explicit `workspaceId` WHERE-clause gate, " +

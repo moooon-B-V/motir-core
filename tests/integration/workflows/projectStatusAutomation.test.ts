@@ -14,6 +14,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workIt
 import { createTestUser } from '../../fixtures/userFixtures';
 import { createTestWorkspace } from '../../fixtures/workspaceFixtures';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story MOTIR-1615 · Subtask MOTIR-1618 — the `Project` status-automation columns
 // and the 4-layer path over them (migration → projectRepository →
@@ -79,7 +80,9 @@ describe('Project status-automation columns — defaults (MOTIR-1618)', () => {
 
   it('the mapper projects exactly the two switches, from a row or from the narrow read', async () => {
     const fx = await makeFixture();
-    const projection = await projectRepository.findStatusAutomation(fx.projectId);
+    const projection = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      projectRepository.findStatusAutomation(fx.projectId, tx),
+    );
 
     expect(projection).not.toBeNull();
     expect(toProjectStatusAutomationDto(projection!)).toEqual({

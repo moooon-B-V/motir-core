@@ -11,6 +11,7 @@ import { createTestUser } from '../fixtures/userFixtures';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Story 6.14 · Subtask 6.14.4 — the SERVER-SIDE epic-privacy enforcement. A
 // private epic's children + its aggregate tells must NEVER be transmitted to a
@@ -96,9 +97,8 @@ describe('workItemRepository.findPublicHiddenDescendantIds', () => {
     const fx = await makePublicProjectFixture();
     const t = await buildTree(fx);
 
-    const hidden = await workItemRepository.findPublicHiddenDescendantIds(
-      fx.projectId,
-      fx.workspaceId,
+    const hidden = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findPublicHiddenDescendantIds(fx.projectId, fx.workspaceId, tx),
     );
 
     // The story (depth 2) AND the task under it (depth 3) are both hidden.
@@ -115,7 +115,9 @@ describe('workItemRepository.findPublicHiddenDescendantIds', () => {
     const t = await buildTree(fx);
     await setPrivate(t.privateEpic.id, false);
     expect(
-      await workItemRepository.findPublicHiddenDescendantIds(fx.projectId, fx.workspaceId),
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.findPublicHiddenDescendantIds(fx.projectId, fx.workspaceId, tx),
+      ),
     ).toEqual([]);
   });
 });

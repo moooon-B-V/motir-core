@@ -4,6 +4,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Repository-layer tests for the Story 6.12 · Subtask 6.12.4 Overview stat
 // methods on workItemRepository (the per-file coverage-gated file). Real
@@ -47,7 +48,9 @@ describe('workItemRepository.countByStatusCategory', () => {
     const cancelled = await createTestWorkItem(fx, { kind: 'task', title: 'cancelled f' });
     await setStatus(cancelled.id, 'cancelled');
 
-    const counts = await workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId);
+    const counts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId, undefined, tx),
+    );
     expect(counts).toEqual({ todo: 2, in_progress: 2, done: 2 });
   });
 
@@ -62,13 +65,17 @@ describe('workItemRepository.countByStatusCategory', () => {
     const triaged = await createTestWorkItem(fx, { kind: 'bug', title: 'triaged' });
     await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
 
-    const counts = await workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId);
+    const counts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId, undefined, tx),
+    );
     expect(counts).toEqual({ todo: 0, in_progress: 1, done: 0 });
   });
 
   it('returns an all-zero map for a project with no work items', async () => {
     const fx = await makeWorkItemFixture();
-    const counts = await workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId);
+    const counts = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId, undefined, tx),
+    );
     expect(counts).toEqual({ todo: 0, in_progress: 0, done: 0 });
   });
 });
@@ -91,12 +98,20 @@ describe('workItemRepository.countTriageItems', () => {
       data: { triagedAt: new Date(), archivedAt: new Date() },
     });
 
-    expect(await workItemRepository.countTriageItems(fx.projectId, fx.workspaceId)).toBe(2);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countTriageItems(fx.projectId, fx.workspaceId, tx),
+      ),
+    ).toBe(2);
   });
 
   it('returns 0 when the project has no triage items', async () => {
     const fx = await makeWorkItemFixture();
     await createTestWorkItem(fx, { kind: 'task', title: 'normal' });
-    expect(await workItemRepository.countTriageItems(fx.projectId, fx.workspaceId)).toBe(0);
+    expect(
+      await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+        workItemRepository.countTriageItems(fx.projectId, fx.workspaceId, tx),
+      ),
+    ).toBe(0);
   });
 });

@@ -9,6 +9,7 @@ import { seedSystemPrincipal } from '@/scripts/plan-seed/systemPrincipal';
 import { MOTIR_SYSTEM_USER_EMAIL, MOTIR_SYSTEM_USER_NAME } from '@/lib/ai/systemPrincipal';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // MOTIR-1451 — the system-principal provisioning the seed adds (a SECOND helper
 // alongside seedGenerationTestProject). Real Postgres (the seed-test convention).
@@ -59,7 +60,9 @@ describe('seedSystemPrincipal (MOTIR-1451)', () => {
       await workspaceMembershipRepository.findByUserAndWorkspace(userId, workspace.id),
     ).not.toBeNull();
     expect(
-      await projectMembershipRepository.findByUserAndProject(userId, project.id),
+      await withWorkspaceServiceContext(workspace.id, (tx) =>
+        projectMembershipRepository.findByUserAndProject(userId, project.id, tx),
+      ),
     ).not.toBeNull();
   });
 

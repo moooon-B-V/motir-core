@@ -12,6 +12,7 @@ import type { SeedItem } from '@/scripts/plan-seed/types';
 import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Subtask 2.7.7 — the SEED-LOADER mapping half of the type/executor lock-down
 // (the gap the other 2.7.7 areas already cover: the default map lives in
@@ -204,7 +205,9 @@ describe('the loader mapping persists structured fields + prose-free description
     );
 
     // Assert via a REPOSITORY READ (the AC) — the structured columns are set…
-    const row = await workItemRepository.findById(created.id);
+    const row = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findById(created.id, tx),
+    );
     expect(row?.type).toBe('test');
     expect(row?.executor).toBe('coding_agent');
     // …and the persisted description carries no type/executor prose.
