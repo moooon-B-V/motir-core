@@ -54,6 +54,7 @@ import type {
   ResolvedWorkItemPayload,
 } from './types';
 import { ImportAlreadyRunningError } from '../errors';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /** Live per-outcome tallies of a run (mirrors the `Import.*Count` columns). */
 export interface ImportRunCounts {
@@ -136,7 +137,7 @@ export const importPersistService = {
     // run of the SAME import (already `running`) is rejected. This is the
     // primary defence against a re-run racing itself into duplicate creates —
     // the per-issue `FOR UPDATE` + `@@unique` cover the rarer cross-import race.
-    await db.$transaction(async (tx) => {
+    await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
       const current = await importRepository.findById(importId, tx);
       if (current && current.status === 'running') {
         throw new ImportAlreadyRunningError(importId);
@@ -458,7 +459,9 @@ async function resolveRef(
 ): Promise<ResolvedRef | null> {
   const inRun = resolved.get(externalId);
   if (inRun) return inRun;
-  const mapped = await importedIssueRepository.findBySourceId(ctx.projectId, source, externalId);
+  const mapped = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    importedIssueRepository.findBySourceId(ctx.projectId, source, externalId, tx),
+  );
   if (!mapped) return null;
   // A prior-run item's kind is unknown here; the DB trigger backstops legality.
   return { workItemId: mapped.workItemId, desiredKind: 'task' };

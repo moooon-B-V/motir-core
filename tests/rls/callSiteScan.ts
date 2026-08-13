@@ -59,10 +59,12 @@ import { policyGatedModels } from './singletonReadScan';
 //     dataflow would; the cost is not worth it while the direct sites are
 //     unfixed, and the guard pins that limit with a fixture case rather than
 //     leaving it implicit.
-//  3. **Whether `tx` IS the transaction.** The check is a NAME match. Resolving
-//     the symbol needs a full program and buys little — `tx` is this codebase's
-//     universal name for it, and a false `receives-tx` costs one under-reported
-//     site rather than a wrong fix.
+//  3. **Whether `tx` IS the transaction.** The check is a NAME match, plus the
+//     TYPE where a local callback declares one (MOTIR-2846 — see
+//     `enclosingTxParams` and `passesTx`, which also read through a `tx ?? t`).
+//     Resolving the symbol needs a full program and buys little — `tx` is this
+//     codebase's universal name for it, and a false `receives-tx` costs one
+//     under-reported site rather than a wrong fix.
 //  4. **Test call sites.** Out of scope entirely: that population is
 //     MOTIR-2797's and MOTIR-2830's, and it has its own classifier.
 
@@ -280,6 +282,38 @@ function enclosingContexts(node: ts.Node): Array<{ param: string | undefined; bi
 }
 
 /**
+ * Parameter names, of any enclosing function, that are ANNOTATED as a
+ * transaction client — `(t: Prisma.TransactionClient) => …`.
+ *
+ * A service often factors its write half into a local `const write = async (t:
+ * Prisma.TransactionClient) => { … }` and hands that to `withWorkspaceContext`
+ * (or to a caller-supplied `tx`). A read inside it that is given `t` IS bound —
+ * by whichever transaction the local was invoked with — so classifying it
+ * `no-context` reports a defect that does not exist. The TYPE is the evidence:
+ * nothing but a transaction client can be passed for that parameter, and the
+ * obligation to bind moves to the local's call sites, which this scanner sees
+ * on their own.
+ */
+function enclosingTxParams(node: ts.Node): string[] {
+  const names: string[] = [];
+  for (let n: ts.Node | undefined = node.parent; n; n = n.parent) {
+    if (
+      !ts.isArrowFunction(n) &&
+      !ts.isFunctionExpression(n) &&
+      !ts.isFunctionDeclaration(n) &&
+      !ts.isMethodDeclaration(n)
+    ) {
+      continue;
+    }
+    for (const p of n.parameters) {
+      if (!ts.isIdentifier(p.name) || !p.type) continue;
+      if (/\bTransactionClient\b/.test(p.type.getText())) names.push(p.name.text);
+    }
+  }
+  return names;
+}
+
+/**
  * Does this argument list carry something that could BE the transaction?
  *
  * A NAME match, deliberately — resolving the symbol would need a full program
@@ -293,13 +327,20 @@ function passesTx(args: ts.NodeArray<ts.Expression>, candidates: readonly string
     ts.isAsExpression(e) || ts.isTypeAssertionExpression(e) || ts.isParenthesizedExpression(e)
       ? unwrap(e.expression)
       : e;
-  return args.some((raw) => {
+  const isTx = (raw: ts.Expression): boolean => {
     const a = unwrap(raw);
     if (ts.isIdentifier(a)) return a.text === 'tx' || candidates.includes(a.text);
     // `opts.tx`, `this.tx` — the property name is what matters.
     if (ts.isPropertyAccessExpression(a)) return a.name.text === 'tx';
+    // `tx ?? t` — the shipped shape for "join the caller's transaction, else the
+    // one this method opened". BOTH arms must be a transaction for the argument
+    // to be one, which is exactly what the operator guarantees here.
+    if (ts.isBinaryExpression(a) && a.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
+      return isTx(a.left) && isTx(a.right);
+    }
     return false;
-  });
+  };
+  return args.some(isTx);
 }
 
 /**
@@ -340,7 +381,10 @@ export function scanCallSites(root = process.cwd()): CallSite[] {
           const key = `${node.expression.expression.text}.${node.expression.name.text}`;
           if (reads.has(key)) {
             const contexts = enclosingContexts(node);
-            const params = contexts.map((c) => c.param).filter((p): p is string => p !== undefined);
+            const params = [
+              ...contexts.map((c) => c.param).filter((p): p is string => p !== undefined),
+              ...enclosingTxParams(node),
+            ];
             // The INNERMOST enclosing transaction decides, because that is the
             // one whose `tx` is in scope at the call. A bound context wrapping a
             // bare `$transaction` does not rescue a read inside the inner one:

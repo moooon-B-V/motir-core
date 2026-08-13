@@ -65,233 +65,19 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'no-policy',
     'device_code: relrowsecurity=f, 0 rows in pg_policies — measured, not inferred',
   ],
+  'lib/services/publicRequestsService.ts#workItemRepository.findById': [
+    'public-arm',
+    // Re-adjudicated under MOTIR-2846 (it was carried as `unbound-call-site`).
+    // The service header states the reason in so many words: this read is the one
+    // that FINDS the item's project, so its workspace is not yet known and there
+    // is nothing to bind. `work_item_public_project_read` admits an unbound read
+    // of a public project's items and nothing else; the comment INSERT beneath it
+    // binds the item's own workspace. Binding here would disable the arm.
+    'the id is all the route has — the read is FINDING the workspace, and the public arm admits it',
+  ],
   'lib/services/publicProjectsService.ts#workItemRepository.findByIds': [
     'public-arm',
     'the public pages read with app.workspace_id UNSET',
-  ],
-  'app/(onboarding)/onboarding/discovery/page.tsx#workItemRepository.countProjectIssues': [
-    'unbound-call-site',
-    'MOTIR-2846 · page',
-  ],
-  'app/(onboarding)/onboarding/page.tsx#workItemRepository.countProjectIssues': [
-    'unbound-call-site',
-    'MOTIR-2846 · page',
-  ],
-  'lib/github/oidcAuth.ts#workspaceMembershipRepository.findOwnerByWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2809 · oidcAuth',
-  ],
-  'lib/import/engine/importEngineService.ts#importedIssueRepository.findBySourceId': [
-    'unbound-call-site',
-    'MOTIR-2846 · importEngineService',
-  ],
-  'lib/import/engine/importPersistService.ts#importRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · importPersistService',
-  ],
-  'lib/import/engine/importPersistService.ts#importedIssueRepository.findBySourceId': [
-    'unbound-call-site',
-    'MOTIR-2846 · importPersistService',
-  ],
-  'lib/services/acceptanceEvidenceService.ts#workspaceRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · acceptanceEvidenceService',
-  ],
-  'lib/services/aiPlanEditsService.ts#workItemRepository.findByIdentifier': [
-    'unbound-call-site',
-    'MOTIR-2846 · aiPlanEditsService',
-  ],
-  'lib/services/aiSprintPlanningService.ts#workItemRepository.findByIdentifiers': [
-    'unbound-call-site',
-    'MOTIR-2846 · aiSprintPlanningService',
-  ],
-  'lib/services/attachmentsService.ts#attachmentRepository.countByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2846 · attachmentsService',
-  ],
-  'lib/services/attachmentsService.ts#attachmentRepository.listByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2846 · attachmentsService',
-  ],
-  'lib/services/attachmentsService.ts#workspaceRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · attachmentsService',
-  ],
-  'lib/services/autoPlanCadenceService.ts#planItemRepository.countByPlan': [
-    'unbound-call-site',
-    'MOTIR-2846 · autoPlanCadenceService',
-  ],
-  'lib/services/autoPlanCadenceService.ts#workspaceMembershipRepository.findOwnerByWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · autoPlanCadenceService',
-  ],
-  'lib/services/backlogService.ts#sprintRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workItemRepository.countBacklog': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workItemRepository.countSprintIssues': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workItemRepository.findBacklogPage': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workItemRepository.findBacklogRankByIds': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workItemRepository.findBoundaryBacklogRank': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workItemRepository.findSprintIssues': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/backlogService.ts#workflowsRepository.findStatuses': [
-    'unbound-call-site',
-    'MOTIR-2846 · backlogService',
-  ],
-  'lib/services/commentsService.ts#commentRepository.countByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2846 · commentsService',
-  ],
-  'lib/services/commentsService.ts#commentRepository.countByWorkItemIds': [
-    'unbound-call-site',
-    'MOTIR-2846 · commentsService',
-  ],
-  'lib/services/commentsService.ts#commentRepository.listThreadsByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2846 · commentsService',
-  ],
-  'lib/services/componentsService.ts#componentRepository.listByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2809 · componentsService',
-  ],
-  'lib/services/customFieldValuesService.ts#customFieldDefinitionRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · customFieldValuesService',
-  ],
-  'lib/services/dashboardsService.ts#dashboardRepository.findByIdWithFacts': [
-    'unbound-call-site',
-    'MOTIR-2809 · dashboardsService',
-  ],
-  'lib/services/designEvidenceService.ts#workspaceRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · designEvidenceService',
-  ],
-  'lib/services/entitlementsService.ts#attachmentRepository.sumSizeByOrganization': [
-    'unbound-call-site',
-    'MOTIR-2809 · entitlementsService',
-  ],
-  'lib/services/importService.ts#importRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · importService',
-  ],
-  'lib/services/labelsService.ts#labelRepository.listByWorkItem': [
-    'unbound-call-site',
-    'MOTIR-2809 · labelsService',
-  ],
-  'lib/services/mentionNotificationsService.ts#commentRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · mentionNotificationsService',
-  ],
-  'lib/services/migrateOnboardingService.ts#migrateOnboardingRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2810 · migrateOnboardingService',
-  ],
-  'lib/services/migrateOnboardingService.ts#migrateOnboardingRepository.findByProjectId': [
-    'unbound-call-site',
-    'MOTIR-2810 · migrateOnboardingService',
-  ],
-  'lib/services/migrateOnboardingService.ts#workItemRepository.findByProject': [
-    'unbound-call-site',
-    'MOTIR-2810 · migrateOnboardingService',
-  ],
-  'lib/services/notificationFanInService.ts#commentRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · notificationFanInService',
-  ],
-  'lib/services/planChangeSessionsService.ts#planChangeSessionRepository.findByProjectAndScope': [
-    'unbound-call-site',
-    'MOTIR-2846 · planChangeSessionsService',
-  ],
-  'lib/services/planChangeSessionsService.ts#planChangeTurnRepository.listBySessionId': [
-    'unbound-call-site',
-    'MOTIR-2846 · planChangeSessionsService',
-  ],
-  'lib/services/planReviewService.ts#workItemRepository.findByIdsInWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · planReviewService',
-  ],
-  'lib/services/planStalenessService.ts#planItemRepository.findByPlan': [
-    'unbound-call-site',
-    'MOTIR-2808 · planStalenessService',
-  ],
-  'lib/services/planStalenessService.ts#planRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2808 · planStalenessService',
-  ],
-  'lib/services/planStalenessService.ts#workItemRepository.findByIdsInWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2808 · planStalenessService',
-  ],
-  'lib/services/planValidityService.ts#sprintRepository.findActiveByProject': [
-    'unbound-call-site',
-    'MOTIR-2808 · planValidityService',
-  ],
-  'lib/services/planValidityService.ts#workItemRepository.findByIdsInWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2808 · planValidityService',
-  ],
-  'lib/services/plansService.ts#planItemRepository.countByPlanIds': [
-    'unbound-call-site',
-    'MOTIR-2846 · plansService',
-  ],
-  'lib/services/plansService.ts#planItemRepository.findByPlan': [
-    'unbound-call-site',
-    'MOTIR-2846 · plansService',
-  ],
-  'lib/services/plansService.ts#planRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · plansService',
-  ],
-  'lib/services/plansService.ts#planRepository.listByProject': [
-    'unbound-call-site',
-    'MOTIR-2846 · plansService',
-  ],
-  'lib/services/projectAccessService.ts#projectMembershipRepository.countByRole': [
-    'unbound-call-site',
-    'MOTIR-2846 · projectAccessService',
-  ],
-  'lib/services/projectAccessService.ts#projectMembershipRepository.countByRoleDefinition': [
-    'unbound-call-site',
-    'MOTIR-2846 · projectAccessService',
-  ],
-  'lib/services/projectRepoSetService.ts#projectRepoRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · projectRepoSetService',
-  ],
-  'lib/services/projectRepoTakeoverService.ts#projectRepoRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · projectRepoTakeoverService',
-  ],
-  'lib/services/projectStateService.ts#migrateOnboardingRepository.findByProjectId': [
-    'unbound-call-site',
-    'MOTIR-2846 · projectStateService',
-  ],
-  'lib/services/proseGraphAdvisoryService.ts#projectRepository.findByWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · proseGraphAdvisoryService',
-  ],
-  'lib/services/proseGraphAdvisoryService.ts#workItemRepository.findByIdsInWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · proseGraphAdvisoryService',
   ],
   'lib/services/publicProjectsService.ts#projectRepository.findById': [
     'public-arm',
@@ -324,178 +110,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
   'lib/services/publicProjectsService.ts#workItemRepository.findPublicProjectTreeLevel': [
     'public-arm',
     'the public pages read with app.workspace_id UNSET',
-  ],
-  'lib/services/publicRequestsService.ts#workItemRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · publicRequestsService',
-  ],
-  'lib/services/sprintsService.ts#sprintRepository.findActiveByProject': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/sprintsService.ts#sprintRepository.listByProject': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/sprintsService.ts#sprintRepository.maxSequenceForProject': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/sprintsService.ts#workItemRepository.countSprintIssues': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/sprintsService.ts#workItemRepository.countSprintIssuesByDoneMembership': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/sprintsService.ts#workItemRepository.findSprintIssuesByDoneMembership': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/sprintsService.ts#workItemRepository.findSprintIssuesExcludingStatuses': [
-    'unbound-call-site',
-    'MOTIR-2804 · sprintsService',
-  ],
-  'lib/services/triageService.ts#workItemRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · triageService',
-  ],
-  'lib/services/triageService.ts#workItemRepository.findTriageQueue': [
-    'unbound-call-site',
-    'MOTIR-2846 · triageService',
-  ],
-  'lib/services/watcherNotificationsService.ts#commentRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2846 · watcherNotificationsService',
-  ],
-  'lib/services/workItemsService.ts#componentRepository.findByIds': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#sprintRepository.findActiveByProject': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#sprintRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#sprintRepository.listByProject': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemLinkRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.countArchivedByProject': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.countLiveDescendantsByKind': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.countProjectIssues': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.countProjectTreeLevel': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.countRoadmapProgress': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findAncestors': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findArchivedByProject': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findByIdentifiers': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findByProjectAndKinds': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findByProjectFiltered': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findByProjectKindAndTitle': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findProjectForest': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findProjectIssuesFlat': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findProjectIssuesKeyset': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findProjectTreeLevel': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workItemsService.ts#workItemRepository.findSubtree': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findStatusById': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findStatusByKey': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findStatuses': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findStatusesByProjects': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findTransition': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findTransitionById': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/services/workflowsService.ts#workflowsRepository.findTransitions': [
-    'unbound-call-site',
-    'MOTIR-2846 · workflowsService',
-  ],
-  'lib/workItems/resolveWorkItemRefs.ts#projectRepository.findByWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · resolveWorkItemRefs',
-  ],
-  'lib/workItems/resolveWorkItemRefs.ts#workItemRepository.findByIdentifiers': [
-    'unbound-call-site',
-    'MOTIR-2846 · resolveWorkItemRefs',
-  ],
-  'lib/workItems/resolveWorkItemRefs.ts#workItemRepository.findByIdsInWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · resolveWorkItemRefs',
   ],
 };
 
@@ -539,8 +153,23 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * their subtree read opens on.
  * 172 -> 169: MOTIR-2809 bound the nine single-read services and their
  * out-of-service callers.
+ *
+ * 169 -> 15: MOTIR-2846 — the sweep this ratchet was built for. It bound the
+ * remaining production call sites across 34 files (workItems / workflows /
+ * sprints / backlog / plans / dashboards / migrate-onboarding and the long tail),
+ * and replaced 28 bare `db.$transaction` service transactions with a binding
+ * context. Four of the 169 were never defects: the scanner learned to read a
+ * `tx` through a local `(t: Prisma.TransactionClient) => …` callback and through
+ * a `tx ?? t` argument, both of which ARE bound (see `callSiteScan.ts`).
+ *
+ * ⚠️ 15 IS THE FLOOR, and every one of them is adjudicated above as `public-arm`
+ * or `no-policy`. **There are no `unbound-call-site` verdicts left.** A rise now
+ * means a NEW unbound caller — bind it. The only legitimate rise is still the one
+ * described above (a read becoming bindable brings its callers into scope), and
+ * it still requires `UNBOUND_READ_PATH_CEILING` to fall in the same commit — but
+ * that ceiling is at 0, so in practice this number only ever goes down or stays.
  */
-const UNBOUND_CALL_SITE_CEILING = 169;
+const UNBOUND_CALL_SITE_CEILING = 15;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.
@@ -552,11 +181,17 @@ const UNBOUND_CALL_SITE_CEILING = 169;
  * binds no GUCs … the read would see NULL context and return the same false miss
  * this function exists to remove."*
  *
- * Not every one is a defect: a transaction over non-gated tables is fine. The
- * number is pinned so the population cannot GROW while MOTIR-2846 works through
- * it.
+ * Not every one is a defect: a transaction over non-gated tables is fine — and
+ * that is what the 32 survivors are: user preferences, rate-limit counters, CLI
+ * device codes, the workspace/org bootstrap that runs BEFORE a tenant exists.
+ *
+ * 60 -> 32: MOTIR-2846 replaced every bare transaction that enclosed a
+ * policy-gated read with `withWorkspaceContext` / `withWorkspaceServiceContext`
+ * (workItems ×6, dashboards ×7, triage ×5, labels ×3, components ×3, imports ×2,
+ * and the rest). What remains encloses no gated read, which is why the number
+ * stops here rather than at zero.
  */
-const BARE_TRANSACTION_CEILING = 60;
+const BARE_TRANSACTION_CEILING = 32;
 
 describe('call sites of bindable tenant reads are all accounted for', () => {
   it('every unbound site has a verdict, and every verdict names a real site', () => {
@@ -620,19 +255,32 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
     ).toEqual([]);
   });
 
-  it('the public-arm sites are exactly publicProjectsService', () => {
-    // The one verdict where BINDING would be the regression. Pinned to the file,
+  it('the public-arm sites are exactly the two PUBLIC services', () => {
+    // The one verdict where BINDING would be the regression. Pinned to the files,
     // so a `public-arm` verdict cannot quietly spread to a tenant path as a way
     // of making this guard pass.
+    //
+    // Two files, not one (MOTIR-2846 added the second): `publicRequestsService`'s
+    // opening `work_item` read is the one that FINDS the item's project, so its
+    // workspace is not known yet — and `work_item_public_project_read`
+    // (`prisma/migrations/20260813210000_public_request_vote_public_read`, which
+    // cites it) admits exactly that read of a public project's items. The
+    // service's own header states the same thing. Everything BELOW that read in
+    // the file already binds.
+    const PUBLIC_FILES = [
+      'lib/services/publicProjectsService.ts#',
+      'lib/services/publicRequestsService.ts#',
+    ];
     const elsewhere = Object.entries(CALL_SITE_VERDICTS)
       .filter(([, [verdict]]) => verdict === 'public-arm')
-      .filter(([key]) => !key.startsWith('lib/services/publicProjectsService.ts#'));
+      .filter(([key]) => !PUBLIC_FILES.some((f) => key.startsWith(f)));
 
     expect(
       elsewhere.map(([k]) => k),
       '`public-arm` means the read MUST run with `app.workspace_id` unset, which is ' +
-        'true of the public project pages and nothing else yet. Adding it elsewhere ' +
-        'needs the policy to actually carry a public arm — check `pg_policies` first.',
+        'true of the public project pages and the public-request resolve and nothing ' +
+        'else. Adding it elsewhere needs the policy to actually carry a public arm — ' +
+        'check `pg_policies` first.',
     ).toEqual([]);
   });
 
@@ -673,31 +321,63 @@ describe('call sites of bindable tenant reads are all accounted for', () => {
     expect(all.some((c) => c.position === 'no-context')).toBe(true);
   });
 
-  it('is calibrated against the three defects that were found by hand', () => {
-    // A detector that misses a bug we already know about is not calibrated.
+  it('the three defects found by hand are FIXED, and the scanner says so', () => {
     // These three were each discovered by a red suite during MOTIR-2796's run,
-    // before this scanner existed (`notes.html` #266).
+    // before this scanner existed (`notes.html` #266). Until MOTIR-2846 this test
+    // asserted their PRESENCE — a detector that misses a bug we already know
+    // about is not calibrated. All three are now bound, so the assertion inverts:
+    // the calibration set becomes the regression guard, and a reappearance here
+    // is the same defect coming back.
+    //
+    // The scanner's own detection power is pinned separately and does NOT depend
+    // on these three: the synthetic fixture above proves it classifies each
+    // position, and the live-negative proves it still walks the real tree.
     const declared = new Set(Object.keys(CALL_SITE_VERDICTS));
+    const clean = (prefix: string, what: string): void => {
+      expect(
+        [...declared].filter((k) => k.startsWith(prefix)),
+        what,
+      ).toEqual([]);
+      expect(
+        unboundCallSites().filter((c) => c.file === prefix.replace('#', '')),
+        what,
+      ).toEqual([]);
+    };
 
-    // (1) backlogService — its gate reads sit outside its own withWorkspaceContext.
-    expect(
-      [...declared].filter((k) => k.startsWith('lib/services/backlogService.ts#')).length,
-      'backlogService accounted for 49 failures in tests/integration/sprints on its own',
-    ).toBeGreaterThan(0);
+    // (1) backlogService — its gate reads sat outside its own withWorkspaceContext,
+    //     which alone accounted for 49 failures in tests/integration/sprints.
+    clean('lib/services/backlogService.ts#', 'backlogService is bound (MOTIR-2846)');
 
-    // (2) workItemsService.updateStatus — a bare `db.$transaction`.
+    // (2) workItemsService.updateStatus — a bare `db.$transaction`, which binds
+    //     nothing. The whole FILE must now open no bare transaction: one is enough
+    //     to darken every gated read inside it.
     expect(
-      bareTransactionSites().some((s) => s.file === 'lib/services/workItemsService.ts'),
-      'workItemsService opens bare transactions that bind no GUCs',
-    ).toBe(true);
+      bareTransactionSites().filter((s) => s.file === 'lib/services/workItemsService.ts'),
+      'workItemsService opens no bare transaction (MOTIR-2846)',
+    ).toEqual([]);
+    clean('lib/services/workItemsService.ts#', 'workItemsService call sites are bound');
 
-    // (3) savedFilterSubscriptionsService — ALREADY FIXED under MOTIR-2805, so the
-    //     calibration here is the inverse: the scan must now report it CLEAN.
-    //     A scanner that still flagged a repaired file would be measuring the file
-    //     rather than the defect.
-    expect(
-      [...declared].filter((k) => k.startsWith('lib/services/savedFilterSubscriptionsService.ts#')),
+    // (3) savedFilterSubscriptionsService — fixed earlier, under MOTIR-2805,
+    //     because that card could not meet its own criterion without it.
+    clean(
+      'lib/services/savedFilterSubscriptionsService.ts#',
       'MOTIR-2805 bound this file; the scan should no longer report it',
+    );
+  });
+
+  it('no site is left carrying an `unbound-call-site` verdict', () => {
+    // The closing assertion of MOTIR-2846, and the reason the verdict kind stays
+    // in the union rather than being deleted: it is how the NEXT one gets
+    // adjudicated. What must never come back is a *standing* entry — a site
+    // recorded as broken and left that way. Fix it, or give it a verdict that
+    // says why it is not a defect.
+    const open = Object.entries(CALL_SITE_VERDICTS)
+      .filter(([, [verdict]]) => verdict === 'unbound-call-site')
+      .map(([key]) => key);
+    expect(
+      open,
+      'an `unbound-call-site` entry is a KNOWN defect parked in an allowlist. Bind the ' +
+        'call (one argument, usually) rather than recording it here.',
     ).toEqual([]);
   });
 });

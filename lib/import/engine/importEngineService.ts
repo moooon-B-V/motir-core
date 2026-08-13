@@ -20,6 +20,7 @@ import type { IssueSourceConnector, SourceIssue } from '../connectors/types';
 import { resolveIssue } from './importResolver';
 import { classifyByHash, computeSourceHash } from './importIdempotency';
 import type { ImportMapping, ImportPlanRow, ImportResolveContext } from './types';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /** Injectable read seams (default to the real repositories). */
 export interface ImportEngineDeps {
@@ -88,7 +89,11 @@ export const importEngineService = {
     const { payload, warnings } = resolveIssue(sourceIssue, mapping, ctx);
     const sourceHash = computeSourceHash(payload);
     const lookup =
-      deps.lookupExisting ?? ((p, s, e) => importedIssueRepository.findBySourceId(p, s, e));
+      deps.lookupExisting ??
+      ((p, s, e) =>
+        withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          importedIssueRepository.findBySourceId(p, s, e, tx),
+        ));
     const existing = await lookup(ctx.projectId, source, sourceIssue.externalId);
     const { plan, existingWorkItemId } = classifyByHash(existing, sourceHash);
     return {

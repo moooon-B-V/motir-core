@@ -32,7 +32,7 @@ import {
 import type { CommentDTO, CommentsPageDTO } from '@/lib/dto/comments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Comments service (Story 5.1 · Subtask 5.1.2) — the business-logic core over
 // the 5.1.1 repositories. Owns validation, the permission matrix, the
@@ -510,11 +510,13 @@ export const commentsService = {
     const pageSize = clampCommentPageSize(options.limit);
 
     // take+1 probes for a next page without a second count read.
-    const window = await commentRepository.listThreadsByWorkItem(workItemId, {
-      take: pageSize + 1,
-      cursor: options.cursor,
-      order,
-    });
+    const window = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      commentRepository.listThreadsByWorkItem(
+        workItemId,
+        { take: pageSize + 1, cursor: options.cursor, order },
+        tx,
+      ),
+    );
     const roots = window.slice(0, pageSize);
     const hasMore = window.length > pageSize;
 
@@ -522,7 +524,9 @@ export const commentsService = {
     const [mentionRows, authors, totalCount] = await Promise.all([
       commentMentionRepository.findByCommentIds(pageComments.map((c) => c.id)),
       userRepository.findByIds([...new Set(pageComments.map((c) => c.authorId))]),
-      commentRepository.countByWorkItem(workItemId),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        commentRepository.countByWorkItem(workItemId, tx),
+      ),
     ]);
 
     const mentionsByCommentId = new Map<string, string[]>();
@@ -588,7 +592,9 @@ export const commentsService = {
 
     // Every returned bucket is one of `workItemIds` — that is the `where` — so
     // the assignment overwrites a seeded zero and never invents a key.
-    const rows = await commentRepository.countByWorkItemIds(workItemIds, ctx.workspaceId);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      commentRepository.countByWorkItemIds(workItemIds, ctx.workspaceId, tx),
+    );
     for (const row of rows) counts[row.workItemId] = row.count;
     return counts;
   },

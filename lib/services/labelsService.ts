@@ -1,6 +1,5 @@
 import { Prisma, type Label, type WorkItem } from '@/generated/prisma/client';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { db } from '@/lib/db';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { workItemLabelRepository } from '@/lib/repositories/workItemLabelRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
@@ -201,7 +200,7 @@ export const labelsService = {
     }
 
     return retryOnceOnUniqueRace(() =>
-      db.$transaction(async (tx) => {
+      withWorkspaceContext(ctx, async (tx) => {
         const item = await resolveEditableWorkItem(workItemId, ctx, tx);
         const current = await labelRepository.listByWorkItem(workItemId, tx);
         const currentByLower = new Map(current.map((l) => [l.nameLower, l]));
@@ -250,7 +249,7 @@ export const labelsService = {
     const name = normalizeLabelName(rawName);
 
     return retryOnceOnUniqueRace(() =>
-      db.$transaction(async (tx) => {
+      withWorkspaceContext(ctx, async (tx) => {
         const item = await resolveEditableWorkItem(workItemId, ctx, tx);
         const current = await labelRepository.listByWorkItem(workItemId, tx);
         const existing = current.find((l) => l.nameLower === name.toLowerCase());
@@ -278,7 +277,7 @@ export const labelsService = {
    * resulting set.
    */
   async removeLabel(workItemId: string, labelId: string, ctx: ServiceContext): Promise<LabelDto[]> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await resolveEditableWorkItem(workItemId, ctx, tx);
       const current = await labelRepository.listByWorkItem(workItemId, tx);
       const target = current.find((l) => l.id === labelId);

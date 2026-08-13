@@ -16,6 +16,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemF
 import { createTestProject } from '../fixtures/projectFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { countDelegateCalls } from '../helpers/countDelegateCalls';
 
 // The dependency-EDGE projection for the MCP LIST reads (Subtask 7.9.0f /
 // MOTIR-1842) over real Postgres. Three layers, one contract:
@@ -82,18 +83,19 @@ const markDone = (id: string) =>
 /**
  * Count REAL `work_item_link` queries issued while `run` executes.
  *
- * ⚠️ The spy MUST sit on `db` — the `@/lib/db` singleton the code under test
- * reads through — NOT on `adminDb`. `adminDb` is for fixtures, teardown and
- * existence-readbacks only (MOTIR-2513's two-client model); a spy on it counts
- * a client the repository never touches, so every assertion here silently
- * measures 0 and passes only where 0 is expected.
+ * ⚠️ The count MUST come off `db` — the `@/lib/db` singleton the code under test
+ * reads through — NOT off `adminDb`. `adminDb` is for fixtures, teardown and
+ * existence-readbacks only (MOTIR-2513's two-client model); counting there
+ * counts a client the repository never touches, so every assertion here
+ * silently measures 0 and passes only where 0 is expected.
+ *
+ * …and off the TRANSACTION client too, which is why this delegates to
+ * `countDelegateCalls` rather than spying directly (MOTIR-2846): once the call
+ * site is bound the read runs on `(tx ?? db)`'s `tx` arm and a singleton-only
+ * spy reports zero — red for a `toBe(2)` and vacuously green for a `toBe(0)`.
  */
 async function countLinkQueries<T>(run: () => Promise<T>): Promise<{ result: T; queries: number }> {
-  const spy = vi.spyOn(db.workItemLink, 'findMany');
-  const result = await run();
-  const queries = spy.mock.calls.length;
-  spy.mockRestore();
-  return { result, queries };
+  return countDelegateCalls('workItemLink', 'findMany', run);
 }
 
 /** Connect an in-memory MCP client to a server bound to `ctx` (no scope gate). */

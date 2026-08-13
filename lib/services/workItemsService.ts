@@ -4,7 +4,6 @@ import {
   type WorkItemKind,
   type WorkItemPriority,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import {
   astHasEpic5Conditions,
   collectFilterReferentIds,
@@ -738,7 +737,9 @@ export const workItemsService = {
     // sprint → 422. Checked before the key-allocation transaction so a denied
     // create never burns a work-item key.
     if (input.sprintId != null) {
-      const sprint = await sprintRepository.findById(input.sprintId, workspaceId);
+      const sprint = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        sprintRepository.findById(input.sprintId as string, workspaceId, tx),
+      );
       if (!sprint) throw new SprintNotFoundError(input.sprintId);
       if (sprint.projectId !== input.projectId) {
         throw new CrossProjectSprintAssignmentError('new', input.sprintId);
@@ -753,7 +754,9 @@ export const workItemsService = {
     // join rows are written inside it.
     const componentIds = [...new Set(input.componentIds ?? [])];
     if (componentIds.length > 0) {
-      const components = await componentRepository.findByIds(componentIds);
+      const components = await withWorkspaceServiceContext(workspaceId, (tx) =>
+        componentRepository.findByIds(componentIds, tx),
+      );
       const componentsById = new Map(components.map((c) => [c.id, c]));
       for (const id of componentIds) {
         const component = componentsById.get(id);
@@ -1635,7 +1638,11 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const { dto, transition } = await db.$transaction((tx) =>
+    // MOTIR-2846: `withWorkspaceContext`, not a bare `db.$transaction`. A bare
+    // one binds no GUCs, so every gate read inside `applyStatusTransition` —
+    // the item, its project, the workflow — comes back empty under `motir_app`
+    // and the transition 404s an item that is on the screen.
+    const { dto, transition } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx),
     );
     // Post-commit, never inside the tx — a rollback must not have notified
@@ -1680,7 +1687,7 @@ export const workItemsService = {
     toStatusKey: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const { dto } = await db.$transaction((tx) =>
+    const { dto } = await withWorkspaceContext(ctx, (tx) =>
       workItemsService.applyStatusTransition(workItemId, toStatusKey, ctx, tx, { system: true }),
     );
     return dto;
@@ -1703,7 +1710,7 @@ export const workItemsService = {
     ciState: 'passing' | 'failing' | null,
     ctx: ServiceContext,
   ): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       const current = await workItemRepository.findById(workItemId, tx);
       if (!current || current.workspaceId !== ctx.workspaceId) {
         throw new WorkItemNotFoundError(workItemId);
@@ -2106,7 +2113,7 @@ export const workItemsService = {
     implementation: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
     const item = await workItemsService.getWorkItem(workItemId, ctx);
-    const row = await db.$transaction(async (tx) => {
+    const row = await withWorkspaceContext(ctx, async (tx) => {
       await projectAccessService.assertCanEdit(item.projectId, ctx, tx);
       return workItemsService.recordImplementationProvenance(
         workItemId,
@@ -2123,7 +2130,7 @@ export const workItemsService = {
     ctx: ServiceContext,
     implementation?: { source?: 'byok' | 'manual'; harness?: string | null; model?: string | null },
   ): Promise<WorkItemDto> {
-    const { dto, transition } = await db.$transaction(async (tx) => {
+    const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const res = await workItemsService.applyStatusTransition(
         workItemId,
         IN_REVIEW_STATUS_KEY,
@@ -2186,7 +2193,7 @@ export const workItemsService = {
     );
     if (items.length === 0) return { sessionBranch, results: [] };
 
-    const { results, transitions } = await db.$transaction(async (tx) => {
+    const { results, transitions } = await withWorkspaceContext(ctx, async (tx) => {
       const results: CompleteSessionItemResultDto[] = [];
       const transitions: Array<{
         id: string;
@@ -2441,7 +2448,15 @@ export const workItemsService = {
     await projectAccessService.assertPermission(root.projectId, ctx, 'work_item:delete');
 
     // One recursive-CTE round-trip: root + every descendant, each with its kind.
-    const subtree = await workItemRepository.findSubtree(id);
+    // Both CTE reads share ONE bound transaction (MOTIR-2846) — they are this
+    // method's own contiguous read run, and unbound they return zero rows and
+    // the preview reports an empty subtree for an item that has children.
+    const [subtree, liveCounts] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findSubtree(id, tx),
+        workItemRepository.countLiveDescendantsByKind(id, tx),
+      ]),
+    );
     const byKind: Partial<Record<WorkItemKindDto, number>> = {};
     for (const row of subtree) {
       if (row.id === id) continue; // the breakdown counts DESCENDANTS only
@@ -2455,7 +2470,7 @@ export const workItemsService = {
     // full breakdown but not here.
     const liveByKind: Partial<Record<WorkItemKindDto, number>> = {};
     let liveDescendantCount = 0;
-    for (const { kind, count } of await workItemRepository.countLiveDescendantsByKind(id)) {
+    for (const { kind, count } of liveCounts) {
       liveByKind[kind as WorkItemKindDto] = count;
       liveDescendantCount += count;
     }
@@ -2555,11 +2570,17 @@ export const workItemsService = {
     ctx: ServiceContext,
   ): Promise<WorkItemSummaryDto[]> {
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const rows = await workItemRepository.findByProjectFiltered(projectId, {
-      ...(filter.kind ? { kind: filter.kind } : {}),
-      ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
-    });
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByProjectFiltered(
+        projectId,
+        {
+          ...(filter.kind ? { kind: filter.kind } : {}),
+          ...(filter.status ? { status: filter.status } : {}),
+          ...(filter.assigneeId !== undefined ? { assigneeId: filter.assigneeId } : {}),
+        },
+        tx,
+      ),
+    );
     return rows.map(toWorkItemSummaryDto);
   },
 
@@ -2568,8 +2589,10 @@ export const workItemsService = {
    * mapped to subtree-row DTOs with depth metadata. Read-only; `ctx` reserved
    * for 1.4.5 RLS.
    */
-  async getWorkItemSubtree(rootId: string, _ctx: ServiceContext): Promise<WorkItemSubtreeDto[]> {
-    const rows = await workItemRepository.findSubtree(rootId);
+  async getWorkItemSubtree(rootId: string, ctx: ServiceContext): Promise<WorkItemSubtreeDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findSubtree(rootId, tx),
+    );
     return rows.map(toWorkItemSubtreeDto);
   },
 
@@ -2632,10 +2655,8 @@ export const workItemsService = {
       ? await loadFilterReferents(projectId, project.workspaceId, filter.ast)
       : undefined;
     const repoFilter = buildRepoFilter(filter, referents);
-    const rows = await workItemRepository.findProjectForest(
-      projectId,
-      project.workspaceId,
-      repoFilter,
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProjectForest(projectId, project.workspaceId, repoFilter, tx),
     );
 
     return assembleProjectForest(rows, repoFilterIsActive(repoFilter));
@@ -2690,9 +2711,8 @@ export const workItemsService = {
     // the shipped read.
     let sprintId: string | null = null;
     if (opts.scope === 'sprint') {
-      const activeSprint = await sprintRepository.findActiveByProject(
-        projectId,
-        project.workspaceId,
+      const activeSprint = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        sprintRepository.findActiveByProject(projectId, project.workspaceId, tx),
       );
       if (!activeSprint) {
         return { nodes: [], edges: [], offLevelBlockers: [] };
@@ -2701,16 +2721,19 @@ export const workItemsService = {
     }
 
     const [rows, statuses] = await Promise.all([
-      workItemRepository.findProjectTreeLevel(
-        projectId,
-        project.workspaceId,
-        parentId,
-        DEFAULT_SORT,
-        {
-          take: TREE_LEVEL_MAX_TAKE,
-          offset: 0,
-        },
-        sprintId,
+      withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workItemRepository.findProjectTreeLevel(
+          projectId,
+          project.workspaceId,
+          parentId,
+          DEFAULT_SORT,
+          {
+            take: TREE_LEVEL_MAX_TAKE,
+            offset: 0,
+          },
+          sprintId,
+          tx,
+        ),
       ),
       workflowsService.listStatusesByProject(projectId, project.workspaceId),
     ]);
@@ -2737,10 +2760,13 @@ export const workItemsService = {
     // that whole subtree (MOTIR-1381, revised) — sprint scope only re-roots the top
     // level, it does not prune progress.
     const containerIds = rows.filter((r) => r.hasChildren).map((r) => r.id);
-    const progressRows = await workItemRepository.countRoadmapProgress(
-      containerIds,
-      [...doneKeys],
-      ROADMAP_CANCELLED_KEY,
+    const progressRows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countRoadmapProgress(
+        containerIds,
+        [...doneKeys],
+        ROADMAP_CANCELLED_KEY,
+        tx,
+      ),
     );
     const progressById = new Map(
       progressRows.map((p) => [p.rootId, { done: p.done, total: p.total, verified: p.verified }]),
@@ -2850,21 +2876,22 @@ export const workItemsService = {
     // Count the filtered set first so an out-of-range ?page CLAMPS to the last
     // page (the 2.5.10 edge spec) instead of fetching an empty offset window.
     // The count is the pager's denominator and tracks the active filter.
-    const total = await workItemRepository.countProjectIssues(
-      projectId,
-      project.workspaceId,
-      repoFilter,
+    const total = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter, tx),
     );
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(Math.max(1, params.page ?? 1), totalPages);
     const offset = (page - 1) * pageSize;
 
-    const rows = await workItemRepository.findProjectIssuesFlat(
-      projectId,
-      project.workspaceId,
-      params.sort,
-      repoFilter,
-      { limit: pageSize, offset },
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesFlat(
+        projectId,
+        project.workspaceId,
+        params.sort,
+        repoFilter,
+        { limit: pageSize, offset },
+        tx,
+      ),
     );
 
     return { items: rows.map(toWorkItemListItemDto), total, page, pageSize };
@@ -2910,11 +2937,14 @@ export const workItemsService = {
     const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
 
     const limit = clampV1PageLimit(params.limit);
-    const rows = await workItemRepository.findProjectIssuesKeyset(
-      projectId,
-      project.workspaceId,
-      repoFilter,
-      { ...(params.after ? { after: params.after } : {}), limit },
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProjectIssuesKeyset(
+        projectId,
+        project.workspaceId,
+        repoFilter,
+        { ...(params.after ? { after: params.after } : {}), limit },
+        tx,
+      ),
     );
 
     // The repository fetched `limit + 1` — the extra row IS the "more remains"
@@ -2963,7 +2993,9 @@ export const workItemsService = {
       : undefined;
     const repoFilter = buildRepoFilter(params.filter ?? {}, referents);
 
-    return workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter);
+    return withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(projectId, project.workspaceId, repoFilter, tx),
+    );
   },
 
   /**
@@ -2993,15 +3025,21 @@ export const workItemsService = {
     await projectAccessService.assertCanBrowse(projectId, ctx);
 
     const pageSize = clampIssuePageSize(params.pageSize);
-    const total = await workItemRepository.countArchivedByProject(projectId, project.workspaceId);
+    const total = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countArchivedByProject(projectId, project.workspaceId, tx),
+    );
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(Math.max(1, params.page ?? 1), totalPages);
     const offset = (page - 1) * pageSize;
 
-    const rows = await workItemRepository.findArchivedByProject(projectId, project.workspaceId, {
-      limit: pageSize,
-      offset,
-    });
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findArchivedByProject(
+        projectId,
+        project.workspaceId,
+        { limit: pageSize, offset },
+        tx,
+      ),
+    );
     return { items: rows.map(toArchivedWorkItemDto), total, page, pageSize };
   },
 
@@ -3020,7 +3058,9 @@ export const workItemsService = {
       throw new ProjectNotFoundError(projectId);
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    return workItemRepository.countArchivedByProject(projectId, project.workspaceId);
+    return withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.countArchivedByProject(projectId, project.workspaceId, tx),
+    );
   },
 
   /**
@@ -3044,13 +3084,20 @@ export const workItemsService = {
     }
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const { take, offset } = clampTreePage(params);
-    const [rows, total] = await Promise.all([
-      workItemRepository.findProjectTreeLevel(projectId, project.workspaceId, null, params.sort, {
-        take,
-        offset,
-      }),
-      workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null),
-    ]);
+    const [rows, total] = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findProjectTreeLevel(
+          projectId,
+          project.workspaceId,
+          null,
+          params.sort,
+          { take, offset },
+          null,
+          tx,
+        ),
+        workItemRepository.countProjectTreeLevel(projectId, project.workspaceId, null, tx),
+      ]),
+    );
     return buildTreeLevel(rows, take, total);
   },
 
@@ -3071,16 +3118,25 @@ export const workItemsService = {
     }
     await projectAccessService.assertCanBrowse(parent.projectId, ctx);
     const { take, offset } = clampTreePage(params);
-    const [rows, total] = await Promise.all([
-      workItemRepository.findProjectTreeLevel(
-        parent.projectId,
-        parent.workspaceId,
-        parentId,
-        params.sort,
-        { take, offset },
-      ),
-      workItemRepository.countProjectTreeLevel(parent.projectId, parent.workspaceId, parentId),
-    ]);
+    const [rows, total] = await withWorkspaceServiceContext(parent.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findProjectTreeLevel(
+          parent.projectId,
+          parent.workspaceId,
+          parentId,
+          params.sort,
+          { take, offset },
+          null,
+          tx,
+        ),
+        workItemRepository.countProjectTreeLevel(
+          parent.projectId,
+          parent.workspaceId,
+          parentId,
+          tx,
+        ),
+      ]),
+    );
     return buildTreeLevel(rows, take, total);
   },
 
@@ -3550,10 +3606,12 @@ export const workItemsService = {
   async resolveIdentifiersToIds(
     projectId: string,
     identifiers: string[],
-    _ctx: ServiceContext,
+    ctx: ServiceContext,
   ): Promise<string[]> {
     if (identifiers.length === 0) return [];
-    const rows = await workItemRepository.findByIdentifiers(projectId, identifiers);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdentifiers(projectId, identifiers, tx),
+    );
     const idByIdentifier = new Map(rows.map((row) => [row.identifier, row.id]));
     return identifiers.map((identifier) => {
       const id = idByIdentifier.get(identifier);
@@ -3599,7 +3657,9 @@ export const workItemsService = {
     );
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(identifier);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
-    const ancestorRows = await workItemRepository.findAncestors(row.id, ctx.workspaceId);
+    const ancestorRows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findAncestors(row.id, ctx.workspaceId, tx),
+    );
     return { item: toWorkItemDto(row), ancestors: ancestorRows.map(toWorkItemSummaryDto) };
   },
 
@@ -3618,7 +3678,9 @@ export const workItemsService = {
     title: string,
     ctx: ServiceContext,
   ): Promise<WorkItemDto | null> {
-    const row = await workItemRepository.findByProjectKindAndTitle(projectId, kind, title);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByProjectKindAndTitle(projectId, kind, title, tx),
+    );
     if (!row || row.workspaceId !== ctx.workspaceId) return null;
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toWorkItemDto(row);
@@ -3856,7 +3918,9 @@ export const workItemsService = {
     const [detail, members, sprintRows, componentRows, estimationConfig] = await Promise.all([
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
-      sprintRepository.listByProject(projectId, ctx.workspaceId),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        sprintRepository.listByProject(projectId, ctx.workspaceId, tx),
+      ),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         componentRepository.listByProject(projectId, tx),
       ),
@@ -3879,7 +3943,9 @@ export const workItemsService = {
     // lookup for an epic or a backlog item.
     let sprintName: string | null = null;
     if (detail.item.sprintId && detail.item.kind !== 'epic') {
-      const sprint = await sprintRepository.findById(detail.item.sprintId, ctx.workspaceId);
+      const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        sprintRepository.findById(detail.item.sprintId as string, ctx.workspaceId, tx),
+      );
       sprintName = sprint?.name ?? null;
     }
     // Work-item references (5.8.6) — `motir:` tokens in the description (live
@@ -3952,7 +4018,9 @@ export const workItemsService = {
     workspaceId: string,
   ): Promise<WorkItemSummaryDto[]> {
     const kinds = allowedParentKinds(childType);
-    const rows = await workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId);
+    const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.findByProjectAndKinds(projectId, kinds, workspaceId, tx),
+    );
     return rows.map(toWorkItemSummaryDto);
   },
 
@@ -4004,7 +4072,9 @@ export const workItemsService = {
    * guard before unlinkWorkItems — a member of W1 can't delete a link in W2.
    */
   async getLink(linkId: string, ctx: ServiceContext): Promise<WorkItemLinkDto> {
-    const link = await workItemLinkRepository.findById(linkId);
+    const link = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findById(linkId, tx),
+    );
     if (!link || link.workspaceId !== ctx.workspaceId) throw new WorkItemLinkNotFoundError(linkId);
     return toWorkItemLinkDto(link);
   },
@@ -4379,7 +4449,7 @@ export const workItemsService = {
     if (candidates.length === 0) return null;
     const orderedIds = candidates.map((r) => r.id);
 
-    const claimed = await db.$transaction(async (tx) => {
+    const claimed = await withWorkspaceContext(ctx, async (tx) => {
       const locked = await workItemRepository.claimNextReadyCandidate(orderedIds, tx);
       if (!locked) return null;
       // `in_progress` is the dispatch state (lib/workflows/defaultWorkflow.ts);
@@ -4499,7 +4569,7 @@ export const workItemsService = {
     publicChildrenHidden: boolean,
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       // Lock + re-read under the lock (mirrors updateWorkItem): two concurrent
       // toggles serialize on the FOR UPDATE lock, and the explicit workspace
       // check is the finding-#26 tenant gate (a cross-workspace item is an
@@ -4706,7 +4776,11 @@ async function buildReadyDispatchDto(
   ctx: ServiceContext,
 ): Promise<ReadyItemDispatchDto> {
   const [parentRow, blockerLinks, readiness, dispatchRepo] = await Promise.all([
-    row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
+    row.parentId
+      ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          workItemRepository.findById(row.parentId as string, tx),
+        )
+      : Promise.resolve(null),
     withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by', tx),
     ),
@@ -4962,7 +5036,9 @@ async function computeSubtreeProseAdvisories(
   // The root's OWN ancestors (above the subtree) — a member naming the epic its
   // story hangs under is naming an ancestor too, and the subtree walk alone
   // cannot see those.
-  const aboveRoot = await workItemRepository.findAncestors(root.id, ctx.workspaceId);
+  const aboveRoot = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findAncestors(root.id, ctx.workspaceId, tx),
+  );
   const rootAncestorIds = aboveRoot.map((a) => a.id);
 
   const blockedByMember = new Map<string, Set<string>>();

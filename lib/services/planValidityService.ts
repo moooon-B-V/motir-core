@@ -214,7 +214,9 @@ async function buildProjection(planId: string, ctx: ServiceContext): Promise<Pro
   for (const item of adds) item.blockedByRefs.forEach(note);
   for (const item of modifies) (item.patch?.blockedByAdd ?? []).forEach(note);
   if (referenced.size > 0) {
-    const extra = await workItemRepository.findByIdsInWorkspace([...referenced], ctx.workspaceId);
+    const extra = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace([...referenced], ctx.workspaceId, tx),
+    );
     for (const row of extra) {
       if (row.archivedAt) continue;
       nodes.set(row.id, {
@@ -599,7 +601,9 @@ export const planValidityService = {
     condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
   ): Promise<SprintValidityDto> {
     const proj = await buildProjection(planId, ctx);
-    const sprint = await sprintRepository.findActiveByProject(proj.projectId, ctx.workspaceId);
+    const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findActiveByProject(proj.projectId, ctx.workspaceId, tx),
+    );
     if (!sprint) throw new NoActiveSprintError(proj.projectId);
 
     // Projected sprint members (any status) = live members minus removed; adds are

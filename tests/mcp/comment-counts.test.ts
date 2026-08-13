@@ -18,6 +18,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { countDelegateCalls } from '../helpers/countDelegateCalls';
 
 // The per-row COMMENT-COUNT projection for the MCP work-item reads (MOTIR-2001)
 // over real Postgres. Three layers, one contract — the shape MOTIR-1842's edge
@@ -70,11 +71,7 @@ const say = (fx: WorkItemFixture, itemId: string, bodyMd: string, parentCommentI
 async function countCommentQueries<T>(
   run: () => Promise<T>,
 ): Promise<{ result: T; queries: number }> {
-  const spy = vi.spyOn(db.comment, 'groupBy');
-  const result = await run();
-  const queries = spy.mock.calls.length;
-  spy.mockRestore();
-  return { result, queries };
+  return countDelegateCalls('comment', 'groupBy', run);
 }
 
 /** Connect an in-memory MCP client to a server bound to `ctx` (no scope gate). */

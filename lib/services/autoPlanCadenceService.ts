@@ -180,7 +180,9 @@ export const autoPlanCadenceService = {
     }
 
     const [itemCount, staleCount] = await Promise.all([
-      planItemRepository.countByPlan(pending.id),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        planItemRepository.countByPlan(pending.id, tx),
+      ),
       staleCountFor(pending, ctx),
     ]);
 
@@ -285,7 +287,9 @@ export const autoPlanCadenceService = {
       const row = await readProjectForService(project.id, project.workspaceId);
       if (!row) return { projectId: project.id, status: 'skipped', reason: 'project_gone' };
 
-      const owner = await workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId);
+      const owner = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId, tx),
+      );
       if (!owner) return { projectId: project.id, status: 'skipped', reason: 'no_owner' };
 
       const svcCtx: ServiceContext = { userId: owner.userId, workspaceId: project.workspaceId };

@@ -7,6 +7,7 @@ import { toWorkItemRefSummaryDto } from '@/lib/mappers/workItemMappers';
 import type { WorkItemRefs } from '@/lib/mentions/workItemRefs';
 import type { WorkItemRefMap } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Read-side resolution for work-item references (Story 5.8 · Subtask 5.8.6) —
 // the parallel of the write-side `autoRelateWorkItemMentions` (5.8.3). Given the
@@ -39,14 +40,16 @@ export async function resolveWorkItemRefSummaries(
   // project's prefix, so resolution is project-scoped — like auto-relate); token
   // ids → rows within the workspace (includes archived; a cross-workspace /
   // deleted id simply doesn't come back).
-  const [keyRows, idRows] = await Promise.all([
-    refs.keys.length
-      ? workItemRepository.findByIdentifiers(activeProjectId, refs.keys)
-      : Promise.resolve<WorkItem[]>([]),
-    refs.ids.length
-      ? workItemRepository.findByIdsInWorkspace(refs.ids, ctx.workspaceId)
-      : Promise.resolve<WorkItem[]>([]),
-  ]);
+  const [keyRows, idRows] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    Promise.all([
+      refs.keys.length
+        ? workItemRepository.findByIdentifiers(activeProjectId, refs.keys, tx)
+        : Promise.resolve<WorkItem[]>([]),
+      refs.ids.length
+        ? workItemRepository.findByIdsInWorkspace(refs.ids, ctx.workspaceId, tx)
+        : Promise.resolve<WorkItem[]>([]),
+    ]),
+  );
 
   // Dedupe by id — a token id and a bare key can name the same item.
   const rowById = new Map<string, WorkItem>();
@@ -55,7 +58,9 @@ export async function resolveWorkItemRefSummaries(
 
   // View scope: the exact `filterBrowsable` gate `quickSearch` / auto-relate
   // ride (reused, not reinvented) — title/status only leak for browsable targets.
-  const projects = await projectRepository.findByWorkspace(ctx.workspaceId);
+  const projects = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    projectRepository.findByWorkspace(ctx.workspaceId, tx),
+  );
   const browsable = await projectAccessService.filterBrowsable(projects, ctx);
   const browsableProjectIds = new Set(browsable.map((p) => p.id));
 

@@ -1,5 +1,9 @@
 import type { Attachment, Prisma, WorkItem } from '@/generated/prisma/client';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -226,7 +230,11 @@ export const attachmentsService = {
     // workspace; a workspace we can't resolve falls back to the 10 MB default
     // (never weaker than today) and skips the storage sum.
     const organizationId =
-      (await workspaceRepository.findById(ctx.workspaceId))?.organizationId ?? null;
+      (
+        await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          workspaceRepository.findById(ctx.workspaceId, tx),
+        )
+      )?.organizationId ?? null;
     const perFileLimit = organizationId
       ? await entitlementsService.resolvePerFileLimitBytes(organizationId)
       : MAX_UPLOAD_BYTES;
@@ -367,16 +375,21 @@ export const attachmentsService = {
     await resolveGatedWorkItem(workItemId, ctx);
 
     // take+1 probes for a next page without a second count read.
-    const window = await attachmentRepository.listByWorkItem(workItemId, {
-      take: ATTACHMENT_PAGE_SIZE + 1,
-      cursor: options.cursor,
-    });
+    const window = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      attachmentRepository.listByWorkItem(
+        workItemId,
+        { take: ATTACHMENT_PAGE_SIZE + 1, cursor: options.cursor },
+        tx,
+      ),
+    );
     const rows = window.slice(0, ATTACHMENT_PAGE_SIZE);
     const hasMore = window.length > ATTACHMENT_PAGE_SIZE;
 
     const [uploaders, totalCount] = await Promise.all([
       userRepository.findByIds([...new Set(rows.map((r) => r.uploaderUserId))]),
-      attachmentRepository.countByWorkItem(workItemId),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        attachmentRepository.countByWorkItem(workItemId, tx),
+      ),
     ]);
     const uploadersById = new Map(uploaders.map((u) => [u.id, u]));
 

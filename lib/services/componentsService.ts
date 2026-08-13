@@ -1,5 +1,4 @@
 import { Prisma, type Component, type Project, type WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import {
   componentRepository,
   type ComponentWithCount,
@@ -429,7 +428,7 @@ export const componentsService = {
     ctx: ServiceContext,
   ): Promise<ComponentDto[]> {
     const ids = [...new Set(componentIds)];
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await resolveEditableWorkItem(workItemId, ctx, tx);
       const byId = await resolveSameProjectComponents(ids, item, tx);
       const current = await componentRepository.listByWorkItem(workItemId, tx);
@@ -473,7 +472,7 @@ export const componentsService = {
     componentId: string,
     ctx: ServiceContext,
   ): Promise<ComponentDto[]> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await resolveEditableWorkItem(workItemId, ctx, tx);
       const byId = await resolveSameProjectComponents([componentId], item, tx);
       const current = await componentRepository.listByWorkItem(workItemId, tx);
@@ -497,7 +496,7 @@ export const componentsService = {
     componentId: string,
     ctx: ServiceContext,
   ): Promise<ComponentDto[]> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await resolveEditableWorkItem(workItemId, ctx, tx);
       const current = await componentRepository.listByWorkItem(workItemId, tx);
       const target = current.find((c) => c.id === componentId);

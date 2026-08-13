@@ -137,11 +137,15 @@ export interface PlanStalenessService {
 
 export const planStalenessService: PlanStalenessService = {
   async computePlanStaleness(planId: string, ctx: ServiceContext): Promise<PlanStalenessDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanBrowse(plan.projectId, ctx);
 
-    const items = await planItemRepository.findByPlan(planId);
+    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
 
     // --- Collect the distinct work-item ids the rules will read (real refs
     //     only; intra-plan temp-refs resolve at materialize, never stale). ---
@@ -167,9 +171,8 @@ export const planStalenessService: PlanStalenessService = {
     // --- Three batched reads (each one round-trip, regardless of plan size). ---
     const presentById = new Map<string, WorkItem>();
     if (referencedIds.size > 0) {
-      const rows = await workItemRepository.findByIdsInWorkspace(
-        [...referencedIds],
-        ctx.workspaceId,
+      const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRepository.findByIdsInWorkspace([...referencedIds], ctx.workspaceId, tx),
       );
       for (const row of rows) presentById.set(row.id, row);
     }

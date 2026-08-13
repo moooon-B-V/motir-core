@@ -139,9 +139,13 @@ export async function buildProseVsGraphAdvisories(
   // the browse gate, then per-project done-ness.
   const resolved = new Map<string, ProseAdvisoryLocalRef>();
   if (unresolved.size > 0) {
-    const rows = await workItemRepository.findByIdsInWorkspace([...unresolved], ctx.workspaceId);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIdsInWorkspace([...unresolved], ctx.workspaceId, tx),
+    );
     if (rows.length > 0) {
-      const projects = await projectRepository.findByWorkspace(ctx.workspaceId);
+      const projects = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        projectRepository.findByWorkspace(ctx.workspaceId, tx),
+      );
       const browsable = await projectAccessService.filterBrowsable(projects, ctx);
       const browsableProjectIds = new Set(browsable.map((p) => p.id));
       const visible = rows.filter((r) => browsableProjectIds.has(r.projectId));

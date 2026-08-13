@@ -1,6 +1,5 @@
 import type { DashboardAccess, DashboardLayout, Prisma } from '@/generated/prisma/client';
-import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
-import { db } from '@/lib/db';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { dashboardRepository } from '@/lib/repositories/dashboardRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
@@ -216,9 +215,15 @@ export const dashboardsService = {
    * names decorated in the same read. Access-gated (private + not owner →
    * the 404-shaped denial). */
   async getDashboard(dashboardId: string, ctx: ServiceContext): Promise<DashboardDetailDto> {
-    const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId);
+    // MOTIR-2846: the dashboard and its widgets in ONE bound transaction. Both
+    // tables are policy-gated; unbound `findByIdWithFacts` returns nothing and
+    // the grid 404s a dashboard the switcher just listed.
+    const { row, widgets } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const found = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
+      if (!found) return { row: found, widgets: [] };
+      return { row: found, widgets: await dashboardWidgetRepository.listByDashboard(found.id, tx) };
+    });
     assertVisible(row, ctx, dashboardId);
-    const widgets = await dashboardWidgetRepository.listByDashboard(row.id);
     return toDashboardDetailDto(row, widgets, ctx.userId);
   },
 
@@ -227,7 +232,7 @@ export const dashboardsService = {
     const name = parseName(input.name);
     const access = input.access === undefined ? 'private' : parseAccess(input.access);
     const layout = input.layout === undefined ? 'two' : parseLayout(input.layout);
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const created = await dashboardRepository.create(
         { workspaceId: ctx.workspaceId, ownerId: ctx.userId, name, access, layout },
         tx,
@@ -254,7 +259,7 @@ export const dashboardsService = {
     const layout = input.layout === undefined ? undefined : parseLayout(input.layout);
     const action: DashboardAction =
       name !== undefined ? 'rename' : access !== undefined ? 'change-access' : 'change-layout';
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await dashboardRepository.lockById(ctx.workspaceId, dashboardId, tx);
       const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
       assertOwner(row, ctx, dashboardId, action);
@@ -282,7 +287,7 @@ export const dashboardsService = {
 
   /** Delete — owner-only. Widgets die with the row (FK Cascade). */
   async delete(dashboardId: string, ctx: ServiceContext): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       await dashboardRepository.lockById(ctx.workspaceId, dashboardId, tx);
       const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
       assertOwner(row, ctx, dashboardId, 'delete');
@@ -304,7 +309,7 @@ export const dashboardsService = {
     const def = widgetDefinition(input.type);
     const config: WidgetConfig = def.parseConfig(input.config);
     const descriptor = def.resolveDataSource(input as WidgetSourceInput);
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await dashboardRepository.lockById(ctx.workspaceId, dashboardId, tx);
       const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
       assertOwner(row, ctx, dashboardId, 'edit-widgets');
@@ -341,7 +346,7 @@ export const dashboardsService = {
     input: UpdateWidgetInput,
     ctx: ServiceContext,
   ): Promise<DashboardWidgetDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await dashboardRepository.lockById(ctx.workspaceId, dashboardId, tx);
       const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
       assertOwner(row, ctx, dashboardId, 'edit-widgets');
@@ -364,7 +369,7 @@ export const dashboardsService = {
 
   /** Remove a widget — owner-only. */
   async removeWidget(dashboardId: string, widgetId: string, ctx: ServiceContext): Promise<void> {
-    await db.$transaction(async (tx) => {
+    await withWorkspaceContext(ctx, async (tx) => {
       await dashboardRepository.lockById(ctx.workspaceId, dashboardId, tx);
       const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
       assertOwner(row, ctx, dashboardId, 'edit-widgets');
@@ -388,7 +393,7 @@ export const dashboardsService = {
     input: MoveWidgetInput,
     ctx: ServiceContext,
   ): Promise<DashboardWidgetDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await dashboardRepository.lockById(ctx.workspaceId, dashboardId, tx);
       const row = await dashboardRepository.findByIdWithFacts(ctx.workspaceId, dashboardId, tx);
       assertOwner(row, ctx, dashboardId, 'edit-widgets');

@@ -200,10 +200,15 @@ export const workflowsService = {
    */
   async getWorkflow(projectId: string, workspaceId: string): Promise<WorkflowDto> {
     const policyMode = await requirePolicyMode(projectId, workspaceId);
-    const [statuses, transitions] = await Promise.all([
-      workflowsRepository.findStatuses(projectId, workspaceId),
-      workflowsRepository.findTransitions(projectId, workspaceId),
-    ]);
+    // MOTIR-2846: one bound transaction over this method's own read run — the
+    // whole workflow (statuses + transitions) is policy-gated, and unbound the
+    // project reads as having no workflow at all.
+    const [statuses, transitions] = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      Promise.all([
+        workflowsRepository.findStatuses(projectId, workspaceId, tx),
+        workflowsRepository.findTransitions(projectId, workspaceId, tx),
+      ]),
+    );
     return {
       statuses: statuses.map(toWorkflowStatusDto),
       transitions: transitions.map(toWorkflowTransitionDto),
@@ -274,7 +279,9 @@ export const workflowsService = {
     key: string,
     workspaceId: string,
   ): Promise<WorkflowStatusDto | null> {
-    const status = await workflowsRepository.findStatusByKey(projectId, key, workspaceId);
+    const status = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workflowsRepository.findStatusByKey(projectId, key, workspaceId, tx),
+    );
     return status ? toWorkflowStatusDto(status) : null;
   },
 
@@ -287,7 +294,9 @@ export const workflowsService = {
    * `done` AND `cancelled` out of the box). Empty for a foreign project.
    */
   async getTerminalStatusKeys(projectId: string, workspaceId: string): Promise<Set<string>> {
-    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
+    const statuses = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workflowsRepository.findStatuses(projectId, workspaceId, tx),
+    );
     return new Set(statuses.filter((s) => s.category === 'done').map((s) => s.key));
   },
 
@@ -337,7 +346,9 @@ export const workflowsService = {
     const map = new Map<string, Map<string, WorkItemRefStatusDto>>(
       unique.map((pid) => [pid, new Map<string, WorkItemRefStatusDto>()]),
     );
-    const statuses = await workflowsRepository.findStatusesByProjects(unique, workspaceId);
+    const statuses = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workflowsRepository.findStatusesByProjects(unique, workspaceId, tx),
+    );
     for (const s of statuses) {
       map.get(s.projectId)?.set(s.key, {
         key: s.key,
@@ -538,16 +549,19 @@ export const workflowsService = {
   async createStatus(input: CreateStatusInput): Promise<WorkflowStatusDto> {
     await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
 
-    const existing = await workflowsRepository.findStatusByKey(
-      input.projectId,
-      input.key,
-      input.workspaceId,
+    const existing = await withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      (tx) =>
+        workflowsRepository.findStatusByKey(input.projectId, input.key, input.workspaceId, tx),
     );
     if (existing) throw new StatusKeyConflictError(input.key);
 
     let position = input.position;
     if (position == null) {
-      const statuses = await workflowsRepository.findStatuses(input.projectId, input.workspaceId);
+      const statuses = await withWorkspaceContext(
+        { userId: input.userId, workspaceId: input.workspaceId },
+        (tx) => workflowsRepository.findStatuses(input.projectId, input.workspaceId, tx),
+      );
       /* istanbul ignore next -- defensive: a project always carries its seeded statuses, so the empty-list (`: null`) ternary branch is unreachable here */
       const last = statuses.length ? statuses[statuses.length - 1]!.position : null;
       position = keyForAppend(last);
@@ -589,7 +603,10 @@ export const workflowsService = {
    * the SAME transaction, so the partial unique index never sees two true rows.
    */
   async updateStatus(input: UpdateWorkflowStatusInput): Promise<WorkflowStatusDto> {
-    const pre = await workflowsRepository.findStatusById(input.statusId, input.workspaceId);
+    const pre = await withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      (tx) => workflowsRepository.findStatusById(input.statusId, input.workspaceId, tx),
+    );
     if (!pre) throw new WorkflowStatusNotFoundError(input.statusId);
     await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
 
@@ -636,7 +653,10 @@ export const workflowsService = {
    * Same-tx cleanup removes every transition touching the status.
    */
   async deleteStatus(input: DeleteStatusInput): Promise<void> {
-    const pre = await workflowsRepository.findStatusById(input.statusId, input.workspaceId);
+    const pre = await withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      (tx) => workflowsRepository.findStatusById(input.statusId, input.workspaceId, tx),
+    );
     if (!pre) throw new WorkflowStatusNotFoundError(input.statusId);
     await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
 
@@ -727,11 +747,16 @@ export const workflowsService = {
   async addTransition(input: AddTransitionInput): Promise<WorkflowTransitionDto> {
     await assertProjectAdmin(input.userId, input.projectId, input.workspaceId);
 
-    const existing = await workflowsRepository.findTransition(
-      input.projectId,
-      input.fromStatusId,
-      input.toStatusId,
-      input.workspaceId,
+    const existing = await withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      (tx) =>
+        workflowsRepository.findTransition(
+          input.projectId,
+          input.fromStatusId,
+          input.toStatusId,
+          input.workspaceId,
+          tx,
+        ),
     );
     if (existing) return toWorkflowTransitionDto(existing);
 
@@ -771,7 +796,10 @@ export const workflowsService = {
 
   /** Remove a transition. */
   async removeTransition(input: RemoveTransitionInput): Promise<void> {
-    const pre = await workflowsRepository.findTransitionById(input.transitionId, input.workspaceId);
+    const pre = await withWorkspaceContext(
+      { userId: input.userId, workspaceId: input.workspaceId },
+      (tx) => workflowsRepository.findTransitionById(input.transitionId, input.workspaceId, tx),
+    );
     if (!pre) throw new WorkflowTransitionNotFoundError(input.transitionId);
     await assertProjectAdmin(input.userId, pre.projectId, input.workspaceId);
 

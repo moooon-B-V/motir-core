@@ -241,7 +241,9 @@ const DISCOVERY: StepWiring = {
     // rows. A project with no items → empty list → blank-slate discovery.
     let existingWorkItems: ExistingWorkItemRef[] | undefined;
     try {
-      const rows = await workItemRepository.findByProject(pctx.projectId, { take: 200 });
+      const rows = await withWorkspaceServiceContext(pctx.workspaceId, (tx) =>
+        workItemRepository.findByProject(pctx.projectId, { take: 200 }, tx),
+      );
       if (rows.length > 0) {
         existingWorkItems = rows.map((r) => ({
           key: r.identifier,
@@ -431,7 +433,9 @@ async function advance(
   ctx: ServiceContext,
   wiring: StepWiring,
 ): Promise<MigrateOnboardingDto> {
-  const existing = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+  const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+  );
   if (!existing) throw new MigrateOnboardingNotFoundError(id);
   await projectAccessService.assertCanEdit(existing.projectId, ctx);
   // Early step check (re-asserted under the lock below) so a wrong-step call
@@ -449,7 +453,9 @@ async function advance(
   if (wiring.ensureKicked) {
     await wiring.ensureKicked({ run, pctx, ctx });
     // A kick may have persisted a job id — re-read so the exit poll sees it.
-    const refreshed = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    const refreshed = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (refreshed) run = refreshed;
   }
 
@@ -787,7 +793,9 @@ export const migrateOnboardingService = {
     input: StartMigrateOnboardingInput = {},
   ): Promise<MigrateOnboardingDto> {
     await projectAccessService.assertCanEdit(projectId, ctx);
-    const existing = await migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId, tx),
+    );
     if (existing) throw new MigrateOnboardingExistsError(projectId);
 
     try {
@@ -824,7 +832,9 @@ export const migrateOnboardingService = {
     ctx: ServiceContext,
   ): Promise<MigrateOnboardingDto | null> {
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const row = await migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findByProjectId(projectId, ctx.workspaceId, tx),
+    );
     return row ? toMigrateOnboardingDto(row) : null;
   },
 
@@ -832,7 +842,9 @@ export const migrateOnboardingService = {
    *  it does not resolve in this workspace. Re-opening resumes at the saved
    *  `step` — the resumable head read the wizard reloads from. */
   async getById(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    const row = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!row) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(row.projectId, ctx);
     return toMigrateOnboardingDto(row);
@@ -853,7 +865,9 @@ export const migrateOnboardingService = {
    * handles that state.
    */
   async getIndexStatus(id: string, ctx: ServiceContext): Promise<MigrateIndexStatusDto> {
-    const run = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!run) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanBrowse(run.projectId, ctx);
 
@@ -943,7 +957,9 @@ export const migrateOnboardingService = {
    * that already skipped is a no-op (returns the current row as-is).
    */
   async skipImport(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    const existing = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!existing) throw new MigrateOnboardingNotFoundError(id);
     await projectAccessService.assertCanEdit(existing.projectId, ctx);
     if (existing.step !== 'import') {
@@ -973,7 +989,9 @@ export const migrateOnboardingService = {
    * condition is unmet — the generic guard.
    */
   async advanceNext(id: string, ctx: ServiceContext): Promise<MigrateOnboardingDto> {
-    const run = await migrateOnboardingRepository.findById(id, ctx.workspaceId);
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!run) throw new MigrateOnboardingNotFoundError(id);
     switch (run.step) {
       case 'connect':

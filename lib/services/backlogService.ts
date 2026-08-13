@@ -7,7 +7,7 @@ import { workItemsService, loadFilterReferents } from '@/lib/services/workItemsS
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { resolveFilterAst, type ProjectFilterReferents } from '@/lib/filters/registry';
 import type { FilterAst } from '@/lib/filters/ast';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { keyBetween, keyForAppend } from '@/lib/workItems/positioning';
 import { toWorkItemDto, toWorkItemSummaryDto } from '@/lib/mappers/workItemMappers';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -134,7 +134,10 @@ export const backlogService = {
   ): Promise<WorkItemDto> {
     const item = await this.loadItem(itemId, ctx);
     await assertCanGroom(item.projectId, ctx);
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    const sprint = await withWorkspaceContext(
+      { userId: ctx.userId, workspaceId: ctx.workspaceId },
+      (tx) => sprintRepository.findById(sprintId, ctx.workspaceId, tx),
+    );
     if (!sprint) throw new SprintNotFoundError(sprintId);
     if (sprint.projectId !== item.projectId) {
       throw new CrossProjectSprintAssignmentError(itemId, sprintId);
@@ -281,7 +284,13 @@ export const backlogService = {
     // the `db` singleton until it commits, so reading outside it would 404 a
     // sprint that demonstrably exists (what the AI sprint-plan approve does —
     // create sprint, then assign into it, in one transaction).
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId, tx);
+    // Bound when the caller supplied no transaction (MOTIR-2846) — same shape,
+    // and the same defect, as `loadItem` below.
+    const sprint = tx
+      ? await sprintRepository.findById(sprintId, ctx.workspaceId, tx)
+      : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+          sprintRepository.findById(sprintId, ctx.workspaceId, t),
+        );
     if (!sprint) throw new SprintNotFoundError(sprintId);
     await assertCanGroom(sprint.projectId, ctx);
 
@@ -452,17 +461,19 @@ export const backlogService = {
     // `FilterValidationError` the route maps to 422). `undefined` when nothing
     // narrows, so both reads take the byte-for-byte unfiltered path.
     const filter = await resolveBacklogFilter(projectId, options.filterAst, ctx);
-    const rows = await workItemRepository.findBacklogPage(projectId, ctx.workspaceId, {
-      take,
-      cursor: options.cursor,
-      excludeStatusKeys,
-      filter,
-    });
-    const totalCount = await workItemRepository.countBacklog(
-      projectId,
-      ctx.workspaceId,
-      excludeStatusKeys,
-      filter,
+    // MOTIR-2846: the page and its denominator share ONE bound transaction —
+    // they must agree, and unbound BOTH return empty, so the backlog renders as
+    // "0 issues" for a project full of them.
+    const [rows, totalCount] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findBacklogPage(
+          projectId,
+          ctx.workspaceId,
+          { take, cursor: options.cursor, excludeStatusKeys, filter },
+          tx,
+        ),
+        workItemRepository.countBacklog(projectId, ctx.workspaceId, excludeStatusKeys, filter, tx),
+      ]),
     );
     return buildPage(rows, take, totalCount);
   },
@@ -475,7 +486,9 @@ export const backlogService = {
    * case the backlog read applies no status filter.
    */
   async backlogExcludedStatusKeys(projectId: string, workspaceId: string): Promise<string[]> {
-    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
+    const statuses = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      workflowsRepository.findStatuses(projectId, workspaceId, tx),
+    );
     return statuses.filter((s) => s.category === 'done').map((s) => s.key);
   },
 
@@ -492,7 +505,9 @@ export const backlogService = {
     options: { cursor?: string; limit?: number; filterAst?: FilterAst },
     ctx: ServiceContext,
   ): Promise<RankedIssuePageDto> {
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(sprintId, ctx.workspaceId, tx),
+    );
     if (!sprint) throw new SprintNotFoundError(sprintId);
     await assertCanBrowseProject(sprint.projectId, ctx);
 
@@ -504,15 +519,16 @@ export const backlogService = {
     // unfiltered path. This makes a filtered backlog re-project its sprint
     // containers too (Subtask 8.8.20, the 8.8.16 design).
     const filter = await resolveBacklogFilter(sprint.projectId, options.filterAst, ctx);
-    const rows = await workItemRepository.findSprintIssues(sprintId, ctx.workspaceId, {
-      take,
-      cursor: options.cursor,
-      filter,
-    });
-    const totalCount = await workItemRepository.countSprintIssues(
-      sprintId,
-      ctx.workspaceId,
-      filter,
+    const [rows, totalCount] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      Promise.all([
+        workItemRepository.findSprintIssues(
+          sprintId,
+          ctx.workspaceId,
+          { take, cursor: options.cursor, filter },
+          tx,
+        ),
+        workItemRepository.countSprintIssues(sprintId, ctx.workspaceId, filter, tx),
+      ]),
     );
     return buildPage(rows, take, totalCount);
   },
@@ -524,9 +540,21 @@ export const backlogService = {
    */
   async loadItem(itemId: string, ctx: ServiceContext, tx?: Prisma.TransactionClient) {
     // `tx` — when the caller holds a transaction, the gate reads THROUGH it, so
-    // it sees rows that transaction has written but not yet committed. Omitted
-    // (every pre-existing caller) it reads the singleton exactly as before.
-    const item = await workItemRepository.findById(itemId, tx);
+    // it sees rows that transaction has written but not yet committed.
+    //
+    // OMITTED, this opens its own bound one (MOTIR-2846). It used to fall through
+    // to the `@/lib/db` singleton, and that is THE defect this card's calibration
+    // set names: under `motir_app` the read saw NULL context, came back empty,
+    // and every caller — `assignToSprint`, `rankIssue`, `bulkAssignToSprint` —
+    // raised `WorkItemNotFoundError` for an issue plainly on the board. The
+    // call-site scanner cannot see it (it reads the `tx` being FORWARDED here and
+    // stops; the gap is one frame up, its documented transitive-forwarding
+    // limit), so the fix has to be made where the fallback lives.
+    const item = tx
+      ? await workItemRepository.findById(itemId, tx)
+      : await withWorkspaceServiceContext(ctx.workspaceId, (t) =>
+          workItemRepository.findById(itemId, t),
+        );
     if (!item || item.workspaceId !== ctx.workspaceId) {
       throw new WorkItemNotFoundError(itemId);
     }
@@ -544,7 +572,9 @@ export const backlogService = {
     const ids = [placement.beforeId, placement.afterId].filter(
       (id): id is string => typeof id === 'string',
     );
-    const ranks = await workItemRepository.findBacklogRankByIds(ids, ctx.workspaceId);
+    const ranks = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findBacklogRankByIds(ids, ctx.workspaceId, tx),
+    );
     const rankOf = (id: string | undefined): string | null => {
       if (id === undefined) return null;
       const hit = ranks.find((r) => r.id === id);

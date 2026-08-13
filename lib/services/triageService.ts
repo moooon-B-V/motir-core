@@ -1,5 +1,4 @@
 import type { Prisma, WorkItem } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
@@ -39,6 +38,7 @@ import {
 } from '@/lib/triage/errors';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { readProject, readProjectByIdentifier, readWorkItem } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /** The two request-grammar kinds a triage submission is born as (ADR §1): a
  *  `bug` (bug report) or a `task` (feature request). Never epic/story/subtask. */
@@ -302,7 +302,7 @@ export const triageService = {
     input: { comment?: string },
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await lockTriageItem(workItemId, ctx, tx);
       const row = await graduate(item, { parentId: null, sprintId: null }, ctx, tx);
       await addTriageNote(item, input.comment, ctx, tx);
@@ -329,7 +329,7 @@ export const triageService = {
     },
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       const item = await lockTriageItem(workItemId, ctx, tx);
       const row = await graduate(
         item,
@@ -361,7 +361,7 @@ export const triageService = {
     input: { comment?: string },
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
-    const { dto, transition } = await db.$transaction(async (tx) => {
+    const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const item = await lockTriageItem(workItemId, ctx, tx);
       const result = await workItemsService.applyStatusTransition(
         workItemId,
@@ -390,7 +390,7 @@ export const triageService = {
     ctx: ServiceContext,
   ): Promise<WorkItemDto> {
     if (workItemId === input.canonicalId) throw new TriageSelfMergeError(workItemId);
-    const { dto, transition } = await db.$transaction(async (tx) => {
+    const { dto, transition } = await withWorkspaceContext(ctx, async (tx) => {
       const item = await lockTriageItem(workItemId, ctx, tx);
       const canonical = await workItemRepository.findById(input.canonicalId, tx);
       if (!canonical || canonical.workspaceId !== ctx.workspaceId) {
@@ -452,7 +452,7 @@ export const triageService = {
     if (Number.isNaN(until.getTime()) || until.getTime() <= Date.now()) {
       throw new InvalidSnoozeUntilError();
     }
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await lockTriageItem(workItemId, ctx, tx);
       const row = await workItemRepository.update(workItemId, { snoozedUntil: until }, tx);
       return toWorkItemDto(row);
@@ -464,7 +464,7 @@ export const triageService = {
    * to the active queue.
    */
   async unsnoozeTriageItem(workItemId: string, ctx: ServiceContext): Promise<WorkItemDto> {
-    return db.$transaction(async (tx) => {
+    return withWorkspaceContext(ctx, async (tx) => {
       await lockTriageItem(workItemId, ctx, tx);
       const row = await workItemRepository.update(workItemId, { snoozedUntil: null }, tx);
       return toWorkItemDto(row);
@@ -670,12 +670,19 @@ async function readTriageQueuePage(
   const limit = clampTriageLimit(params.limit);
   const cursor = params.cursor ? decodeTriageCursor(params.cursor) : undefined;
 
-  const rows = await workItemRepository.findTriageQueue(projectId, workspaceId, {
-    limit: limit + 1,
-    cursor: cursor
-      ? { voteCount: cursor.voteCount, triagedAt: new Date(cursor.triagedAt), id: cursor.id }
-      : undefined,
-  });
+  const rows = await withWorkspaceServiceContext(workspaceId, (tx) =>
+    workItemRepository.findTriageQueue(
+      projectId,
+      workspaceId,
+      {
+        limit: limit + 1,
+        cursor: cursor
+          ? { voteCount: cursor.voteCount, triagedAt: new Date(cursor.triagedAt), id: cursor.id }
+          : undefined,
+      },
+      tx,
+    ),
+  );
 
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;

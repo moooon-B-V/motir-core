@@ -26,6 +26,7 @@ import type { CustomFieldValueDto, SetCustomFieldValueInput } from '@/lib/dto/cu
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // customFieldValuesService — the VALUES half of the custom-fields domain
 // (Story 5.3 · Subtask 5.3.3): per-type validated set/clear of one issue's
@@ -164,7 +165,9 @@ export const customFieldValuesService = {
     // Tenant gates first — 404, no existence leak (finding #44).
     const item = await readWorkItem(workItemId, ctx);
     if (!item || item.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
-    const field = await customFieldDefinitionRepository.findById(fieldId, ctx.workspaceId);
+    const field = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      customFieldDefinitionRepository.findById(fieldId, ctx.workspaceId, tx),
+    );
     // A field of a DIFFERENT project is, from this issue's vantage, absent.
     if (!field || field.projectId !== item.projectId) throw new CustomFieldNotFoundError(fieldId);
 

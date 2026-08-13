@@ -145,7 +145,9 @@ export const sprintsService = {
    * is not a mutation; the same workspace tenancy the repo enforces applies).
    */
   async getActiveSprint(projectId: string, ctx: ServiceContext): Promise<SprintDto | null> {
-    const row = await sprintRepository.findActiveByProject(projectId, ctx.workspaceId);
+    const row = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findActiveByProject(projectId, ctx.workspaceId, tx),
+    );
     return row ? toSprintDto(row, 0) : null;
   },
 
@@ -283,7 +285,9 @@ export const sprintsService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       (tx) => sprintRepository.update(id, data, tx),
     );
-    const issueCount = await workItemRepository.countSprintIssues(id, ctx.workspaceId);
+    const issueCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.countSprintIssues(id, ctx.workspaceId, undefined, tx),
+    );
     return toSprintDto(row, issueCount);
   },
 
@@ -339,12 +343,20 @@ export const sprintsService = {
       { userId: ctx.userId, workspaceId: ctx.workspaceId },
       'project:browse',
     );
-    const rows = await sprintRepository.listByProject(projectId, ctx.workspaceId);
-    return Promise.all(
-      rows.map(async (row) =>
-        toSprintDto(row, await workItemRepository.countSprintIssues(row.id, ctx.workspaceId)),
-      ),
-    );
+    // One bound transaction over the list AND its per-sprint counts (MOTIR-2846):
+    // unbound the list comes back empty and the board reports a project with no
+    // sprints at all.
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const rows = await sprintRepository.listByProject(projectId, ctx.workspaceId, tx);
+      return Promise.all(
+        rows.map(async (row) =>
+          toSprintDto(
+            row,
+            await workItemRepository.countSprintIssues(row.id, ctx.workspaceId, undefined, tx),
+          ),
+        ),
+      );
+    });
   },
 
   /**
@@ -394,9 +406,8 @@ export const sprintsService = {
 
     // Friendly pre-check: 409 BEFORE provisioning a board, so the common
     // "another sprint is already running" case never leaves an orphan board.
-    const alreadyActive = await sprintRepository.findActiveByProject(
-      existing.projectId,
-      ctx.workspaceId,
+    const alreadyActive = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findActiveByProject(existing.projectId, ctx.workspaceId, tx),
     );
     if (alreadyActive) throw new SprintAlreadyActiveError(existing.projectId, alreadyActive.id);
 
@@ -480,9 +491,8 @@ export const sprintsService = {
     // has committed, so the error can name the sprint that actually won.
     const result = await activate.catch(async (err: unknown) => {
       if (!isUniqueViolation(err)) throw err;
-      const winner = await sprintRepository.findActiveByProject(
-        existing.projectId,
-        ctx.workspaceId,
+      const winner = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        sprintRepository.findActiveByProject(existing.projectId, ctx.workspaceId, tx),
       );
       throw new SprintAlreadyActiveError(existing.projectId, winner?.id ?? id);
     });
@@ -826,28 +836,35 @@ export const sprintsService = {
     const rollup = await estimationService.rollupForSprint(id, ctx);
 
     // Grouped aggregate counts (not page sums) + one bounded page of each list.
-    const [completedCount, incompleteCount, completedRows, incompleteRows] = await Promise.all([
-      workItemRepository.countSprintIssuesByDoneMembership(id, ctx.workspaceId, {
-        statusKeys: doneStatusKeys,
-        include: true,
-      }),
-      workItemRepository.countSprintIssuesByDoneMembership(id, ctx.workspaceId, {
-        statusKeys: doneStatusKeys,
-        include: false,
-      }),
-      workItemRepository.findSprintIssuesByDoneMembership(id, ctx.workspaceId, {
-        statusKeys: doneStatusKeys,
-        include: true,
-        take,
-        cursor: options.completedCursor,
-      }),
-      workItemRepository.findSprintIssuesByDoneMembership(id, ctx.workspaceId, {
-        statusKeys: doneStatusKeys,
-        include: false,
-        take,
-        cursor: options.incompleteCursor,
-      }),
-    ]);
+    const [completedCount, incompleteCount, completedRows, incompleteRows] =
+      await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        Promise.all([
+          workItemRepository.countSprintIssuesByDoneMembership(
+            id,
+            ctx.workspaceId,
+            { statusKeys: doneStatusKeys, include: true },
+            tx,
+          ),
+          workItemRepository.countSprintIssuesByDoneMembership(
+            id,
+            ctx.workspaceId,
+            { statusKeys: doneStatusKeys, include: false },
+            tx,
+          ),
+          workItemRepository.findSprintIssuesByDoneMembership(
+            id,
+            ctx.workspaceId,
+            { statusKeys: doneStatusKeys, include: true, take, cursor: options.completedCursor },
+            tx,
+          ),
+          workItemRepository.findSprintIssuesByDoneMembership(
+            id,
+            ctx.workspaceId,
+            { statusKeys: doneStatusKeys, include: false, take, cursor: options.incompleteCursor },
+            tx,
+          ),
+        ]),
+      );
 
     // Scope change: issues added to the sprint after it started (the Jira "added
     // during sprint" figure). A sprint with no startDate (never started) has no
@@ -928,10 +945,8 @@ async function computeSprintValidity(
   // "blocker is also in the sprint?" test keys on. `findSprintIssuesExcludingStatuses`
   // with an empty exclusion set is the whole committed set (it already filters
   // archived + tenant).
-  const members = await workItemRepository.findSprintIssuesExcludingStatuses(
-    sprintId,
-    ctx.workspaceId,
-    [],
+  const members = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findSprintIssuesExcludingStatuses(sprintId, ctx.workspaceId, [], tx),
   );
   const memberIds = new Set(members.map((m) => m.id));
   const membersById = new Map(members.map((m) => [m.id, m]));

@@ -17,6 +17,9 @@ import { estimationService } from '@/lib/services/estimationService';
 import { reportsService } from '@/lib/services/reportsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
+import { backlogService } from '@/lib/services/backlogService';
+import { plansService } from '@/lib/services/plansService';
+import { workflowsService } from '@/lib/services/workflowsService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { importRepository } from '@/lib/repositories/importRepository';
@@ -1210,5 +1213,170 @@ describe('migrateOnboardingService — the "already done?" reads', () => {
     // unbound, the generation path looked up the plan it had just written and
     // concluded it had produced nothing.
     expect(plan?.status).toBe('planned');
+  });
+});
+
+// ── MOTIR-2846 · the CALL SITES ───────────────────────────────────────────────
+//
+// Everything above tests a REPOSITORY that could not take a `tx`. These test the
+// other half — reads that always could, whose callers never passed one. The
+// symptom is not an empty chart: these are GATE reads, run before an action to
+// answer "does this exist and may you touch it?". Unbound the answer is "it does
+// not exist", so the product tells someone the item on their screen is gone.
+//
+// ⚠️ Each case names a SPECIFIC seeded row and asserts it comes BACK. Never
+// `toHaveLength(n > 0)` on a list: the defect makes lists empty, so a
+// non-emptiness assertion is exactly the shape that passes while the bug is
+// fully intact. The card says this in as many words and it is worth repeating
+// here, next to the tests it governs.
+
+describe('backlogService — the 404 for an issue that is on the screen', () => {
+  it('FINDS the seeded issue in the backlog page, and counts it', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'BKA' });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'In the backlog' },
+      fx.ctx,
+    );
+
+    const page = await backlogService.getBacklog(fx.projectId, {}, fx.ctx);
+
+    // The id, not the length: an empty page is what the defect produces.
+    expect(page.items.map((i) => i.id)).toContain(item.id);
+    expect(page.totalCount).toBe(1);
+  });
+
+  it('ASSIGNS to a sprint — the read that 404`d a sprint that exists', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'BKB' });
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Sprint one' }, fx.ctx);
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Dragged in' },
+      fx.ctx,
+    );
+
+    // Unbound, `sprintRepository.findById` came back null and this threw
+    // SprintNotFoundError — the drag failed for a sprint drawn on the board.
+    const moved = await backlogService.assignToSprint(item.id, sprint.id, undefined, fx.ctx);
+    expect(moved.sprintId).toBe(sprint.id);
+
+    const inSprint = await backlogService.getSprintIssues(sprint.id, {}, fx.ctx);
+    expect(inSprint.items.map((i) => i.id)).toContain(item.id);
+    expect(inSprint.totalCount).toBe(1);
+  });
+});
+
+describe('workItemsService.updateStatus — the bare transaction that bound nothing', () => {
+  it('TRANSITIONS the item and returns its new status', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'UPS' });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Move me' },
+      fx.ctx,
+    );
+
+    // `db.$transaction` opens a transaction and sets no GUC on it, so every gate
+    // read inside `applyStatusTransition` — the item, its project, the workflow —
+    // saw NULL context. The move 404'd an item the caller had just created.
+    const moved = await workItemsService.updateStatus(item.id, 'in_progress', fx.ctx);
+    expect(moved.id).toBe(item.id);
+    expect(moved.status).toBe('in_progress');
+
+    // Committed, not just returned.
+    const readBack = await workItemsService.getWorkItem(item.id, fx.ctx);
+    expect(readBack.status).toBe('in_progress');
+  });
+});
+
+describe('workflowsService.getWorkflow — the project that had no workflow', () => {
+  it('FINDS the seeded initial status and at least one transition', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'WFA' });
+
+    const workflow = await workflowsService.getWorkflow(fx.projectId, fx.workspaceId);
+
+    const initial = workflow.statuses.find((s) => s.isInitial);
+    expect(initial?.key).toBe('todo');
+    expect(workflow.statuses.map((s) => s.key)).toContain('in_progress');
+    // The transitions half of the same read run — an empty set would make every
+    // move illegal under the `restricted` policy rather than merely look odd.
+    expect(
+      workflow.transitions.some(
+        (t) => t.fromStatusId === initial?.id && t.fromStatusId !== t.toStatusId,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe('the detail reads a call site had to bind', () => {
+  it('sprintsService.listByProject FINDS the sprint and its issue count', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'SLB' });
+    const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Listed' }, fx.ctx);
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Counted' },
+      fx.ctx,
+    );
+    await backlogService.assignToSprint(item.id, sprint.id, undefined, fx.ctx);
+
+    const sprints = await sprintsService.listByProject(fx.projectId, fx.ctx);
+
+    const listed = sprints.find((s) => s.id === sprint.id);
+    expect(listed?.name).toBe('Listed');
+    // The per-sprint count rides the SAME transaction as the list; a zero here
+    // would be the same silent-empty answer one level down.
+    expect(listed?.issueCount).toBe(1);
+  });
+
+  it('plansService.getPlan FINDS the plan it just created', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'PGP' });
+    const created = await plansService.createPlan(fx.projectId, {}, fx.ctx);
+
+    const plan = await plansService.getPlan(created.id, fx.ctx);
+
+    expect(plan.id).toBe(created.id);
+    expect(plan.status).toBe('generating');
+  });
+
+  it('dashboardsService.getDashboard FINDS the dashboard the switcher listed', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'DSH' });
+    const created = await dashboardsService.create({ name: 'My board' }, fx.ctx);
+
+    const detail = await dashboardsService.getDashboard(created.id, fx.ctx);
+
+    expect(detail.id).toBe(created.id);
+    expect(detail.name).toBe('My board');
+  });
+
+  it('workItemsService.listRootIssues FINDS the root it just created', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'RTL' });
+    const root = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'epic', title: 'A root' },
+      fx.ctx,
+    );
+
+    const level = await workItemsService.listRootIssues(
+      fx.projectId,
+      { sort: { column: 'key', direction: 'asc' } },
+      fx.ctx,
+    );
+
+    expect(level.rows.map((r) => r.id)).toContain(root.id);
+    expect(level.total).toBe(1);
+  });
+
+  it('workItemsService.getDeletePreview COUNTS the descendant it would delete', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'DPV' });
+    const parent = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'story', title: 'Parent' },
+      fx.ctx,
+    );
+    const child = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Child', parentId: parent.id },
+      fx.ctx,
+    );
+
+    const preview = await workItemsService.getDeletePreview(parent.id, fx.ctx);
+
+    // Unbound the subtree CTE returned nothing, so the confirm dialog promised
+    // to delete one item and would have taken two.
+    expect(preview.totalCount).toBe(2);
+    expect(preview.liveDescendantCount).toBe(1);
+    expect(child.id).toBeTruthy();
   });
 });

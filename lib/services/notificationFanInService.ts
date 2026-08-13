@@ -15,6 +15,7 @@ import type {
   WorkItemTransitionedData,
 } from '@/lib/jobs/types';
 import type { NotificationData } from '@/lib/dto/notifications';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // In-app notification fan-in (Story 5.7 · Subtask 5.7.3). The business logic
 // behind the notificationFanIn jobs (lib/jobs/definitions/notificationFanIn.ts),
@@ -209,7 +210,9 @@ export const NOTIFICATION_FAN_IN_REGISTRY: NotificationFanInRegistry = {
       if (payload.mentionedUserIds.length === 0) return null;
       // The comment must still exist (5.1's delete is HARD — an excerpt of a
       // deleted comment would resurrect content the author removed).
-      const comment = await commentRepository.findById(payload.commentId);
+      const comment = await withWorkspaceServiceContext(item.workspaceId, (tx) =>
+        commentRepository.findById(payload.commentId, tx),
+      );
       if (!comment || comment.workItemId !== item.id) return null;
       return {
         actorId: payload.authorId,

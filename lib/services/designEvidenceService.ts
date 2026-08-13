@@ -26,6 +26,7 @@ import type {
   DesignUploadTokensDTO,
 } from '@/lib/dto/designEvidence';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 /**
  * Design results — business logic (Story MOTIR-2664 · Subtask MOTIR-2666).
@@ -108,7 +109,12 @@ async function resolveTarget(workItemId: string, ctx: ServiceContext): Promise<W
 async function resolveCostContext(
   workspaceId: string,
 ): Promise<{ organizationId: string | null; perFileLimit: number }> {
-  const organizationId = (await workspaceRepository.findById(workspaceId))?.organizationId ?? null;
+  const organizationId =
+    (
+      await withWorkspaceServiceContext(workspaceId, (tx) =>
+        workspaceRepository.findById(workspaceId, tx),
+      )
+    )?.organizationId ?? null;
   const perFileLimit = organizationId
     ? await entitlementsService.resolvePerFileLimitBytes(organizationId)
     : MAX_UPLOAD_BYTES;

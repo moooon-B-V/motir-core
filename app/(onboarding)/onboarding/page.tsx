@@ -8,6 +8,7 @@ import { migrateOnboardingService } from '@/lib/services/migrateOnboardingServic
 import { shouldRouteToMigrateWizard } from '@/lib/onboarding/migrateHandoff';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { OnboardingEntrance } from '@/components/onboarding/OnboardingEntrance';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The onboarding ENTRANCE route (Subtask 7.22.4 / MOTIR-1462) — the new-vs-existing
 // fork the user lands on at `/onboarding`, designed by MOTIR-1461
@@ -59,7 +60,9 @@ export default async function OnboardingEntrancePage() {
   // this route is also `PLANNING_WORKSPACE_PATH`, the universal "Plan with AI"
   // target, so an unconditional bounce here trapped the hand-off as well.
   if (!ctx.project.onboardingRanAt) {
-    const itemCount = await workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId);
+    const itemCount = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.countProjectIssues(ctx.projectId, ctx.workspaceId, undefined, tx),
+    );
     const run =
       itemCount > 0
         ? await migrateOnboardingService.getForProject(ctx.projectId, {

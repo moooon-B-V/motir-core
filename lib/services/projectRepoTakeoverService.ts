@@ -441,7 +441,9 @@ async function inLockedRow<T>(
   ctx: ServiceContext,
   fn: (row: ProjectRepoWithRealized, tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  const existing = await projectRepoRepository.findById(rowId, ctx.workspaceId);
+  const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    projectRepoRepository.findById(rowId, ctx.workspaceId, tx),
+  );
   if (!existing) throw new ProjectRepoNotFoundError(rowId);
   await projectAccessService.assertPermission(existing.projectId, ctx, 'repository:manage');
   return withWorkspaceContext(

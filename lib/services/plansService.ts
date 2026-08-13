@@ -958,7 +958,9 @@ async function editAddProposal(
   ctx: ServiceContext,
   expectedStatus: 'planned' | 'generating',
 ): Promise<PlanWithItemsDto> {
-  const plan = await planRepository.findById(planId, ctx.workspaceId);
+  const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    planRepository.findById(planId, ctx.workspaceId, tx),
+  );
   if (!plan) throw new PlanNotFoundError(planId);
   // `ai:view_plan` (Story MOTIR-2291 · Subtask MOTIR-2363). ⚠️ THE NAME IS THE
   // MISLEADING PART: this key governs reading a generated plan AND acting on it,
@@ -1052,7 +1054,9 @@ export const plansService = {
     proposals: ProposalInput[],
     ctx: ServiceContext,
   ): Promise<PlanWithItemsDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
     if (plan.status !== 'generating') throw new PlanNotGeneratingError(planId, plan.status);
@@ -1098,7 +1102,9 @@ export const plansService = {
     ctx: ServiceContext,
     opts: { productName?: string | null } = {},
   ): Promise<PlanDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
@@ -1145,15 +1151,17 @@ export const plansService = {
   ): Promise<PlanListPageDto> {
     await projectAccessService.assertCanBrowse(projectId, ctx);
     const limit = clampLimit(opts.limit);
-    const rows = await planRepository.listByProject(
-      projectId,
-      ctx.workspaceId,
-      limit + 1,
-      opts.cursor ?? null,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.listByProject(projectId, ctx.workspaceId, limit + 1, opts.cursor ?? null, tx),
     );
     const hasMore = rows.length > limit;
     const page = hasMore ? rows.slice(0, limit) : rows;
-    const counts = await planItemRepository.countByPlanIds(page.map((p) => p.id));
+    const counts = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.countByPlanIds(
+        page.map((p) => p.id),
+        tx,
+      ),
+    );
     return {
       plans: page.map((p) => toPlanDto(p, counts.get(p.id) ?? 0)),
       nextCursor: hasMore ? page[page.length - 1]!.id : null,
@@ -1217,10 +1225,14 @@ export const plansService = {
   /** A plan + its bundled proposal items (the detail view). The lifecycle
    *  timestamps + decider on the returned plan ARE the history surface. */
   async getPlan(planId: string, ctx: ServiceContext): Promise<PlanWithItemsDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertCanBrowse(plan.projectId, ctx);
-    const items = await planItemRepository.findByPlan(planId);
+    const items = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
     return toPlanWithItemsDto(plan, items);
   },
 
@@ -1292,7 +1304,9 @@ export const plansService = {
     ctx: ServiceContext,
     opts: { provisionalProjectName?: string | null } = {},
   ): Promise<PlanWithItemsDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 
@@ -1308,7 +1322,9 @@ export const plansService = {
     // Pass 1 — reject BEFORE the transaction opens (the card's atomicity point:
     // a malformed proposal never even starts a write). Pass 2 runs inside, under
     // the target row locks, and is the verdict that actually gates materialize.
-    const preItems = await planItemRepository.findByPlan(planId);
+    const preItems = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planItemRepository.findByPlan(planId, tx),
+    );
     await runPersistGate(preItems, ctx, terminalStatusKeys);
 
     // The proposed repo PINS (MOTIR-1884), normalized + validated against this
@@ -1507,7 +1523,9 @@ export const plansService = {
    * modify/remove targets untouched) → a clean no-op on the work-item tree.
    */
   async declinePlan(planId: string, ctx: ServiceContext): Promise<PlanDto> {
-    const plan = await planRepository.findById(planId, ctx.workspaceId);
+    const plan = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      planRepository.findById(planId, ctx.workspaceId, tx),
+    );
     if (!plan) throw new PlanNotFoundError(planId);
     await projectAccessService.assertPermission(plan.projectId, ctx, 'ai:view_plan');
 

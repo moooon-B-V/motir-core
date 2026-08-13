@@ -166,7 +166,12 @@ export const entitlementsService = {
     if (!isCloudBilling()) return;
     const { maxTotalStorageBytes } = entitlementsFor(await tierForOrg(organizationId));
     if (maxTotalStorageBytes === null) return;
-    const current = await attachmentRepository.sumSizeByOrganization(organizationId);
+    // Bound to the ORG (MOTIR-2846): `attachment`'s policy is org-scoped, so
+    // unbound the sum is 0 and the storage cap never fires — the one arm of §4.3b
+    // that silently stops enforcing.
+    const current = await withOrgServiceWriteContext(organizationId, (tx) =>
+      attachmentRepository.sumSizeByOrganization(organizationId, tx),
+    );
     if (current + incomingBytes > maxTotalStorageBytes) {
       throw new EntitlementExceededError('storage', {
         limit: maxTotalStorageBytes,

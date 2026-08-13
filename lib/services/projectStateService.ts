@@ -9,7 +9,7 @@ import { migrateOnboardingRepository } from '@/lib/repositories/migrateOnboardin
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { projectsService } from '@/lib/services/projectsService';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The project's PLANNING PRECONDITIONS, in ONE read (MOTIR-1968) — an ADAPTER
 // over four shipped reads, not a new capability.
@@ -126,7 +126,9 @@ export const projectStateService = {
 
     const code = await resolveCodeState(ctx);
     const repoSet = await projectRepoSetService.listByProject(project.id, ctx);
-    const run = await migrateOnboardingRepository.findByProjectId(project.id, ctx.workspaceId);
+    const run = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      migrateOnboardingRepository.findByProjectId(project.id, ctx.workspaceId, tx),
+    );
 
     return {
       project: {
