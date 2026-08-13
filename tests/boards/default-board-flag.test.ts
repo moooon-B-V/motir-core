@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Default-board flag + switcher ordering (Story 3.7 · Subtask 3.7.2). Real
@@ -24,6 +25,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeWorkspaceAndUser(
@@ -50,7 +52,7 @@ describe('board.isDefault + board.position (Subtask 3.7.2)', () => {
       name: 'Defaulted',
     });
 
-    const boards = await db.board.findMany({ where: { projectId: project.id } });
+    const boards = await adminDb.board.findMany({ where: { projectId: project.id } });
     expect(boards).toHaveLength(1);
     expect(boards[0]?.isDefault).toBe(true);
     // `keyForAppend(null)` mints the first fractional-index key — the same value
@@ -68,7 +70,7 @@ describe('board.isDefault + board.position (Subtask 3.7.2)', () => {
     // The seeded board is already the project's default; a second is_default=true
     // for the same project violates `board_one_default_per_project`.
     await expect(
-      db.board.create({
+      adminDb.board.create({
         data: {
           workspaceId,
           projectId: project.id,
@@ -89,7 +91,7 @@ describe('board.isDefault + board.position (Subtask 3.7.2)', () => {
       name: 'ManyBoards',
     });
 
-    await db.board.create({
+    await adminDb.board.create({
       data: {
         workspaceId,
         projectId: project.id,
@@ -100,7 +102,7 @@ describe('board.isDefault + board.position (Subtask 3.7.2)', () => {
       },
     });
 
-    const boards = await db.board.findMany({
+    const boards = await adminDb.board.findMany({
       where: { projectId: project.id },
       orderBy: { position: 'asc' },
     });
@@ -123,8 +125,8 @@ describe('board.isDefault + board.position (Subtask 3.7.2)', () => {
       name: 'ProjB',
     });
 
-    const aDefault = await db.board.count({ where: { projectId: a.id, isDefault: true } });
-    const bDefault = await db.board.count({ where: { projectId: b.id, isDefault: true } });
+    const aDefault = await adminDb.board.count({ where: { projectId: a.id, isDefault: true } });
+    const bDefault = await adminDb.board.count({ where: { projectId: b.id, isDefault: true } });
     expect(aDefault).toBe(1);
     expect(bDefault).toBe(1);
   });

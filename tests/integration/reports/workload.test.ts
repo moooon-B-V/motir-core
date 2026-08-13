@@ -5,6 +5,7 @@ import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItem } from '@/generated/prisma/client';
 
@@ -24,7 +25,7 @@ async function setFields(
   id: string,
   data: { assigneeId?: string | null; storyPoints?: number | null; status?: string },
 ): Promise<void> {
-  await db.workItem.update({ where: { id }, data });
+  await adminDb.workItem.update({ where: { id }, data });
 }
 
 beforeEach(async () => {
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function expectOk(promise: ReturnType<typeof reportsService.getWorkload>) {
@@ -67,7 +69,7 @@ describe('getWorkload — the ranked open-work matrix', () => {
     // Excluded: a DONE item (done-category current status) and an ARCHIVED one.
     await seed('E', bo.id, 100, 'done');
     const archived = await seed('F', odie.id, 100);
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     const data = await expectOk(
       reportsService.getWorkload({ projectId: fx.projectId }, { measure: 'story_points' }, fx.ctx),
@@ -159,8 +161,8 @@ describe('getWorkload — the ranked open-work matrix', () => {
     const lo = await createTestWorkItem(fx, { kind: 'task', title: 'lo' });
     await setFields(hi.id, { assigneeId: u.id, storyPoints: 8, status: 'todo' });
     await setFields(lo.id, { assigneeId: u.id, storyPoints: 3, status: 'todo' });
-    await db.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
-    await db.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
+    await adminDb.workItem.update({ where: { id: hi.id }, data: { priority: 'high' } });
+    await adminDb.workItem.update({ where: { id: lo.id }, data: { priority: 'low' } });
 
     const filter = await savedFiltersService.create(
       fx.projectIdentifier,

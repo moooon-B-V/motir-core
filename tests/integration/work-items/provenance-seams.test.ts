@@ -6,6 +6,7 @@ import { plansService } from '@/lib/services/plansService';
 import enMessages from '@/messages/en.json';
 import zhMessages from '@/messages/zh.json';
 import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story-level integration + coverage gate for work-item PROVENANCE (Story
@@ -18,7 +19,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // Real Postgres (no mocks), per CLAUDE.md.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Read a work item back through the detail DTO the UI reads. */
@@ -77,7 +79,7 @@ describe('provenance write → read-DTO seams (all sources through the detail re
     await plansService.markPlanned(plan.id, fx.ctx);
     await plansService.approvePlan(plan.id, fx.ctx);
 
-    const row = await db.workItem.findFirstOrThrow({ where: { title: 'native' } });
+    const row = await adminDb.workItem.findFirstOrThrow({ where: { title: 'native' } });
     expect(row.planningModel).toBe('deepseek-chat'); // recorded for analysis
     const dto = await readDto(fx, row.identifier);
     expect(dto.planningSource).toBe('native');
@@ -148,7 +150,7 @@ describe('provenance write → read-DTO seams (all sources through the detail re
     );
     await workItemsService.updateStatus(created.id, 'in_progress', fx.ctx);
     await workItemsService.updateStatus(created.id, 'in_review', fx.ctx);
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: created.id },
       data: { sessionBranch: 'motir/auto-2' },
     });

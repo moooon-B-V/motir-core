@@ -12,6 +12,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureEmailEvents } from '../helpers/jobs';
 
@@ -36,6 +37,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string): Promise<User> {
@@ -221,7 +223,7 @@ describe('notificationPreferenceRepository', () => {
     });
     expect(await notificationPreferenceRepository.findByUser(user.id)).toHaveLength(1);
 
-    await db.user.delete({ where: { id: user.id } });
+    await adminDb.user.delete({ where: { id: user.id } });
     expect(await notificationPreferenceRepository.findByUser(user.id)).toHaveLength(0);
   });
 });

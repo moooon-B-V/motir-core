@@ -20,6 +20,7 @@ import { submitJob } from '@/lib/ai/motirAiClient';
 import { resolveTenantOrg } from '@/lib/ai/tenantOrg';
 import type { WorkItemCreatedData } from '@/lib/jobs/types';
 import { makeWorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 
@@ -43,6 +44,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The single `work-item/created` payload emitted since buffer index `from`. */

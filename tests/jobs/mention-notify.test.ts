@@ -18,6 +18,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { WorkItemCommentCreatedData } from '@/lib/jobs/types';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureEmailEvents } from '../helpers/jobs';
 
@@ -44,6 +45,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;
@@ -270,7 +272,7 @@ describe('mentionNotify jobs — in-process runs', () => {
     expect(capture.events).toHaveLength(1);
     expect(capture.events[0]!.data.idempotencyKey).toBe(`mention:${comment.id}:${s.member.id}`);
 
-    const runs = await db.jobRun.findMany({
+    const runs = await adminDb.jobRun.findMany({
       where: { functionId: 'work-item/comment.created' },
     });
     expect(runs).toHaveLength(1);

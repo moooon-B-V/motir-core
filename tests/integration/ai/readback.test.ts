@@ -5,6 +5,7 @@ import { aiBoundaryService } from '@/lib/services/aiBoundaryService';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 7.1.6 — the ai→core READ-back surface against a REAL Postgres. Proves
@@ -16,7 +17,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // (see tests/integration/ai/generation*.test.ts).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('aiBoundaryService.readPlanTree', () => {

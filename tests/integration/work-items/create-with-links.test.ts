@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { CrossWorkspaceLinkError, WorkItemLinkCycleError } from '@/lib/workItems/linkErrors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 2.4.10 — links collected in the create modal, written ATOMICALLY with
@@ -15,7 +16,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // exists.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('createWorkItem with links (2.4.10)', () => {
@@ -54,7 +56,7 @@ describe('createWorkItem with links (2.4.10)', () => {
       fx.ctx,
     );
 
-    const links = await db.workItemLink.findMany({ orderBy: { createdAt: 'asc' } });
+    const links = await adminDb.workItemLink.findMany({ orderBy: { createdAt: 'asc' } });
     // is_blocked_by stored as new → blocker; relates_to stored both directions.
     expect(links).toEqual(
       expect.arrayContaining([
@@ -89,7 +91,7 @@ describe('createWorkItem with links (2.4.10)', () => {
     );
 
     // "issue blocks target" is stored as "target is_blocked_by issue".
-    const links = await db.workItemLink.findMany();
+    const links = await adminDb.workItemLink.findMany();
     expect(links).toEqual([
       expect.objectContaining({ fromId: target.id, toId: issue.id, kind: 'is_blocked_by' }),
     ]);
@@ -124,8 +126,10 @@ describe('createWorkItem with links (2.4.10)', () => {
 
     // Nothing persisted: no "Cyclic issue" row, no links at all (the first edge
     // rolled back with the item).
-    expect(await db.workItem.findFirst({ where: { title: 'Cyclic issue' } })).toBeNull();
-    expect(await db.workItemLink.count()).toBe(0);
+    const workItemRow = await adminDb.workItem.findFirst({ where: { title: 'Cyclic issue' } });
+    expect(workItemRow).toBeNull();
+    const workItemLinkCount = await adminDb.workItemLink.count();
+    expect(workItemLinkCount).toBe(0);
   });
 
   it('rolls back when a link target is in another workspace', async () => {
@@ -148,7 +152,10 @@ describe('createWorkItem with links (2.4.10)', () => {
       ),
     ).rejects.toBeInstanceOf(CrossWorkspaceLinkError);
 
-    expect(await db.workItem.findFirst({ where: { title: 'Cross-tenant issue' } })).toBeNull();
+    const workItemRow = await adminDb.workItem.findFirst({
+      where: { title: 'Cross-tenant issue' },
+    });
+    expect(workItemRow).toBeNull();
   });
 
   it('rolls back when a link target does not exist', async () => {
@@ -164,7 +171,10 @@ describe('createWorkItem with links (2.4.10)', () => {
         fx.ctx,
       ),
     ).rejects.toBeInstanceOf(WorkItemNotFoundError);
-    expect(await db.workItem.findFirst({ where: { title: 'Dangling link issue' } })).toBeNull();
+    const workItemRow = await adminDb.workItem.findFirst({
+      where: { title: 'Dangling link issue' },
+    });
+    expect(workItemRow).toBeNull();
   });
 });
 
@@ -179,7 +189,7 @@ describe('listCreateLinkCandidates (2.4.10; server-search since 6.9.2)', () => {
       { projectId: fx.projectId, kind: 'task', title: 'Archived node' },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     // Query-driven since 6.9.2 — both titles share the "node" token; the archived
     // one is still filtered out by the read.

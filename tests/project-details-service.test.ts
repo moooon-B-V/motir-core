@@ -25,7 +25,8 @@ import {
   PUBLIC_TAGS_MAX_COUNT,
   PUBLIC_TAGLINE_MAX_LENGTH,
 } from '@/lib/publicProjects/limits';
-import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import * as uploader from '@/lib/blob/uploader';
 
@@ -49,6 +50,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {
@@ -95,12 +97,18 @@ async function seedItems(projectId: string, ctx: WorkspaceContext, n: number) {
 // The RAW stored value — the object key — as distinct from the DTO's resolved
 // URL. Asserting on both is what proves the key/URL split holds.
 async function storedImageOf(projectId: string): Promise<string | null> {
-  const row = await db.project.findUnique({ where: { id: projectId }, select: { image: true } });
+  const row = await adminDb.project.findUnique({
+    where: { id: projectId },
+    select: { image: true },
+  });
   return row?.image ?? null;
 }
 
 async function identifiersOf(projectId: string): Promise<string[]> {
-  const rows = await db.workItem.findMany({ where: { projectId }, select: { identifier: true } });
+  const rows = await adminDb.workItem.findMany({
+    where: { projectId },
+    select: { identifier: true },
+  });
   return rows.map((r) => r.identifier).sort();
 }
 
@@ -248,7 +256,7 @@ describe('changeKey', () => {
     expect(await identifiersOf(project.id)).toEqual(keys.map((k) => `NIF-${k}`).sort());
     // The alias row for the old key exists, owned by this project.
     expect(
-      await db.projectKeyAlias.count({ where: { projectId: updated.id, identifier: 'PROD' } }),
+      await adminDb.projectKeyAlias.count({ where: { projectId: updated.id, identifier: 'PROD' } }),
     ).toBe(1);
   });
 
@@ -259,7 +267,10 @@ describe('changeKey', () => {
 
     // The repository method is a single $executeRaw; its returned row count being
     // the full total proves one statement rewrote every row (no per-row loop).
-    const count = await db.$transaction((tx) =>
+    // The repository stays the code under test on `@/lib/db`; it is handed the
+    // transaction production hands it, which binds the GUCs the work_item policy
+    // reads. A bare db.$transaction reaches it with no tenant bound.
+    const count = await withWorkspaceContext(ownerCtx, (tx) =>
       workItemRepository.rewriteIdentifiersForProject(project.id, 'ZAP', tx),
     );
     expect(count).toBe(n);
@@ -278,10 +289,13 @@ describe('changeKey', () => {
     );
 
     // The project key, the work-item identifiers, and the alias table are all untouched.
-    const fresh = await db.project.findUnique({ where: { id: project.id } });
+    const fresh = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(fresh?.identifier).toBe('PROD');
     expect(await identifiersOf(project.id)).toEqual(beforeRewrite);
-    expect(await db.projectKeyAlias.count({ where: { projectId: project.id } })).toBe(0);
+    const projectKeyAliasCount = await adminDb.projectKeyAlias.count({
+      where: { projectId: project.id },
+    });
+    expect(projectKeyAliasCount).toBe(0);
     expect(before).toEqual([]);
   });
 
@@ -323,9 +337,9 @@ describe('changeKey', () => {
     expect(back.identifier).toBe('PROD');
     // PROD's alias row is gone; NIF is now the alias.
     expect(back.previousKeys).toEqual([{ identifier: 'NIF', retiredAt: expect.any(String) }]);
-    const aliasIds = (await db.projectKeyAlias.findMany({ where: { projectId: project.id } })).map(
-      (a) => a.identifier,
-    );
+    const aliasIds = (
+      await adminDb.projectKeyAlias.findMany({ where: { projectId: project.id } })
+    ).map((a) => a.identifier);
     expect(aliasIds).toEqual(['NIF']);
   });
 
@@ -396,7 +410,10 @@ describe('releaseAlias', () => {
 
     const after = await projectsService.releaseAlias({ key: 'NIF', alias: 'prod', ctx });
     expect(after.previousKeys).toEqual([]);
-    expect(await db.projectKeyAlias.count({ where: { projectId: moved.id } })).toBe(0);
+    const projectKeyAliasCount = await adminDb.projectKeyAlias.count({
+      where: { projectId: moved.id },
+    });
+    expect(projectKeyAliasCount).toBe(0);
 
     // PROD is now free for a new project.
     const reuse = await projectsService.createProject({
@@ -451,7 +468,7 @@ describe('getDetails', () => {
 // author). Reads back the persisted columns directly to prove what was stored.
 describe('setPublicOverview — public hero authoring (6.16.3)', () => {
   async function readHero(projectId: string) {
-    const row = await db.project.findUniqueOrThrow({
+    const row = await adminDb.project.findUniqueOrThrow({
       where: { id: projectId },
       select: { publicOverviewMd: true, publicTagline: true, publicTags: true },
     });

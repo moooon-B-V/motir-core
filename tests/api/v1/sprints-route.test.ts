@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { GET as GET_LIST } from '@/app/api/v1/projects/[projectKey]/sprints/route';
 import { GET as GET_ONE } from '@/app/api/v1/sprints/[sprintId]/route';
 import { sprintSchema, type V1Sprint } from '@/lib/api/v1/sprints/schema';
@@ -8,6 +7,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // GET /api/v1/projects/{projectKey}/sprints + GET /api/v1/sprints/{sprintId}
@@ -130,7 +130,7 @@ describe('GET /api/v1/projects/{projectKey}/sprints', () => {
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
     const first = await makeSprint(caller, 'One');
     const second = await makeSprint(caller, 'Two');
-    await db.sprint.update({ where: { id: second.id }, data: { sequence: first.sequence } });
+    await adminDb.sprint.update({ where: { id: second.id }, data: { sequence: first.sequence } });
 
     const expected = [first, second].map((s) => s.id).sort((a, b) => a.localeCompare(b));
 

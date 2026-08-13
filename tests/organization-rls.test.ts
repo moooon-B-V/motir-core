@@ -5,6 +5,7 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withOrgContext } from '@/lib/organizations/context';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // RLS verification suite for the org tier (Story 6.10 · Subtask 6.10.7 — the
@@ -29,6 +30,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface OrgRlsFixture {
@@ -51,7 +53,8 @@ async function makeFixture(): Promise<OrgRlsFixture> {
     name: 'Workspace A',
     ownerUserId: userA.id,
   });
-  const orgAId = (await db.workspace.findUniqueOrThrow({ where: { id: wsA.id } })).organizationId;
+  const orgAId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: wsA.id } }))
+    .organizationId;
   await organizationsService.addMember({
     organizationId: orgAId,
     userId: memberB.id,
@@ -63,7 +66,8 @@ async function makeFixture(): Promise<OrgRlsFixture> {
     name: 'Stranger Workspace',
     ownerUserId: stranger.id,
   });
-  const orgSId = (await db.workspace.findUniqueOrThrow({ where: { id: wsS.id } })).organizationId;
+  const orgSId = (await adminDb.workspace.findUniqueOrThrow({ where: { id: wsS.id } }))
+    .organizationId;
 
   return { userAId: userA.id, memberBId: memberB.id, strangerId: stranger.id, orgAId, orgSId };
 }
@@ -135,8 +139,10 @@ describe('organization RLS — mutation', () => {
       // RLS hides the stranger org from the UPDATE → zero rows matched → P2025.
       code: 'P2025',
     });
-    // Sanity: the stranger org's name is unchanged.
-    const stranger = await db.organization.findUnique({ where: { id: fx.orgSId } });
+    // Sanity: the stranger org's name is unchanged. Read back through the ADMIN
+    // client — the question is whether the ROW changed, which is a fact about
+    // storage, not about what the app role can see.
+    const stranger = await adminDb.organization.findUnique({ where: { id: fx.orgSId } });
     expect(stranger?.name).toBe('Stranger Workspace');
   });
 
@@ -182,12 +188,13 @@ describe('organization_membership RLS', () => {
       }),
     );
     expect(deleted.count).toBe(1);
-    // The row is really gone (verified as the bypass role).
-    expect(
-      await db.organizationMembership.findUnique({
-        where: { organizationId_userId: { organizationId: fx.orgAId, userId: fx.memberBId } },
-      }),
-    ).toBeNull();
+    // The row is really gone — read back through the ADMIN client, which is
+    // subject to no policy, so this is a statement about the row's EXISTENCE
+    // rather than about the app role's visibility.
+    const leftRow = await adminDb.organizationMembership.findUnique({
+      where: { organizationId_userId: { organizationId: fx.orgAId, userId: fx.memberBId } },
+    });
+    expect(leftRow).toBeNull();
   });
 
   it("a user CANNOT delete another user's membership without the active-org GUC", async () => {
@@ -200,20 +207,21 @@ describe('organization_membership RLS', () => {
       }),
     );
     expect(deleted.count).toBe(0);
-    expect(
-      await db.organizationMembership.findUnique({
-        where: { organizationId_userId: { organizationId: fx.orgAId, userId: fx.userAId } },
-      }),
-    ).not.toBeNull();
+    const ownerRow = await adminDb.organizationMembership.findUnique({
+      where: { organizationId_userId: { organizationId: fx.orgAId, userId: fx.userAId } },
+    });
+    expect(ownerRow).not.toBeNull();
   });
 });
 
 describe('withOrgContext', () => {
-  // Runs as the default `prodect` (superuser) role, which bypasses RLS. The
-  // point is to prove the helper pins both GUCs and they persist across queries
-  // in the callback (the load-bearing reason for $transaction) and are
-  // discarded after — the RLS-enforcement tests above already prove the
-  // policies bite under the non-bypass role.
+  // These read GUCs only, never table rows, so they hold under EITHER role the
+  // `db` singleton may carry (the default `prodect` superuser, or `motir_app`
+  // under TEST_DB_APP_ROLE=1). The point is to prove the helper pins both GUCs,
+  // that they persist across queries in the callback (the load-bearing reason
+  // for $transaction) and that they are discarded after — the RLS-enforcement
+  // tests above already prove the policies bite under the non-bypass role.
+  // Both stay on `db`: the claim is about the connection the helper used.
   it('pins both GUCs and they persist across queries in the callback', async () => {
     const fx = await makeFixture();
     const [seenUser, seenOrg] = await withOrgContext(

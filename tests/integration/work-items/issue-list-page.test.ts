@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { toIssueRows } from '@/app/(authed)/items/_components/issueRows';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -19,7 +20,7 @@ import {
 // the unclassifiable-status fallback, and the empty project.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -31,6 +32,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Re-run the page's three service reads + the pure shaping, as the route does. */
@@ -53,8 +55,8 @@ describe('issues page data shaping (toIssueRows over the live reads)', () => {
     // Set real workflow statuses (the fixture's createTestWorkItem inserts the
     // column-default 'open', bypassing the service's initial-status seeding) and
     // assign the story, so both resolution paths are exercised deterministically.
-    await db.workItem.update({ where: { id: epic.id }, data: { status: 'todo' } });
-    await db.workItem.update({
+    await adminDb.workItem.update({ where: { id: epic.id }, data: { status: 'todo' } });
+    await adminDb.workItem.update({
       where: { id: story.id },
       data: {
         status: 'in_progress',
@@ -105,7 +107,10 @@ describe('issues page data shaping (toIssueRows over the live reads)', () => {
     const fx = await makeFixture();
     const item = await createWorkItem(fx, { kind: 'task', title: 'Orphan status' });
     // A status key the project workflow doesn't define (defensive fallback path).
-    await db.workItem.update({ where: { id: item.id }, data: { status: 'archived_elsewhere' } });
+    await adminDb.workItem.update({
+      where: { id: item.id },
+      data: { status: 'archived_elsewhere' },
+    });
 
     const rows = await loadRows(fx);
     expect(rows[0]!.data.statusLabel).toBe('archived_elsewhere');

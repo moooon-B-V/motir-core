@@ -10,6 +10,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { PermissionDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -69,7 +70,9 @@ async function makeFixture(label: string): Promise<Fixture> {
       password: PASSWORD,
       name: slug,
     });
-    await db.workspaceMembership.create({ data: { userId: u.id, workspaceId, role: 'member' } });
+    await adminDb.workspaceMembership.create({
+      data: { userId: u.id, workspaceId, role: 'member' },
+    });
     if (role) {
       await projectMembersService.addMember({
         key: project.identifier,
@@ -106,6 +109,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the five holes the bucket was hiding', () => {
@@ -163,10 +167,10 @@ describe('the five holes the bucket was hiding', () => {
       password: PASSWORD,
       name: 'viewer',
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: viewer.id, workspaceId: fx.ownerCtx.workspaceId, role: 'member' },
     });
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     await projectMembersService.addMember({
       key: project.identifier,
       actorUserId: fx.ownerCtx.userId,
@@ -230,10 +234,10 @@ describe('the second half — the ready nudge and the editor upload', () => {
       password: PASSWORD,
       name: 'viewer',
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: viewer.id, workspaceId: fx.ownerCtx.workspaceId, role: 'member' },
     });
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     await projectMembersService.addMember({
       key: project.identifier,
       actorUserId: fx.ownerCtx.userId,

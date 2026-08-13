@@ -15,6 +15,7 @@ import {
   SystemPrincipalNotProvisionedError,
 } from '@/lib/ai/serviceAuth';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1451 — the cross-project service principal + service-bearer-only auth
@@ -32,6 +33,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A META workspace (`moooon`-analogue) + a `MOTIR`-keyed project + the system

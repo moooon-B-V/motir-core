@@ -12,6 +12,7 @@ import { buildContainerAccrual } from '@/lib/orchestrator/usage';
 import { recordContainerAccrual, recordContainerUsage } from '@/lib/orchestrator/usageSink';
 import { withSystemContext } from '@/lib/workspaces/context';
 import type { ContainerAccrual, ContainerUsage } from '@/lib/orchestrator/types';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
@@ -57,7 +58,7 @@ interface Fixture {
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_container_usage", "ci_container_period_cost", "ci_period_usage" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -73,6 +74,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> {
@@ -89,7 +91,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -189,7 +191,7 @@ describe('recording one container', () => {
       periodStart: AUGUST_2026,
       billableSeconds: 240,
     });
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row).toMatchObject({
       containerProvider: 'fake',
       handleId: usage.handleId,
@@ -212,7 +214,7 @@ describe('recording one container', () => {
     // it lands in the same monthly bucket the minute meter would use.
     expect(row.periodStart).toEqual(AUGUST_2026);
 
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup).toMatchObject({
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -239,7 +241,7 @@ describe('recording one container', () => {
     );
 
     expect(outcome).toMatchObject({ outcome: 'recorded' });
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.workflowJobId).toBeNull();
     expect(row.workflowJobId).not.toBe('null');
     // Everything else about the row is written exactly as it always was — this
@@ -268,8 +270,9 @@ describe('recording one container', () => {
       containerProvider: 'fake',
       handleId: usage.handleId,
     });
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerCount).toBe(1);
     expect(rollup.containerSeconds).toBe(240);
   });
@@ -293,8 +296,9 @@ describe('recording one container', () => {
     ]);
 
     expect(outcomes.map((o) => o.outcome).sort()).toEqual(['duplicate', 'recorded']);
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(240);
     expect(rollup.containerCount).toBe(1);
   });
@@ -304,7 +308,7 @@ describe('recording one container', () => {
     await ciFleetCostMeterService.recordContainerUsage(usageFor(fx, { billableSeconds: 100 }));
     await ciFleetCostMeterService.recordContainerUsage(usageFor(fx, { billableSeconds: 200 }));
 
-    const rollups = await db.ciContainerPeriodCost.findMany();
+    const rollups = await adminDb.ciContainerPeriodCost.findMany();
     expect(rollups).toHaveLength(1);
     expect(rollups[0]).toMatchObject({ containerSeconds: 300, containerCount: 2 });
   });
@@ -324,7 +328,7 @@ describe('recording one container', () => {
       }),
     );
 
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.containerStartedAt).toBeNull();
     expect(row.billableSeconds).toBe(0);
     expect(row.costUsd.toNumber()).toBe(0);
@@ -337,7 +341,7 @@ describe('recording one container', () => {
       usageFor(fx, { usdPerSecond: '0', costUsd: '0', rateEffectiveFrom: null, region: 'syd' }),
     );
 
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.rateEffectiveFrom).toBeNull();
     expect(row.costUsd.toNumber()).toBe(0);
     // Distinguishable from a genuine zero-second row by the seconds beside it.
@@ -348,9 +352,9 @@ describe('recording one container', () => {
     const fx = await seedTenant();
     await ciFleetCostMeterService.recordContainerUsage(usageFor(fx));
 
-    await db.project.delete({ where: { id: fx.projectId } });
+    await adminDb.project.delete({ where: { id: fx.projectId } });
 
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.projectId).toBeNull();
     expect(row.organizationId).toBe(fx.organizationId);
   });
@@ -362,8 +366,10 @@ describe('recording one container', () => {
     const fx = await seedTenant();
     await ciFleetCostMeterService.recordContainerUsage(usageFor(fx));
 
-    expect(await db.ciPeriodCharge.count()).toBe(0);
-    expect(await db.ciPeriodUsage.count()).toBe(0);
+    const ciPeriodChargeCount = await adminDb.ciPeriodCharge.count();
+    expect(ciPeriodChargeCount).toBe(0);
+    const ciPeriodUsageCount = await adminDb.ciPeriodUsage.count();
+    expect(ciPeriodUsageCount).toBe(0);
   });
 });
 
@@ -375,7 +381,8 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
     expect(await ciFleetCostMeterService.recordContainerUsage(usageFor(fx))).toEqual({
       outcome: 'disabled',
     });
-    expect(await db.ciContainerUsage.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
   });
 
   it('the off-cloud bypass covers the CHECKPOINT path too', async () => {
@@ -388,7 +395,8 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
     expect(await ciFleetCostMeterService.recordContainerAccrual(accrualFor(fx))).toEqual({
       outcome: 'disabled',
     });
-    expect(await db.ciContainerUsage.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
   });
 
   it('METERS the meta org — the §4.4 bypass is GONE, because meta runs on the fleet', async () => {
@@ -410,8 +418,10 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
       workload: 'index',
       billableSeconds: 240,
     });
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    expect(await db.ciContainerPeriodCost.count()).toBe(1);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const ciContainerPeriodCostCount = await adminDb.ciContainerPeriodCost.count();
+    expect(ciContainerPeriodCostCount).toBe(1);
   });
 
   it('meta cost is queryable as ITS OWN LINE — never folded into per-customer margin', async () => {
@@ -455,8 +465,10 @@ describe('the bypasses — one survives, one does NOT (§8.5; MOTIR-1995 vs §4.
     await ciFleetCostMeterService.recordContainerUsage(usageFor(tenant));
     await ciFleetCostMeterService.recordContainerAccrual(accrualFor(tenant));
 
-    expect(await db.ciPeriodCharge.count()).toBe(0);
-    expect(await db.ciPeriodUsage.count()).toBe(0);
+    const ciPeriodChargeCount = await adminDb.ciPeriodCharge.count();
+    expect(ciPeriodChargeCount).toBe(0);
+    const ciPeriodUsageCount = await adminDb.ciPeriodUsage.count();
+    expect(ciPeriodUsageCount).toBe(0);
   });
 });
 
@@ -473,7 +485,7 @@ describe('the WORKLOAD axis — three lines in one shared fleet org (MOTIR-1995)
       usageFor(fx, { workload: 'hosted_agent', workflowJobId: null, billableSeconds: 400 }),
     );
 
-    const rows = await db.ciContainerUsage.findMany({ orderBy: { billableSeconds: 'asc' } });
+    const rows = await adminDb.ciContainerUsage.findMany({ orderBy: { billableSeconds: 'asc' } });
     expect(rows.map((r) => r.workload)).toEqual(['ci', 'index', 'agent']);
   });
 
@@ -587,7 +599,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       billableSeconds: 90,
       accruedSecondsDelta: 90,
     });
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.billableSeconds).toBe(90);
     // The three fields that say "still running" — and the reason the columns were
     // relaxed to nullable ahead of this card.
@@ -596,7 +608,7 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     expect(row.teardownReason).toBeNull();
     // The partial cost is already in the rollup, which is the whole point: the
     // figure exists before the money is gone.
-    expect((await db.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(90);
+    expect((await adminDb.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(90);
   });
 
   it('ADVANCES on each checkpoint by the DIFFERENCE, never by the whole figure again', async () => {
@@ -611,8 +623,9 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     );
 
     expect(second).toMatchObject({ billableSeconds: 150, accruedSecondsDelta: 90 });
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     // 150, not 60 + 150. The rollup always equals the sum of the per-container rows.
     expect(rollup.containerSeconds).toBe(150);
     // And ONE container, not one per observation.
@@ -640,11 +653,11 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       billableSeconds: 240,
       accruedSecondsDelta: 140,
     });
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.billableSeconds).toBe(240);
     expect(row.containerStoppedAt).toEqual(STOPPED_AT);
     expect(row.teardownReason).toBe('job_completed');
-    expect((await db.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(240);
+    expect((await adminDb.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(240);
   });
 
   it('reconciles DOWNWARD when the container stopped between two observations', async () => {
@@ -668,8 +681,8 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     );
 
     expect(settled).toMatchObject({ accruedSecondsDelta: -50 });
-    expect((await db.ciContainerUsage.findFirstOrThrow()).billableSeconds).toBe(250);
-    expect((await db.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(250);
+    expect((await adminDb.ciContainerUsage.findFirstOrThrow()).billableSeconds).toBe(250);
+    expect((await adminDb.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(250);
   });
 
   it('a REPLAYED checkpoint adds NOTHING — idempotent under checkpointing', async () => {
@@ -685,8 +698,9 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
     const replay = await ciFleetCostMeterService.recordContainerAccrual(accrual);
 
     expect(replay).toMatchObject({ billableSeconds: 120, accruedSecondsDelta: 0 });
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(120);
     expect(rollup.containerCount).toBe(1);
   });
@@ -708,8 +722,9 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       ),
     ]);
 
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(200);
     expect(rollup.containerCount).toBe(1);
   });
@@ -738,10 +753,10 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       containerProvider: 'fake',
       handleId,
     });
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.billableSeconds).toBe(240);
     expect(row.containerStoppedAt).not.toBeNull();
-    expect((await db.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(240);
+    expect((await adminDb.ciContainerPeriodCost.findFirstOrThrow()).containerSeconds).toBe(240);
   });
 
   it('a CRASHED container keeps its partial accrual — reconciled by the reaper, not duplicated', async () => {
@@ -765,11 +780,12 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       }),
     );
 
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.billableSeconds).toBe(520);
     expect(row.teardownReason).toBe('reaped');
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(520);
     expect(rollup.containerCount).toBe(1);
   });
@@ -799,10 +815,10 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       }),
     );
 
-    const rollups = await db.ciContainerPeriodCost.findMany();
+    const rollups = await adminDb.ciContainerPeriodCost.findMany();
     expect(rollups).toHaveLength(1);
     expect(rollups[0]).toMatchObject({ periodStart: AUGUST_2026, containerSeconds: 1200 });
-    expect((await db.ciContainerUsage.findFirstOrThrow()).periodStart).toEqual(AUGUST_2026);
+    expect((await adminDb.ciContainerUsage.findFirstOrThrow()).periodStart).toEqual(AUGUST_2026);
   });
 
   it('carries money as DECIMAL through a checkpoint and its settle, never a float', async () => {
@@ -823,8 +839,8 @@ describe('INCREMENTAL accrual — a running container is visible before it stops
       }),
     );
 
-    const row = await db.ciContainerUsage.findFirstOrThrow();
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     // 240 s × $0.000031636049, to the column's full 12 decimal places — the row and
     // the rollup agreeing EXACTLY is what a signed-delta rollup has to prove.
     expect(row.costUsd.toFixed(12)).toBe('0.007592651760');
@@ -841,7 +857,7 @@ describe('the CHECKPOINT seam the supervision loop actually calls (MOTIR-1995)',
 
     await recordContainerAccrual(accrualFor(fx, { accruedSeconds: 45 }));
 
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.billableSeconds).toBe(45);
     expect(row.containerStoppedAt).toBeNull();
   });
@@ -872,7 +888,7 @@ describe('the CHECKPOINT seam the supervision loop actually calls (MOTIR-1995)',
       // a running container has none, and reporting one would be a lie about when.
       expect.objectContaining({ region: 'syd', at: STOPPED_AT.toISOString() }),
     );
-    const row = await db.ciContainerUsage.findFirstOrThrow();
+    const row = await adminDb.ciContainerUsage.findFirstOrThrow();
     expect(row.rateEffectiveFrom).toBeNull();
     expect(row.costUsd.toNumber()).toBe(0);
     // Distinguishable from a genuine zero-second row by the seconds beside it.
@@ -990,9 +1006,11 @@ describe('ONE write path over the shared record (MOTIR-1995)', () => {
       }),
     );
 
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    expect(await db.ciContainerPeriodCost.count()).toBe(1);
-    const rollup = await db.ciContainerPeriodCost.findFirstOrThrow();
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    const ciContainerPeriodCostCount = await adminDb.ciContainerPeriodCost.count();
+    expect(ciContainerPeriodCostCount).toBe(1);
+    const rollup = await adminDb.ciContainerPeriodCost.findFirstOrThrow();
     expect(rollup.containerSeconds).toBe(95);
     expect(rollup.containerCount).toBe(1);
     expect(rollup.workload).toBe('index');
@@ -1096,8 +1114,9 @@ describe('the seam the orchestrator actually calls', () => {
 
     await recordContainerUsage(usage);
 
-    expect(await db.ciContainerUsage.count()).toBe(1);
-    expect((await db.ciContainerUsage.findFirstOrThrow()).handleId).toBe(usage.handleId);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
+    expect((await adminDb.ciContainerUsage.findFirstOrThrow()).handleId).toBe(usage.handleId);
   });
 
   it('NEVER THROWS through the sink when the persist fails', async () => {
@@ -1115,6 +1134,7 @@ describe('the seam the orchestrator actually calls', () => {
       '[containerUsage] could not record a container-seconds row',
       expect.objectContaining({ handleId: usage.handleId }),
     );
-    expect(await db.ciContainerUsage.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
   });
 });

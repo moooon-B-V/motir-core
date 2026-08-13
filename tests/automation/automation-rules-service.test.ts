@@ -24,6 +24,7 @@ import {
 } from '@/lib/automation/constants';
 import { encodeFilterParam, type FilterAst, type FilterCondition } from '@/lib/filters/ast';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Service-layer tests for automationRulesService (Story 6.6 · Subtask 6.6.1).
@@ -42,6 +43,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function ctxFor(userId: string, workspaceId: string): WorkspaceContext {
@@ -404,7 +406,7 @@ describe('enable / disable', () => {
     const s = await makeScenario('toggle');
     const rule = await automationRulesService.create(s.key, ruleInput(), s.ownerCtx);
     // Simulate the engine having recorded failures (6.6.2 writes these).
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: { consecutiveFailureCount: 5 },
     });
@@ -431,13 +433,19 @@ describe('delete', () => {
     const s = await makeScenario('del');
     const rule = await automationRulesService.create(s.key, ruleInput(), s.ownerCtx);
     // Seed an execution row (6.6.2 writes these) to prove the cascade.
-    await db.automationRuleExecution.create({ data: { ruleId: rule.id, status: 'success' } });
-    expect(await db.automationRuleExecution.count({ where: { ruleId: rule.id } })).toBe(1);
+    await adminDb.automationRuleExecution.create({ data: { ruleId: rule.id, status: 'success' } });
+    const automationRuleExecutionCount = await adminDb.automationRuleExecution.count({
+      where: { ruleId: rule.id },
+    });
+    expect(automationRuleExecutionCount).toBe(1);
 
     await automationRulesService.delete(s.key, rule.id, s.ownerCtx);
 
     expect(await automationRuleRepository.findByIdInProject(rule.id, s.project.id)).toBeNull();
-    expect(await db.automationRuleExecution.count({ where: { ruleId: rule.id } })).toBe(0);
+    const automationRuleExecutionCount2 = await adminDb.automationRuleExecution.count({
+      where: { ruleId: rule.id },
+    });
+    expect(automationRuleExecutionCount2).toBe(0);
   });
 
   it('delete of an unknown rule id → 404', async () => {
@@ -475,7 +483,7 @@ describe('caps', () => {
       conditionAst: { v: 'v1', c: 'and', f: [] } as Prisma.InputJsonValue,
       actions: [{ type: 'set_field', field: 'priority', value: 'low' }] as Prisma.InputJsonValue,
     }));
-    await db.automationRule.createMany({ data: rows });
+    await adminDb.automationRule.createMany({ data: rows });
 
     await expect(
       automationRulesService.create(s.key, ruleInput(), s.ownerCtx),
@@ -487,7 +495,7 @@ describe('stored-condition degraded read (the durability rule)', () => {
   it('a structurally-corrupt stored envelope reads as a typed conditionError, not a crash', async () => {
     const s = await makeScenario('corrupt');
     const rule = await automationRulesService.create(s.key, ruleInput(), s.ownerCtx);
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: { conditionAst: { not: 'an envelope' } as Prisma.InputJsonValue },
     });
@@ -499,7 +507,7 @@ describe('stored-condition degraded read (the durability rule)', () => {
   it('a decodable-but-registry-invalid stored envelope also degrades (unknown field id)', async () => {
     const s = await makeScenario('invalidstored');
     const rule = await automationRulesService.create(s.key, ruleInput(), s.ownerCtx);
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: {
         conditionAst: {

@@ -4,6 +4,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { boardRepository } from '@/lib/repositories/boardRepository';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { BoardSummaryDto } from '@/lib/dto/boards';
@@ -35,6 +36,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -66,7 +68,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'CRUD Routes Member',
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { userId: member.id, workspaceId: ws.workspace.id, role: 'member' },
   });
   const board = await boardRepository.findDefaultForProject(project.id, ws.workspace.id);

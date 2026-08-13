@@ -5,6 +5,7 @@ import { NotProjectAdminError, ProjectTaglineTooLongError } from '@/lib/projects
 import { PUBLIC_TAGLINE_MAX_LENGTH } from '@/lib/publicProjects/limits';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.16 · Subtask 6.16.5 — the ON-PAGE save path. The public Overview editor
@@ -21,11 +22,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makePublicProjectFixture(): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
 }
 

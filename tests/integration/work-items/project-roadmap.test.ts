@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -18,7 +19,7 @@ import {
 // Real Postgres, no mocks (Yue's rule).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -30,15 +31,16 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Direct column poke (tests may reach the db to set state — CLAUDE.md). */
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function link(fx: WorkItemFixture, blockedId: string, blockerId: string): Promise<void> {
-  await db.workItemLink.create({
+  await adminDb.workItemLink.create({
     data: {
       fromId: blockedId, // `is_blocked_by`: from = the blocked item, to = the blocker
       toId: blockerId,
@@ -127,7 +129,7 @@ describe('workItemsService.getProjectRoadmap — per-level read', () => {
   it('excludes archived items from the level', async () => {
     const fx = await makeFixture();
     const f = await buildForest(fx);
-    await db.workItem.update({ where: { id: f.B.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: f.B.id }, data: { archivedAt: new Date() } });
 
     const { nodes } = await workItemsService.getProjectRoadmap(fx.projectId, f.E.id, fx.ctx);
     expect(nodes.map((n) => n.identifier)).toEqual(['PROD-2']); // Story B archived out
@@ -182,7 +184,7 @@ describe('workItemsService.getProjectRoadmap — per-level read', () => {
     const fx = await makeFixture();
     const f = await buildForest(fx);
     // Archive A2 (todo) — E's total drops from 6 to 5; done unchanged.
-    await db.workItem.update({ where: { id: f.A2.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: f.A2.id }, data: { archivedAt: new Date() } });
 
     const roots = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx);
     const e = roots.nodes.find((n) => n.identifier === 'PROD-1')!;

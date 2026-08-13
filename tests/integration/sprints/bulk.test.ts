@@ -11,6 +11,7 @@ import {
 } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemDto } from '@/lib/dto/workItems';
 
@@ -50,7 +51,7 @@ async function sprintIds(fx: WorkItemFixture, sprintId: string): Promise<string[
 }
 
 async function revisionCount(workItemId: string): Promise<number> {
-  return db.workItemRevision.count({ where: { workItemId } });
+  return adminDb.workItemRevision.count({ where: { workItemId } });
 }
 
 beforeEach(async () => {
@@ -59,6 +60,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('backlogService.bulkAssignToSprint', () => {
@@ -249,7 +251,9 @@ describe('backlogService.createBacklogIssue', () => {
     expect(await backlogIds(fx)).toEqual([]); // not in the backlog
     expect(await sprintIds(fx, sprint.id)).toEqual([created.id]);
     // The created revision captures the born-in-sprint assignment.
-    const revision = await db.workItemRevision.findFirst({ where: { workItemId: created.id } });
+    const revision = await adminDb.workItemRevision.findFirst({
+      where: { workItemId: created.id },
+    });
     expect((revision?.diff as Record<string, unknown>)?.sprintId).toEqual({
       from: null,
       to: sprint.id,

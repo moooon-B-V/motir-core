@@ -4,6 +4,7 @@ import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { makeWorkItemFixture } from './fixtures/workItemFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Route-level transport tests for the generation API (Subtask 7.4.4 · MOTIR-846):
@@ -116,6 +117,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/ai/plan/generate', () => {
@@ -194,7 +196,7 @@ describe('POST /api/ai/plan/generate', () => {
     expect(res.status).toBe(402);
     await expect(res.json()).resolves.toMatchObject({ code: 'MOTIR_AI_OUT_OF_CREDITS' });
     // Submit-first means a refused submit never opened a Plan.
-    const count = await db.plan.count({ where: { projectId: fx.projectId } });
+    const count = await adminDb.plan.count({ where: { projectId: fx.projectId } });
     expect(count).toBe(0);
   });
 

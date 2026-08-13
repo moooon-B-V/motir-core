@@ -22,6 +22,7 @@ import {
 } from '@/lib/ciFleet/workloads';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -77,7 +78,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -96,7 +97,7 @@ async function seedIntent(
   overrides: { status?: string } = {},
 ): Promise<CiRunnerProvisioningIntent> {
   jobSeq += 1;
-  return db.ciRunnerProvisioningIntent.create({
+  return adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -160,7 +161,7 @@ async function census(): Promise<FleetInFlightCensus> {
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await db.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   vi.setSystemTime(NOW);
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
@@ -182,6 +183,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── The registry, and the totality guard that keeps it honest ───────────────
@@ -216,7 +218,10 @@ describe('the fleet workload REGISTRY', () => {
     expect(seen.total).toBe(2);
     // The CI runner left NO slot row behind: a dual write on the hottest path in
     // the fleet is exactly what the union exists to avoid.
-    expect(await db.fleetInFlightSlot.count({ where: { workload: 'ci_runner' } })).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count({
+      where: { workload: 'ci_runner' },
+    });
+    expect(fleetInFlightSlotCount).toBe(0);
     expect(SLOT_BACKED_WORKLOADS).not.toContain('ci_runner');
   });
 
@@ -248,7 +253,7 @@ describe('ONE ceiling over ALL workloads', () => {
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
     // QUEUED, not failed — a ceiling must feel like waiting.
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect(after.status).toBe('pending');
@@ -274,7 +279,8 @@ describe('ONE ceiling over ALL workloads', () => {
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'fleet_ceiling' });
     expect((verdict as { detail: string }).detail).toContain('CI runners 3');
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(0);
   });
 
   it('refuses an AGENT container when INDEX containers have filled the fleet', async () => {
@@ -348,7 +354,7 @@ describe('completion frees a slot for ANY workload', () => {
 
     expect(await fleetCeilingService.release('code_graph_index', ref)).toBe(true);
 
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect((await ciRunnerAdmissionService.admit(after)).outcome).toBe('admitted');
@@ -366,7 +372,7 @@ describe('completion frees a slot for ANY workload', () => {
       reason: 'fleet_ceiling',
     });
 
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: busy.id },
       data: { status: 'completed', settledAt: NOW, teardownReason: 'job_completed' },
     });
@@ -479,7 +485,8 @@ describe('the ceiling fails CLOSED', () => {
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
     expect(error).toHaveBeenCalled();
     // The transaction rolled back, so no slot was taken either.
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(0);
   });
 
   // And the same posture reached through the CI gate — a NON-CI counter failing
@@ -495,7 +502,7 @@ describe('the ceiling fails CLOSED', () => {
     const verdict = await ciRunnerAdmissionService.admit(intent);
 
     expect(verdict).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(after.status).toBe('pending');

@@ -11,6 +11,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -64,7 +65,9 @@ async function makeFixture(label: string): Promise<Fixture> {
     password: PASSWORD,
     name: 'Viewer',
   });
-  await db.workspaceMembership.create({ data: { userId: viewer.id, workspaceId, role: 'member' } });
+  await adminDb.workspaceMembership.create({
+    data: { userId: viewer.id, workspaceId, role: 'member' },
+  });
   await projectMembersService.addMember({
     key: project.identifier,
     actorUserId: owner.id,
@@ -78,7 +81,7 @@ async function makeFixture(label: string): Promise<Fixture> {
     password: PASSWORD,
     name: 'Outsider',
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { userId: outsider.id, workspaceId, role: 'member' },
   });
 
@@ -112,6 +115,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('report:view is BROWSE-WIDE — a project viewer reads every analytics path', () => {

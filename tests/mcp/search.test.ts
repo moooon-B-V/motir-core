@@ -10,6 +10,7 @@ import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { parseAdvancedFilterParam } from '@/lib/issues/issueListAdvancedFilter';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `search_work_items` (Subtask 7.8.6) over real Postgres. The tool rides the
@@ -26,6 +27,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function make(fx: WorkItemFixture, kind: 'task' | 'bug' | 'story', title: string) {

@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { PermissionDeniedError } from '@/lib/projects/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture,
@@ -25,7 +26,7 @@ import type { WorkItemFixture } from '../../fixtures';
 // WorkItemNotFoundError.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item_revision", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -37,6 +38,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /**
@@ -195,7 +197,7 @@ describe('deleteWorkItem — audit', () => {
 
     await expect(workItemsService.deleteWorkItem(epic.id, fx.ctx)).resolves.toBeUndefined();
     // Nothing survives to host a revision, and no stray `deleted` row leaks.
-    const rows = await db.workItemRevision.count({ where: { changeKind: 'deleted' } });
+    const rows = await adminDb.workItemRevision.count({ where: { changeKind: 'deleted' } });
     expect(rows).toBe(0);
   });
 });

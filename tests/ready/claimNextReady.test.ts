@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `claim_next_ready` (MOTIR-1330) — the ATOMIC, race-safe dispatch claim over
@@ -19,6 +20,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type Priority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
@@ -41,7 +43,7 @@ async function makeReady(fx: WorkItemFixture, title: string, priority?: Priority
 async function activeSprintWith(fx: WorkItemFixture, itemIds: string[]): Promise<string> {
   const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Active' }, fx.ctx);
   if (itemIds.length > 0) {
-    await db.workItem.updateMany({
+    await adminDb.workItem.updateMany({
       where: { id: { in: itemIds } },
       data: { sprintId: sprint.id },
     });
@@ -58,7 +60,7 @@ async function warmPool(n = 6): Promise<void> {
 }
 
 async function statusOf(id: string): Promise<string> {
-  const row = await db.workItem.findUniqueOrThrow({ where: { id } });
+  const row = await adminDb.workItem.findUniqueOrThrow({ where: { id } });
   return row.status;
 }
 

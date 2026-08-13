@@ -5,6 +5,7 @@ import { commentRepository } from '@/lib/repositories/commentRepository';
 import { commentMentionRepository } from '@/lib/repositories/commentMentionRepository';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Repository-layer tests for the comment data-access leaves (Story 5.1 ·
@@ -17,6 +18,16 @@ import { truncateAuthTables } from '../helpers/db';
 // multi-tenant-rls suite's pattern); what's proven here is the repository
 // contract and the migration-built constraints. Writes run inside a real
 // `db.$transaction` to exercise the required-`tx` path.
+//
+// ⚠️ THIS FILE'S WRITES RUN THROUGH `adminDb` ON PURPOSE (MOTIR-2751).
+// The header above states the subject: the repository CONTRACT and the
+// migration-built CONSTRAINTS, with RLS deliberately inert. Under the non-bypass
+// role a cross-workspace read returns [] because the POLICY hid the row — the same
+// observation for a different reason, which would make every gate assertion here
+// vacuous, and a constraint test that fails with a policy error proves nothing about
+// the constraint. So the admin client is what PRESERVES these claims rather than
+// weakening them. The policies' own behaviour is proved separately, under the role,
+// in the *-rls suites this header already points at.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -27,6 +38,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface CommentFixture {
@@ -45,7 +57,7 @@ async function addComment(
   c: CommentFixture,
   input: { bodyMd?: string; parentCommentId?: string; authorId?: string } = {},
 ): Promise<Comment> {
-  return db.$transaction(async (tx) =>
+  return adminDb.$transaction(async (tx) =>
     commentRepository.create(
       {
         workspaceId: c.fx.workspaceId,
@@ -76,7 +88,7 @@ describe('commentRepository', () => {
     const b = await addComment(c, { bodyMd: 'untouched' });
 
     const editedAt = new Date();
-    const updated = await db.$transaction(async (tx) =>
+    const updated = await adminDb.$transaction(async (tx) =>
       commentRepository.update(a.id, { bodyMd: 'edited', editedAt }, tx),
     );
     expect(updated.bodyMd).toBe('edited');
@@ -99,7 +111,7 @@ describe('commentRepository', () => {
     const mentioned = await createTestUser({ name: 'Bo' });
     const root = await addComment(c, { bodyMd: 'root' });
     const reply = await addComment(c, { bodyMd: 'reply', parentCommentId: root.id });
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       commentMentionRepository.createMany(
         [
           { commentId: root.id, mentionedUserId: mentioned.id },
@@ -109,11 +121,12 @@ describe('commentRepository', () => {
       ),
     );
 
-    await db.$transaction(async (tx) => commentRepository.delete(root.id, tx));
+    await adminDb.$transaction(async (tx) => commentRepository.delete(root.id, tx));
 
     expect(await commentRepository.findById(root.id)).toBeNull();
     expect(await commentRepository.findById(reply.id)).toBeNull();
-    expect(await db.commentMention.count()).toBe(0);
+    const commentMentionCount = await adminDb.commentMention.count();
+    expect(commentMentionCount).toBe(0);
   });
 
   it('deleting a work item cascades its whole comment thread', async () => {
@@ -122,8 +135,9 @@ describe('commentRepository', () => {
     await addComment(c, { parentCommentId: root.id });
     expect(await commentRepository.countByWorkItem(c.issue.id)).toBe(2);
 
-    await db.workItem.delete({ where: { id: c.issue.id } });
-    expect(await db.comment.count()).toBe(0);
+    await adminDb.workItem.delete({ where: { id: c.issue.id } });
+    const commentCount = await adminDb.comment.count();
+    expect(commentCount).toBe(0);
   });
 
   describe('listThreadsByWorkItem', () => {
@@ -200,9 +214,9 @@ describe('commentRepository', () => {
 
     expect(await commentRepository.countByParent(root.id)).toBe(2);
     expect(await commentRepository.countByParent(lone.id)).toBe(0);
-    expect(await db.$transaction(async (tx) => commentRepository.countByParent(root.id, tx))).toBe(
-      2,
-    );
+    expect(
+      await adminDb.$transaction(async (tx) => commentRepository.countByParent(root.id, tx)),
+    ).toBe(2);
   });
 });
 
@@ -213,7 +227,7 @@ describe('commentMentionRepository', () => {
     const odie = await createTestUser({ name: 'Odie' });
     const comment = await addComment(c);
 
-    const count = await db.$transaction(async (tx) =>
+    const count = await adminDb.$transaction(async (tx) =>
       commentMentionRepository.createMany(
         [
           { commentId: comment.id, mentionedUserId: bo.id },
@@ -228,7 +242,9 @@ describe('commentMentionRepository', () => {
   });
 
   it('createMany short-circuits on empty input (the empty-input guard)', async () => {
-    const count = await db.$transaction(async (tx) => commentMentionRepository.createMany([], tx));
+    const count = await adminDb.$transaction(async (tx) =>
+      commentMentionRepository.createMany([], tx),
+    );
     expect(count).toBe(0);
   });
 
@@ -237,11 +253,11 @@ describe('commentMentionRepository', () => {
     const bo = await createTestUser({ name: 'Bo' });
     const comment = await addComment(c);
 
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       commentMentionRepository.createMany([{ commentId: comment.id, mentionedUserId: bo.id }], tx),
     );
     await expect(
-      db.$transaction(async (tx) =>
+      adminDb.$transaction(async (tx) =>
         commentMentionRepository.createMany(
           [{ commentId: comment.id, mentionedUserId: bo.id }],
           tx,
@@ -255,7 +271,7 @@ describe('commentMentionRepository', () => {
     const bo = await createTestUser({ name: 'Bo' });
     const a = await addComment(c);
     const b = await addComment(c);
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       commentMentionRepository.createMany(
         [
           { commentId: a.id, mentionedUserId: bo.id },
@@ -265,7 +281,7 @@ describe('commentMentionRepository', () => {
       ),
     );
 
-    const removed = await db.$transaction(async (tx) =>
+    const removed = await adminDb.$transaction(async (tx) =>
       commentMentionRepository.deleteByCommentId(a.id, tx),
     );
     expect(removed).toBe(1);

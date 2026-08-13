@@ -8,6 +8,7 @@ import { GET as getSubtreeGET } from '@/app/api/internal/ai/get-subtree/route';
 import { GET as walkBlockingGET } from '@/app/api/internal/ai/walk-blocking/route';
 import { GET as skeletonGET } from '@/app/api/internal/ai/skeleton/route';
 import { makeWorkItemFixture as makeFixture, createTestLink } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST (Subtask 7.5.1) — the plan-tree graph-traversal read family
@@ -20,7 +21,7 @@ import { truncateAuthTables } from '../../helpers/db';
 const SERVICE_SECRET = 'core-callback-secret-test';
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type Fx = Awaited<ReturnType<typeof makeFixture>>;

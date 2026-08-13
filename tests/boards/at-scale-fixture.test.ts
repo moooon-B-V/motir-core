@@ -14,6 +14,7 @@ import { BOARD_SWIMLANE_NO_VALUE } from '@/lib/dto/boards';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { seedLargeBoard } from '../../scripts/seedLargeBoard';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Subtask 3.5.1 — the at-scale board FIXTURE + cap/Done-age test SEAM. Two
@@ -39,6 +40,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('board load-model test seam (3.5.1)', () => {
@@ -118,7 +120,7 @@ async function makeFixture(): Promise<Fixture> {
 }
 
 async function setGroupBy(projectId: string, groupBy: BoardSwimlaneGroupBy): Promise<void> {
-  await db.board.updateMany({ where: { projectId }, data: { swimlaneGroupBy: groupBy } });
+  await adminDb.board.updateMany({ where: { projectId }, data: { swimlaneGroupBy: groupBy } });
 }
 
 // Small, fast distribution — round-robins 18 spread cards over the 6 default

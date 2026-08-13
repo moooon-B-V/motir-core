@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 
@@ -21,7 +22,7 @@ import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 // (vitest.config.ts) for the new branches.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('getWorkItem — workspace-scoped single fetch', () => {

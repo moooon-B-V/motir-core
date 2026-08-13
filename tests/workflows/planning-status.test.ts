@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { DEFAULT_STATUSES } from '@/lib/workflows/defaultWorkflow';
 import { IllegalTransitionError } from '@/lib/workItems/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE `planning` STATUS (MOTIR-2425).
@@ -44,11 +45,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Every statement of the backfill migration, run the way `migrate deploy` runs it. */
 async function runBackfill(): Promise<void> {
-  await db.$executeRawUnsafe(readFileSync(MIGRATION, 'utf8'));
+  await adminDb.$executeRawUnsafe(readFileSync(MIGRATION, 'utf8'));
 }
 
 async function readySetKeys(): Promise<string[]> {
@@ -175,11 +177,11 @@ describe('the backfill onto a project that predates the status', () => {
    * left alone.
    */
   async function stripPlanning(): Promise<void> {
-    await db.$executeRawUnsafe(
+    await adminDb.$executeRawUnsafe(
       `DELETE FROM board_column WHERE project_id = $1 AND name = 'Planning'`,
       fx.projectId,
     );
-    await db.$executeRawUnsafe(
+    await adminDb.$executeRawUnsafe(
       `DELETE FROM workflow_status WHERE project_id = $1 AND key = 'planning'`,
       fx.projectId,
     );
@@ -187,9 +189,9 @@ describe('the backfill onto a project that predates the status', () => {
 
   async function shape(): Promise<{ statuses: number; edges: number; columns: number }> {
     const [status, edges, columns] = await Promise.all([
-      db.workflowStatus.count({ where: { projectId: fx.projectId, key: 'planning' } }),
-      db.workflowTransition.count({ where: { projectId: fx.projectId } }),
-      db.boardColumn.count({ where: { projectId: fx.projectId, name: 'Planning' } }),
+      adminDb.workflowStatus.count({ where: { projectId: fx.projectId, key: 'planning' } }),
+      adminDb.workflowTransition.count({ where: { projectId: fx.projectId } }),
+      adminDb.boardColumn.count({ where: { projectId: fx.projectId, name: 'Planning' } }),
     ]);
     return { statuses: status, edges, columns };
   }
@@ -207,13 +209,13 @@ describe('the backfill onto a project that predates the status', () => {
     expect(after.edges).toBe(before.edges + 5);
     expect(after.columns).toBe(1);
 
-    const planning = await db.workflowStatus.findFirst({
+    const planning = await adminDb.workflowStatus.findFirst({
       where: { projectId: fx.projectId, key: 'planning' },
     });
     expect(planning?.category).toBe('in_progress');
     // It sorts between in_progress and in_review, as it does in the seed — the
     // position is opaque, the ORDER is the claim.
-    const ordered = await db.workflowStatus.findMany({
+    const ordered = await adminDb.workflowStatus.findMany({
       where: { projectId: fx.projectId },
       orderBy: { position: 'asc' },
     });
@@ -230,7 +232,7 @@ describe('the backfill onto a project that predates the status', () => {
     expect(await shape()).toEqual(once);
     // …and the mapping did not double either, which a column-only check would
     // miss: two mappings for one status is a board that renders a card twice.
-    const mappings = await db.boardColumnStatus.count({
+    const mappings = await adminDb.boardColumnStatus.count({
       where: { projectId: fx.projectId, status: { key: 'planning' } },
     });
     expect(mappings).toBe(1);
@@ -261,7 +263,7 @@ describe('the backfill onto a project that predates the status', () => {
     // Better than guessing where the status belongs in a workflow somebody
     // designed.
     await stripPlanning();
-    await db.$executeRawUnsafe(
+    await adminDb.$executeRawUnsafe(
       `UPDATE workflow_status SET key = 'doing' WHERE project_id = $1 AND key = 'in_progress'`,
       fx.projectId,
     );
@@ -269,7 +271,7 @@ describe('the backfill onto a project that predates the status', () => {
     await runBackfill();
 
     expect(
-      await db.workflowStatus.count({ where: { projectId: fx.projectId, key: 'planning' } }),
+      await adminDb.workflowStatus.count({ where: { projectId: fx.projectId, key: 'planning' } }),
     ).toBe(0);
   });
 });

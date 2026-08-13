@@ -5,6 +5,7 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import { workflowsRepository } from '@/lib/repositories/workflowsRepository';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Readiness against per-project terminal sets (Story 2.2 · Subtask 2.2.6,
@@ -19,6 +20,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Recategorize a status in a project (admin would do this via 2.2.5's UI). */
@@ -27,7 +29,7 @@ async function recategorize(
   key: string,
   category: 'todo' | 'in_progress' | 'done',
 ): Promise<void> {
-  await db.workflowStatus.updateMany({ where: { projectId, key }, data: { category } });
+  await adminDb.workflowStatus.updateMany({ where: { projectId, key }, data: { category } });
 }
 
 describe('isReady — terminal status is per-project category=done (finding #21)', () => {
@@ -49,7 +51,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
     expect(await workItemsService.isReady(x.id, fx.ctx)).toBe(false);
 
     // Cancel the blocker — `cancelled` is category=done in the default seed.
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
     expect(await workItemsService.isReady(x.id, fx.ctx)).toBe(true);
   });
 
@@ -67,7 +69,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
       { fromId: x.id, toId: blocker.id, kind: 'is_blocked_by' },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
     expect(await workItemsService.isReady(x.id, fx.ctx)).toBe(true);
 
     // Admin recategorizes cancelled to a non-terminal bucket → it's no longer
@@ -97,7 +99,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
       { projectId: projectB.id, kind: 'task', title: 'BB' },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: blockerInB.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blockerInB.id }, data: { status: 'cancelled' } });
     await workItemsService.linkWorkItems(
       { fromId: x.id, toId: blockerInB.id, kind: 'is_blocked_by' },
       fx.ctx,
@@ -114,7 +116,7 @@ describe('isReady — terminal status is per-project category=done (finding #21)
       { projectId: fx.projectId, kind: 'task', title: 'BA' },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: blockerInA.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blockerInA.id }, data: { status: 'cancelled' } });
     await workItemsService.linkWorkItems(
       { fromId: x2.id, toId: blockerInA.id, kind: 'is_blocked_by' },
       fx.ctx,
@@ -213,7 +215,7 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
 
     // Clear the story's blocker (cancelled = category=done) → the chain is ready
     // again, so the subtask re-enters the ready set.
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
     expect(await workItemsService.isReady(story.id, fx.ctx)).toBe(true);
     expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
   });
@@ -224,7 +226,7 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
     expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(false);
     // The story (the middle node) is also held by its unready parent.
     expect(await workItemsService.isReady(story.id, fx.ctx)).toBe(false);
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
   });
 
@@ -232,7 +234,7 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
     const { fx, subtask } = await tree();
     const blocker = await block(subtask.id, fx);
     expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(false);
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
     expect(await workItemsService.isReady(subtask.id, fx.ctx)).toBe(true);
   });
 
@@ -247,7 +249,7 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
     const blocker = await block(story.id, fx);
     expect(await inReady()).toBe(false);
 
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
     expect(await inReady()).toBe(true);
   });
 
@@ -261,7 +263,7 @@ describe('ready cascade through the ancestor chain (Subtask 7.0.13)', () => {
       { projectId: fx.projectId, kind: 'task', title: 'B' },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'in_progress' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'in_progress' } });
     // Two NOT-ready tasks created FIRST (lower keys → they sort AHEAD under
     // `(type, priority, key)`), each blocked by the in-progress task.
     for (const title of ['NR1', 'NR2']) {
@@ -374,7 +376,7 @@ describe('getIssueDetail readiness.blockedByAncestor — the cascade cause (Subt
     let detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
     expect(detail.readiness.blockedByAncestor?.id).toBe(story.id);
 
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
     detail = await workItemsService.getIssueDetail(fx.projectId, subtask.identifier, fx.ctx);
     expect(detail.readiness.ready).toBe(true);
     expect(detail.readiness.blockedByAncestor).toBeNull();

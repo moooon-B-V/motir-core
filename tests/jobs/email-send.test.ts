@@ -6,6 +6,7 @@ import { EMAIL_SEND_IDEMPOTENCY } from '@/lib/jobs/definitions/emailSend';
 import type { EmailSendData } from '@/lib/jobs/types';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureConsoleEmails, runEmailSendJob } from '../helpers/jobs';
 
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('email.send job — handler', () => {
@@ -63,7 +65,7 @@ describe('email.send job — handler', () => {
     expect(emails.lines[0]).toContain('Reset your Motir password');
     expect(emails.lines[0]).toContain(RESET_URL);
 
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.functionId).toBe('email.send');
@@ -103,7 +105,7 @@ describe('email.send job — handler', () => {
     expect(emails.lines[0]).toContain("You're invited to join Acme Co. on Motir");
     expect(emails.lines[0]).toContain(acceptUrl);
 
-    const run = (await db.jobRun.findMany())[0]!;
+    const run = (await adminDb.jobRun.findMany())[0]!;
     expect(run.status).toBe('succeeded');
     expect(run.workspaceId).toBe(workspace.id); // tenanted → real FK
     expect(run.idempotencyKey).toBe('invite-token-1');

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { apiTokensService } from '@/lib/services/apiTokensService';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { DEFAULT_TOKEN_GRANT } from '@/lib/tokens/grant';
 import { projectsService } from '@/lib/services/projectsService';
@@ -68,6 +69,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/me/api-tokens', () => {
@@ -127,7 +129,7 @@ describe('POST /api/me/api-tokens', () => {
     expect(body.dto.expiresAt).not.toBeNull();
     expect(body.dto.workspace.id).toBe(workspace.id);
 
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: body.dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: body.dto.id } });
     expect(row.tokenHash).not.toBe(body.token);
     expect(row.workspaceId).toBe(workspace.id);
     expect(await apiTokensService.listForUser(alice.id)).toHaveLength(1);
@@ -159,7 +161,8 @@ describe('POST /api/me/api-tokens', () => {
     );
     expect(res.status).toBe(403);
     expect(((await res.json()) as { code: string }).code).toBe('WORKSPACE_FORBIDDEN');
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('400 on a missing workspaceId', async () => {
@@ -246,7 +249,8 @@ describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
     );
     expect(res.status).toBe(422);
     expect((await res.json()).code).toBe('API_TOKEN_INVALID_PERMISSION');
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('an unknown permission string is 422, and nothing is minted', async () => {
@@ -256,7 +260,8 @@ describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
       postReq({ label: 'bad', workspaceId: workspace.id, permissions: ['work_item:nuke'] }),
     );
     expect(res.status).toBe(422);
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 
   it('a non-array `permissions` is a 400 SHAPE error, not a 422', async () => {
@@ -279,7 +284,8 @@ describe('POST /api/me/api-tokens — the GRANT contract (MOTIR-2575)', () => {
       postReq({ label: 'legacy', workspaceId: workspace.id, permissions: ['work_items:write'] }),
     );
     expect(res.status).toBe(422);
-    expect(await db.apiToken.count()).toBe(0);
+    const apiTokenCount = await adminDb.apiToken.count();
+    expect(apiTokenCount).toBe(0);
   });
 });
 
@@ -305,7 +311,7 @@ describe('DELETE /api/me/api-tokens/[tokenId]', () => {
     ).not.toBeNull();
 
     // Soft revoke — the row stays for the audit trail.
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.revokedAt).not.toBeNull();
   });
 
@@ -324,7 +330,7 @@ describe('DELETE /api/me/api-tokens/[tokenId]', () => {
     expect(((await res.json()) as { code: string }).code).toBe('API_TOKEN_NOT_FOUND');
 
     // Bob's token is untouched.
-    const row = await db.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.apiToken.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.revokedAt).toBeNull();
   });
 });

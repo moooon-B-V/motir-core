@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Attachment, Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 
@@ -12,15 +13,26 @@ import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '.
 // default, the paged panel read, the workspace-scoped URL lookup, link/unlink,
 // delete, and the orphan-GC read — plus the empty-input guards on every new
 // method (the coverage-gate discipline).
+//
+// ⚠️ WRITES RUN THROUGH `adminDb` (MOTIR-2751), for the same reason the sibling
+// `repositories.test.ts` suites do: the subject is the repository CONTRACT and the
+// migration-built constraints — the SetNull-not-cascade link lifecycle, the `source`
+// backfill default, the empty-input guards — none of which is a claim about
+// visibility. Under the non-bypass role a constraint test that fails with a policy
+// error proves nothing about the constraint, and the workspace-scoped lookup would
+// pass because the POLICY filtered rather than because the query's own gate did.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment", "work_item" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe(
+    'TRUNCATE TABLE "attachment", "work_item" RESTART IDENTITY CASCADE',
+  );
   await truncateAuthTables();
 }
 
 beforeEach(truncateAll);
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Insert an attachment row directly (test setup — the legitimate cross-layer reach). */
@@ -33,7 +45,7 @@ async function makeAttachment(
     source: 'editor' | 'panel';
   }> = {},
 ): Promise<Attachment> {
-  return db.attachment.create({
+  return adminDb.attachment.create({
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,
@@ -57,9 +69,9 @@ describe('attachment.workItemId schema (5.2.1)', () => {
     const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Doomed' });
     const att = await makeAttachment(fx, { workItemId: issue.id });
 
-    await db.workItem.delete({ where: { id: issue.id } });
+    await adminDb.workItem.delete({ where: { id: issue.id } });
 
-    const survivor = await db.attachment.findUnique({ where: { id: att.id } });
+    const survivor = await adminDb.attachment.findUnique({ where: { id: att.id } });
     expect(survivor).not.toBeNull();
     expect(survivor!.workItemId).toBeNull();
   });
@@ -127,7 +139,7 @@ describe('attachmentRepository.linkToWorkItem / unlinkFromWorkItem', () => {
     const a = await makeAttachment(fx);
     const b = await makeAttachment(fx, { blobPathname: 'https://blob.example/a/b.png' });
 
-    const linked = await db.$transaction((tx) =>
+    const linked = await adminDb.$transaction((tx) =>
       attachmentRepository.linkToWorkItem([a.id, b.id], issue.id, 'panel', tx),
     );
     expect(linked).toBe(2);
@@ -136,12 +148,12 @@ describe('attachmentRepository.linkToWorkItem / unlinkFromWorkItem', () => {
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.source === 'panel')).toBe(true);
 
-    const unlinked = await db.$transaction((tx) =>
+    const unlinked = await adminDb.$transaction((tx) =>
       attachmentRepository.unlinkFromWorkItem([a.id], tx),
     );
     expect(unlinked).toBe(1);
 
-    const aRow = await db.attachment.findUnique({ where: { id: a.id } });
+    const aRow = await adminDb.attachment.findUnique({ where: { id: a.id } });
     expect(aRow!.workItemId).toBeNull();
     expect(aRow!.source).toBe('panel'); // source records how it ENTERED, not link state
     expect(await attachmentRepository.countByWorkItem(issue.id)).toBe(1);
@@ -150,7 +162,7 @@ describe('attachmentRepository.linkToWorkItem / unlinkFromWorkItem', () => {
   it('empty-input guards: [] is a no-op returning 0 for both link and unlink', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Idle' });
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       expect(await attachmentRepository.linkToWorkItem([], issue.id, 'editor', tx)).toBe(0);
       expect(await attachmentRepository.unlinkFromWorkItem([], tx)).toBe(0);
     });
@@ -161,8 +173,9 @@ describe('attachmentRepository.delete', () => {
   it('hard-deletes the row (no tombstone)', async () => {
     const fx = await makeWorkItemFixture();
     const att = await makeAttachment(fx);
-    await db.$transaction((tx) => attachmentRepository.delete(att.id, tx));
-    expect(await db.attachment.findUnique({ where: { id: att.id } })).toBeNull();
+    await adminDb.$transaction((tx) => attachmentRepository.delete(att.id, tx));
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id: att.id } });
+    expect(attachmentRow).toBeNull();
   });
 });
 
@@ -204,7 +217,7 @@ async function asAppRole<T>(
   guc: { workspaceId?: string; systemAdmin?: boolean },
   fn: (tx: Prisma.TransactionClient) => Promise<T>,
 ): Promise<T> {
-  return db.$transaction(async (tx) => {
+  return adminDb.$transaction(async (tx) => {
     if (guc.workspaceId !== undefined) {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${guc.workspaceId}, true)`;
     }
@@ -249,14 +262,15 @@ describe('attachment RLS — the 5.2.1 policy swap', () => {
 
     // The GC write: the hatch's WITH CHECK / USING admits the row delete too.
     await asAppRole({ systemAdmin: true }, (tx) => attachmentRepository.delete(orphanA.id, tx));
-    expect(await db.attachment.findUnique({ where: { id: orphanA.id } })).toBeNull();
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id: orphanA.id } });
+    expect(attachmentRow).toBeNull();
   });
 });
 
 describe('2.3.7 upload path is untouched', () => {
   it('attachmentRepository.create still inserts an unlinked row with the unchanged input shape', async () => {
     const fx = await makeWorkItemFixture();
-    const row = await db.$transaction((tx) =>
+    const row = await adminDb.$transaction((tx) =>
       attachmentRepository.create(
         {
           workspaceId: fx.workspaceId,

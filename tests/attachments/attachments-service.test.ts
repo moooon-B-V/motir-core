@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, waitForWindowBoundary } from '../helpers/rateLimitWindow';
 
@@ -64,7 +65,7 @@ const UPLOAD_BUDGET_ENVS = ['MOTIR_UPLOAD_RATE_LIMIT', 'MOTIR_UPLOAD_RATE_LIMIT_
 const ELEVEN_UPLOAD_WINDOW_MS = 6_000;
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   await truncateRateLimitCounters();
   for (const key of UPLOAD_BUDGET_ENVS) delete process.env[key];
@@ -76,6 +77,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('attachmentsService.uploadAttachment', () => {
@@ -88,7 +90,7 @@ describe('attachmentsService.uploadAttachment', () => {
     // The private content path (not a public blob URL), keyed by the row id.
     expect(res.url).toBe(`/api/attachments/${res.id}/content`);
 
-    const row = await db.attachment.findFirst({ where: { workspaceId: fx.workspaceId } });
+    const row = await adminDb.attachment.findFirst({ where: { workspaceId: fx.workspaceId } });
     expect(row).not.toBeNull();
     expect(row!.uploaderUserId).toBe(fx.userId); // from ctx, never the client
     expect(row!.mimeType).toBe('image/png');
@@ -112,7 +114,8 @@ describe('attachmentsService.uploadAttachment', () => {
       code: 'FILE_TOO_LARGE',
       status: 413,
     });
-    expect(await db.attachment.count()).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
   });
 
   it('disallowed MIME → UnsupportedFileTypeError (415)', async () => {
@@ -120,7 +123,8 @@ describe('attachmentsService.uploadAttachment', () => {
     await expect(
       attachmentsService.uploadAttachment(fileOf('x.exe', 'application/x-msdownload'), fx),
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_FILE_TYPE', status: 415 });
-    expect(await db.attachment.count()).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
   });
 
   it('rate limit → the 11th upload in the window throws RateLimitError (429)', async () => {
@@ -166,7 +170,7 @@ describe('attachmentsService.uploadAttachment', () => {
       attachmentsService.uploadAttachment(fileOf('c.png', 'image/png'), fx),
     ).rejects.toMatchObject({ code: 'RATE_LIMITED', status: 429 });
 
-    const counters = await db.$queryRawUnsafe<Array<{ count: number }>>(
+    const counters = await adminDb.$queryRawUnsafe<Array<{ count: number }>>(
       'SELECT COUNT(*)::int AS count FROM "rate_limit_counter"',
     );
     expect(counters[0]!.count).toBeGreaterThan(0);
@@ -203,6 +207,10 @@ describe('attachmentsService.uploadAttachment', () => {
     const fx = await makeFixture('hashed@example.com');
     await attachmentsService.uploadAttachment(fileOf('h.png', 'image/png'), fx);
 
+    // Left on `@/lib/db` deliberately (MOTIR-2751 audit): `rate_limit_counter` carries
+    // NO RLS — it is in `tenant-root-creation-rls`'s DELIBERATELY_UNGUARDED map, because
+    // the surfaces it protects are rate-limited before any workspace is known. There is
+    // no tenant to bind and no policy to be blind to.
     const rows = await db.$queryRawUnsafe<Array<{ key: string }>>(
       'SELECT key FROM "rate_limit_counter"',
     );
@@ -217,7 +225,7 @@ describe('attachmentsService.uploadAttachment', () => {
     expect(res).toBeTruthy();
     // The row's workspaceId comes from ctx (the route resolves it from the
     // session's active project), never from the upload payload.
-    const row = await db.attachment.findFirst({ where: { workspaceId: fx.workspaceId } });
+    const row = await adminDb.attachment.findFirst({ where: { workspaceId: fx.workspaceId } });
     expect(row!.workspaceId).toBe(fx.workspaceId);
   });
 });

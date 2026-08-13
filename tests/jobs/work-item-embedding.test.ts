@@ -102,7 +102,8 @@ describe('workItemEmbeddingRequested', () => {
 
     expect(second.result).toEqual({ embedded: false, reason: 'unchanged' });
     expect(embedTexts).toHaveBeenCalledTimes(1);
-    expect(await adminDb.workItemEmbedding.count()).toBe(1);
+    const workItemEmbeddingCount = await adminDb.workItemEmbedding.count();
+    expect(workItemEmbeddingCount).toBe(1);
   });
 
   it('lets a provider outage FAIL, so the retry budget can absorb it', async () => {
@@ -123,6 +124,7 @@ describe('workItemEmbeddingRequested', () => {
     // Swallowing here would turn a transient outage into a permanently
     // un-embedded item, because nothing else ever revisits it.
     expect(error).toBeTruthy();
-    expect(await adminDb.workItemEmbedding.count()).toBe(0);
+    const workItemEmbeddingCount = await adminDb.workItemEmbedding.count();
+    expect(workItemEmbeddingCount).toBe(0);
   });
 });

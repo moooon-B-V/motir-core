@@ -7,8 +7,14 @@ import { db } from '@/lib/db';
 // the workspace is the parent.
 
 export const workspaceRepository = {
-  async findById(id: string): Promise<Workspace | null> {
-    return db.workspace.findUnique({ where: { id } });
+  /**
+   * BINDABLE (MOTIR-2789). `workspace` is a tenant-root table with no public arm, so a
+   * caller that knows the workspace must be able to bind it — the public project
+   * overview reads the project's own workspace and got null otherwise.
+   */
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<Workspace | null> {
+    const client = tx ?? db;
+    return client.workspace.findUnique({ where: { id } });
   },
 
   async findBySlug(slug: string): Promise<Workspace | null> {

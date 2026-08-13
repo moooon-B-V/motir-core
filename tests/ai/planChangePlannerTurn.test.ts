@@ -6,6 +6,7 @@ import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepos
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The PLANNER'S TURN in the plan-change thread (MOTIR-2226) — the consuming half
@@ -91,6 +92,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('recordPlannerTurn — the assistant turn persists', () => {

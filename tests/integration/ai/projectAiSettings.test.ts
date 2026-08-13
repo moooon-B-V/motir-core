@@ -20,6 +20,7 @@ import {
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { createTestWorkspace } from '../../fixtures/workspaceFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story 7.13 · Subtask MOTIR-915 — the `Project` AI-settings columns and the
@@ -43,6 +44,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The settings fixture: an owner (project admin) + a project. */
@@ -76,7 +78,7 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
 
     // Read the raw row: proves the DEFAULTs live in the migration, so a project
     // created by any path (seed, import, raw insert) backfills the same way.
-    const row = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
 
     expect(row.aiAutoPlanEnabled).toBe(false);
     expect(row.aiAutoPlanThreshold).toBe(5);
@@ -88,7 +90,7 @@ describe('Project AI-settings columns — defaults (MOTIR-915)', () => {
   it('the mapper projects the row (and the repository projection) to the same DTO', async () => {
     const fx = await makeFixture();
     const projection = await projectRepository.findAiSettings(fx.projectId);
-    const row = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const row = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
 
     expect(projection).not.toBeNull();
     expect(toProjectAiSettingsDto(projection!)).toEqual(toProjectAiSettingsDto(row));
@@ -320,7 +322,7 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
   it('a plain workspace member can READ the settings but cannot CHANGE them', async () => {
     const fx = await makeFixture();
     const member = await createTestUser({ email: 'member@example.com' });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
 
@@ -353,7 +355,7 @@ describe('projectAiSettingsService — tenancy + admin gates', () => {
     // is MOTIR-2291's, governed by nothing today, and must not appear here.
     const fx = await makeFixture();
     const member = await createTestUser({ email: 'ai-key-member@example.com' });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
 

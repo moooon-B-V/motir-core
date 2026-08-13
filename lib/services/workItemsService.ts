@@ -3120,7 +3120,9 @@ export const workItemsService = {
    */
   async unlinkWorkItems(linkId: string, ctx: ServiceContext): Promise<void> {
     await withWorkspaceContext(ctx, async (tx) => {
-      const link = await workItemLinkRepository.findById(linkId);
+      // The `tx` is load-bearing (MOTIR-2774): without it this read leaves the bound
+      // transaction and the workspace policy hides the very link being removed.
+      const link = await workItemLinkRepository.findById(linkId, tx);
       if (!link) throw new WorkItemLinkNotFoundError(linkId);
 
       // Project access gate (6.4.3): removing a link is an edit of the FROM item.

@@ -19,6 +19,7 @@ import { planItemRepository } from '@/lib/repositories/planItemRepository';
 import { planRepository } from '@/lib/repositories/planRepository';
 import { POST as proposalsPOST } from '@/app/api/internal/ai/plan-proposals/route';
 import { makeWorkItemFixture as makeFixture, createTestWorkItem } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { WorkItemFixture } from '../../fixtures';
@@ -40,7 +41,7 @@ import type { WorkItemFixture } from '../../fixtures';
 const SERVICE_SECRET = 'core-callback-secret-test';
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -54,6 +55,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function tokenFor(fx: WorkItemFixture): string {
@@ -172,12 +174,12 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
       const finalRes = await callback(fx, { jobId, final: true });
       expect(finalRes.status).toBe(200);
       expect((await finalRes.json()).planned).toBe(true);
-      const closed = await db.plan.findFirstOrThrow({ where: { id: planId } });
+      const closed = await adminDb.plan.findFirstOrThrow({ where: { id: planId } });
       expect(closed.status).toBe('planned');
 
       // Proposals only — nothing materialized. The seeded story is the ONLY
       // work item; the four proposed subtasks exist as PlanItems alone.
-      const workItems = await db.workItem.findMany({ where: { projectId: fx.projectId } });
+      const workItems = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
       expect(workItems.map((w) => w.identifier)).toEqual([storyKey]);
     });
 
@@ -188,7 +190,8 @@ describe('plan-edit submit → proposal callback (MOTIR-1743)', () => {
 
       await expect(c.submit(fx, storyKey)).rejects.toThrow('motir-ai unreachable');
 
-      expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(0);
+      const planCount = await adminDb.plan.count({ where: { projectId: fx.projectId } });
+      expect(planCount).toBe(0);
     });
   }
 

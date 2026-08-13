@@ -26,10 +26,24 @@ import {
 
 export const workItemLinkRepository = {
   /**
-   * Look up a single link by id. Read-only, uses the `db` singleton.
+   * Look up a single link by id.
+   *
+   * Takes an optional `tx` (MOTIR-2774) because `work_item_link` is
+   * workspace-scoped: read off the `db` singleton with no workspace bound, the
+   * policy returns NOTHING AND RAISES NOTHING. `unlinkWorkItems` had opened a
+   * `withWorkspaceContext` transaction and then read here without it, so the link it
+   * had just been handed came back null and the call threw
+   * `WorkItemLinkNotFoundError` — unlinking was impossible under the non-bypass role,
+   * and the error blamed the link's existence.
+   *
+   * Optional rather than required, unlike `findOrganizationsByUser`, because the
+   * other caller (`getLink`) is deliberately unbound: it reads the link and compares
+   * `workspaceId` in application code as the cross-tenant guard. That path wants the
+   * singleton and is covered by its own tests.
    */
-  async findById(id: string): Promise<WorkItemLink | null> {
-    return db.workItemLink.findUnique({ where: { id } });
+  async findById(id: string, tx?: Prisma.TransactionClient): Promise<WorkItemLink | null> {
+    const client = tx ?? db;
+    return client.workItemLink.findUnique({ where: { id } });
   },
 
   /**

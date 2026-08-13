@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import { makeWorkItemFixture, type WorkItemFixture } from './fixtures/workItemFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // POST /api/backlog stamps planning provenance `manual` (Story MOTIR-1685 ·
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture) {
@@ -77,7 +79,7 @@ describe('POST /api/backlog — planning provenance', () => {
     expect(dto.implementationSource).toBeNull();
 
     // Persisted, not just echoed.
-    const row = await db.workItem.findUnique({ where: { id: dto.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: dto.id } });
     expect(row!.planningSource).toBe('manual');
   });
 
@@ -94,7 +96,7 @@ describe('POST /api/backlog — planning provenance', () => {
     expect(res.status).toBe(201);
     const dto = (await res.json()) as { id: string; planningSource: string | null };
     expect(dto.planningSource).toBe('manual');
-    const row = await db.workItem.findUnique({ where: { id: dto.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: dto.id } });
     expect(row!.planningHarness).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // designEvidenceService (Story MOTIR-2664 · Subtask MOTIR-2666) against a REAL
@@ -79,7 +80,7 @@ function seedAsset(
 
 beforeEach(async () => {
   store.clear();
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "design_asset", "design_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -87,6 +88,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('designEvidenceService.recordFromPathnames', () => {
@@ -140,14 +142,14 @@ describe('designEvidenceService.recordFromPathnames', () => {
 
     // Attachments are source design_asset and LINKED to the item, so the
     // orphan-GC leaves the current set alone.
-    const atts = await db.attachment.findMany({ where: { workItemId: card.id } });
+    const atts = await adminDb.attachment.findMany({ where: { workItemId: card.id } });
     expect(atts).toHaveLength(3);
     expect(new Set(atts.map((a) => a.source))).toEqual(new Set(['design_asset']));
 
     // Exactly one current evidence row.
-    expect(await db.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } })).toBe(
-      1,
-    );
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(1);
   });
 
   it('a design result is a SET — a PR with two mocks and no PNG records both, no placeholder', async () => {
@@ -212,7 +214,10 @@ describe('designEvidenceService.recordFromPathnames', () => {
     const second = await publish();
 
     expect(second.id).not.toBe(first.id);
-    expect(await db.designEvidence.count({ where: { workItemId: card.id } })).toBe(2);
+    const designEvidenceCount = await adminDb.designEvidence.count({
+      where: { workItemId: card.id },
+    });
+    expect(designEvidenceCount).toBe(2);
   });
 
   it('a second publish SUPERSEDES the prior — one current, old assets unlinked (GC-eligible), history kept', async () => {
@@ -242,18 +247,21 @@ describe('designEvidenceService.recordFromPathnames', () => {
 
     expect(second.id).not.toBe(first.id);
 
-    const currents = await db.designEvidence.findMany({
+    const currents = await adminDb.designEvidence.findMany({
       where: { workItemId: card.id, isCurrent: true },
     });
     expect(currents).toHaveLength(1);
     expect(currents[0]!.id).toBe(second.id);
 
     // History retained.
-    expect(await db.designEvidence.count({ where: { workItemId: card.id } })).toBe(2);
+    const designEvidenceCount = await adminDb.designEvidence.count({
+      where: { workItemId: card.id },
+    });
+    expect(designEvidenceCount).toBe(2);
 
     // The superseded asset's attachment is unlinked → GC-eligible; the current
     // one is still linked.
-    const linked = await db.attachment.findMany({ where: { workItemId: card.id } });
+    const linked = await adminDb.attachment.findMany({ where: { workItemId: card.id } });
     expect(linked).toHaveLength(1);
     expect(linked[0]!.blobPathname).toContain('v2.mock.html');
   });
@@ -274,14 +282,20 @@ describe('designEvidenceService.recordFromPathnames', () => {
     const again = await designEvidenceService.recordFromPathnames(input, fx.ctx);
 
     expect(again.id).toBe(first.id);
-    expect(await db.designEvidence.count({ where: { workItemId: card.id } })).toBe(1);
-    expect(await db.designAsset.count({ where: { designEvidenceId: first.id } })).toBe(1);
+    const designEvidenceCount = await adminDb.designEvidence.count({
+      where: { workItemId: card.id },
+    });
+    expect(designEvidenceCount).toBe(1);
+    const designAssetCount = await adminDb.designAsset.count({
+      where: { designEvidenceId: first.id },
+    });
+    expect(designAssetCount).toBe(1);
   });
 
   it('never advances the item status — publishing is evidence, not a workflow decision', async () => {
     const fx = await makeWorkItemFixture();
     const card = await makeSubtask(fx);
-    const before = await db.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const before = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
 
     await designEvidenceService.recordFromPathnames(
       {
@@ -293,7 +307,7 @@ describe('designEvidenceService.recordFromPathnames', () => {
       fx.ctx,
     );
 
-    const after = await db.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const after = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(after.status).toBe(before.status);
     expect(after.status).toBeTruthy();
   });
@@ -337,8 +351,10 @@ describe('designEvidenceService — the gates', () => {
       ),
     ).rejects.toBeInstanceOf(DesignEvidencePathnameError);
 
-    expect(await db.designEvidence.count()).toBe(0);
-    expect(await db.attachment.count()).toBe(0);
+    const designEvidenceCount = await adminDb.designEvidence.count();
+    expect(designEvidenceCount).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
   });
 
   it('rejects a pathname whose blob does not exist — the client upload never completed', async () => {
@@ -371,7 +387,8 @@ describe('designEvidenceService — the gates', () => {
       designEvidenceService.recordFromPathnames({ workItemId: card.id, assets: [asset] }, fx.ctx),
     ).rejects.toBeInstanceOf(UnsupportedFileTypeError);
 
-    expect(await db.designEvidence.count()).toBe(0);
+    const designEvidenceCount = await adminDb.designEvidence.count();
+    expect(designEvidenceCount).toBe(0);
   });
 
   it('reads a missing target as NOT FOUND, never as forbidden', async () => {
@@ -405,7 +422,8 @@ describe('designEvidenceService — the gates', () => {
       designEvidenceService.recordFromPathnames({ workItemId: card.id, assets: [asset] }, fx.ctx),
     ).rejects.toBeInstanceOf(FileTooLargeError);
 
-    expect(await db.designEvidence.count()).toBe(0);
+    const designEvidenceCount = await adminDb.designEvidence.count();
+    expect(designEvidenceCount).toBe(0);
   });
 
   it('rejects an unknown asset KIND before touching the store', async () => {
@@ -429,7 +447,8 @@ describe('designEvidenceService — the gates', () => {
       ),
     ).rejects.toBeInstanceOf(UnsupportedFileTypeError);
 
-    expect(await db.designEvidence.count()).toBe(0);
+    const designEvidenceCount = await adminDb.designEvidence.count();
+    expect(designEvidenceCount).toBe(0);
   });
 
   it('rejects an EMPTY publish — it would supersede a real result with nothing', async () => {
@@ -584,7 +603,8 @@ describe('the attachments panel excludes design assets', () => {
     );
 
     // The rows exist and are linked...
-    expect(await db.attachment.count({ where: { workItemId: card.id } })).toBe(2);
+    const attachmentCount = await adminDb.attachment.count({ where: { workItemId: card.id } });
+    expect(attachmentCount).toBe(2);
 
     // ...but the panel does not show them: they are owned by the DesignEvidence
     // lifecycle and rendered in the Design result panel.
@@ -652,7 +672,7 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
     // Bypass the service entirely: the constraint, not the code, is what makes
     // two current rows unrepresentable.
     await expect(
-      db.designEvidence.create({
+      adminDb.designEvidence.create({
         data: {
           workspaceId: fx.ctx.workspaceId,
           workItemId: card.id,
@@ -661,9 +681,9 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
       }),
     ).rejects.toThrow();
 
-    expect(await db.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } })).toBe(
-      1,
-    );
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(1);
   });
 
   it('survives GENUINE concurrency — two publishes race, exactly one current row survives', async () => {
@@ -697,9 +717,9 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
       }
     }
 
-    expect(await db.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } })).toBe(
-      1,
-    );
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(1);
   });
 
   it('a superseded row is unconstrained — many history rows coexist', async () => {
@@ -723,10 +743,13 @@ describe('the one-current invariant is enforced by the DATABASE', () => {
       );
     }
 
-    expect(await db.designEvidence.count({ where: { workItemId: card.id } })).toBe(3);
-    expect(await db.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } })).toBe(
-      1,
-    );
+    const designEvidenceCount = await adminDb.designEvidence.count({
+      where: { workItemId: card.id },
+    });
+    expect(designEvidenceCount).toBe(3);
+    expect(
+      await adminDb.designEvidence.count({ where: { workItemId: card.id, isCurrent: true } }),
+    ).toBe(1);
   });
 });
 
@@ -752,7 +775,7 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
 
     // The orphan-GC removes the Attachment; the SetNull FK leaves the asset row
     // standing, so the record of WHAT was published outlives its bytes.
-    await db.attachment.deleteMany({ where: { workItemId: card.id } });
+    await adminDb.attachment.deleteMany({ where: { workItemId: card.id } });
 
     const dto = await designEvidenceService.getCurrentForWorkItem(card.id, fx.ctx);
     expect(dto!.assets).toHaveLength(1);

@@ -9,6 +9,7 @@ import type { WorkItemDto, WorkItemKindDto } from '@/lib/dto/workItems';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { runMoveToParent } from '@/lib/mcp/tools/moveToParent';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP re-parent tool (bug MOTIR-1017) over real Postgres. `move_to_parent` is a
@@ -32,6 +33,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

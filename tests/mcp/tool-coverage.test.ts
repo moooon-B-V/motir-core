@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Branch-coverage companion to story-roundtrip.test.ts (Subtask 7.7.12). The
@@ -52,6 +53,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('MCP tool branch coverage', () => {
@@ -350,7 +352,7 @@ describe('MCP tool branch coverage', () => {
         { projectId: fx.projectId, kind: 'task', title },
         fx.ctx,
       );
-      await db.workItem.update({
+      await adminDb.workItem.update({
         where: { id: dto.id },
         data: { status, sessionBranch: branch },
       });

@@ -13,6 +13,7 @@ import {
   DAILY_HEALTH_CHECK_PAYLOAD,
   ScheduledJobsOverdueError,
 } from '@/lib/jobs/definitions/dailyHealthCheck';
+import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
 
 // THE DETECTION SEAM for a stale Inngest app registry (MOTIR-1970).
@@ -29,7 +30,7 @@ import { truncateJobRuns } from '../helpers/db';
 
 /** Insert a completed ledger row for a scheduled job at a given instant. */
 async function recordScheduledRun(functionId: string, startedAt: Date): Promise<void> {
-  await db.jobRun.create({
+  await adminDb.jobRun.create({
     data: {
       workspaceId: null,
       functionId,
@@ -52,6 +53,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the schedule table', () => {
@@ -175,7 +177,7 @@ describe('jobScheduleHealthService.check', () => {
     // A DLQ replay writes the function's own id as the event name, not the
     // synthetic `scheduled.` one. It proves someone poked the job by hand; it
     // does not prove the cron is firing.
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId: null,
         functionId: 'system.ci-actions-gate-sweep',

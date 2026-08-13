@@ -18,6 +18,7 @@ import { fakeOrchestrator } from '@/lib/orchestrator/adapters/fake';
 import { githubProvider } from '@/lib/git/providers/github';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import {
   containerExitsWith,
@@ -87,7 +88,7 @@ beforeEach(async () => {
   // survive the deletion of whatever it pointed at — the model comment). A file
   // that left them behind would slowly fill the index lane and start deferring
   // its own later cases.
-  await db.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   _resetInstallationTokenCache();
   fakeOrchestrator.reset();
   resetTarballBodyTrap();
@@ -101,6 +102,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -383,7 +385,7 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
   // under test is the shipped discriminator, not a mock.
   async function seedGitlabWorkspace(slug: string, projectCount: number) {
     const seeded = await seedWorkspace(slug, projectCount);
-    await db.githubInstallation.update({
+    await adminDb.githubInstallation.update({
       where: { installationId: seeded.installationId },
       data: { provider: 'gitlab' },
     });
@@ -417,7 +419,8 @@ describe('a GitLab repo is REFUSED before dispatch, not dead-lettered five times
     expect(ids).toEqual(['resolve-target']);
     expect(boot).not.toHaveBeenCalled();
     expect(fakeOrchestrator.provisioned).toEqual([]);
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(0);
   });
 
   it('index: records the reason on a SUCCEEDED ledger row that claims no repoRef', async () => {
@@ -523,7 +526,7 @@ describe('step ids identify the SAME unit of work on every replay', () => {
     });
     const drifted = await projectsService.createProject({
       workspaceId,
-      actorUserId: (await db.user.findFirstOrThrow()).id,
+      actorUserId: (await adminDb.user.findFirstOrThrow()).id,
       name: 'Added between attempts',
       identifier: 'DRIFT',
     });
@@ -778,7 +781,8 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
     expect(admission.slotRef).toBe(`${projectIds[0]}:${REPO_REF}`);
     // And the slot really was taken and then given back — the container is gone,
     // so the capacity is free.
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(0);
   }, 30_000);
 
   // ⚠️ THE LEDGER CONTRACT UNDER A REFUSAL (§6). A run that could not get
@@ -826,7 +830,7 @@ describe('the admission cap queues in STEPS, and nothing is dropped', () => {
 describe('a refresh run whose (repo × project) is already being indexed', () => {
   /** Take the slot as a DIFFERENT run, through the real gate — a first run mid-index. */
   async function heldByAnotherRun(workspaceId: string, projectId: string, dispatchId: string) {
-    const workspace = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+    const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
     return codeGraphIndexAdmissionService.admit({
       projectId,
       repoRef: REPO_REF,
@@ -862,7 +866,7 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
     expect((error as Error).message).toContain('repo_index_in_flight');
     // …and it never took a second slot, so the first run's capacity is intact and
     // still names its real owner.
-    const slots = await db.fleetInFlightSlot.findMany();
+    const slots = await adminDb.fleetInFlightSlot.findMany();
     expect(slots).toHaveLength(1);
     expect(slots[0]).toMatchObject({ ownerRef: 'evt-first', ref: `${projectId}:${REPO_REF}` });
     // The ledger recorded a FAILED run: a refresh that indexed nothing must never
@@ -905,7 +909,8 @@ describe('a refresh run whose (repo × project) is already being indexed', () =>
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
     // And it gave that capacity back — which an ownership-checked release only
     // does for the run that took it.
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(0);
   }, 30_000);
 });
 

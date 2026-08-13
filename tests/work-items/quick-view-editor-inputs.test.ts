@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { componentsService } from '@/lib/services/componentsService';
 import { backlogService } from '@/lib/services/backlogService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-2562 — the peek payload's EDITOR INPUTS, read BACK through the real
@@ -53,6 +54,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('getQuickView() — the editor inputs the editable rail needs (MOTIR-2562)', () => {

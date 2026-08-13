@@ -8,6 +8,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { encryptToken } from '@/lib/gitlab/tokenCrypto';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { GitlabConnectionNotFoundError, GitlabProjectNotFoundError } from '@/lib/gitlab/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.23 · MOTIR-1478 — the GitLab settings surface's PROJECT SELECTION service
@@ -31,6 +32,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeWorkspace(email: string) {

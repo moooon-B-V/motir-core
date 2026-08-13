@@ -11,6 +11,7 @@ import {
 import { CrossWorkspaceLinkError, WorkItemLinkNotFoundError } from '@/lib/workItems/linkErrors';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { CreateWorkItemInput } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   createTestProject,
@@ -30,7 +31,7 @@ import { inngest } from '@/lib/jobs/client';
 // Postgres, no mocks.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -50,6 +51,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function createInput(
@@ -306,7 +308,7 @@ describe('listWorkItems — filters', () => {
     await workItemsService.createWorkItem(createInput(fx, { title: 'B' }), fx.ctx);
     // 2.3.6/finding #46: status isn't an updateWorkItem patch field anymore —
     // set both via a direct write for this list-filter setup.
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: a.id },
       data: { status: 'done', assigneeId: fx.ownerId },
     });

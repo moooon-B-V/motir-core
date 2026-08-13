@@ -9,6 +9,7 @@ import {
   createTestProject,
   createTestLink,
 } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Subtask 7.5.1 — the plan-tree GRAPH-TRAVERSAL read family (get_item /
@@ -18,7 +19,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // and 404-not-403 across tenants (finding #26).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('workItemsService.getBoundedSubtree', () => {

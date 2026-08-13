@@ -29,6 +29,8 @@ import {
 } from '@/lib/customFields/valueErrors';
 import { MAX_TEXT_VALUE_LENGTH } from '@/lib/customFields/valueLimits';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Integration tests for customFieldValuesService.setValue + the getIssueDetail
 // custom-fields read (Story 5.3 · Subtask 5.3.3) against a REAL Postgres
@@ -40,11 +42,11 @@ import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../..
 // the bounded detail read (definitions with null values still listed).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "custom_field_value", "custom_field_option", "custom_field_definition", ' +
       '"work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "workspace_membership", "workspace", "session", "account", "verification", "user" RESTART IDENTITY CASCADE',
   );
 }
@@ -55,6 +57,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Insert a definition the way 5.3.2's create flow will — through the repo. */
@@ -65,7 +68,8 @@ async function makeField(
     position?: string;
   },
 ): Promise<CustomFieldDefinition> {
-  return db.$transaction((tx) =>
+  // Bound (MOTIR-2792): `custom_field_definition` is workspace-scoped.
+  return withWorkspaceContext(fx.ctx, (tx) =>
     customFieldDefinitionRepository.create(
       {
         workspaceId: fx.workspaceId,
@@ -82,11 +86,14 @@ async function makeField(
 }
 
 async function makeOption(
+  fx: WorkItemFixture,
   field: CustomFieldDefinition,
   label: string,
   opts: { archived?: boolean; position?: string } = {},
 ): Promise<CustomFieldOption> {
-  return db.$transaction((tx) =>
+  // Takes the fixture purely to bind the tenant (MOTIR-2792) — `custom_field_option`
+  // is reached through its workspace-scoped field.
+  return withWorkspaceContext(fx.ctx, (tx) =>
     customFieldOptionRepository.create(
       {
         fieldId: field.id,
@@ -303,8 +310,8 @@ describe('setValue — select', () => {
   it('sets an active option; the diff records LABELS (from/to), not ids', async () => {
     const fx = await makeWorkItemFixture();
     const field = await makeField(fx, { fieldType: 'select', key: 'severity' });
-    const high = await makeOption(field, 'High');
-    const low = await makeOption(field, 'Low', { position: keyForAppend(keyForAppend(null)) });
+    const high = await makeOption(fx, field, 'High');
+    const low = await makeOption(fx, field, 'Low', { position: keyForAppend(keyForAppend(null)) });
     const itemId = await makeIssue(fx);
 
     const dto = await customFieldValuesService.setValue(itemId, field.id, high.id, fx.ctx);
@@ -319,9 +326,9 @@ describe('setValue — select', () => {
   it('rejects an archived option on a NEW write, a cross-field option, and an unknown id (422)', async () => {
     const fx = await makeWorkItemFixture();
     const field = await makeField(fx, { fieldType: 'select', key: 'severity' });
-    const archived = await makeOption(field, 'Legacy', { archived: true });
+    const archived = await makeOption(fx, field, 'Legacy', { archived: true });
     const other = await makeField(fx, { fieldType: 'select', key: 'other' });
-    const otherOpt = await makeOption(other, 'Elsewhere');
+    const otherOpt = await makeOption(fx, other, 'Elsewhere');
     const itemId = await makeIssue(fx);
 
     await expect(
@@ -338,11 +345,11 @@ describe('setValue — select', () => {
   it('an EXISTING value holding a since-archived option stays valid: re-set is a no-op, the DTO carries the archived mark', async () => {
     const fx = await makeWorkItemFixture();
     const field = await makeField(fx, { fieldType: 'select' });
-    const opt = await makeOption(field, 'Soon-gone');
+    const opt = await makeOption(fx, field, 'Soon-gone');
     const itemId = await makeIssue(fx);
     await customFieldValuesService.setValue(itemId, field.id, opt.id, fx.ctx);
 
-    await db.$transaction((tx) =>
+    await withWorkspaceContext(fx.ctx, (tx) =>
       customFieldOptionRepository.update(opt.id, { archived: true }, tx),
     );
 
@@ -391,7 +398,7 @@ describe('setValue — permission matrix', () => {
 
     const viewer = await createTestUser({ email: 'viewer@ex.com', name: 'Viewer' });
     await workspacesService.addMember({ userId: viewer.id, workspaceId: fx.workspaceId });
-    await db.$transaction((tx) =>
+    await withWorkspaceContext(fx.ctx, (tx) =>
       projectMembershipRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -435,7 +442,7 @@ describe('setValue — permission matrix', () => {
       actorUserId: fx.ownerId,
       name: 'Second',
     });
-    const crossProjectField = await db.$transaction((tx) =>
+    const crossProjectField = await withWorkspaceContext(fx.ctx, (tx) =>
       customFieldDefinitionRepository.create(
         {
           workspaceId: fx.workspaceId,
@@ -462,7 +469,7 @@ describe('setValue — permission matrix', () => {
       customFieldValuesService.setValue(itemId, field.id, 'first', fx.ctx),
       customFieldValuesService.setValue(itemId, field.id, 'second', fx.ctx),
     ]);
-    const count = await db.customFieldValue.count({ where: { workItemId: itemId } });
+    const count = await adminDb.customFieldValue.count({ where: { workItemId: itemId } });
     expect(count).toBe(1);
   });
 });
@@ -481,7 +488,7 @@ describe('getIssueDetail — customFields', () => {
       label: 'Severity',
       position: p1,
     });
-    const high = await makeOption(severity, 'High');
+    const high = await makeOption(fx, severity, 'High');
     await makeField(fx, { fieldType: 'number', key: 'effort', label: 'Effort', position: p2 });
     const stakeholder = await makeField(fx, {
       fieldType: 'user',
@@ -536,7 +543,9 @@ describe('lifecycle — field delete destroys values', () => {
     const itemId = await makeIssue(fx);
     await customFieldValuesService.setValue(itemId, field.id, 'gone soon', fx.ctx);
 
-    await db.$transaction((tx) => customFieldDefinitionRepository.delete(field.id, tx));
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      customFieldDefinitionRepository.delete(field.id, tx),
+    );
     expect(await customFieldValueRepository.findByWorkItemAndField(itemId, field.id)).toBeNull();
   });
 });
@@ -579,7 +588,7 @@ describe('the 5.3.8 story matrix — clear + re-set for date / select / user', (
   it('select: clear deletes the row and diffs the LABEL to null; clearing again is a no-op', async () => {
     const fx = await makeWorkItemFixture();
     const field = await makeField(fx, { fieldType: 'select', key: 'severity' });
-    const high = await makeOption(field, 'High');
+    const high = await makeOption(fx, field, 'High');
     const itemId = await makeIssue(fx);
     await customFieldValuesService.setValue(itemId, field.id, high.id, fx.ctx);
 

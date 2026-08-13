@@ -11,6 +11,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { ENFORCED_PERMISSIONS, PERMISSIONS, type PermissionKey } from '@/lib/permissions/catalog';
 import { CUSTOM_ROLE_TIER, ROLE_GATED_PERMISSIONS } from '@/lib/permissions/builtinRoles';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `projectAccessService.getPermissions` / `getRoleCatalog` (Story MOTIR-2255 ·
@@ -29,6 +30,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function ctxFor(userId: string, workspaceId: string): WorkspaceContext {
@@ -70,7 +72,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   if (level === 'public') {
     // `public` is not settable through the service setter yet (6.12.8), so seed
     // it at the data layer exactly as the sibling suite does.
-    await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,
@@ -407,7 +409,7 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
     const s = await buildScenario('open', 'counts');
     const other = await buildScenario('open', 'counts-other');
 
-    const seeded = await db.projectMembership.groupBy({
+    const seeded = await adminDb.projectMembership.groupBy({
       by: ['role'],
       where: { projectId: s.projectId },
       _count: { _all: true },
@@ -429,11 +431,11 @@ describe('getRoleCatalog reports each role`s member count from real memberships'
     // A sibling project's memberships never leak in — the count is scoped to the
     // project asked about, not to the workspace.
     await projectMembersService.addMember({
-      key: (await db.project.findUniqueOrThrow({ where: { id: other.projectId } })).identifier,
+      key: (await adminDb.project.findUniqueOrThrow({ where: { id: other.projectId } })).identifier,
       actorUserId: other.ctxs.owner.userId,
       ctx: other.ctxs.owner,
       targetUserId: (
-        await db.user.findFirstOrThrow({ where: { email: 'plain-counts-other@ex.com' } })
+        await adminDb.user.findFirstOrThrow({ where: { email: 'plain-counts-other@ex.com' } })
       ).id,
       role: 'member',
     });
@@ -502,7 +504,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     name: string;
     permissions: string[];
   }): Promise<string> {
-    const definition = await db.projectRoleDefinition.create({
+    const definition = await adminDb.projectRoleDefinition.create({
       data: {
         workspaceId: args.workspaceId,
         projectId: args.projectId,
@@ -510,7 +512,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
         permissions: args.permissions,
       },
     });
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       projectMembershipRepository.setRoleDefinition(
         args.userId,
         args.projectId,
@@ -627,7 +629,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     // membership's own row is hidden too (project_membership carries the same
     // policy) — so the join returns nothing and there is no way to read the
     // role's set across the tenant boundary.
-    const leaked = await db.$transaction(async (tx) => {
+    const leaked = await adminDb.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
       await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
@@ -636,7 +638,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
 
     // Under its OWN workspace's GUC it is right there — so the emptiness above
     // is the policy biting, not a missing row.
-    const visible = await db.$transaction(async (tx) => {
+    const visible = await adminDb.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${s.workspaceId}, true)`;
       await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return tx.projectRoleDefinition.findMany({ where: { id: roleId } });
@@ -660,7 +662,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
     // run entirely inside the caller's transaction (no second connection).
     async function countSelectsFor(ctx: WorkspaceContext): Promise<number> {
       let selects = 0;
-      const client = db.$extends({
+      const client = adminDb.$extends({
         query: {
           async $allOperations({ args, query, operation }) {
             if (operation.startsWith('find') || operation === 'count') selects += 1;
@@ -694,7 +696,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
       'project:browse',
     ]);
 
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       projectMembershipRepository.setRoleDefinition(
         s.ctxs.member.userId,
         s.projectId,
@@ -710,7 +712,7 @@ describe('a membership on a CUSTOM role, resolved through the database (MOTIR-24
 
 describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
   async function seedRole(fx: Scenario, name: string, permissions: string[]) {
-    return db.projectRoleDefinition.create({
+    return adminDb.projectRoleDefinition.create({
       data: { workspaceId: fx.workspaceId, projectId: fx.projectId, name, permissions },
     });
   }
@@ -746,7 +748,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     const a = await seedRole(s, 'A role', ['project:browse']);
     const b = await seedRole(s, 'B role', ['project:browse']);
     const c = await seedRole(s, 'C role', ['project:browse']);
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await projectMembershipRepository.setRoleDefinition(
         s.ctxs.member.userId,
         s.projectId,
@@ -769,7 +771,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
 
     async function countReads(): Promise<number> {
       let reads = 0;
-      const client = db.$extends({
+      const client = adminDb.$extends({
         query: {
           async $allOperations({ args, query, operation }) {
             if (operation.startsWith('find') || operation === 'count' || operation === 'groupBy') {
@@ -821,7 +823,7 @@ describe('getRoleCatalog returns the project`s OWN roles (MOTIR-2478)', () => {
     const mine = await buildScenario('open', 'cat-rls-mine');
     const other = await buildScenario('open', 'cat-rls-other');
     const role = await seedRole(mine, 'Contractor', ['project:browse']);
-    const leaked = await db.$transaction(async (tx) => {
+    const leaked = await adminDb.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT set_config('app.workspace_id', ${other.workspaceId}, true)`;
       await tx.$executeRawUnsafe('SET LOCAL ROLE motir_app');
       return tx.projectRoleDefinition.findMany({ where: { id: role.id } });

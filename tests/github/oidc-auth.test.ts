@@ -6,6 +6,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { authenticateGithubOidc } from '@/lib/github/oidcAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
 
@@ -62,6 +63,7 @@ afterAll(async () => {
   delete process.env.GITHUB_OIDC_JWKS_URL;
   delete process.env.GITHUB_OIDC_AUDIENCE;
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 beforeEach(async () => {
@@ -193,7 +195,7 @@ describe('authenticateGithubOidc', () => {
     // tenant A's repo authenticating as tenant B, acting as B's owner.
     const a = await makeWorkspace('shared-a@example.com');
     const b = await makeWorkspace('shared-b@example.com');
-    const installation = await db.githubInstallation.create({
+    const installation = await adminDb.githubInstallation.create({
       data: {
         installationId: 'motir-provisioning-oidc',
         workspaceId: null,
@@ -202,7 +204,7 @@ describe('authenticateGithubOidc', () => {
         provider: 'github',
       },
     });
-    await db.githubRepo.createMany({
+    await adminDb.githubRepo.createMany({
       data: [
         {
           installationId: installation.id,

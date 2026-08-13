@@ -10,6 +10,7 @@ import { toAttachmentDto } from '@/lib/mappers/attachmentMappers';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // attachmentsService management surface (Story 5.2 · Subtask 5.2.2) against a
@@ -127,14 +128,14 @@ async function linkAsEditor(s: Scenario, row: Attachment): Promise<void> {
 // or a raw blob pathname to its row.
 const rowByUrl = (ref: string) => {
   const m = ref.match(/\/api\/attachments\/([a-z0-9]+)\/content/i);
-  return db.attachment.findFirst({ where: m ? { id: m[1]! } : { blobPathname: ref } });
+  return adminDb.attachment.findFirst({ where: m ? { id: m[1]! } : { blobPathname: ref } });
 };
 
 const revisionsOf = (workItemId: string) =>
-  db.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
+  adminDb.workItemRevision.findMany({ where: { workItemId }, orderBy: { changedAt: 'asc' } });
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   vi.mocked(deleteAttachmentBlob).mockReset();
   vi.mocked(deleteAttachmentBlob).mockResolvedValue(undefined);
@@ -143,6 +144,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('attachmentsService.attachToWorkItem', () => {
@@ -182,7 +184,8 @@ describe('attachmentsService.attachToWorkItem', () => {
       attachmentsService.attachToWorkItem(s.issue.id, fileOf('x.png', 'image/png'), s.viewerCtx),
     ).rejects.toMatchObject({ code: 'ATTACHMENT_FORBIDDEN', status: 403 });
     expect(putAttachment).not.toHaveBeenCalled();
-    expect(await db.attachment.count()).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
     expect(await revisionsOf(s.issue.id)).toHaveLength(0);
   });
 
@@ -203,7 +206,8 @@ describe('attachmentsService.attachToWorkItem', () => {
         s.memberCtx,
       ),
     ).rejects.toMatchObject({ code: 'FILE_TOO_LARGE', status: 413 });
-    expect(await db.attachment.count()).toBe(0);
+    const attachmentCount = await adminDb.attachment.count();
+    expect(attachmentCount).toBe(0);
     expect(await revisionsOf(s.issue.id)).toHaveLength(0);
   });
 });
@@ -313,11 +317,12 @@ describe('attachmentsService.deleteAttachment', () => {
   it('the uploader deletes their OWN: row + blob gone, revision attachment-removed recorded', async () => {
     const s = await buildScenario();
     const id = await attachAsMember(s);
-    const blobPathname = (await db.attachment.findUnique({ where: { id } }))!.blobPathname;
+    const blobPathname = (await adminDb.attachment.findUnique({ where: { id } }))!.blobPathname;
 
     await attachmentsService.deleteAttachment(id, s.memberCtx);
 
-    expect(await db.attachment.findUnique({ where: { id } })).toBeNull();
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id } });
+    expect(attachmentRow).toBeNull();
     expect(deleteAttachmentBlob).toHaveBeenCalledWith(blobPathname);
 
     const revisions = await revisionsOf(s.issue.id);
@@ -335,7 +340,8 @@ describe('attachmentsService.deleteAttachment', () => {
       code: 'ATTACHMENT_FORBIDDEN',
       status: 403,
     });
-    expect(await db.attachment.findUnique({ where: { id } })).not.toBeNull();
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id } });
+    expect(attachmentRow).not.toBeNull();
     expect(deleteAttachmentBlob).not.toHaveBeenCalled();
   });
 
@@ -343,14 +349,16 @@ describe('attachmentsService.deleteAttachment', () => {
     const s = await buildScenario();
     const id = await attachAsMember(s);
     await attachmentsService.deleteAttachment(id, s.projAdminCtx);
-    expect(await db.attachment.findUnique({ where: { id } })).toBeNull();
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id } });
+    expect(attachmentRow).toBeNull();
   });
 
   it('the workspace owner deletes ANY (the always-pass rail)', async () => {
     const s = await buildScenario();
     const id = await attachAsMember(s);
     await attachmentsService.deleteAttachment(id, s.ownerCtx);
-    expect(await db.attachment.findUnique({ where: { id } })).toBeNull();
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id } });
+    expect(attachmentRow).toBeNull();
   });
 
   it('a project viewer → 403 (read-only everywhere)', async () => {
@@ -376,7 +384,8 @@ describe('attachmentsService.deleteAttachment', () => {
       code: 'ATTACHMENT_EDITOR_SOURCED',
       status: 409,
     });
-    expect(await db.attachment.findUnique({ where: { id: row.id } })).toMatchObject({
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id: row.id } });
+    expect(attachmentRow).toMatchObject({
       workItemId: s.issue.id,
       source: 'editor',
     });
@@ -416,7 +425,7 @@ describe('attachmentsService.deleteAttachment', () => {
 
     // The row survives as the GC's retry marker: unlinked (off the panel),
     // blob still recorded — exactly the listOrphans shape.
-    const row = await db.attachment.findUnique({ where: { id } });
+    const row = await adminDb.attachment.findUnique({ where: { id } });
     expect(row).not.toBeNull();
     expect(row!.workItemId).toBeNull();
 

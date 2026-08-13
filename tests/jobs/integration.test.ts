@@ -14,6 +14,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import type { EmailSendData } from '@/lib/jobs/types';
 import type { Prisma } from '@/generated/prisma/client';
 import { captureConsoleEmails, runEmailSendJob, seedHealthyJobSchedules } from '../helpers/jobs';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Cross-cutting jobs invariants that close Story 1.6 (Subtask 1.6.6) — the ones
@@ -58,6 +59,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('scheduled job', () => {
@@ -75,7 +77,9 @@ describe('scheduled job', () => {
     expect(result).toMatchObject(DAILY_HEALTH_CHECK_PAYLOAD);
 
     // The seed skips this function, so its own row is the only one.
-    const runs = await db.jobRun.findMany({ where: { functionId: 'system.daily-health-check' } });
+    const runs = await adminDb.jobRun.findMany({
+      where: { functionId: 'system.daily-health-check' },
+    });
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.functionId).toBe('system.daily-health-check');
@@ -99,7 +103,7 @@ describe('idempotency', () => {
     }
     // The handler ran once and recorded the key — this is the correlation the
     // operator dashboard shows and the value the runtime dedups ON.
-    const run = (await db.jobRun.findMany())[0]!;
+    const run = (await adminDb.jobRun.findMany())[0]!;
     expect(run.idempotencyKey).toBe('thread-me');
 
     // The dedup itself is enforced by Inngest (config expression), not our code.
@@ -127,7 +131,8 @@ describe('idempotency', () => {
     } finally {
       emails.restore();
     }
-    expect(await db.jobRun.count()).toBe(2);
+    const jobRunCount = await adminDb.jobRun.count();
+    expect(jobRunCount).toBe(2);
   });
 });
 
@@ -152,7 +157,7 @@ describe('DLQ replay ↔ idempotency window (finding #40)', () => {
       eventData: emailEvent({ idempotencyKey: 'window-key' }) as unknown as Prisma.InputJsonValue,
       attempts: 3,
     });
-    const dlqId = (await db.jobRunDlq.findFirst())!.id;
+    const dlqId = (await adminDb.jobRunDlq.findFirst())!.id;
 
     const sendSpy = vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] } as never);
     await withSystemContext((tx) => replayDLQ(dlqId, tx));

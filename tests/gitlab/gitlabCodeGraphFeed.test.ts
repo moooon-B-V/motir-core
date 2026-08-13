@@ -10,6 +10,7 @@ import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { encryptToken } from '@/lib/gitlab/tokenCrypto';
 import { inngest } from '@/lib/jobs/client';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.23 · MOTIR-1476 — the GitLab code-graph FEED, against a real Postgres
@@ -44,6 +45,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A fresh, history-clean spy on the enqueue transport (`inngest.send`). */

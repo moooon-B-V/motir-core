@@ -5,6 +5,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { backlogService } from '@/lib/services/backlogService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture } from '../../fixtures';
 
@@ -13,7 +14,7 @@ import { makeWorkItemFixture } from '../../fixtures';
 // (item + parent + children + blocked-by/blocks + workflow) and the tenant gate.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -22,6 +23,7 @@ async function truncateAll(): Promise<void> {
 beforeEach(truncateAll);
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('workItemsService.getIssueDetail (2.4.1)', () => {
@@ -201,7 +203,7 @@ describe('workItemsService.getIssueDetail (2.4.1)', () => {
 
     // `cancelled` is category=done in the default-seeded workflow, so a
     // cancelled blocker is terminal → the verdict flips on the next read.
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'cancelled' } });
     const readyView = await workItemsService.getIssueDetail(
       fx.projectId,
       subject.identifier,

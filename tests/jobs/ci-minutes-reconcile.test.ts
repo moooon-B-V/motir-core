@@ -10,6 +10,7 @@ import {
 } from '@/lib/jobs/definitions/ciMinutesReconcile';
 import { jobFunctions } from '@/lib/jobs/registry';
 import { ciMinutesReconciliationService } from '@/lib/services/ciMinutesReconciliationService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // system.ci-minutes-reconcile (Story MOTIR-1775 · MOTIR-1896) — the monthly
@@ -22,7 +23,7 @@ const MOTIR_ORG = 'motir-projects';
 const JULY_2026 = new Date('2026-07-01T00:00:00.000Z');
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_workflow_run_usage", "ci_period_usage" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -37,6 +38,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** One metered run in July 2026, on a Motir-org repo. */
@@ -50,7 +52,7 @@ async function seedMeteredRun(repoName: string, billableMinutes: number): Promis
     name: `WS ${repoName}`,
     ownerUserId: user.id,
   });
-  await db.ciWorkflowRunUsage.create({
+  await adminDb.ciWorkflowRunUsage.create({
     data: {
       workspaceId: workspace.id,
       organizationId: workspace.organizationId,
@@ -106,7 +108,7 @@ describe('system.ci-minutes-reconcile', () => {
       github: { outcome: 'skipped', reason: 'no_billing_credential' },
       fleet: { outcome: 'reconciled', org: MOTIR_ORG, repos: [], discrepancies: [] },
     });
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
       functionId: 'system.ci-minutes-reconcile',

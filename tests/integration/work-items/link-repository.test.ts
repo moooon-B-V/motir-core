@@ -9,7 +9,9 @@ import {
   WorkItemLinkCycleError,
   WorkspaceMismatchLinkError,
 } from '@/lib/workItems/linkErrors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
   makeWorkItemFixture as makeFixture,
   createTestWorkItem as createWorkItem,
@@ -34,7 +36,7 @@ import {
 // repository.test.ts does for work_item).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -46,6 +48,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('workItemLinkRepository.create — happy path', () => {
@@ -355,7 +358,7 @@ describe('workItemLinkRepository.findById + delete', () => {
     const found = await workItemLinkRepository.findById(link.id);
     expect(found?.id).toBe(link.id);
 
-    await db.$transaction((tx) => workItemLinkRepository.delete(link.id, tx));
+    await withWorkspaceContext(fx.ctx, (tx) => workItemLinkRepository.delete(link.id, tx));
 
     const missing = await workItemLinkRepository.findById(link.id);
     expect(missing).toBeNull();
@@ -399,14 +402,18 @@ describe('workItemLinkRepository.createIfAbsent — idempotent insert (5.8.3)', 
     };
 
     // First insert → the row (the `rows[0]` branch).
-    const first = await db.$transaction((tx) => workItemLinkRepository.createIfAbsent(data, tx));
+    const first = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.createIfAbsent(data, tx),
+    );
     expect(first).not.toBeNull();
     expect(first?.fromId).toBe(a.id);
     expect(first?.kind).toBe('relates_to');
 
     // Same (fromId, toId, kind) → the @@unique already holds → null (the
     // `?? null` skip branch), and crucially NO P2002 escapes the transaction.
-    const second = await db.$transaction((tx) => workItemLinkRepository.createIfAbsent(data, tx));
+    const second = await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemLinkRepository.createIfAbsent(data, tx),
+    );
     expect(second).toBeNull();
   });
 });
@@ -423,7 +430,7 @@ describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
     const fx = await makeFixture();
     const dependent = await createWorkItem(fx, { kind: 'task', title: 'dependent' });
     const blocker = await createWorkItem(fx, { kind: 'task', title: 'blocker' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: blocker.id },
       data: { sessionBranch: 'motir/auto-1' },
     });
@@ -482,7 +489,7 @@ describe('workItemLinkRepository.findBlockerSessionBranchesForItems', () => {
     const theirs = await makeFixture({ name: 'Other', identifier: 'OTH' });
     const dependent = await createWorkItem(mine, { kind: 'task', title: 'dependent' });
     const blocker = await createWorkItem(mine, { kind: 'task', title: 'blocker' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: blocker.id },
       data: { sessionBranch: 'motir/auto-2' },
     });

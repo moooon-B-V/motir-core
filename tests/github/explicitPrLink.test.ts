@@ -10,6 +10,7 @@ import { githubPullRequestService } from '@/lib/services/githubPullRequestServic
 import { GithubNotConnectedError, GithubPullRequestNotFoundError } from '@/lib/github/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-1596 — the EXPLICIT item→PR link (the manual override of
@@ -101,7 +102,7 @@ async function ingestPr(opts: {
   title: string;
 }): Promise<string> {
   await githubWebhookService.handleEvent('pull_request', prEvent(opts));
-  const row = await db.githubPullRequest.findFirst({ where: { number: opts.number } });
+  const row = await adminDb.githubPullRequest.findFirst({ where: { number: opts.number } });
   return row!.id;
 }
 
@@ -117,6 +118,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubPullRequestService.linkPullRequest — the explicit override (MOTIR-1596)', () => {
@@ -138,13 +140,13 @@ describe('githubPullRequestService.linkPullRequest — the explicit override (MO
       headBranch: 'feature/unrelated-branch',
       title: 'Add per-route throttling',
     });
-    const before = await db.githubPullRequest.findUnique({ where: { id: prId } });
+    const before = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
     expect(before?.workItemId).toBeNull();
 
     const dto = await githubPullRequestService.linkPullRequest(item.id, prId, s.ctx);
     expect(dto).toMatchObject({ number: 12, repo: 'moooon/acme', linkedManually: true });
 
-    const after = await db.githubPullRequest.findUnique({ where: { id: prId } });
+    const after = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
     expect(after?.workItemId).toBe(item.id);
     expect(after?.linkedManually).toBe(true);
   });
@@ -173,7 +175,7 @@ describe('githubPullRequestService.linkPullRequest — the explicit override (MO
     await githubPullRequestService.linkPullRequest(itemA.id, prId, s.ctx);
     await githubPullRequestService.linkPullRequest(itemB.id, prId, s.ctx);
 
-    const row = await db.githubPullRequest.findUnique({ where: { id: prId } });
+    const row = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
     expect(row?.workItemId).toBe(itemB.id);
     expect(row?.linkedManually).toBe(true);
   });
@@ -353,7 +355,7 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
         action: 'reopened',
       }),
     );
-    const row = await db.githubPullRequest.findUnique({ where: { id: prId } });
+    const row = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
     expect(row?.workItemId).toBe(item.id);
     expect(row?.linkedManually).toBe(true);
   });
@@ -393,10 +395,10 @@ describe('a manual link is STICKY against the webhook resolver (MOTIR-1596)', ()
         merged: true,
       }),
     );
-    const moved = await db.workItem.findUnique({ where: { id: item.id } });
+    const moved = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(moved?.status).toBe('done');
     // The link stays manual after the merge delivery.
-    const row = await db.githubPullRequest.findUnique({ where: { id: prId } });
+    const row = await adminDb.githubPullRequest.findUnique({ where: { id: prId } });
     expect(row?.linkedManually).toBe(true);
     expect(row?.workItemId).toBe(item.id);
   });

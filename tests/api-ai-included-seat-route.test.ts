@@ -4,6 +4,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { pmTierForOrg } from '@/lib/billing/entitlements';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Transport + end-to-end tests for POST /api/internal/billing/ai-included-seat
@@ -22,6 +23,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const { POST } = await import('@/app/api/internal/billing/ai-included-seat/route');
@@ -43,7 +45,8 @@ async function makeOrg(): Promise<string> {
     name: 'Acme',
     ownerUserId: owner.id,
   });
-  return (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } })).organizationId;
+  return (await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
+    .organizationId;
 }
 
 describe('POST /api/internal/billing/ai-included-seat', () => {

@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { InvalidEmailChangeTokenError } from '@/lib/users/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureEmailEvents } from '../helpers/jobs';
 
@@ -53,6 +54,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /**
@@ -157,11 +159,14 @@ describe('profile feature — story-level integration (8.8.25)', () => {
     // one (swapped exactly once, not to a wrong value), the credential is re-keyed
     // to it, the token is consumed, and no pending row lingers.
     expect((await usersService.getProfile(user.id))?.email).toBe('new@example.com');
-    const credential = await db.account.findFirst({
+    const credential = await adminDb.account.findFirst({
       where: { userId: user.id, providerId: 'credential' },
     });
     expect(credential!.accountId).toBe('new@example.com');
-    expect(await db.emailChangeRequest.findMany({ where: { userId: user.id } })).toHaveLength(0);
+    const emailChangeRequestRows = await adminDb.emailChangeRequest.findMany({
+      where: { userId: user.id },
+    });
+    expect(emailChangeRequestRows).toHaveLength(0);
     // Single-use holds going forward: a fresh confirm of the spent token is rejected.
     await expect(usersService.confirmEmailChange(token)).rejects.toBeInstanceOf(
       InvalidEmailChangeTokenError,

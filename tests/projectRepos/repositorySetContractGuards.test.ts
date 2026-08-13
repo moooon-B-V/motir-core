@@ -9,6 +9,7 @@ import { enqueueReposMissingFirstIndex } from '@/lib/github/indexEnqueue';
 import { projectRepoSetService } from '@/lib/services/projectRepoSetService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── 1 · the table and its RLS ship together ─────────────────────────────────
@@ -158,7 +160,7 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
    *  code-context resolver reads. */
   async function connectRepo(workspaceId: string, name: string): Promise<string> {
     const installationId = `inst-${workspaceId}`;
-    const inst = await db.githubInstallation.upsert({
+    const inst = await adminDb.githubInstallation.upsert({
       where: { installationId },
       create: {
         installationId,
@@ -169,7 +171,7 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
       },
       update: {},
     });
-    const repo = await db.githubRepo.create({
+    const repo = await adminDb.githubRepo.create({
       data: {
         installationId: inst.id,
         workspaceId,
@@ -264,7 +266,7 @@ describe('resolveCodeContext and codeGraphIndexService are unchanged', () => {
 
 describe('what a delete does to a repository row', () => {
   async function realizedRow(fx: WorkItemFixture): Promise<{ rowId: string; repoId: string }> {
-    const inst = await db.githubInstallation.create({
+    const inst = await adminDb.githubInstallation.create({
       data: {
         installationId: `inst-${fx.workspaceId}`,
         workspaceId: fx.workspaceId,
@@ -273,7 +275,7 @@ describe('what a delete does to a repository row', () => {
         provider: 'github',
       },
     });
-    const repo = await db.githubRepo.create({
+    const repo = await adminDb.githubRepo.create({
       data: {
         installationId: inst.id,
         workspaceId: fx.workspaceId,
@@ -304,7 +306,7 @@ describe('what a delete does to a repository row', () => {
     const fx = await makeWorkItemFixture();
     const { rowId, repoId } = await realizedRow(fx);
 
-    await db.githubRepo.delete({ where: { id: repoId } });
+    await adminDb.githubRepo.delete({ where: { id: repoId } });
 
     const rows = await projectRepoSetService.listByProject(fx.projectId, fx.ctx);
     const row = rows.find((r) => r.id === rowId)!;
@@ -316,7 +318,7 @@ describe('what a delete does to a repository row', () => {
       realizedRepo: null,
     });
     // …and the claim is released, so the row can realize against a new repo.
-    const raw = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    const raw = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
     expect(raw.githubRepoId).toBeNull();
   });
 
@@ -324,11 +326,13 @@ describe('what a delete does to a repository row', () => {
     const fx = await makeWorkItemFixture();
     const { rowId, repoId } = await realizedRow(fx);
 
-    await db.project.delete({ where: { id: fx.projectId } });
+    await adminDb.project.delete({ where: { id: fx.projectId } });
 
-    expect(await db.projectRepo.findUnique({ where: { id: rowId } })).toBeNull();
+    const projectRepoRow = await adminDb.projectRepo.findUnique({ where: { id: rowId } });
+    expect(projectRepoRow).toBeNull();
     // The repository is a real artifact on GitHub — deleting a Motir project
     // must not pretend it went away.
-    expect(await db.githubRepo.findUnique({ where: { id: repoId } })).not.toBeNull();
+    const githubRepoRow = await adminDb.githubRepo.findUnique({ where: { id: repoId } });
+    expect(githubRepoRow).not.toBeNull();
   });
 });

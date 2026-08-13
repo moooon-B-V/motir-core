@@ -9,6 +9,7 @@ import { NotEpicError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Service-layer tests for workItemsService.setEpicPrivacy (Story 6.14 · Subtask
@@ -20,7 +21,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // guarantee is 6.14.8's suite (this card is the write path + its gates only).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -32,6 +33,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The owner-actor input for project-scoped calls on the fixture's project. */

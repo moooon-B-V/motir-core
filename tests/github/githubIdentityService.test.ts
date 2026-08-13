@@ -7,6 +7,7 @@ import { githubIdentityRepository } from '@/lib/repositories/githubIdentityRepos
 import { decryptToken } from '@/lib/github/tokenCrypto';
 import { GithubOAuthExchangeError, GithubOAuthNotConfiguredError } from '@/lib/github/errors';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-1498 — the OAuth user-identity grant service, against a
@@ -92,6 +93,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubIdentityService.buildAuthorizeUrl', () => {

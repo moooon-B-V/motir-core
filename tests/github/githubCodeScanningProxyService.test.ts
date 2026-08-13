@@ -7,6 +7,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubCodeScanningProxyService } from '@/lib/services/githubCodeScanningProxyService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
 
@@ -90,6 +91,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubCodeScanningProxyService — private connected repo (AC1)', () => {

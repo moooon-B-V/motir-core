@@ -12,6 +12,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { createTestProject } from '../../fixtures/projectFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 
@@ -62,7 +63,9 @@ async function makeFixture(label: string): Promise<Fixture> {
       password: PASSWORD,
       name: slug,
     });
-    await db.workspaceMembership.create({ data: { userId: u.id, workspaceId, role: 'member' } });
+    await adminDb.workspaceMembership.create({
+      data: { userId: u.id, workspaceId, role: 'member' },
+    });
     if (role) {
       await projectMembersService.addMember({
         key: project.identifier,
@@ -88,6 +91,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the plan-change session asks ai:plan', () => {

@@ -8,6 +8,7 @@ import { usersService } from '@/lib/services/usersService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Public request DETAIL read (Story 6.12 · Subtask 6.12.12) — the read behind the
@@ -35,7 +36,7 @@ async function publicRequestFixture(): Promise<{
   requestIdentifier: string;
 }> {
   const fx = await makeWorkItemFixture({ name: 'Acme' });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   const item = await workItemsService.createWorkItem(
     {
       projectId: fx.projectId,
@@ -45,7 +46,7 @@ async function publicRequestFixture(): Promise<{
     },
     fx.ctx,
   );
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: item.id },
     data: { assigneeId: fx.ownerId, estimateMinutes: 480, storyPoints: 8 },
   });
@@ -58,6 +59,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('publicProjectsService.getRequestDetail (6.12.12)', () => {
@@ -154,7 +156,7 @@ describe('publicProjectsService.getRequestDetail (6.12.12)', () => {
       publicProjectsService.getRequestDetail(fx.projectIdentifier, 'PROD-9999', null),
     ).rejects.toBeInstanceOf(PublicRequestNotFoundError);
 
-    await db.workItem.update({ where: { id: requestId }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: requestId }, data: { archivedAt: new Date() } });
     await expect(
       publicProjectsService.getRequestDetail(fx.projectIdentifier, requestIdentifier, null),
     ).rejects.toBeInstanceOf(PublicRequestNotFoundError);

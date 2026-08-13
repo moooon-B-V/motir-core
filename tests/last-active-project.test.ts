@@ -5,6 +5,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { withUserContext } from '@/lib/workspaces/context';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Subtask 8.8.27 — the GLOBAL last-active-project resolver engine. On a fresh
@@ -23,10 +24,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function orgIdOfWorkspace(workspaceId: string): Promise<string> {
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   return ws.organizationId;
 }
 
@@ -71,7 +73,7 @@ describe('recordLastActiveProject (the global pointer write)', () => {
 
     await workspacesService.recordLastActiveProject(owner.id, project.id);
 
-    const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+    const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
     expect(row.lastActiveProjectId).toBe(project.id);
   });
 
@@ -87,7 +89,7 @@ describe('recordLastActiveProject (the global pointer write)', () => {
     await workspacesService.recordLastActiveProject(owner.id, p1.id);
     await workspacesService.recordLastActiveProject(owner.id, p2.id);
 
-    const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+    const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
     expect(row.lastActiveProjectId).toBe(p2.id);
   });
 
@@ -100,9 +102,9 @@ describe('recordLastActiveProject (the global pointer write)', () => {
     const project = await makeProject(owner.id, workspace.id, 'Doomed Project');
     await workspacesService.recordLastActiveProject(owner.id, project.id);
 
-    await db.project.delete({ where: { id: project.id } });
+    await adminDb.project.delete({ where: { id: project.id } });
 
-    const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+    const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
     expect(row.lastActiveProjectId).toBeNull();
   });
 });
@@ -220,7 +222,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
         projectId: project.id,
       });
 
-      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
       expect(row.lastActiveProjectId).toBe(project.id);
     });
 
@@ -244,7 +246,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
         projectId: p2.id,
       });
 
-      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
       expect(row.lastActiveProjectId).toBe(p2.id);
     });
 
@@ -269,7 +271,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
         projectId: null,
       });
 
-      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
       expect(row.lastActiveProjectId).toBe(project.id);
     });
   });
@@ -280,7 +282,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
 
       await projectsService.recordLastActiveProjectForWorkspace(member.id, wsB.id);
 
-      const row = await db.user.findUniqueOrThrow({ where: { id: member.id } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { id: member.id } });
       expect(row.lastActiveProjectId).toBe(projectB.id);
     });
 
@@ -293,7 +295,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
 
       await projectsService.recordLastActiveProjectForWorkspace(owner.id, workspace.id);
 
-      const row = await db.user.findUniqueOrThrow({ where: { id: owner.id } });
+      const row = await adminDb.user.findUniqueOrThrow({ where: { id: owner.id } });
       expect(row.lastActiveProjectId).toBeNull();
     });
 
@@ -301,7 +303,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
       const { member, wsA, projectA } = await twoWorkspaceMember();
       // Establish a valid pointer from a workspace the member IS in.
       await projectsService.recordLastActiveProjectForWorkspace(member.id, wsA.id);
-      const before = await db.user.findUniqueOrThrow({ where: { id: member.id } });
+      const before = await adminDb.user.findUniqueOrThrow({ where: { id: member.id } });
       expect(before.lastActiveProjectId).toBe(projectA.id);
 
       // A workspace the member is NOT a member of (a forged/stale id at a switch
@@ -318,7 +320,7 @@ describe('8.8.28 — recording the global pointer at the switch points', () => {
         projectsService.recordLastActiveProjectForWorkspace(member.id, foreign.id),
       ).resolves.toBeUndefined();
 
-      const after = await db.user.findUniqueOrThrow({ where: { id: member.id } });
+      const after = await adminDb.user.findUniqueOrThrow({ where: { id: member.id } });
       expect(after.lastActiveProjectId).toBe(projectA.id);
     });
   });

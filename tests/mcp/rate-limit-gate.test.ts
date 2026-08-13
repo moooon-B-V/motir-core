@@ -11,6 +11,7 @@ import { __resetSharedRateLimitStoreForTest } from '@/lib/rateLimit/store';
 import type { McpRequestExtra } from '@/lib/mcp/context';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from '../helpers/db';
 import { ALIGNED_WINDOW_MS, sleep, waitForWindowBoundary } from '../helpers/rateLimitWindow';
 
@@ -94,6 +95,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a metered server. `grant` mirrors what a

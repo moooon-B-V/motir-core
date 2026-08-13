@@ -3,6 +3,7 @@ import type { WorkItemKind } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 
@@ -20,7 +21,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
 // cell never perturb another's depth/sibling state.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -32,6 +33,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const CHILD_KINDS: readonly WorkItemKind[] = ['epic', 'story', 'task', 'bug', 'subtask'];

@@ -11,6 +11,7 @@ import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -60,6 +61,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect one repo to the fixture's workspace — the 7.10.3 installation mirror
@@ -72,7 +74,7 @@ async function connectRepo(
   const owner = opts.owner ?? 'moooon';
   const provider = opts.provider ?? 'github';
   const installationId = `inst-${workspaceId}-${provider}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -83,7 +85,7 @@ async function connectRepo(
     },
     update: {},
   });
-  return db.githubRepo.create({
+  return adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
@@ -515,7 +517,7 @@ describe('a dispatch resolving to an ARCHIVED repository', () => {
     await makeReady(fx, 'unpinned');
     await expect(dispatchOf(fx)).rejects.toThrow(ArchivedTargetRepoError);
 
-    await db.githubRepo.update({ where: { id: repo.id }, data: { archived: false } });
+    await adminDb.githubRepo.update({ where: { id: repo.id }, data: { archived: false } });
     expect(await dispatchOf(fx)).toMatchObject({ targetRepo: 'acme-web' });
   });
 });

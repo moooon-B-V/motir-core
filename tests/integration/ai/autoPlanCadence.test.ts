@@ -22,6 +22,7 @@ import { plansService } from '@/lib/services/plansService';
 import { aiPlanEditsService } from '@/lib/services/aiPlanEditsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemFixture } from '../../fixtures';
 import type { PlanStatus } from '@/generated/prisma/client';
@@ -51,7 +52,7 @@ import type { PlanStatus } from '@/generated/prisma/client';
 // `pending_proposal` are exactly the projects the indicator reports as paused.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -69,11 +70,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Opt a project into auto-planning at a given drain threshold. */
 async function enableAutoPlan(projectId: string, threshold = 5): Promise<void> {
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: projectId },
     data: { aiAutoPlanEnabled: true, aiAutoPlanThreshold: threshold },
   });
@@ -126,7 +128,7 @@ async function makeDrainedProject(
 
 /** Seed a plan in a given lifecycle state directly (the gate reads status only). */
 async function seedPlan(fx: WorkItemFixture, status: PlanStatus): Promise<string> {
-  const plan = await db.plan.create({
+  const plan = await adminDb.plan.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -235,7 +237,7 @@ describe('Auto-plan cadence — the pending-proposal gate (MOTIR-916)', () => {
   it('gates on a USER-clicked plan exactly as on a cadence-fired one — origin is not part of the predicate', async () => {
     const { fx } = await makeDrainedProject();
     // A plan a person opened by clicking Expand: origin `user`, still undecided.
-    await db.plan.create({
+    await adminDb.plan.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -284,7 +286,7 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
     parentRef?: string,
   ): Promise<void> {
     for (let i = 0; i < count; i++) {
-      await db.planItem.create({
+      await adminDb.planItem.create({
         data: {
           workspaceId: fx.workspaceId,
           planId,
@@ -317,7 +319,7 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
     const { fx } = await makeDrainedProject();
     const planId = await seedPlan(fx, 'planned');
     const plannedAt = new Date('2026-07-20T10:00:00.000Z');
-    await db.plan.update({ where: { id: planId }, data: { plannedAt } });
+    await adminDb.plan.update({ where: { id: planId }, data: { plannedAt } });
     await seedItems(fx, planId, 3);
 
     const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
@@ -349,9 +351,9 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
     // The proposal's parent is archived after the plan was drafted → the shipped
     // `parent_removed` rule fires. Real drift, computed by the shipped service.
     const parent = await makeItem(fx, { kind: 'story', title: 'Parent that goes away' });
-    await db.plan.update({ where: { id: planId }, data: { plannedAt: new Date() } });
+    await adminDb.plan.update({ where: { id: planId }, data: { plannedAt: new Date() } });
     await seedItems(fx, planId, 2, parent.id);
-    await db.workItem.update({ where: { id: parent.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: parent.id }, data: { archivedAt: new Date() } });
 
     const state = await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
 
@@ -394,15 +396,18 @@ describe('Auto-plan cadence — the PAUSED indicator read (MOTIR-1740)', () => {
     const { fx } = await makeDrainedProject();
     const planId = await seedPlan(fx, 'planned');
     await seedItems(fx, planId, 2);
-    const plansBefore = await db.plan.findMany({ orderBy: { id: 'asc' } });
-    const itemsBefore = await db.planItem.findMany({ orderBy: { id: 'asc' } });
-    const treeBefore = await db.workItem.findMany({ orderBy: { id: 'asc' } });
+    const plansBefore = await adminDb.plan.findMany({ orderBy: { id: 'asc' } });
+    const itemsBefore = await adminDb.planItem.findMany({ orderBy: { id: 'asc' } });
+    const treeBefore = await adminDb.workItem.findMany({ orderBy: { id: 'asc' } });
 
     await autoPlanCadenceService.getAutoPlanPauseState(fx.projectId, fx.ctx);
 
-    expect(await db.plan.findMany({ orderBy: { id: 'asc' } })).toEqual(plansBefore);
-    expect(await db.planItem.findMany({ orderBy: { id: 'asc' } })).toEqual(itemsBefore);
-    expect(await db.workItem.findMany({ orderBy: { id: 'asc' } })).toEqual(treeBefore);
+    const planRows = await adminDb.plan.findMany({ orderBy: { id: 'asc' } });
+    expect(planRows).toEqual(plansBefore);
+    const planItemRows = await adminDb.planItem.findMany({ orderBy: { id: 'asc' } });
+    expect(planItemRows).toEqual(itemsBefore);
+    const workItemRows = await adminDb.workItem.findMany({ orderBy: { id: 'asc' } });
+    expect(workItemRows).toEqual(treeBefore);
   });
 
   it('ONE predicate, TWO consumers — the trigger skips exactly the projects the indicator calls paused', async () => {
@@ -452,7 +457,7 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
 
     const summary = await autoPlanCadenceService.runCadenceSweep();
 
-    const plans = await db.plan.findMany({ where: { projectId: fx.projectId } });
+    const plans = await adminDb.plan.findMany({ where: { projectId: fx.projectId } });
     expect(plans).toHaveLength(1);
     expect(plans[0]).toMatchObject({
       status: 'generating',
@@ -473,7 +478,7 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
       project: fx.project,
     });
 
-    const plan = await db.plan.findFirstOrThrow({ where: { projectId: fx.projectId } });
+    const plan = await adminDb.plan.findFirstOrThrow({ where: { projectId: fx.projectId } });
     expect(plan.origin).toBe('user');
   });
 
@@ -483,20 +488,20 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
     const dto = await plansService.createPlan(fx.projectId, { title: 'By hand' }, fx.ctx);
 
     expect(dto.origin).toBe('user');
-    const row = await db.plan.findUniqueOrThrow({ where: { id: dto.id } });
+    const row = await adminDb.plan.findUniqueOrThrow({ where: { id: dto.id } });
     expect(row.origin).toBe('user');
   });
 
   it('writes NOTHING to the work-item tree — a fired run produces proposals only', async () => {
     const { fx } = await makeDrainedProject();
-    const before = await db.workItem.findMany({
+    const before = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       orderBy: { id: 'asc' },
     });
 
     await autoPlanCadenceService.runCadenceSweep();
 
-    const after = await db.workItem.findMany({
+    const after = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       orderBy: { id: 'asc' },
     });
@@ -504,7 +509,8 @@ describe('Auto-plan cadence — provenance and the proposal-only invariant (MOTI
     // bump updatedAt). The tree only ever changes when a human approves.
     expect(after).toEqual(before);
     // And no proposal ITEMS yet either — motir-ai appends those via the callback.
-    expect(await db.planItem.count()).toBe(0);
+    const planItemCount = await adminDb.planItem.count();
+    expect(planItemCount).toBe(0);
   });
 });
 
@@ -542,7 +548,8 @@ describe('Auto-plan cadence — the actor and failure isolation (MOTIR-916)', ()
     // failed submit leaves no orphan behind, so the next tick sees it as
     // eligible again rather than gated by a phantom pending proposal.
     const failedProjectId = (failed as { projectId: string }).projectId;
-    expect(await db.plan.count({ where: { projectId: failedProjectId } })).toBe(0);
+    const planCount = await adminDb.plan.count({ where: { projectId: failedProjectId } });
+    expect(planCount).toBe(0);
     // Both projects belong to different workspaces — the sweep really is
     // cross-workspace, not scoped to one tenant.
     expect(a.fx.workspaceId).not.toBe(b.fx.workspaceId);
@@ -550,7 +557,7 @@ describe('Auto-plan cadence — the actor and failure isolation (MOTIR-916)', ()
 
   it('skips a workspace with no owner rather than throwing — an invariant violation is logged, not fatal', async () => {
     const { fx } = await makeDrainedProject();
-    await db.workspaceMembership.deleteMany({ where: { workspaceId: fx.workspaceId } });
+    await adminDb.workspaceMembership.deleteMany({ where: { workspaceId: fx.workspaceId } });
 
     const summary = await autoPlanCadenceService.runCadenceSweep();
 

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story MOTIR-1665 · Subtask MOTIR-1669 — the ASSEMBLED access-controlled read
@@ -42,13 +43,14 @@ const BASE = 'http://localhost:3000';
 const png = (name = 'shot.png') => new File([new Uint8Array(8)], name, { type: 'image/png' });
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   ctxRef.current = null;
 });
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture) {

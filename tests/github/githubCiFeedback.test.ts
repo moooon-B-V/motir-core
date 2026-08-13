@@ -7,6 +7,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · Subtask 7.10.6 / MOTIR-894 — the CI feedback loop, against a real
@@ -128,10 +129,10 @@ function checkRunPayload(opts: {
 }
 
 async function commentsOn(workItemId: string) {
-  return db.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
 }
 async function ciStateOf(workItemId: string): Promise<string | null> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.ciState;
 }
 
@@ -142,6 +143,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
@@ -169,7 +171,7 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(comments).toHaveLength(1);
     expect(comments[0]!.bodyMd).toContain('CI passing');
 
-    const checkRows = await db.githubCheckRun.findMany();
+    const checkRows = await adminDb.githubCheckRun.findMany();
     expect(checkRows).toHaveLength(1);
     expect(checkRows[0]).toMatchObject({ conclusion: 'success', commitSha: 'sha1' });
     expect(checkRows[0]!.feedbackCommentId).toBe(comments[0]!.id);
@@ -216,7 +218,8 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     expect(second).toMatchObject({ outcome: 'noop' });
 
     expect(await commentsOn(item.id)).toHaveLength(1);
-    expect(await db.githubCheckRun.count()).toBe(1);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(1);
     expect(await ciStateOf(item.id)).toBe('passing');
   });
 
@@ -244,7 +247,8 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     const comments = await commentsOn(item.id);
     expect(comments).toHaveLength(1); // updated in place — NOT a second comment
     expect(comments[0]!.bodyMd).toContain('CI passing');
-    expect(await db.githubCheckRun.count()).toBe(1);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(1);
     expect(await ciStateOf(item.id)).toBe('passing');
   });
 
@@ -265,7 +269,8 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'no_work_item' });
 
-    expect(await db.githubCheckRun.count()).toBe(0); // nothing recorded
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(0); // nothing recorded
     expect(await commentsOn(item.id)).toHaveLength(0); // the real item is untouched
     expect(await ciStateOf(item.id)).toBeNull();
   });
@@ -291,7 +296,7 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     // it) but the TERMINAL side-effects stay terminal-only (MOTIR-894): no
     // feedback comment, no ciState flip.
     expect(res).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
-    const rows = await db.githubCheckRun.findMany();
+    const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!).toMatchObject({ conclusion: 'pending', feedbackCommentId: null });
     expect(await commentsOn(item.id)).toHaveLength(0);
@@ -311,7 +316,8 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
       checkSuitePayload({ conclusion: 'neutral', headSha: 'sha1', prNumbers: [7] }),
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'ignored_pending' });
-    expect(await db.githubCheckRun.count()).toBe(0);
+    const githubCheckRunCount = await adminDb.githubCheckRun.count();
+    expect(githubCheckRunCount).toBe(0);
     expect(await commentsOn(item.id)).toHaveLength(0);
     expect(await ciStateOf(item.id)).toBeNull();
   });
@@ -346,7 +352,7 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
       }),
     );
     expect(pendingRes).toMatchObject({ event: 'ci', outcome: 'pending_recorded' });
-    const rows = await db.githubCheckRun.findMany();
+    const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.conclusion).toBe('pending');
     expect(rows[0]!.feedbackCommentId).toBe(afterSuccess[0]!.id);
@@ -400,7 +406,7 @@ describe('githubWebhookService — CI feedback (MOTIR-894)', () => {
     );
     expect(res).toMatchObject({ event: 'ci', outcome: 'verified', ciState: 'passing' });
     expect(await ciStateOf(item.id)).toBe('passing');
-    const rows = await db.githubCheckRun.findMany();
+    const rows = await adminDb.githubCheckRun.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ checkName: 'lint' });
   });

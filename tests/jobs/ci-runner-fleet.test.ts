@@ -24,6 +24,7 @@ import {
 } from '@/lib/jobs/definitions/ciRunnerFleet';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
@@ -123,7 +124,7 @@ async function seedIntent(): Promise<string> {
     name: `WS ${email}`,
     ownerUserId: user.id,
   });
-  const intent = await db.ciRunnerProvisioningIntent.create({
+  const intent = await adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: workspace.id,
       organizationId: workspace.organizationId,
@@ -149,6 +150,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('all three fleet jobs are REGISTERED and reach the service through the injected bag', () => {
@@ -352,7 +354,7 @@ describe('the boot and reap handlers DELEGATE', () => {
     const engine = new InngestTestEngine({ function: ciRunnerReap });
     await engine.execute();
 
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
       functionId: 'system.ci-runner-reap',
@@ -391,7 +393,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
     // hand-written event here would test the fix out of existence.
     await engine.execute({ events: [bootEvent(intentId)] });
 
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     expect(runs[0]).toMatchObject({
       functionId: 'system.ci-runner-boot',
@@ -423,7 +425,7 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)], steps: sleepSteps(10) });
 
-    const run = await db.jobRun.findFirstOrThrow();
+    const run = await adminDb.jobRun.findFirstOrThrow();
     expect(run.status).toBe('succeeded');
     // `defineJob` JSON-round-trips the handler's return value into `output`, so
     // the Dates land as ISO strings — assert the persisted shape, not the
@@ -448,7 +450,8 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       attempt: 0,
     });
     expect(started).toBeNull();
-    expect(await db.jobRun.count({ where: { eventId: 'evt-empty' } })).toBe(0);
+    const jobRunCount = await adminDb.jobRun.count({ where: { eventId: 'evt-empty' } });
+    expect(jobRunCount).toBe(0);
 
     // The identical call with `null` — the shipped value — persists.
     const untenanted = await jobRunsService.recordStart({
@@ -459,7 +462,8 @@ describe('a BOOT run is READABLE on the job_run ledger', () => {
       attempt: 0,
     });
     expect(untenanted).not.toBeNull();
-    expect(await db.jobRun.count({ where: { eventId: 'evt-null' } })).toBe(1);
+    const jobRunCount2 = await adminDb.jobRun.count({ where: { eventId: 'evt-null' } });
+    expect(jobRunCount2).toBe(1);
   });
 });
 
@@ -603,7 +607,7 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
     const engine = new InngestTestEngine({ function: ciRunnerBoot });
     await engine.execute({ events: [bootEvent(intentId)], steps: sleepSteps(10) });
 
-    const run = await db.jobRun.findFirstOrThrow();
+    const run = await adminDb.jobRun.findFirstOrThrow();
     expect(run.status).toBe('succeeded');
     // The audit trail MOTIR-1928 reads on live infrastructure: the container's
     // id, its billable seconds and its cost — for a job that used to
@@ -642,7 +646,7 @@ describe('a container that OUTLIVES the invocation ceiling still reaches teardow
     expect(settle).toHaveBeenCalledTimes(1);
     // Both surfaces agree — what MOTIR-2002 was restoring by other means, now a
     // property of the shape. Through the JSON projection both of them apply.
-    const ledger = await db.jobRun.findFirstOrThrow();
+    const ledger = await adminDb.jobRun.findFirstOrThrow();
     expect(JSON.parse(JSON.stringify(result))).toEqual(SETTLED_JSON);
     expect(ledger.output).toEqual(JSON.parse(JSON.stringify(result)));
   });

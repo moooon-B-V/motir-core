@@ -7,8 +7,10 @@ import {
   planIdFromTitle,
   snapshotLiveStatuses,
 } from '@/scripts/plan-seed/preserveStatus';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Subtask 7.8.7 — the seed-loader status-preservation flip. Status authority
 // moved seed → live DB: a seed status is INITIAL-ONLY now, and a reseed
@@ -43,7 +45,7 @@ describe('planIdFromTitle — recover the dotted plan id from a seed title prefi
 
 describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => {
   beforeEach(async () => {
-    await db.$executeRawUnsafe(
+    await adminDb.$executeRawUnsafe(
       'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
     );
     await truncateAuthTables();
@@ -51,13 +53,14 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
 
   afterAll(async () => {
     await db.$disconnect();
+    await adminDb.$disconnect();
   });
 
   /** Create a leaf with a plan-id title prefix and force its status. (Uses the
    * parentless-legal `task` kind — the plan-id parse is kind-independent.) */
   async function seedItem(fx: WorkItemFixture, planId: string, status: string): Promise<string> {
     const row = await createTestWorkItem(fx, { kind: 'task', title: `${planId} A leaf` });
-    await db.$transaction((tx) => workItemRepository.update(row.id, { status }, tx));
+    await withWorkspaceContext(fx.ctx, (tx) => workItemRepository.update(row.id, { status }, tx));
     return row.id;
   }
 
@@ -67,7 +70,9 @@ describe('snapshotLiveStatuses + applyPreservedStatuses (real Postgres)', () => 
     await seedItem(fx, '7.8.7', 'in_progress');
     // A hand-created item (no plan-id prefix) is ignored by the snapshot.
     const hand = await createTestWorkItem(fx, { kind: 'task', title: 'Ad-hoc chore' });
-    await db.$transaction((tx) => workItemRepository.update(hand.id, { status: 'todo' }, tx));
+    await withWorkspaceContext(fx.ctx, (tx) =>
+      workItemRepository.update(hand.id, { status: 'todo' }, tx),
+    );
 
     const snapshot = await snapshotLiveStatuses([fx.workspaceId]);
 

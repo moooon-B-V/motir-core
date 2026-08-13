@@ -8,6 +8,7 @@ import { triageService } from '@/lib/services/triageService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // 6.11.8 — the triage 6.4 PERMISSION matrix. Triage reads gate on `canBrowse`
@@ -25,6 +26,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface PermScenario {
@@ -54,8 +56,8 @@ async function buildScenario(): Promise<PermScenario> {
     { projectId: fx.projectId, kind: 'bug', title: 'Canonical' },
     fx.ctx,
   );
-  await db.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
-  await db.workItem.update({ where: { id: canonical.id }, data: { triagedAt: new Date() } });
+  await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
+  await adminDb.workItem.update({ where: { id: canonical.id }, data: { triagedAt: new Date() } });
 
   async function enrol(email: string, name: string, role: 'viewer' | 'member') {
     const u = await usersService.createUser({ email, password: 'hunter2hunter2', name });
@@ -125,7 +127,7 @@ describe('triage permissions — a read-only viewer can browse the inbox but not
 
     // The denied writes mutated nothing: the item is still an un-snoozed,
     // un-graduated, non-cancelled triage item.
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: s.triagedId } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: s.triagedId } });
     expect(row.triagedAt).not.toBeNull();
     expect(row.snoozedUntil).toBeNull();
     expect(row.parentId).toBeNull();
@@ -137,7 +139,7 @@ describe('triage permissions — a read-only viewer can browse the inbox but not
     // Same accept the viewer was denied, now as the owner: it graduates.
     const dto = await triageService.acceptTriageItem(s.triagedId, {}, s.fx.ctx);
     expect(dto.id).toBe(s.triagedId);
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: s.triagedId } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: s.triagedId } });
     expect(row.triagedAt).toBeNull(); // graduated into the backlog
   });
 });

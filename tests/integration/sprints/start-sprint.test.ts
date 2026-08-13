@@ -5,6 +5,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   SprintAlreadyActiveError,
@@ -25,12 +26,13 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Give an issue a story-point estimate directly (the estimation service is a
  *  sibling Story 4.3 not yet on this branch; the column ships in 4.3.1). */
 async function setPoints(itemId: string, points: number): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
 }
 
 describe('sprintsService.startSprint', () => {

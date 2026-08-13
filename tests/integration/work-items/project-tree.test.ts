@@ -6,6 +6,7 @@ import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -21,7 +22,7 @@ import {
 // build two independent tenants so the tenant gate is exercised, not assumed.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,20 +34,21 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Direct column pokes (tests may reach the db to set state — CLAUDE.md). */
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 async function setAssignee(id: string, assigneeId: string | null): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { assigneeId } });
+  await adminDb.workItem.update({ where: { id }, data: { assigneeId } });
 }
 async function setType(id: string, type: Prisma.WorkItemUpdateInput['type']): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { type } });
+  await adminDb.workItem.update({ where: { id }, data: { type } });
 }
 async function setDescription(id: string, descriptionMd: string | null): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { descriptionMd } });
+  await adminDb.workItem.update({ where: { id }, data: { descriptionMd } });
 }
 
 /**
@@ -184,7 +186,7 @@ describe('workItemsService.getProjectTree — nesting (no filter)', () => {
   it('excludes archived items (and their descendants drop out of the forest)', async () => {
     const fx = await makeFixture();
     const t = await buildForest(fx);
-    await db.workItem.update({ where: { id: t.B.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: t.B.id }, data: { archivedAt: new Date() } });
 
     const tree = await workItemsService.getProjectTree(fx.projectId, {}, fx.ctx);
     // Story B is archived; B1 was reachable only through B → both gone.

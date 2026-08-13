@@ -8,6 +8,7 @@ import { withUserContext, type WorkspaceContext } from '@/lib/workspaces/context
 import { WORKSPACE_COOKIE_NAME } from '@/lib/workspaces/middleware';
 import { ORGANIZATION_COOKIE_NAME } from '@/lib/organizations/cookie';
 import { createTestUser } from './fixtures/userFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Subtask 8.8.29 — the STORY-LEVEL integration seam for "land on your last
@@ -67,11 +68,11 @@ function setWorkspaceCtx(userId: string, workspaceId: string) {
   workspaceCtx = { userId, workspaceId };
 }
 async function orgOf(workspaceId: string): Promise<string> {
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   return ws.organizationId;
 }
 async function pointerOf(userId: string): Promise<string | null> {
-  const row = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const row = await adminDb.user.findUniqueOrThrow({ where: { id: userId } });
   return row.lastActiveProjectId;
 }
 
@@ -114,6 +115,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('8.8.29 — last-active project seam (write actions ↔ read resolver)', () => {
@@ -189,7 +191,7 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
 
     await setActiveProjectAction(projectP.id);
 
-    const membership = await db.workspaceMembership.findFirstOrThrow({
+    const membership = await adminDb.workspaceMembership.findFirstOrThrow({
       where: { userId: user.id, workspaceId: wsC.id },
     });
     expect(await pointerOf(user.id)).toBe(projectP.id);
@@ -225,7 +227,7 @@ describe('8.8.29 — last-active project seam (write actions ↔ read resolver)'
       expect(await pointerOf(user.id)).toBe(projectP.id);
 
       // Hard-delete P → the FK's onDelete: SetNull nulls the pointer.
-      await db.project.delete({ where: { id: projectP.id } });
+      await adminDb.project.delete({ where: { id: projectP.id } });
       expect(await pointerOf(user.id)).toBeNull();
 
       // Cold resolve degrades to first-by-createdAt (wsA).

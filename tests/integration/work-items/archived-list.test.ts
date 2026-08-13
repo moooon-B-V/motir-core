@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -18,7 +19,7 @@ import {
 // pagination + the page-size clamp, and the empty archive.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const ids = (rows: { identifier: string }[]) => rows.map((r) => r.identifier);
@@ -38,7 +40,7 @@ const ids = (rows: { identifier: string }[]) => rows.map((r) => r.identifier);
  *  service stamps `now()` — distinct-millisecond ordering is too racy to
  *  assert on). The actor revision archiveWorkItem recorded is untouched. */
 async function setArchivedAt(id: string, iso: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { archivedAt: new Date(iso) } });
+  await adminDb.workItem.update({ where: { id }, data: { archivedAt: new Date(iso) } });
 }
 
 describe('listArchivedWorkItems — only-archived projection + ordering', () => {
@@ -108,7 +110,7 @@ describe('listArchivedWorkItems — only-archived projection + ordering', () => 
     const fx = await makeFixture();
     const epic = await createWorkItem(fx, { kind: 'epic', title: 'Epic' });
     const task = await createWorkItem(fx, { kind: 'task', title: 'Task' });
-    await db.workItem.update({ where: { id: task.id }, data: { type: 'code' } });
+    await adminDb.workItem.update({ where: { id: task.id }, data: { type: 'code' } });
     await workItemsService.archiveWorkItem(task.id, fx.ctx);
     await workItemsService.archiveWorkItem(epic.id, fx.ctx);
 

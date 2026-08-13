@@ -6,6 +6,7 @@ import {
   WeakPasswordError,
   WrongCurrentPasswordError,
 } from '@/lib/users/errors';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for the in-app password change (Subtask 8.8.23), against
@@ -32,7 +33,7 @@ async function oauthUser(email = 'oauth@example.com') {
 }
 
 async function credentialHash(userId: string): Promise<string | null> {
-  const row = await db.account.findFirst({ where: { userId, providerId: 'credential' } });
+  const row = await adminDb.account.findFirst({ where: { userId, providerId: 'credential' } });
   return row?.password ?? null;
 }
 
@@ -42,6 +43,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('getPasswordCapability', () => {
@@ -111,7 +113,7 @@ describe('changePassword', () => {
   it('revokes other sessions but keeps the current one when asked', async () => {
     const user = await credentialUser();
     const now = new Date(Date.now() + 60 * 60 * 1000);
-    await db.session.createMany({
+    await adminDb.session.createMany({
       data: [
         { userId: user.id, token: 'current', expiresAt: now },
         { userId: user.id, token: 'other-1', expiresAt: now },
@@ -128,14 +130,14 @@ describe('changePassword', () => {
     });
     expect(result).toEqual({ revokedSessions: 2 });
 
-    const remaining = await db.session.findMany({ where: { userId: user.id } });
+    const remaining = await adminDb.session.findMany({ where: { userId: user.id } });
     expect(remaining.map((s) => s.token)).toEqual(['current']);
   });
 
   it('leaves sessions untouched when revokeOtherSessions is not set', async () => {
     const user = await credentialUser();
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
-    await db.session.createMany({
+    await adminDb.session.createMany({
       data: [
         { userId: user.id, token: 'current', expiresAt },
         { userId: user.id, token: 'other-1', expiresAt },
@@ -149,6 +151,7 @@ describe('changePassword', () => {
       currentSessionToken: 'current',
     });
     expect(result).toEqual({ revokedSessions: 0 });
-    expect(await db.session.count({ where: { userId: user.id } })).toBe(2);
+    const sessionCount = await adminDb.session.count({ where: { userId: user.id } });
+    expect(sessionCount).toBe(2);
   });
 });

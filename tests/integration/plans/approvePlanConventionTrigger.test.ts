@@ -14,6 +14,7 @@ import { db } from '@/lib/db';
 import { plansService } from '@/lib/services/plansService';
 import { conventionEstablishService } from '@/lib/services/conventionEstablishService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 /** Create a plan, append the given proposals, and mark it `planned`. */
@@ -40,6 +41,7 @@ afterEach(() => vi.clearAllMocks());
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('plansService.approvePlan — fresh-establish convention trigger (MOTIR-839)', () => {
@@ -94,10 +96,10 @@ describe('plansService.approvePlan — fresh-establish convention trigger (MOTIR
 
     // The approve still committed: the plan is approved and the add materialized.
     expect(approved.status).toBe('approved');
-    const item = await db.workItem.findFirst({ where: { title: 'Resilient tree' } });
+    const item = await adminDb.workItem.findFirst({ where: { title: 'Resilient tree' } });
     expect(item).not.toBeNull();
     // The onboarding marker is stamped despite the trigger throwing.
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.onboardingRanAt).toBeInstanceOf(Date);
   });
 });

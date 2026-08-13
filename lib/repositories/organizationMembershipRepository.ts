@@ -5,7 +5,6 @@ import {
   Prisma,
   type User,
 } from '@/generated/prisma/client';
-import { db } from '@/lib/db';
 
 // A membership row joined with the slice of its user the cross-workspace member
 // roster (6.10.5) renders. Kept here (not in the service) because the join shape
@@ -24,21 +23,17 @@ export type OrgMembershipWithUser = OrganizationMembership & {
 // pagination live in `organizationsService` (6.10.4).
 
 export const organizationMembershipRepository = {
-  async findByOrgAndUser(
-    organizationId: string,
-    userId: string,
-  ): Promise<OrganizationMembership | null> {
-    return db.organizationMembership.findUnique({
-      where: { organizationId_userId: { organizationId, userId } },
-    });
-  },
-
   /**
-   * Same lookup as findByOrgAndUser, but inside the caller's transaction so the
+   * The membership lookup, inside the caller's transaction so the
    * organization_membership RLS policy (keyed off the per-transaction
    * `app.organization_id` / `app.user_id` GUCs) admits the row under the
    * non-bypass `motir_app` role. Used by the 6.10.4 access gate, whose result
    * must be correct in production.
+   *
+   * The `…InTx` suffix is now vestigial and kept only so the six call sites in
+   * `organizationsService` need not churn: the un-suffixed singleton variant was
+   * retired in MOTIR-2775, having had zero production callers and returning NULL
+   * under RLS by design.
    */
   async findByOrgAndUserInTx(
     organizationId: string,
@@ -54,9 +49,21 @@ export const organizationMembershipRepository = {
    * The organizations a user belongs to, ordered by membership.createdAt asc so
    * the auto-provisioned default org (6.10.4 signup flow) lands first in the
    * switcher list (6.10.5). Mirrors workspaceMembershipRepository.findWorkspacesByUser.
+   *
+   * Takes `tx` for the same reason `findMembersByOrg` below does, and it is REQUIRED
+   * rather than optional (MOTIR-2774): both call sites already ran inside
+   * `withUserContext`, and both discarded the transaction it handed them, so the read
+   * went to the `@/lib/db` singleton where the membership policy sees no
+   * `app.user_id`. It then returned an EMPTY ARRAY AND RAISED NOTHING — the org
+   * switcher rendered empty and `resolveActiveOrganization` reported that the user
+   * belonged to no organization at all. An optional `tx` would have left exactly that
+   * mistake available to the next caller; a required one makes it a type error.
    */
-  async findOrganizationsByUser(userId: string): Promise<Organization[]> {
-    const rows = await db.organizationMembership.findMany({
+  async findOrganizationsByUser(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<Organization[]> {
+    const rows = await tx.organizationMembership.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
       include: { organization: true },

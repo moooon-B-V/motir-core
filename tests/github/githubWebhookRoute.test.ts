@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { db } from '@/lib/db';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-892 — the webhook ROUTE: signature verification is the gate,
@@ -40,6 +41,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/github/webhook — signature gate', () => {

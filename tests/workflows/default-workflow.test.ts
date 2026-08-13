@@ -7,6 +7,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
 import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWorkflow';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Default-workflow seed (Story 2.2 · Subtask 2.2.2). Real Postgres — runs in
@@ -35,6 +36,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeWorkspaceAndUser(): Promise<{ userId: string; workspaceId: string }> {
@@ -84,19 +86,19 @@ describe('createProject seeds the default workflow (same transaction)', () => {
     });
 
     const [statusCount, transitionCount] = await Promise.all([
-      db.workflowStatus.count({ where: { projectId: project.id } }),
-      db.workflowTransition.count({ where: { projectId: project.id } }),
+      adminDb.workflowStatus.count({ where: { projectId: project.id } }),
+      adminDb.workflowTransition.count({ where: { projectId: project.id } }),
     ]);
     expect(statusCount).toBe(7);
     expect(transitionCount).toBe(22);
 
-    const initials = await db.workflowStatus.findMany({
+    const initials = await adminDb.workflowStatus.findMany({
       where: { projectId: project.id, isInitial: true },
     });
     expect(initials.map((s) => s.key)).toEqual(['todo']);
 
     // Every status + transition carries the project's workspaceId (tenant tag).
-    const statuses = await db.workflowStatus.findMany({ where: { projectId: project.id } });
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: project.id } });
     expect(statuses.every((s) => s.workspaceId === workspaceId)).toBe(true);
   });
 
@@ -166,8 +168,14 @@ describe('seed atomicity + the one-initial-per-project constraint', () => {
       ),
     ).rejects.toThrow();
 
-    expect(await db.workflowStatus.count({ where: { projectId: project.id } })).toBe(7);
-    expect(await db.workflowTransition.count({ where: { projectId: project.id } })).toBe(22);
+    const workflowStatusCount = await adminDb.workflowStatus.count({
+      where: { projectId: project.id },
+    });
+    expect(workflowStatusCount).toBe(7);
+    const workflowTransitionCount = await adminDb.workflowTransition.count({
+      where: { projectId: project.id },
+    });
+    expect(workflowTransitionCount).toBe(22);
   });
 
   it('a second initial status in the same project violates the partial-unique index (2.2.1)', async () => {
@@ -179,7 +187,7 @@ describe('seed atomicity + the one-initial-per-project constraint', () => {
     });
 
     await expect(
-      db.workflowStatus.create({
+      adminDb.workflowStatus.create({
         data: {
           workspaceId,
           projectId: project.id,
@@ -199,21 +207,33 @@ describe('backfillDefaultWorkflow (one-off, idempotent)', () => {
     const { userId, workspaceId } = await makeWorkspaceAndUser();
     // A project row WITHOUT a workflow (bypasses createProject's seed) — mimics
     // a row predating this Story.
-    const bare = await db.project.create({
+    const bare = await adminDb.project.create({
       data: { workspaceId, name: 'Bare', slug: 'bare-proj', identifier: 'BARE' },
     });
 
-    expect(await db.workflowStatus.count({ where: { projectId: bare.id } })).toBe(0);
+    const workflowStatusCount = await adminDb.workflowStatus.count({
+      where: { projectId: bare.id },
+    });
+    expect(workflowStatusCount).toBe(0);
 
     const seeded = await workflowsService.backfillDefaultWorkflow(bare.id, userId);
     expect(seeded).toBe(true);
-    expect(await db.workflowStatus.count({ where: { projectId: bare.id } })).toBe(7);
-    expect(await db.workflowTransition.count({ where: { projectId: bare.id } })).toBe(22);
+    const workflowStatusCount2 = await adminDb.workflowStatus.count({
+      where: { projectId: bare.id },
+    });
+    expect(workflowStatusCount2).toBe(7);
+    const workflowTransitionCount = await adminDb.workflowTransition.count({
+      where: { projectId: bare.id },
+    });
+    expect(workflowTransitionCount).toBe(22);
 
     // Idempotent — already has a workflow, so the second call is a no-op.
     const again = await workflowsService.backfillDefaultWorkflow(bare.id, userId);
     expect(again).toBe(false);
-    expect(await db.workflowStatus.count({ where: { projectId: bare.id } })).toBe(7);
+    const workflowStatusCount3 = await adminDb.workflowStatus.count({
+      where: { projectId: bare.id },
+    });
+    expect(workflowStatusCount3).toBe(7);
   });
 
   it('throws ProjectNotFoundError for a project that does not exist (2.6.4)', async () => {

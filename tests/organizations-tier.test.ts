@@ -6,6 +6,8 @@ import { organizationMembershipRepository } from '@/lib/repositories/organizatio
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { AlreadyOrgMemberError, LastOrgOwnerError } from '@/lib/organizations/errors';
 import { createTestUser } from './fixtures/userFixtures';
+import { withOrgContext } from '@/lib/organizations/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // The exhaustive org-tier matrix (Story 6.10 · Subtask 6.10.7). Picks up the
@@ -21,10 +23,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function orgIdOfWorkspace(workspaceId: string): Promise<string> {
-  const ws = await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
+  const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } });
   return ws.organizationId;
 }
 
@@ -101,7 +104,9 @@ describe('access gating — the membership-direction asymmetry (6.10.2 §5)', ()
 
     // The org membership is untouched (leaving a workspace ≠ leaving the org).
     expect(
-      await organizationMembershipRepository.findByOrgAndUser(orgId, member.id),
+      await adminDb.$transaction((tx) =>
+        organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+      ),
     ).not.toBeNull();
     // w1 is now denied (no workspace membership, plain org member), but w2 still works.
     expect(await organizationsService.resolveWorkspaceAccess(member.id, w1.id)).toBeNull();
@@ -149,7 +154,11 @@ describe('membership management — idempotency + the upward auto-join', () => {
       userId: member.id,
       actorUserId: member.id, // self-leave
     });
-    expect(await organizationMembershipRepository.findByOrgAndUser(orgId, member.id)).toBeNull();
+    expect(
+      await adminDb.$transaction((tx) =>
+        organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+      ),
+    ).toBeNull();
   });
 
   it('changeMemberRole promotes a member to admin (the happy path)', async () => {
@@ -173,9 +182,11 @@ describe('membership management — idempotency + the upward auto-join', () => {
       role: 'admin',
       actorUserId: owner.id,
     });
-    expect((await organizationMembershipRepository.findByOrgAndUser(orgId, member.id))!.role).toBe(
-      'admin',
-    );
+    expect(
+      (await adminDb.$transaction((tx) =>
+        organizationMembershipRepository.findByOrgAndUserInTx(orgId, member.id, tx),
+      ))!.role,
+    ).toBe('admin');
   });
 
   it('ensureOrgMembership is a no-op when the user is already a member (does NOT downgrade their role)', async () => {
@@ -194,11 +205,22 @@ describe('membership management — idempotency + the upward auto-join', () => {
     });
 
     // The upward auto-join must not clobber the existing 'admin' to 'member'.
-    await db.$transaction((tx) => organizationsService.ensureOrgMembership(admin.id, orgId, tx));
-    const m = await organizationMembershipRepository.findByOrgAndUser(orgId, admin.id);
+    // ALTITUDE, not client (MOTIR-2777): `ensureOrgMembership` takes its caller's
+    // transaction and deliberately binds nothing itself, so the test must open the
+    // org context its production callers open. A bare `db.$transaction` reaches the
+    // service with no tenant bound, and `org_membership_insert_active_or_bootstrap`
+    // refuses the row.
+    await withOrgContext({ userId: admin.id, organizationId: orgId }, (tx) =>
+      organizationsService.ensureOrgMembership(admin.id, orgId, tx),
+    );
+    const m = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(orgId, admin.id, tx),
+    );
     expect(m!.role).toBe('admin');
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, userId: admin.id } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: admin.id },
+      }),
     ).toBe(1);
   });
 });
@@ -302,7 +324,9 @@ describe('concurrency — the last-owner guard under a WARM pool (bug-org-last-o
     expect(rejected[0]!.reason).toBeInstanceOf(LastOrgOwnerError);
     // The invariant: exactly one owner survives — the org is never orphaned.
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, role: 'owner' },
+      }),
     ).toBe(1);
   });
 
@@ -341,7 +365,9 @@ describe('concurrency — the last-owner guard under a WARM pool (bug-org-last-o
     expect(rejected).toHaveLength(1);
     expect(rejected[0]!.reason).toBeInstanceOf(LastOrgOwnerError);
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, role: 'owner' },
+      }),
     ).toBe(1);
   });
 });
@@ -377,7 +403,9 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
     expect(rejected[0]!.reason).toBeInstanceOf(AlreadyOrgMemberError);
     // The unique (organizationId, userId) index left exactly one row.
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, userId: u.id } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: u.id },
+      }),
     ).toBe(1);
   });
 
@@ -392,13 +420,19 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
 
     // Two independent transactions both racing to auto-join the same user.
     const results = await Promise.allSettled([
-      db.$transaction((tx) => organizationsService.ensureOrgMembership(u.id, orgId, tx)),
-      db.$transaction((tx) => organizationsService.ensureOrgMembership(u.id, orgId, tx)),
+      withOrgContext({ userId: u.id, organizationId: orgId }, (tx) =>
+        organizationsService.ensureOrgMembership(u.id, orgId, tx),
+      ),
+      withOrgContext({ userId: u.id, organizationId: orgId }, (tx) =>
+        organizationsService.ensureOrgMembership(u.id, orgId, tx),
+      ),
     ]);
     // Neither rejects (the duplicate-insert race is swallowed to a no-op).
     expect(results.every((r) => r.status === 'fulfilled')).toBe(true);
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, userId: u.id } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, userId: u.id },
+      }),
     ).toBe(1);
   });
 
@@ -429,7 +463,9 @@ describe('concurrency — unique-constraint races (the deterministic guarantees)
       organizationsService.removeMember({ organizationId: orgId, userId: b.id, actorUserId: b.id }),
     ).rejects.toBeInstanceOf(LastOrgOwnerError);
     expect(
-      await db.organizationMembership.count({ where: { organizationId: orgId, role: 'owner' } }),
+      await adminDb.organizationMembership.count({
+        where: { organizationId: orgId, role: 'owner' },
+      }),
     ).toBe(1);
   });
 });
@@ -489,10 +525,14 @@ describe('migration backfill (6.10.3) — one default org per workspace, idempot
     await workspacesService.createWorkspace({ name: 'Beta', ownerUserId: owner2.id });
     await workspacesService.addMember({ userId: member.id, workspaceId: w1.id });
 
-    const w1Slug = (await db.workspace.findUniqueOrThrow({ where: { id: w1.id } })).slug;
+    const w1Slug = (await adminDb.workspace.findUniqueOrThrow({ where: { id: w1.id } })).slug;
 
     try {
-      await db.$transaction(
+      // The ADMIN client: this block runs `ALTER TABLE` (which needs table
+      // OWNERSHIP) and `DELETE FROM "organization"` across every tenant. Both are
+      // privileges the runtime role must never hold, and the subject here is the
+      // migration SQL rather than anything about visibility.
+      await adminDb.$transaction(
         async (tx) => {
           // Reconstruct the legacy pre-org state: drop the NOT NULL, null every
           // workspace's org, then delete the orgs (org_membership cascades).
@@ -550,11 +590,10 @@ describe('migration backfill (6.10.3) — one default org per workspace, idempot
     // After rollback the original service-created orgs are back and the NOT NULL
     // is restored (the schema is pristine for sibling tests).
     expect(await nullOrgWorkspaceCount(db)).toBe(0);
-    expect(
-      await organizationMembershipRepository.findByOrgAndUser(
-        await orgIdOfWorkspace(w1.id),
-        owner1.id,
-      ),
-    ).not.toBeNull();
+    const restoredOrgId = await orgIdOfWorkspace(w1.id);
+    const restoredMembership = await adminDb.$transaction((tx) =>
+      organizationMembershipRepository.findByOrgAndUserInTx(restoredOrgId, owner1.id, tx),
+    );
+    expect(restoredMembership).not.toBeNull();
   });
 });

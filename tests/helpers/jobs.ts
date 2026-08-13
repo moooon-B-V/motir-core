@@ -3,6 +3,7 @@ import { InngestTestEngine } from '@inngest/test';
 import { inngest } from '@/lib/jobs/client';
 import { emailSend } from '@/lib/jobs/definitions/emailSend';
 import type { EmailSendData } from '@/lib/jobs/types';
+import { adminDb } from './adminDb';
 
 // Test helpers for the async email path (Story 1.6 · Subtask 1.6.3).
 //
@@ -117,7 +118,6 @@ export function captureJobEvents(): { events: CapturedJobEvent[]; restore: () =>
 export async function seedHealthyJobSchedules(): Promise<void> {
   const { jobSchedules } = await import('@/lib/jobs/schedules');
   await import('@/lib/jobs/registry');
-  const { db } = await import('@/lib/db');
   // ⚠️ SEEDED AT `now`, NOT AT `now - 60s` — the difference is a CI flake, not a
   // style preference. `jobScheduleHealthService.judge` holds a schedule to the
   // tick BEFORE the most recent one, so for the every-minute cron
@@ -132,7 +132,11 @@ export async function seedHealthyJobSchedules(): Promise<void> {
   const startedAt = new Date();
   for (const { functionId } of jobSchedules()) {
     if (functionId === 'system.daily-health-check') continue;
-    await db.jobRun.create({
+    // FIXTURE (MOTIR-2792) → the admin client. `job_run` is workspace-scoped and its
+    // policy admits the trusted-writer/system-admin context production's job runtime
+    // binds; a test SEEDING a ledger row is not exercising that runtime, so it writes
+    // as the owner rather than pretending to be it.
+    await adminDb.jobRun.create({
       data: {
         workspaceId: null,
         functionId,

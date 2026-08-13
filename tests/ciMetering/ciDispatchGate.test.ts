@@ -8,6 +8,7 @@ import { CiCreditsExhaustedError } from '@/lib/ciMetering/errors';
 import { POST as postReadyNext } from '@/app/api/ready/next/route';
 import { getWorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The REFUSAL where it actually bites (Story MOTIR-1775 · MOTIR-1901 ·
@@ -45,7 +46,7 @@ function stubBalance(balance: number): void {
 
 /** Put the org past its 1,000-minute floor pool. */
 async function exhaustPool(fx: WorkItemFixture): Promise<void> {
-  const workspace = await db.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
+  const workspace = await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
   await withSystemContext((tx) =>
     ciPeriodUsageRepository.incrementForPeriod(
       {
@@ -87,6 +88,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('an EXHAUSTED org is refused on every dispatch path (§6.2)', () => {
@@ -113,7 +115,7 @@ describe('an EXHAUSTED org is refused on every dispatch path (§6.2)', () => {
 
     // The gate runs BEFORE the claim transaction, so nothing was flipped to
     // in_progress and stranded — the item is still there for after the top-up.
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: item.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: item.id } });
     expect(row.status).toBe('todo');
   });
 

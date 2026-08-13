@@ -17,6 +17,7 @@ import {
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import type { ProjectAccessLevel } from '@/generated/prisma/client';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.3 access gate — the
@@ -48,6 +49,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {
@@ -110,7 +112,7 @@ async function buildScenario(level: ProjectAccessLevel, slug: string): Promise<S
   // 6.12.8, and `asAccessLevel` deliberately still rejects it), so seed it
   // directly at the data layer; the 3 settable levels go through the real setter.
   if (level === 'public') {
-    await db.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
+    await adminDb.project.update({ where: { id: project.id }, data: { accessLevel: 'public' } });
   } else {
     await projectMembersService.setAccessLevel({
       key: project.identifier,

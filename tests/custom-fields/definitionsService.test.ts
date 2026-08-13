@@ -32,6 +32,7 @@ import {
 import { keyForAppend, keyForPrepend } from '@/lib/workItems/positioning';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Service-layer tests for customFieldsService — the DEFINITIONS half (Story
@@ -51,6 +52,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The owner-actor input for project-scoped calls on the fixture's project. */

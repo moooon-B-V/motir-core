@@ -30,6 +30,7 @@ import {
   type ActionsVariableFake,
 } from '../helpers/actionsVariableFake';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -174,13 +175,13 @@ async function seedTenant(
   });
 
   if (options.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
   }
   if (options.withRunnerGroup !== false) {
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: project.id },
       data: {
         // Deliberately NEVER 1: the `Default` group is what §7.3 forbids, and a
@@ -201,10 +202,12 @@ async function seedTenant(
       { providerRepoId, owner: MOTIR_ORG, name: repoName, defaultBranch: 'main', archived: false },
     ],
   });
-  const githubRepo = await db.githubRepo.findFirstOrThrow({ where: { repoId: providerRepoId } });
+  const githubRepo = await adminDb.githubRepo.findFirstOrThrow({
+    where: { repoId: providerRepoId },
+  });
 
   if (options.withProjectRepo !== false) {
-    await db.projectRepo.create({
+    await adminDb.projectRepo.create({
       data: {
         workspaceId: workspace.id,
         projectId: project.id,
@@ -283,12 +286,14 @@ function runToCompletion(intentId: string) {
 }
 
 async function statusOf(intentId: string): Promise<string> {
-  const row = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intentId } });
+  const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    where: { id: intentId },
+  });
   return row.status;
 }
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_workflow_run_usage", "ci_period_usage", "ci_container_usage", "ci_container_period_cost", "fleet_in_flight_slot" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -375,6 +380,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -394,7 +400,7 @@ describe('§2.1 — one queued job walks the WHOLE pipeline to a cost row', () =
     expect(intentIds).toHaveLength(1);
     const intentId = intentIds[0]!;
 
-    const intent = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const intent = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intentId },
     });
     expect(intent).toMatchObject({
@@ -419,7 +425,7 @@ describe('§2.1 — one queued job walks the WHOLE pipeline to a cost row', () =
     const usage = outcome.outcome === 'settled' ? outcome.usage : null;
     expect(usage).not.toBeNull();
 
-    const rows = await db.ciContainerUsage.findMany();
+    const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       containerProvider: 'fake',
@@ -437,7 +443,7 @@ describe('§2.1 — one queued job walks the WHOLE pipeline to a cost row', () =
 
     // And the org's period rollup was incremented in the SAME transaction — the
     // margin readout's half of the record.
-    const rollups = await db.ciContainerPeriodCost.findMany();
+    const rollups = await adminDb.ciContainerPeriodCost.findMany();
     expect(rollups).toHaveLength(1);
     expect(rollups[0]).toMatchObject({
       organizationId: fx.organizationId,
@@ -458,8 +464,10 @@ describe('§2.1 — one queued job walks the WHOLE pipeline to a cost row', () =
     expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'fleet_ceiling' });
     expect(mintCalls()).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
-    expect(await db.ciContainerUsage.count()).toBe(0);
-    expect(await db.ciContainerPeriodCost.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
+    const ciContainerPeriodCostCount = await adminDb.ciContainerPeriodCost.count();
+    expect(ciContainerPeriodCostCount).toBe(0);
     // Deferred, never failed: the intent waits for the next sweep.
     expect(await statusOf(intentId)).toBe('pending');
   });
@@ -480,7 +488,7 @@ describe('§2.2 — establishment → the PERSISTED runner group → the JIT min
     // The value GitHub minted, as Motir persisted it. Neither card's own units
     // can see this hop: MOTIR-1972's stop at the column, MOTIR-1921's start from
     // a fixture.
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(project.runnerGroupId).toBe(created.id);
 
     await handle(delivery(fx, { jobId: 52_001, runId: 62_001 }));
@@ -489,7 +497,7 @@ describe('§2.2 — establishment → the PERSISTED runner group → the JIT min
     expect(mintedGroupIds()).toEqual([created.id]);
     // …and the group GitHub holds access-lists exactly this project's repo set,
     // which is what makes the label unambiguous for the runner just minted.
-    const repo = await db.githubRepo.findUniqueOrThrow({ where: { id: fx.githubRepoId } });
+    const repo = await adminDb.githubRepo.findUniqueOrThrow({ where: { id: fx.githubRepoId } });
     expect(created.repositoryIds).toEqual([Number(repo.repoId)]);
   });
 
@@ -510,7 +518,7 @@ describe('§2.2 — establishment → the PERSISTED runner group → the JIT min
     const [groupA, groupB] = await Promise.all(
       [a, b].map(
         async (fx) =>
-          (await db.project.findUniqueOrThrow({ where: { id: fx.projectId } })).runnerGroupId,
+          (await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } })).runnerGroupId,
       ),
     );
     expect(groupA).not.toBe(groupB);
@@ -561,7 +569,7 @@ describe('§2.3 — a fleet job lands on the FLEET side of the reconciliation', 
     expect(boot.outcome).toBe('settled');
     // The container's cost lands in the run's month, so the audit compares like
     // with like.
-    await db.ciContainerUsage.updateMany({
+    await adminDb.ciContainerUsage.updateMany({
       data: { periodStart: JULY_2026, containerStoppedAt: RUN_COMPLETED_AT },
     });
 
@@ -659,7 +667,7 @@ describe('§2.3 — a fleet job lands on the FLEET side of the reconciliation', 
       fx.installationId,
     );
 
-    const row = await db.ciWorkflowRunUsage.findFirstOrThrow();
+    const row = await adminDb.ciWorkflowRunUsage.findFirstOrThrow();
     const families = (row.runnerBreakdown as Array<{ family: string }>).map((e) => e.family);
     expect(families).toEqual([MOTIR_FLEET_RUNNER_FAMILY]);
   });
@@ -707,7 +715,8 @@ describe('§3.1 — LABEL SCOPING IS TOTAL: a job that is not ours provisions NO
       // says why, so GitHub is not made to retry a job there was nothing to do
       // for.
       expect(result).toEqual({ event: 'workflow_job', outcome: 'not_fleet_job' });
-      expect(await db.ciRunnerProvisioningIntent.count()).toBe(0);
+      const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+      expect(ciRunnerProvisioningIntentCount).toBe(0);
       expect(dispatchedIntentIds()).toEqual([]);
       expect(mintCalls()).toEqual([]);
       expect(fakeOrchestrator.provisioned).toEqual([]);
@@ -729,7 +738,8 @@ describe('§3.1 — LABEL SCOPING IS TOTAL: a job that is not ours provisions NO
 
       await handle(delivery(fx, { labels: shape.labels, jobId: 54_002, runId: 64_002 }));
 
-      expect(await db.ciRunnerProvisioningIntent.count()).toBe(1);
+      const ciRunnerProvisioningIntentCount = await adminDb.ciRunnerProvisioningIntent.count();
+      expect(ciRunnerProvisioningIntentCount).toBe(1);
       expect(dispatchedIntentIds()).toHaveLength(1);
     });
   }
@@ -741,7 +751,7 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     await handle(delivery(fx, { jobId: 55_001, runId: 65_001 }));
     await runToCompletion(dispatchedIntentIds()[0]!);
 
-    const rows = await db.ciContainerUsage.findMany();
+    const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]!.teardownReason).toBe('job_completed');
   });
@@ -754,7 +764,7 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     const outcome = await ciRunnerBootService.runIntent(dispatchedIntentIds()[0]!, FAST);
     expect(outcome).toMatchObject({ outcome: 'settled', reason: 'provision_failed' });
 
-    const rows = await db.ciContainerUsage.findMany();
+    const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ teardownReason: 'provision_failed', billableSeconds: 0 });
     // Zero seconds is not zero ROWS: "a container with no usage row is a bug
@@ -771,10 +781,10 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     // intent stays in flight — the ONE case a `finally` cannot cover.
     fakeOrchestrator.setBootBehaviour('hang');
     const admitted = await ciRunnerAdmissionService.admit(
-      await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intentId } }),
+      await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intentId } }),
     );
     expect(admitted.outcome).toBe('admitted');
-    const intent = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const intent = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intentId },
     });
     const handleRef = await fakeOrchestrator.provision(
@@ -806,26 +816,29 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     const reap = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
     expect(reap.reaped).toBe(1);
 
-    const rows = await db.ciContainerUsage.findMany();
+    const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ handleId: handleRef.id, teardownReason: 'reaped' });
 
     // …and a SECOND reap of the same container adds nothing. Both the `finally`
     // and the reaper can reach one handle; the row is per handle, not per call.
     await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
-    expect(await db.ciContainerUsage.count()).toBe(1);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
   });
 
   it('a reaper arriving AFTER the supervised teardown adds no second row', async () => {
     const fx = await seedTenant();
     await handle(delivery(fx, { jobId: 55_004, runId: 65_004 }));
     await runToCompletion(dispatchedIntentIds()[0]!);
-    expect(await db.ciContainerUsage.count()).toBe(1);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
 
     // Nothing is left to reap, and the sweep is inert rather than duplicating.
     const reap = await ciRunnerBootService.reapOrphans({ olderThan: new Date() });
     expect(reap.reaped).toBe(0);
-    expect(await db.ciContainerUsage.count()).toBe(1);
+    const ciContainerUsageCount2 = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount2).toBe(1);
   });
 
   it('a provision that THREW leaves no handle and therefore no row — and no leak', async () => {
@@ -840,7 +853,8 @@ describe('§3.2 — EXACTLY ONE usage row per provisioned handle, on every path'
     // No container was ever provisioned, so there is no handle to account for —
     // the invariant is per PROVISIONED handle, and honouring it here means
     // writing nothing rather than writing a row about nothing.
-    expect(await db.ciContainerUsage.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
   });
 });
 
@@ -864,7 +878,7 @@ describe('§3.3 — NO RUNNER REUSE', () => {
     expect(new Set(handles).size).toBe(3);
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     // One usage row per handle, and their handle ids are the three booted.
-    const rows = await db.ciContainerUsage.findMany({ orderBy: { handleId: 'asc' } });
+    const rows = await adminDb.ciContainerUsage.findMany({ orderBy: { handleId: 'asc' } });
     expect(rows.map((r) => r.handleId).sort()).toEqual([...handles].sort());
   });
 
@@ -882,7 +896,8 @@ describe('§3.3 — NO RUNNER REUSE', () => {
     expect(again).toEqual({ outcome: 'already_claimed' });
     expect(fakeOrchestrator.provisioned).toHaveLength(1);
     expect(mintCalls()).toHaveLength(1);
-    expect(await db.ciContainerUsage.count()).toBe(1);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(1);
   });
 });
 
@@ -900,7 +915,7 @@ describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs',
     expect(
       (
         await ciRunnerAdmissionService.admit(
-          await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: first! } }),
+          await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: first! } }),
         )
       ).outcome,
     ).toBe('admitted');
@@ -910,7 +925,8 @@ describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs',
     expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'project_cap' });
     expect(mintCalls()).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
-    expect(await db.ciContainerUsage.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
   });
 
   it('the FLEET-WIDE ceiling refuses before anything is spent', async () => {
@@ -956,7 +972,8 @@ describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs',
     expect(outcome).toMatchObject({ outcome: 'gate_deferred', reason: 'ci_credits_exhausted' });
     expect(mintCalls()).toEqual([]);
     expect(fakeOrchestrator.provisioned).toEqual([]);
-    expect(await db.ciContainerUsage.count()).toBe(0);
+    const ciContainerUsageCount = await adminDb.ciContainerUsage.count();
+    expect(ciContainerUsageCount).toBe(0);
     // The slot is RELEASED — an exhausted org's queue must not squeeze paying
     // tenants out of the fleet.
     expect(await statusOf(intentId)).toBe('pending');
@@ -990,7 +1007,7 @@ describe('§3.4 — the GATE is consulted BEFORE provision, on all three limbs',
     for (const n of [1, 2, 3, 4] as const) {
       await handle(delivery(fx, { jobId: 57_100 + n, runId: 67_100 + n }));
     }
-    const intents = await db.ciRunnerProvisioningIntent.findMany();
+    const intents = await adminDb.ciRunnerProvisioningIntent.findMany();
     expect(intents).toHaveLength(4);
 
     const verdicts = await Promise.all(
@@ -1058,7 +1075,7 @@ describe('§3.5 — the admission LOCK is load-bearing: an executable mutation c
     );
     const intents = await Promise.all(
       tenants.map((fx, i) =>
-        db.ciRunnerProvisioningIntent.create({
+        adminDb.ciRunnerProvisioningIntent.create({
           data: {
             workspaceId: fx.workspaceId,
             organizationId: fx.organizationId,
@@ -1129,7 +1146,7 @@ describe('§3.6 — the JIT mint NAMES THE PROJECT’S OWN GROUP, or refuses', (
     await handle(delivery(fx, { jobId: 58_001, runId: 68_001 }));
     await runToCompletion(dispatchedIntentIds()[0]!);
 
-    const project = await db.project.findUniqueOrThrow({ where: { id: fx.projectId } });
+    const project = await adminDb.project.findUniqueOrThrow({ where: { id: fx.projectId } });
     expect(mintedGroupIds()).toEqual([project.runnerGroupId]);
     // §7.3's forbidden value, named explicitly: `Default` is id 1 with
     // `visibility: "all"`, and provisioning into it restores exactly the
@@ -1197,7 +1214,7 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
 
     await handle(delivery(broke, { jobId: 59_001, runId: 69_001 }));
     await handle(delivery(paying, { jobId: 59_002, runId: 69_002 }));
-    const [brokeIntent, payingIntent] = await db.ciRunnerProvisioningIntent.findMany({
+    const [brokeIntent, payingIntent] = await adminDb.ciRunnerProvisioningIntent.findMany({
       orderBy: { jobId: 'asc' },
     });
 
@@ -1215,7 +1232,9 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     await handle(delivery(a, { jobId: 59_003, runId: 69_003 }));
     await handle(delivery(a, { jobId: 59_004, runId: 69_004 }));
     await handle(delivery(b, { jobId: 59_005, runId: 69_005 }));
-    const intents = await db.ciRunnerProvisioningIntent.findMany({ orderBy: { jobId: 'asc' } });
+    const intents = await adminDb.ciRunnerProvisioningIntent.findMany({
+      orderBy: { jobId: 'asc' },
+    });
 
     const first = await ciRunnerAdmissionService.admit(intents[0]!);
     const second = await ciRunnerAdmissionService.admit(intents[1]!);
@@ -1234,7 +1253,7 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     await handle(delivery(a, { jobId: 59_006, runId: 69_006 }));
     await runToCompletion(dispatchedIntentIds()[0]!);
 
-    const rows = await db.ciContainerUsage.findMany();
+    const rows = await adminDb.ciContainerUsage.findMany();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       organizationId: a.organizationId,
@@ -1243,7 +1262,7 @@ describe('§3.7 — CROSS-TENANT ISOLATION: one org’s state never decides anot
     expect(rows[0]!.organizationId).not.toBe(b.organizationId);
 
     // The rollup the margin readout reads is per org, so B's is untouched.
-    const costB = await db.ciContainerPeriodCost.findMany({
+    const costB = await adminDb.ciContainerPeriodCost.findMany({
       where: { organizationId: b.organizationId },
     });
     expect(costB).toEqual([]);

@@ -8,6 +8,7 @@ import { workItemComponentRepository } from '@/lib/repositories/workItemComponen
 import { watcherRepository } from '@/lib/repositories/watcherRepository';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Repository-layer tests for the Story 5.4 data-access leaves (Subtask
@@ -24,6 +25,16 @@ import { truncateAuthTables } from '../helpers/db';
 // Writes run inside a real `db.$transaction` to exercise the required-`tx`
 // path. The folksonomy/permission/notification BUSINESS rules live in the
 // 5.4.2–5.4.5 services and are tested there.
+//
+// ⚠️ THIS FILE'S WRITES RUN THROUGH `adminDb` ON PURPOSE (MOTIR-2751).
+// The header above states the subject: the repository CONTRACT and the
+// migration-built CONSTRAINTS, with RLS deliberately inert. Under the non-bypass
+// role a cross-workspace read returns [] because the POLICY hid the row — the same
+// observation for a different reason, which would make every gate assertion here
+// vacuous, and a constraint test that fails with a policy error proves nothing about
+// the constraint. So the admin client is what PRESERVES these claims rather than
+// weakening them. The policies' own behaviour is proved separately, under the role,
+// in the *-rls suites this header already points at.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -35,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface OrganisationFixture {
@@ -50,7 +62,7 @@ async function makeOrganisationFixture(): Promise<OrganisationFixture> {
 
 /** Find-or-create a label + attach it to an issue through the required-`tx` write path. */
 async function addLabel(c: OrganisationFixture, name: string): Promise<string> {
-  return db.$transaction(async (tx) => {
+  return adminDb.$transaction(async (tx) => {
     const nameLower = name.toLowerCase();
     const existing = await labelRepository.findByNameLower(c.fx.projectId, nameLower, tx);
     const label =
@@ -69,7 +81,7 @@ async function addComponent(
   name: string,
   opts: { defaultAssigneeId?: string } = {},
 ): Promise<string> {
-  const component = await db.$transaction(async (tx) =>
+  const component = await adminDb.$transaction(async (tx) =>
     componentRepository.create(
       {
         workspaceId: c.fx.workspaceId,
@@ -89,7 +101,7 @@ describe('labelRepository + workItemLabelRepository', () => {
     const c = await makeOrganisationFixture();
     const id = await addLabel(c, 'Perf-Q3');
 
-    const found = await db.$transaction(async (tx) =>
+    const found = await adminDb.$transaction(async (tx) =>
       labelRepository.findByNameLower(c.fx.projectId, 'perf-q3', tx),
     );
     expect(found?.id).toBe(id);
@@ -103,7 +115,7 @@ describe('labelRepository + workItemLabelRepository', () => {
 
     // Same project, different casing → the unique on (projectId, nameLower) rejects.
     await expect(
-      db.$transaction(async (tx) =>
+      adminDb.$transaction(async (tx) =>
         labelRepository.create(
           {
             workspaceId: c.fx.workspaceId,
@@ -118,7 +130,7 @@ describe('labelRepository + workItemLabelRepository', () => {
 
     // A different project (second tenant) is free to use the same name.
     const other = await makeWorkItemFixture({ name: 'Globex', identifier: 'GLX' });
-    const row = await db.$transaction(async (tx) =>
+    const row = await adminDb.$transaction(async (tx) =>
       labelRepository.create(
         {
           workspaceId: other.workspaceId,
@@ -137,15 +149,15 @@ describe('labelRepository + workItemLabelRepository', () => {
     const labelId = await addLabel(c, 'backend');
 
     await expect(
-      db.$transaction(async (tx) =>
+      adminDb.$transaction(async (tx) =>
         workItemLabelRepository.create({ workItemId: c.issue.id, labelId }, tx),
       ),
     ).rejects.toMatchObject({ code: 'P2002' });
 
-    const first = await db.$transaction(async (tx) =>
+    const first = await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.remove(c.issue.id, labelId, tx),
     );
-    const second = await db.$transaction(async (tx) =>
+    const second = await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.remove(c.issue.id, labelId, tx),
     );
     expect(first).toBe(1);
@@ -155,7 +167,7 @@ describe('labelRepository + workItemLabelRepository', () => {
   it('createMany skips duplicates; createMany/removeMany guard empty input as no-ops', async () => {
     const c = await makeOrganisationFixture();
     const aId = await addLabel(c, 'alpha'); // already attached
-    const b = await db.$transaction(async (tx) =>
+    const b = await adminDb.$transaction(async (tx) =>
       labelRepository.create(
         {
           workspaceId: c.fx.workspaceId,
@@ -167,7 +179,7 @@ describe('labelRepository + workItemLabelRepository', () => {
       ),
     );
 
-    const inserted = await db.$transaction(async (tx) =>
+    const inserted = await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.createMany(
         [
           { workItemId: c.issue.id, labelId: aId }, // duplicate → skipped
@@ -179,16 +191,16 @@ describe('labelRepository + workItemLabelRepository', () => {
     expect(inserted).toBe(1);
 
     // Empty-input guards (coverage gate): no statement, zero counts.
-    const emptyCreate = await db.$transaction(async (tx) =>
+    const emptyCreate = await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.createMany([], tx),
     );
-    const emptyRemove = await db.$transaction(async (tx) =>
+    const emptyRemove = await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.removeMany(c.issue.id, [], tx),
     );
     expect(emptyCreate).toBe(0);
     expect(emptyRemove).toBe(0);
 
-    const removed = await db.$transaction(async (tx) =>
+    const removed = await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.removeMany(c.issue.id, [aId, b.id], tx),
     );
     expect(removed).toBe(2);
@@ -197,7 +209,7 @@ describe('labelRepository + workItemLabelRepository', () => {
   it('searchByPrefix is case-insensitive, prefix-anchored, bounded, name-ordered; empty prefix lists bounded', async () => {
     const c = await makeOrganisationFixture();
     for (const name of ['Perf-Q3', 'perf-q4', 'performance', 'backend']) {
-      await db.$transaction(async (tx) =>
+      await adminDb.$transaction(async (tx) =>
         labelRepository.create(
           {
             workspaceId: c.fx.workspaceId,
@@ -226,11 +238,11 @@ describe('labelRepository + workItemLabelRepository', () => {
     const c = await makeOrganisationFixture();
     const labelId = await addLabel(c, 'infra');
     const issue2 = await createTestWorkItem(c.fx, { kind: 'task', title: 'Second' });
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.create({ workItemId: issue2.id, labelId }, tx),
     );
 
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       expect(await workItemLabelRepository.countByLabel(labelId, tx)).toBe(2);
       expect(await workItemLabelRepository.countByWorkItem(c.issue.id, tx)).toBe(1);
       expect(await labelRepository.lockById(labelId, tx)).toEqual({ id: labelId });
@@ -246,37 +258,43 @@ describe('labelRepository + workItemLabelRepository', () => {
     // findByNameLower, the in-`tx` half of the two list reads).
     const bare = await labelRepository.findByNameLower(c.fx.projectId, 'infra');
     expect(bare?.id).toBe(labelId);
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       expect(await labelRepository.listByWorkItem(c.issue.id, tx)).toHaveLength(1);
       expect(await workItemLabelRepository.listByWorkItem(c.issue.id, tx)).toHaveLength(1);
     });
 
     // The delete-on-last-use end state: label rows die with their last use.
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await workItemLabelRepository.remove(c.issue.id, labelId, tx);
       await workItemLabelRepository.remove(issue2.id, labelId, tx);
       expect(await workItemLabelRepository.countByLabel(labelId, tx)).toBe(0);
       await labelRepository.delete(labelId, tx);
     });
-    expect(await db.label.findUnique({ where: { id: labelId } })).toBeNull();
+    const labelRow = await adminDb.label.findUnique({ where: { id: labelId } });
+    expect(labelRow).toBeNull();
   });
 
   it('cascades: deleting a work item sheds its label joins; deleting a label sheds its joins', async () => {
     const c = await makeOrganisationFixture();
     const labelId = await addLabel(c, 'doomed');
 
-    await db.workItem.delete({ where: { id: c.issue.id } });
-    expect(await db.workItemLabel.count({ where: { labelId } })).toBe(0);
+    await adminDb.workItem.delete({ where: { id: c.issue.id } });
+    const workItemLabelCount = await adminDb.workItemLabel.count({ where: { labelId } });
+    expect(workItemLabelCount).toBe(0);
     // The label row itself survives a work-item delete (delete-on-last-use
     // is a SERVICE rule, not a cascade) — 5.4.2 owns that lifecycle.
-    expect(await db.label.findUnique({ where: { id: labelId } })).not.toBeNull();
+    const labelRow = await adminDb.label.findUnique({ where: { id: labelId } });
+    expect(labelRow).not.toBeNull();
 
     const issue2 = await createTestWorkItem(c.fx, { kind: 'task', title: 'Again' });
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       workItemLabelRepository.create({ workItemId: issue2.id, labelId }, tx),
     );
-    await db.$transaction(async (tx) => labelRepository.delete(labelId, tx));
-    expect(await db.workItemLabel.count({ where: { workItemId: issue2.id } })).toBe(0);
+    await adminDb.$transaction(async (tx) => labelRepository.delete(labelId, tx));
+    const workItemLabelCount2 = await adminDb.workItemLabel.count({
+      where: { workItemId: issue2.id },
+    });
+    expect(workItemLabelCount2).toBe(0);
   });
 });
 
@@ -286,7 +304,7 @@ describe('componentRepository + workItemComponentRepository', () => {
     const id = await addComponent(c, 'API');
 
     await expect(
-      db.$transaction(async (tx) =>
+      adminDb.$transaction(async (tx) =>
         componentRepository.create(
           {
             workspaceId: c.fx.workspaceId,
@@ -303,12 +321,12 @@ describe('componentRepository + workItemComponentRepository', () => {
     expect(probe?.id).toBe(id);
     expect(await componentRepository.findByNameLower(c.fx.projectId, 'web')).toBeNull();
 
-    const updated = await db.$transaction(async (tx) =>
+    const updated = await adminDb.$transaction(async (tx) =>
       componentRepository.update(id, { description: 'The API surface' }, tx),
     );
     expect(updated.description).toBe('The API surface');
 
-    await db.$transaction(async (tx) => componentRepository.delete(id, tx));
+    await adminDb.$transaction(async (tx) => componentRepository.delete(id, tx));
     expect(await componentRepository.findById(id)).toBeNull();
   });
 
@@ -316,7 +334,7 @@ describe('componentRepository + workItemComponentRepository', () => {
     const c = await makeOrganisationFixture();
     const webId = await addComponent(c, 'Web');
     const apiId = await addComponent(c, 'API');
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       workItemComponentRepository.createMany(
         [
           { workItemId: c.issue.id, componentId: apiId },
@@ -359,21 +377,21 @@ describe('componentRepository + workItemComponentRepository', () => {
   it('RESTRICT backstop: a component with join rows cannot be deleted until the joins go', async () => {
     const c = await makeOrganisationFixture();
     const id = await addComponent(c, 'API');
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       workItemComponentRepository.create({ workItemId: c.issue.id, componentId: id }, tx),
     );
 
     await expect(
-      db.$transaction(async (tx) => componentRepository.delete(id, tx)),
+      adminDb.$transaction(async (tx) => componentRepository.delete(id, tx)),
     ).rejects.toMatchObject({ code: 'P2003' }); // FK violation — the DB backstop
 
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       expect(await componentRepository.lockById(id, tx)).toEqual({ id });
       expect(await workItemComponentRepository.deleteByComponent(id, tx)).toBe(1);
       await componentRepository.delete(id, tx); // now clean
     });
     expect(await componentRepository.findById(id)).toBeNull();
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       expect(await componentRepository.lockById('missing-component-id', tx)).toBeNull();
     });
   });
@@ -383,7 +401,7 @@ describe('componentRepository + workItemComponentRepository', () => {
     const fromId = await addComponent(c, 'Old');
     const toId = await addComponent(c, 'New');
     const issue2 = await createTestWorkItem(c.fx, { kind: 'task', title: 'Both' });
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       workItemComponentRepository.createMany(
         [
           { workItemId: c.issue.id, componentId: fromId }, // moves
@@ -394,7 +412,7 @@ describe('componentRepository + workItemComponentRepository', () => {
       ),
     );
 
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       const moved = await workItemComponentRepository.reassignItems(fromId, toId, tx);
       expect(moved).toBe(1);
       // The duplicate leftover still points at `fromId` — the service drops
@@ -405,60 +423,65 @@ describe('componentRepository + workItemComponentRepository', () => {
     expect(await workItemComponentRepository.countByComponent(toId)).toBe(2);
     expect(await workItemComponentRepository.countByComponent(fromId)).toBe(0);
     // Issues untouched either way (the verified rule).
-    expect(await db.workItem.count({ where: { projectId: c.fx.projectId } })).toBe(2);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: c.fx.projectId } });
+    expect(workItemCount).toBe(2);
 
     // The set-diff reads, on both client paths (bare `db` + in-`tx`).
     const joins = await workItemComponentRepository.listByWorkItem(issue2.id);
     expect(joins.map((j) => j.componentId)).toEqual([toId]);
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       expect(await workItemComponentRepository.listByWorkItem(c.issue.id, tx)).toHaveLength(1);
       expect(await workItemComponentRepository.countByComponent(toId, tx)).toBe(2);
     });
 
     // removeMany with real ids (the bulk-remove path of setComponents).
     expect(
-      await db.$transaction(async (tx) =>
+      await adminDb.$transaction(async (tx) =>
         workItemComponentRepository.removeMany(c.issue.id, [toId, fromId], tx),
       ),
     ).toBe(1);
 
     // Per-issue join uniqueness + idempotent removes, mirroring labels.
     await expect(
-      db.$transaction(async (tx) =>
+      adminDb.$transaction(async (tx) =>
         workItemComponentRepository.create({ workItemId: issue2.id, componentId: toId }, tx),
       ),
     ).rejects.toMatchObject({ code: 'P2002' });
     expect(
-      await db.$transaction(async (tx) => workItemComponentRepository.remove(issue2.id, toId, tx)),
+      await adminDb.$transaction(async (tx) =>
+        workItemComponentRepository.remove(issue2.id, toId, tx),
+      ),
     ).toBe(1);
     expect(
-      await db.$transaction(async (tx) => workItemComponentRepository.remove(issue2.id, toId, tx)),
+      await adminDb.$transaction(async (tx) =>
+        workItemComponentRepository.remove(issue2.id, toId, tx),
+      ),
     ).toBe(0);
   });
 
   it('createMany/removeMany guard empty input; cascades shed an issue’s joins; SetNull clears a departed default assignee', async () => {
     const c = await makeOrganisationFixture();
     expect(
-      await db.$transaction(async (tx) => workItemComponentRepository.createMany([], tx)),
+      await adminDb.$transaction(async (tx) => workItemComponentRepository.createMany([], tx)),
     ).toBe(0);
     expect(
-      await db.$transaction(async (tx) =>
+      await adminDb.$transaction(async (tx) =>
         workItemComponentRepository.removeMany(c.issue.id, [], tx),
       ),
     ).toBe(0);
 
     const user = await createTestUser({ name: 'Departing' });
     const id = await addComponent(c, 'Theirs', { defaultAssigneeId: user.id });
-    await db.$transaction(async (tx) =>
+    await adminDb.$transaction(async (tx) =>
       workItemComponentRepository.create({ workItemId: c.issue.id, componentId: id }, tx),
     );
 
     // Issue delete cascades the join (RESTRICT is only on the component side).
-    await db.workItem.delete({ where: { id: c.issue.id } });
+    await adminDb.workItem.delete({ where: { id: c.issue.id } });
     expect(await workItemComponentRepository.countByComponent(id)).toBe(0);
 
     // Deleting the default assignee clears the pointer, never blocks.
-    await db.user.delete({ where: { id: user.id } });
+    await adminDb.user.delete({ where: { id: user.id } });
     const after = await componentRepository.findById(id);
     expect(after).not.toBeNull();
     expect(after?.defaultAssigneeId).toBeNull();
@@ -468,10 +491,10 @@ describe('componentRepository + workItemComponentRepository', () => {
 describe('watcherRepository', () => {
   it('add is idempotent (the unique absorbs a re-watch); existsFor and countByWorkItem read it back', async () => {
     const c = await makeOrganisationFixture();
-    const first = await db.$transaction(async (tx) =>
+    const first = await adminDb.$transaction(async (tx) =>
       watcherRepository.add(c.issue.id, c.fx.ownerId, tx),
     );
-    const again = await db.$transaction(async (tx) =>
+    const again = await adminDb.$transaction(async (tx) =>
       watcherRepository.add(c.issue.id, c.fx.ownerId, tx),
     );
     expect(again.id).toBe(first.id); // upsert no-op, same row
@@ -482,13 +505,17 @@ describe('watcherRepository', () => {
 
   it('remove is an idempotent count; existsFor turns false', async () => {
     const c = await makeOrganisationFixture();
-    await db.$transaction(async (tx) => watcherRepository.add(c.issue.id, c.fx.ownerId, tx));
+    await adminDb.$transaction(async (tx) => watcherRepository.add(c.issue.id, c.fx.ownerId, tx));
 
     expect(
-      await db.$transaction(async (tx) => watcherRepository.remove(c.issue.id, c.fx.ownerId, tx)),
+      await adminDb.$transaction(async (tx) =>
+        watcherRepository.remove(c.issue.id, c.fx.ownerId, tx),
+      ),
     ).toBe(1);
     expect(
-      await db.$transaction(async (tx) => watcherRepository.remove(c.issue.id, c.fx.ownerId, tx)),
+      await adminDb.$transaction(async (tx) =>
+        watcherRepository.remove(c.issue.id, c.fx.ownerId, tx),
+      ),
     ).toBe(0);
     expect(await watcherRepository.existsFor(c.issue.id, c.fx.ownerId)).toBe(false);
   });
@@ -498,7 +525,7 @@ describe('watcherRepository', () => {
     const users = [c.fx.owner];
     for (let i = 0; i < 4; i++) users.push(await createTestUser({ name: `Watcher ${i}` }));
     for (const u of users) {
-      await db.$transaction(async (tx) => watcherRepository.add(c.issue.id, u.id, tx));
+      await adminDb.$transaction(async (tx) => watcherRepository.add(c.issue.id, u.id, tx));
     }
 
     const page1 = await watcherRepository.listByWorkItem(c.issue.id, { take: 2 });
@@ -522,15 +549,16 @@ describe('watcherRepository', () => {
   it('cascades both sides: an issue delete sheds its watchers; a user delete stops their watching', async () => {
     const c = await makeOrganisationFixture();
     const user = await createTestUser({ name: 'Transient' });
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await watcherRepository.add(c.issue.id, c.fx.ownerId, tx);
       await watcherRepository.add(c.issue.id, user.id, tx);
     });
 
-    await db.user.delete({ where: { id: user.id } });
+    await adminDb.user.delete({ where: { id: user.id } });
     expect(await watcherRepository.countByWorkItem(c.issue.id)).toBe(1);
 
-    await db.workItem.delete({ where: { id: c.issue.id } });
-    expect(await db.watcher.count()).toBe(0);
+    await adminDb.workItem.delete({ where: { id: c.issue.id } });
+    const watcherCount = await adminDb.watcher.count();
+    expect(watcherCount).toBe(0);
   });
 });

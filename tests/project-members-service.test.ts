@@ -19,6 +19,7 @@ import {
 } from '@/lib/projects/errors';
 import { RoleDefinitionNotFoundError } from '@/lib/permissions/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for projectMembersService (Story 6.4 · Subtask 6.4.4) —
@@ -49,6 +50,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {
@@ -761,7 +763,7 @@ describe('setAccessLevel', () => {
       level: 'limited',
     });
     expect(res).toEqual({ key, accessLevel: 'limited' });
-    const count = await db.projectMembership.count({ where: { projectId: project.id } });
+    const count = await adminDb.projectMembership.count({ where: { projectId: project.id } });
     expect(count).toBe(0);
   });
 
@@ -798,11 +800,11 @@ describe('setAccessLevel', () => {
     });
     expect(res.accessLevel).toBe('private');
 
-    const persistedProject = await db.project.findUnique({ where: { id: project.id } });
+    const persistedProject = await adminDb.project.findUnique({ where: { id: project.id } });
     expect(persistedProject?.accessLevel).toBe('private');
 
     // Workspace has owner + m1 + m2 = 3 members → 3 project memberships.
-    const rows = await db.projectMembership.findMany({ where: { projectId: project.id } });
+    const rows = await adminDb.projectMembership.findMany({ where: { projectId: project.id } });
     expect(rows).toHaveLength(3);
     const byUser = new Map(rows.map((r) => [r.userId, r.role]));
     expect(byUser.get(owner.id)).toBe('member'); // seeded

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
+import { adminDb } from './helpers/adminDb';
 
 // Transport tests for GET /api/ai/coding-convention/audit-coverage (MOTIR-2248).
 // The route is a thin one-service-call transport, so this proves the route-layer
@@ -59,6 +60,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/ai/coding-convention/audit-coverage', () => {

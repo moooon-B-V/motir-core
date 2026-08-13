@@ -29,6 +29,7 @@ import type {
   WorkItemTransitionedData,
 } from '@/lib/jobs/types';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // In-app notification fan-in (Story 5.7 · Subtask 5.7.3). Real Postgres, no DB
@@ -57,6 +58,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;
@@ -99,7 +101,10 @@ async function addMentioningComment(s: Scenario, mentioned: User) {
 
 /** Read the notification rows for a recipient (tests may use db directly). */
 function notificationsFor(recipientUserId: string) {
-  return db.notification.findMany({ where: { recipientUserId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.notification.findMany({
+    where: { recipientUserId },
+    orderBy: { createdAt: 'asc' },
+  });
 }
 
 describe('notificationFanInService.fanIn — comment mentions', () => {
@@ -448,7 +453,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
     expect(result).toEqual({ writtenUserIds: [s.member.id] });
     expect(await notificationsFor(s.member.id)).toHaveLength(1);
 
-    const runs = await db.jobRun.findMany({
+    const runs = await adminDb.jobRun.findMany({
       where: { functionId: 'notification-fan-in/comment.created' },
     });
     expect(runs).toHaveLength(1);
@@ -505,7 +510,7 @@ describe('notificationFanIn jobs — in-process runs', () => {
     expect(rows[0]!.category).toBe('watching');
     expect(rows[0]!.dedupeKey).toBe('transitioned:rev-transition-e2e');
 
-    const runs = await db.jobRun.findMany({
+    const runs = await adminDb.jobRun.findMany({
       where: { functionId: 'notification-fan-in/transitioned' },
     });
     expect(runs).toHaveLength(1);

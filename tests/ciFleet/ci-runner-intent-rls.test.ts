@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `ci_runner_provisioning_intent` isolation — direct-DB RLS proof (Story
@@ -29,6 +30,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface TenantFixture {
@@ -53,7 +55,7 @@ async function makeFleetTenants(): Promise<TenantFixture> {
   const a = await workspacesService.createWorkspace({ name: 'Fleet WS A', ownerUserId: userA.id });
   const b = await workspacesService.createWorkspace({ name: 'Fleet WS B', ownerUserId: userB.id });
 
-  await db.ciRunnerProvisioningIntent.create({
+  await adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: a.workspace.id,
       organizationId: a.workspace.organizationId,
@@ -67,7 +69,7 @@ async function makeFleetTenants(): Promise<TenantFixture> {
       queuedAt: QUEUED_AT,
     },
   });
-  const intentB = await db.ciRunnerProvisioningIntent.create({
+  const intentB = await adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: b.workspace.id,
       organizationId: b.workspace.organizationId,

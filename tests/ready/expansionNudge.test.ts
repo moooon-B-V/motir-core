@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Expansion nudge (Subtask 7.11.7 / MOTIR-904) — the REAL
@@ -38,6 +39,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type Priority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
@@ -65,7 +67,7 @@ async function leaf(fx: WorkItemFixture, title = 'Leaf task') {
 
 /** Force a live status by key (the workflow seeds `done` + `cancelled` as category=done). */
 async function setStatus(id: string, status: string) {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 const stubs = (rows: Array<{ identifier: string }>) => rows.map((r) => r.identifier);
@@ -128,7 +130,7 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
       stubs(await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId)),
     ).toEqual([]);
 
-    await db.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
 
     expect(
       stubs(await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId)),
@@ -143,7 +145,7 @@ describe('findExpandableStubs — the repository read, over real Postgres', () =
       fx.ctx,
     );
     const gone = await stub(fx, { title: 'Archived stub' });
-    await db.workItem.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
 
     const rows = await workItemRepository.findExpandableStubs(fx.projectId, fx.workspaceId);
 

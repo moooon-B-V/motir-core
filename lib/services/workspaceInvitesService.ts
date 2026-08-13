@@ -16,7 +16,7 @@ import { verificationRepository } from '@/lib/repositories/verificationRepositor
 import { workspaceRepository } from '@/lib/repositories/workspaceRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 import { readMembership } from '@/lib/workspaces/membershipGate';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { organizationsService } from '@/lib/services/organizationsService';
 import { enqueueScaledTrackerSeatSync } from '@/lib/billing/seatSync';
 import { isEmailShape } from '@/lib/utils/email';
@@ -241,8 +241,21 @@ export const workspaceInvitesService = {
     const payload = parsePayload(row.value);
     if (!payload) return null;
 
+    // BOUND, and actorless (MOTIR-2777). Both PRE-AUTH inspections below run with no
+    // session at all — the person holding the link may not have an account yet — so
+    // there is no user context to derive, and `withWorkspaceServiceContext` (the
+    // userless helper MOTIR-2685 established) binds the workspace tier alone. Left on
+    // the singleton, `workspace_active` sees no GUC, the row is invisible, and every
+    // VALID invite renders as an invalid one. This is the same fix the inviter-side
+    // read above already carries from MOTIR-2527.
+    //
+    // The helper's constraint — `workspaceId` must come from the layer above, never
+    // from caller input — holds: it is read out of the server-stored verification row
+    // this method just validated, not off the request.
     const [workspace, inviter] = await Promise.all([
-      workspaceRepository.findById(payload.workspaceId),
+      withWorkspaceServiceContext(payload.workspaceId, (tx) =>
+        workspaceRepository.findByIdInTx(payload.workspaceId, tx),
+      ),
       userRepository.findById(payload.inviterUserId),
     ]);
     if (!workspace) return null;
@@ -274,8 +287,12 @@ export const workspaceInvitesService = {
     const payload = parsePayload(row.value);
     if (!payload) return { status: 'used' };
 
+    // Bound + actorless for the reason given on `validateInvite` above; unbound this
+    // reported every live invite as 'used'.
     const [workspace, inviter] = await Promise.all([
-      workspaceRepository.findById(payload.workspaceId),
+      withWorkspaceServiceContext(payload.workspaceId, (tx) =>
+        workspaceRepository.findByIdInTx(payload.workspaceId, tx),
+      ),
       userRepository.findById(payload.inviterUserId),
     ]);
     if (!workspace) return { status: 'used' };
@@ -312,6 +329,26 @@ export const workspaceInvitesService = {
 
     let organizationId: string | null = null;
     await db.$transaction(async (tx) => {
+      // BIND THE TENANT GUCs (MOTIR-2777). The tenant-root INSERT policies from
+      // `20260810001000_tenant_root_insert_policies` admit a membership row on two
+      // arms, and arm 1 — "acting inside the active tenant" — was written for THIS
+      // caller; its migration comment names the invite path explicitly. Unbound,
+      // `current_setting(…, true)` is NULL, the predicate is NULL, and every write
+      // below is refused with `new row violates row-level security policy`. Set
+      // per-transaction (`set_config(…, true)`), so they die with the transaction —
+      // the same shape `insertWorkspaceWithOwner` uses for the bootstrap path.
+      //
+      // WHY BINDING THE ACTIVE-WORKSPACE GUC IS LEGITIMATE HERE, since a reader will
+      // ask: the authority is the INVITATION, and it has already been validated above
+      // this transaction — the verification row exists, has not expired, and its email
+      // matches the session user's. The bind admits only rows targeting that one
+      // workspace, and this transaction does nothing beyond the membership, the
+      // upward org-join and consuming the token. It grants no reach the invite does
+      // not already carry, and it is NOT the self-join arm the migration deliberately
+      // refused (that would key on `app.user_id` and admit any workspace a user can
+      // name; this keys on the workspace the invite names).
+      await tx.$executeRaw`SELECT set_config('app.user_id', ${sessionUser.id}, true)`;
+      await tx.$executeRaw`SELECT set_config('app.workspace_id', ${payload.workspaceId}, true)`;
       try {
         await workspaceMembershipRepository.create(
           {
@@ -343,6 +380,19 @@ export const workspaceInvitesService = {
       const workspace = await workspaceRepository.findByIdInTx(payload.workspaceId, tx);
       if (workspace) {
         organizationId = workspace.organizationId;
+        // The org tier needs its OWN GUC, and only now can it be bound: the org id
+        // is not known until the workspace read above, which itself needed
+        // `app.workspace_id` to return anything at all. Unbound, the org-membership
+        // INSERT is refused by `org_membership_insert_active_or_bootstrap`.
+        //
+        // ⚠️ This read failing silently is what made the bug two bugs. With no
+        // workspace GUC bound, `findByIdInTx` returned null, `if (workspace)` was
+        // false, and the upward org-join was SKIPPED WITHOUT AN ERROR — leaving a
+        // workspace member who is not an org member, which is exactly what the
+        // 6.10.2 §5i invariant forbids and what `resolveWorkspaceAccess` then reads
+        // as no access. A test that only asserts the workspace membership cannot see
+        // it, which is why the regression test asserts BOTH rows.
+        await tx.$executeRaw`SELECT set_config('app.organization_id', ${workspace.organizationId}, true)`;
         await organizationsService.ensureOrgMembership(
           sessionUser.id,
           workspace.organizationId,

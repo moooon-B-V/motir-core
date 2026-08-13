@@ -5,6 +5,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Default-board seed (Story 3.1 · Subtask 3.1.2). Real Postgres — runs in CI.
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeWorkspaceAndUser(
@@ -59,7 +61,7 @@ describe('createProject seeds the default board (same transaction)', () => {
       name: 'Boarded',
     });
 
-    const boards = await db.board.findMany({ where: { projectId: project.id } });
+    const boards = await adminDb.board.findMany({ where: { projectId: project.id } });
     expect(boards).toHaveLength(1);
     expect(boards[0]?.name).toBe('Board');
     expect(boards[0]?.type).toBe('kanban');
@@ -74,22 +76,22 @@ describe('createProject seeds the default board (same transaction)', () => {
       name: 'Columns',
     });
 
-    const board = await db.board.findFirstOrThrow({ where: { projectId: project.id } });
-    const columns = await db.boardColumn.findMany({
+    const board = await adminDb.board.findFirstOrThrow({ where: { projectId: project.id } });
+    const columns = await adminDb.boardColumn.findMany({
       where: { boardId: board.id },
       orderBy: { position: 'asc' },
     });
     expect(columns.map((c) => c.name)).toEqual(WORKFLOW_ORDER);
 
     // Column positions mirror the workflow-status positions (same order).
-    const statuses = await db.workflowStatus.findMany({
+    const statuses = await adminDb.workflowStatus.findMany({
       where: { projectId: project.id },
       orderBy: { position: 'asc' },
     });
     expect(columns.map((c) => c.position)).toEqual(statuses.map((s) => s.position));
 
     // Exactly one mapping per column, pointing at the same-labelled status.
-    const mappings = await db.boardColumnStatus.findMany({ where: { boardId: board.id } });
+    const mappings = await adminDb.boardColumnStatus.findMany({ where: { boardId: board.id } });
     // Seven since MOTIR-2425 added `planning`. The count is stated rather than
     // derived so adding a status is a deliberate edit here.
     expect(mappings).toHaveLength(7);
@@ -118,11 +120,13 @@ describe('createProject seeds the default board (same transaction)', () => {
       actorUserId: userId,
       name: 'Beta',
     });
-    expect(await db.board.count({ where: { projectId: a.id } })).toBe(1);
-    expect(await db.board.count({ where: { projectId: b.id } })).toBe(1);
+    const boardCount = await adminDb.board.count({ where: { projectId: a.id } });
+    expect(boardCount).toBe(1);
+    const boardCount2 = await adminDb.board.count({ where: { projectId: b.id } });
+    expect(boardCount2).toBe(1);
     // Each board's columns belong only to that project.
-    const aBoard = await db.board.findFirstOrThrow({ where: { projectId: a.id } });
-    const aCols = await db.boardColumn.findMany({ where: { boardId: aBoard.id } });
+    const aBoard = await adminDb.board.findFirstOrThrow({ where: { projectId: a.id } });
+    const aCols = await adminDb.boardColumn.findMany({ where: { boardId: aBoard.id } });
     expect(aCols.every((c) => c.projectId === a.id)).toBe(true);
   });
 });
@@ -138,21 +142,29 @@ describe('boardsService.backfillDefaultBoard (one-off, idempotent)', () => {
       actorUserId: userId,
       name: 'Predates',
     });
-    await db.board.deleteMany({ where: { projectId: project.id } });
-    expect(await db.board.count({ where: { projectId: project.id } })).toBe(0);
+    await adminDb.board.deleteMany({ where: { projectId: project.id } });
+    const boardCount = await adminDb.board.count({ where: { projectId: project.id } });
+    expect(boardCount).toBe(0);
 
     const seeded = await boardsService.backfillDefaultBoard(project.id, userId);
     expect(seeded).toBe(true);
-    expect(await db.board.count({ where: { projectId: project.id } })).toBe(1);
-    expect(await db.boardColumn.count({ where: { projectId: project.id } })).toBe(7);
-    expect(await db.boardColumnStatus.count({ where: { projectId: project.id } })).toBe(7);
+    const boardCount2 = await adminDb.board.count({ where: { projectId: project.id } });
+    expect(boardCount2).toBe(1);
+    const boardColumnCount = await adminDb.boardColumn.count({ where: { projectId: project.id } });
+    expect(boardColumnCount).toBe(7);
+    const boardColumnStatusCount = await adminDb.boardColumnStatus.count({
+      where: { projectId: project.id },
+    });
+    expect(boardColumnStatusCount).toBe(7);
 
     // Idempotent — already has a board, so the second call is a no-op and adds
     // no duplicate board/columns.
     const again = await boardsService.backfillDefaultBoard(project.id, userId);
     expect(again).toBe(false);
-    expect(await db.board.count({ where: { projectId: project.id } })).toBe(1);
-    expect(await db.boardColumn.count({ where: { projectId: project.id } })).toBe(7);
+    const boardCount3 = await adminDb.board.count({ where: { projectId: project.id } });
+    expect(boardCount3).toBe(1);
+    const boardColumnCount2 = await adminDb.boardColumn.count({ where: { projectId: project.id } });
+    expect(boardColumnCount2).toBe(7);
   });
 
   it('leaves an already-boarded project untouched (no second board)', async () => {
@@ -164,7 +176,8 @@ describe('boardsService.backfillDefaultBoard (one-off, idempotent)', () => {
     });
     const seeded = await boardsService.backfillDefaultBoard(project.id, userId);
     expect(seeded).toBe(false);
-    expect(await db.board.count({ where: { projectId: project.id } })).toBe(1);
+    const boardCount = await adminDb.board.count({ where: { projectId: project.id } });
+    expect(boardCount).toBe(1);
   });
 
   it('throws ProjectNotFoundError for an unknown project', async () => {

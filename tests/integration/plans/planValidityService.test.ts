@@ -10,6 +10,7 @@ import { PlanNotFoundError } from '@/lib/plans/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import { NoActiveSprintError } from '@/lib/sprints/errors';
 import { makeWorkItemFixture, createTestProject, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // `planValidityService` (Story 7.28 · Subtask 7.28.1 / MOTIR-1386) over real
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mk = (
@@ -40,9 +42,10 @@ const link = (fx: WorkItemFixture, fromId: string, toId: string) =>
   workItemsService.linkWorkItems({ fromId, toId, kind: 'is_blocked_by' }, fx.ctx);
 
 const putInSprint = (id: string, sprintId: string) =>
-  db.workItem.update({ where: { id }, data: { sprintId } });
+  adminDb.workItem.update({ where: { id }, data: { sprintId } });
 
-const markDone = (id: string) => db.workItem.update({ where: { id }, data: { status: 'done' } });
+const markDone = (id: string) =>
+  adminDb.workItem.update({ where: { id }, data: { status: 'done' } });
 
 async function freshPlan(fx: WorkItemFixture): Promise<string> {
   const plan = await plansService.createPlan(fx.projectId, { title: 'Plan' }, fx.ctx);
@@ -503,7 +506,7 @@ describe('planValidityService.validateProjectedPlan — the WHOLE-forest rule (M
   it('a node blocked_by a real ARCHIVED item has its edge DROPPED → the forest is VALID', async () => {
     const fx = await makeWorkItemFixture();
     const archived = await mk(fx, 'Archived blocker', 'task');
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     const planId = await freshPlan(fx);
     await addProposal(fx, planId, {

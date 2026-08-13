@@ -22,6 +22,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestProject } from '../fixtures/projectFixtures';
 import { createTestWorkspace } from '../fixtures/workspaceFixtures';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `list_projects` (MOTIR-1879) over real Postgres — the read that lets a client
@@ -85,6 +86,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('list_projects — registration + the token workspace read', () => {

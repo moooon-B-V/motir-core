@@ -8,6 +8,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { resolveAliasedIssueKey } from '@/lib/issues/aliasRedirect';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Subtask 6.8.2 — the READ half of the project-key-alias feature: alias-aware
@@ -26,6 +27,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'User') {

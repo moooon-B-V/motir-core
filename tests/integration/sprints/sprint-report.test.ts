@@ -5,6 +5,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { SprintNotFoundError } from '@/lib/sprints/errors';
 
@@ -22,17 +23,18 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Give an issue a story-point estimate directly. */
 async function setPoints(itemId: string, points: number): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
 }
 
 /** Move an issue into a done-category status (the default workflow seeds
  *  `done`/`cancelled` as `category = done`). */
 async function markDone(itemId: string): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { status: 'done' } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { status: 'done' } });
 }
 
 /** Create one issue committed to `sprintId`, returning its id. */
@@ -107,10 +109,18 @@ describe('sprintsService.getSprintReport', () => {
     await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
 
     // The carry-over really DID move b + c out of the live sprint membership…
-    expect(await db.workItem.findUnique({ where: { id: b }, select: { sprintId: true } })).toEqual({
+    const workItemRow = await adminDb.workItem.findUnique({
+      where: { id: b },
+      select: { sprintId: true },
+    });
+    expect(workItemRow).toEqual({
       sprintId: null,
     });
-    expect(await db.workItem.findUnique({ where: { id: c }, select: { sprintId: true } })).toEqual({
+    const workItemRow2 = await adminDb.workItem.findUnique({
+      where: { id: c },
+      select: { sprintId: true },
+    });
+    expect(workItemRow2).toEqual({
       sprintId: null,
     });
 
@@ -140,7 +150,11 @@ describe('sprintsService.getSprintReport', () => {
     await sprintsService.completeSprint(s1.id, { carryOverTo: { sprintId: s2.id } }, fx.ctx);
 
     // b is now a member of S2, not S1.
-    expect(await db.workItem.findUnique({ where: { id: b }, select: { sprintId: true } })).toEqual({
+    const workItemRow3 = await adminDb.workItem.findUnique({
+      where: { id: b },
+      select: { sprintId: true },
+    });
+    expect(workItemRow3).toEqual({
       sprintId: s2.id,
     });
 
@@ -167,7 +181,7 @@ describe('sprintsService.getSprintReport', () => {
     // change touches the frozen snapshot, so the closed report is unchanged
     // (Jira freezes "Completed / Not Completed" at sprint close — both buckets).
     await markDone(b);
-    await db.workItem.update({ where: { id: a }, data: { status: 'todo' } });
+    await adminDb.workItem.update({ where: { id: a }, data: { status: 'todo' } });
 
     const report = await sprintsService.getSprintReport(sprint.id, {}, fx.ctx);
     expect(report.completed.items.map((i) => i.id)).toEqual([a]);
@@ -186,7 +200,11 @@ describe('sprintsService.getSprintReport', () => {
     const f = await addIssue(fx, sprint.id, 'f');
     await sprintsService.completeSprint(sprint.id, { carryOverTo: 'backlog' }, fx.ctx);
 
-    expect(await db.workItem.findUnique({ where: { id: f }, select: { sprintId: true } })).toEqual({
+    const workItemRow4 = await adminDb.workItem.findUnique({
+      where: { id: f },
+      select: { sprintId: true },
+    });
+    expect(workItemRow4).toEqual({
       sprintId: null,
     });
     const report = await sprintsService.getSprintReport(sprint.id, {}, fx.ctx);

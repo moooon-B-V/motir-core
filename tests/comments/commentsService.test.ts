@@ -21,6 +21,7 @@ import type { WorkItemCommentCreatedData } from '@/lib/jobs/types';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Service-layer tests for commentsService (Story 5.1 · Subtask 5.1.2). Real
@@ -39,6 +40,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Capture every `work-item/comment.created` publish (and block the network). */
@@ -448,7 +450,7 @@ describe('commentsService.deleteComment', () => {
     expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(0);
     expect(await commentMentionRepository.findByCommentIds([root.id])).toEqual([]);
 
-    const revisions = await db.workItemRevision.findMany({
+    const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },
     });
     expect(revisions).toHaveLength(1);
@@ -474,7 +476,7 @@ describe('commentsService.deleteComment', () => {
     await commentsService.deleteComment(reply.id, s.memberCtx);
 
     expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(1);
-    const revisions = await db.workItemRevision.findMany({
+    const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },
     });
     expect(revisions[0]?.diff).toEqual({
@@ -518,7 +520,7 @@ describe('commentsService.deleteComment', () => {
     await commentsService.deleteComment(created.id, s.ownerCtx);
 
     expect(await commentRepository.countByWorkItem(s.issue.id)).toBe(0);
-    const revisions = await db.workItemRevision.findMany({
+    const revisions = await adminDb.workItemRevision.findMany({
       where: { workItemId: s.issue.id, changeKind: 'comment_deleted' },
     });
     expect(revisions).toHaveLength(1);

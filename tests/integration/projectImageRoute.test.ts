@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // PATCH /api/projects/[key] — the `image` half of the details route (MOTIR-2676),
@@ -46,6 +47,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture, userId = fx.ownerId) {
@@ -65,7 +67,10 @@ function patch(key: string, body: unknown) {
 
 /** The RAW stored value — an object key — as opposed to the DTO's resolved URL. */
 async function storedImageOf(projectId: string): Promise<string | null> {
-  const row = await db.project.findUnique({ where: { id: projectId }, select: { image: true } });
+  const row = await adminDb.project.findUnique({
+    where: { id: projectId },
+    select: { image: true },
+  });
   return row?.image ?? null;
 }
 

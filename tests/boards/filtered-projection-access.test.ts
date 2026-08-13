@@ -10,6 +10,7 @@ import type { FilterAst } from '@/lib/filters/ast';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKind } from '@/generated/prisma/client';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // boardsService.getBoard — the FILTERED board read's ACCESS + TENANT-SCOPE +
@@ -42,6 +43,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const PASSWORD = 'hunter2hunter2';
@@ -72,7 +74,7 @@ async function card(t: Tenant, kind: WorkItemKind, status: string, title: string
     { projectId: t.projectId, kind, title },
     t.ctx,
   );
-  await db.workItem.update({ where: { id: item.id }, data: { status } });
+  await adminDb.workItem.update({ where: { id: item.id }, data: { status } });
 }
 
 describe('getBoard — filtered read: access, tenant scope, typed error (6.15.4)', () => {
@@ -80,7 +82,10 @@ describe('getBoard — filtered read: access, tenant scope, typed error (6.15.4)
     const owner = await makeTenant('filter-access-owner@example.com');
     await card(owner, 'bug', 'todo', 'Bug card');
     // Make the project private (the strictest gate); a non-member sees nothing.
-    await db.project.update({ where: { id: owner.projectId }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({
+      where: { id: owner.projectId },
+      data: { accessLevel: 'private' },
+    });
 
     // An outsider: a real user who is NOT a member of the project's workspace.
     const outsider = await usersService.createUser({

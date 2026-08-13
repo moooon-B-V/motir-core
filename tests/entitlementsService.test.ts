@@ -1,7 +1,9 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { withUserContext, withWorkspaceContext } from '@/lib/workspaces/context';
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
+import { adminDb } from './helpers/adminDb';
 
 // Service test for entitlementsService (Subtask 8.1.11) — the §4 PM-core
 // entitlement caps. Everything is exercised against the REAL Postgres (the
@@ -32,11 +34,11 @@ const SCALED: ScaledTrackerSubscription = {
 const CANCELED: ScaledTrackerSubscription = { ...SCALED, status: 'canceled' };
 
 async function orgIdOf(workspaceId: string): Promise<string> {
-  return (await db.workspace.findUniqueOrThrow({ where: { id: workspaceId } })).organizationId;
+  return (await adminDb.workspace.findUniqueOrThrow({ where: { id: workspaceId } })).organizationId;
 }
 
 async function setTier(organizationId: string, sub: ScaledTrackerSubscription): Promise<void> {
-  await db.organization.update({
+  await adminDb.organization.update({
     where: { id: organizationId },
     data: { scaledTrackerSubscription: sub as unknown as Prisma.InputJsonValue },
   });
@@ -44,7 +46,7 @@ async function setTier(organizationId: string, sub: ScaledTrackerSubscription): 
 
 /** Flag the org as the META org (moooon B.V.) — the `meta` tier, every cap lifted. */
 async function setMeta(organizationId: string): Promise<void> {
-  await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+  await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 }
 
 /** Bulk-seed `count` top-level task rows in the fixture's project (one INSERT —
@@ -75,7 +77,7 @@ async function seedWorkItems(
     position = keyForAppend(position);
     return row;
   });
-  await db.workItem.createMany({ data: rows });
+  await adminDb.workItem.createMany({ data: rows });
 }
 
 beforeEach(async () => {
@@ -89,6 +91,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('entitlementsService — work-item cap (§4.1)', () => {
@@ -98,10 +101,10 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
 
     await seedWorkItems(fx, 249);
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).resolves.toBeUndefined();
 
-    await db.workItem.create({
+    await adminDb.workItem.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -115,7 +118,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     });
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).rejects.toMatchObject({ name: 'EntitlementExceededError', entitlement: 'work_items' });
   });
 
@@ -125,7 +128,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     await seedWorkItems(fx, 250, { archived: true });
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).rejects.toBeInstanceOf(EntitlementExceededError);
   });
 
@@ -136,7 +139,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     await seedWorkItems(fx, 250);
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).resolves.toBeUndefined();
   });
 
@@ -147,7 +150,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     await seedWorkItems(fx, 250);
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).resolves.toBeUndefined();
   });
 
@@ -158,7 +161,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     await seedWorkItems(fx, 250);
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).rejects.toBeInstanceOf(EntitlementExceededError);
   });
 
@@ -169,7 +172,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     await seedWorkItems(fx, 300);
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkItemCap(orgId, tx)),
     ).resolves.toBeUndefined();
   });
 
@@ -178,7 +181,10 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     await seedWorkItems(fx, 250);
     // Advance the project key counter past the bulk-seeded rows so the next
     // create allocates a FREE key (251) — proving the cap, not a key collision.
-    await db.project.update({ where: { id: fx.projectId }, data: { lastWorkItemNumber: 250 } });
+    await adminDb.project.update({
+      where: { id: fx.projectId },
+      data: { lastWorkItemNumber: 250 },
+    });
 
     await expect(
       workItemsService.createWorkItem(
@@ -207,8 +213,11 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
       251: keyForAppend(racePosition),
     };
 
+    // The concurrency probe runs at production altitude too: `createWorkItem` opens
+    // withWorkspaceContext and does the cap-assert + the create inside it, so the
+    // FOR-UPDATE serialization under test is the one production actually gets.
     const attempt = (key: number) =>
-      db.$transaction(async (tx) => {
+      withWorkspaceContext(fx.ctx, async (tx) => {
         await entitlementsService.assertWithinWorkItemCap(orgId, tx);
         await workItemRepository.create(
           {
@@ -233,7 +242,7 @@ describe('entitlementsService — work-item cap (§4.1)', () => {
     expect(rejected).toHaveLength(1);
     expect((rejected[0] as PromiseRejectedResult).reason).toBeInstanceOf(EntitlementExceededError);
 
-    const finalCount = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const finalCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(finalCount).toBe(250);
   });
 });
@@ -244,7 +253,7 @@ describe('entitlementsService — project cap (§4.2)', () => {
     const orgId = await orgIdOf(fx.workspaceId);
     // Seed 2 more (total 3 = the free cap).
     for (let i = 2; i <= 3; i++) {
-      await db.project.create({
+      await adminDb.project.create({
         data: {
           workspaceId: fx.workspaceId,
           name: `P${i}`,
@@ -255,12 +264,12 @@ describe('entitlementsService — project cap (§4.2)', () => {
     }
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinProjectCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinProjectCap(orgId, tx)),
     ).rejects.toMatchObject({ entitlement: 'projects' });
 
     await setTier(orgId, SCALED);
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinProjectCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinProjectCap(orgId, tx)),
     ).resolves.toBeUndefined();
   });
 });
@@ -271,12 +280,12 @@ describe('entitlementsService — workspace cap (§4.4)', () => {
     const orgId = await orgIdOf(fx.workspaceId);
 
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkspaceCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkspaceCap(orgId, tx)),
     ).rejects.toMatchObject({ entitlement: 'workspaces' });
 
     await setTier(orgId, SCALED);
     await expect(
-      db.$transaction((tx) => entitlementsService.assertWithinWorkspaceCap(orgId, tx)),
+      withWorkspaceContext(fx.ctx, (tx) => entitlementsService.assertWithinWorkspaceCap(orgId, tx)),
     ).resolves.toBeUndefined();
   });
 
@@ -299,7 +308,9 @@ describe('entitlementsService — org-creation gate (§4.5)', () => {
 
     // First org — the user owns none yet, always allowed.
     await expect(
-      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+      withUserContext(user.id, (tx) =>
+        entitlementsService.assertCanCreateOrganization(user.id, tx),
+      ),
     ).resolves.toBeUndefined();
 
     // Give them one (free) org.
@@ -311,13 +322,17 @@ describe('entitlementsService — org-creation gate (§4.5)', () => {
 
     // A 2nd org is now gated (no paid org).
     await expect(
-      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+      withUserContext(user.id, (tx) =>
+        entitlementsService.assertCanCreateOrganization(user.id, tx),
+      ),
     ).rejects.toMatchObject({ entitlement: 'organizations' });
 
     // Upgrade the first org → the owner can now create more orgs.
     await setTier(orgId, SCALED);
     await expect(
-      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+      withUserContext(user.id, (tx) =>
+        entitlementsService.assertCanCreateOrganization(user.id, tx),
+      ),
     ).resolves.toBeUndefined();
   });
 
@@ -326,7 +341,9 @@ describe('entitlementsService — org-creation gate (§4.5)', () => {
     const user = await createTestUser();
     await workspacesService.createWorkspace({ name: 'First', ownerUserId: user.id });
     await expect(
-      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+      withUserContext(user.id, (tx) =>
+        entitlementsService.assertCanCreateOrganization(user.id, tx),
+      ),
     ).resolves.toBeUndefined();
   });
 
@@ -340,13 +357,17 @@ describe('entitlementsService — org-creation gate (§4.5)', () => {
 
     // Without meta/paid → a 2nd org is gated.
     await expect(
-      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+      withUserContext(user.id, (tx) =>
+        entitlementsService.assertCanCreateOrganization(user.id, tx),
+      ),
     ).rejects.toMatchObject({ entitlement: 'organizations' });
 
     // Flag the org meta → the owner can now create more orgs.
     await setMeta(orgId);
     await expect(
-      db.$transaction((tx) => entitlementsService.assertCanCreateOrganization(user.id, tx)),
+      withUserContext(user.id, (tx) =>
+        entitlementsService.assertCanCreateOrganization(user.id, tx),
+      ),
     ).resolves.toBeUndefined();
   });
 });
@@ -375,7 +396,7 @@ describe('entitlementsService — upload caps (§4.3)', () => {
     // Seed ~1.86 GB of attachments (two ~0.93 GB rows; each fits int4).
     const big = 1_000_000_000; // 1e9 bytes
     for (let i = 0; i < 2; i++) {
-      await db.attachment.create({
+      await adminDb.attachment.create({
         data: {
           workspaceId: fx.workspaceId,
           uploaderUserId: fx.ownerId,
@@ -393,8 +414,8 @@ describe('entitlementsService — upload caps (§4.3)', () => {
     ).rejects.toMatchObject({ entitlement: 'storage' });
 
     // A small file that stays under 2 GB is allowed.
-    await db.attachment.deleteMany({ where: { workspaceId: fx.workspaceId } });
-    await db.attachment.create({
+    await adminDb.attachment.deleteMany({ where: { workspaceId: fx.workspaceId } });
+    await adminDb.attachment.create({
       data: {
         workspaceId: fx.workspaceId,
         uploaderUserId: fx.ownerId,

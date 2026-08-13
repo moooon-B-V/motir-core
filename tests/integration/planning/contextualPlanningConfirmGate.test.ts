@@ -8,6 +8,7 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Story 7.12 (MOTIR-812) — the per-repo INTEGRATION + CONTRACT gate for
@@ -175,6 +176,7 @@ beforeEach(async () => {
 afterAll(async () => {
   vi.unstubAllGlobals();
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const svcCtx = () => ({ userId: fx.ownerId, workspaceId: fx.workspaceId });
@@ -232,7 +234,7 @@ async function engineProposes(
 
 /** Everything an approve could touch, for a byte-identical no-write check. */
 async function treeSnapshot(): Promise<unknown> {
-  const items = await db.workItem.findMany({
+  const items = await adminDb.workItem.findMany({
     where: { projectId: fx.projectId },
     orderBy: { id: 'asc' },
     select: {
@@ -247,12 +249,12 @@ async function treeSnapshot(): Promise<unknown> {
       updatedAt: true,
     },
   });
-  const links = await db.workItemLink.findMany({
+  const links = await adminDb.workItemLink.findMany({
     where: { workspaceId: fx.workspaceId },
     orderBy: { id: 'asc' },
     select: { fromId: true, toId: true, kind: true },
   });
-  const revisions = await db.workItemRevision.count({
+  const revisions = await adminDb.workItemRevision.count({
     where: { workItem: { projectId: fx.projectId } },
   });
   return { items, links, revisions };
@@ -273,7 +275,7 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     // open the run's plan bound to that job (the confirm half).
     const submitted = submitJobMock.mock.calls[0]![2] as { targetKeys?: string[] };
     expect(submitted.targetKeys).toEqual([story.identifier]);
-    const opened = await db.plan.findUnique({ where: { id: planId } });
+    const opened = await adminDb.plan.findUnique({ where: { id: planId } });
     expect(opened?.sourceJobId).toBe(jobId);
     expect(opened?.status).toBe('generating');
     expect(opened?.origin).toBe('user');
@@ -332,7 +334,8 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     expect(byTitle.get('Validate the PAN')!.blockedByNodeIds).toEqual([cardFormItemId]);
     // Nothing is materialized yet — the read is a review, not a write.
     expect(byTitle.get('Card form')!.identifier).toBeNull();
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(1);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(1);
 
     // 4. The rail's CONFIRM — the same client the four entrances share.
     const approved = await approvePlanRequest(planId);
@@ -346,7 +349,7 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
 
     // 6. …and what actually happened, read from the database. The response is the
     //    claim; the rows are the fact.
-    const rows = await db.workItem.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.workItem.findMany({ where: { projectId: fx.projectId } });
     const items = new Map(rows.map((r) => [r.title, r]));
     expect(rows).toHaveLength(3);
     expect(items.get('Checkout & payment')!.id).toBe(story.id);
@@ -360,7 +363,7 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     expect(new Set(summary.created)).toEqual(new Set([cardForm.id, pan.id]));
     // The intra-plan blocked-by ref resolved to the sibling created in the SAME
     // approve — the edge the rail drew, now a real link.
-    const link = await db.workItemLink.findFirstOrThrow({
+    const link = await adminDb.workItemLink.findFirstOrThrow({
       where: { fromId: pan.id, toId: cardForm.id, kind: 'is_blocked_by' },
     });
     expect(link.toId).toBe(cardForm.id);
@@ -394,7 +397,8 @@ describe('seam · contextual submit → the run’s proposals → the rail’s r
     expect(pending!.items.map((i) => i.title)).toEqual(['Indexing']);
 
     await approvePlanRequest(resumedPlanId!);
-    expect(await db.workItem.count({ where: { title: 'Indexing' } })).toBe(1);
+    const workItemCount = await adminDb.workItem.count({ where: { title: 'Indexing' } });
+    expect(workItemCount).toBe(1);
   });
 });
 
@@ -423,8 +427,9 @@ describe('no approve ⇒ no write — a completed run leaves the tree byte-ident
     expect(pending!.status).toBe('planned');
 
     expect(await treeSnapshot()).toEqual(before);
-    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
-    expect(await db.workItem.count({ where: { title: 'Never built' } })).toBe(0);
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    const workItemCount = await adminDb.workItem.count({ where: { title: 'Never built' } });
+    expect(workItemCount).toBe(0);
 
     // …and it is the APPROVE, not the run, that writes.
     await approvePlanRequest(planId);
@@ -447,7 +452,7 @@ describe('no approve ⇒ no write — a completed run leaves the tree byte-ident
 
     expect(await treeSnapshot()).toEqual(before);
     expect(await readPendingProposal(planId)).toBeNull();
-    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('declined');
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('declined');
 
     // Discarding twice is a no-op the surface can explain, not a crash.
     const again = await declinePlanRequest(planId).catch((e: unknown) => e);
@@ -477,15 +482,17 @@ describe('no approve ⇒ no write — a completed run leaves the tree byte-ident
     });
     expect(edited.items[0]!.proposedFields?.title).toBe('The title the reviewer wants');
     // Still a proposal — an edit is not a write either.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(1);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(1);
 
     await approvePlanRequest(planId);
-    const built = await db.workItem.findFirstOrThrow({
+    const built = await adminDb.workItem.findFirstOrThrow({
       where: { projectId: fx.projectId, parentId: story.id },
     });
     expect(built.title).toBe('The title the reviewer wants');
     expect(built.priority).toBe('high');
-    expect(await db.workItem.count({ where: { title: 'Generated title' } })).toBe(0);
+    const workItemCount2 = await adminDb.workItem.count({ where: { title: 'Generated title' } });
+    expect(workItemCount2).toBe(0);
   });
 
   it('an edit that would break the proposal is refused, and the run stays reviewable', async () => {
@@ -535,8 +542,10 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
     );
 
     // The provenance really does differ — otherwise this asserts nothing.
-    expect((await db.plan.findUnique({ where: { id: userPlanId } }))?.origin).toBe('user');
-    expect((await db.plan.findUnique({ where: { id: cadencePlanId } }))?.origin).toBe('cadence');
+    expect((await adminDb.plan.findUnique({ where: { id: userPlanId } }))?.origin).toBe('user');
+    expect((await adminDb.plan.findUnique({ where: { id: cadencePlanId } }))?.origin).toBe(
+      'cadence',
+    );
 
     await engineProposes(userPlanId, proposalsFor(userStory.id));
     await engineProposes(cadencePlanId, proposalsFor(cadenceStory.id));
@@ -549,10 +558,11 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
     }
 
     // Same confirm: neither is materialized until approved, and both then are.
-    expect(await db.workItem.count({ where: { title: 'Proposed leaf' } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { title: 'Proposed leaf' } });
+    expect(workItemCount).toBe(0);
     await approvePlanRequest(userPlanId);
     await approvePlanRequest(cadencePlanId);
-    const created = await db.workItem.findMany({ where: { title: 'Proposed leaf' } });
+    const created = await adminDb.workItem.findMany({ where: { title: 'Proposed leaf' } });
     expect(created).toHaveLength(2);
     expect(new Set(created.map((r) => r.parentId))).toEqual(
       new Set([userStory.id, cadenceStory.id]),
@@ -591,7 +601,8 @@ describe('the gate is TRIGGER-AGNOSTIC — same predicate, same confirm', () => 
       expect((err as InstanceType<typeof PlanRequestError>).code).toBe('PLAN_GRAMMAR_VIOLATION');
     }
     expect(await treeSnapshot()).toEqual(before);
-    expect(await db.workItem.count({ where: { title: 'Illegal child' } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { title: 'Illegal child' } });
+    expect(workItemCount).toBe(0);
   });
 });
 
@@ -619,7 +630,7 @@ describe('every rejection class leaves the database untouched — through the an
     expect(await treeSnapshot()).toEqual(before);
     // Still `planned`, and still offered by the rail — a refusal is recoverable
     // in place, not a run the user has to start over.
-    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
     expect(await readPendingProposal(planId)).not.toBeNull();
   }
 
@@ -710,7 +721,7 @@ describe('every rejection class leaves the database untouched — through the an
       svcCtx(),
     );
     const bId = b.items.find((i) => i.proposedFields?.title === 'B')!.id;
-    await db.planItem.update({
+    await adminDb.planItem.update({
       where: { id: aId },
       data: { parentRef: `${TEMP_REF_PREFIX}${bId}` },
     });
@@ -747,7 +758,8 @@ describe('every rejection class leaves the database untouched — through the an
     const twice = await approvePlanRequest(decidedId).catch((e: unknown) => e);
     expect(planDecisionErrorCode(twice)).toBe('decided');
     // The second confirm changed nothing — one approve, one materialize.
-    expect(await db.workItem.count({ where: { title: 'Once' } })).toBe(1);
+    const workItemCount = await adminDb.workItem.count({ where: { title: 'Once' } });
+    expect(workItemCount).toBe(1);
   });
 });
 
@@ -838,8 +850,11 @@ describe('tenancy — a plan outside the actor’s workspace is 404, never 403',
     expect(confirm.status).not.toBe(403);
 
     // And the refusal is real, not cosmetic: the rival's tree is untouched.
-    expect(await db.workItem.count({ where: { projectId: rival.projectId } })).toBe(1);
-    expect((await db.plan.findUnique({ where: { id: rivalPlan.id } }))?.status).toBe('planned');
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: rival.projectId } });
+    expect(workItemCount).toBe(1);
+    expect((await adminDb.plan.findUnique({ where: { id: rivalPlan.id } }))?.status).toBe(
+      'planned',
+    );
   });
 
   it('the rail’s own client reports a cross-tenant plan as `decided`, not as an error dump', async () => {
@@ -867,7 +882,8 @@ describe('tenancy — a plan outside the actor’s workspace is 404, never 403',
     );
     expect(res.status).toBe(404);
     expect(submitJobMock).not.toHaveBeenCalled();
-    expect(await db.plan.count()).toBe(0);
+    const planCount = await adminDb.plan.count();
+    expect(planCount).toBe(0);
   });
 });
 

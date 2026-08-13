@@ -11,6 +11,7 @@ import {
 } from '@/lib/triage/errors';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Triage submission intake (Subtask 6.11.4) — the in-app member submit + the
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('triageService.createSubmission — the in-app member intake', () => {
@@ -50,7 +52,7 @@ describe('triageService.createSubmission — the in-app member intake', () => {
 
     // The row is a triage submission: marker set, no parent, reporter +
     // submitter both the member, in the right project.
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: result.id } });
     expect(row.triagedAt).not.toBeNull();
     expect(row.parentId).toBeNull();
     expect(row.reporterId).toBe(fx.ownerId);
@@ -73,7 +75,7 @@ describe('triageService.createSubmission — the in-app member intake', () => {
       fx.ctx,
     );
     expect(result.kind).toBe('task');
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: result.id } });
     expect(row.triagedAt).not.toBeNull();
     expect(row.kind).toBe('task');
   });
@@ -95,7 +97,7 @@ describe('triageService.createSubmission — the in-app member intake', () => {
       fx.ctx,
     );
 
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: result.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: result.id } });
     expect(row.reporterId).toBe(fx.ownerId); // reporter = the actor
     expect(row.submittedByUserId).toBe(submitter.id); // submitter = the supplied id
   });
@@ -119,7 +121,7 @@ describe('triageService.createSubmission — guards', () => {
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
 
     // No work item was created.
-    const count = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const count = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
     expect(count).toBe(0);
   });
 

@@ -5,6 +5,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { boardRepository } from '@/lib/repositories/boardRepository';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { ProjectContext } from '@/lib/projects';
 
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -75,14 +77,16 @@ async function makeFixture(label: string): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'Routes Member',
   });
-  await db.workspaceMembership.create({ data: { userId: member.id, workspaceId, role: 'member' } });
+  await adminDb.workspaceMembership.create({
+    data: { userId: member.id, workspaceId, role: 'member' },
+  });
 
   const board = await boardRepository.findDefaultForProject(project.id, workspaceId);
   if (!board) throw new Error('expected a seeded default board');
-  const statuses = await db.workflowStatus.findMany({ where: { projectId: project.id } });
+  const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: project.id } });
   const statusIdByKey = new Map(statuses.map((s) => [s.key, s.id]));
   const keyByStatusId = new Map(statuses.map((s) => [s.id, s.key]));
-  const mappings = await db.boardColumnStatus.findMany({ where: { boardId: board.id } });
+  const mappings = await adminDb.boardColumnStatus.findMany({ where: { boardId: board.id } });
   const columnByStatusKey = new Map<string, string>();
   for (const m of mappings) {
     const key = keyByStatusId.get(m.statusId);
@@ -197,7 +201,7 @@ describe('PATCH /api/board/columns/[columnId]', () => {
   it('reorders via { position }', async () => {
     const fx = await makeFixture('patch-pos');
     asOwner(fx);
-    const cols = await db.boardColumn.findMany({
+    const cols = await adminDb.boardColumn.findMany({
       where: { boardId: fx.boardId },
       orderBy: { position: 'asc' },
     });

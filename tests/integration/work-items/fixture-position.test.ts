@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { isValidOrderKey } from '@/lib/workItems/positioning';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../../fixtures';
 
@@ -19,7 +20,7 @@ import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '.
 // creation order. Real Postgres, no mocks.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -29,7 +30,7 @@ beforeEach(truncateAll);
 afterAll(() => db.$disconnect());
 
 const positionsOf = (fx: WorkItemFixture, parentId: string | null) =>
-  db.workItem.findMany({
+  adminDb.workItem.findMany({
     where: { projectId: fx.projectId, parentId },
     orderBy: { position: 'asc' },
     select: { identifier: true, position: true },
@@ -66,7 +67,7 @@ describe('createTestWorkItem — the seeded `position` is a real fractional-inde
     const r1 = await createTestWorkItem(fx, { kind: 'task', title: 'R1', parentId: right.id });
     const l2 = await createTestWorkItem(fx, { kind: 'task', title: 'L2', parentId: left.id });
 
-    const all = await db.workItem.findMany({
+    const all = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       select: { position: true },
     });

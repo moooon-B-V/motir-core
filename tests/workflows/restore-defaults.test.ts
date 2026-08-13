@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { PermissionDeniedError } from '@/lib/projects/errors';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Restore default TRANSITIONS — additive merge (Story 2.2 · Subtask 2.2.10).
@@ -19,6 +20,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -42,12 +44,12 @@ describe('restoreDefaultTransitions — additive merge', () => {
   it('re-adds missing default edges, keeps custom edges, is idempotent', async () => {
     const fx = await makeFixture();
 
-    const statuses = await db.workflowStatus.findMany({ where: { projectId: fx.projectId } });
+    const statuses = await adminDb.workflowStatus.findMany({ where: { projectId: fx.projectId } });
     const idOf = (k: string) => statuses.find((s) => s.key === k)!.id;
 
     // Remove three default edges (their endpoints all survive — statuses are
     // protected and never deleted).
-    await db.workflowTransition.deleteMany({
+    await adminDb.workflowTransition.deleteMany({
       where: {
         projectId: fx.projectId,
         OR: [
@@ -127,7 +129,7 @@ describe('restoreDefaultTransitions — additive merge', () => {
       password: 'hunter2hunter2',
       name: 'Member',
     });
-    await db.workspaceMembership.create({
+    await adminDb.workspaceMembership.create({
       data: { userId: member.id, workspaceId: fx.workspaceId, role: 'member' },
     });
     await expect(

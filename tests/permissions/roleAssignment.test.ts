@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 
 // Assigning a CUSTOM role (Story MOTIR-2257 · Subtask MOTIR-2485) — the two
 // things the SERVICE tests in `tests/project-members-service.test.ts` cannot say
@@ -47,6 +48,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {

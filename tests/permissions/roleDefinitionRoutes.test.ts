@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 
 // Transport tests for the role-definition API (Story MOTIR-2257 · Subtask
 // MOTIR-2474). The routes are thin one-service-call transports, so what these
@@ -49,6 +50,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -187,7 +189,10 @@ describe('POST /api/projects/[key]/roles', () => {
       expect(res.status, JSON.stringify(body)).toBe(400);
       expect((await res.json()).code).toBe('BAD_REQUEST');
     }
-    expect(await db.projectRoleDefinition.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const projectRoleDefinitionCount = await adminDb.projectRoleDefinition.count({
+      where: { projectId: fx.projectId },
+    });
+    expect(projectRoleDefinitionCount).toBe(0);
   });
 
   it('400s an ungrantable permission — the SERVICE`s refusal, mapped', async () => {
@@ -215,7 +220,7 @@ describe('POST /api/projects/[key]/roles', () => {
     expect(res.status).toBe(201);
     const { role } = (await res.json()) as { role: Record<string, unknown> };
     expect('basedOn' in role).toBe(false);
-    const stored = await db.projectRoleDefinition.findUniqueOrThrow({
+    const stored = await adminDb.projectRoleDefinition.findUniqueOrThrow({
       where: { id: role['id'] as string },
     });
     expect('basedOn' in stored).toBe(false);
@@ -271,9 +276,9 @@ describe('the 404-BEFORE-403 ordering — a settings surface cannot confirm a fo
     expect(res.status).toBe(404);
     expect((await res.json()).code).toBe('PROJECT_NOT_FOUND');
     // Nothing reached the foreign project.
-    expect(await db.projectRoleDefinition.count({ where: { projectId: theirs.projectId } })).toBe(
-      0,
-    );
+    expect(
+      await adminDb.projectRoleDefinition.count({ where: { projectId: theirs.projectId } }),
+    ).toBe(0);
   });
 
   it('a key that COLLIDES across workspaces resolves to the actor`s OWN project, never the foreign one', async () => {
@@ -293,11 +298,14 @@ describe('the 404-BEFORE-403 ordering — a settings surface cannot confirm a fo
     });
     expect(res.status).toBe(201);
     // It landed on MINE…
-    expect(await db.projectRoleDefinition.count({ where: { projectId: mine.projectId } })).toBe(1);
+    const projectRoleDefinitionCount = await adminDb.projectRoleDefinition.count({
+      where: { projectId: mine.projectId },
+    });
+    expect(projectRoleDefinitionCount).toBe(1);
     // …and never touched theirs.
-    expect(await db.projectRoleDefinition.count({ where: { projectId: theirs.projectId } })).toBe(
-      0,
-    );
+    expect(
+      await adminDb.projectRoleDefinition.count({ where: { projectId: theirs.projectId } }),
+    ).toBe(0);
   });
 
   it('an actor who cannot BROWSE the project gets 404 rather than 403', async () => {
@@ -381,7 +389,7 @@ describe('PATCH /api/projects/[key]/roles/[roleId]', () => {
 
 describe('DELETE /api/projects/[key]/roles/[roleId]', () => {
   async function hold(fx: Fixture, userId: string, roleId: string) {
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       projectMembershipRepository.setRoleDefinition(
         userId,
         fx.projectId,
@@ -397,7 +405,10 @@ describe('DELETE /api/projects/[key]/roles/[roleId]', () => {
     const role = await seedRole(fx, 'Unheld');
     const res = await del(fx.projectKey, role.id);
     expect(res.status).toBe(204);
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).toBeNull();
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).toBeNull();
   });
 
   it('409s WITH `count: 2` when two people hold it, and the same call with a destination succeeds', async () => {
@@ -429,7 +440,10 @@ describe('DELETE /api/projects/[key]/roles/[roleId]', () => {
     expect(body.count).toBe(2);
     expect(body.roleName).toBe('Contractor');
     // Nothing written by the refusal.
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
 
     const destination = await seedRole(fx, 'Reporter');
     const ok = await del(fx.projectKey, role.id, destination.id);
@@ -456,7 +470,10 @@ describe('DELETE /api/projects/[key]/roles/[roleId]', () => {
       expect(res.status, target).toBe(400);
       expect((await res.json()).code).toBe('INVALID_ROLE_REASSIGN_TARGET');
     }
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
   });
 
   it('403s a BUILT-IN and a non-admin', async () => {
@@ -472,7 +489,10 @@ describe('DELETE /api/projects/[key]/roles/[roleId]', () => {
     const nonAdmin = await del(fx.projectKey, role.id);
     expect(nonAdmin.status).toBe(403);
     expect((await nonAdmin.json()).code).toBe('PERMISSION_DENIED');
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: role.id } })).not.toBeNull();
+    const projectRoleDefinitionRow = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: role.id },
+    });
+    expect(projectRoleDefinitionRow).not.toBeNull();
   });
 
   it('401s when there is no session', async () => {

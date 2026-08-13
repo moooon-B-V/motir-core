@@ -4,6 +4,7 @@ import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { Prisma } from '@/generated/prisma/client';
 
@@ -28,7 +29,7 @@ async function addRevision(
   changedAt: Date,
   diff: Prisma.InputJsonValue,
 ): Promise<void> {
-  await db.workItemRevision.create({
+  await adminDb.workItemRevision.create({
     data: { workItemId, changedById, changeKind: 'updated', changedAt, diff },
   });
 }
@@ -40,7 +41,7 @@ async function place(
   status: string,
   storyPoints: number | null,
 ): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { sprintId, status, storyPoints } });
+  await adminDb.workItem.update({ where: { id }, data: { sprintId, status, storyPoints } });
 }
 
 const WINDOW = { start: utcDay(2026, 6, 1), end: utcDay(2026, 6, 10) };
@@ -57,6 +58,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('aggregateSprintCycleByDay', () => {
@@ -191,15 +193,15 @@ describe('workItemRepository.sumStartedForSprint', () => {
     const b = await createTestWorkItem(fx, { kind: 'task', title: 'B in progress' });
     const c = await createTestWorkItem(fx, { kind: 'task', title: 'C todo (excluded)' });
     // points + minutes set so each statistic resolves to a number.
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: a.id },
       data: { sprintId: sprint.id, status: 'done', storyPoints: 5, estimateMinutes: 50 },
     });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: b.id },
       data: { sprintId: sprint.id, status: 'in_progress', storyPoints: 8, estimateMinutes: 80 },
     });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: c.id },
       data: { sprintId: sprint.id, status: 'todo', storyPoints: 3, estimateMinutes: 30 },
     });
@@ -223,7 +225,7 @@ describe('workItemRepository.sumStartedForSprint', () => {
     const other = await makeWorkItemFixture({ name: 'Other', identifier: 'OTHR' });
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Empty' }, fx.ctx);
     const a = await createTestWorkItem(fx, { kind: 'task', title: 'A todo' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: a.id },
       data: { sprintId: sprint.id, status: 'todo', storyPoints: 5 },
     });

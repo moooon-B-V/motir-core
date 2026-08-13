@@ -6,6 +6,7 @@ import { projectRoleDefinitionRepository } from '@/lib/repositories/projectRoleD
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { CUSTOM_ROLE_TIER } from '@/lib/permissions/builtinRoles';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Schema + tenancy + repository proof for Story MOTIR-2257 · Subtask MOTIR-2467
@@ -32,9 +33,13 @@ import { truncateAuthTables } from './helpers/db';
 // superuser, which has BYPASSRLS — RLS is inert under it regardless of FORCE.
 // Every RLS assertion below runs inside a transaction that drops to the
 // non-bypass `motir_app` role (the asAppRole helper, a local copy per the
-// convention each RLS suite carries its own). Constraint tests run as the
-// superuser via the `db` singleton — they assert DB constraints, which bite
-// regardless of role.
+// convention each RLS suite carries its own). Constraint and repository-leaf
+// tests run through the ADMIN client (`adminDb`) — they assert DB constraints and
+// column round-trips, which bite regardless of role, so a policy denial there
+// would replace the signal with noise. Where a repository read accepts an
+// optional `tx`, it is handed the admin transaction rather than being replaced by
+// a raw query: the repository stays the code under test, it is only the
+// connection its statement rides that changes.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -45,6 +50,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface RoleTenantFixture {
@@ -75,13 +81,13 @@ async function makeRoleTenants(): Promise<RoleTenantFixture> {
   });
   const w1 = await workspacesService.createWorkspace({ name: 'PRD WS 1', ownerUserId: userA.id });
   const w2 = await workspacesService.createWorkspace({ name: 'PRD WS 2', ownerUserId: userB.id });
-  const p1 = await db.project.create({
+  const p1 = await adminDb.project.create({
     data: { workspaceId: w1.workspace.id, name: 'PRD P1', slug: 'prd-rls', identifier: 'PRA' },
   });
-  const p2 = await db.project.create({
+  const p2 = await adminDb.project.create({
     data: { workspaceId: w2.workspace.id, name: 'PRD P2', slug: 'prd-rls', identifier: 'PRB' },
   });
-  const r1 = await db.projectRoleDefinition.create({
+  const r1 = await adminDb.projectRoleDefinition.create({
     data: {
       workspaceId: w1.workspace.id,
       projectId: p1.id,
@@ -89,7 +95,7 @@ async function makeRoleTenants(): Promise<RoleTenantFixture> {
       permissions: ['project:browse', 'comment:add'],
     },
   });
-  const r2 = await db.projectRoleDefinition.create({
+  const r2 = await adminDb.projectRoleDefinition.create({
     data: {
       workspaceId: w2.workspace.id,
       projectId: p2.id,
@@ -131,7 +137,7 @@ async function asAppRole<T>(
 describe('project_role_definition — round-trip + constraints', () => {
   it('a role definition round-trips with its base, its permission array and its timestamps', async () => {
     const fx = await makeRoleTenants();
-    const read = await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
+    const read = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
     expect(read?.name).toBe('Contractor');
     expect(read?.permissions).toEqual(['project:browse', 'comment:add']);
     expect(read?.workspaceId).toBe(fx.workspaceW1Id);
@@ -144,7 +150,7 @@ describe('project_role_definition — round-trip + constraints', () => {
     const fx = await makeRoleTenants();
     let caught: unknown;
     try {
-      await db.$transaction((tx) =>
+      await adminDb.$transaction((tx) =>
         projectRoleDefinitionRepository.create(
           {
             workspaceId: fx.workspaceW1Id,
@@ -167,7 +173,7 @@ describe('project_role_definition — round-trip + constraints', () => {
     // The fixture already proves it across workspaces; prove it across two
     // projects in ONE workspace, which is where a workspace-wide unique would
     // have bitten.
-    const sibling = await db.project.create({
+    const sibling = await adminDb.project.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         name: 'PRD P1b',
@@ -175,7 +181,7 @@ describe('project_role_definition — round-trip + constraints', () => {
         identifier: 'PRC',
       },
     });
-    const created = await db.projectRoleDefinition.create({
+    const created = await adminDb.projectRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: sibling.id,
@@ -189,11 +195,15 @@ describe('project_role_definition — round-trip + constraints', () => {
 
   it('deleting a project cascades away its role definitions; a sibling tenant’s survive', async () => {
     const fx = await makeRoleTenants();
-    await db.project.delete({ where: { id: fx.projectP1Id } });
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } })).toBeNull();
-    expect(
-      await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW2Id } }),
-    ).not.toBeNull();
+    await adminDb.project.delete({ where: { id: fx.projectP1Id } });
+    const cascaded = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: fx.roleW1Id },
+    });
+    expect(cascaded).toBeNull();
+    const siblingTenantRole = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: fx.roleW2Id },
+    });
+    expect(siblingTenantRole).not.toBeNull();
   });
 });
 
@@ -261,7 +271,7 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
     // pre-migration row is. Asserted, not assumed: nobody's access changes on
     // deploy because NULL means what a membership meant before the column.
     const fx = await makeRoleTenants();
-    const membership = await db.projectMembership.create({
+    const membership = await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -273,7 +283,7 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
     expect(membership.role).toBe('viewer');
 
     // And across the whole table: no row anywhere carries a pointer yet.
-    const withPointer = await db.projectMembership.count({
+    const withPointer = await adminDb.projectMembership.count({
       where: { roleDefinitionId: { not: null } },
     });
     expect(withPointer).toBe(0);
@@ -281,7 +291,7 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
 
   it('deleting a role definition a membership POINTS AT is refused by the database, and the membership survives', async () => {
     const fx = await makeRoleTenants();
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -291,16 +301,18 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
       },
     });
 
-    await expect(
-      db.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx)),
-    ).rejects.toThrow();
+    const heldRoleDelete = adminDb.$transaction((tx) =>
+      projectRoleDefinitionRepository.delete(fx.roleW1Id, tx),
+    );
+    await expect(heldRoleDelete).rejects.toThrow();
 
     // Both sides intact — Restrict refuses rather than cascading the membership
     // away or silently nulling the pointer.
-    expect(
-      await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } }),
-    ).not.toBeNull();
-    const survivor = await db.projectMembership.findUnique({
+    const heldRole = await adminDb.projectRoleDefinition.findUnique({
+      where: { id: fx.roleW1Id },
+    });
+    expect(heldRole).not.toBeNull();
+    const survivor = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: fx.userA1Id, projectId: fx.projectP1Id } },
     });
     expect(survivor?.roleDefinitionId).toBe(fx.roleW1Id);
@@ -309,15 +321,16 @@ describe('project_membership.role_definition_id — the deploy backfill and the 
 
   it('a role definition nobody holds deletes cleanly', async () => {
     const fx = await makeRoleTenants();
-    await db.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx));
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } })).toBeNull();
+    await adminDb.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx));
+    const deleted = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
+    expect(deleted).toBeNull();
   });
 });
 
 describe('projectRoleDefinitionRepository — the leaves', () => {
   it('findManyByProject returns the project’s roles ordered by name', async () => {
     const fx = await makeRoleTenants();
-    await db.projectRoleDefinition.createMany({
+    await adminDb.projectRoleDefinition.createMany({
       data: [
         {
           workspaceId: fx.workspaceW1Id,
@@ -333,22 +346,35 @@ describe('projectRoleDefinitionRepository — the leaves', () => {
         },
       ],
     });
-    const rows = await projectRoleDefinitionRepository.findManyByProject(fx.projectP1Id);
+    const rows = await adminDb.$transaction((tx) =>
+      projectRoleDefinitionRepository.findManyByProject(fx.projectP1Id, tx),
+    );
     expect(rows.map((r) => r.name)).toEqual(['Auditor', 'Contractor', 'Reporter']);
   });
 
   it('findById / findManyByIds read back what was written; findManyByIds([]) makes no query', async () => {
     const fx = await makeRoleTenants();
-    expect((await projectRoleDefinitionRepository.findById(fx.roleW1Id))?.name).toBe('Contractor');
-    expect(await projectRoleDefinitionRepository.findById('no-such-id')).toBeNull();
-    const many = await projectRoleDefinitionRepository.findManyByIds([fx.roleW1Id, fx.roleW2Id]);
+    const found = await adminDb.$transaction((tx) =>
+      projectRoleDefinitionRepository.findById(fx.roleW1Id, tx),
+    );
+    expect(found?.name).toBe('Contractor');
+    const missing = await adminDb.$transaction((tx) =>
+      projectRoleDefinitionRepository.findById('no-such-id', tx),
+    );
+    expect(missing).toBeNull();
+    const many = await adminDb.$transaction((tx) =>
+      projectRoleDefinitionRepository.findManyByIds([fx.roleW1Id, fx.roleW2Id], tx),
+    );
     expect(many.map((r) => r.id).sort()).toEqual([fx.roleW1Id, fx.roleW2Id].sort());
-    expect(await projectRoleDefinitionRepository.findManyByIds([])).toEqual([]);
+    const none = await adminDb.$transaction((tx) =>
+      projectRoleDefinitionRepository.findManyByIds([], tx),
+    );
+    expect(none).toEqual([]);
   });
 
   it('countByProject counts only THAT project’s roles', async () => {
     const fx = await makeRoleTenants();
-    const count = await db.$transaction((tx) =>
+    const count = await adminDb.$transaction((tx) =>
       projectRoleDefinitionRepository.countByProject(fx.projectP1Id, tx),
     );
     expect(count).toBe(1);
@@ -356,7 +382,7 @@ describe('projectRoleDefinitionRepository — the leaves', () => {
 
   it('update patches name + permissions, and there is nothing else to patch', async () => {
     const fx = await makeRoleTenants();
-    const updated = await db.$transaction((tx) =>
+    const updated = await adminDb.$transaction((tx) =>
       projectRoleDefinitionRepository.update(
         fx.roleW1Id,
         { name: 'External', permissions: ['project:browse'] },
@@ -379,7 +405,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
    * nothing, so a custom role grants exactly what it lists.
    */
   async function assertPairedColumns(projectId: string): Promise<number> {
-    const memberships = await db.projectMembership.findMany({
+    const memberships = await adminDb.projectMembership.findMany({
       where: { projectId },
       include: { roleDefinition: true },
     });
@@ -398,7 +424,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
 
   it('setRoleDefinition onto a CUSTOM role writes the pointer AND the tier in one statement', async () => {
     const fx = await makeRoleTenants();
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -407,7 +433,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       },
     });
 
-    const updated = await db.$transaction((tx) =>
+    const updated = await adminDb.$transaction((tx) =>
       projectMembershipRepository.setRoleDefinition(
         fx.userA1Id,
         fx.projectP1Id,
@@ -422,7 +448,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
 
   it('setRoleDefinition back onto a BUILT-IN clears the pointer AND sets `role` to that built-in', async () => {
     const fx = await makeRoleTenants();
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -432,7 +458,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       },
     });
 
-    const updated = await db.$transaction((tx) =>
+    const updated = await adminDb.$transaction((tx) =>
       projectMembershipRepository.setRoleDefinition(
         fx.userA1Id,
         fx.projectP1Id,
@@ -447,7 +473,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
 
   it('reassignRoleDefinition moves EVERY holder onto the destination, both columns together', async () => {
     const fx = await makeRoleTenants();
-    const destination = await db.projectRoleDefinition.create({
+    const destination = await adminDb.projectRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -467,7 +493,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       password: 'hunter2hunter2',
       name: 'PRD Builtin',
     });
-    await db.projectMembership.createMany({
+    await adminDb.projectMembership.createMany({
       data: [
         {
           workspaceId: fx.workspaceW1Id,
@@ -492,7 +518,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       ],
     });
 
-    const moved = await db.$transaction((tx) =>
+    const moved = await adminDb.$transaction((tx) =>
       projectMembershipRepository.reassignRoleDefinition(
         fx.roleW1Id,
         { roleDefinitionId: destination.id, role: CUSTOM_ROLE_TIER },
@@ -503,7 +529,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
     expect(await assertPairedColumns(fx.projectP1Id)).toBe(2);
 
     // The built-in membership is untouched — the move is scoped to holders.
-    const builtIn = await db.projectMembership.findUnique({
+    const builtIn = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: untouched.id, projectId: fx.projectP1Id } },
     });
     expect(builtIn?.roleDefinitionId).toBeNull();
@@ -511,13 +537,14 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
 
     // And with no holders left, the role now deletes cleanly — the shape the
     // service's reassign-then-delete relies on.
-    await db.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx));
-    expect(await db.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } })).toBeNull();
+    await adminDb.$transaction((tx) => projectRoleDefinitionRepository.delete(fx.roleW1Id, tx));
+    const deleted = await adminDb.projectRoleDefinition.findUnique({ where: { id: fx.roleW1Id } });
+    expect(deleted).toBeNull();
   });
 
   it('reassignRoleDefinition to a BUILT-IN destination clears every pointer and sets `role`', async () => {
     const fx = await makeRoleTenants();
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -526,7 +553,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         roleDefinitionId: fx.roleW1Id,
       },
     });
-    const moved = await db.$transaction((tx) =>
+    const moved = await adminDb.$transaction((tx) =>
       projectMembershipRepository.reassignRoleDefinition(
         fx.roleW1Id,
         { roleDefinitionId: null, role: 'member' },
@@ -535,7 +562,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
     );
     expect(moved).toBe(1);
     expect(await assertPairedColumns(fx.projectP1Id)).toBe(0);
-    const row = await db.projectMembership.findUnique({
+    const row = await adminDb.projectMembership.findUnique({
       where: { userId_projectId: { userId: fx.userA1Id, projectId: fx.projectP1Id } },
     });
     expect(row?.role).toBe('member');
@@ -543,7 +570,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
 
   it('countByRoleDefinition groups holders per custom role and EXCLUDES built-in memberships', async () => {
     const fx = await makeRoleTenants();
-    const second = await db.projectRoleDefinition.create({
+    const second = await adminDb.projectRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -561,7 +588,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       password: 'hunter2hunter2',
       name: 'PRD Count 3',
     });
-    await db.projectMembership.createMany({
+    await adminDb.projectMembership.createMany({
       data: [
         {
           workspaceId: fx.workspaceW1Id,
@@ -587,7 +614,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       ],
     });
     // A membership on a BUILT-IN — countByRole's, never this one's.
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -596,7 +623,9 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
       },
     });
 
-    const counts = await projectMembershipRepository.countByRoleDefinition(fx.projectP1Id);
+    const counts = await adminDb.$transaction((tx) =>
+      projectMembershipRepository.countByRoleDefinition(fx.projectP1Id, tx),
+    );
     expect(counts.sort((a, b) => a.roleDefinitionId.localeCompare(b.roleDefinitionId))).toEqual(
       [
         { roleDefinitionId: fx.roleW1Id, count: 2 },
@@ -605,7 +634,7 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
     );
 
     // A role nobody holds is simply absent — zero-filling is the mapper's job.
-    const unheld = await db.projectRoleDefinition.create({
+    const unheld = await adminDb.projectRoleDefinition.create({
       data: {
         workspaceId: fx.workspaceW1Id,
         projectId: fx.projectP1Id,
@@ -613,7 +642,9 @@ describe('projectMembershipRepository — the paired-column invariant', () => {
         permissions: [],
       },
     });
-    const after = await projectMembershipRepository.countByRoleDefinition(fx.projectP1Id);
+    const after = await adminDb.$transaction((tx) =>
+      projectMembershipRepository.countByRoleDefinition(fx.projectP1Id, tx),
+    );
     expect(after.map((c) => c.roleDefinitionId)).not.toContain(unheld.id);
   });
 });

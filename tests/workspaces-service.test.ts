@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { AlreadyMemberError, LastMemberError } from '@/lib/workspaces/errors';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for the Workspace + WorkspaceMembership
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeUser(email: string, name = 'Owner') {
@@ -57,7 +59,7 @@ describe('createWorkspace', () => {
     // The workspace creator is its owner (Subtask 1.6.5 — replay gate tier).
     expect(membership.role).toBe('owner');
 
-    const persistedMembership = await db.workspaceMembership.findUnique({
+    const persistedMembership = await adminDb.workspaceMembership.findUnique({
       where: { id: membership.id },
     });
     expect(persistedMembership).not.toBeNull();
@@ -111,7 +113,7 @@ describe('addMember', () => {
     expect(membership.userId).toBe(invitee.id);
     expect(membership.role).toBe('member');
 
-    const count = await db.workspaceMembership.count({
+    const count = await adminDb.workspaceMembership.count({
       where: { workspaceId: workspace.id },
     });
     expect(count).toBe(2);
@@ -215,7 +217,10 @@ describe('removeMember', () => {
     expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect(rejected[0]!.reason).toBeInstanceOf(LastMemberError);
-    expect(await db.workspaceMembership.count({ where: { workspaceId: workspace.id } })).toBe(1);
+    const workspaceMembershipCount = await adminDb.workspaceMembership.count({
+      where: { workspaceId: workspace.id },
+    });
+    expect(workspaceMembershipCount).toBe(1);
   });
 });
 
@@ -232,7 +237,7 @@ describe('renameWorkspace', () => {
     expect(result.name).toBe('New Name');
     expect(result.slug).toBe(workspace.slug);
 
-    const persisted = await db.workspace.findUnique({ where: { id: workspace.id } });
+    const persisted = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
     expect(persisted?.name).toBe('New Name');
   });
 
@@ -271,8 +276,12 @@ describe('deleteWorkspace', () => {
 
     await deleteWorkspace({ workspaceId: workspace.id, actorUserId: owner.id });
 
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
-    expect(await db.workspaceMembership.count({ where: { workspaceId: workspace.id } })).toBe(0);
+    const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(workspaceRow).toBeNull();
+    const workspaceMembershipCount = await adminDb.workspaceMembership.count({
+      where: { workspaceId: workspace.id },
+    });
+    expect(workspaceMembershipCount).toBe(0);
   });
 
   it('rejects a delete from a non-member', async () => {
@@ -283,7 +292,8 @@ describe('deleteWorkspace', () => {
     await expect(
       deleteWorkspace({ workspaceId: workspace.id, actorUserId: stranger.id }),
     ).rejects.toMatchObject({ code: 'NOT_A_MEMBER' });
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).not.toBeNull();
+    const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(workspaceRow).not.toBeNull();
   });
 });
 
@@ -311,9 +321,12 @@ describe('cascade behavior', () => {
       ownerUserId: owner.id,
     });
 
-    await db.workspace.delete({ where: { id: workspace.id } });
+    await adminDb.workspace.delete({ where: { id: workspace.id } });
 
-    expect(await db.workspaceMembership.findUnique({ where: { id: membership.id } })).toBeNull();
+    const workspaceMembershipRow = await adminDb.workspaceMembership.findUnique({
+      where: { id: membership.id },
+    });
+    expect(workspaceMembershipRow).toBeNull();
   });
 
   it('removes membership rows when the parent User is deleted', async () => {
@@ -323,8 +336,11 @@ describe('cascade behavior', () => {
       ownerUserId: owner.id,
     });
 
-    await db.user.delete({ where: { id: owner.id } });
+    await adminDb.user.delete({ where: { id: owner.id } });
 
-    expect(await db.workspaceMembership.findUnique({ where: { id: membership.id } })).toBeNull();
+    const workspaceMembershipRow = await adminDb.workspaceMembership.findUnique({
+      where: { id: membership.id },
+    });
+    expect(workspaceMembershipRow).toBeNull();
   });
 });

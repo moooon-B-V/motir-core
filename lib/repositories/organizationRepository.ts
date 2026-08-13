@@ -36,21 +36,17 @@ function toCapContext(
 }
 
 export const organizationRepository = {
-  async findById(id: string): Promise<Organization | null> {
-    return db.organization.findUnique({ where: { id } });
-  },
-
-  async findBySlug(slug: string): Promise<Organization | null> {
-    return db.organization.findUnique({ where: { slug } });
-  },
-
   /**
    * Find by id inside the caller's transaction so the organization RLS policy
    * (which keys off the per-transaction `app.organization_id` / `app.user_id`
    * GUCs bound by the 6.10.4 org-context layer) admits the row under the
    * non-bypass `motir_app` role. Used by role-gated reads that guard a
-   * subsequent write; the `db`-singleton variant above returns NULL under RLS
-   * when no context is bound.
+   * subsequent write.
+   *
+   * There is no `db`-singleton variant any more (MOTIR-2775). One existed, returned
+   * NULL under RLS by design, had ZERO production callers, and survived only on the
+   * tests that asserted it — a method that cannot work is a trap in proportion to how
+   * inviting its name is, and `findById` is about as inviting as a name gets.
    */
   async findByIdInTx(id: string, tx: Prisma.TransactionClient): Promise<Organization | null> {
     return tx.organization.findUnique({ where: { id } });

@@ -25,6 +25,7 @@ import {
 import { POST as sendInvitePOST } from '@/app/api/workspaces/[workspaceId]/invites/route';
 import { GET as validateInviteGET } from '@/app/api/invites/[token]/route';
 import { POST as acceptInvitePOST } from '@/app/api/invites/[token]/accept/route';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from './helpers/db';
 import { captureConsoleEmails, captureEmailEvents, runEmailSendJob } from './helpers/jobs';
 
@@ -95,7 +96,7 @@ async function createInvite(args: {
     workspaceId: args.workspaceId,
     targetEmail: args.email,
   });
-  const row = await db.verification.findFirstOrThrow({
+  const row = await adminDb.verification.findFirstOrThrow({
     where: {
       identifier: { startsWith: INVITE_IDENTIFIER_PREFIX },
       value: { contains: args.email },
@@ -117,6 +118,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
@@ -128,7 +130,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const rows = await db.verification.findMany({
+    const rows = await adminDb.verification.findMany({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toHaveLength(1);
@@ -181,7 +183,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     const body = await res.json();
     expect(body.code).toBe('ALREADY_MEMBER');
 
-    const rows = await db.verification.count({
+    const rows = await adminDb.verification.count({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toBe(0);
@@ -208,7 +210,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     const body = await res.json();
     expect(body.code).toBe('NOT_FOUND');
 
-    const rows = await db.verification.count({
+    const rows = await adminDb.verification.count({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toBe(0);
@@ -228,7 +230,7 @@ describe('POST /api/workspaces/[workspaceId]/invites — send', () => {
     const body = await fourth.json();
     expect(body.code).toBe('RATE_LIMITED');
 
-    const rows = await db.verification.count({
+    const rows = await adminDb.verification.count({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(rows).toBe(3);
@@ -260,7 +262,7 @@ describe('POST /api/invites/[token]/accept', () => {
     const membership = await workspacesService.findMembership(invitee.id, workspace.id);
     expect(membership).not.toBeNull();
 
-    const remaining = await db.verification.count({
+    const remaining = await adminDb.verification.count({
       where: { identifier: { startsWith: INVITE_IDENTIFIER_PREFIX } },
     });
     expect(remaining).toBe(0);
@@ -338,7 +340,7 @@ describe('POST /api/invites/[token]/accept', () => {
       inviterUserId: inviter.id,
     });
     // Backdate the row's expiresAt to simulate "clicked after 7 days".
-    await db.verification.updateMany({
+    await adminDb.verification.updateMany({
       where: { identifier: INVITE_IDENTIFIER_PREFIX + token },
       data: { expiresAt: new Date(Date.now() - 60_000) },
     });

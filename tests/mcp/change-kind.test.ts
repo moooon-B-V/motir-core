@@ -9,6 +9,7 @@ import type { WorkItemDto, WorkItemKindDto, WorkItemTypeDto } from '@/lib/dto/wo
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { runChangeKind } from '@/lib/mcp/tools/changeKind';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP reclassify tool (MOTIR-1020) over real Postgres. `change_kind` is a thin
@@ -31,6 +32,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

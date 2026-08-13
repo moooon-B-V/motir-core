@@ -9,6 +9,7 @@ import type { WorkItemDto } from '@/lib/dto/workItems';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { runLinkWorkItems, runUnlinkWorkItems } from '@/lib/mcp/tools/linkWorkItems';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP link tools (Subtask 7.8.13) over real Postgres. `link_work_items` /
@@ -32,6 +33,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

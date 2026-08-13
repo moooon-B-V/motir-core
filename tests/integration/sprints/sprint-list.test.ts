@@ -5,6 +5,7 @@ import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Integration tests for the Story-4.2.3 sprint-list read binding
@@ -20,6 +21,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('sprintsService.listByProject', () => {

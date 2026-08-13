@@ -3,6 +3,7 @@ import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import type { TokenScope } from '@/lib/mcp/scopes';
@@ -84,6 +85,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST acceptance-evidence/upload-token', () => {
@@ -143,7 +145,7 @@ describe('POST acceptance-evidence/upload-token', () => {
   });
 
   it('org has no paid plan → 402 (no token minted)', async () => {
-    const ws = await db.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
+    const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
     aiAccess.current = access({ organizationId: ws.organizationId, hasPaidAiPlan: false });
     const token = await integrationToken(fx);
     const res = await POST(tokenReq(token), paramsFor(story));

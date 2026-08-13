@@ -20,6 +20,7 @@ import type {
 import type { CommentsPageDTO } from '@/lib/dto/comments';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `get_work_item_activity` (MOTIR-1999) over real Postgres — the DISCUSSION
@@ -109,6 +110,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('get_work_item_activity — registration', () => {
@@ -205,7 +207,7 @@ describe('get_work_item_activity — the empty page', () => {
     const item = await makeItem(fx, 'Silent');
     // Creation writes a `created` revision, so clear the trail to reach the
     // genuine zero-comments AND zero-displayable-revisions case.
-    await db.workItemRevision.deleteMany({ where: { workItemId: item.id } });
+    await adminDb.workItemRevision.deleteMany({ where: { workItemId: item.id } });
 
     const all = pageOf<ActivityAllPageDto>(await callActivity(fx.ctx, { key: item.key }));
     expect(all.entries).toEqual([]);

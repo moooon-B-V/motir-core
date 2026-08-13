@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -21,7 +22,7 @@ import type { WorkItemFixture } from '../../fixtures';
 // the repo units (notes.html #102). Real Postgres, no mocks (Yue's rule).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,10 +34,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function createActiveSprint(fx: WorkItemFixture, name = 'Sprint 1'): Promise<string> {
-  const sprint = await db.sprint.create({
+  const sprint = await adminDb.sprint.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -48,10 +50,10 @@ async function createActiveSprint(fx: WorkItemFixture, name = 'Sprint 1'): Promi
   return sprint.id;
 }
 async function setSprint(id: string, sprintId: string | null): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { sprintId } });
+  await adminDb.workItem.update({ where: { id }, data: { sprintId } });
 }
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 /** `is_blocked_by`: from = the blocked item, to = the blocker. */
 async function link(fx: WorkItemFixture, blockedId: string, blockerId: string): Promise<void> {
@@ -238,7 +240,7 @@ describe('getProjectRoadmap seam — sprint scope (top in-sprint roots)', () => 
     const fx = await makeFixture();
     const sprintId = await createActiveSprint(fx);
     await seedTree(fx, sprintId);
-    await db.sprint.update({ where: { id: sprintId }, data: { state: 'complete' } });
+    await adminDb.sprint.update({ where: { id: sprintId }, data: { state: 'complete' } });
 
     const roadmap = await workItemsService.getProjectRoadmap(fx.projectId, null, fx.ctx, {
       scope: 'sprint',

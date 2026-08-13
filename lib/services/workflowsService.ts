@@ -339,9 +339,25 @@ export const workflowsService = {
    * status per project, so `find` is unambiguous. Used by
    * workItemsService.createWorkItem to seed `work_item.status` (2.2.4).
    */
+  /**
+   * BOUND (MOTIR-2774): the read runs inside `withWorkspaceServiceContext` and takes
+   * that `tx`, following `canTransition` below. Unbound it went to the `@/lib/db`
+   * singleton, where the `workflow_status_active_workspace` policy sees no workspace
+   * and returns ZERO ROWS WITHOUT RAISING — so `find` missed, this returned null, and
+   * `workItemsService.createWorkItem` threw `NoInitialStatusError`. That error reads
+   * "corrupt seed", which is what made the bug expensive: the message accused the
+   * project's workflow while the workflow was intact and the read was simply blind.
+   * Creating ANY work item was impossible under the non-bypass role.
+   *
+   * `workspaceId` is a service argument resolved by the layer above (a session or a
+   * job envelope), never caller-supplied — `withWorkspaceServiceContext`'s security
+   * constraint, same as `canTransition`.
+   */
   async getInitialStatusKey(projectId: string, workspaceId: string): Promise<string | null> {
-    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
-    return statuses.find((s) => s.isInitial)?.key ?? null;
+    return withWorkspaceServiceContext(workspaceId, async (tx) => {
+      const statuses = await workflowsRepository.findStatuses(projectId, workspaceId, tx);
+      return statuses.find((s) => s.isInitial)?.key ?? null;
+    });
   },
 
   /**

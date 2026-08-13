@@ -3,6 +3,7 @@ import { NextRequest, type NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.10 · MOTIR-1498 — HTTP smoke for the two OAuth routes. The only
@@ -56,6 +57,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/github/oauth/start', () => {

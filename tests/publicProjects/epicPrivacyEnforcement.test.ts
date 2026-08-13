@@ -9,6 +9,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.14 · Subtask 6.14.4 — the SERVER-SIDE epic-privacy enforcement. A
@@ -32,26 +33,27 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Set a work item's status key directly (a read test doesn't transition). The
  *  default `status` is "open" — not a default-workflow key — so the board/stats
  *  reads need a real key ('todo' → To Do column, `todo` category). */
 async function setStatus(id: string, status = 'todo'): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 /** Flip an epic's privacy flag the way the 6.14.7 admin write will — the column
  *  the 6.14.4 exclusion predicate reads. */
 async function setPrivate(epicId: string, value: boolean): Promise<void> {
-  await db.workItem.update({ where: { id: epicId }, data: { publicChildrenHidden: value } });
+  await adminDb.workItem.update({ where: { id: epicId }, data: { publicChildrenHidden: value } });
 }
 
 /** A fixture whose project is PUBLIC (the make-public toggle is 6.12.8; tests set
  *  the column directly, the shortcut the other public-project tests use). */
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
 }
 

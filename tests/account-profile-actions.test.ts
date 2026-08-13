@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateRateLimitCounters } from './helpers/db';
 
 // Action-wiring tests for the Account › Profile security controls (Subtask
@@ -56,6 +57,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('updateProfileNameAction', () => {

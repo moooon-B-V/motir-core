@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `fleet_in_flight_slot` isolation — direct-DB RLS proof (Story MOTIR-1916 ·
@@ -47,7 +48,7 @@ async function seed(): Promise<Fixture> {
     name: 'Slot WS',
     ownerUserId: user.id,
   });
-  const slot = await db.fleetInFlightSlot.create({
+  const slot = await adminDb.fleetInFlightSlot.create({
     data: {
       workload: 'code_graph_index',
       ref: 'index-run-1',
@@ -87,11 +88,12 @@ async function asAppRole<T>(
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await db.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
 });
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('fleet_in_flight_slot RLS — system context only', () => {
@@ -122,7 +124,8 @@ describe('fleet_in_flight_slot RLS — system context only', () => {
       tx.fleetInFlightSlot.deleteMany({ where: { id: fx.slotId } }),
     );
     expect(deleted.count).toBe(0);
-    expect(await db.fleetInFlightSlot.count()).toBe(1);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(1);
   });
 
   // ...and one that could INSERT could deny the fleet to everyone else.
@@ -140,7 +143,8 @@ describe('fleet_in_flight_slot RLS — system context only', () => {
         }),
       ),
     ).rejects.toThrow();
-    expect(await db.fleetInFlightSlot.count()).toBe(1);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(1);
   });
 
   // The system context — the ONLY reach every caller of this table has, since

@@ -9,6 +9,7 @@ import { BUILTIN_STATISTIC_TYPES, customFieldStatisticId } from '@/lib/reports/s
 import { encodeFilterParam, type FilterAst } from '@/lib/filters/ast';
 import { makeWorkItemFixture, createTestWorkItem } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { DistributionDto } from '@/lib/dto/reports';
 
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function expectOk(
@@ -49,11 +51,11 @@ async function seedSpread(fx: WorkItemFixture) {
   const b = await createTestWorkItem(fx, { kind: 'task', title: 'B' });
   const bare = await createTestWorkItem(fx, { kind: 'bug', title: 'bare' });
   const sprint = await sprintsService.createSprint(fx.projectId, { name: 'S1' }, fx.ctx);
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: a.id },
     data: { assigneeId: fx.ownerId, priority: 'high', sprintId: sprint.id, status: 'done' },
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: b.id },
     data: { assigneeId: fx.ownerId, priority: 'high', sprintId: sprint.id },
   });
@@ -108,7 +110,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
   it('label multi-counts (an item appears once per label — the verified Jira rule) and percentages stay over the segment total', async () => {
     const fx = await makeWorkItemFixture();
     const { a, b } = await seedSpread(fx);
-    const l1 = await db.label.create({
+    const l1 = await adminDb.label.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -116,7 +118,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
         nameLower: 'urgent',
       },
     });
-    const l2 = await db.label.create({
+    const l2 = await adminDb.label.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -124,7 +126,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
         nameLower: 'infra',
       },
     });
-    await db.workItemLabel.createMany({
+    await adminDb.workItemLabel.createMany({
       data: [
         { workItemId: a.id, labelId: l1.id },
         { workItemId: a.id, labelId: l2.id }, // A carries BOTH labels
@@ -147,7 +149,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
   it('component groups through the 5.4.1 join', async () => {
     const fx = await makeWorkItemFixture();
     const { a } = await seedSpread(fx);
-    const cmp = await db.component.create({
+    const cmp = await adminDb.component.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -155,7 +157,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
         nameLower: 'api',
       },
     });
-    await db.workItemComponent.create({ data: { workItemId: a.id, componentId: cmp.id } });
+    await adminDb.workItemComponent.create({ data: { workItemId: a.id, componentId: cmp.id } });
 
     const data = await expectOk(
       reportsService.getDistribution({ projectId: fx.projectId }, 'component', fx.ctx),
@@ -168,7 +170,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
     const fx = await makeWorkItemFixture();
     const { a, b } = await seedSpread(fx);
 
-    const selectField = await db.customFieldDefinition.create({
+    const selectField = await adminDb.customFieldDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -178,10 +180,10 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
         position: 'a',
       },
     });
-    const opt = await db.customFieldOption.create({
+    const opt = await adminDb.customFieldOption.create({
       data: { fieldId: selectField.id, label: 'Production', position: 'a' },
     });
-    await db.customFieldValue.create({
+    await adminDb.customFieldValue.create({
       data: {
         workspaceId: fx.workspaceId,
         workItemId: a.id,
@@ -200,7 +202,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
     expect(segment(bySelect, opt.id)).toMatchObject({ count: 1, label: 'Production' });
     expect(segment(bySelect, null)).toMatchObject({ count: 2 }); // no value row → None
 
-    const userField = await db.customFieldDefinition.create({
+    const userField = await adminDb.customFieldDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -210,7 +212,7 @@ describe('getDistribution — the statistic matrix (registry-driven)', () => {
         position: 'b',
       },
     });
-    await db.customFieldValue.create({
+    await adminDb.customFieldValue.create({
       data: {
         workspaceId: fx.workspaceId,
         workItemId: b.id,
@@ -267,7 +269,7 @@ describe('getDistribution — scope + the 422/stale statistic split', () => {
       reportsService.getDistribution({ projectId: fx.projectId }, 'bogus', fx.ctx),
     ).rejects.toThrow(UnknownStatisticTypeError);
 
-    const textField = await db.customFieldDefinition.create({
+    const textField = await adminDb.customFieldDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -298,7 +300,7 @@ describe('getDistribution — scope + the 422/stale statistic split', () => {
 
     // A field on ANOTHER project is indistinguishable from deleted for this scope.
     const other = await makeWorkItemFixture({ identifier: 'OTHX', name: 'Other' });
-    const foreign = await db.customFieldDefinition.create({
+    const foreign = await adminDb.customFieldDefinition.create({
       data: {
         workspaceId: other.workspaceId,
         projectId: other.projectId,

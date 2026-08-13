@@ -11,6 +11,7 @@ import { SavedFilterNotFoundError } from '@/lib/savedFilters/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import type { WorkItemKind, WorkItemType } from '@/generated/prisma/client';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // boardsService.getBoard — the FILTERED board read (Story 6.15.2). The board
@@ -30,6 +31,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Fixture {
@@ -49,7 +51,7 @@ async function makeFixture(email: string): Promise<Fixture> {
   const ws = await workspacesService.createWorkspace({ name: 'Board WS', ownerUserId: user.id });
   const ctx: ServiceContext = { userId: user.id, workspaceId: ws.workspace.id };
   const project = await createTestProject({ workspaceId: ws.workspace.id, actorUserId: user.id });
-  const board = await db.board.findFirstOrThrow({ where: { projectId: project.id } });
+  const board = await adminDb.board.findFirstOrThrow({ where: { projectId: project.id } });
   return {
     ctx,
     workspaceId: ws.workspace.id,
@@ -77,7 +79,7 @@ async function card(
     { projectId: fx.projectId, kind: opts.kind ?? 'task', title: opts.title },
     fx.ctx,
   );
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: item.id },
     data: {
       status: opts.status,
@@ -190,8 +192,8 @@ describe('getBoard — filtered projection (6.15.2)', () => {
 
   it('composes with the Scrum sprint scope — narrows WITHIN the sprint, never widening', async () => {
     const fx = await makeFixture('filter-scrum@example.com');
-    await db.board.update({ where: { id: fx.boardId }, data: { type: 'scrum' } });
-    const sprint = await db.sprint.create({
+    await adminDb.board.update({ where: { id: fx.boardId }, data: { type: 'scrum' } });
+    const sprint = await adminDb.sprint.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -218,7 +220,10 @@ describe('getBoard — filtered projection (6.15.2)', () => {
 
   it('filters the swimlane lanes + counts on a grouped board', async () => {
     const fx = await makeFixture('filter-lanes@example.com');
-    await db.board.update({ where: { id: fx.boardId }, data: { swimlaneGroupBy: 'assignee' } });
+    await adminDb.board.update({
+      where: { id: fx.boardId },
+      data: { swimlaneGroupBy: 'assignee' },
+    });
 
     // The only BUG is unassigned; the assigned card is a task (filtered out).
     await card(fx, { kind: 'bug', status: 'todo', title: 'Bug unassigned', assigneeId: null });

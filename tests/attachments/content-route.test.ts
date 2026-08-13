@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // GET /api/attachments/[id]/content (Story MOTIR-1665 · Subtask MOTIR-1667/1668)
@@ -35,13 +36,14 @@ const { GET } = await import('@/app/api/attachments/[id]/content/route');
 const BASE = 'http://localhost:3000';
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   ctxRef.current = null;
 });
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function signInAs(fx: WorkItemFixture) {
@@ -52,7 +54,7 @@ async function makeAttachment(
   fx: WorkItemFixture,
   overrides: { workItemId?: string | null; blobPathname?: string } = {},
 ) {
-  return db.attachment.create({
+  return adminDb.attachment.create({
     data: {
       workspaceId: fx.workspaceId,
       uploaderUserId: fx.ownerId,

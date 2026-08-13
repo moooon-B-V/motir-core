@@ -10,6 +10,7 @@ import { IllegalTransitionError, UnknownStatusError } from '@/lib/workItems/erro
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { DEFAULT_STATUSES, DEFAULT_TRANSITIONS } from '@/lib/workflows/defaultWorkflow';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Graph-COMPLETE conformance guard over the default workflow (Subtask 2.6.2),
@@ -82,7 +83,7 @@ beforeAll(async () => {
     name: 'Open',
     identifier: 'OPN',
   });
-  await db.project.update({ where: { id: open.id }, data: { workflowPolicyMode: 'open' } });
+  await adminDb.project.update({ where: { id: open.id }, data: { workflowPolicyMode: 'open' } });
   openItemId = (
     await workItemsService.createWorkItem({ projectId: open.id, kind: 'task', title: 'Open' }, ctx)
   ).id;
@@ -90,6 +91,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Position an item in `status` directly (test setup) — bypasses the service so
@@ -97,7 +99,7 @@ afterAll(async () => {
  *  direct DB write records NO revision, so the ledger only grows from the
  *  `updateStatus` calls we assert on. */
 function setStatus(itemId: string, status: string): Promise<unknown> {
-  return db.workItem.update({ where: { id: itemId }, data: { status } });
+  return adminDb.workItem.update({ where: { id: itemId }, data: { status } });
 }
 async function revisionCount(itemId: string): Promise<number> {
   return (await workItemRevisionRepository.listByWorkItem(itemId)).length;

@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { notificationRepository } from '@/lib/repositories/notificationRepository';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Repository-layer tests for the in-app notification data-access leaf (Story
@@ -17,6 +18,16 @@ import { truncateAuthTables } from '../helpers/db';
 // what's proven here is the repository contract and the migration-built
 // constraints. Writes run inside a real `db.$transaction` to exercise the
 // required-`tx` path.
+//
+// ⚠️ THIS FILE'S WRITES RUN THROUGH `adminDb` ON PURPOSE (MOTIR-2751).
+// The header above states the subject: the repository CONTRACT and the
+// migration-built CONSTRAINTS, with RLS deliberately inert. Under the non-bypass
+// role a cross-workspace read returns [] because the POLICY hid the row — the same
+// observation for a different reason, which would make every gate assertion here
+// vacuous, and a constraint test that fails with a policy error proves nothing about
+// the constraint. So the admin client is what PRESERVES these claims rather than
+// weakening them. The policies' own behaviour is proved separately, under the role,
+// in the *-rls suites this header already points at.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` + `user` RESTART IDENTITY CASCADE,
@@ -27,6 +38,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface NotificationFixture {
@@ -61,7 +73,7 @@ async function addNotifications(
     actorId?: string | null;
   }>,
 ): Promise<number> {
-  return db.$transaction(async (tx) =>
+  return adminDb.$transaction(async (tx) =>
     notificationRepository.createMany(
       rows.map((r) => ({
         workspaceId: c.fx.workspaceId,
@@ -80,7 +92,10 @@ async function addNotifications(
 }
 
 async function allRows(recipientUserId: string): Promise<Notification[]> {
-  return db.notification.findMany({ where: { recipientUserId }, orderBy: { dedupeKey: 'asc' } });
+  return adminDb.notification.findMany({
+    where: { recipientUserId },
+    orderBy: { dedupeKey: 'asc' },
+  });
 }
 
 describe('notificationRepository.createMany', () => {
@@ -106,7 +121,7 @@ describe('notificationRepository.createMany', () => {
 
   it('returns 0 and writes nothing for an empty batch (the empty-input guard)', async () => {
     const c = await makeNotificationFixture();
-    const count = await db.$transaction((tx) => notificationRepository.createMany([], tx));
+    const count = await adminDb.$transaction((tx) => notificationRepository.createMany([], tx));
     expect(count).toBe(0);
     expect(await allRows(c.recipient.id)).toHaveLength(0);
   });
@@ -124,7 +139,7 @@ describe('notificationRepository.createMany', () => {
     const c = await makeNotificationFixture();
     const other = await createTestUser({ name: 'Other recipient' });
     await addNotifications(c, [{ dedupeKey: 'comment:c1' }]);
-    const count = await db.$transaction((tx) =>
+    const count = await adminDb.$transaction((tx) =>
       notificationRepository.createMany(
         [
           {
@@ -149,21 +164,24 @@ describe('notificationRepository — schema delete semantics', () => {
   it('cascades when the recipient user is deleted', async () => {
     const c = await makeNotificationFixture();
     await addNotifications(c, [{ dedupeKey: 'comment:c1' }, { dedupeKey: 'comment:c2' }]);
-    await db.$transaction((tx) => tx.user.delete({ where: { id: c.recipient.id } }));
-    expect(await db.notification.count({ where: { recipientUserId: c.recipient.id } })).toBe(0);
+    await adminDb.$transaction((tx) => tx.user.delete({ where: { id: c.recipient.id } }));
+    const notificationCount = await adminDb.notification.count({
+      where: { recipientUserId: c.recipient.id },
+    });
+    expect(notificationCount).toBe(0);
   });
 
   it('cascades when the work item is deleted', async () => {
     const c = await makeNotificationFixture();
     await addNotifications(c, [{ dedupeKey: 'comment:c1' }]);
-    await db.$transaction((tx) => tx.workItem.delete({ where: { id: c.issue.id } }));
+    await adminDb.$transaction((tx) => tx.workItem.delete({ where: { id: c.issue.id } }));
     expect(await allRows(c.recipient.id)).toHaveLength(0);
   });
 
   it('sets actorId NULL when the actor user is deleted (row survives)', async () => {
     const c = await makeNotificationFixture();
     await addNotifications(c, [{ dedupeKey: 'comment:c1' }]);
-    await db.$transaction((tx) => tx.user.delete({ where: { id: c.actor.id } }));
+    await adminDb.$transaction((tx) => tx.user.delete({ where: { id: c.actor.id } }));
     const rows = await allRows(c.recipient.id);
     expect(rows).toHaveLength(1);
     expect(rows[0]!.actorId).toBeNull();
@@ -259,7 +277,7 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
     const [a, b] = await allRows(c.recipient.id);
 
     const readAt = new Date();
-    const updated = await db.$transaction((tx) =>
+    const updated = await adminDb.$transaction((tx) =>
       notificationRepository.markRead(a!.id, readAt, tx),
     );
     expect(updated.readAt).toEqual(readAt);
@@ -276,7 +294,7 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
       { dedupeKey: 'comment:c3', readAt: already },
     ]);
 
-    const flipped = await db.$transaction((tx) =>
+    const flipped = await adminDb.$transaction((tx) =>
       notificationRepository.markAllReadByRecipient(c.recipient.id, new Date(), tx),
     );
     // Only the two UNREAD rows were touched — not the already-read one.
@@ -292,7 +310,7 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
   it('markAllReadByRecipient returns 0 when nothing is unread', async () => {
     const c = await makeNotificationFixture();
     await addNotifications(c, [{ dedupeKey: 'comment:c1', readAt: new Date() }]);
-    const flipped = await db.$transaction((tx) =>
+    const flipped = await adminDb.$transaction((tx) =>
       notificationRepository.markAllReadByRecipient(c.recipient.id, new Date(), tx),
     );
     expect(flipped).toBe(0);
@@ -304,7 +322,7 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
 
     // A second recipient in the same workspace with their own unread row.
     const other = await createTestUser({ name: 'Bo' });
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       notificationRepository.createMany(
         [
           {
@@ -322,7 +340,7 @@ describe('notificationRepository.markRead / markAllReadByRecipient', () => {
       ),
     );
 
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       notificationRepository.markAllReadByRecipient(c.recipient.id, new Date(), tx),
     );
     // The other recipient's notification is still unread.

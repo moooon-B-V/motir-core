@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { GET } from '@/app/api/v1/workspaces/route';
 import { createV1Caller } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // GET /api/v1/workspaces (Story 11.1 · Subtask 11.1.3 — MOTIR-1859) against
@@ -56,7 +56,10 @@ async function walkAll(
 
 /** Give a workspace an exact `createdAt`, so a test controls the sort order. */
 async function backdate(workspaceId: string, iso: string) {
-  await db.workspace.update({ where: { id: workspaceId }, data: { createdAt: new Date(iso) } });
+  await adminDb.workspace.update({
+    where: { id: workspaceId },
+    data: { createdAt: new Date(iso) },
+  });
 }
 
 describe('GET /api/v1/workspaces', () => {

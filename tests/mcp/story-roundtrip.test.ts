@@ -14,6 +14,7 @@ import { decodeFilterEnvelope, FILTER_PARAM_VERSION } from '@/lib/filters/ast';
 import { DEFAULT_SORT } from '@/lib/issues/issueListView';
 import * as route from '@/app/api/mcp/route';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 
@@ -127,8 +128,8 @@ async function makeTask(fx: WorkItemFixture, title: string): Promise<string> {
 
 /** The latest audit revision for a work item (by identifier). */
 async function latestRevision(identifier: string) {
-  const item = await db.workItem.findFirstOrThrow({ where: { identifier } });
-  return db.workItemRevision.findFirstOrThrow({
+  const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier } });
+  return adminDb.workItemRevision.findFirstOrThrow({
     where: { workItemId: item.id },
     orderBy: { changedAt: 'desc' },
   });
@@ -145,6 +146,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ───────────────────────────── tools/list ──────────────────────────────────
@@ -374,8 +376,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       });
       expect(commented.isError).toBeFalsy();
       expect((structured(commented) as { bodyMd: string }).bodyMd).toBe('first comment');
-      const item = await db.workItem.findFirstOrThrow({ where: { identifier: key } });
-      expect(await db.comment.count({ where: { workItemId: item.id } })).toBe(1);
+      const item = await adminDb.workItem.findFirstOrThrow({ where: { identifier: key } });
+      const commentCount = await adminDb.comment.count({ where: { workItemId: item.id } });
+      expect(commentCount).toBe(1);
 
       // transition_status ≡ the board drag — the SAME applyStatusTransition, so
       // an identical revision row. Prove it: drive item via MCP and a SECOND
@@ -386,7 +389,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
         name: 'transition_status',
         arguments: { key: viaMcpKey, status: 'in_progress' },
       });
-      const boardItem = await db.workItem.findFirstOrThrow({ where: { identifier: viaBoardKey } });
+      const boardItem = await adminDb.workItem.findFirstOrThrow({
+        where: { identifier: viaBoardKey },
+      });
       await workItemsService.updateStatus(boardItem.id, 'in_progress', fx.ctx);
 
       const mcpRev = await latestRevision(viaMcpKey);
@@ -517,7 +522,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(JSON.stringify(denied.content)).toContain('PERMISSION_NOT_GRANTED');
       await defClient.close();
       // Nothing was deleted by the refused call.
-      expect(await db.workItem.count({ where: { id: { in: [story.id, child.id] } } })).toBe(2);
+      const workItemCount = await adminDb.workItem.count({
+        where: { id: { in: [story.id, child.id] } },
+      });
+      expect(workItemCount).toBe(2);
 
       // A FULL-scope token deletes the whole subtree (the permanent-delete action).
       const fullClient = await connect(await fullToken(fx));
@@ -527,7 +535,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       });
       expect(deleted.isError).toBeFalsy();
       await fullClient.close();
-      expect(await db.workItem.count({ where: { id: { in: [story.id, child.id] } } })).toBe(0);
+      const workItemCount2 = await adminDb.workItem.count({
+        where: { id: { in: [story.id, child.id] } },
+      });
+      expect(workItemCount2).toBe(0);
     });
 
     it('sprint family — create → move_to_sprint → start → complete lands the same end state as the UI flow', async () => {
@@ -556,7 +567,7 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect((structured(completed) as { state: string }).state).toBe('complete');
 
       // The end state matches the UI flow: the sprint is closed in the DB.
-      const row = await db.sprint.findFirstOrThrow({ where: { id: sprintId } });
+      const row = await adminDb.sprint.findFirstOrThrow({ where: { id: sprintId } });
       expect(row.state).toBe('complete');
       await client.close();
     });
@@ -680,8 +691,9 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(after.item.title).toBe('Scope-1');
       expect(after.item.status).toBe('todo');
       expect(after.item.archivedAt).toBeNull();
-      const itemRow = await db.workItem.findFirstOrThrow({ where: { identifier: item1 } });
-      expect(await db.comment.count({ where: { workItemId: itemRow.id } })).toBe(0);
+      const itemRow = await adminDb.workItem.findFirstOrThrow({ where: { identifier: item1 } });
+      const commentCount = await adminDb.comment.count({ where: { workItemId: itemRow.id } });
+      expect(commentCount).toBe(0);
     });
 
     it('the DEFAULT token (all-minus-delete) passes the gate for every tool EXCEPT delete_work_item', async () => {
@@ -757,7 +769,8 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
       expect(detail.item.status).toBe('in_review');
       expect(detail.item.sessionBranch).toBe('feat/default');
       expect(detail.item.archivedAt).toBeNull();
-      expect(await db.sprint.count({ where: { projectId: fx.projectId } })).toBe(1);
+      const sprintCount = await adminDb.sprint.count({ where: { projectId: fx.projectId } });
+      expect(sprintCount).toBe(1);
       await client.close();
     });
 
@@ -786,7 +799,10 @@ describe('MCP story suite — real /api/mcp endpoint', () => {
 
       // The whole subtree is gone (the cascade), proving the delete-enabled token
       // actually performed the irreversible op.
-      expect(await db.workItem.count({ where: { id: { in: [story.id, child.id] } } })).toBe(0);
+      const workItemCount = await adminDb.workItem.count({
+        where: { id: { in: [story.id, child.id] } },
+      });
+      expect(workItemCount).toBe(0);
     });
 
     it('scope ∩ role — a granted scope still 404s when the role denies; an allowed role still scope-denies when the scope is absent', async () => {

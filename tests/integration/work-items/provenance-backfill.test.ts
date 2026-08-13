@@ -8,6 +8,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { MOTIR_SEED_BURST_END } from '@/lib/workItems/provenanceBackfill';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The provenance BACKFILL against real Postgres (MOTIR-1758) — the half the
@@ -21,7 +22,7 @@ const IN_BURST = new Date(MOTIR_SEED_BURST_END.getTime() - 60_000);
 const AFTER_BURST = new Date(MOTIR_SEED_BURST_END.getTime() + 60_000);
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "github_pull_request", "github_repo", "github_installation", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -33,6 +34,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /**
@@ -66,7 +68,7 @@ async function seedRow(
     type: opts.type ?? 'code',
     executor: opts.executor ?? 'coding_agent',
   });
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id: item.id },
     data: {
       createdAt: opts.createdAt,
@@ -85,7 +87,7 @@ let prNumber = 0;
 /** Attach a linked PR to an item — the 7.10.3 `GithubPullRequest` mirror the rules read. */
 async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise<void> {
   const installationId = `inst-${fx.workspaceId}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -96,7 +98,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
     },
     update: {},
   });
-  const repo = await db.githubRepo.upsert({
+  const repo = await adminDb.githubRepo.upsert({
     where: { installationId_repoId: { installationId: inst.id, repoId: 'repo-1' } },
     create: {
       installationId: inst.id,
@@ -111,7 +113,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
     update: {},
   });
   prNumber += 1;
-  await db.githubPullRequest.create({
+  await adminDb.githubPullRequest.create({
     data: {
       provider: 'github',
       repoId: repo.id,
@@ -125,7 +127,7 @@ async function linkPullRequest(fx: WorkItemFixture, workItemId: string): Promise
 }
 
 function read(id: string) {
-  return db.workItem.findUniqueOrThrow({
+  return adminDb.workItem.findUniqueOrThrow({
     where: { id },
     select: {
       planningSource: true,
@@ -232,7 +234,7 @@ describe('backfillProvenanceForProject — the decision pass over real rows', ()
       implementationSource: 'hosted',
     });
     await linkPullRequest(fx, stamped.id);
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: stamped.id },
       data: {
         planningHarness: 'Motir',

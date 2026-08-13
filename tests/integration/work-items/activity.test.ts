@@ -14,8 +14,10 @@ import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionR
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ActivityEntryDto, ActivityEntryPartDto } from '@/lib/dto/activity';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { inngest } from '@/lib/jobs/client';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Subtask 5.5.1 — the activity read service over the 1.4.6 revision trail.
 // Real Postgres, no mocks: every history entry asserted here was produced by
@@ -26,7 +28,7 @@ import { inngest } from '@/lib/jobs/client';
 // prove the fallback contract.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -46,16 +48,19 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Insert a raw revision through the repository edge (the legit test reach). */
 async function injectRevision(
+  fx: WorkItemFixture,
   workItemId: string,
   changedById: string,
   changeKind: string,
   diff: Record<string, unknown>,
 ): Promise<void> {
-  await db.$transaction(async (tx) => {
+  // Bound (MOTIR-2792) — see activity-all.test.ts for the reasoning.
+  await withWorkspaceContext(fx.ctx, async (tx) => {
     await workItemRevisionsService.recordRevision(
       { workItemId, changedById, changeKind: changeKind as 'updated', diff },
       tx,
@@ -64,8 +69,13 @@ async function injectRevision(
 }
 
 /** Bulk-inject suppressed position-noise revisions in one transaction. */
-async function injectNoise(workItemId: string, changedById: string, count: number): Promise<void> {
-  await db.$transaction(async (tx) => {
+async function injectNoise(
+  fx: WorkItemFixture,
+  workItemId: string,
+  changedById: string,
+  count: number,
+): Promise<void> {
+  await withWorkspaceContext(fx.ctx, async (tx) => {
     for (let i = 0; i < count; i++) {
       await workItemRevisionsService.recordRevision(
         {
@@ -265,7 +275,7 @@ describe('activityService.listHistory — entry rendering', () => {
   it('renders the in-flight comment_deleted shape (5.1.2) without content', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectRevision(issue.id, fx.ownerId, 'comment_deleted', {
+    await injectRevision(fx, issue.id, fx.ownerId, 'comment_deleted', {
       comment: {
         from: { commentId: 'cm_1', authorId: fx.ownerId, replyCount: 2 },
         to: null,
@@ -286,7 +296,7 @@ describe('activityService.listHistory — entry rendering', () => {
   it('renders unknown keys via the generic fallback — never a crash, never a drop (mistake #29)', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectRevision(issue.id, fx.ownerId, 'updated', {
+    await injectRevision(fx, issue.id, fx.ownerId, 'updated', {
       frobnicate: { from: 1, to: 2 },
       weird: [1, 2, 3],
     });
@@ -302,7 +312,7 @@ describe('activityService.listHistory — entry rendering', () => {
   it('renders registered prefix keys (customFields.*) and in-flight collections (labels)', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectRevision(issue.id, fx.ownerId, 'updated', {
+    await injectRevision(fx, issue.id, fx.ownerId, 'updated', {
       'customFields.severity': { from: null, to: 'Critical' },
       labels: { added: [{ name: 'backend' }, 'raw-string'] },
     });
@@ -324,7 +334,7 @@ describe('activityService.listHistory — entry rendering', () => {
   it('degrades deleted referents to stored-id fallbacks — never a crash', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectRevision(issue.id, fx.ownerId, 'updated', {
+    await injectRevision(fx, issue.id, fx.ownerId, 'updated', {
       assigneeId: { from: null, to: 'u_gone' },
       status: { from: 'todo', to: 'k_deleted_status' },
       sprintId: { from: null, to: 'sp_gone' },
@@ -364,14 +374,14 @@ describe('activityService.listHistory — noise policy', () => {
     expect(page.entries.map((e) => e.changeKind)).toEqual(['created']);
 
     // The trail itself still holds the suppressed rows (append-only audit).
-    const raw = await db.workItemRevision.count({ where: { workItemId: issue.id } });
+    const raw = await adminDb.workItemRevision.count({ where: { workItemId: issue.id } });
     expect(raw).toBe(3); // created + the two rank writes
   });
 
   it('excludes an empty-diff revision from feed and count', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectRevision(issue.id, fx.ownerId, 'updated', {});
+    await injectRevision(fx, issue.id, fx.ownerId, 'updated', {});
 
     const page = await activityService.listHistory(issue.id, {}, fx.ctx);
     expect(page.totalCount).toBe(1);
@@ -448,7 +458,7 @@ describe('activityService.listHistory — paging (finding #57)', () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
     await workItemsService.updateWorkItem(issue.id, { title: 'Real edit' }, fx.ctx);
-    await injectNoise(issue.id, fx.ownerId, 23); // created + edit + 23 noise = 25 rows: 2 batches
+    await injectNoise(fx, issue.id, fx.ownerId, 23); // created + edit + 23 noise = 25 rows: 2 batches
 
     const page = await activityService.listHistory(issue.id, {}, fx.ctx);
     expect(page.totalCount).toBe(2);
@@ -459,7 +469,7 @@ describe('activityService.listHistory — paging (finding #57)', () => {
   it('caps a single call at the scan bound and resumes from the handed-back cursor', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectNoise(issue.id, fx.ownerId, 100); // newest 100 rows are pure noise
+    await injectNoise(fx, issue.id, fx.ownerId, 100); // newest 100 rows are pure noise
 
     // First call exhausts the 100-row scan window on noise alone: a short
     // (here empty) page with a continuation cursor, not an unbounded read.

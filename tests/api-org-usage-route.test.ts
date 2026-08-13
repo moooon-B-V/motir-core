@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
 import type { RawUsageResponse } from '@/lib/ai/types';
+import { adminDb } from './helpers/adminDb';
 
 // Transport tests for GET /api/organizations/[orgId]/usage — the org cost
 // dashboard route (Story 7.2 · Subtask 7.2.11, locked by 7.2.12). The COMPANION
@@ -66,6 +67,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/organizations/[orgId]/usage', () => {

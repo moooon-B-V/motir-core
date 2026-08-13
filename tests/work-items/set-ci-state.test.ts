@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 
@@ -12,7 +13,7 @@ import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 // is a 404, never a leak — mirrors `updateStatus`).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -24,10 +25,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function ciStateOf(id: string): Promise<string | null> {
-  const row = await db.workItem.findUnique({ where: { id } });
+  const row = await adminDb.workItem.findUnique({ where: { id } });
   return row!.ciState;
 }
 
@@ -51,11 +53,11 @@ describe('workItemsService.setCiState (MOTIR-894)', () => {
     const fx = await makeWorkItemFixture();
     const item = await createTestWorkItem(fx, { kind: 'task', title: 'A task' });
     await workItemsService.setCiState(item.id, 'passing', fx.ctx);
-    const before = await db.workItem.findUnique({ where: { id: item.id } });
+    const before = await adminDb.workItem.findUnique({ where: { id: item.id } });
 
     // Same value again — no write (the updatedAt stays put).
     await workItemsService.setCiState(item.id, 'passing', fx.ctx);
-    const after = await db.workItem.findUnique({ where: { id: item.id } });
+    const after = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(after!.ciState).toBe('passing');
     expect(after!.updatedAt.getTime()).toBe(before!.updatedAt.getTime());
   });

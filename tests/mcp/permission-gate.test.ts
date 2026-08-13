@@ -9,6 +9,7 @@ import { permissionDenial, PERMISSION_NOT_GRANTED_CODE } from '@/lib/mcp/permiss
 import { toolPermission } from '@/lib/mcp/toolPermissions';
 import { DEFAULT_TOKEN_GRANT, GRANTABLE_PERMISSIONS, type TokenGrant } from '@/lib/tokens/grant';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The per-token PERMISSION GATE at MCP dispatch (Story 7.7 · Subtask 7.7.17,
@@ -27,6 +28,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function textOf(content: unknown): string {

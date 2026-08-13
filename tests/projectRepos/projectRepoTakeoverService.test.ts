@@ -16,6 +16,7 @@ import {
 } from '@/lib/projectRepos/errors';
 import { encryptToken } from '@/lib/github/tokenCrypto';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 
@@ -172,7 +173,7 @@ async function motirOwnedRow(
   name: string,
   opts: { repoId?: string } = {},
 ): Promise<{ rowId: string; repoId: string }> {
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: INSTALLATION_ID },
     create: {
       installationId: INSTALLATION_ID,
@@ -183,7 +184,7 @@ async function motirOwnedRow(
     update: {},
   });
   const repoId = opts.repoId ?? `host-${name}`;
-  const mirror = await db.githubRepo.create({
+  const mirror = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -203,7 +204,7 @@ async function motirOwnedRow(
 /** A row realized by CONNECTING a repository the user already owned — the
  *  already-yours case, reached through the real `proposed → connected` hop. */
 async function connectedRow(fx: WorkItemFixture, name: string): Promise<string> {
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId: `inst-user-${fx.workspaceId}` },
     create: {
       installationId: `inst-user-${fx.workspaceId}`,
@@ -213,7 +214,7 @@ async function connectedRow(fx: WorkItemFixture, name: string): Promise<string> 
     },
     update: {},
   });
-  const mirror = await db.githubRepo.create({
+  const mirror = await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,
@@ -232,7 +233,7 @@ async function connectedRow(fx: WorkItemFixture, name: string): Promise<string> 
 /** Give the acting user a connected GitHub identity — the precondition a takeover
  *  has, and whose absence is the connect-prompt error. */
 async function connectIdentity(fx: WorkItemFixture): Promise<void> {
-  await db.githubIdentity.create({
+  await adminDb.githubIdentity.create({
     data: {
       userId: fx.ownerId,
       githubUserId: `gh-${fx.ownerId}`,
@@ -280,6 +281,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── §G — the ORDER of the two host calls ────────────────────────────────────
@@ -346,7 +348,7 @@ describe('the Actions re-enable', () => {
 
     // And the stored INTENT is cleared, or MOTIR-1907's sweep would re-assert the
     // disable Motir just deliberately lifted — a real re-pause of the user's CI.
-    const persisted = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    const persisted = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
     expect(persisted.ciActionsDisabled).toBe(false);
     expect(persisted.ciActionsAppliedAt?.getTime()).toBe(persisted.ciActionsIntentAt?.getTime());
   });
@@ -452,7 +454,8 @@ describe('the `repository` transferred delivery', () => {
     // The mirror now says the repo is THEIRS — which is also what silently drops
     // the row out of MOTIR-1907's pause fan-out (it re-checks the owner at call
     // time), with no code in this card doing the excluding.
-    expect(await db.githubRepo.findFirstOrThrow({ where: { repoId } })).toMatchObject({
+    const githubRepoRow = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId } });
+    expect(githubRepoRow).toMatchObject({
       owner: NEW_OWNER,
     });
   });
@@ -464,11 +467,11 @@ describe('the `repository` transferred delivery', () => {
     await projectRepoTakeoverService.requestTakeover(rowId, NEW_OWNER, fx.ctx);
 
     await deliver(repoId);
-    const afterFirst = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    const afterFirst = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
 
     expect(await deliver(repoId)).toEqual({ event: 'repository', outcome: 'already_applied' });
 
-    const afterSecond = await db.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
+    const afterSecond = await adminDb.projectRepo.findUniqueOrThrow({ where: { id: rowId } });
     expect(afterSecond.takeoverState).toBe('awaiting_reinstall');
     // The stamp did not move — a redelivery is a no-op, not a re-application.
     expect(afterSecond.takeoverTransferredAt?.getTime()).toBe(
@@ -489,7 +492,8 @@ describe('the `repository` transferred delivery', () => {
 
     // The coordinates are a FACT and are recorded; the saga is not advanced by a
     // move Motir did not request.
-    expect(await db.githubRepo.findFirstOrThrow({ where: { repoId } })).toMatchObject({
+    const githubRepoRow2 = await adminDb.githubRepo.findFirstOrThrow({ where: { repoId } });
+    expect(githubRepoRow2).toMatchObject({
       owner: 'someone-else',
     });
     expect((await readRow(rowId, fx)).takeover?.state).toBe('transfer_pending');
@@ -549,7 +553,9 @@ describe('the `repository` transferred delivery', () => {
 
     expect(result).toEqual({ event: 'repository', outcome: 'applied' });
     // The optional branch was absent, so the stored one is left alone.
-    expect(await db.githubRepo.findFirstOrThrow({ where: { repoId: '900001' } })).toMatchObject({
+    expect(
+      await adminDb.githubRepo.findFirstOrThrow({ where: { repoId: '900001' } }),
+    ).toMatchObject({
       owner: NEW_OWNER,
       defaultBranch: 'main',
       archived: false,
@@ -591,7 +597,7 @@ describe('completing the handoff', () => {
     });
 
     // The user installs the Motir App on their own account and selects the repo.
-    await db.githubInstallation.create({
+    await adminDb.githubInstallation.create({
       data: {
         installationId: 'inst-new-owner',
         workspaceId: fx.workspaceId,
@@ -619,7 +625,7 @@ describe('completing the handoff', () => {
       action: 'transferred',
       repository: { id: repoId, name: 'acme-web', owner: { login: NEW_OWNER } },
     });
-    await db.githubInstallation.create({
+    await adminDb.githubInstallation.create({
       data: {
         installationId: 'inst-new-owner',
         workspaceId: fx.workspaceId,
@@ -787,7 +793,8 @@ describe('the CI meter', () => {
 
     expect(before.outcome).toBe('metered');
     expect(after).toEqual({ outcome: 'not_metered', reason: 'foreign_owner' });
-    expect(await db.ciWorkflowRunUsage.count()).toBe(1);
+    const ciWorkflowRunUsageCount = await adminDb.ciWorkflowRunUsage.count();
+    expect(ciWorkflowRunUsageCount).toBe(1);
   });
 });
 
@@ -807,7 +814,7 @@ describe('the `repository` archived / unarchived delivery', () => {
     });
   }
 
-  const mirror = (repoId: string) => db.githubRepo.findFirst({ where: { repoId } });
+  const mirror = (repoId: string) => adminDb.githubRepo.findFirst({ where: { repoId } });
 
   it('flips the mirror row and reports it applied', async () => {
     const fx = await makeWorkItemFixture();

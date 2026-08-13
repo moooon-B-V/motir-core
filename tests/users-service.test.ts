@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { DuplicateEmailError } from '@/lib/users/errors';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for the User entity. Per CLAUDE.md, business
@@ -18,6 +19,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('createUser', () => {
@@ -31,7 +33,7 @@ describe('createUser', () => {
     expect(user.email).toBe('alice@example.com');
     expect(user.emailVerified).toBe(false);
 
-    const credential = await db.account.findFirst({
+    const credential = await adminDb.account.findFirst({
       where: { userId: user.id, providerId: 'credential' },
     });
     expect(credential).not.toBeNull();
@@ -112,12 +114,12 @@ describe('findOrCreateOAuthUser', () => {
     expect(user.emailVerified).toBe(true);
     expect(user.name).toBe('Newcomer');
 
-    const credential = await db.account.findFirst({
+    const credential = await adminDb.account.findFirst({
       where: { userId: user.id, providerId: 'credential' },
     });
     expect(credential).toBeNull();
 
-    const oauth = await db.account.findUnique({
+    const oauth = await adminDb.account.findUnique({
       where: {
         providerId_accountId: { providerId: 'google', accountId: 'google-uid-1' },
       },
@@ -143,7 +145,7 @@ describe('findOrCreateOAuthUser', () => {
     expect(linked.emailVerified).toBe(true);
 
     // Both Account rows now exist for the same user.
-    const accounts = await db.account.findMany({ where: { userId: existing.id } });
+    const accounts = await adminDb.account.findMany({ where: { userId: existing.id } });
     expect(accounts).toHaveLength(2);
     const providers = accounts.map((a) => a.providerId).sort();
     expect(providers).toEqual(['credential', 'google']);
@@ -162,7 +164,7 @@ describe('findOrCreateOAuthUser', () => {
     });
     expect(second.id).toBe(first.id);
 
-    const accountCount = await db.account.count({
+    const accountCount = await adminDb.account.count({
       where: { providerId: 'google', accountId: 'google-uid-repeat' },
     });
     expect(accountCount).toBe(1);
@@ -182,7 +184,7 @@ describe('findOrCreateOAuthUser', () => {
       accessToken: 'new-access',
     });
 
-    const account = await db.account.findUnique({
+    const account = await adminDb.account.findUnique({
       where: {
         providerId_accountId: {
           providerId: 'google',

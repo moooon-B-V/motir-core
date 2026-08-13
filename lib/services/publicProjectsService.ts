@@ -12,7 +12,11 @@ import { workflowsService } from '@/lib/services/workflowsService';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { projectsService } from '@/lib/services/projectsService';
 import { triageService, type TriageSubmissionKind } from '@/lib/services/triageService';
-import { withSystemContext, withUserContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withUserContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { NotProjectAdminError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { PublicRequestNotFoundError } from '@/lib/publicRequests/errors';
 import { toCommentDto } from '@/lib/mappers/commentMappers';
@@ -172,8 +176,15 @@ async function computeStats(
   excludeIds: readonly string[],
 ): Promise<PublicProjectStatsDto> {
   const [byCategory, publicRequests, upvotes] = await Promise.all([
-    workItemRepository.countByStatusCategory(projectId, workspaceId, { excludeIds }),
-    workItemRepository.countTriageItems(projectId, workspaceId),
+    // Bound (MOTIR-2789): this count JOINS `workflow_status` to resolve each item's
+    // category, and that table has no public arm — so unbound the join matched nothing
+    // and every stat read zero on a project full of work.
+    withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.countByStatusCategory(projectId, workspaceId, { excludeIds }, tx),
+    ),
+    withWorkspaceServiceContext(workspaceId, (tx) =>
+      workItemRepository.countTriageItems(projectId, workspaceId, tx),
+    ),
     publicRequestVoteRepository.countByProject(projectId),
   ]);
   return {
@@ -374,7 +385,10 @@ export const publicProjectsService = {
     const { project, isMember, canManage } = await resolvePublicProject(identifier, actorUserId);
     const hiddenIds = await resolveHiddenIds(project, isMember);
     const [workspace, stats] = await Promise.all([
-      workspaceRepository.findById(project.workspaceId),
+      // `workspace` has no public arm either; the project's own workspace is known here.
+      withWorkspaceServiceContext(project.workspaceId, (tx) =>
+        workspaceRepository.findById(project.workspaceId, tx),
+      ),
       computeStats(project.id, project.workspaceId, hiddenIds),
     ]);
     return toPublicProjectOverviewDto(project, workspace?.name ?? '', stats, canManage);
@@ -435,14 +449,33 @@ export const publicProjectsService = {
     // private epic card itself is marked `childrenHidden` (the mapper).
     const hiddenIds = await resolveHiddenIds(project, isMember);
 
-    const board = await boardRepository.findDefaultForProject(projectId, workspaceId);
+    // BOUND (MOTIR-2789). MOTIR-2684 gave a public arm to `project` and `work_item` only;
+    // `board`, `board_column`, `board_column_status` and `workflow_status` never got one,
+    // so every one of these reads came back empty and the public board rendered as a
+    // project with no columns — the 404 this card's predecessor fixed became a blank page
+    // one table over.
+    //
+    // Binding rather than four more policy arms, and MOTIR-2684's own reasoning is why:
+    // it needed an arm for `project` because "the workspace is the PROJECT'S own — which
+    // is the very thing the read resolves, so binding it would presume the answer". That
+    // chicken-and-egg holds ONLY for the reads that come BEFORE the workspace is known.
+    // Here `resolvePublicProject` has already returned it, so there is something honest
+    // to bind, and binding the project's own workspace is not the cross-tenant widening
+    // that migration rejected `withSystemContext` for.
+    const board = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      boardRepository.findDefaultForProject(projectId, workspaceId, tx),
+    );
     if (!board) {
       return { boardId: '', name: '', columns: [], cap: PUBLIC_BOARD_CAP, truncated: false };
     }
 
     const [columns, mappings, statuses] = await Promise.all([
-      boardColumnRepository.findByBoard(board.id, workspaceId),
-      boardColumnStatusRepository.findByBoard(board.id, workspaceId),
+      withWorkspaceServiceContext(workspaceId, (tx) =>
+        boardColumnRepository.findByBoard(board.id, workspaceId, tx),
+      ),
+      withWorkspaceServiceContext(workspaceId, (tx) =>
+        boardColumnStatusRepository.findByBoard(board.id, workspaceId, tx),
+      ),
       workflowsService.listStatusesByProject(projectId, workspaceId),
     ]);
 
@@ -751,7 +784,13 @@ export const publicProjectsService = {
     // "Opened by" — the real submitter (a 6.12 non-member, when present) else
     // the tenant reporter. The PUBLIC comment thread (isPublic only).
     const openedById = item.submittedByUserId ?? item.reporterId;
-    const commentRows = await commentRepository.listPublicByWorkItem(item.id);
+    // Bound to the project's workspace (MOTIR-2784). `comment` has no public policy
+    // arm, so this read must name its tenant or it comes back empty and the thread
+    // silently disappears. `withWorkspaceServiceContext` binds the workspace tier
+    // alone, which is right here: a public reader has no actor.
+    const commentRows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      commentRepository.listPublicByWorkItem(item.id, tx),
+    );
     const userIds = [...new Set([openedById, ...commentRows.map((c) => c.authorId)])];
     const users = await userRepository.findByIds(userIds);
     const usersById = new Map(users.map((u) => [u.id, u]));
@@ -940,9 +979,20 @@ export const publicProjectsService = {
     // Resolve the project row for its workspace + identifier (the gate proved it
     // exists and is public). The intake reporter is the workspace OWNER — a
     // guaranteed member who passes `createWorkItem`'s `assertReporterMember`.
+    // The project read needs no context: MOTIR-2684's `project_public_read` arm admits
+    // `accessLevel = 'public'`, which is exactly this path.
     const project = await projectRepository.findById(projectId);
     if (!project) throw new PublicProjectIntakeUnavailableError(projectId);
-    const owner = await workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId);
+    // The OWNER read does (MOTIR-2789). `workspace_membership` got NO public arm from
+    // MOTIR-2684 — only `project` and `work_item` did — so unbound this returned null
+    // and the intake raised `PublicProjectIntakeUnavailableError`, which reads as "this
+    // project has no owner" about a project that has one. There IS something honest to
+    // bind here, unlike the project read above: the workspace is known from the row we
+    // just resolved, so no policy work is needed. Workspace-tier only, because a public
+    // submitter is cross-org and is not the actor whose membership is being read.
+    const owner = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workspaceMembershipRepository.findOwnerByWorkspace(project.workspaceId, tx),
+    );
     if (!owner) throw new PublicProjectIntakeUnavailableError(projectId);
 
     // Reuse the shared triage-create authority. `ctx` carries the intake

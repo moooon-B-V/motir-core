@@ -6,6 +6,7 @@ import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptio
 import { customFieldValueRepository } from '@/lib/repositories/customFieldValueRepository';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Repository-layer tests for the custom-fields data-access leaves (Story 5.3
@@ -22,6 +23,16 @@ import { truncateAuthTables } from '../helpers/db';
 // the explicit-workspaceId gates (finding #26) — and the migration-built
 // constraints. Writes run inside a real `db.$transaction` to exercise the
 // required-`tx` path.
+//
+// ⚠️ THIS FILE'S WRITES RUN THROUGH `adminDb` ON PURPOSE (MOTIR-2751).
+// The header above states the subject: the repository CONTRACT and the
+// migration-built CONSTRAINTS, with RLS deliberately inert. Under the non-bypass
+// role a cross-workspace read returns [] because the POLICY hid the row — the same
+// observation for a different reason, which would make every gate assertion here
+// vacuous, and a constraint test that fails with a policy error proves nothing about
+// the constraint. So the admin client is what PRESERVES these claims rather than
+// weakening them. The policies' own behaviour is proved separately, under the role,
+// in the *-rls suites this header already points at.
 
 beforeEach(async () => {
   // truncateAuthTables truncates `workspace` RESTART IDENTITY CASCADE, which
@@ -34,6 +45,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface FieldFixture {
@@ -58,7 +70,7 @@ async function addField(
     description: string;
   }> = {},
 ): Promise<CustomFieldDefinition> {
-  return db.$transaction(async (tx) =>
+  return adminDb.$transaction(async (tx) =>
     customFieldDefinitionRepository.create(
       {
         workspaceId: f.fx.workspaceId,
@@ -76,7 +88,7 @@ async function addField(
 
 /** Insert one option through the repository's required-`tx` write path. */
 async function addOption(fieldId: string, label: string, position: string, archived = false) {
-  return db.$transaction(async (tx) =>
+  return adminDb.$transaction(async (tx) =>
     customFieldOptionRepository.create({ fieldId, label, position, archived }, tx),
   );
 }
@@ -94,7 +106,7 @@ async function setValue(
   }>,
   workItemId = f.issue.id,
 ) {
-  return db.$transaction(async (tx) =>
+  return adminDb.$transaction(async (tx) =>
     customFieldValueRepository.upsert(
       workItemId,
       fieldId,
@@ -142,7 +154,7 @@ describe('customFieldDefinitionRepository', () => {
   it('update patches label/position; the key column stays untouched', async () => {
     const f = await makeFieldFixture();
     const row = await addField(f, { label: 'Sev', position: 'a0' });
-    const updated = await db.$transaction(async (tx) =>
+    const updated = await adminDb.$transaction(async (tx) =>
       customFieldDefinitionRepository.update(row.id, { label: 'Severity', position: 'a2' }, tx),
     );
     expect(updated.label).toBe('Severity');
@@ -174,7 +186,7 @@ describe('customFieldDefinitionRepository', () => {
       await customFieldDefinitionRepository.countByProject(f.fx.projectId, f.fx.workspaceId),
     ).toBe(2);
     // The tx branch — the 5.3.2 cap check runs inside the create transaction.
-    const inTx = await db.$transaction(async (tx) =>
+    const inTx = await adminDb.$transaction(async (tx) =>
       customFieldDefinitionRepository.countByProject(f.fx.projectId, f.fx.workspaceId, tx),
     );
     expect(inTx).toBe(2);
@@ -190,13 +202,20 @@ describe('customFieldDefinitionRepository', () => {
     const opt = await addOption(field.id, 'High', 'a0');
     await setValue(f, field.id, { valueOptionId: opt.id });
 
-    await db.$transaction(async (tx) => customFieldDefinitionRepository.delete(field.id, tx));
+    await adminDb.$transaction(async (tx) => customFieldDefinitionRepository.delete(field.id, tx));
 
     expect(await customFieldDefinitionRepository.findById(field.id, f.fx.workspaceId)).toBeNull();
-    expect(await db.customFieldOption.count({ where: { fieldId: field.id } })).toBe(0);
-    expect(await db.customFieldValue.count({ where: { fieldId: field.id } })).toBe(0);
+    const customFieldOptionCount = await adminDb.customFieldOption.count({
+      where: { fieldId: field.id },
+    });
+    expect(customFieldOptionCount).toBe(0);
+    const customFieldValueCount = await adminDb.customFieldValue.count({
+      where: { fieldId: field.id },
+    });
+    expect(customFieldValueCount).toBe(0);
     // The issue itself is untouched — only the field's data dies.
-    expect(await db.workItem.count({ where: { id: f.issue.id } })).toBe(1);
+    const workItemCount = await adminDb.workItem.count({ where: { id: f.issue.id } });
+    expect(workItemCount).toBe(1);
   });
 });
 
@@ -231,7 +250,7 @@ describe('customFieldOptionRepository', () => {
     const f = await makeFieldFixture();
     const field = await addField(f);
     const opt = await addOption(field.id, 'Hgh', 'a0');
-    const updated = await db.$transaction(async (tx) =>
+    const updated = await adminDb.$transaction(async (tx) =>
       customFieldOptionRepository.update(
         opt.id,
         { label: 'High', position: 'a3', archived: true },
@@ -242,7 +261,7 @@ describe('customFieldOptionRepository', () => {
     expect(updated.position).toBe('a3');
     expect(updated.archived).toBe(true);
     // Unarchive is the free inverse.
-    const back = await db.$transaction(async (tx) =>
+    const back = await adminDb.$transaction(async (tx) =>
       customFieldOptionRepository.update(opt.id, { archived: false }, tx),
     );
     expect(back.archived).toBe(false);
@@ -254,7 +273,7 @@ describe('customFieldOptionRepository', () => {
     await addOption(field.id, 'A', 'a0');
     await addOption(field.id, 'B', 'a1');
     expect(await customFieldOptionRepository.countByField(field.id, f.fx.workspaceId)).toBe(2);
-    const inTx = await db.$transaction(async (tx) =>
+    const inTx = await adminDb.$transaction(async (tx) =>
       customFieldOptionRepository.countByField(field.id, f.fx.workspaceId, tx),
     );
     expect(inTx).toBe(2);
@@ -267,13 +286,13 @@ describe('customFieldOptionRepository', () => {
     const inUse = await addOption(field.id, 'InUse', 'a1');
     await setValue(f, field.id, { valueOptionId: inUse.id });
 
-    await db.$transaction(async (tx) => customFieldOptionRepository.delete(unused.id, tx));
+    await adminDb.$transaction(async (tx) => customFieldOptionRepository.delete(unused.id, tx));
     expect(await customFieldOptionRepository.findById(unused.id, f.fx.workspaceId)).toBeNull();
 
     // The only-when-unused rule's DB backstop: the value FK's ON DELETE
     // RESTRICT rejects the hard delete while a value row holds the option.
     await expect(
-      db.$transaction(async (tx) => customFieldOptionRepository.delete(inUse.id, tx)),
+      adminDb.$transaction(async (tx) => customFieldOptionRepository.delete(inUse.id, tx)),
     ).rejects.toMatchObject({ code: 'P2003' });
     // The value row (and the option) survive the rejected delete.
     expect((await customFieldOptionRepository.findById(inUse.id, f.fx.workspaceId))?.id).toBe(
@@ -308,11 +327,13 @@ describe('customFieldValueRepository', () => {
     expect(after.valueNumber?.toString()).toBe('7');
     // Still ONE row for the pair — the unique is the conflict target.
     expect(
-      await db.customFieldValue.count({ where: { workItemId: f.issue.id, fieldId: field.id } }),
+      await adminDb.customFieldValue.count({
+        where: { workItemId: f.issue.id, fieldId: field.id },
+      }),
     ).toBe(1);
     // And the constraint itself rejects a second row for the pair (P2002).
     await expect(
-      db.$transaction(async (tx) =>
+      adminDb.$transaction(async (tx) =>
         tx.customFieldValue.create({
           data: {
             workspaceId: f.fx.workspaceId,
@@ -347,9 +368,9 @@ describe('customFieldValueRepository', () => {
     const stakeholder = await createTestUser({ name: 'Leaving' });
     const row = await setValue(f, field.id, { valueUserId: stakeholder.id });
 
-    await db.user.delete({ where: { id: stakeholder.id } });
+    await adminDb.user.delete({ where: { id: stakeholder.id } });
 
-    const after = await db.customFieldValue.findUnique({ where: { id: row.id } });
+    const after = await adminDb.customFieldValue.findUnique({ where: { id: row.id } });
     expect(after?.valueUserId).toBeNull();
   });
 
@@ -358,15 +379,17 @@ describe('customFieldValueRepository', () => {
     const field = await addField(f, { key: 'customer', fieldType: 'text' });
     await setValue(f, field.id, { valueText: 'ACME' });
 
-    const first = await db.$transaction(async (tx) =>
+    const first = await adminDb.$transaction(async (tx) =>
       customFieldValueRepository.deleteByWorkItemAndField(f.issue.id, field.id, tx),
     );
     expect(first).toBe(1);
     expect(
-      await db.customFieldValue.count({ where: { workItemId: f.issue.id, fieldId: field.id } }),
+      await adminDb.customFieldValue.count({
+        where: { workItemId: f.issue.id, fieldId: field.id },
+      }),
     ).toBe(0);
     // Clearing an already-empty field is a no-op, not a throw.
-    const second = await db.$transaction(async (tx) =>
+    const second = await adminDb.$transaction(async (tx) =>
       customFieldValueRepository.deleteByWorkItemAndField(f.issue.id, field.id, tx),
     );
     expect(second).toBe(0);
@@ -389,7 +412,7 @@ describe('customFieldValueRepository', () => {
       [],
     );
     // The tx branch — 5.3.3 may read inside its set transaction.
-    const inTx = await db.$transaction(async (tx) =>
+    const inTx = await adminDb.$transaction(async (tx) =>
       customFieldValueRepository.listByWorkItem(f.issue.id, f.fx.workspaceId, tx),
     );
     expect(inTx).toHaveLength(2);
@@ -409,7 +432,7 @@ describe('customFieldValueRepository', () => {
     expect(await customFieldValueRepository.countByField(field.id, other.workspaceId)).toBe(0);
     expect(await customFieldValueRepository.countByOption(opt.id, other.workspaceId)).toBe(0);
     // The tx branches — both counts run inside their write transactions.
-    const [fieldCount, optionCount] = await db.$transaction(async (tx) => [
+    const [fieldCount, optionCount] = await adminDb.$transaction(async (tx) => [
       await customFieldValueRepository.countByField(field.id, f.fx.workspaceId, tx),
       await customFieldValueRepository.countByOption(opt.id, f.fx.workspaceId, tx),
     ]);
@@ -422,9 +445,12 @@ describe('customFieldValueRepository', () => {
     const field = await addField(f, { key: 'customer', fieldType: 'text' });
     await setValue(f, field.id, { valueText: 'ACME' });
 
-    await db.workItem.delete({ where: { id: f.issue.id } });
+    await adminDb.workItem.delete({ where: { id: f.issue.id } });
 
-    expect(await db.customFieldValue.count({ where: { workItemId: f.issue.id } })).toBe(0);
+    const customFieldValueCount = await adminDb.customFieldValue.count({
+      where: { workItemId: f.issue.id },
+    });
+    expect(customFieldValueCount).toBe(0);
     // The definition survives — only the issue's values die.
     expect((await customFieldDefinitionRepository.findById(field.id, f.fx.workspaceId))?.id).toBe(
       field.id,

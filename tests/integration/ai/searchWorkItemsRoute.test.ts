@@ -4,6 +4,7 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { POST as searchPOST } from '@/app/api/internal/ai/search-work-items/route';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST (Subtask 7.5.2) — the `search_work_items` planner read tool
@@ -18,7 +19,7 @@ import { truncateAuthTables } from '../../helpers/db';
 const SERVICE_SECRET = 'core-callback-secret-test';
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -31,6 +32,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type Fx = Awaited<ReturnType<typeof makeFixture>>;

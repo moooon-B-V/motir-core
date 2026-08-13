@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import type { ProjectContext } from '@/lib/projects';
 import type { JobStreamEvent } from '@/lib/ai/types';
 import { makeWorkItemFixture } from './fixtures/workItemFixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Route-level transport tests for the chat proxy (Subtask 7.3.7b) — the two
@@ -143,6 +144,7 @@ beforeEach(() => {
 afterEach(() => vi.clearAllMocks());
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/ai/chat/:jobId/stream', () => {

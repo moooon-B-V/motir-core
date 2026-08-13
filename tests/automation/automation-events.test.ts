@@ -11,6 +11,7 @@ import type {
   WorkItemTransitionedData,
 } from '@/lib/jobs/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 
@@ -41,6 +42,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Events of `name` emitted since the buffer index `from` — scopes assertions

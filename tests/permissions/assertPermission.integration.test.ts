@@ -12,6 +12,7 @@ import {
 } from '@/lib/projects/errors';
 import { projectErrorResponse } from '@/lib/projects/projectErrorResponse';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `projectAccessService.assertPermission` (Story MOTIR-2256 · Subtask
@@ -38,6 +39,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function ctxFor(userId: string, workspaceId: string): WorkspaceContext {
@@ -272,7 +274,7 @@ describe('`tx` is threaded into the gate reads', () => {
       projectAccessService.assertPermission(s.projectId, promotedCtx, 'board:configure'),
     ).rejects.toBeInstanceOf(ProjectNotFoundError);
 
-    await db.$transaction(async (tx) => {
+    await adminDb.$transaction(async (tx) => {
       await tx.projectMembership.create({
         data: {
           projectId: s.projectId,

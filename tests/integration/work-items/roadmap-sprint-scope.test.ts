@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { workItemsService } from '@/lib/services/workItemsService';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import {
   makeWorkItemFixture as makeFixture,
@@ -23,7 +24,7 @@ const SORT = { column: 'key', direction: 'asc' } as const;
 const PAGE = { take: 200, offset: 0 };
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -35,10 +36,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function createActiveSprint(fx: WorkItemFixture, name = 'Sprint 1'): Promise<string> {
-  const sprint = await db.sprint.create({
+  const sprint = await adminDb.sprint.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -52,10 +54,10 @@ async function createActiveSprint(fx: WorkItemFixture, name = 'Sprint 1'): Promi
 
 /** Direct column poke — tests may reach the DB to set state (CLAUDE.md). */
 async function setSprint(id: string, sprintId: string | null): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { sprintId } });
+  await adminDb.workItem.update({ where: { id }, data: { sprintId } });
 }
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 /**

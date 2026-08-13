@@ -10,6 +10,7 @@ import {
   type ProvenanceBackfillRow,
 } from '@/lib/workItems/provenanceBackfill';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-2221 — "which TERMINAL statuses mean IMPLEMENTED?" is encoded TWICE:
@@ -41,6 +42,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A leaf task with an explicit type/executor (both feed the manual lane's guard). */
@@ -144,12 +146,12 @@ describe('the manual implementation stamp: done means implemented, cancelled mea
     const a = await typedTask(fx, 'Integrated, then abandoned', { executor: 'human' });
     await workItemsService.updateStatus(a.id, 'in_progress', fx.ctx);
     await workItemsService.markIntegrated(a.id, 'session/abandoned', fx.ctx);
-    expect((await db.workItem.findUniqueOrThrow({ where: { id: a.id } })).sessionBranch).toBe(
+    expect((await adminDb.workItem.findUniqueOrThrow({ where: { id: a.id } })).sessionBranch).toBe(
       'session/abandoned',
     );
 
     await workItemsService.updateStatus(a.id, 'cancelled', fx.ctx);
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: a.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: a.id } });
     expect(row.status).toBe('cancelled');
     expect(row.sessionBranch).toBeNull();
   });

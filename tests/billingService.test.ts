@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { db } from '@/lib/db';
 import type { RawSubscriptionResponse, RawUsageResponse } from '@/lib/ai/types';
 import type { ScaledTrackerSubscription } from '@/lib/billing/scaledTrackerState';
+import { adminDb } from './helpers/adminDb';
 
 // Service test for billingService (Subtask 8.1.6) — the open-core billing
 // boundary. The motir-ai client is the external HTTP leaf, so it's mocked (the
@@ -95,8 +96,9 @@ async function makeOrgWithRoles() {
     name: 'Acme',
     ownerUserId: owner.id,
   });
-  const organizationId = (await db.workspace.findUniqueOrThrow({ where: { id: workspace.id } }))
-    .organizationId;
+  const organizationId = (
+    await adminDb.workspace.findUniqueOrThrow({ where: { id: workspace.id } })
+  ).organizationId;
 
   const admin = await createTestUser();
   const member = await createTestUser();
@@ -139,6 +141,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('billingService.getBillingStatus', () => {
@@ -188,7 +191,7 @@ describe('billingService.getBillingStatus', () => {
 
   it('flags the META org (moooon B.V.) so the page renders the Internal plan state', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
     const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
     expect(dto.isMeta).toBe(true);
   });
@@ -347,7 +350,7 @@ describe('billingService.getBillingStatus — the CI entitlement (③ Motir CI)'
 
   it('bypasses the META org — no CI accounting, so the panel shows no CI line', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
 
     const dto = await billingService.getBillingStatus({ organizationId, actorUserId: owner.id });
     expect(dto.ci.applicable).toBe(false);
@@ -578,7 +581,7 @@ describe('billingService.getAiAccess (the member-safe 8.1.8 paywall read)', () =
 
   it('is not applicable for the META org (moooon B.V.) — the AI paywall never renders', async () => {
     const { organizationId, owner } = await makeOrgWithRoles();
-    await db.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
+    await adminDb.organization.update({ where: { id: organizationId }, data: { isMeta: true } });
     const access = await billingService.getAiAccess({ organizationId, actorUserId: owner.id });
     expect(access.applicable).toBe(false);
   });

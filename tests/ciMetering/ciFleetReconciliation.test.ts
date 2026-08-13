@@ -10,6 +10,7 @@ import {
   reconcileTotals,
 } from '@/lib/services/ciMinutesReconciliationService';
 import { MOTIR_FLEET_RUNNER_FAMILY } from '@/lib/ciMetering/runnerRates';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
@@ -34,7 +35,7 @@ const JULY_2026 = new Date('2026-07-01T00:00:00.000Z');
 const AUGUST_2026 = new Date('2026-08-01T00:00:00.000Z');
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "ci_workflow_run_usage", "ci_period_usage", "ci_container_usage", "ci_container_period_cost" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -50,6 +51,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A runner-family entry, the shape `normalizeRunUsage` writes (§3.3). */
@@ -91,7 +93,7 @@ async function seedMeteredRun(
   options: { periodStart?: Date; runId?: string } = {},
 ): Promise<void> {
   const billableMinutes = entries.reduce((sum, e) => sum + e.billableMinutes, 0);
-  await db.ciWorkflowRunUsage.create({
+  await adminDb.ciWorkflowRunUsage.create({
     data: {
       workspaceId: tenant.workspaceId,
       organizationId: tenant.organizationId,
@@ -120,7 +122,7 @@ async function seedContainer(
   periodStart: Date = JULY_2026,
   workload: 'ci' | 'index' | 'agent' = 'ci',
 ): Promise<void> {
-  await db.ciContainerUsage.create({
+  await adminDb.ciContainerUsage.create({
     data: {
       containerProvider: 'fly',
       handleId: `m-${randomToken(8)}`,
@@ -211,7 +213,7 @@ describe('the GITHUB-BILLED side excludes fleet minutes (§Q.1)', () => {
     // breakdown cannot be read must fall somewhere rather than disappear from
     // the audit, and this is the only honest place for it.
     const tenant = await seedTenant('legacy');
-    await db.ciWorkflowRunUsage.create({
+    await adminDb.ciWorkflowRunUsage.create({
       data: {
         workspaceId: tenant.workspaceId,
         organizationId: tenant.organizationId,
@@ -452,7 +454,7 @@ describe('reconcileFleetMonth (against real Postgres)', () => {
   it('scopes containers to the period and to Motir’s own org', async () => {
     const tenant = await seedTenant('scope');
     await seedContainer(tenant, 'acme-web', 600, AUGUST_2026);
-    await db.ciContainerUsage.create({
+    await adminDb.ciContainerUsage.create({
       data: {
         containerProvider: 'fly',
         handleId: 'm-foreign',

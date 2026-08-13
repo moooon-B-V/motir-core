@@ -13,6 +13,7 @@ import { withWorkspaceContext } from '@/lib/workspaces/context';
 import type { PlanItemDto, PlanWithItemsDto } from '@/lib/dto/plans';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // `get_plan` (Story 7.9 · MOTIR-1837) — the plan CONTENT read.
@@ -66,7 +67,7 @@ function itemTitled(plan: PlanWithItemsDto, title: string): PlanItemDto {
 }
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "plan_item", "plan", "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -78,6 +79,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('get_plan — registration, scope, and the proposal gate', () => {
@@ -141,7 +143,7 @@ describe('get_plan — the transport contract', () => {
       fx.ctx,
     );
     await plansService.markPlanned(plan.id, fx.ctx);
-    const before = await db.workItem.count({ where: { projectId: fx.projectId } });
+    const before = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
 
     const client = await connectClient(fx.ctx);
     const res = await call(client, { planId: plan.id });
@@ -149,9 +151,14 @@ describe('get_plan — the transport contract', () => {
 
     // Every `add` is still un-materialized, and the host story gained no
     // children: the read is a read.
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(before);
-    expect(await db.workItem.count({ where: { parentId: story.id } })).toBe(0);
-    expect(await db.planItem.count({ where: { planId: plan.id, workItemId: null } })).toBe(2);
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(before);
+    const workItemCount2 = await adminDb.workItem.count({ where: { parentId: story.id } });
+    expect(workItemCount2).toBe(0);
+    const planItemCount = await adminDb.planItem.count({
+      where: { planId: plan.id, workItemId: null },
+    });
+    expect(planItemCount).toBe(2);
     await client.close();
   });
 });

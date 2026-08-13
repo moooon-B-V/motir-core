@@ -12,7 +12,9 @@ import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepositor
 import type { WorkItemDto } from '@/lib/dto/workItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, createTestProject } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Auto-relate-on-mention (Story 5.8 · Subtask 5.8.3): saving a work-item text
 // field or comment that REFERENCES another item (`[KEY](motir:<id>)` token or a
@@ -39,6 +41,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Create a task via the service (valid fractional position) in a project/ctx. */
@@ -56,11 +59,11 @@ const token = (item: Pick<WorkItemDto, 'id' | 'identifier'>) =>
 
 /** Every `relates_to` out-edge of an item, with its provenance. */
 function relatesOut(fromId: string): Promise<WorkItemLink[]> {
-  return db.workItemLink.findMany({ where: { fromId, kind: 'relates_to' } });
+  return adminDb.workItemLink.findMany({ where: { fromId, kind: 'relates_to' } });
 }
 
 function linkBetween(aId: string, bId: string): Promise<WorkItemLink | null> {
-  return db.workItemLink.findFirst({
+  return adminDb.workItemLink.findFirst({
     where: {
       OR: [
         { fromId: aId, toId: bId },
@@ -79,14 +82,14 @@ describe('auto-relate on create', () => {
       descriptionMd: `Depends on context from ${token(target)}.`,
     });
 
-    const forward = await db.workItemLink.findUnique({
+    const forward = await adminDb.workItemLink.findUnique({
       where: { fromId_toId_kind: { fromId: dto.id, toId: target.id, kind: 'relates_to' } },
     });
     expect(forward).not.toBeNull();
     expect(forward!.source).toBe('mention');
 
     // The symmetric reciprocal row exists too, also stamped mention.
-    const reciprocal = await db.workItemLink.findUnique({
+    const reciprocal = await adminDb.workItemLink.findUnique({
       where: { fromId_toId_kind: { fromId: target.id, toId: dto.id, kind: 'relates_to' } },
     });
     expect(reciprocal).not.toBeNull();
@@ -191,7 +194,7 @@ describe('auto-relate guards', () => {
     // The existing block is untouched; no relates_to edge was added.
     expect(await relatesOut(source.id)).toHaveLength(0);
     expect(
-      await db.workItemLink.findUnique({
+      await adminDb.workItemLink.findUnique({
         where: { fromId_toId_kind: { fromId: source.id, toId: target.id, kind: 'is_blocked_by' } },
       }),
     ).not.toBeNull();
@@ -283,7 +286,7 @@ describe('auto-relate guards', () => {
 describe('normalize bare refs on write (bug MOTIR-1440)', () => {
   /** The stored (canonical) description body, read back authoritatively. */
   async function storedDescription(id: string): Promise<string | null> {
-    const row = await db.workItem.findUnique({ where: { id } });
+    const row = await adminDb.workItem.findUnique({ where: { id } });
     return row?.descriptionMd ?? null;
   }
 
@@ -343,15 +346,16 @@ describe('normalize bare refs on write (bug MOTIR-1440)', () => {
     const canonical = await storedDescription(dto.id);
     expect(canonical).toBe(`see ${token(target)}`);
 
-    const revisionsBefore = await db.workItemRevision.count({ where: { workItemId: dto.id } });
+    const revisionsBefore = await adminDb.workItemRevision.count({ where: { workItemId: dto.id } });
     // Re-submit the canonical token form (what the editor reloads + re-saves).
     await workItemsService.updateWorkItem(dto.id, { descriptionMd: canonical! }, fx.ctx);
 
     expect(await storedDescription(dto.id)).toBe(canonical);
     // No body change → no new revision (the normalize is idempotent).
-    expect(await db.workItemRevision.count({ where: { workItemId: dto.id } })).toBe(
-      revisionsBefore,
-    );
+    const revisionsAfter = await adminDb.workItemRevision.count({
+      where: { workItemId: dto.id },
+    });
+    expect(revisionsAfter).toBe(revisionsBefore);
   });
 
   it('also normalizes a bare key in the explanation body', async () => {
@@ -362,7 +366,7 @@ describe('normalize bare refs on write (bug MOTIR-1440)', () => {
       explanationMd: `Implements ${target.identifier}.`,
     });
 
-    const row = await db.workItem.findUnique({ where: { id: dto.id } });
+    const row = await adminDb.workItem.findUnique({ where: { id: dto.id } });
     expect(row?.explanationMd).toBe(`Implements ${token(target)}.`);
   });
 
@@ -412,8 +416,12 @@ describe('auto-relate concurrency', () => {
     const source = await makeItem(fx.projectId, fx.ctx, 'Source');
 
     const refText = `see ${token(target)}`;
+    // Bound (MOTIR-2753): `autoRelateWorkItemMentions` is the code under test and it
+    // reads the mention target through `work_item`. Unbound the target is invisible,
+    // no link is attempted by either racer, and "exactly ONE link" holds trivially at
+    // zero — the concurrency claim would evaporate.
     const run = () =>
-      db.$transaction((tx) =>
+      withWorkspaceContext(fx.ctx, (tx) =>
         autoRelateWorkItemMentions(
           {
             source: {

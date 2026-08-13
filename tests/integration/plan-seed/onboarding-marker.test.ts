@@ -6,7 +6,9 @@ import { projectsService } from '@/lib/services/projectsService';
 import { markDogfoodProjectEstablished } from '@/scripts/plan-seed/dogfoodProject';
 import { seedGenerationTestProject } from '@/scripts/plan-seed/testProject';
 import { stampOnboardingRan } from '@/scripts/stampOnboardingRan';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // MOTIR-1799 — the onboarding-ran marker for the dogfood project. Two
 // deliverables, both covered here against a real Postgres (the seed-test
@@ -27,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The seed's shape in miniature: a `moooon` workspace + its `motir` project. */
@@ -50,7 +53,7 @@ async function makeTenant(opts: { workspaceName: string; projectKey: string }) {
 }
 
 async function readMarker(projectId: string): Promise<Date | null> {
-  const row = await db.project.findUnique({ where: { id: projectId } });
+  const row = await adminDb.project.findUnique({ where: { id: projectId } });
   return row?.onboardingRanAt ?? null;
 }
 
@@ -68,7 +71,9 @@ describe('the seed change — markDogfoodProjectEstablished (MOTIR-1799)', () =>
     });
 
     const at = new Date('2026-07-31T12:00:00.000Z');
-    const wrote = await db.$transaction((tx) => markDogfoodProjectEstablished(project.id, at, tx));
+    const wrote = await withWorkspaceServiceContext(workspace.id, (tx) =>
+      markDogfoodProjectEstablished(project.id, at, tx),
+    );
 
     expect(wrote).toBe(true);
     expect(await readMarker(project.id)).toEqual(at);
@@ -79,15 +84,22 @@ describe('the seed change — markDogfoodProjectEstablished (MOTIR-1799)', () =>
   });
 
   it('is set-once — a reseed over an already-stamped project writes nothing', async () => {
-    const { project } = await makeTenant({ workspaceName: 'moooon', projectKey: 'PROD' });
+    const { workspace, project } = await makeTenant({
+      workspaceName: 'moooon',
+      projectKey: 'PROD',
+    });
     const first = new Date('2026-07-31T12:00:00.000Z');
     const second = new Date('2026-08-05T09:30:00.000Z');
 
     expect(
-      await db.$transaction((tx) => markDogfoodProjectEstablished(project.id, first, tx)),
+      await withWorkspaceServiceContext(workspace.id, (tx) =>
+        markDogfoodProjectEstablished(project.id, first, tx),
+      ),
     ).toBe(true);
     expect(
-      await db.$transaction((tx) => markDogfoodProjectEstablished(project.id, second, tx)),
+      await withWorkspaceServiceContext(workspace.id, (tx) =>
+        markDogfoodProjectEstablished(project.id, second, tx),
+      ),
     ).toBe(false);
 
     // The ORIGINAL timestamp survives — the second call never overwrote it.
@@ -97,7 +109,10 @@ describe('the seed change — markDogfoodProjectEstablished (MOTIR-1799)', () =>
 
 describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   it('--dry-run reports exactly what it would stamp and writes nothing', async () => {
-    const { project } = await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
+    const { project } = await makeTenant({
+      workspaceName: 'moooon',
+      projectKey: 'MOTIR',
+    });
 
     const outcome = await stampOnboardingRan({ projectKey: 'MOTIR', dryRun: true });
 
@@ -108,7 +123,10 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   });
 
   it('a real run stamps the project; a second consecutive run reports zero writes', async () => {
-    const { project } = await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
+    const { project } = await makeTenant({
+      workspaceName: 'moooon',
+      projectKey: 'MOTIR',
+    });
     const at = new Date('2026-07-31T12:00:00.000Z');
 
     const first = await stampOnboardingRan({ projectKey: 'MOTIR', dryRun: false, now: at });
@@ -177,7 +195,10 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   });
 
   it('reports an unknown project key without writing', async () => {
-    const { project } = await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
+    const { project } = await makeTenant({
+      workspaceName: 'moooon',
+      projectKey: 'MOTIR',
+    });
 
     const outcome = await stampOnboardingRan({ projectKey: 'NOPE', dryRun: false });
 
@@ -186,7 +207,10 @@ describe('the operator script — stampOnboardingRan (MOTIR-1799)', () => {
   });
 
   it('reports an unknown workspace slug without writing', async () => {
-    const { project } = await makeTenant({ workspaceName: 'moooon', projectKey: 'MOTIR' });
+    const { project } = await makeTenant({
+      workspaceName: 'moooon',
+      projectKey: 'MOTIR',
+    });
 
     const outcome = await stampOnboardingRan({
       projectKey: 'MOTIR',

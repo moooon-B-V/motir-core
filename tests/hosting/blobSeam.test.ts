@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { db } from '@/lib/db';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-2394, jobs 1 and 2 — the blob seam, driven END TO END.
@@ -60,7 +61,7 @@ async function makeStory(fx: WorkItemFixture) {
 beforeEach(async () => {
   for (const [name, value] of Object.entries(ENV)) process.env[name] = value;
   installBlobStoreMock();
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -76,6 +77,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('seam: attachmentsService ← the REAL uploader (the key a service persists is the key the store holds)', () => {
@@ -86,7 +88,7 @@ describe('seam: attachmentsService ← the REAL uploader (the key a service pers
       { userId: fx.ctx.userId, workspaceId: fx.ctx.workspaceId, projectId: fx.projectId },
     );
 
-    const row = await db.attachment.findUniqueOrThrow({ where: { id: result.id } });
+    const row = await adminDb.attachment.findUniqueOrThrow({ where: { id: result.id } });
 
     // THE assertion the mocks cannot make. `putPrivateAttachment` appends a
     // random suffix S3 does not add for us, so the key the service stores is
@@ -107,7 +109,7 @@ describe('seam: attachmentsService ← the REAL uploader (the key a service pers
       workspaceId: fx.ctx.workspaceId,
       projectId: fx.projectId,
     });
-    const row = await db.attachment.findUniqueOrThrow({ where: { id: result.id } });
+    const row = await adminDb.attachment.findUniqueOrThrow({ where: { id: result.id } });
 
     // The two-bucket split is structural (lib/blob/s3.ts), so it is asserted
     // against the store rather than against the call: the same key resolves in
@@ -131,7 +133,7 @@ describe('seam: attachmentsService ← the REAL uploader (the key a service pers
       fileOf('spec.pdf', 'application/pdf', 20),
       fx.ctx,
     );
-    const row = await db.attachment.findUniqueOrThrow({ where: { id: attached.id } });
+    const row = await adminDb.attachment.findUniqueOrThrow({ where: { id: attached.id } });
 
     const redirect = await attachmentsService.getContentRedirect(attached.id, fx.ctx);
     const url = new URL(redirect);
@@ -153,7 +155,7 @@ describe('seam: attachmentsService ← the REAL uploader (the key a service pers
       fileOf('quarterly.pdf', 'application/pdf', 20),
       fx.ctx,
     );
-    const row = await db.attachment.findUniqueOrThrow({ where: { id: attached.id } });
+    const row = await adminDb.attachment.findUniqueOrThrow({ where: { id: attached.id } });
 
     const url = new URL(
       await attachmentsService.getContentRedirect(attached.id, fx.ctx, { download: true }),
@@ -176,12 +178,13 @@ describe('seam: attachmentsService ← the REAL uploader (the key a service pers
       fileOf('junk.png', 'image/png'),
       fx.ctx,
     );
-    const row = await db.attachment.findUniqueOrThrow({ where: { id: attached.id } });
+    const row = await adminDb.attachment.findUniqueOrThrow({ where: { id: attached.id } });
     expect(await headPrivateBlob(row.blobPathname)).not.toBeNull();
 
     await attachmentsService.deleteAttachment(attached.id, fx.ctx);
 
-    expect(await db.attachment.findUnique({ where: { id: attached.id } })).toBeNull();
+    const attachmentRow = await adminDb.attachment.findUnique({ where: { id: attached.id } });
+    expect(attachmentRow).toBeNull();
     expect(await headPrivateBlob(row.blobPathname)).toBeNull();
   });
 });
@@ -272,7 +275,7 @@ describe('seam: acceptanceEvidenceService ← the REAL uploader (a minted grant,
 
     // The trace's size is not on the DTO, so it is read where the service put
     // it — and it is the store's number too, for the same reason.
-    const trace = await db.attachment.findFirstOrThrow({
+    const trace = await adminDb.attachment.findFirstOrThrow({
       where: { blobPathname: tokens.trace!.pathname },
     });
     expect(trace.sizeBytes).toBe(traceBytes);
@@ -295,7 +298,10 @@ describe('seam: acceptanceEvidenceService ← the REAL uploader (a minted grant,
         fx.ctx,
       ),
     ).rejects.toMatchObject({ code: 'ACCEPTANCE_EVIDENCE_BLOB_MISSING' });
-    expect(await db.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count({
+      where: { workItemId: story.id },
+    });
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 
   it('recordFromUpload → the recorded pathname is an object the store really holds', async () => {
@@ -309,10 +315,10 @@ describe('seam: acceptanceEvidenceService ← the REAL uploader (a minted grant,
 
     // The evidence row points at an `acceptance_video` Attachment, and THAT is
     // where the key the uploader minted is persisted.
-    const evidence = await db.acceptanceEvidence.findFirstOrThrow({
+    const evidence = await adminDb.acceptanceEvidence.findFirstOrThrow({
       where: { workItemId: story.id, isCurrent: true },
     });
-    const video = await db.attachment.findUniqueOrThrow({
+    const video = await adminDb.attachment.findUniqueOrThrow({
       where: { id: evidence.attachmentId! },
     });
     expect(dto.sizeBytes).toBe(2048);
@@ -339,7 +345,7 @@ describe('seam: usersService ← the REAL uploader (a KEY is persisted, a URL is
     expect(key).not.toContain('://');
 
     const profile = await usersService.updateProfile(fx.ctx.userId, { image: key });
-    const row = await db.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
+    const row = await adminDb.user.findUniqueOrThrow({ where: { id: fx.ctx.userId } });
 
     expect(row.image).toBe(key);
     expect(profile.image).toBe(`${ENV.MOTIR_S3_PUBLIC_BASE_URL}/${key}`);

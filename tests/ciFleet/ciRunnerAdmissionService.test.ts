@@ -12,6 +12,7 @@ import { ciFleetAdmissionLockRepository } from '@/lib/repositories/ciFleetAdmiss
 import { organizationRepository } from '@/lib/repositories/organizationRepository';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -69,7 +70,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -90,7 +91,7 @@ async function seedIntent(
   overrides: { status?: string; projectId?: string | null } = {},
 ): Promise<CiRunnerProvisioningIntent> {
   jobSeq += 1;
-  return db.ciRunnerProvisioningIntent.create({
+  return adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -146,7 +147,9 @@ function stubMotirAi(balance = 1_000): void {
 }
 
 async function statusOf(intentId: string): Promise<string> {
-  const row = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intentId } });
+  const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    where: { id: intentId },
+  });
   return row.status;
 }
 
@@ -172,6 +175,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── Guard 1 · the per-project in-flight cap ─────────────────────────────────
@@ -230,12 +234,12 @@ describe('guard 1 — the PER-PROJECT in-flight cap', () => {
     expect((await ciRunnerAdmissionService.admit(queued)).outcome).toBe('deferred');
 
     // Exactly what MOTIR-1921's teardown writes when a container ends.
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: inFlight.id },
       data: { status: 'completed', settledAt: new Date(), teardownReason: 'job_completed' },
     });
 
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect((await ciRunnerAdmissionService.admit(after)).outcome).toBe('admitted');
@@ -278,12 +282,12 @@ describe('guard 2 — the FLEET-WIDE ceiling (ADR §9.1)', () => {
       reason: 'fleet_ceiling',
     });
 
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: busy.id },
       data: { status: 'completed', settledAt: new Date() },
     });
 
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect((await ciRunnerAdmissionService.admit(after)).outcome).toBe('admitted');

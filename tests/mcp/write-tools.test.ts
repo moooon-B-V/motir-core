@@ -13,6 +13,7 @@ import { runCreateWorkItem } from '@/lib/mcp/tools/createWorkItem';
 import { runTransitionStatus } from '@/lib/mcp/tools/transitionStatus';
 import { runAddComment } from '@/lib/mcp/tools/addComment';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP write tools (Subtask 7.8.5) over real Postgres. `create_work_item`,
@@ -58,6 +59,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

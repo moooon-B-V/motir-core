@@ -16,6 +16,7 @@ import { runNextReady } from '@/lib/mcp/tools/nextReady';
 import { runSearchWorkItems } from '@/lib/mcp/tools/searchWorkItems';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The per-row COMMENT-COUNT projection for the MCP work-item reads (MOTIR-2001)
@@ -48,6 +49,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mk = (fx: WorkItemFixture, title: string) =>
@@ -56,7 +58,15 @@ const mk = (fx: WorkItemFixture, title: string) =>
 const say = (fx: WorkItemFixture, itemId: string, bodyMd: string, parentCommentId?: string) =>
   commentsService.addComment(itemId, { bodyMd, parentCommentId }, fx.ctx);
 
-/** Count REAL comment-aggregate queries issued while `run` executes. */
+/**
+ * Count REAL comment-aggregate queries issued while `run` executes.
+ *
+ * ⚠️ The spy MUST sit on `db` — the `@/lib/db` singleton the code under test
+ * reads through — NOT on `adminDb`. `adminDb` is for fixtures, teardown and
+ * existence-readbacks only (MOTIR-2513's two-client model); a spy on it counts
+ * a client the service never touches, so every assertion here silently
+ * measures 0 and passes only where 0 is expected.
+ */
 async function countCommentQueries<T>(
   run: () => Promise<T>,
 ): Promise<{ result: T; queries: number }> {
@@ -80,7 +90,10 @@ async function connectClient(ctx: ServiceContext): Promise<Client> {
 /** Create a sprint holding the given items and START it — `claim_next_ready`'s scope. */
 async function activeSprintWith(fx: WorkItemFixture, itemIds: string[]): Promise<void> {
   const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Active' }, fx.ctx);
-  await db.workItem.updateMany({ where: { id: { in: itemIds } }, data: { sprintId: sprint.id } });
+  await adminDb.workItem.updateMany({
+    where: { id: { in: itemIds } },
+    data: { sprintId: sprint.id },
+  });
   await sprintsService.startSprint(sprint.id, {}, fx.ctx);
 }
 

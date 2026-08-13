@@ -5,6 +5,7 @@ import { customFieldFilterFieldId, type FilterAst } from '@/lib/filters/ast';
 import { labelRepository } from '@/lib/repositories/labelRepository';
 import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptionRepository';
 import type { WorkItemTreeNodeDto } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { createTestUser } from '../../fixtures';
 import {
@@ -22,7 +23,7 @@ import {
 // static fragment inspection lives in tests/filters/epic5Filters.test.ts.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "custom_field_value", "custom_field_option", "custom_field_definition", ' +
       '"work_item_label", "label", "work_item_component", "component", ' +
       '"work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
@@ -36,6 +37,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const SORT = { column: 'key', direction: 'asc' } as const;
@@ -73,29 +75,29 @@ async function seedEpic5(): Promise<Seeded> {
   const d = await createWorkItem(fx, { kind: 'task', title: 'Chart polish pass' });
 
   const defCommon = { workspaceId: fx.workspaceId, projectId: fx.projectId };
-  const severity = await db.customFieldDefinition.create({
+  const severity = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'severity', label: 'Severity', fieldType: 'select', position: 'a0' },
   });
-  const effort = await db.customFieldDefinition.create({
+  const effort = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'effort', label: 'Effort', fieldType: 'number', position: 'a1' },
   });
-  const golive = await db.customFieldDefinition.create({
+  const golive = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'golive', label: 'Go-live', fieldType: 'date', position: 'a2' },
   });
-  const owner = await db.customFieldDefinition.create({
+  const owner = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'owner', label: 'Owner', fieldType: 'user', position: 'a3' },
   });
-  const notes = await db.customFieldDefinition.create({
+  const notes = await adminDb.customFieldDefinition.create({
     data: { ...defCommon, key: 'notes', label: 'Notes', fieldType: 'text', position: 'a4' },
   });
 
-  const high = await db.customFieldOption.create({
+  const high = await adminDb.customFieldOption.create({
     data: { fieldId: severity.id, label: 'High', position: 'a0' },
   });
-  const low = await db.customFieldOption.create({
+  const low = await adminDb.customFieldOption.create({
     data: { fieldId: severity.id, label: 'Low', position: 'a1' },
   });
-  const legacy = await db.customFieldOption.create({
+  const legacy = await adminDb.customFieldOption.create({
     data: { fieldId: severity.id, label: 'Legacy', position: 'a2', archived: true },
   });
 
@@ -104,7 +106,7 @@ async function seedEpic5(): Promise<Seeded> {
     workItemId,
     fieldId,
   });
-  await db.customFieldValue.createMany({
+  await adminDb.customFieldValue.createMany({
     data: [
       { ...value(a.id, severity.id), valueOptionId: high.id },
       { ...value(b.id, severity.id), valueOptionId: legacy.id },
@@ -121,13 +123,13 @@ async function seedEpic5(): Promise<Seeded> {
   });
 
   const labelCommon = { workspaceId: fx.workspaceId, projectId: fx.projectId };
-  const perf = await db.label.create({
+  const perf = await adminDb.label.create({
     data: { ...labelCommon, name: 'perf-q3', nameLower: 'perf-q3' },
   });
-  const infra = await db.label.create({
+  const infra = await adminDb.label.create({
     data: { ...labelCommon, name: 'infra', nameLower: 'infra' },
   });
-  await db.workItemLabel.createMany({
+  await adminDb.workItemLabel.createMany({
     data: [
       { workItemId: a.id, labelId: perf.id },
       { workItemId: c.id, labelId: perf.id },
@@ -135,13 +137,13 @@ async function seedEpic5(): Promise<Seeded> {
     ],
   });
 
-  const api = await db.component.create({
+  const api = await adminDb.component.create({
     data: { ...labelCommon, name: 'API', nameLower: 'api' },
   });
-  const web = await db.component.create({
+  const web = await adminDb.component.create({
     data: { ...labelCommon, name: 'Web', nameLower: 'web' },
   });
-  await db.workItemComponent.createMany({
+  await adminDb.workItemComponent.createMany({
     data: [
       { workItemId: a.id, componentId: api.id },
       { workItemId: d.id, componentId: api.id },
@@ -427,7 +429,7 @@ describe('stale referents degrade to match-nothing — never an error (the 6.2 d
   it('a deleted custom FIELD: its condition matches nothing; OR-siblings still match', async () => {
     const s = await seedEpic5();
     const severity = cf(s, 'severity');
-    await db.customFieldDefinition.delete({ where: { id: s.fields.severity } });
+    await adminDb.customFieldDefinition.delete({ where: { id: s.fields.severity } });
 
     expect(
       await listIdentifiers(
@@ -449,8 +451,8 @@ describe('stale referents degrade to match-nothing — never an error (the 6.2 d
   it('a deleted OPTION: the condition matches nothing even under negation (stale ≠ none-of-everything)', async () => {
     const s = await seedEpic5();
     const severity = cf(s, 'severity');
-    await db.customFieldValue.deleteMany({ where: { valueOptionId: s.options.legacy } });
-    await db.customFieldOption.delete({ where: { id: s.options.legacy } });
+    await adminDb.customFieldValue.deleteMany({ where: { valueOptionId: s.options.legacy } });
+    await adminDb.customFieldOption.delete({ where: { id: s.options.legacy } });
 
     expect(
       await listIdentifiers(
@@ -469,10 +471,10 @@ describe('stale referents degrade to match-nothing — never an error (the 6.2 d
 
   it('a deleted LABEL and a deleted COMPONENT each go match-nothing', async () => {
     const s = await seedEpic5();
-    await db.workItemLabel.deleteMany({ where: { labelId: s.labels.perf } });
-    await db.label.delete({ where: { id: s.labels.perf } });
-    await db.workItemComponent.deleteMany({ where: { componentId: s.components.api } });
-    await db.component.delete({ where: { id: s.components.api } });
+    await adminDb.workItemLabel.deleteMany({ where: { labelId: s.labels.perf } });
+    await adminDb.label.delete({ where: { id: s.labels.perf } });
+    await adminDb.workItemComponent.deleteMany({ where: { componentId: s.components.api } });
+    await adminDb.component.delete({ where: { id: s.components.api } });
 
     expect(
       await listIdentifiers(
@@ -491,7 +493,7 @@ describe('stale referents degrade to match-nothing — never an error (the 6.2 d
   it('a CROSS-TENANT id reads as stale too (no existence probe across projects)', async () => {
     const s = await seedEpic5();
     const other = await makeFixture({ name: 'Other', identifier: 'OTH' });
-    const foreignLabel = await db.label.create({
+    const foreignLabel = await adminDb.label.create({
       data: {
         workspaceId: other.workspaceId,
         projectId: other.projectId,
@@ -529,7 +531,10 @@ describe('the bulk-id reads (coverage-gate contracts)', () => {
 describe('the 5.3.1 predicate indexes serve the probes (finding #57)', () => {
   it('EXPLAIN shows the select-option probe using the [fieldId, valueOptionId] index', async () => {
     const s = await seedEpic5();
-    const plan = await db.$transaction(async (tx) => {
+    // ADMIN client: this asserts the INDEX serves the probe, which is a property of
+    // the schema rather than of a tenant. As the app role the plan also carries the RLS
+    // filter and the seeded rows are hidden, so the assertion would change subject.
+    const plan = await adminDb.$transaction(async (tx) => {
       // Tiny seeded table — force the planner's hand: the assert is "the
       // index EXISTS and serves this predicate", not a cost decision. (jit
       // off: the sandbox Postgres lacks the JIT library.)

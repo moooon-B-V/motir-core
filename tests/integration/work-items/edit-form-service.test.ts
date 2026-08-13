@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { StaleWorkItemError, WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { UpdateWorkItemInput } from '@/lib/dto/workItems';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture as makeFixture } from '../../fixtures';
 import { inngest } from '@/lib/jobs/client';
@@ -21,7 +22,7 @@ const _statusGuard: StatusGuard = 'ok';
 void _statusGuard;
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -41,6 +42,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('finding #46 — updateWorkItem no longer carries status', () => {
@@ -84,7 +86,7 @@ describe('updateWorkItem — optimistic concurrency (2.3.6)', () => {
     const staleToken = created.updatedAt;
 
     // Someone else edits the row → updatedAt moves.
-    await db.workItem.update({ where: { id: created.id }, data: { title: 'Theirs' } });
+    await adminDb.workItem.update({ where: { id: created.id }, data: { title: 'Theirs' } });
 
     await expect(
       workItemsService.updateWorkItem(created.id, { title: 'Mine' }, fx.ctx, {

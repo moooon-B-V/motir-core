@@ -22,6 +22,7 @@ import { NotSprintAdminError } from '@/lib/sprints/errors';
 import type { PermissionKey } from '@/lib/permissions/catalog';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
 import type { ProjectContext } from '@/lib/projects';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // THE STORY TEST GATE for MOTIR-2291 (Subtask MOTIR-2367) — the SEAM half,
@@ -124,6 +125,7 @@ beforeEach(async () => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('every member-facing key answers through ONE resolution, the same way', () => {

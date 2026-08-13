@@ -10,6 +10,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateCodeGraphOffboarding, truncateJobRuns } from '../helpers/db';
 
 // ── THE STORY SEAM (MOTIR-2193, for Story MOTIR-2192) ────────────────────────
@@ -295,8 +296,10 @@ describe('the queue row survives the real workspace cascade (§14.5)', () => {
       actorUserId: owner.id,
     });
 
-    expect(await db.workspace.findUnique({ where: { id: workspace.id } })).toBeNull();
-    expect(await db.project.findUnique({ where: { id: project.id } })).toBeNull();
+    const workspaceRow = await adminDb.workspace.findUnique({ where: { id: workspace.id } });
+    expect(workspaceRow).toBeNull();
+    const projectRow = await adminDb.project.findUnique({ where: { id: project.id } });
+    expect(projectRow).toBeNull();
 
     const rows = await queueRows();
     expect(rows).toHaveLength(1);

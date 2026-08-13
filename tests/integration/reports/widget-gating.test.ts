@@ -24,6 +24,7 @@ import { GET as distributionGET } from '@/app/api/reports/distribution/route';
 import { GET as filterResultsGET } from '@/app/api/reports/filter-results/route';
 import { createTestUser, createTestWorkItem, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -111,6 +112,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the per-viewer no-access matrix (route-level)', () => {
@@ -186,7 +188,7 @@ describe('the stale-referent matrix', () => {
     wsCtx.current = fx.ctx;
 
     // Corrupt the envelope in place (a future-versioned payload).
-    await db.savedFilter.update({
+    await adminDb.savedFilter.update({
       where: { id: filterId },
       data: { astEnvelope: { v: 'v999', ast: {} } },
     });
@@ -195,7 +197,7 @@ describe('the stale-referent matrix', () => {
       reason: 'filter_invalid',
     });
 
-    await db.savedFilter.delete({ where: { id: filterId } });
+    await adminDb.savedFilter.delete({ where: { id: filterId } });
     expect((await getJson(filterResultsGET, `savedFilterId=${filterId}`)).body).toEqual({
       state: 'stale',
       reason: 'filter_missing',
@@ -216,7 +218,7 @@ describe('filter-results — /items parity + the 50/page cap', () => {
     const fx = await makeWorkItemFixture();
     for (let i = 0; i < 8; i++) {
       const item = await createTestWorkItem(fx, { kind: 'task', title: `T${i}` });
-      await db.workItem.update({
+      await adminDb.workItem.update({
         where: { id: item.id },
         data: { priority: i % 2 === 0 ? 'high' : 'low' },
       });

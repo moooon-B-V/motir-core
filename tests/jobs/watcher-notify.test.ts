@@ -27,6 +27,7 @@ import { resolveBaseUrlTrimmed } from '@/lib/baseUrl';
 import type { WorkItemCommentCreatedData, WorkItemTransitionedData } from '@/lib/jobs/types';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureEmailEvents, captureJobEvents } from '../helpers/jobs';
 
@@ -55,6 +56,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface Scenario {
@@ -79,7 +81,7 @@ async function buildScenario(): Promise<Scenario> {
   const issue = await createTestWorkItem(fx, { kind: 'task', title: 'Watched task' });
   // The repo fixture leaves the DB-default status ('open', outside the default
   // workflow); the transition tests need the workflow's initial 'todo'.
-  await db.workItem.update({ where: { id: issue.id }, data: { status: 'todo' } });
+  await adminDb.workItem.update({ where: { id: issue.id }, data: { status: 'todo' } });
   const { user: watcher, ctx: watcherCtx } = await addWsMember(
     fx,
     'watcher@example.com',
@@ -455,7 +457,7 @@ describe('work-item/transitioned emit seam', () => {
       toStatusKey: 'in_progress',
     });
     // The revisionId is the revision row the transition wrote.
-    const revision = await db.workItemRevision.findFirst({
+    const revision = await adminDb.workItemRevision.findFirst({
       where: { workItemId: s.issueId },
       orderBy: { changedAt: 'desc' },
     });
@@ -481,7 +483,7 @@ describe('work-item/transitioned emit seam', () => {
     // A minimal per-status board (the move-card fixture shape, one column per
     // default status).
     const statuses = await workflowsService.listStatusesByProject(s.fx.projectId, s.fx.workspaceId);
-    const board = await db.board.create({
+    const board = await adminDb.board.create({
       data: {
         workspaceId: s.fx.workspaceId,
         projectId: s.fx.projectId,
@@ -493,7 +495,7 @@ describe('work-item/transitioned emit seam', () => {
     const columns: Record<string, string> = {};
     let pos = 0;
     for (const st of statuses) {
-      const col = await db.boardColumn.create({
+      const col = await adminDb.boardColumn.create({
         data: {
           workspaceId: s.fx.workspaceId,
           projectId: s.fx.projectId,
@@ -503,7 +505,7 @@ describe('work-item/transitioned emit seam', () => {
         },
       });
       columns[st.key] = col.id;
-      await db.boardColumnStatus.create({
+      await adminDb.boardColumnStatus.create({
         data: {
           workspaceId: s.fx.workspaceId,
           projectId: s.fx.projectId,
@@ -585,7 +587,7 @@ describe('watcherNotify jobs — in-process runs', () => {
       `watcher-comment:${comment.id}:${s.watcher.id}`,
     );
 
-    const runs = await db.jobRun.findMany({
+    const runs = await adminDb.jobRun.findMany({
       where: { functionId: 'watcher-notify/comment.created' },
     });
     expect(runs).toHaveLength(1);
@@ -617,7 +619,7 @@ describe('watcherNotify jobs — in-process runs', () => {
       `watcher-transition:rev-e2e:${s.watcher.id}`,
     );
 
-    const runs = await db.jobRun.findMany({
+    const runs = await adminDb.jobRun.findMany({
       where: { functionId: 'watcher-notify/transitioned' },
     });
     expect(runs).toHaveLength(1);

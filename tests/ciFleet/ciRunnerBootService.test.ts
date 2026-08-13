@@ -24,6 +24,7 @@ import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
 import { _resetProvisioningInstallationCache } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken, randomInt } from '../helpers/random';
 
@@ -104,7 +105,7 @@ async function seedTenant(options: { withRunnerGroup?: boolean; email?: string }
     identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.withRunnerGroup !== false) {
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: project.id },
       data: {
         runnerGroupId: RUNNER_GROUP_ID,
@@ -125,7 +126,7 @@ async function seedIntent(
   fx: Fixture,
   overrides: { jobId?: string; projectId?: string | null } = {},
 ) {
-  return db.ciRunnerProvisioningIntent.create({
+  return adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -203,6 +204,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the happy path — ONE intent produces ONE ephemeral runner', () => {
@@ -240,7 +242,7 @@ describe('the happy path — ONE intent produces ONE ephemeral runner', () => {
       { handleId: fakeOrchestrator.provisioned[0]!.id, reason: 'job_completed' },
     ]);
 
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('completed');
@@ -283,7 +285,7 @@ describe('the happy path — ONE intent produces ONE ephemeral runner', () => {
       },
     });
 
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.bootLatencyMs).not.toBeNull();
@@ -342,7 +344,7 @@ describe('§7.3 — a project with NO runner group is REFUSED', () => {
       githubCalls.some((c) => JSON.stringify(c.body ?? {}).includes('"runner_group_id":1')),
     ).toBe(false);
 
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -375,7 +377,7 @@ describe('every failure path destroys the container — one test each', () => {
     expect(deleteRunnerCalls()).toHaveLength(1);
     expect(deleteRunnerCalls()[0]!.url).toMatch(/\/actions\/runners\/9001$/);
 
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -397,7 +399,7 @@ describe('every failure path destroys the container — one test each', () => {
     expect(fakeOrchestrator.teardowns).toEqual([
       { handleId: fakeOrchestrator.provisioned[0]!.id, reason: 'provision_failed' },
     ]);
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -418,7 +420,7 @@ describe('every failure path destroys the container — one test each', () => {
 
     expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.teardownReason).toBe('job_timed_out');
@@ -462,7 +464,7 @@ describe('every failure path destroys the container — one test each', () => {
     expect(outcome).toMatchObject({ outcome: 'settled', reason: 'job_timed_out' });
     describeSpy.mockRestore();
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.failureDetail).toContain('provider unreachable');
@@ -480,7 +482,7 @@ describe('every failure path destroys the container — one test each', () => {
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
 
     expect(outcome.outcome).toBe('provision_failed');
-    const stuck = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const stuck = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(stuck.status).toBe('running');
@@ -510,7 +512,7 @@ describe('the registration ceiling releases the claim rather than failing the jo
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
 
     expect(outcome).toEqual({ outcome: 'rate_limited', retryAfterSeconds: 25 });
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     // Back to pending: the next sweep retries it, which is a retry that costs
@@ -559,7 +561,7 @@ describe('a mint that BLOWS ITS DEADLINE is early, not broken (MOTIR-2011)', () 
     // Retryable, and NOT dead-lettered: with `retryPolicy: 'none'` a failed
     // outcome is where the job would stay.
     expect(outcome).toEqual({ outcome: 'rate_limited', retryAfterSeconds: null });
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(after.status).toBe('pending');
@@ -596,7 +598,7 @@ describe('a mint that BLOWS ITS DEADLINE is early, not broken (MOTIR-2011)', () 
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
 
     expect(outcome).toEqual({ outcome: 'rate_limited', retryAfterSeconds: null });
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(after.status).toBe('pending');
@@ -616,7 +618,7 @@ describe('a mint that BLOWS ITS DEADLINE is early, not broken (MOTIR-2011)', () 
     const outcome = await ciRunnerBootService.runIntent(intent.id, FAST);
 
     expect(outcome.outcome).toBe('provision_failed');
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(after.status).toBe('failed');
@@ -660,7 +662,7 @@ describe('the CLAIM is the concurrency guard', () => {
     expect(await ciRunnerBootService.runIntent(intent.id, FAST)).toEqual({
       outcome: 'not_configured',
     });
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(after.status).toBe('pending');
@@ -676,7 +678,7 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
     vi.stubEnv('MOTIR_FLEET_MAX_IN_FLIGHT', '1');
     const fx = await seedTenant();
     // One runner already in flight — the fleet is full.
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: (await seedIntent(fx, { jobId: '90001' })).id },
       data: { status: 'running' },
     });
@@ -688,7 +690,7 @@ describe('the ADMISSION GATE is consulted BEFORE anything is spent (MOTIR-1922)'
     expect(mintCalls()).toHaveLength(0);
     expect(fakeOrchestrator.provisioned).toHaveLength(0);
     // PENDING, so the next sweep retries it — queued, never failed.
-    const after = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const after = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: queued.id },
     });
     expect(after.status).toBe('pending');
@@ -723,7 +725,7 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
 
     const orphanId = fakeOrchestrator.provisioned[0]!.id;
     expect(fakeOrchestrator.liveContainerIds()).toEqual([orphanId]);
-    const inFlight = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const inFlight = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(inFlight.status).toBe('running');
@@ -736,7 +738,7 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
 
     expect(result.reaped).toBe(1);
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -766,7 +768,7 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
     // before the boot.
     const fx = await seedTenant();
     const intent = await seedIntent(fx);
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: intent.id },
       data: {
         status: 'provisioning',
@@ -780,7 +782,7 @@ describe('the REAPER — the backstop for the orchestrator crashing mid-flight',
 
     expect(result.staleClaims).toBe(1);
     expect(deleteRunnerCalls()).toHaveLength(1);
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -804,13 +806,13 @@ describe('the pending-intent seam', () => {
   it('lists pending intents oldest-QUEUED first, and nothing else', async () => {
     const fx = await seedTenant();
     const older = await seedIntent(fx, { jobId: '1' });
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: older.id },
       data: { queuedAt: new Date(QUEUED_AT.getTime() - 60_000) },
     });
     const newer = await seedIntent(fx, { jobId: '2' });
     const settledAlready = await seedIntent(fx, { jobId: '3' });
-    await db.ciRunnerProvisioningIntent.update({
+    await adminDb.ciRunnerProvisioningIntent.update({
       where: { id: settledAlready.id },
       data: { status: 'completed' },
     });
@@ -980,7 +982,7 @@ describe('the boot’s defensive paths', () => {
     // The intent tells the truth about WHICH image and WHAT the registry said —
     // this is the row the operator surface renders, so the diagnosis has to
     // survive into it rather than living only in a log line.
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -1011,7 +1013,7 @@ describe('the boot’s defensive paths', () => {
       detail: expect.stringContaining('could not mint a JIT config'),
     });
     expect(fakeOrchestrator.provisioned).toEqual([]);
-    const settled = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({
+    const settled = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
       where: { id: intent.id },
     });
     expect(settled.status).toBe('failed');
@@ -1053,7 +1055,8 @@ describe('the boot’s defensive paths', () => {
     expect(mintCalls()).toEqual([]);
     // Released, so a configured instance can take it.
     expect(
-      (await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intent.id } })).status,
+      (await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intent.id } }))
+        .status,
     ).toBe('pending');
   });
 
@@ -1109,7 +1112,7 @@ describe('the REAPER’s attribution resolver refuses what it cannot attribute',
     fx: Fixture,
     overrides: { projectId?: string | null; jobId?: string; githubRunnerId?: number | null } = {},
   ) {
-    const intent = await db.ciRunnerProvisioningIntent.create({
+    const intent = await adminDb.ciRunnerProvisioningIntent.create({
       data: {
         workspaceId: fx.workspaceId,
         organizationId: fx.organizationId,
@@ -1324,7 +1327,9 @@ describe('the boot path is three bounded phases, not one long one', () => {
     // the same three guarantees the `finally` used to hold.
     expect(fakeOrchestrator.liveContainerIds()).toEqual([]);
     expect(deleteRunnerCalls()).toHaveLength(1);
-    const row = await db.ciRunnerProvisioningIntent.findUniqueOrThrow({ where: { id: intent.id } });
+    const row = await adminDb.ciRunnerProvisioningIntent.findUniqueOrThrow({
+      where: { id: intent.id },
+    });
     expect(row.status).toBe('completed');
     expect(row.settledAt).not.toBeNull();
   });

@@ -1,6 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
-import type { AutomationExecutionStatus } from '@/generated/prisma/client';
+import type { AutomationExecutionStatus, Prisma } from '@/generated/prisma/client';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { usersService } from '@/lib/services/usersService';
@@ -11,6 +11,7 @@ import { AutomationRuleNotFoundError } from '@/lib/automation/errors';
 import { AUTOMATION_EXECUTIONS_PAGE_SIZE } from '@/lib/services/automationRulesService';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures';
 import type { WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Read-side tests for the automation audit log (Story 6.6 · Subtask 6.6.6):
@@ -30,13 +31,14 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Create an automation rule directly (the engine writes executions against it;
  * this read suite doesn't exercise the create path — the service tests own it).
  * Returns the rule id. */
 async function seedRule(fx: WorkItemFixture, name = 'Rule'): Promise<string> {
-  const row = await db.automationRule.create({
+  const row = await adminDb.automationRule.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -64,7 +66,7 @@ async function seedExecution(
     createdAt?: Date;
   },
 ): Promise<string> {
-  const row = await db.automationRuleExecution.create({
+  const row = await adminDb.automationRuleExecution.create({
     data: {
       ruleId,
       status: opts.status,
@@ -208,7 +210,7 @@ describe('listExecutions — tombstone (since-deleted triggering item)', () => {
 
     // Delete the item — the FK is SetNull, so the execution row survives with a
     // null work_item_id (the key is unrecoverable → the UI renders a tombstone).
-    await db.workItem.delete({ where: { id: item.id } });
+    await adminDb.workItem.delete({ where: { id: item.id } });
 
     const page = await automationRulesService.listExecutions(
       fx.projectIdentifier,
@@ -300,8 +302,21 @@ describe('list — lastRun attach (latest per rule)', () => {
 });
 
 describe('automationRuleExecutionRepository — direct', () => {
-  it('findLatestByRuleIds short-circuits empty input to []', async () => {
-    expect(await automationRuleExecutionRepository.findLatestByRuleIds([])).toEqual([]);
+  it('findLatestByRuleIds short-circuits empty input to [] without touching the client', async () => {
+    // `tx` is required, but the empty-input arm must return before it is used —
+    // that is the claim under test. Passing a client whose every method throws
+    // proves no SQL is issued, which a real `tx` could not distinguish from a
+    // query that happened to return no rows.
+    const exploding = new Proxy(
+      {},
+      {
+        get() {
+          throw new Error('findLatestByRuleIds([]) issued SQL — the short-circuit is gone');
+        },
+      },
+    ) as Prisma.TransactionClient;
+
+    expect(await automationRuleExecutionRepository.findLatestByRuleIds([], exploding)).toEqual([]);
   });
 
   it('listByRule joins the work item identifier + title', async () => {

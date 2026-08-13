@@ -9,6 +9,7 @@ import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { buildMcpServer } from '@/lib/mcp/registry';
 import { runDeleteWorkItem } from '@/lib/mcp/tools/deleteWorkItem';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MCP `delete_work_item` (Subtask 2.8.5) over real Postgres. The tool is a thin
@@ -29,6 +30,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect an in-memory MCP client to a server bound to `ctx`. */

@@ -3,6 +3,7 @@ import type { AiAccessDTO } from '@/lib/dto/aiAccess';
 import type { WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from './fixtures';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 import type { TokenScope } from '@/lib/mcp/scopes';
@@ -93,7 +94,9 @@ let story: WorkItem;
 beforeEach(async () => {
   aiAccess.current = access({ applicable: false, organizationId: null });
   blobHead.current = { size: 1024, contentType: 'video/webm' };
-  await db.$executeRawUnsafe(
+  // TRUNCATE requires table OWNERSHIP, which the runtime role must never have —
+  // the admin client is the only one that can reset between tests.
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "acceptance_evidence", "attachment" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -103,6 +106,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('POST acceptance-evidence (register)', () => {
@@ -117,7 +121,7 @@ describe('POST acceptance-evidence (register)', () => {
     expect(body.evidence.status).toBe('pending');
     expect(body.evidence.workItemId).toBe(story.id);
 
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: story.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: story.id } });
     expect(row.status).not.toBe('done');
   });
 
@@ -185,7 +189,8 @@ describe('POST acceptance-evidence (register)', () => {
       paramsFor(story),
     );
     expect(res.status).toBe(400);
-    expect(await db.acceptanceEvidence.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 
   it('a pathname whose blob does not exist → 400 (head confirms the upload)', async () => {
@@ -193,7 +198,8 @@ describe('POST acceptance-evidence (register)', () => {
     const token = await integrationToken(fx);
     const res = await POST(publishReq(token, { videoPathname: videoPathname() }), paramsFor(story));
     expect(res.status).toBe(400);
-    expect(await db.acceptanceEvidence.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 
   it('unknown story key → 404', async () => {
@@ -213,14 +219,15 @@ describe('POST acceptance-evidence (register)', () => {
   });
 
   it('org has no paid plan → 402 no_plan (no evidence)', async () => {
-    const ws = await db.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
+    const ws = await adminDb.workspace.findUniqueOrThrow({ where: { id: fx.workspaceId } });
     aiAccess.current = access({ organizationId: ws.organizationId, hasPaidAiPlan: false });
     const token = await integrationToken(fx);
     const res = await POST(publishReq(token, { videoPathname: videoPathname() }), paramsFor(story));
     expect(res.status).toBe(402);
     const body = (await res.json()) as { reason: string };
     expect(body.reason).toBe('no_plan');
-    expect(await db.acceptanceEvidence.count()).toBe(0);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count();
+    expect(acceptanceEvidenceCount).toBe(0);
   });
 
   it('idempotent redelivery — same commit twice → one current, same evidence', async () => {
@@ -245,6 +252,9 @@ describe('POST acceptance-evidence (register)', () => {
     const secondBody = (await second.json()) as { evidence: { id: string } };
 
     expect(secondBody.evidence.id).toBe(firstBody.evidence.id);
-    expect(await db.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(1);
+    const acceptanceEvidenceCount = await adminDb.acceptanceEvidence.count({
+      where: { workItemId: story.id },
+    });
+    expect(acceptanceEvidenceCount).toBe(1);
   });
 });

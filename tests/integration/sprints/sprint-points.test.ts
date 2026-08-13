@@ -4,6 +4,7 @@ import { backlogService } from '@/lib/services/backlogService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkspaceContext } from '@/lib/workspaces';
 
@@ -35,7 +36,7 @@ function req(id: string): Promise<Response> {
 /** Give an issue a story-point estimate directly (mirrors the sibling
  *  start-sprint integration test's helper). */
 async function setPoints(itemId: string, points: number): Promise<void> {
-  await db.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
+  await adminDb.workItem.update({ where: { id: itemId }, data: { storyPoints: points } });
 }
 
 beforeEach(async () => {
@@ -45,6 +46,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/sprints/[id]/points', () => {

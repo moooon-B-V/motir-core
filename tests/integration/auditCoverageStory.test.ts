@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { db } from '@/lib/db';
 import type { RawCodeAuditSurface } from '@/lib/ai/motirAiClient';
+import { adminDb } from '../helpers/adminDb';
 
 // The STORY gate for MOTIR-2244 (MOTIR-2252).
 //
@@ -108,6 +109,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── SEAM 1 · the scoped trigger's targets → the submitted job envelopes ──────

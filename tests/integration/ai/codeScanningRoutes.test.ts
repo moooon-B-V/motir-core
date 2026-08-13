@@ -7,6 +7,7 @@ import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { GET as analysesGET } from '@/app/api/internal/ai/code-scanning/analyses/route';
 import { GET as sarifGET } from '@/app/api/internal/ai/code-scanning/sarif/route';
 import { createTestWorkspace, createTestProject } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
 
@@ -38,6 +39,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function req(path: string, opts: { bearer?: string; token?: string }): Request {

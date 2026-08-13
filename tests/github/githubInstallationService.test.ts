@@ -8,6 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { githubInstallationRepository } from '@/lib/repositories/githubInstallationRepository';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import type { NormalizedRepo } from '@/lib/git/types';
 
@@ -68,6 +69,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('githubInstallationService.persistInstallation + getWorkspaceInstallation', () => {
@@ -282,7 +284,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
   /** The ledger row that MEANS "this repo has a code graph" — a succeeded
    *  `system.code-graph-index` run carrying the repo's `output.repoRef`. */
   async function seedSucceededIndex(workspaceId: string, repoRef: string): Promise<void> {
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId,
         functionId: 'system.code-graph-index',
@@ -370,7 +372,7 @@ describe('githubInstallationService.bindInstallationForWorkspace', () => {
       installation: { installationId: 'inst-bind', accountLogin: 'moooon', accountType: 'User' },
       repos: [REPO_A],
     });
-    await db.jobRun.create({
+    await adminDb.jobRun.create({
       data: {
         workspaceId: workspace.id,
         functionId: 'system.code-graph-index',

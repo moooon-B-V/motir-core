@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Subtask 1.2.4 — auto-create a default workspace on user signup.
@@ -26,10 +27,11 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function workspacesForUser(userId: string) {
-  return db.workspaceMembership.findMany({
+  return adminDb.workspaceMembership.findMany({
     where: { userId },
     include: { workspace: true },
     orderBy: { createdAt: 'asc' },
@@ -47,7 +49,7 @@ describe('email/password sign-up (Better-Auth databaseHooks)', () => {
       headers: { origin: BASE_URL },
     });
 
-    const user = await db.user.findUnique({ where: { email: 'alice@example.com' } });
+    const user = await adminDb.user.findUnique({ where: { email: 'alice@example.com' } });
     expect(user).not.toBeNull();
 
     const memberships = await workspacesForUser(user!.id);
@@ -58,7 +60,8 @@ describe('email/password sign-up (Better-Auth databaseHooks)', () => {
     expect(memberships[0]!.workspace.slug).toBe('alice-s-workspace');
 
     // Exactly one workspace row total — the hook didn't double-fire.
-    expect(await db.workspace.count()).toBe(1);
+    const workspaceCount = await adminDb.workspace.count();
+    expect(workspaceCount).toBe(1);
   });
 });
 
@@ -79,7 +82,8 @@ describe('Google new-user sign-up (same databaseHook, OAuth path)', () => {
     // findOrCreateOAuthUser does NOT route through Better-Auth's hooked
     // adapter, so no workspace exists yet — mirror the post-commit hook
     // Better-Auth would fire after its own OAuth user insert.
-    expect(await db.workspace.count()).toBe(0);
+    const workspaceCount = await adminDb.workspace.count();
+    expect(workspaceCount).toBe(0);
 
     const afterHook = auth.options.databaseHooks?.user?.create?.after;
     expect(afterHook).toBeTypeOf('function');
@@ -90,7 +94,8 @@ describe('Google new-user sign-up (same databaseHook, OAuth path)', () => {
     const memberships = await workspacesForUser(gUser.id);
     expect(memberships).toHaveLength(1);
     expect(memberships[0]!.workspace.name).toBe("Georgia's Workspace");
-    expect(await db.workspace.count()).toBe(1);
+    const workspaceCount2 = await adminDb.workspace.count();
+    expect(workspaceCount2).toBe(1);
   });
 });
 
@@ -105,7 +110,7 @@ describe('email-first user who later links Google', () => {
       },
       headers: { origin: BASE_URL },
     });
-    const user = await db.user.findUnique({ where: { email: 'overlap@example.com' } });
+    const user = await adminDb.user.findUnique({ where: { email: 'overlap@example.com' } });
     expect(user).not.toBeNull();
     expect(await workspacesForUser(user!.id)).toHaveLength(1);
 
@@ -122,12 +127,13 @@ describe('email-first user who later links Google', () => {
     });
     expect(linked.id).toBe(user!.id);
 
-    const accounts = await db.account.findMany({ where: { userId: user!.id } });
+    const accounts = await adminDb.account.findMany({ where: { userId: user!.id } });
     expect(accounts.map((a) => a.providerId).sort()).toEqual(['credential', 'google']);
 
     // Still exactly one workspace — the pre-existing one is preserved.
     expect(await workspacesForUser(user!.id)).toHaveLength(1);
-    expect(await db.workspace.count()).toBe(1);
+    const workspaceCount = await adminDb.workspace.count();
+    expect(workspaceCount).toBe(1);
   });
 });
 
@@ -176,7 +182,8 @@ describe('workspacesService.ensureDefaultWorkspace (lazy self-heal)', () => {
     // Same workspace returned both times; no duplicate row.
     expect(second.workspace.id).toBe(first.workspace.id);
     expect(await workspacesForUser(user.id)).toHaveLength(1);
-    expect(await db.workspace.count()).toBe(1);
+    const workspaceCount = await adminDb.workspace.count();
+    expect(workspaceCount).toBe(1);
   });
 
   it('returns the existing workspace without creating a second when one already exists', async () => {
@@ -195,7 +202,8 @@ describe('workspacesService.ensureDefaultWorkspace (lazy self-heal)', () => {
       userName: user.name,
     });
     expect(ensured.workspace.id).toBe(created.workspace.id);
-    expect(await db.workspace.count()).toBe(1);
+    const workspaceCount = await adminDb.workspace.count();
+    expect(workspaceCount).toBe(1);
   });
 
   it('survives concurrent first-calls without creating duplicate workspaces', async () => {
@@ -215,6 +223,7 @@ describe('workspacesService.ensureDefaultWorkspace (lazy self-heal)', () => {
 
     expect(a.workspace.id).toBe(b.workspace.id);
     expect(await workspacesForUser(user.id)).toHaveLength(1);
-    expect(await db.workspace.count()).toBe(1);
+    const workspaceCount = await adminDb.workspace.count();
+    expect(workspaceCount).toBe(1);
   });
 });

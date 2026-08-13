@@ -13,6 +13,7 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import {
   createActionsVariableFake,
@@ -181,10 +182,10 @@ async function addMember(
     login?: string | null;
   },
 ): Promise<string> {
-  const user = await db.user.create({
+  const user = await adminDb.user.create({
     data: { name: opts.email.split('@')[0]!, email: opts.email, emailVerified: true },
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: {
       userId: user.id,
       workspaceId: fx.workspaceId,
@@ -192,7 +193,7 @@ async function addMember(
     },
   });
   if (opts.projectRole) {
-    await db.projectMembership.create({
+    await adminDb.projectMembership.create({
       data: {
         userId: user.id,
         projectId: fx.projectId,
@@ -267,6 +268,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('who is invitable — the shipped canEdit policy, not a membership query', () => {
@@ -322,7 +324,7 @@ describe('who is invitable — the shipped canEdit policy, not a membership quer
 
   it('scopes a `private` project to its own members', async () => {
     const fx = await makeWorkItemFixture();
-    await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'private' } });
     await connectGithub(fx.ownerId, OWNER_LOGIN, '4242');
     // In the workspace but NOT on the project: on `private` they cannot even
     // browse it, so they are not a candidate for its code.
@@ -507,12 +509,12 @@ describe('rows and members are independent', () => {
       { role: 'web', name: 'their-own-repo' },
       fx.ctx,
     );
-    const repo = await db.githubRepo.create({
+    const repo = await adminDb.githubRepo.create({
       data: {
         provider: 'github',
         workspaceId: fx.workspaceId,
         installationId: (
-          await db.githubInstallation.create({
+          await adminDb.githubInstallation.create({
             data: {
               workspaceId: fx.workspaceId,
               installationId: '999',

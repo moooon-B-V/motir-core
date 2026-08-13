@@ -2,6 +2,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Cross-tenant isolation on the conversation tables, proven AT THE DATABASE
@@ -48,10 +49,10 @@ async function asAppRole<T>(
  *  what is under test — the READ/WRITE isolation is). */
 async function seedConversations(): Promise<void> {
   const make = async (fx: WorkItemFixture, body: string) => {
-    const session = await db.planChangeSession.create({
+    const session = await adminDb.planChangeSession.create({
       data: { workspaceId: fx.workspaceId, projectId: fx.projectId, createdById: fx.ownerId },
     });
-    await db.planChangeTurn.create({
+    await adminDb.planChangeTurn.create({
       data: {
         workspaceId: fx.workspaceId,
         sessionId: session.id,
@@ -61,7 +62,7 @@ async function seedConversations(): Promise<void> {
         authorId: fx.ownerId,
       },
     });
-    await db.planChangeSession.update({
+    await adminDb.planChangeSession.update({
       where: { id: session.id },
       data: { turnCount: 1 },
     });
@@ -80,6 +81,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('plan_change_session RLS — reads', () => {
@@ -152,7 +154,10 @@ describe('plan_change_session RLS — writes', () => {
     ).rejects.toThrow(/[Ff]oreign key/);
 
     // Nothing landed: B's thread still holds exactly its own single turn.
-    expect(await db.planChangeTurn.count({ where: { sessionId: sessionB.id } })).toBe(1);
+    const planChangeTurnCount = await adminDb.planChangeTurn.count({
+      where: { sessionId: sessionB.id },
+    });
+    expect(planChangeTurnCount).toBe(1);
   });
 
   it('tenant A cannot RE-POINT one of its own turns at tenant B’s session', async () => {
@@ -181,9 +186,12 @@ describe('plan_change_session RLS — writes', () => {
       ),
     ).rejects.toThrow(/[Ff]oreign key/);
 
-    const after = await db.planChangeTurn.findUniqueOrThrow({ where: { id: own.id } });
+    const after = await adminDb.planChangeTurn.findUniqueOrThrow({ where: { id: own.id } });
     expect(after.sessionId).toBe(sessionA.id);
-    expect(await db.planChangeTurn.count({ where: { sessionId: sessionB.id } })).toBe(1);
+    const planChangeTurnCount = await adminDb.planChangeTurn.count({
+      where: { sessionId: sessionB.id },
+    });
+    expect(planChangeTurnCount).toBe(1);
   });
 
   it('tenant A’s DELETE of tenant B’s TURNS removes nothing', async () => {
@@ -193,7 +201,10 @@ describe('plan_change_session RLS — writes', () => {
       tx.planChangeTurn.deleteMany({ where: { sessionId: sessionB.id } }),
     );
     expect(result.count).toBe(0);
-    expect(await db.planChangeTurn.count({ where: { sessionId: sessionB.id } })).toBe(1);
+    const planChangeTurnCount = await adminDb.planChangeTurn.count({
+      where: { sessionId: sessionB.id },
+    });
+    expect(planChangeTurnCount).toBe(1);
   });
 
   it('after a planting ATTEMPT, tenant B’s next append still succeeds — no wedged seq', async () => {
@@ -254,7 +265,10 @@ describe('plan_change_session RLS — writes', () => {
       ),
     ).rejects.toThrow();
 
-    expect(await db.planChangeSession.count({ where: { workspaceId: b.workspaceId } })).toBe(1);
+    const planChangeSessionCount = await adminDb.planChangeSession.count({
+      where: { workspaceId: b.workspaceId },
+    });
+    expect(planChangeSessionCount).toBe(1);
   });
 
   it('tenant A’s UPDATE of tenant B’s conversation touches nothing', async () => {
@@ -268,7 +282,7 @@ describe('plan_change_session RLS — writes', () => {
     );
     expect(result.count).toBe(0);
 
-    const untouched = await db.planChangeSession.findUnique({ where: { id: sessionB.id } });
+    const untouched = await adminDb.planChangeSession.findUnique({ where: { id: sessionB.id } });
     expect(untouched?.lastJobId).toBeNull();
   });
 
@@ -277,7 +291,10 @@ describe('plan_change_session RLS — writes', () => {
       tx.planChangeSession.deleteMany({ where: { id: sessionB.id } }),
     );
     expect(result.count).toBe(0);
-    expect(await db.planChangeSession.count({ where: { id: sessionB.id } })).toBe(1);
+    const planChangeSessionCount = await adminDb.planChangeSession.count({
+      where: { id: sessionB.id },
+    });
+    expect(planChangeSessionCount).toBe(1);
   });
 
   it('tenant A CAN write its own thread — the policy gates, it does not block', async () => {
@@ -296,6 +313,9 @@ describe('plan_change_session RLS — writes', () => {
       }),
     );
     expect(turn.seq).toBe(1);
-    expect(await db.planChangeTurn.count({ where: { sessionId: sessionA.id } })).toBe(2);
+    const planChangeTurnCount = await adminDb.planChangeTurn.count({
+      where: { sessionId: sessionA.id },
+    });
+    expect(planChangeTurnCount).toBe(2);
   });
 });

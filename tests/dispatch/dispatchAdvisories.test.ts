@@ -8,6 +8,7 @@ import { runDispatchPrompt } from '@/lib/mcp/tools/dispatchPrompt';
 import { runClaimNextReady } from '@/lib/mcp/tools/claimNextReady';
 import type { ExecutorDto, WorkItemProseAdvisoryDto, WorkItemTypeDto } from '@/lib/dto/workItems';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -39,6 +40,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** A `[label](motir:<id>)` reference token — the shipped chip form every card in
@@ -121,7 +123,7 @@ describe('buildDispatchProseAdvisories — the single-card resolver', () => {
     // advisory scans. That auto-written edge is exactly what made MOTIR-2075 look
     // wired while the ready set saw nothing — the card carries a real link, just
     // not the kind that gates.
-    const links = await db.workItemLink.findMany({ where: { fromId: card.id } });
+    const links = await adminDb.workItemLink.findMany({ where: { fromId: card.id } });
     expect(links.map((l) => l.kind)).toEqual(['relates_to']);
 
     const advisories = await buildDispatchProseAdvisories(card, fx.ctx);
@@ -343,7 +345,7 @@ describe('claim_next_ready — the advisories reach the PLANNER AGENT', () => {
   /** Create a sprint holding the given items and START it. */
   async function activeSprintWith(fx: WorkItemFixture, itemIds: string[]): Promise<void> {
     const sprint = await sprintsService.createSprint(fx.projectId, { name: 'Active' }, fx.ctx);
-    await db.workItem.updateMany({
+    await adminDb.workItem.updateMany({
       where: { id: { in: itemIds } },
       data: { sprintId: sprint.id },
     });
@@ -369,7 +371,7 @@ describe('claim_next_ready — the advisories reach the PLANNER AGENT', () => {
     expect(struct.item?.key).toBe(card.identifier);
     expect(keys(struct.advisories)).toEqual([substrate.identifier]);
     // The claim IS the status flip, advisory or not.
-    const row = await db.workItem.findUniqueOrThrow({ where: { id: card.id } });
+    const row = await adminDb.workItem.findUniqueOrThrow({ where: { id: card.id } });
     expect(row.status).toBe('in_progress');
     const text = (res.content as { text: string }[])[0]!.text;
     expect(text).toContain('Advisory (NOT a blocker');
@@ -617,7 +619,7 @@ describe('the ORDERING advisory — a card whose criterion turns on its OWN merg
  *  validation reads. */
 async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'): Promise<void> {
   const installationId = `inst-${fx.workspaceId}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -628,7 +630,7 @@ async function connectRepo(fx: WorkItemFixture, name: string, owner = 'moooon'):
     },
     update: {},
   });
-  await db.githubRepo.create({
+  await adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: fx.workspaceId,

@@ -6,6 +6,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 // Service-layer tests for the Story 6.4 · Subtask 6.4.6 UI-gating BACKING
@@ -26,6 +27,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function ctxFor(userId: string, workspaceId: string): WorkspaceContext {

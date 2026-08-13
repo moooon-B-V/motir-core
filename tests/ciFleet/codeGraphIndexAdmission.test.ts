@@ -19,6 +19,7 @@ import {
 } from '@/lib/ciFleet/limits';
 import { withSystemContext } from '@/lib/workspaces/context';
 import { MOTIR_RUNNER_LABEL } from '@/lib/ciFleet/config';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomInt } from '../helpers/random';
 
@@ -74,7 +75,7 @@ async function seedTenant(options: { isMeta?: boolean } = {}): Promise<Fixture> 
     identifier: `A${randomInt(100, 1000)}`,
   });
   if (options.isMeta) {
-    await db.organization.update({
+    await adminDb.organization.update({
       where: { id: workspace.organizationId },
       data: { isMeta: true },
     });
@@ -134,7 +135,7 @@ let jobSeq = 0;
 /** A queued CI job — the OTHER workload on the same invoice. */
 async function seedIntent(fx: Fixture, overrides: { status?: string } = {}) {
   jobSeq += 1;
-  return db.ciRunnerProvisioningIntent.create({
+  return adminDb.ciRunnerProvisioningIntent.create({
     data: {
       workspaceId: fx.workspaceId,
       organizationId: fx.organizationId,
@@ -172,7 +173,7 @@ function stubMotirAi(balance = 1_000): void {
 
 beforeEach(async () => {
   await truncateAuthTables();
-  await db.fleetInFlightSlot.deleteMany({});
+  await adminDb.fleetInFlightSlot.deleteMany({});
   vi.setSystemTime(NOW);
   vi.stubEnv('MOTIR_CLOUD', 'true');
   vi.stubEnv('GITHUB_FALLBACK_ORG', MOTIR_ORG);
@@ -193,6 +194,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── The numbers are CONFIG, and the per-tenant one is DERIVED ────────────────
@@ -327,7 +329,7 @@ describe('the GLOBAL cap and the PER-WORKSPACE cap', () => {
     const second = await projectsService.createProject({
       workspaceId: fx.workspaceId,
       actorUserId: (
-        await db.workspaceMembership.findFirstOrThrow({
+        await adminDb.workspaceMembership.findFirstOrThrow({
           where: { workspaceId: fx.workspaceId },
         })
       ).userId,
@@ -570,7 +572,8 @@ describe('the index gate fails CLOSED', () => {
     expect(await admit(fx)).toMatchObject({ outcome: 'deferred', reason: 'gate_unavailable' });
     expect(error).toHaveBeenCalled();
     // The transaction rolled back, so no slot was taken either.
-    expect(await db.fleetInFlightSlot.count()).toBe(0);
+    const fleetInFlightSlotCount = await adminDb.fleetInFlightSlot.count();
+    expect(fleetInFlightSlotCount).toBe(0);
   });
 
   it('DECLINES when the per-WORKSPACE count throws', async () => {

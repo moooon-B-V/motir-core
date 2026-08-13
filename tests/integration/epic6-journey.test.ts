@@ -21,6 +21,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { projectMembersService } from '@/lib/services/projectMembersService';
 import type { AutomationRuleWriteInput } from '@/lib/services/automationRulesService';
 import { createTestUser, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
@@ -66,6 +67,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // ── Team fixture: owner + an enrolled project admin + a read-only viewer ──────
@@ -357,7 +359,10 @@ describe('the rule-firing transaction seams', () => {
     const replay = await transitionedTo(fx, item.id, 'in_progress', eventId);
     expect(replay.deduped).toBe(1);
 
-    expect(await db.automationRuleExecution.count({ where: { ruleId: rule.id } })).toBe(1);
+    const automationRuleExecutionCount = await adminDb.automationRuleExecution.count({
+      where: { ruleId: rule.id },
+    });
+    expect(automationRuleExecutionCount).toBe(1);
     expect((await workItemsService.getWorkItem(item.id, fx.ctx)).priority).toBe('highest');
   });
 
@@ -375,7 +380,7 @@ describe('the rule-firing transaction seams', () => {
     const summary = await transitionedTo(t.fx, item.id, 'in_progress', `attr-${(evtSeq += 1)}`);
     expect(summary).toMatchObject({ matched: 1, succeeded: 1 });
 
-    const updates = await db.workItemRevision.findMany({
+    const updates = await adminDb.workItemRevision.findMany({
       where: { workItemId: item.id, changeKind: 'updated' },
     });
     const priorityRev = updates.find(
@@ -413,12 +418,19 @@ describe('the rule-firing transaction seams', () => {
       eventId: `del-${(evtSeq += 1)}`,
     });
     expect(run).toMatchObject({ matched: 1, succeeded: 1 });
-    expect(await db.automationRuleExecution.count({ where: { ruleId: rule.id } })).toBe(1);
+    const automationRuleExecutionCount = await adminDb.automationRuleExecution.count({
+      where: { ruleId: rule.id },
+    });
+    expect(automationRuleExecutionCount).toBe(1);
 
     await automationRulesService.delete(fx.projectIdentifier, rule.id, fx.ctx);
 
     // FK onDelete: Cascade — the audit rows go with the rule, none orphaned.
-    expect(await db.automationRuleExecution.count({ where: { ruleId: rule.id } })).toBe(0);
-    expect(await db.automationRule.count({ where: { id: rule.id } })).toBe(0);
+    const automationRuleExecutionCount2 = await adminDb.automationRuleExecution.count({
+      where: { ruleId: rule.id },
+    });
+    expect(automationRuleExecutionCount2).toBe(0);
+    const automationRuleCount = await adminDb.automationRule.count({ where: { id: rule.id } });
+    expect(automationRuleCount).toBe(0);
   });
 });

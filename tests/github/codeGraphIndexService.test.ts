@@ -8,6 +8,7 @@ import { githubInstallationService } from '@/lib/services/githubInstallationServ
 import { codeGraphIndexService } from '@/lib/services/codeGraphIndexService';
 import * as motirAiClient from '@/lib/ai/motirAiClient';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.5 · MOTIR-1500 — the code-graph index service, the producer half. Real
@@ -65,6 +66,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('codeGraphIndexService — resolve, then index one project per step', () => {
@@ -168,7 +170,7 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
 
     // Auto-created workspaces may seed a default project; remove any so the
     // "no projects" branch is exercised deterministically.
-    await db.project.deleteMany({ where: { workspaceId: workspace.id } });
+    await adminDb.project.deleteMany({ where: { workspaceId: workspace.id } });
 
     const fetchMock = stubGithubTarball();
 
@@ -238,7 +240,7 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
     });
     // How a GitLab connection is really stored: the same entity under a different
     // discriminator (`gitlabConnectionService` writes `provider: 'gitlab'`).
-    await db.githubInstallation.update({
+    await adminDb.githubInstallation.update({
       where: { installationId: 'inst-gitlab' },
       data: { provider: 'gitlab' },
     });
@@ -299,7 +301,7 @@ describe('codeGraphIndexService — resolve, then index one project per step', (
         },
       ],
     });
-    await db.githubInstallation.update({
+    await adminDb.githubInstallation.update({
       where: { installationId: 'inst-unknown' },
       data: { provider: 'bitbucket' },
     });

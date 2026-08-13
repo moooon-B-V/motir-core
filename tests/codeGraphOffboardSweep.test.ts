@@ -16,6 +16,7 @@ import {
 } from '@/lib/services/codeGraphOffboardSweepService';
 import { codeGraphOffboardingService } from '@/lib/services/codeGraphOffboardingService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from './helpers/adminDb';
 import { truncateCodeGraphOffboarding, truncateJobRuns } from './helpers/db';
 
 // THE OFFBOARDING SWEEP (MOTIR-2168 ·
@@ -365,7 +366,7 @@ describe('the scheduled job (in-process Inngest run)', () => {
     });
     expect(await allRows()).toEqual([]);
 
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.functionId).toBe('system.code-graph-offboard-sweep');

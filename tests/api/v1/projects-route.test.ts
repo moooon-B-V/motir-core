@@ -1,6 +1,5 @@
 import type { Workspace } from '@/generated/prisma/client';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { db } from '@/lib/db';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { GET as GET_LIST } from '@/app/api/v1/projects/route';
 import { GET as GET_ONE } from '@/app/api/v1/projects/[projectKey]/route';
@@ -8,6 +7,7 @@ import { projectSchema, type V1Project } from '@/lib/api/v1/projects/schema';
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { createTestUser } from '../../fixtures/userFixtures';
 import { createV1Caller, createV1ProjectCaller, withTokenFor } from '../../fixtures/apiV1Fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // GET /api/v1/projects + GET /api/v1/projects/{projectKey} (Story 11.3 ·
@@ -213,7 +213,7 @@ describe('GET /api/v1/projects', () => {
     });
     // Make it private AND drop the owner's project membership, so the browse
     // gate is the only thing standing between the caller and the row.
-    await db.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
     const member = await memberCaller(caller.workspace);
 
     const page = await fetchPage(member.headers);
@@ -237,7 +237,7 @@ describe('GET /api/v1/projects', () => {
       actorUserId: caller.user.id,
       identifier: 'GONE',
     });
-    await db.project.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
+    await adminDb.project.update({ where: { id: gone.id }, data: { archivedAt: new Date() } });
 
     const page = await fetchPage(caller.headers);
 
@@ -303,7 +303,7 @@ describe('GET /api/v1/projects/{projectKey}', () => {
       actorUserId: caller.user.id,
       identifier: 'SECRET',
     });
-    await db.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
+    await adminDb.project.update({ where: { id: secret.id }, data: { accessLevel: 'private' } });
     const member = await memberCaller(caller.workspace);
 
     const res = await GET_ONE(oneReq(member.headers, 'SECRET'), params('SECRET'));
@@ -326,7 +326,7 @@ describe('GET /api/v1/projects/{projectKey}', () => {
     // The list filters archived rows out; a by-key read can still reach one, and
     // a client that could not tell would treat a dead project as live.
     const caller = await createV1ProjectCaller({ scopes: ['read'] });
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: caller.fixture.projectId },
       data: { archivedAt: new Date() },
     });

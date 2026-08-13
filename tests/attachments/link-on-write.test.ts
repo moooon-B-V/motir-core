@@ -8,6 +8,7 @@ import { attachmentRepository } from '@/lib/repositories/attachmentRepository';
 import { commentRepository } from '@/lib/repositories/commentRepository';
 import { attachmentContentPath } from '@/lib/blob/referencedUrls';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Link-on-write integration tests (Story 5.2 · Subtask 5.2.3) against a REAL
@@ -19,7 +20,7 @@ import { truncateAuthTables } from '../helpers/db';
 // is the one stubbed external (the tests/helpers/jobs.ts pattern).
 
 beforeEach(async () => {
-  await db.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
+  await adminDb.$executeRawUnsafe('TRUNCATE TABLE "attachment" RESTART IDENTITY CASCADE');
   await truncateAuthTables();
   vi.spyOn(inngest, 'send').mockResolvedValue({ ids: [] });
 });
@@ -30,6 +31,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 let uploadSeq = 0;
@@ -42,7 +44,9 @@ async function createUpload(
 ): Promise<Attachment> {
   uploadSeq += 1;
   const blobPathname = `attachments/${fx.workspaceId}/${filename}-${uploadSeq}`;
-  return db.$transaction((tx: Prisma.TransactionClient) =>
+  // A SEED through the repository edge — admin client (MOTIR-2751), so the upload
+  // this test links FROM can never be the thing that fails.
+  return adminDb.$transaction((tx: Prisma.TransactionClient) =>
     attachmentRepository.create(
       {
         workspaceId: fx.workspaceId,
@@ -57,10 +61,10 @@ async function createUpload(
   );
 }
 
-const reloaded = (id: string) => db.attachment.findUniqueOrThrow({ where: { id } });
+const reloaded = (id: string) => adminDb.attachment.findUniqueOrThrow({ where: { id } });
 
 const updatedRevisions = (workItemId: string) =>
-  db.workItemRevision.findMany({
+  adminDb.workItemRevision.findMany({
     where: { workItemId, changeKind: 'updated' },
     orderBy: { changedAt: 'asc' },
   });
@@ -108,7 +112,8 @@ describe('createWorkItem — link-on-write', () => {
     });
 
     expect((await reloaded(foreignRow.id)).workItemId).toBeNull();
-    expect(await db.attachment.count({ where: { workItemId: dto.id } })).toBe(0);
+    const attachmentCount = await adminDb.attachment.count({ where: { workItemId: dto.id } });
+    expect(attachmentCount).toBe(0);
   });
 });
 
@@ -217,7 +222,9 @@ describe('updateWorkItem — link-on-write', () => {
     const fx = await makeWorkItemFixture();
     const upload = await createUpload(fx, 'panel.png');
     const dto = await createIssue(fx);
-    await db.$transaction((tx) =>
+    // Also a seed: the assertion below is about what `updateWorkItem` does with an
+    // already-linked attachment.
+    await adminDb.$transaction((tx) =>
       attachmentRepository.linkToWorkItem([upload.id], dto.id, 'panel', tx),
     );
     await workItemsService.updateWorkItem(
@@ -313,7 +320,8 @@ describe('comment write paths — link-on-write', () => {
       fx.ctx,
     );
 
-    expect(await db.attachment.count({ where: { workItemId: dto.id } })).toBe(0);
+    const attachmentCount = await adminDb.attachment.count({ where: { workItemId: dto.id } });
+    expect(attachmentCount).toBe(0);
     expect(await updatedRevisions(dto.id)).toHaveLength(0);
   });
 });

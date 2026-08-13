@@ -5,6 +5,7 @@ import { estimationService } from '@/lib/services/estimationService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // MOTIR-1495 (AC #2) — the ACTIVE sprint's scope-lock committed baseline is an
@@ -22,6 +23,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function seedSprintIssues(
@@ -64,7 +66,7 @@ describe('active sprint committed-points baseline is immutable (MOTIR-1495 AC #2
 
     // …but the stored scope-lock baseline is UNCHANGED — still the 8 stamped at
     // activation (read straight from the row, not the live compute).
-    const row = await db.sprint.findUniqueOrThrow({ where: { id: sprint.id } });
+    const row = await adminDb.sprint.findUniqueOrThrow({ where: { id: sprint.id } });
     expect(row.committedPoints === null ? null : Number(row.committedPoints)).toBe(8);
   });
 });

@@ -5,6 +5,7 @@ import { planReviewService } from '@/lib/services/planReviewService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { PlanNotFoundError } from '@/lib/plans/errors';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // Integration tests for Subtask 7.4.5 / MOTIR-847 — `planReviewService`, the
@@ -40,6 +41,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('planReviewService.getPlanReview', () => {
@@ -107,7 +109,7 @@ describe('planReviewService.getPlanReview', () => {
   it('surfaces a leaf-sizing re-scope in the change preview so the approver SEES it (MOTIR-1532)', async () => {
     const fx = await makeWorkItemFixture();
     const target = await seedItem(fx, 'Resized card');
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: target.id },
       data: { storyPoints: 3, estimateMinutes: 45 },
     });

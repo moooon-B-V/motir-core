@@ -10,6 +10,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import type { EmailSendData } from '@/lib/jobs/types';
 import type { Prisma } from '@/generated/prisma/client';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Dead-letter queue + replay (Story 1.6 · Subtask 1.6.4, REWORKED in 1.6.6).
@@ -48,6 +49,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('recordTerminalFailure — correlates to the running row', () => {
@@ -76,7 +78,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
     expect(dto!.status).toBe('failed');
 
     // Exactly one run row — the running row was FLIPPED, not duplicated.
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     const run = runs[0]!;
     expect(run.id).toBe(started!.id);
@@ -85,7 +87,7 @@ describe('recordTerminalFailure — correlates to the running row', () => {
     expect(run.finishedAt).not.toBeNull();
     expect((run.failure as { message?: string } | null)?.message).toBe('deliberate boom');
 
-    const dlq = await db.jobRunDlq.findMany();
+    const dlq = await adminDb.jobRunDlq.findMany();
     expect(dlq).toHaveLength(1);
     const entry = dlq[0]!;
     expect(entry.functionId).toBe('email.send');
@@ -130,10 +132,10 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       attempts: 3,
     });
 
-    const run = (await db.jobRun.findMany())[0]!;
+    const run = (await adminDb.jobRun.findMany())[0]!;
     expect(run.status).toBe('failed');
     expect(run.workspaceId).toBe(workspace.id);
-    const entry = (await db.jobRunDlq.findMany())[0]!;
+    const entry = (await adminDb.jobRunDlq.findMany())[0]!;
     expect(entry.workspaceId).toBe(workspace.id);
   });
 
@@ -150,12 +152,13 @@ describe('recordTerminalFailure — correlates to the running row', () => {
       attempts: 3,
     });
 
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
     expect(runs[0]!.status).toBe('failed');
     expect(runs[0]!.eventId).toBe('orphan-evt');
     expect(runs[0]!.attempt).toBe(2); // attempts - 1 (zero-indexed final attempt)
-    expect(await db.jobRunDlq.count()).toBe(1);
+    const jobRunDlqCount = await adminDb.jobRunDlq.count();
+    expect(jobRunDlqCount).toBe(1);
   });
 });
 
@@ -188,10 +191,11 @@ describe('defineJob failure wiring', () => {
       /* the throw is expected; we assert on persisted rows */
     }
 
-    const run = (await db.jobRun.findMany())[0]!;
+    const run = (await adminDb.jobRun.findMany())[0]!;
     expect(run.status).toBe('running');
     expect(run.finishedAt).toBeNull();
-    expect(await db.jobRunDlq.findMany()).toHaveLength(0);
+    const jobRunDlqRows = await adminDb.jobRunDlq.findMany();
+    expect(jobRunDlqRows).toHaveLength(0);
   });
 });
 
@@ -223,7 +227,7 @@ describe('replayDLQ', () => {
       eventData: emailEvent({ idempotencyKey }) as unknown as Prisma.InputJsonValue,
       attempts: 3,
     });
-    return (await db.jobRunDlq.findFirst())!.id;
+    return (await adminDb.jobRunDlq.findFirst())!.id;
   }
 
   it('re-emits with a RE-SHAPED idempotency key (finding #40) so the replay is not dedup-dropped, and stamps replayed_at', async () => {
@@ -245,7 +249,7 @@ describe('replayDLQ', () => {
 
     // The row is stamped (auditable replay).
     expect(result.replayedAt).not.toBeNull();
-    const reread = await db.jobRunDlq.findUnique({ where: { id: dlqId } });
+    const reread = await adminDb.jobRunDlq.findUnique({ where: { id: dlqId } });
     expect(reread!.replayedAt).not.toBeNull();
   });
 

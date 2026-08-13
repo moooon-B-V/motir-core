@@ -6,6 +6,7 @@ import { projectRepoProvisioningService } from '@/lib/services/projectRepoProvis
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { ProjectRepoInvalidFieldError } from '@/lib/projectRepos/errors';
 import { makeWorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The establish step's READ MODEL + the two set operations MOTIR-1782 adds to make
@@ -41,13 +42,14 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Connect repos to the fixture's workspace through a real installation — the
  *  7.10.3 mirror rows the "Use one of mine" picker is built from. */
 async function connectRepos(workspaceId: string, names: string[]) {
   const installationId = `inst-${workspaceId}`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -61,7 +63,7 @@ async function connectRepos(workspaceId: string, names: string[]) {
   const created = [];
   for (const name of names) {
     created.push(
-      await db.githubRepo.create({
+      await adminDb.githubRepo.create({
         data: {
           installationId: inst.id,
           workspaceId,

@@ -6,6 +6,7 @@ import { plansService } from '@/lib/services/plansService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { TEMP_REF_PREFIX } from '@/lib/plans/refs';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // The Story-7.30 INTEGRATION SEAMS (MOTIR-1732) — the joints BETWEEN this
@@ -145,6 +146,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /**
@@ -173,7 +175,7 @@ async function seedItem(input: {
 /** Mark the fixture project established, as finishing onboarding does. */
 async function markOnboarded(): Promise<void> {
   const onboardingRanAt = new Date('2026-07-01T10:00:00Z');
-  await db.project.update({ where: { id: fx.projectId }, data: { onboardingRanAt } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { onboardingRanAt } });
   // The context the page reads carries the DTO form (an ISO string), so patch
   // the marker on the DTO rather than swapping in the raw Prisma row.
   activeCtx.current = {
@@ -515,7 +517,7 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     // The submit opened the run's Plan and bound it to the job — the fact the
     // whole review path turns on (MOTIR-1743/1745). Nothing about a delta.
     expect(planId).toBeTruthy();
-    const opened = await db.plan.findUnique({ where: { id: planId } });
+    const opened = await adminDb.plan.findUnique({ where: { id: planId } });
     expect(opened?.sourceJobId).toBe(jobId);
     expect(opened?.status).toBe('generating');
 
@@ -548,7 +550,7 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     // …and the tree really changed. Read it back from the database, not from the
     // approve response — the response is the claim, the rows are the fact (the
     // read-back-through-the-next-consumer rule).
-    const rows = await db.workItem.findMany({
+    const rows = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       orderBy: { createdAt: 'asc' },
     });
@@ -569,7 +571,7 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
 
     // The run is DECIDED — nothing left at `planned` for the auto-plan pause
     // (MOTIR-1740) to read as a proposal still awaiting review.
-    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('approved');
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('approved');
   });
 
   it('leaves the CONVERSATION open after an approve — the thread is not consumed', async () => {
@@ -631,11 +633,11 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
 
     // The DONE item is untouched — the guarantee that actually matters — and the
     // refused plan is still `planned`, so it stays decidable.
-    const titles = (await db.workItem.findMany({ where: { projectId: fx.projectId } })).map(
+    const titles = (await adminDb.workItem.findMany({ where: { projectId: fx.projectId } })).map(
       (r) => r.title,
     );
     expect(titles).toEqual(['Shipped']);
-    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
   });
 
   it('does not approve a conversation’s plan without a caller the workspace knows', async () => {
@@ -654,7 +656,8 @@ describe('seam · the run’s proposals approve through the 7.21 substrate into 
     const res = await approvePlan(planId);
     expect(res.status).toBe(401);
 
-    expect(await db.workItem.count({ where: { projectId: fx.projectId } })).toBe(0);
-    expect((await db.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
+    const workItemCount = await adminDb.workItem.count({ where: { projectId: fx.projectId } });
+    expect(workItemCount).toBe(0);
+    expect((await adminDb.plan.findUnique({ where: { id: planId } }))?.status).toBe('planned');
   });
 });

@@ -13,6 +13,7 @@ import {
   autoPlanCadenceTick,
   AUTO_PLAN_CADENCE_TICK_CRON,
 } from '@/lib/jobs/definitions/autoPlanCadenceTick';
+import { adminDb } from '../helpers/adminDb';
 import { truncateJobRuns } from '../helpers/db';
 
 // Story 7.13 · Subtask 7.13.7 (MOTIR-920) — the CRON TASK half of the cadence
@@ -43,6 +44,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('system.auto-plan-cadence-tick — the schedule wiring (MOTIR-920)', () => {
@@ -140,7 +142,7 @@ describe('system.auto-plan-cadence-tick — the handler DELEGATES (MOTIR-920)', 
     const engine = new InngestTestEngine({ function: autoPlanCadenceTick });
     await engine.execute();
 
-    const runs = await db.jobRun.findMany();
+    const runs = await adminDb.jobRun.findMany();
     expect(runs).toHaveLength(1);
 
     const run = runs[0]!;

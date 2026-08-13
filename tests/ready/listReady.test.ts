@@ -11,6 +11,7 @@ import {
 import { extractContextRefs } from '@/lib/markdown/contextRefs';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
 import { createTestProject } from '../fixtures/projectFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Ready set — service (`listReady` / `getNextReady`) + repository
@@ -28,6 +29,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 type Priority = 'lowest' | 'low' | 'medium' | 'high' | 'highest';
@@ -85,7 +87,7 @@ describe('listReady — readiness predicate', () => {
 
     // Resolve the blocker (done is category=done) → X ready; the done blocker
     // drops out of the ready set (its own status is now terminal).
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
     res = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
     expect(keys(res.items)).toContain(x.identifier);
     expect(keys(res.items)).not.toContain(blocker.identifier);
@@ -99,8 +101,8 @@ describe('listReady — readiness predicate', () => {
     // `in_progress` (category in_progress) and `done` (category done) are both
     // valid keys in the default workflow; a ready item is one to START, so
     // neither belongs in the dispatch set.
-    await db.workItem.update({ where: { id: started.id }, data: { status: 'in_progress' } });
-    await db.workItem.update({ where: { id: finished.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: started.id }, data: { status: 'in_progress' } });
+    await adminDb.workItem.update({ where: { id: finished.id }, data: { status: 'done' } });
 
     const { items } = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
     expect(keys(items)).toContain(open.identifier);
@@ -117,7 +119,7 @@ describe('listReady — readiness predicate', () => {
       identifier: 'PROJB',
     });
     // In project B, recategorize `cancelled` to a non-terminal bucket.
-    await db.workflowStatus.updateMany({
+    await adminDb.workflowStatus.updateMany({
       where: { projectId: projectB.id, key: 'cancelled' },
       data: { category: 'todo' },
     });
@@ -126,7 +128,7 @@ describe('listReady — readiness predicate', () => {
       { projectId: projectB.id, kind: 'task', title: 'BB' },
       fx.ctx,
     );
-    await db.workItem.update({ where: { id: blockerInB.id }, data: { status: 'cancelled' } });
+    await adminDb.workItem.update({ where: { id: blockerInB.id }, data: { status: 'cancelled' } });
     await block(fx, x.id, blockerInB.id);
 
     // B's terminal set excludes cancelled → X still blocked → absent.
@@ -480,7 +482,7 @@ describe('getNextReady — single dispatch', () => {
     );
     const blocker = await make(fx, { title: 'gate' });
     await block(fx, item.id, blocker.id);
-    await db.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: blocker.id }, data: { status: 'done' } });
 
     const dto = await workItemsService.getNextReady(
       fx.projectId,
@@ -551,7 +553,7 @@ describe('listReady — leaf-only (a container is not dispatchable, Subtask 7.0.
     expect(keys(res.items)).toContain(child.identifier);
 
     // Archive the only child (soft-delete) → no LIVE children → leaf again → ready.
-    await db.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: child.id }, data: { archivedAt: new Date() } });
     res = await workItemsService.listReady(fx.projectId, {}, fx.ctx);
     expect(keys(res.items)).toContain(story.identifier);
     expect(keys(res.items)).not.toContain(child.identifier); // archived → gone

@@ -6,6 +6,7 @@ import { workspacesService } from '@/lib/services/workspacesService';
 import { importSourceIdentityService } from '@/lib/services/importSourceIdentityService';
 import { jiraOAuthService, jiraApiBaseUrl } from '@/lib/services/jiraOAuthService';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.16 · MOTIR-1654 — HTTP smoke for the Jira 3LO OAuth routes + a
@@ -109,6 +110,7 @@ afterAll(async () => {
   delete process.env['JIRA_OAUTH_CLIENT_ID'];
   delete process.env['JIRA_OAUTH_CLIENT_SECRET'];
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('GET /api/import/jira/oauth/start', () => {

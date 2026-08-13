@@ -21,6 +21,7 @@ import { projectMembersService } from '@/lib/services/projectMembersService';
 import type { WorkItemCommentCreatedData, WorkItemTransitionedData } from '@/lib/jobs/types';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { createTestWorkItem, makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 import { captureEmailEvents } from '../helpers/jobs';
 
@@ -73,6 +74,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const mentionToken = (u: User) => `[@${u.name}](mention:${u.id})`;
@@ -170,7 +172,9 @@ describe('a real comment mention is fanned in and read back through the feed (5.
     // 5.7.9 the producer writes the SHARED `@/lib/dto/notifications`
     // `NotificationData` keys (`issueKey` / `title`), not the old
     // `workItemKey` / `workItemTitle`.
-    const raw = await db.notification.findFirstOrThrow({ where: { recipientUserId: j.bo.id } });
+    const raw = await adminDb.notification.findFirstOrThrow({
+      where: { recipientUserId: j.bo.id },
+    });
     const stored = raw.data as unknown as NotificationData;
     expect(stored.kind).toBe('mentioned');
     if (stored.kind !== 'mentioned') throw new Error('expected a mentioned payload');
@@ -353,7 +357,7 @@ async function seedRow(
     category?: 'direct' | 'watching';
   },
 ): Promise<void> {
-  await db.$transaction((tx) =>
+  await adminDb.$transaction((tx) =>
     notificationRepository.createMany(
       [
         {
@@ -385,8 +389,11 @@ describe('the Notification model cascades + idempotency, observed through the re
     await seedRow(j, j.bo.id, { dedupeKey: 'r1' });
     expect(await notificationRepository.countUnreadByRecipient(j.bo.id)).toBe(1);
 
-    await db.user.delete({ where: { id: j.bo.id } });
-    expect(await db.notification.count({ where: { recipientUserId: j.bo.id } })).toBe(0);
+    await adminDb.user.delete({ where: { id: j.bo.id } });
+    const notificationCount = await adminDb.notification.count({
+      where: { recipientUserId: j.bo.id },
+    });
+    expect(notificationCount).toBe(0);
   });
 
   it('deleting the work item removes its notifications (Cascade)', async () => {
@@ -394,8 +401,11 @@ describe('the Notification model cascades + idempotency, observed through the re
     await seedRow(j, j.bo.id, { dedupeKey: 'wi1' });
     expect(await notificationRepository.countByRecipient(j.bo.id)).toBe(1);
 
-    await db.workItem.delete({ where: { id: j.issueId } });
-    expect(await db.notification.count({ where: { recipientUserId: j.bo.id } })).toBe(0);
+    await adminDb.workItem.delete({ where: { id: j.issueId } });
+    const notificationCount = await adminDb.notification.count({
+      where: { recipientUserId: j.bo.id },
+    });
+    expect(notificationCount).toBe(0);
   });
 
   it('deleting the actor SetNulls actorId; the feed then renders a null actor', async () => {
@@ -410,10 +420,12 @@ describe('the Notification model cascades + idempotency, observed through the re
     await workspacesService.addMember({ userId: actor.id, workspaceId: j.fx.workspaceId });
     await seedRow(j, j.bo.id, { dedupeKey: 'a1', actorId: actor.id });
 
-    await db.user.delete({ where: { id: actor.id } });
+    await adminDb.user.delete({ where: { id: actor.id } });
 
     // DB-level SetNull: the row survives, actorId is now null.
-    const raw = await db.notification.findFirstOrThrow({ where: { recipientUserId: j.bo.id } });
+    const raw = await adminDb.notification.findFirstOrThrow({
+      where: { recipientUserId: j.bo.id },
+    });
     expect(raw.actorId).toBeNull();
     // Read path: the feed renders the missing actor as null, never throwing.
     const page = await notificationsService.listNotifications({}, j.boCtx);
@@ -434,14 +446,14 @@ describe('the Notification model cascades + idempotency, observed through the re
   it('the (dedupeKey, recipientUserId) @@unique rejects a duplicate row', async () => {
     const j = await makeJourney();
     await seedRow(j, j.bo.id, { dedupeKey: 'dup' });
-    const existing = await db.notification.findFirstOrThrow({
+    const existing = await adminDb.notification.findFirstOrThrow({
       where: { recipientUserId: j.bo.id },
     });
 
     // A second row with the SAME (dedupeKey, recipient) violates the unique —
     // the constraint behind createMany(skipDuplicates)'s replay idempotency.
     await expect(
-      db.notification.create({
+      adminDb.notification.create({
         data: {
           workspaceId: existing.workspaceId,
           recipientUserId: existing.recipientUserId,
@@ -455,7 +467,8 @@ describe('the Notification model cascades + idempotency, observed through the re
       }),
     ).rejects.toMatchObject({ code: 'P2002' });
     // Still exactly one row — the replay never doubled it.
-    expect(await db.notification.count({ where: { dedupeKey: 'dup' } })).toBe(1);
+    const notificationCount = await adminDb.notification.count({ where: { dedupeKey: 'dup' } });
+    expect(notificationCount).toBe(1);
   });
 
   it('a replayed fan-in writes no second row; the feed still shows one (skipDuplicates idempotency)', async () => {
@@ -482,7 +495,10 @@ describe('the Notification model cascades + idempotency, observed through the re
     expect((await notificationRepository.findById(only!.id))?.id).toBe(only!.id);
     expect(await notificationRepository.findById('no-such-id')).toBeNull();
     // The empty-input guard short-circuits with no DB round-trip.
-    expect(await db.$transaction((tx) => notificationRepository.createMany([], tx))).toBe(0);
+    const emptyCreate = await adminDb.$transaction((tx) =>
+      notificationRepository.createMany([], tx),
+    );
+    expect(emptyCreate).toBe(0);
   });
 });
 
@@ -643,7 +659,7 @@ describe('a real `work-item/transitioned` event fans into the Watching feed (5.7
     // seeded directly here as a test shortcut.) The resolver honours the stored
     // row, proving the descriptor's `transitioned` type flows through the SAME
     // gate (no extra wiring in the descriptor).
-    await db.$transaction((tx) =>
+    await adminDb.$transaction((tx) =>
       notificationPreferenceRepository.upsert(
         { userId: j.bo.id, eventType: 'transitioned', channel: 'in_app', enabled: false },
         tx,

@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from '../helpers/db';
 
 // Row-level security for the job-ledger tables (Story 1.6 · Subtask 1.6.4) —
@@ -39,6 +40,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 interface JobLedgerFixture {
@@ -59,7 +61,7 @@ function uniq(): string {
 }
 
 async function seedJobRun(workspaceId: string | null): Promise<string> {
-  const row = await db.jobRun.create({
+  const row = await adminDb.jobRun.create({
     data: {
       workspace: workspaceId ? { connect: { id: workspaceId } } : undefined,
       functionId: 'email.send',
@@ -73,7 +75,7 @@ async function seedJobRun(workspaceId: string | null): Promise<string> {
 }
 
 async function seedDlq(workspaceId: string | null): Promise<string> {
-  const row = await db.jobRunDlq.create({
+  const row = await adminDb.jobRunDlq.create({
     data: {
       workspace: workspaceId ? { connect: { id: workspaceId } } : undefined,
       functionId: 'email.send',

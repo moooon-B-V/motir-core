@@ -52,9 +52,15 @@ export const workspaceMembershipRepository = {
    * Workspaces the user belongs to, ordered by membership.createdAt asc
    * so the auto-created default workspace (Subtask 1.2.4) lands first in
    * the switcher list (Subtask 1.2.6).
+   *
+   * Takes a REQUIRED `tx` (MOTIR-2774) for the same reason its org-tier mirror
+   * `organizationMembershipRepository.findOrganizationsByUser` does: `workspace_membership`
+   * is policy-gated on `app.user_id`, and read off the `@/lib/db` singleton with nothing
+   * bound the policy returns an EMPTY ARRAY AND RAISES NOTHING — so every surface that
+   * lists "your workspaces" silently showed none.
    */
-  async findWorkspacesByUser(userId: string): Promise<Workspace[]> {
-    const rows = await db.workspaceMembership.findMany({
+  async findWorkspacesByUser(userId: string, tx: Prisma.TransactionClient): Promise<Workspace[]> {
+    const rows = await tx.workspaceMembership.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
       include: { workspace: true },

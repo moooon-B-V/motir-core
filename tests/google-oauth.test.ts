@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '@/lib/db';
 import { usersService } from '@/lib/services/usersService';
 const { findOrCreateOAuthUser, createUser } = usersService;
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables } from './helpers/db';
 
 beforeEach(async () => {
@@ -66,7 +66,7 @@ describe('findOrCreateOAuthUser auto-link path (Story 1.1 decision)', () => {
     expect(linked.id).toBe(existing.id);
     expect(linked.emailVerified).toBe(true);
 
-    const accounts = await db.account.findMany({ where: { userId: existing.id } });
+    const accounts = await adminDb.account.findMany({ where: { userId: existing.id } });
     expect(accounts).toHaveLength(2);
     expect(accounts.map((a) => a.providerId).sort()).toEqual(['credential', 'google']);
   });
@@ -83,7 +83,7 @@ describe('findOrCreateOAuthUser auto-link path (Story 1.1 decision)', () => {
     expect(fresh.email).toBe('fresh@example.com');
     expect(fresh.emailVerified).toBe(true);
 
-    const credential = await db.account.findFirst({
+    const credential = await adminDb.account.findFirst({
       where: { userId: fresh.id, providerId: 'credential' },
     });
     expect(credential).toBeNull();

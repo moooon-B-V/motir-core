@@ -12,7 +12,9 @@ import type { ActivityAllEntryDto } from '@/lib/dto/activity';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { inngest } from '@/lib/jobs/client';
 import { makeWorkItemFixture, type WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 
 // Subtask 5.5.2 — the All merged stream: the 5.1.2 comment threads and the
 // 5.5.1 history entries interleaved by a bounded two-source composite-cursor
@@ -22,7 +24,7 @@ import { truncateAuthTables } from '../../helpers/db';
 // page-boundary clusters are deterministic rather than racing the clock.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "comment", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -41,6 +43,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function createIssue(fx: WorkItemFixture, title = 'The issue') {
@@ -48,8 +51,16 @@ async function createIssue(fx: WorkItemFixture, title = 'The issue') {
 }
 
 /** Insert a renderable revision through the service edge (a title change). */
-async function injectRevision(workItemId: string, changedById: string, n: number): Promise<void> {
-  await db.$transaction(async (tx) => {
+async function injectRevision(
+  fx: WorkItemFixture,
+  workItemId: string,
+  changedById: string,
+  n: number,
+): Promise<void> {
+  // Takes the fixture so it can bind the tenant (MOTIR-2792): `recordRevision` is
+  // reached inside withWorkspaceContext in production, and unbound its reads and
+  // writes on `work_item_revision` are refused.
+  await withWorkspaceContext(fx.ctx, async (tx) => {
     await workItemRevisionsService.recordRevision(
       {
         workItemId,
@@ -63,8 +74,13 @@ async function injectRevision(workItemId: string, changedById: string, n: number
 }
 
 /** Bulk-inject suppressed position-noise revisions (no feed entry). */
-async function injectNoise(workItemId: string, changedById: string, count: number): Promise<void> {
-  await db.$transaction(async (tx) => {
+async function injectNoise(
+  fx: WorkItemFixture,
+  workItemId: string,
+  changedById: string,
+  count: number,
+): Promise<void> {
+  await withWorkspaceContext(fx.ctx, async (tx) => {
     for (let i = 0; i < count; i++) {
       await workItemRevisionsService.recordRevision(
         {
@@ -91,7 +107,7 @@ async function setRevisionTime(id: string, at: Date): Promise<void> {
 
 /** All revision ids of an issue, oldest first (raw read — test reach). */
 async function revisionIdsAsc(workItemId: string): Promise<string[]> {
-  const rows = await db.workItemRevision.findMany({
+  const rows = await adminDb.workItemRevision.findMany({
     where: { workItemId },
     orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
     select: { id: true },
@@ -176,9 +192,9 @@ describe('activityService.listAll — interleaving', () => {
       { bodyMd: 'late reply', parentCommentId: commentA.id },
       fx.ctx,
     );
-    await injectRevision(issue.id, fx.ownerId, 1);
+    await injectRevision(fx, issue.id, fx.ownerId, 1);
     const commentB = await commentsService.addComment(issue.id, { bodyMd: 'second' }, fx.ctx);
-    await injectRevision(issue.id, fx.ownerId, 2);
+    await injectRevision(fx, issue.id, fx.ownerId, 2);
 
     const [createdRev, titleRev1, titleRev2] = await revisionIdsAsc(issue.id);
     const base = Date.parse('2026-06-01T10:00:00.000Z');
@@ -219,7 +235,7 @@ describe('activityService.listAll — interleaving', () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
     const comment = await commentsService.addComment(issue.id, { bodyMd: 'tied' }, fx.ctx);
-    await injectRevision(issue.id, fx.ownerId, 1);
+    await injectRevision(fx, issue.id, fx.ownerId, 1);
 
     const [createdRev, titleRev] = await revisionIdsAsc(issue.id);
     const at = new Date('2026-06-01T12:00:00.000Z');
@@ -269,7 +285,7 @@ describe('activityService.listAll — the composite-cursor page walk', () => {
       const c = await commentsService.addComment(issue.id, { bodyMd: `comment ${i}` }, fx.ctx);
       comments.push(c.id);
     }
-    for (let i = 0; i < 30; i++) await injectRevision(issue.id, fx.ownerId, i);
+    for (let i = 0; i < 30; i++) await injectRevision(fx, issue.id, fx.ownerId, i);
     const revisions = await revisionIdsAsc(issue.id); // created + 30 = 31
 
     // Interleave the two sources second-by-second, then collapse positions
@@ -322,7 +338,7 @@ describe('activityService.listAll — the composite-cursor page walk', () => {
     for (let i = 0; i < 25; i++) {
       await commentsService.addComment(issue.id, { bodyMd: `c${i}` }, fx.ctx);
     }
-    for (let i = 0; i < 25; i++) await injectRevision(issue.id, fx.ownerId, i);
+    for (let i = 0; i < 25; i++) await injectRevision(fx, issue.id, fx.ownerId, i);
 
     const commentReads = vi.spyOn(commentRepository, 'listThreadsByWorkItem');
     const revisionReads = vi.spyOn(workItemRevisionRepository, 'listByWorkItem');
@@ -340,7 +356,7 @@ describe('activityService.listAll — the composite-cursor page walk', () => {
   it('advances through a suppressed-noise stretch with a short page, losing nothing', async () => {
     const fx = await makeWorkItemFixture();
     const issue = await createIssue(fx);
-    await injectNoise(issue.id, fx.ownerId, 120); // newer than `created`
+    await injectNoise(fx, issue.id, fx.ownerId, 120); // newer than `created`
     await commentsService.addComment(issue.id, { bodyMd: 'newest' }, fx.ctx);
 
     // Page 1 (desc): the bounded scan consumes 100 pure-noise rows and finds

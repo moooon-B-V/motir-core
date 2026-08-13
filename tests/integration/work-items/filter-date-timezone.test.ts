@@ -4,7 +4,9 @@ import { db } from '@/lib/db';
 import { compileFilterConditionsSql } from '@/lib/repositories/workItemRepository';
 import { customFieldFilterFieldId, type FilterAst } from '@/lib/filters/ast';
 import type { ProjectFilterReferents } from '@/lib/filters/registry';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
+import { withWorkspaceContext } from '@/lib/workspaces/context';
 import {
   makeWorkItemFixture as makeFixture,
   createTestWorkItem as createWorkItem,
@@ -40,7 +42,7 @@ import {
 const ZONES = ['UTC', 'Etc/GMT+12', 'Etc/GMT-12'] as const;
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "custom_field_value", "custom_field_option", "custom_field_definition", ' +
       '"work_item_revision", "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
@@ -53,6 +55,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The DATABASE's own UTC calendar day — the anchor the fixture is built around. */
@@ -100,13 +103,13 @@ async function seed(utcToday: string): Promise<Seeded> {
   ] as const;
 
   for (const [item, offset] of dated) {
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: item.id },
       data: { createdAt: dayAt(offset), dueDate: dayAt(offset) },
     });
   }
 
-  const golive = await db.customFieldDefinition.create({
+  const golive = await adminDb.customFieldDefinition.create({
     data: {
       workspaceId: fx.workspaceId,
       projectId: fx.projectId,
@@ -116,7 +119,7 @@ async function seed(utcToday: string): Promise<Seeded> {
       position: 'a0',
     },
   });
-  await db.customFieldValue.createMany({
+  await adminDb.customFieldValue.createMany({
     data: dated.map(([item, offset]) => ({
       workspaceId: fx.workspaceId,
       workItemId: item.id,
@@ -151,7 +154,10 @@ async function seed(utcToday: string): Promise<Seeded> {
  * `SET TIME ZONE` on a pooled client would land on an arbitrary connection.
  */
 async function matchesUnder(zone: string, s: Seeded, ast: FilterAst): Promise<string[]> {
-  return db.$transaction(async (tx) => {
+  // Bound (MOTIR-2792): the compiled predicate reads `work_item`, so the tenant has to
+  // be bound or the query returns nothing and every timezone "agrees" vacuously — the
+  // worst possible outcome for a test whose whole point is that they agree.
+  return withWorkspaceContext(s.fx.ctx, async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL TIME ZONE '${zone}'`);
     const predicate = compileFilterConditionsSql(ast, s.referents);
     const rows = await tx.$queryRaw<{ identifier: string }[]>(

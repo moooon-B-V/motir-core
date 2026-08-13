@@ -7,6 +7,7 @@ import { githubInstallationRepository } from '@/lib/repositories/githubInstallat
 import { getGitProvider } from '@/lib/git';
 import { encryptToken, decryptToken } from '@/lib/gitlab/tokenCrypto';
 import { withSystemContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 7.23 · MOTIR-1474 — the GitLab connect + token-store service, against a
@@ -71,6 +72,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('gitlabConnectionService.completeOAuthCallback', () => {

@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/lib/db';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { makeWorkItemFixture, createTestWorkItem } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Repository-layer tests for the Story 6.12 · Subtask 6.12.4 Overview stat
@@ -16,11 +17,12 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** Force a work item's status key directly (a read-stat test doesn't transition). */
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 describe('workItemRepository.countByStatusCategory', () => {
@@ -55,10 +57,10 @@ describe('workItemRepository.countByStatusCategory', () => {
     await setStatus(live.id, 'in_progress');
 
     const archived = await createTestWorkItem(fx, { kind: 'task', title: 'archived' });
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     const triaged = await createTestWorkItem(fx, { kind: 'bug', title: 'triaged' });
-    await db.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: triaged.id }, data: { triagedAt: new Date() } });
 
     const counts = await workItemRepository.countByStatusCategory(fx.projectId, fx.workspaceId);
     expect(counts).toEqual({ todo: 0, in_progress: 1, done: 0 });
@@ -78,13 +80,13 @@ describe('workItemRepository.countTriageItems', () => {
     // Two triage items (the public-request inbox 6.12.5 feeds).
     for (const title of ['req 1', 'req 2']) {
       const wi = await createTestWorkItem(fx, { kind: 'bug', title });
-      await db.workItem.update({ where: { id: wi.id }, data: { triagedAt: new Date() } });
+      await adminDb.workItem.update({ where: { id: wi.id }, data: { triagedAt: new Date() } });
     }
     // A normal (non-triage) item — must NOT count.
     await createTestWorkItem(fx, { kind: 'task', title: 'normal' });
     // An archived triage item — must NOT count.
     const archived = await createTestWorkItem(fx, { kind: 'bug', title: 'old req' });
-    await db.workItem.update({
+    await adminDb.workItem.update({
       where: { id: archived.id },
       data: { triagedAt: new Date(), archivedAt: new Date() },
     });

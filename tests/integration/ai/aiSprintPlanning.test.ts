@@ -24,6 +24,7 @@ import { SprintAssignmentValidationError } from '@/lib/ai/sprintAssignment';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { makeWorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { WorkItemFixture } from '../../fixtures';
 import type { ProjectContext } from '@/lib/projects';
@@ -46,7 +47,7 @@ import type { SprintAssignmentDelta } from '@/lib/ai/types';
 //     sequence, backlog ranks, revisions), not a re-implemented sprint create.
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item", "sprint" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -61,6 +62,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 /** The `ProjectContext` the service takes (session user + active project). */
@@ -74,7 +76,7 @@ function projectCtx(fx: WorkItemFixture): ProjectContext {
 }
 
 async function enableSprintPlanning(projectId: string, lengthDays = 2): Promise<void> {
-  await db.project.update({
+  await adminDb.project.update({
     where: { id: projectId },
     data: { aiSprintPlanningEnabled: true, aiSprintLengthDays: lengthDays },
   });
@@ -181,7 +183,8 @@ describe('AI sprint planning — the submit (MOTIR-918)', () => {
 
     await aiSprintPlanningService.submitSprintPlan(projectCtx(fx));
 
-    expect(await db.plan.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const planCount = await adminDb.plan.count({ where: { projectId: fx.projectId } });
+    expect(planCount).toBe(0);
   });
 });
 
@@ -202,7 +205,7 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
     expect(result.sprints.map((s) => s.tempId)).toEqual(['sprint:1', 'sprint:2']);
     expect(result.sprints.map((s) => s.assignedCount)).toEqual([2, 1]);
 
-    const rows = await db.sprint.findMany({
+    const rows = await adminDb.sprint.findMany({
       where: { projectId: fx.projectId },
       orderBy: { sequence: 'asc' },
     });
@@ -213,7 +216,7 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
     expect(rows.every((r) => r.state === 'planned')).toBe(true);
     expect(result.sprints.map((s) => s.id)).toEqual(rows.map((r) => r.id));
 
-    const items = await db.workItem.findMany({
+    const items = await adminDb.workItem.findMany({
       where: { projectId: fx.projectId },
       select: { identifier: true, sprintId: true, backlogRank: true },
     });
@@ -241,7 +244,7 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
       projectCtx(fx),
     );
 
-    const rows = await db.sprint.findMany({
+    const rows = await adminDb.sprint.findMany({
       where: { projectId: fx.projectId },
       orderBy: { sequence: 'asc' },
     });
@@ -260,7 +263,7 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
 
     await aiSprintPlanningService.approveSprintPlan('job_sprint_1', edited, projectCtx(fx));
 
-    const rows = await db.sprint.findMany({ where: { projectId: fx.projectId } });
+    const rows = await adminDb.sprint.findMany({ where: { projectId: fx.projectId } });
     expect(rows.map((r) => r.name)).toEqual(['Hardening week']);
   });
 
@@ -274,7 +277,8 @@ describe('AI sprint planning — approve persists through the Epic-4 services (M
     );
 
     expect(result).toEqual({ sprints: [], assigned: 0 });
-    expect(await db.sprint.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const sprintCount = await adminDb.sprint.count({ where: { projectId: fx.projectId } });
+    expect(sprintCount).toBe(0);
   });
 
   it('reads the JOB RESULT when the caller sends no edited packing', async () => {
@@ -362,10 +366,12 @@ describe('AI sprint planning — the semantic re-validation, BEFORE any write (M
       ),
     ).rejects.toThrow(/unknown work item/);
 
-    expect(await db.sprint.count()).toBe(0);
+    const sprintCount = await adminDb.sprint.count();
+    expect(sprintCount).toBe(0);
     // A key from another tenant is indistinguishable from a typo — 400, no
     // existence leak, nothing written.
-    expect(await db.workItem.count({ where: { sprintId: { not: null } } })).toBe(0);
+    const workItemCount = await adminDb.workItem.count({ where: { sprintId: { not: null } } });
+    expect(workItemCount).toBe(0);
   });
 
   it('rejects a CONTAINER member — an epic/story rolls its children up, it is not scheduled', async () => {
@@ -380,13 +386,14 @@ describe('AI sprint planning — the semantic re-validation, BEFORE any write (M
         projectCtx(fx),
       ),
     ).rejects.toThrow(/only leaf work/);
-    expect(await db.sprint.count()).toBe(0);
+    const sprintCount = await adminDb.sprint.count();
+    expect(sprintCount).toBe(0);
   });
 
   it('rejects an item that is already FINISHED — there is nothing left to schedule', async () => {
     const fx = await makeWorkItemFixture();
     const a = await makeItem(fx, { kind: 'subtask', title: 'A' });
-    await db.workItem.update({ where: { id: a.id }, data: { status: 'done' } });
+    await adminDb.workItem.update({ where: { id: a.id }, data: { status: 'done' } });
 
     await expect(
       aiSprintPlanningService.approveSprintPlan(
@@ -395,7 +402,8 @@ describe('AI sprint planning — the semantic re-validation, BEFORE any write (M
         projectCtx(fx),
       ),
     ).rejects.toThrow(/already finished/);
-    expect(await db.sprint.count()).toBe(0);
+    const sprintCount = await adminDb.sprint.count();
+    expect(sprintCount).toBe(0);
   });
 
   it('rejects an INVERTED is_blocked_by ordering ACROSS sprints', async () => {
@@ -415,7 +423,8 @@ describe('AI sprint planning — the semantic re-validation, BEFORE any write (M
         projectCtx(fx),
       ),
     ).rejects.toThrow(/is_blocked_by order is inverted/);
-    expect(await db.sprint.count()).toBe(0);
+    const sprintCount = await adminDb.sprint.count();
+    expect(sprintCount).toBe(0);
   });
 
   it('rejects an inverted ordering WITHIN one sprint — members must be topological', async () => {
@@ -455,11 +464,11 @@ describe('AI sprint planning — the semantic re-validation, BEFORE any write (M
     );
 
     expect(result.assigned).toBe(2);
-    const rows = await db.sprint.findMany({
+    const rows = await adminDb.sprint.findMany({
       where: { projectId: fx.projectId },
       orderBy: { sequence: 'asc' },
     });
-    const item = await db.workItem.findUniqueOrThrow({ where: { id: blocked.id } });
+    const item = await adminDb.workItem.findUniqueOrThrow({ where: { id: blocked.id } });
     expect(item.sprintId).toBe(rows[1]!.id);
   });
 
@@ -490,7 +499,8 @@ describe('AI sprint planning — the semantic re-validation, BEFORE any write (M
         projectCtx(fx),
       ),
     ).rejects.toBeInstanceOf(SprintAssignmentValidationError);
-    expect(await db.sprint.count()).toBe(0);
+    const sprintCount = await adminDb.sprint.count();
+    expect(sprintCount).toBe(0);
   });
 });
 
@@ -520,9 +530,10 @@ describe('AI sprint planning — atomicity (MOTIR-918)', () => {
     ).rejects.toThrow('assignment blew up');
 
     // NOTHING survived — not the first sprint, not its assignment.
-    expect(await db.sprint.count({ where: { projectId: fx.projectId } })).toBe(0);
+    const sprintCount = await adminDb.sprint.count({ where: { projectId: fx.projectId } });
+    expect(sprintCount).toBe(0);
     expect(
-      await db.workItem.count({ where: { projectId: fx.projectId, sprintId: { not: null } } }),
+      await adminDb.workItem.count({ where: { projectId: fx.projectId, sprintId: { not: null } } }),
     ).toBe(0);
     spy.mockRestore();
   });

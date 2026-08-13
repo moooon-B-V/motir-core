@@ -9,6 +9,7 @@ import {
 } from '../fixtures/workItemFixtures';
 import { createTestUser } from '../fixtures/userFixtures';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story 6.14 · Subtask 6.14.10 — the PUBLIC, expandable work-item TREE. The
@@ -25,19 +26,20 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function setStatus(id: string, status = 'todo'): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 async function setPrivate(epicId: string, value: boolean): Promise<void> {
-  await db.workItem.update({ where: { id: epicId }, data: { publicChildrenHidden: value } });
+  await adminDb.workItem.update({ where: { id: epicId }, data: { publicChildrenHidden: value } });
 }
 
 async function makePublicProjectFixture(name = 'Acme'): Promise<WorkItemFixture> {
   const fx = await makeWorkItemFixture({ name });
-  await db.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
+  await adminDb.project.update({ where: { id: fx.projectId }, data: { accessLevel: 'public' } });
   return fx;
 }
 

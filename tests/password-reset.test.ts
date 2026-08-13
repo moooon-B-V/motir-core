@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { usersService } from '@/lib/services/usersService';
 const { createUser, verifyPassword } = usersService;
+import { adminDb } from './helpers/adminDb';
 import { truncateAuthTables, truncateJobRuns } from './helpers/db';
 import {
   captureConsoleEmails,
@@ -55,6 +56,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('forget-password (auth.api.requestPasswordReset)', () => {
@@ -99,7 +101,7 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
 
     // Verification row is keyed by `reset-password:<token>`, with the
     // value being the user id — see better-auth/dist/api/routes/password.mjs.
-    const row = await db.verification.findFirst({
+    const row = await adminDb.verification.findFirst({
       where: { identifier: `reset-password:${token}` },
     });
     expect(row).not.toBeNull();
@@ -130,7 +132,7 @@ describe('forget-password (auth.api.requestPasswordReset)', () => {
     expect(result.status).toBe(true);
     expect(captured.events).toHaveLength(0);
 
-    const rowCount = await db.verification.count();
+    const rowCount = await adminDb.verification.count();
     expect(rowCount).toBe(0);
   });
 });
@@ -172,7 +174,7 @@ describe('reset-password (auth.api.resetPassword)', () => {
 
     // Single-use: Better-Auth deletes the Verification row after a
     // successful reset (deleteVerificationByIdentifier in password.mjs).
-    const rowAfter = await db.verification.findFirst({
+    const rowAfter = await adminDb.verification.findFirst({
       where: { identifier: `reset-password:${token}` },
     });
     expect(rowAfter).toBeNull();
@@ -205,10 +207,10 @@ describe('reset-password (auth.api.resetPassword)', () => {
     // after the 1-hour window. We touch the DB directly rather than wait
     // an hour; the handler in better-auth's password.mjs checks
     // `verification.expiresAt < new Date()` so any past timestamp suffices.
-    await db.verification.update({
+    await adminDb.verification.update({
       where: {
         id: (
-          await db.verification.findFirstOrThrow({
+          await adminDb.verification.findFirstOrThrow({
             where: { identifier: `reset-password:${token}` },
           })
         ).id,

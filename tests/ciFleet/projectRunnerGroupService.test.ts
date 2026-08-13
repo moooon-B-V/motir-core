@@ -17,6 +17,7 @@ import {
 } from '@/lib/github/repoProvisioning';
 import { _resetInstallationTokenCache } from '@/lib/github/appAuth';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { createRunnerGroupFake, type RunnerGroupFake } from '../helpers/runnerGroupFake';
 import {
@@ -144,7 +145,7 @@ async function addRow(fx: WorkItemFixture, role: 'web' | 'api', name: string): P
 }
 
 async function readProject(projectId: string) {
-  return db.project.findUniqueOrThrow({ where: { id: projectId } });
+  return adminDb.project.findUniqueOrThrow({ where: { id: projectId } });
 }
 
 /** The GitHub repo id the fake minted for a name — what must be in the list. */
@@ -197,6 +198,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('establishing a set provisions the project its OWN group', () => {
@@ -347,7 +349,7 @@ describe('establishing a set provisions the project its OWN group', () => {
     await addRow(fx, 'web', 'acme-web');
     await projectRepoProvisioningService.establishSet(fx.projectId, fx.ctx);
     const orphanId = runnerGroups.onlyGroup().id;
-    await db.project.update({
+    await adminDb.project.update({
       where: { id: fx.projectId },
       data: { runnerGroupId: null, runnerGroupName: null },
     });
@@ -451,11 +453,12 @@ describe('the access list is READ-DERIVED, so the sync holds the project row loc
     // row lock for its sync, so driving it while sync #1 deliberately holds that
     // lock would deadlock the ARRANGEMENT, not exercise the guard.
     const apiRepoId = repoId('acme-api');
-    await db.projectRepo.update({
+    await adminDb.projectRepo.update({
       where: { id: apiRow },
       data: { state: 'proposed', githubRepoId: null },
     });
-    const apiMirrorId = (await db.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } })).id;
+    const apiMirrorId = (await adminDb.githubRepo.findFirstOrThrow({ where: { name: 'acme-api' } }))
+      .id;
     await projectRunnerGroupService.syncForProject(target);
     expect(runnerGroups.onlyGroup().repositoryIds).toEqual([repoId('acme-web')]);
 
@@ -476,7 +479,7 @@ describe('the access list is READ-DERIVED, so the sync holds the project row loc
     // …and only THEN does the second repository become established. A sync
     // started now sees both. Without the row lock it races ahead and writes
     // both, and sync #1's stale array then overwrites it.
-    await db.projectRepo.update({
+    await adminDb.projectRepo.update({
       where: { id: apiRow },
       data: { state: 'created', githubRepoId: apiMirrorId },
     });
@@ -511,7 +514,8 @@ describe('a GitHub-side failure degrades instead of failing the establishment', 
     // an artifact that cannot be rolled back (ADR §4.2), and the group is the
     // side effect, not the deliverable.
     expect(result.rows[0]).toMatchObject({ outcome: 'created' });
-    expect(await db.githubRepo.count()).toBe(1);
+    const githubRepoCount = await adminDb.githubRepo.count();
+    expect(githubRepoCount).toBe(1);
 
     const project = await readProject(fx.projectId);
     expect(project).toMatchObject({ runnerGroupId: null, runnerGroupSyncPending: true });

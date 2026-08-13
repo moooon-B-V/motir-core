@@ -19,6 +19,7 @@ import {
 import { createTestProject } from '../../fixtures/projectFixtures';
 import { createTestWorkItem } from '../../fixtures/workItemFixtures';
 import type { WorkItemFixture } from '../../fixtures/workItemFixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -57,7 +58,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
     password: 'hunter2hunter2',
     name: 'Sprint Member',
   });
-  await db.workspaceMembership.create({
+  await adminDb.workspaceMembership.create({
     data: { userId: member.id, workspaceId, role: 'member' },
   });
 
@@ -71,7 +72,7 @@ async function makeFixture(label = 'a'): Promise<Fixture> {
 
 /** Force a sprint into a state Story 4.4 would set (no service path here yet). */
 async function forceState(sprintId: string, state: SprintState): Promise<void> {
-  await db.sprint.update({ where: { id: sprintId }, data: { state } });
+  await adminDb.sprint.update({ where: { id: sprintId }, data: { state } });
 }
 
 beforeEach(async () => {
@@ -80,6 +81,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('sprintsService.createSprint', () => {
@@ -229,13 +231,15 @@ describe('sprintsService.deleteSprint', () => {
     const item = await createTestWorkItem(workItemFx, { title: 'Carried issue', kind: 'task' });
 
     const sprint = await sprintsService.createSprint(fx.projectId, {}, fx.ownerCtx);
-    await db.$transaction((tx) => workItemRepository.setSprint(item.id, sprint.id, tx));
+    // A SEED, not the claim: the assertion below is `countSprintIssues`. Through the
+    // admin client so the seed cannot be the thing that fails (MOTIR-2747).
+    await adminDb.$transaction((tx) => workItemRepository.setSprint(item.id, sprint.id, tx));
     expect(await workItemRepository.countSprintIssues(sprint.id, fx.workspaceId)).toBe(1);
 
     await sprintsService.deleteSprint(sprint.id, fx.ownerCtx);
 
     expect(await sprintRepository.findById(sprint.id, fx.workspaceId)).toBeNull();
-    const reloaded = await db.workItem.findUnique({ where: { id: item.id } });
+    const reloaded = await adminDb.workItem.findUnique({ where: { id: item.id } });
     expect(reloaded?.sprintId).toBeNull(); // fell back to the backlog, not deleted
   });
 

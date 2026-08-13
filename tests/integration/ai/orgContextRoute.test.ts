@@ -5,6 +5,7 @@ import { organizationsService } from '@/lib/services/organizationsService';
 import { mintJobToken } from '@/lib/ai/jobToken';
 import { GET as orgContextGET } from '@/app/api/internal/ai/org-context/route';
 import { createTestUser, createTestWorkspace, createTestProject } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 
 // CONTRACT TEST — the org-context read-back surface end-to-end through the REAL
@@ -23,6 +24,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 function orgContextReq(opts: { bearer?: string; token?: string }): Request {

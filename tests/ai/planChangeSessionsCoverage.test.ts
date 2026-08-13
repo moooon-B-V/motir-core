@@ -8,6 +8,7 @@ import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepos
 import { toPlanChangeSessionDto } from '@/lib/mappers/planChangeMappers';
 import { PROJECT_SCOPE_KEY } from '@/lib/planChange/scope';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // The story-level COVERAGE GATE's residual for the conversation's persistence
@@ -70,6 +71,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('planChange repositories — the DEFAULT (no-transaction) client', () => {
@@ -226,7 +228,7 @@ describe('planChangeSessionsService — error classification is not a catch-all'
 
     expect(resolved.id).toBe(winner.id);
     // Idempotent by outcome: still exactly ONE thread for the project.
-    const rows = await db.planChangeSession.findMany({ where: { projectId: c.projectId } });
+    const rows = await adminDb.planChangeSession.findMany({ where: { projectId: c.projectId } });
     expect(rows).toHaveLength(1);
   });
 

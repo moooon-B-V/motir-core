@@ -58,6 +58,7 @@ import {
 import { POST as movePOST } from '@/app/api/dashboards/[dashboardId]/widgets/[widgetId]/move/route';
 import { createTestUser, makeWorkItemFixture } from '../../fixtures';
 import type { WorkItemFixture } from '../../fixtures';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 
@@ -123,6 +124,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the widget registry is TOTAL (mistake #29)', () => {
@@ -374,7 +376,10 @@ describe('dashboard CRUD — validation + the permission rule', () => {
     const dash = await dashboardsService.create({ name: 'Doomed' }, t.ownerCtx);
     await dashboardsService.addWidget(dash.id, filterWidgetInput(t), t.ownerCtx);
     await dashboardsService.delete(dash.id, t.ownerCtx);
-    expect(await db.dashboardWidget.count({ where: { dashboardId: dash.id } })).toBe(0);
+    const dashboardWidgetCount = await adminDb.dashboardWidget.count({
+      where: { dashboardId: dash.id },
+    });
+    expect(dashboardWidgetCount).toBe(0);
   });
 
   it('a layout SHRINK reflows orphaned columns into the new last column, order preserved', async () => {
@@ -494,7 +499,9 @@ describe('widgets — registry-gated writes, the cap, and the FK split', () => {
         t.ownerCtx,
       ),
     ).rejects.toThrow(DashboardWidgetSourceNotFoundError);
-    await db.$transaction((tx) => projectRepository.archive(t.fx.projectId, tx));
+    // A precondition, not the claim (MOTIR-2752): the assertion is what addWidget does
+    // against an archived project.
+    await adminDb.$transaction((tx) => projectRepository.archive(t.fx.projectId, tx));
     await expect(
       dashboardsService.addWidget(
         dash.id,
@@ -595,7 +602,7 @@ describe('widgets — registry-gated writes, the cap, and the FK split', () => {
     const dash = await dashboardsService.create({ name: 'Grid' }, t.ownerCtx);
     const w = await dashboardsService.addWidget(dash.id, filterWidgetInput(t), t.ownerCtx);
     // Simulate a config persisted by an older, looser registry version.
-    await db.dashboardWidget.update({
+    await adminDb.dashboardWidget.update({
       where: { id: w.id },
       data: { config: { pageSize: 9999, legacyKey: true } },
     });
@@ -611,7 +618,7 @@ describe('widgets — registry-gated writes, the cap, and the FK split', () => {
       { type: 'filter_results', projectId: t.fx.projectId },
       t.ownerCtx,
     );
-    await db.project.delete({ where: { id: t.fx.projectId } });
+    await adminDb.project.delete({ where: { id: t.fx.projectId } });
     const detail = await dashboardsService.getDashboard(dash.id, t.ownerCtx);
     expect(detail.widgets.map((x) => x.id)).not.toContain(w.id);
   });

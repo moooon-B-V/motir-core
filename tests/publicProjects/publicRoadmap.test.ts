@@ -7,6 +7,7 @@ import {
   createTestWorkItem,
   type WorkItemFixture,
 } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Repository-layer tests for the Story 6.12 · Subtask 6.12.7 public-roadmap
@@ -35,7 +36,7 @@ async function makeUser(name: string) {
 
 /** Force a work item's status key directly (a read test doesn't transition). */
 async function setStatus(id: string, status: string): Promise<void> {
-  await db.workItem.update({ where: { id }, data: { status } });
+  await adminDb.workItem.update({ where: { id }, data: { status } });
 }
 
 /**
@@ -50,7 +51,7 @@ async function markSubmittedRequest(
   submittedByUserId: string,
   patch: { snoozedUntil?: Date } = {},
 ): Promise<void> {
-  await db.workItem.update({
+  await adminDb.workItem.update({
     where: { id },
     data: { triagedAt: new Date(), submittedByUserId, status: 'todo', ...patch },
   });
@@ -59,7 +60,7 @@ async function markSubmittedRequest(
 /** Add `n` distinct-account upvotes to a request (the demand signal). */
 async function addVotes(workItemId: string, voterIds: string[]): Promise<void> {
   for (const userId of voterIds) {
-    await db.publicRequestVote.create({ data: { workItemId, userId } });
+    await adminDb.publicRequestVote.create({ data: { workItemId, userId } });
   }
 }
 
@@ -69,6 +70,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('workItemRepository.findPublicRoadmapSubmitted (6.12.7)', () => {
@@ -110,12 +112,15 @@ describe('workItemRepository.findPublicRoadmapSubmitted (6.12.7)', () => {
 
     // A triage item with NO submitter (a legacy/internal capture) — excluded.
     const unattributed = await createTestWorkItem(fx, { kind: 'bug', title: 'unattributed' });
-    await db.workItem.update({ where: { id: unattributed.id }, data: { triagedAt: new Date() } });
+    await adminDb.workItem.update({
+      where: { id: unattributed.id },
+      data: { triagedAt: new Date() },
+    });
 
     // An archived submission — excluded.
     const archived = await createTestWorkItem(fx, { kind: 'bug', title: 'archived' });
     await markSubmittedRequest(archived.id, submitter.id);
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     // A DECLINED submission (category `done` while still triaged) — excluded.
     const declined = await createTestWorkItem(fx, { kind: 'bug', title: 'declined' });
@@ -241,7 +246,7 @@ describe('workItemRepository.findPublicRoadmapByStatus (6.12.7)', () => {
 
     const archived = await createTestWorkItem(fx, { kind: 'task', title: 'archived done' });
     await setStatus(archived.id, 'done');
-    await db.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
+    await adminDb.workItem.update({ where: { id: archived.id }, data: { archivedAt: new Date() } });
 
     // A triage request that happens to be `done`-status — must NOT appear in the
     // promoted Done column (it belongs to the Submitted read, if anywhere).

@@ -10,6 +10,7 @@ import { TOOL_PAYLOADS } from '@/lib/mcp/payloads/registry';
 import { checkPayloadDrift } from '@/lib/mcp/payloads/driftGuard';
 import { startMcpHttpServer, type McpTestServer } from '../helpers/mcpHttpServer';
 import { createV1ProjectCaller, type V1ProjectCaller } from '../fixtures/apiV1Fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
 
@@ -46,6 +47,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.close();
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 beforeEach(async () => {

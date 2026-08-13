@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { IllegalParentTypeError } from '@/lib/workItems/errors';
 import type { IssueType } from '@/lib/issues/parentRules';
+import { adminDb } from '../../helpers/adminDb';
 import { truncateAuthTables } from '../../helpers/db';
 import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../fixtures';
 
@@ -13,7 +14,7 @@ import { makeWorkItemFixture as makeFixture, type WorkItemFixture } from '../../
 // even though the UI pre-filters (defense in depth).
 
 async function truncateAll(): Promise<void> {
-  await db.$executeRawUnsafe(
+  await adminDb.$executeRawUnsafe(
     'TRUNCATE TABLE "work_item_link", "work_item" RESTART IDENTITY CASCADE',
   );
   await truncateAuthTables();
@@ -25,6 +26,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // A legal tree: epic E (root), story/task/bug under E, subtask under the story.

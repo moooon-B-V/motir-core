@@ -15,6 +15,7 @@ import { PROJECT_NAV_ACCESS, canOfferNavDestination } from '@/lib/settings/proje
 import { resolveSettingsRefusal } from '@/app/(authed)/settings/project/_guard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import type { WorkspaceContext } from '@/lib/workspaces/context';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // Story MOTIR-2258 · Subtask MOTIR-2476 — RESOLUTION TO RENDER, end to end.
@@ -35,6 +36,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 const ctxFor = (userId: string, workspaceId: string): WorkspaceContext => ({ userId, workspaceId });

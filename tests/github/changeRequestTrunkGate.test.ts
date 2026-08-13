@@ -6,6 +6,7 @@ import { projectsService } from '@/lib/services/projectsService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { githubInstallationService } from '@/lib/services/githubInstallationService';
 import { githubWebhookService } from '@/lib/services/githubWebhookService';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 
 // MOTIR-1873 — THE TRUNK GATE. A merge only completes a work item when it landed
@@ -110,12 +111,12 @@ async function openThenMergeInto(identifier: string, baseRef: string, number = 1
 }
 
 async function statusOf(workItemId: string): Promise<string> {
-  const row = await db.workItem.findUnique({ where: { id: workItemId } });
+  const row = await adminDb.workItem.findUnique({ where: { id: workItemId } });
   return row!.status;
 }
 
 async function commentsOn(workItemId: string) {
-  return db.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.comment.findMany({ where: { workItemId }, orderBy: { createdAt: 'asc' } });
 }
 
 /** The status hops recorded on the append-only revision trail, oldest first. Their
@@ -123,7 +124,7 @@ async function commentsOn(workItemId: string) {
  *  `workflow_status` write leaves no revision); the ABSENCE of a `done` hop is the
  *  proof the gate held rather than transitioning and transitioning back. */
 async function statusHops(workItemId: string): Promise<string[]> {
-  const rows = await db.workItemRevision.findMany({
+  const rows = await adminDb.workItemRevision.findMany({
     where: { workItemId },
     orderBy: { changedAt: 'asc' },
   });
@@ -138,6 +139,7 @@ beforeEach(async () => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('the trunk gate — a merge completes an item only on the default branch', () => {
@@ -175,7 +177,7 @@ describe('the trunk gate — a merge completes an item only on the default branc
 
     // The PR row still records the truth about the merge itself — the gate changes
     // what the CARD says, never what the change request did.
-    const prRow = await db.githubPullRequest.findFirst({ where: { number: 1688 } });
+    const prRow = await adminDb.githubPullRequest.findFirst({ where: { number: 1688 } });
     expect(prRow).toMatchObject({ state: 'closed', merged: true, workItemId: s.item.id });
 
     // The item never reached `done` at all — not even briefly. The trail ends at

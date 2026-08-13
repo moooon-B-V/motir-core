@@ -10,6 +10,7 @@ import { encodeFilterParam, type FilterAst, type FilterCondition } from '@/lib/f
 import { AUTOMATION_AUTO_DISABLE_THRESHOLD } from '@/lib/automation/constants';
 import type { WorkItemFieldChangedData } from '@/lib/jobs/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 
@@ -39,6 +40,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 async function makeRule(
@@ -66,7 +68,10 @@ async function newItem(fx: WorkItemFixture, kind: 'task' | 'bug' | 'story' = 'ta
 }
 
 function executions(ruleId: string) {
-  return db.automationRuleExecution.findMany({ where: { ruleId }, orderBy: { createdAt: 'asc' } });
+  return adminDb.automationRuleExecution.findMany({
+    where: { ruleId },
+    orderBy: { createdAt: 'asc' },
+  });
 }
 
 function readItem(fx: WorkItemFixture, id: string) {
@@ -335,7 +340,7 @@ describe('failure ops (invariant #5)', () => {
       await created(fx, item.id, { eventId: `fail-${i}` });
     }
 
-    const ruleRow = await db.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
+    const ruleRow = await adminDb.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
     expect(ruleRow.consecutiveFailureCount).toBe(AUTOMATION_AUTO_DISABLE_THRESHOLD);
     expect(ruleRow.enabled).toBe(false);
     expect(await executions(rule.id)).toHaveLength(AUTOMATION_AUTO_DISABLE_THRESHOLD);
@@ -367,13 +372,13 @@ describe('failure ops (invariant #5)', () => {
       actions: [{ type: 'set_field', field: 'priority', value: 'high' }],
     });
     const item = await newItem(fx);
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: { consecutiveFailureCount: 4 },
     });
 
     await created(fx, item.id, { eventId: 'reset-1' });
-    const ruleRow = await db.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
+    const ruleRow = await adminDb.automationRule.findUniqueOrThrow({ where: { id: rule.id } });
     expect(ruleRow.consecutiveFailureCount).toBe(0);
   });
 });
@@ -449,7 +454,7 @@ describe('more action + trigger coverage', () => {
     const rule = await makeRule(fx, {});
     // A trigger config the engine doesn't recognise (a forward-compat guard) —
     // written behind the service's back; it must never accidentally fire.
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: { triggerConfig: { type: 'from_the_future' } },
     });
@@ -463,7 +468,7 @@ describe('more action + trigger coverage', () => {
     const rule = await makeRule(fx, {});
     // Corrupt the stored envelope behind the service's back (a server invariant
     // the 6.6.1 write path prevents — the engine must still not crash).
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: { conditionAst: { garbage: true } },
     });
@@ -477,7 +482,7 @@ describe('more action + trigger coverage', () => {
     const fx = await makeWorkItemFixture();
     const rule = await makeRule(fx, {});
     // Write a bogus action directly (bypassing the 6.6.1 registry validation).
-    await db.automationRule.update({
+    await adminDb.automationRule.update({
       where: { id: rule.id },
       data: { actions: [{ type: 'not_a_real_action' }] },
     });
@@ -513,7 +518,7 @@ describe('internal guards', () => {
   it('the failure email is a silent no-op when the owner no longer exists', async () => {
     const fx = await makeWorkItemFixture();
     const rule = await makeRule(fx, {});
-    const ruleRow = await db.automationRule.findUniqueOrThrow({
+    const ruleRow = await adminDb.automationRule.findUniqueOrThrow({
       where: { id: rule.id },
       include: { owner: { select: { id: true, name: true } } },
     });
@@ -544,10 +549,10 @@ describe('retention sweep', () => {
     await created(fx, item.id, { eventId: 'fresh' });
 
     // Back-date one audit row well past the 90-day window.
-    const oldRow = await db.automationRuleExecution.create({
+    const oldRow = await adminDb.automationRuleExecution.create({
       data: { ruleId: rule.id, status: 'success', workItemId: item.id, eventId: 'ancient' },
     });
-    await db.automationRuleExecution.update({
+    await adminDb.automationRuleExecution.update({
       where: { id: oldRow.id },
       data: { createdAt: new Date('2020-01-01T00:00:00Z') },
     });
@@ -566,7 +571,7 @@ describe('retention sweep', () => {
     // 501 stale rows → batch 1 deletes 500 (full → loop continues), batch 2
     // deletes 1 (short → drained). Exercises the multi-batch loop.
     const ancient = new Date('2019-06-01T00:00:00Z');
-    await db.automationRuleExecution.createMany({
+    await adminDb.automationRuleExecution.createMany({
       data: Array.from({ length: 501 }, (_unused, i) => ({
         ruleId: rule.id,
         status: 'success' as const,

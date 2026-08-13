@@ -564,11 +564,25 @@ export const projectsService = {
    * context, never off the wire (`withWorkspaceServiceContext`'s security constraint);
    * the in-tx variant below is still what a caller inside a bound transaction uses.
    *
-   * Both refusals stay and are still distinguishable: a genuinely absent project is
-   * `ProjectNotFoundError`, a cross-workspace one is `ProjectWorkspaceMismatchError`.
-   * That distinction is deliberate (see `getByKey` below for why the caller-supplied
-   * path must NOT make it) and RLS does not blur it — under `motir_app` a foreign row
-   * is invisible, but the explicit comparison is what still refuses it under BYPASSRLS.
+   * Both refusals stay, and the distinction is deliberate (see `getByKey` below for why
+   * the caller-supplied path must NOT make it).
+   *
+   * ⚠️ BUT WHICH ONE YOU GET DEPENDS ON THE ROLE (MOTIR-2776). Under BYPASSRLS the read
+   * returns the foreign row and the explicit comparison refuses it —
+   * `ProjectWorkspaceMismatchError`. Under `motir_app` the policy hides the row first,
+   * so `!project` fires and the refusal is `ProjectNotFoundError`; the comparison below
+   * is then unreachable, BY DESIGN and not by accident.
+   *
+   * That is the better of the two answers and is why it was adopted rather than worked
+   * around: a mismatch error confirms to its caller that the id exists somewhere else in
+   * the system, which is exactly what tenant isolation should not disclose. Every
+   * comparable tool 404s a resource you cannot see. Nothing is lost at the transport —
+   * the only consumer that names both (`app/api/_test/work-items/route.ts`) maps them to
+   * the same `notFound()`, so no route, DTO or copy distinguishes them.
+   *
+   * The comparison stays as DEFENCE IN DEPTH: it is what still refuses a foreign row if
+   * a policy is ever wrong, and it is the arm that carries the check off-cloud and in any
+   * bypass context. Unreachable-under-the-role is not the same as dead.
    */
   async assertProjectInWorkspace(projectId: string, workspaceId: string): Promise<Project> {
     const project = await readProjectForService(projectId, workspaceId);
@@ -658,6 +672,9 @@ export const projectsService = {
   ): Promise<Project> {
     const project = await projectRepository.findById(projectId, tx);
     if (!project) throw new ProjectNotFoundError(projectId);
+    // Same role-dependent taxonomy as `assertProjectInWorkspace` above (MOTIR-2776):
+    // under `motir_app` the policy hides a foreign row, so this arm is unreachable and
+    // the refusal arrives as `ProjectNotFoundError`. It stays as defence in depth.
     if (project.workspaceId !== workspaceId) {
       throw new ProjectWorkspaceMismatchError(projectId, workspaceId);
     }

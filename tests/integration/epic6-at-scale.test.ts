@@ -10,6 +10,7 @@ import { automationEngineService } from '@/lib/services/automationEngineService'
 import { DEFAULT_SORT, ISSUE_LIST_PAGE_SIZE } from '@/lib/issues/issueListView';
 import { expectedCreatedVsResolved, expectedStatusDistribution } from '../e2e/_helpers/reporting';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { captureJobEvents, type CapturedJobEvent } from '../helpers/jobs';
 
@@ -63,6 +64,7 @@ afterEach(() => {
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 // --------------------------------------------------------------------------
@@ -88,7 +90,7 @@ describe('epic6-at-scale (6.7.3) — SQL-aggregated reporting', () => {
       // Back-date creation across ~7 weekly buckets, all comfortably inside the
       // 70-day window below (no boundary item → no off-by-one flake).
       const createdAt = new Date(now - ((i % 7) * 7 + 3) * DAY);
-      await db.workItem.update({ where: { id: item.id }, data: { createdAt } });
+      await adminDb.workItem.update({ where: { id: item.id }, data: { createdAt } });
       // Resolve ~40% by cancelling (todo→cancelled is a single legal edge into
       // the done CATEGORY — the report's "resolved" predicate).
       if (i % 5 < 2) await workItemsService.updateStatus(item.id, 'cancelled', fx.ctx);
@@ -181,7 +183,7 @@ describe('epic6-at-scale (6.7.3) — heavy predicates are index-served, not Seq 
   beforeEach(async () => {
     fx = await makeWorkItemFixture({ name: 'Index scale', identifier: 'IDX' });
     // A select custom field + option for the CF-join predicate.
-    const field = await db.customFieldDefinition.create({
+    const field = await adminDb.customFieldDefinition.create({
       data: {
         workspaceId: fx.workspaceId,
         projectId: fx.projectId,
@@ -192,7 +194,7 @@ describe('epic6-at-scale (6.7.3) — heavy predicates are index-served, not Seq 
       },
     });
     fieldId = field.id;
-    const option = await db.customFieldOption.create({
+    const option = await adminDb.customFieldOption.create({
       data: { fieldId, label: 'Frontend', position: 'a0' },
     });
     optionId = option.id;
@@ -205,7 +207,7 @@ describe('epic6-at-scale (6.7.3) — heavy predicates are index-served, not Seq 
         fx.ctx,
       );
       if (i % 2 === 0) {
-        await db.customFieldValue.create({
+        await adminDb.customFieldValue.create({
           data: {
             workspaceId: fx.workspaceId,
             workItemId: item.id,
@@ -215,8 +217,8 @@ describe('epic6-at-scale (6.7.3) — heavy predicates are index-served, not Seq 
         });
       }
     }
-    await db.$executeRawUnsafe('ANALYZE "work_item"');
-    await db.$executeRawUnsafe('ANALYZE "custom_field_value"');
+    await adminDb.$executeRawUnsafe('ANALYZE "work_item"');
+    await adminDb.$executeRawUnsafe('ANALYZE "custom_field_value"');
   });
 
   /**
@@ -226,7 +228,9 @@ describe('epic6-at-scale (6.7.3) — heavy predicates are index-served, not Seq 
    * usable index is present, independent of table size.
    */
   async function explain(sql: string, params: unknown[]): Promise<string> {
-    const rows = await db.$transaction(async (tx) => {
+    // ADMIN client (MOTIR-2752): an EXPLAIN asserts the INDEX serves the query, which
+    // is a property of the schema. As the app role the plan also carries the RLS filter.
+    const rows = await adminDb.$transaction(async (tx) => {
       await tx.$executeRawUnsafe('SET LOCAL enable_seqscan = off');
       return tx.$queryRawUnsafe<Array<Record<string, string>>>(`EXPLAIN ${sql}`, ...params);
     });
@@ -351,12 +355,14 @@ describe('epic6-at-scale (6.7.3) — the rule storm fires exactly once under ret
     }
 
     // Exactly N execution audit rows for the rule — one per item, no duplicates.
-    const executions = await db.automationRuleExecution.findMany({ where: { ruleId: rule.id } });
+    const executions = await adminDb.automationRuleExecution.findMany({
+      where: { ruleId: rule.id },
+    });
     expect(executions).toHaveLength(N);
     expect(executions.every((e) => e.status === 'success')).toBe(true);
 
     // Every action landed: all N items carry the 'swept' label.
-    const labelled = await db.workItemLabel.count({
+    const labelled = await adminDb.workItemLabel.count({
       where: { workItemId: { in: itemIds }, label: { nameLower: 'swept' } },
     });
     expect(labelled).toBe(N);

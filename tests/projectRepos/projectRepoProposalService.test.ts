@@ -20,6 +20,7 @@ import {
 import type { ProjectRepoDto } from '@/lib/dto/projectRepos';
 import type { RawPreplanStateResponse } from '@/lib/ai/types';
 import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures/workItemFixtures';
+import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { randomToken } from '../helpers/random';
 
@@ -55,7 +56,7 @@ function preplanWith(
  *  against (the 7.10.3 installation mirror). */
 async function connectRepo(workspaceId: string, name: string): Promise<GithubRepo> {
   const installationId = `inst-${workspaceId}-github`;
-  const inst = await db.githubInstallation.upsert({
+  const inst = await adminDb.githubInstallation.upsert({
     where: { installationId },
     create: {
       installationId,
@@ -66,7 +67,7 @@ async function connectRepo(workspaceId: string, name: string): Promise<GithubRep
     },
     update: {},
   });
-  return db.githubRepo.create({
+  return adminDb.githubRepo.create({
     data: {
       installationId: inst.id,
       workspaceId: workspaceId,
@@ -95,6 +96,7 @@ afterEach(() => vi.restoreAllMocks());
 
 afterAll(async () => {
   await db.$disconnect();
+  await adminDb.$disconnect();
 });
 
 describe('projectRepoProposalService.proposeRepositorySet — deriving + persisting', () => {
