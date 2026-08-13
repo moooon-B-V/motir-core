@@ -20,9 +20,16 @@ export const attachmentRepository = {
    * inside the delete transaction (the read guards the subsequent write); the
    * service applies the workspace-scoping + linked checks (a repo is a leaf).
    */
-  async findById(id: string, tx?: Prisma.TransactionClient): Promise<Attachment | null> {
-    const client = tx ?? db;
-    return client.attachment.findUnique({ where: { id } });
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
+  async findById(id: string, tx: Prisma.TransactionClient): Promise<Attachment | null> {
+    return tx.attachment.findUnique({ where: { id } });
   },
 
   /**
@@ -74,14 +81,21 @@ export const attachmentRepository = {
    * workspace's row (defence in depth with the RLS gate — finding #26). Empty
    * input short-circuits to [] without touching the DB.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async findManyByIds(
     workspaceId: string,
     ids: string[],
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<Attachment[]> {
     if (ids.length === 0) return [];
-    const client = tx ?? db;
-    return client.attachment.findMany({ where: { workspaceId, id: { in: ids } } });
+    return tx.attachment.findMany({ where: { workspaceId, id: { in: ids } } });
   },
 
   /**
@@ -164,13 +178,20 @@ export const attachmentRepository = {
    * hatch); the (work_item_id, created_at DESC) index serves the
    * IS NULL + createdAt range scan.
    */
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797). It carried a `tx ?? db` fallback until every
+   * caller bound its read; the arm then had no caller, so it was dead code that
+   * returned an EMPTY result under `motir_app` and raised nothing — the exact
+   * silent failure this cutover exists to remove. A branch that cannot be
+   * honestly exercised in both role modes should not exist. Same disposition
+   * MOTIR-2755 gave projectRoleDefinitionRepository.
+   */
   async listOrphans(
     options: { olderThan: Date; take?: number; cursor?: string },
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<Attachment[]> {
     const { olderThan, take = 200, cursor } = options;
-    const client = tx ?? db;
-    return client.attachment.findMany({
+    return tx.attachment.findMany({
       where: { workItemId: null, createdAt: { lt: olderThan } },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
       take,
