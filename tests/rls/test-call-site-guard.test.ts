@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 import {
   ADJUDICATED_UNBOUND_FILES,
@@ -214,9 +214,19 @@ describe('the test call-site classifier rules on every shape', () => {
 });
 
 describe('the ratchets over the real test suite', () => {
+  // ⚠️ Scan ONCE and share it. `scanTestCallSites()` parses every `.ts` under
+  // `tests/` plus all of `lib/repositories/` — ~1.3 s locally. Calling it per
+  // test cost 4× that, which fits comfortably in the 15 s default on a quiet
+  // machine and does NOT on a CI runner with three vitest shards competing for
+  // the box: every test in this block timed out on the first parent PR while
+  // passing locally. The scan is pure and the files do not change mid-run, so
+  // one call is not just faster, it is the honest shape.
+  let scan: ReturnType<typeof scanTestCallSites>;
+  beforeAll(() => {
+    scan = scanTestCallSites();
+  }, 60_000);
   it('NO test call site reads a gated table unbound — the class is closed', () => {
-    const { sites } = scanTestCallSites();
-    const inScope = sites.filter((s) => s.verdict === 'in-scope');
+    const inScope = scan.sites.filter((s) => s.verdict === 'in-scope');
 
     expect(
       inScope.map((s) => `${s.key} ${s.repository}.${s.method}`),
@@ -236,8 +246,7 @@ describe('the ratchets over the real test suite', () => {
   });
 
   it('no out-of-scope call site has been given a `tx`', () => {
-    const { sites } = scanTestCallSites();
-    const untouched = sites.filter((s) => outOfScope(s) && !s.bound);
+    const untouched = scan.sites.filter((s) => outOfScope(s) && !s.bound);
 
     expect(
       untouched.length,
@@ -253,7 +262,7 @@ describe('the ratchets over the real test suite', () => {
   });
 
   it('every call site in the suite is classifiable', () => {
-    const { unclassifiable } = scanTestCallSites();
+    const { unclassifiable } = scan;
 
     expect(
       unclassifiable,
@@ -284,8 +293,7 @@ describe('the ratchets over the real test suite', () => {
       );
     }
 
-    const { sites } = scanTestCallSites();
-    const adjudicated = sites.filter((s) => s.verdict === 'adjudicated-unbound');
+    const adjudicated = scan.sites.filter((s) => s.verdict === 'adjudicated-unbound');
     expect(adjudicated.length).toBeGreaterThan(0);
     // A write in an adjudicated file still requires its `tx` and still reads as
     // bound: the decision is "do not bind these READS", not "this file is exempt".
