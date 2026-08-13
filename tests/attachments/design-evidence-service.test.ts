@@ -3,6 +3,7 @@ import { db } from '@/lib/db';
 import { makeWorkItemFixture, createTestWorkItem, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // designEvidenceService (Story MOTIR-2664 · Subtask MOTIR-2666) against a REAL
 // Postgres. The Blob adapter is the ONE mocked external (no network); every
@@ -801,11 +802,15 @@ describe('designEvidenceService.getCurrentForWorkItem', () => {
 
     // The repository's `tx ?? db` fallback: the panel read runs under an
     // already-bound workspace context, not inside the supersede transaction.
-    const current = await designEvidenceRepository.findCurrentByWorkItem(card.id);
+    const current = await withWorkspaceServiceContext(fx.ctx.workspaceId, (tx) =>
+      designEvidenceRepository.findCurrentByWorkItem(card.id, tx),
+    );
     expect(current!.id).toBe(created.id);
     expect(current!.assets).toHaveLength(1);
 
-    const byId = await designEvidenceRepository.findById(created.id);
+    const byId = await withWorkspaceServiceContext(fx.ctx.workspaceId, (tx) =>
+      designEvidenceRepository.findById(created.id, tx),
+    );
     expect(byId!.workItemId).toBe(card.id);
   });
 

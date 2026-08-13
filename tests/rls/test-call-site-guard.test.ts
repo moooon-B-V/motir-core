@@ -52,7 +52,8 @@ const FIXTURE = path.join(process.cwd(), 'tests/rls/__fixtures__/testCallSites')
  */
 // 375 - 39 (MOTIR-2834, tests/integration/sprints) = 336
 // 336 - 53 (MOTIR-2835, tests/integration/work-items) = 283
-const IN_SCOPE_CEILING = 283;
+// 283 - 40 (MOTIR-2836, comments + notifications + attachments) = 243
+const IN_SCOPE_CEILING = 243;
 
 /**
  * The do-not-touch ratchet, and the load-bearing half of this file.
