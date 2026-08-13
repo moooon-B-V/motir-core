@@ -2180,6 +2180,7 @@ export const workItemRepository = {
   async findChildrenForItems(
     parentIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<
     Array<{
       parentId: string;
@@ -2191,7 +2192,8 @@ export const workItemRepository = {
     }>
   > {
     if (parentIds.length === 0) return [];
-    const rows = await db.workItem.findMany({
+    const client = tx ?? db;
+    const rows = await client.workItem.findMany({
       where: {
         parentId: { in: parentIds },
         workspaceId,

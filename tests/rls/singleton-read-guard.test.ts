@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (44) ────────────────────────────────────────────────
+  // ── unbound-read-path (39) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -165,13 +165,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-read-path',
     'projectSquareService',
   ],
-  'sprintReportEntryRepository.ts#countAddedAfterStart': ['unbound-read-path', 'sprintsService'],
-  'sprintReportEntryRepository.ts#countByCompletion': ['unbound-read-path', 'sprintsService'],
-  'sprintReportEntryRepository.ts#findByCompletion': ['unbound-read-path', 'sprintsService'],
-  'sprintReportEntryRepository.ts#sumPointsByCompletion': [
-    'unbound-read-path',
-    'estimationService',
-  ],
   'sprintRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
   'workItemLinkRepository.ts#findBlockedByEdges': ['unbound-read-path', 'workItemsService'],
   'workItemLinkRepository.ts#findBlockedEdgesForItems': ['unbound-read-path', 'workItemsService'],
@@ -196,7 +189,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'workItemRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
   'workItemRepository.ts#findBySessionBranch': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
-  'workItemRepository.ts#findChildrenForItems': ['unbound-read-path', 'sprintsService'],
   'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#findEpicAncestors': ['unbound-read-path', 'boardsService'],
   'workItemRepository.ts#findExpandableStubs': ['unbound-read-path', 'workItemsService'],
@@ -302,8 +294,10 @@ const UNREVIEWED_CEILING = 8;
  * absolute: sibling cards edit this same line, and an absolute would discard theirs.
  * 52 -> 44: MOTIR-2800 bound `reportsService` — its eight aggregates, all raw SQL.
  * Same subtraction discipline.
+ * 44 -> 39: MOTIR-2804 bound `sprintsService` + `estimationService` — the four
+ * `sprint_report_entry` reads and the child rollup.
  */
-const UNBOUND_READ_PATH_CEILING = 44;
+const UNBOUND_READ_PATH_CEILING = 39;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

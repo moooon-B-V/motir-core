@@ -8,7 +8,7 @@ import { boardsService } from '@/lib/services/boardsService';
 import { workflowsService } from '@/lib/services/workflowsService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
 import { estimationService } from '@/lib/services/estimationService';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { keyForAppend } from '@/lib/workItems/positioning';
 import { toSprintDto, toSprintReportDto, toSprintReportPage } from '@/lib/mappers/sprintMappers';
 import { PermissionDeniedError } from '@/lib/projects/errors';
@@ -175,9 +175,11 @@ export const sprintsService = {
    * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
    */
   async getById(id: string, ctx: ServiceContext): Promise<SprintDto> {
-    const row = await sprintRepository.findById(id, ctx.workspaceId);
+    const { row, issueCount } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+      row: await sprintRepository.findById(id, ctx.workspaceId, tx),
+      issueCount: await workItemRepository.countSprintIssues(id, ctx.workspaceId, undefined, tx),
+    }));
     if (!row) throw new SprintNotFoundError(id);
-    const issueCount = await workItemRepository.countSprintIssues(id, ctx.workspaceId);
     return toSprintDto(row, issueCount);
   },
 
@@ -226,10 +228,11 @@ export const sprintsService = {
     ctx: ServiceContext,
     condition: ValidityCondition = DEFAULT_VALIDITY_CONDITION,
   ): Promise<SprintValidityDto> {
-    const sprint =
+    const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
       sprintId === null
-        ? await sprintRepository.findActiveByProject(projectId, ctx.workspaceId)
-        : await sprintRepository.findById(sprintId, ctx.workspaceId);
+        ? sprintRepository.findActiveByProject(projectId, ctx.workspaceId, tx)
+        : sprintRepository.findById(sprintId, ctx.workspaceId, tx),
+    );
     if (!sprint) {
       if (sprintId === null) throw new NoActiveSprintError(projectId);
       throw new SprintNotFoundError(sprintId);
@@ -253,7 +256,9 @@ export const sprintsService = {
     patch: UpdateSprintInput,
     ctx: ServiceContext,
   ): Promise<SprintDto> {
-    const existing = await sprintRepository.findById(id, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!existing) throw new SprintNotFoundError(id);
     await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
     if (existing.state === 'complete') throw new CannotModifyCompletedSprintError(id);
@@ -293,7 +298,9 @@ export const sprintsService = {
    * `CannotDeleteActiveSprintError` (409).
    */
   async deleteSprint(id: string, ctx: ServiceContext): Promise<void> {
-    const existing = await sprintRepository.findById(id, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!existing) throw new SprintNotFoundError(id);
     await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
     if (existing.state === 'active') throw new CannotDeleteActiveSprintError(id);
@@ -368,7 +375,9 @@ export const sprintsService = {
    * (400), `SprintWindowInvalidError` (422), `SprintAlreadyActiveError` (409).
    */
   async startSprint(id: string, input: StartSprintInput, ctx: ServiceContext): Promise<SprintDto> {
-    const existing = await sprintRepository.findById(id, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!existing) throw new SprintNotFoundError(id);
     await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
 
@@ -517,7 +526,9 @@ export const sprintsService = {
     input: CompleteSprintInput,
     ctx: ServiceContext,
   ): Promise<SprintDto> {
-    const existing = await sprintRepository.findById(id, ctx.workspaceId);
+    const existing = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(id, ctx.workspaceId, tx),
+    );
     if (!existing) throw new SprintNotFoundError(id);
     await assertCanManageSprints(ctx.userId, existing.projectId, ctx.workspaceId);
 
@@ -535,7 +546,9 @@ export const sprintsService = {
     // non-planned / self target is rejected with InvalidCarryOverTargetError.
     if (carryOverTo !== 'backlog') {
       const targetId = carryOverTo.sprintId;
-      const target = await sprintRepository.findById(targetId, ctx.workspaceId);
+      const target = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        sprintRepository.findById(targetId, ctx.workspaceId, tx),
+      );
       if (
         !target ||
         target.id === existing.id ||
@@ -726,7 +739,9 @@ export const sprintsService = {
     options: GetSprintReportOptions,
     ctx: ServiceContext,
   ): Promise<SprintReportDto> {
-    const sprint = await sprintRepository.findById(id, ctx.workspaceId);
+    const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(id, ctx.workspaceId, tx),
+    );
     // `report:view` (MOTIR-2351) — the sprint report is analytics, not a sprint
     // ACT, so it does not ride this file's `sprint:manage` gate. One key, one
     // owning card.
@@ -753,23 +768,40 @@ export const sprintsService = {
     // complete-modal live preview) / `planned` sprint has NO snapshot and falls
     // through to the live-membership read below.
     if (sprint.state === 'complete') {
-      const [snapPoints, completedCount, incompleteCount, completedRows, incompleteRows, added] =
-        await Promise.all([
-          estimationService.rollupForSprintSnapshot(id, ctx),
-          sprintReportEntryRepository.countByCompletion(id, ctx.workspaceId, true),
-          sprintReportEntryRepository.countByCompletion(id, ctx.workspaceId, false),
-          sprintReportEntryRepository.findByCompletion(id, ctx.workspaceId, {
-            completed: true,
-            take,
-            cursor: options.completedCursor,
-          }),
-          sprintReportEntryRepository.findByCompletion(id, ctx.workspaceId, {
-            completed: false,
-            take,
-            cursor: options.incompleteCursor,
-          }),
-          sprintReportEntryRepository.countAddedAfterStart(id, ctx.workspaceId),
-        ]);
+      // The snapshot roll-up is a SERVICE call and opens its own bound context
+      // (the call-into-another-service clause in the transaction-shape ADR); the
+      // five snapshot reads this method owns share ONE. They are five views of a
+      // single frozen table and are rendered as one report, so a shared snapshot
+      // is what stops the counts disagreeing with the rows they head.
+      const snapPoints = await estimationService.rollupForSprintSnapshot(id, ctx);
+      const { completedCount, incompleteCount, completedRows, incompleteRows, added } =
+        await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+          completedCount: await sprintReportEntryRepository.countByCompletion(
+            id,
+            ctx.workspaceId,
+            true,
+            tx,
+          ),
+          incompleteCount: await sprintReportEntryRepository.countByCompletion(
+            id,
+            ctx.workspaceId,
+            false,
+            tx,
+          ),
+          completedRows: await sprintReportEntryRepository.findByCompletion(
+            id,
+            ctx.workspaceId,
+            { completed: true, take, cursor: options.completedCursor },
+            tx,
+          ),
+          incompleteRows: await sprintReportEntryRepository.findByCompletion(
+            id,
+            ctx.workspaceId,
+            { completed: false, take, cursor: options.incompleteCursor },
+            tx,
+          ),
+          added: await sprintReportEntryRepository.countAddedAfterStart(id, ctx.workspaceId, tx),
+        }));
       return toSprintReportDto({
         sprintId: sprint.id,
         state: sprint.state as SprintDto['state'],
@@ -941,9 +973,12 @@ async function computeSprintValidity(
   // not-done children (a parent can only be finished once every child is done).
   // Keyed on the not-done MEMBERS directly (not the ancestor probe set) — this is
   // a direct parent→child dependency owned by the member.
-  const childEdges = await workItemRepository.findChildrenForItems(
-    notDone.map((m) => m.id),
-    ctx.workspaceId,
+  const childEdges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findChildrenForItems(
+      notDone.map((m) => m.id),
+      ctx.workspaceId,
+      tx,
+    ),
   );
   // Per-project terminal sets — a block can be cross-project, so each gating
   // item's done-ness is judged against its OWN project (finding #21). Children

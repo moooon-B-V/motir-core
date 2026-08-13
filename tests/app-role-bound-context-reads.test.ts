@@ -5,7 +5,9 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
+import { estimationService } from '@/lib/services/estimationService';
 import { reportsService } from '@/lib/services/reportsService';
+import { sprintsService } from '@/lib/services/sprintsService';
 import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { encodeFilterParam } from '@/lib/filters/ast';
@@ -499,5 +501,104 @@ describe('reportsService — the aggregates that drew flat zero lines', () => {
     if (result.state !== 'ok') throw new Error('unreachable');
     expect(result.data.buckets.reduce((n, b) => n + b.count, 0)).toBe(1);
     expect(result.data.windowAverage).not.toBeNull();
+  });
+});
+
+// ── MOTIR-2804 · sprintsService + estimationService ───────────────────────────
+//
+// A completed sprint's report is read from the FROZEN `sprint_report_entry`
+// snapshot, and the velocity chart sums the same table through
+// `estimationService`. Unbound, all of it read as a team that did nothing: zero
+// completed, zero added mid-sprint, a velocity of zero — and the zero then feeds
+// the estimation surface, so the wrong number travels one layer further than the
+// report that produced it.
+//
+// ⚠️ THESE ARE SUMS AND COUNTS, which is why they are asserted against seeded
+// values rather than for non-emptiness. `expect(velocity).toBe(0)` is what an
+// unbound read passes; only a specific figure separates "the team completed
+// nothing" from "the query could not see the rows".
+
+describe('estimationService + sprintsService — the frozen sprint report', () => {
+  /** A COMPLETED sprint carrying a two-row snapshot: one done (5 pts), one not. */
+  async function seedCompletedSprint(identifier: string) {
+    const fx = await makeWorkItemFixture({ identifier });
+    const sprint = await adminDb.sprint.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'Closed sprint',
+        state: 'complete',
+        sequence: 1,
+        completedAt: new Date(),
+        committedPoints: 8,
+        committedIssueCount: 2,
+      },
+    });
+    const done = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Finished' },
+      fx.ctx,
+    );
+    const open = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Carried over' },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({
+      where: { id: done.id },
+      data: { sprintId: sprint.id, storyPoints: 5, status: 'done' },
+    });
+    await adminDb.workItem.update({
+      where: { id: open.id },
+      data: { sprintId: sprint.id, storyPoints: 3 },
+    });
+    await adminDb.sprintReportEntry.createMany({
+      data: [
+        {
+          workspaceId: fx.workspaceId,
+          sprintId: sprint.id,
+          workItemId: done.id,
+          completed: true,
+          addedAfterStart: false,
+        },
+        {
+          workspaceId: fx.workspaceId,
+          sprintId: sprint.id,
+          workItemId: open.id,
+          completed: false,
+          addedAfterStart: true,
+        },
+      ],
+    });
+    return { fx, sprintId: sprint.id };
+  }
+
+  it('reports the frozen completed / incomplete split and the added-during figure', async () => {
+    const { fx, sprintId } = await seedCompletedSprint('SPA');
+
+    const report = await sprintsService.getSprintReport(sprintId, {}, fx.ctx);
+
+    // Unbound, every one of these read 0 — a closed sprint that looks empty.
+    expect(report.completed.totalCount).toBe(1);
+    expect(report.incomplete.totalCount).toBe(1);
+    expect(report.addedAfterStart).toBe(1);
+    expect(report.completed.items.map((i) => i.title)).toEqual(['Finished']);
+    expect(report.points.completed).toBe(5);
+    expect(report.points.notCompleted).toBe(3);
+  });
+
+  it('rolls the sprint up to a NON-ZERO velocity input rather than a silent zero', async () => {
+    const { fx, sprintId } = await seedCompletedSprint('SPB');
+
+    const snapshot = await estimationService.rollupForSprintSnapshot(sprintId, fx.ctx);
+    expect(snapshot.completed).toBe(5);
+    expect(snapshot.notCompleted).toBe(3);
+
+    // And through the chart the estimation surface actually renders. A `sum`
+    // returns 0 rather than failing when the read sees nothing, so this is the
+    // vacuous-pass shape the story exists to remove.
+    const velocity = await reportsService.getVelocity({ projectId: fx.projectId }, fx.ctx);
+    expect(velocity.sprints).toHaveLength(1);
+    expect(velocity.sprints[0]?.completed).toBe(5);
+    expect(velocity.sprints[0]?.committed).toBe(8);
+    expect(velocity.averageCompleted).toBe(5);
   });
 });

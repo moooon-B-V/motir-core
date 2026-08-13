@@ -1,10 +1,10 @@
-import type { EstimationStatistic, PointScale } from '@/generated/prisma/client';
+import type { EstimationStatistic, PointScale, Prisma } from '@/generated/prisma/client';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { sprintRepository } from '@/lib/repositories/sprintRepository';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { toWorkItemDto } from '@/lib/mappers/workItemMappers';
 import { toEstimationConfigDto, toSprintPointsDto } from '@/lib/mappers/estimationMappers';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
@@ -167,7 +167,13 @@ export const estimationService = {
    * Throws: `SprintNotFoundError` (404 — unknown / cross-workspace sprint).
    */
   async rollupForSprint(sprintId: string, ctx: ServiceContext): Promise<SprintPointsDto> {
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
+    // ONE bound transaction for the two reads that precede the gate
+    // (docs/decisions/bound-read-transaction-shape.md). Unbound, `findById`
+    // returned null and every velocity bar, sprint report and scrum header threw
+    // SprintNotFoundError for a sprint that plainly exists.
+    const sprint = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      sprintRepository.findById(sprintId, ctx.workspaceId, tx),
+    );
     if (!sprint) throw new SprintNotFoundError(sprintId);
     // `report:view` (MOTIR-2351), NOT `estimation:manage`. This method had no
     // project gate; its sibling `setEstimationConfig` is the one MOTIR-2298 put
@@ -177,11 +183,12 @@ export const estimationService = {
     // who can see the project.
     await projectAccessService.assertPermission(sprint.projectId, ctx, 'report:view');
 
-    const statistic = await resolveStatistic(sprint.projectId);
-    const { committed, completed } = await workItemRepository.sumPointsForSprint(
-      sprintId,
+    const { committed, completed } = await withWorkspaceServiceContext(
       ctx.workspaceId,
-      statistic,
+      async (tx) => {
+        const statistic = await resolveStatistic(sprint.projectId, tx);
+        return workItemRepository.sumPointsForSprint(sprintId, ctx.workspaceId, statistic, tx);
+      },
     );
     return toSprintPointsDto(committed, completed);
   },
@@ -205,11 +212,18 @@ export const estimationService = {
     sprintId: string,
     ctx: ServiceContext,
   ): Promise<{ completed: number; notCompleted: number }> {
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
-    if (!sprint) throw new SprintNotFoundError(sprintId);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId, tx);
+      if (!sprint) throw new SprintNotFoundError(sprintId);
 
-    const statistic = await resolveStatistic(sprint.projectId);
-    return sprintReportEntryRepository.sumPointsByCompletion(sprintId, ctx.workspaceId, statistic);
+      const statistic = await resolveStatistic(sprint.projectId, tx);
+      return sprintReportEntryRepository.sumPointsByCompletion(
+        sprintId,
+        ctx.workspaceId,
+        statistic,
+        tx,
+      );
+    });
   },
 
   /**
@@ -236,14 +250,29 @@ export const estimationService = {
     columns: Array<{ id: string; statusKeys: string[] }>,
     ctx: ServiceContext,
   ): Promise<{ points: SprintPointsDto; columnPoints: Record<string, number> }> {
-    const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId);
-    if (!sprint) throw new SprintNotFoundError(sprintId);
-
-    const statistic = await resolveStatistic(sprint.projectId);
-    const [{ committed, completed }, perStatus] = await Promise.all([
-      workItemRepository.sumPointsForSprint(sprintId, ctx.workspaceId, statistic),
-      workItemRepository.sumPointsBySprintAndStatus(sprintId, ctx.workspaceId, statistic),
-    ]);
+    const { committed, completed, perStatus } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => {
+        const sprint = await sprintRepository.findById(sprintId, ctx.workspaceId, tx);
+        if (!sprint) throw new SprintNotFoundError(sprintId);
+        const statistic = await resolveStatistic(sprint.projectId, tx);
+        const sums = await workItemRepository.sumPointsForSprint(
+          sprintId,
+          ctx.workspaceId,
+          statistic,
+          tx,
+        );
+        return {
+          ...sums,
+          perStatus: await workItemRepository.sumPointsBySprintAndStatus(
+            sprintId,
+            ctx.workspaceId,
+            statistic,
+            tx,
+          ),
+        };
+      },
+    );
 
     const pointsByStatus = new Map(perStatus.map((r) => [r.status, r.points]));
     const columnPoints: Record<string, number> = {};
@@ -272,8 +301,10 @@ export const estimationService = {
     // `project:browse` (MOTIR-2365) — the row said `existing` and the code had
     // only the workspace check above.
     await projectAccessService.assertPermission(item.projectId, ctx, 'project:browse');
-    const statistic = await resolveStatistic(item.projectId);
-    return workItemRepository.sumPointsForParent(parentId, ctx.workspaceId, statistic);
+    return withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const statistic = await resolveStatistic(item.projectId, tx);
+      return workItemRepository.sumPointsForParent(parentId, ctx.workspaceId, statistic, tx);
+    });
   },
 };
 
@@ -354,8 +385,11 @@ function validateScaleValues(values: number[]): number[] {
  * reference lookup — the roll-up's own `workspaceId` gate keeps the aggregate
  * tenant-scoped, so no extra tenancy check is needed here.
  */
-async function resolveStatistic(projectId: string): Promise<EstimationStatistic> {
-  const config = await projectRepository.findEstimationConfig(projectId);
+async function resolveStatistic(
+  projectId: string,
+  tx?: Prisma.TransactionClient,
+): Promise<EstimationStatistic> {
+  const config = await projectRepository.findEstimationConfig(projectId, tx);
   return config?.estimationStatistic ?? 'story_points';
 }
 
