@@ -34,13 +34,19 @@ export const planChangeSessionRepository = {
     return client.planChangeSession.findFirst({ where: { projectId, scopeKey, workspaceId } });
   },
 
+  /**
+   * ⚠️ `tx` is REQUIRED (MOTIR-2797) — unlike its sibling `findByProjectAndScope`,
+   * which keeps its fallback because `planChangeSessionsService` still calls that
+   * one unbound (MOTIR-2796's to fix). This one had no unbound caller left once
+   * the tests bound, so the arm was dead code returning an EMPTY result under
+   * `motir_app` while raising nothing.
+   */
   async findById(
     id: string,
     workspaceId: string,
-    tx?: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient,
   ): Promise<PlanChangeSession | null> {
-    const client = tx ?? db;
-    return client.planChangeSession.findFirst({ where: { id, workspaceId } });
+    return tx.planChangeSession.findFirst({ where: { id, workspaceId } });
   },
 
   /**
