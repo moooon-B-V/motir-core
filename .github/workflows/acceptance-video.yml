@@ -317,8 +317,14 @@ jobs:
       # `--shard=i/N` (MOTIR-2600). Playwright partitions the suite across the
       # legs, so every recording is produced by exactly one of them — which is
       # what makes the per-shard publish step below publish each receipt once.
+      # `--pass-with-no-tests` (MOTIR-2769): the lane's membership is now exactly
+      # the stories currently IN REVIEW, so an EMPTY lane is a legitimate — and
+      # after a triage, common — state rather than a misconfiguration. Playwright
+      # exits non-zero on "no tests found" by default, which would red-light every
+      # PR that touches this workflow or the config while no story is in flight.
+      # A shard leg can also legitimately draw zero specs once the lane is small.
       - name: Run E2E (acceptance-video)
-        run: pnpm test:e2e --config playwright.acceptance.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }}
+        run: pnpm test:e2e --config playwright.acceptance.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ matrix.total }}
 
       # On a GREEN acceptance run, publish the recordings this PR owns to their
       # OWN STORY's acceptance panel (BYOK). The lane carries one chaptered

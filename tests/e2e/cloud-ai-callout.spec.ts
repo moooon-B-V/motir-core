@@ -59,7 +59,7 @@
 // `acceptance-plan-change-conversation.spec.ts`. Nothing on the callout's own
 // path is faked: the orb, the menu, the href and the workspace all run real.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';

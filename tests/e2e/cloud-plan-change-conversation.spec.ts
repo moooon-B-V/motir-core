@@ -41,7 +41,7 @@
 // SSE. The streaming state is observed by HOLDING the plan-review read until the
 // assertion has run — an authoritative gate, never a timeout.
 
-import { test, expect, FIRST_PAINT_MS } from './_helpers/acceptance-video';
+import { test, expect, FIRST_PAINT_MS } from './_helpers/promoted-regression';
 import type { Page, Route } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';

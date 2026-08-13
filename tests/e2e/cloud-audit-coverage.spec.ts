@@ -1,4 +1,4 @@
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page, Route } from '@playwright/test';
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';

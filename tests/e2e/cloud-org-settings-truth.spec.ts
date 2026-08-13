@@ -28,7 +28,7 @@
 // therefore READS the flag and asserts which reason it is verifying, so the
 // green tick always means something.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 
 const PASSWORD = 'org-settings-truth-pass-123';
