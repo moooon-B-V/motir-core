@@ -3096,6 +3096,7 @@ export const workItemRepository = {
     statusKeys: string[],
     sprintId?: string,
     filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ assigneeId: string | null; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Raw GROUP BY (not the Prisma builder) so the optional 6.15.2 FilterAST —
@@ -3104,7 +3105,8 @@ export const workItemRepository = {
     // No filter → the fragment is `TRUE`, so the counts are byte-for-byte the
     // 3.3.4 aggregate. Read-exclusion (6.11.3): a triage item never counts.
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    return db.$queryRaw<Array<{ assigneeId: string | null; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ assigneeId: string | null; count: number }>>`
       SELECT w."assigneeId" AS "assigneeId", COUNT(*)::int AS "count"
         FROM "work_item" w
         WHERE w."projectId" = ${projectId}
@@ -3128,6 +3130,7 @@ export const workItemRepository = {
     statusKeys: string[],
     sprintId?: string,
     filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ priority: WorkItemPriority; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Raw GROUP BY so the optional 6.15.2 FilterAST AND-s in (see
@@ -3135,7 +3138,8 @@ export const workItemRepository = {
     // string value (= the WorkItemPriority union members), so the shape matches
     // the prior `groupBy` result. No filter → `TRUE` (byte-for-byte 3.3.4).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    return db.$queryRaw<Array<{ priority: WorkItemPriority; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ priority: WorkItemPriority; count: number }>>`
       SELECT w."priority"::text AS "priority", COUNT(*)::int AS "count"
         FROM "work_item" w
         WHERE w."projectId" = ${projectId}
@@ -3166,6 +3170,7 @@ export const workItemRepository = {
     statusKeys: string[],
     sprintId?: string,
     filter?: BoardCardFilter,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ epicId: string; count: number }>> {
     if (statusKeys.length === 0) return [];
     // Sprint scope (Story 4.5.2): only the anchor (the board CARDS) is sprint-
@@ -3175,7 +3180,8 @@ export const workItemRepository = {
     // is structural) — so the epic lanes/counts track the FILTERED board. No
     // filter → `TRUE` (byte-for-byte the 3.3.4 epic aggregate).
     const sprintScope = sprintId ? Prisma.sql`AND w."sprintId" = ${sprintId}` : Prisma.empty;
-    return db.$queryRaw<Array<{ epicId: string; count: number }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ epicId: string; count: number }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
           FROM "work_item" w
@@ -3369,9 +3375,11 @@ export const workItemRepository = {
   async findEpicAncestors(
     itemIds: string[],
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<Array<{ cardId: string; epicId: string }>> {
     if (itemIds.length === 0) return [];
-    return db.$queryRaw<Array<{ cardId: string; epicId: string }>>`
+    const client = tx ?? db;
+    return client.$queryRaw<Array<{ cardId: string; epicId: string }>>`
       WITH RECURSIVE up AS (
         SELECT w."id" AS card_id, w."id" AS node_id, w."parentId", w."kind"::text AS kind
           FROM "work_item" w

@@ -218,8 +218,17 @@ export const workflowsService = {
   async listStatusesByProject(
     projectId: string,
     workspaceId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<WorkflowStatusDto[]> {
-    const statuses = await workflowsRepository.findStatuses(projectId, workspaceId);
+    // Bound (MOTIR-2801). `workflow_status` is policy-gated, and this read is the
+    // BOARD's status vocabulary: unbound it returned [], so every column mapped
+    // no live status, every column was empty, and every lane aggregate was
+    // computed over an empty status set. The board rendered its chrome and
+    // nothing else. `tx` is threaded when the caller already holds a bound
+    // transaction; the rest of this file's unbound call sites are MOTIR-2846's.
+    const statuses = await withWorkspaceServiceContext(workspaceId, (t) =>
+      workflowsRepository.findStatuses(projectId, workspaceId, tx ?? t),
+    );
     return statuses.map(toWorkflowStatusDto);
   },
 

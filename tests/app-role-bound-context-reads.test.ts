@@ -5,6 +5,7 @@ import { usersService } from '@/lib/services/usersService';
 import { workspacesService } from '@/lib/services/workspacesService';
 import { workItemsService } from '@/lib/services/workItemsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
+import { boardsService } from '@/lib/services/boardsService';
 import { estimationService } from '@/lib/services/estimationService';
 import { reportsService } from '@/lib/services/reportsService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -600,5 +601,90 @@ describe('estimationService + sprintsService — the frozen sprint report', () =
     expect(velocity.sprints[0]?.completed).toBe(5);
     expect(velocity.sprints[0]?.committed).toBe(8);
     expect(velocity.averageCompleted).toBe(5);
+  });
+});
+
+// ── MOTIR-2801 · boardsService ────────────────────────────────────────────────
+//
+// The board's swimlane grouping — by assignee, by epic, by priority — is the
+// feature that makes a board more than a list, and unbound every lane came back
+// empty. The board still DREW its lanes; they just contained nothing.
+//
+// ⚠️ The plan named four reads here. The call-site scanner (MOTIR-2845) found
+// TWENTY-FIVE, and the extra twenty-one are why the whole projection 404'd
+// rather than merely rendering empty lanes: `boardRepository.findById` and
+// `findDefaultForProject` are the FIRST reads `getBoard` makes, so under the
+// role every board in the product was BoardNotFoundError before a lane was ever
+// computed. That is the guard earning its move to the front of the story.
+
+describe('boardsService — the board that could not be found and the lanes that were empty', () => {
+  async function seedBoard(identifier: string) {
+    const fx = await makeWorkItemFixture({ identifier });
+    const assignee = await usersService.createUser({
+      email: `boards-${identifier.toLowerCase()}@example.com`,
+      password: 'hunter2hunter2',
+      name: `Laner ${identifier}`,
+    });
+    const one = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Assigned card' },
+      fx.ctx,
+    );
+    const two = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Unassigned card' },
+      fx.ctx,
+    );
+    await adminDb.workItem.update({
+      where: { id: one.id },
+      data: { assigneeId: assignee.id, priority: 'high' },
+    });
+    await adminDb.workItem.update({ where: { id: two.id }, data: { priority: 'low' } });
+    return { fx, assigneeName: `Laner ${identifier}` };
+  }
+
+  it('finds the project’s default board at all', async () => {
+    const { fx } = await seedBoard('BDA');
+
+    // Unbound this threw BoardNotFoundError — for the default board the project
+    // is seeded with. Every other assertion in this block is downstream of it.
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+    expect(board.columns.length).toBeGreaterThan(0);
+    expect(
+      board.columns
+        .flatMap((c) => c.cards)
+        .map((c) => c.title)
+        .sort(),
+    ).toEqual(['Assigned card', 'Unassigned card']);
+  });
+
+  it('groups into populated ASSIGNEE lanes, not empty ones', async () => {
+    const { fx, assigneeName } = await seedBoard('BDB');
+    await boardsService.setSwimlaneGroupBy(
+      (await boardsService.getBoard(fx.projectId, fx.ctx)).boardId,
+      'assignee',
+      fx.ctx,
+    );
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+
+    // Named lanes with counts — never `lanes.length >= 0`, which is what an
+    // unbound aggregate satisfies.
+    const byLabel = new Map(board.swimlanes.map((l) => [l.label, l.count]));
+    expect(byLabel.get(assigneeName)).toBe(1);
+    expect(byLabel.get('No assignee')).toBe(1);
+  });
+
+  it('groups into populated PRIORITY lanes', async () => {
+    const { fx } = await seedBoard('BDC');
+    await boardsService.setSwimlaneGroupBy(
+      (await boardsService.getBoard(fx.projectId, fx.ctx)).boardId,
+      'priority',
+      fx.ctx,
+    );
+
+    const board = await boardsService.getBoard(fx.projectId, fx.ctx);
+
+    const byKey = new Map(board.swimlanes.map((l) => [l.key, l.count]));
+    expect(byKey.get('high')).toBe(1);
+    expect(byKey.get('low')).toBe(1);
   });
 });

@@ -26,7 +26,11 @@ import {
   toBoardSummaryDto,
   toSprintSummaryDto,
 } from '@/lib/mappers/boardMappers';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { buildDefaultBoard, DEFAULT_BOARD_NAME } from '@/lib/boards/defaultBoard';
 import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -225,9 +229,11 @@ export const boardsService = {
     // never the board. Runs first so a hidden project never leaks its board.
     await projectAccessService.assertCanBrowse(projectId, ctx);
 
-    const board = boardId
-      ? await boardRepository.findById(boardId, ctx.workspaceId)
-      : await boardRepository.findDefaultForProject(projectId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardId
+        ? boardRepository.findById(boardId, ctx.workspaceId, tx)
+        : boardRepository.findDefaultForProject(projectId, ctx.workspaceId, tx),
+    );
     // A selected board must live in the active project (the workspace gate is
     // already in the repo read); the default lookup is project-scoped by query.
     if (!board || board.projectId !== projectId) {
@@ -243,11 +249,17 @@ export const boardsService = {
     // rejected consistently regardless of the board's sprint state.
     const boardFilter = await resolveBoardFilter(projectId, filter, ctx);
 
-    const [columns, mappings, statuses] = await Promise.all([
-      boardColumnRepository.findByBoard(board.id, ctx.workspaceId),
-      boardColumnStatusRepository.findByBoard(board.id, ctx.workspaceId),
-      workflowsService.listStatusesByProject(projectId, ctx.workspaceId),
-    ]);
+    // The board's own two reads share ONE bound transaction; the workflow LIST is
+    // a service call and opens its own (the call-into-another-service clause in
+    // the transaction-shape ADR).
+    const { columns, mappings } = await withWorkspaceServiceContext(
+      ctx.workspaceId,
+      async (tx) => ({
+        columns: await boardColumnRepository.findByBoard(board.id, ctx.workspaceId, tx),
+        mappings: await boardColumnStatusRepository.findByBoard(board.id, ctx.workspaceId, tx),
+      }),
+    );
+    const statuses = await workflowsService.listStatusesByProject(projectId, ctx.workspaceId);
 
     const statusById = new Map(statuses.map((s) => [s.id, s]));
     const terminalKeys = terminalKeySet(statuses);
@@ -279,7 +291,9 @@ export const boardsService = {
     // below is byte-for-byte the 3.1.4 projection.
     const activeSprint =
       board.type === BoardType.scrum
-        ? await sprintRepository.findActiveByProject(projectId, ctx.workspaceId)
+        ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+            sprintRepository.findActiveByProject(projectId, ctx.workspaceId, tx),
+          )
         : null;
 
     // A scrum board with NO active sprint: empty columns + `sprint: null`, so the
@@ -379,15 +393,22 @@ export const boardsService = {
       resolveSwimlaneKeys(groupBy, allRows, ctx),
       buildSwimlanes(groupBy, projectId, boardStatusKeys, ctx, sprintScopeId, boardFilter),
       boardStatusKeys.length
-        ? workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
-            statuses: boardStatusKeys,
-            ...(sprintScopeId ? { sprintId: sprintScopeId } : {}),
-            // 6.15.2 — the truncation denominator counts the FILTERED set, so a
-            // filter that brings the board under the cap clears `truncated`.
-            ...(boardFilter
-              ? { ast: boardFilter.ast, filterReferents: boardFilter.referents }
-              : {}),
-          })
+        ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+            workItemRepository.countProjectIssues(
+              projectId,
+              ctx.workspaceId,
+              {
+                statuses: boardStatusKeys,
+                ...(sprintScopeId ? { sprintId: sprintScopeId } : {}),
+                // 6.15.2 — the truncation denominator counts the FILTERED set, so
+                // a filter that brings the board under the cap clears `truncated`.
+                ...(boardFilter
+                  ? { ast: boardFilter.ast, filterReferents: boardFilter.referents }
+                  : {}),
+              },
+              tx,
+            ),
+          )
         : Promise.resolve(0),
     ]);
 
@@ -623,7 +644,9 @@ export const boardsService = {
     groupBy: string,
     ctx: ServiceContext,
   ): Promise<BoardDto> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
     if (!isSwimlaneGroupBy(groupBy)) throw new InvalidSwimlaneGroupByError(groupBy);
@@ -656,7 +679,9 @@ export const boardsService = {
     limit: number | null,
     ctx: ServiceContext,
   ): Promise<BoardColumnConfigDto> {
-    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    const column = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardColumnRepository.findById(columnId, ctx.workspaceId, tx),
+    );
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
     if (!isValidWipLimit(limit)) throw new InvalidWipLimitError();
@@ -692,7 +717,9 @@ export const boardsService = {
     input: { name: string; position?: string },
     ctx: ServiceContext,
   ): Promise<BoardColumnConfigDto> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
@@ -701,7 +728,9 @@ export const boardsService = {
 
     let position = input.position;
     if (position == null) {
-      const columns = await boardColumnRepository.findByBoard(boardId, ctx.workspaceId);
+      const columns = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        boardColumnRepository.findByBoard(boardId, ctx.workspaceId, tx),
+      );
       const last = columns.length ? columns[columns.length - 1]!.position : null;
       position = keyForAppend(last);
     }
@@ -730,7 +759,9 @@ export const boardsService = {
     name: string,
     ctx: ServiceContext,
   ): Promise<BoardColumnConfigDto> {
-    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    const column = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardColumnRepository.findById(columnId, ctx.workspaceId, tx),
+    );
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
 
@@ -760,7 +791,9 @@ export const boardsService = {
     position: string,
     ctx: ServiceContext,
   ): Promise<BoardColumnConfigDto> {
-    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    const column = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardColumnRepository.findById(columnId, ctx.workspaceId, tx),
+    );
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
 
@@ -795,7 +828,9 @@ export const boardsService = {
    * `LastColumnError` (409), `ColumnNotEmptyError` (409).
    */
   async deleteColumn(columnId: string, ctx: ServiceContext): Promise<void> {
-    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    const column = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardColumnRepository.findById(columnId, ctx.workspaceId, tx),
+    );
     if (!column) throw new BoardColumnNotFoundError(columnId);
     await assertBoardConfigAdmin(ctx.userId, column.projectId, ctx.workspaceId);
 
@@ -875,14 +910,20 @@ export const boardsService = {
     statusId: string,
     ctx: ServiceContext,
   ): Promise<BoardColumnStatusDto> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertWorkflowMappingAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
-    const column = await boardColumnRepository.findById(columnId, ctx.workspaceId);
+    const column = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardColumnRepository.findById(columnId, ctx.workspaceId, tx),
+    );
     if (!column || column.boardId !== boardId) throw new BoardColumnNotFoundError(columnId);
 
-    const status = await workflowsRepository.findStatusById(statusId, ctx.workspaceId);
+    const status = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workflowsRepository.findStatusById(statusId, ctx.workspaceId, tx),
+    );
     if (!status || status.projectId !== board.projectId) {
       throw new WorkflowStatusNotFoundError(statusId);
     }
@@ -930,7 +971,9 @@ export const boardsService = {
    * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403).
    */
   async unmapStatus(boardId: string, statusId: string, ctx: ServiceContext): Promise<void> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertWorkflowMappingAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
@@ -947,7 +990,9 @@ export const boardsService = {
    * `InvalidBoardNameError` (400).
    */
   async renameBoard(boardId: string, name: string, ctx: ServiceContext): Promise<BoardDto> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
@@ -990,7 +1035,9 @@ export const boardsService = {
     // enumerate its boards. A `manage` key here would be wrong — seeing which
     // boards exist is what every member of the project does all day.
     await projectAccessService.assertCanBrowse(projectId, ctx);
-    const boards = await boardRepository.findByProjectByPosition(projectId, ctx.workspaceId);
+    const boards = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findByProjectByPosition(projectId, ctx.workspaceId, tx),
+    );
     return boards.map(toBoardSummaryDto);
   },
 
@@ -1039,7 +1086,9 @@ export const boardsService = {
    * the service so the sprint flow can reach it, and its name says what it is.
    */
   async ensureScrumBoard(projectId: string, ctx: ServiceContext): Promise<void> {
-    const boards = await boardRepository.findByProjectByPosition(projectId, ctx.workspaceId);
+    const boards = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findByProjectByPosition(projectId, ctx.workspaceId, tx),
+    );
     if (boards.some((b) => b.type === BoardType.scrum)) return;
     await createBoardUnchecked(projectId, { name: 'Sprint board', type: 'scrum' }, ctx);
   },
@@ -1056,7 +1105,9 @@ export const boardsService = {
    * Throws: `BoardNotFoundError` (404), `NotBoardAdminError` (403).
    */
   async setDefaultBoard(boardId: string, ctx: ServiceContext): Promise<BoardSummaryDto> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
@@ -1092,7 +1143,9 @@ export const boardsService = {
    * `LastBoardError` (409).
    */
   async deleteBoard(boardId: string, ctx: ServiceContext): Promise<void> {
-    const board = await boardRepository.findById(boardId, ctx.workspaceId);
+    const board = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      boardRepository.findById(boardId, ctx.workspaceId, tx),
+    );
     if (!board) throw new BoardNotFoundError(boardId);
     await assertBoardConfigAdmin(ctx.userId, board.projectId, ctx.workspaceId);
 
@@ -1433,13 +1486,21 @@ async function buildColumnCards(
   // and the card load, so the column shows only matching cards and its
   // `totalCount` header reflects the filtered set. `undefined` → byte-for-byte
   // the unfiltered column read.
-  const [totalCount, rows] = await Promise.all([
-    workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
-      statuses: statusKeys,
-      ...(sprintId ? { sprintId } : {}),
-      ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
-    }),
-    workItemRepository.findColumnCards(
+  // The column's cards and its own denominator, in ONE bound transaction: two
+  // reads of the same predicate rendered as one column header, so a write
+  // landing between them cannot make "12 of 9" appear.
+  const { totalCount, rows } = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+    totalCount: await workItemRepository.countProjectIssues(
+      projectId,
+      ctx.workspaceId,
+      {
+        statuses: statusKeys,
+        ...(sprintId ? { sprintId } : {}),
+        ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+      },
+      tx,
+    ),
+    rows: await workItemRepository.findColumnCards(
       projectId,
       ctx.workspaceId,
       statusKeys,
@@ -1450,8 +1511,9 @@ async function buildColumnCards(
         sprintId,
         ...(filter ? { ast: filter.ast, referents: filter.referents } : {}),
       },
+      tx,
     ),
-  ]);
+  }));
   return { col, statusKeys, rows, totalCount };
 }
 
@@ -1504,9 +1566,12 @@ async function resolveSwimlaneKeys(
   } else if (groupBy === 'priority') {
     for (const r of rows) keyByCard.set(r.id, r.priority);
   } else {
-    const pairs = await workItemRepository.findEpicAncestors(
-      rows.map((r) => r.id),
-      ctx.workspaceId,
+    const pairs = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findEpicAncestors(
+        rows.map((r) => r.id),
+        ctx.workspaceId,
+        tx,
+      ),
     );
     const epicByCard = new Map(pairs.map((p) => [p.cardId, p.epicId]));
     for (const r of rows) keyByCard.set(r.id, epicByCard.get(r.id) ?? BOARD_SWIMLANE_NO_VALUE);
@@ -1539,12 +1604,15 @@ async function buildSwimlanes(
   const laneFilter = filter ? { ast: filter.ast, referents: filter.referents } : undefined;
 
   if (groupBy === 'assignee') {
-    const rows = await workItemRepository.aggregateBoardLanesByAssignee(
-      projectId,
-      ctx.workspaceId,
-      statusKeys,
-      sprintId,
-      laneFilter,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.aggregateBoardLanesByAssignee(
+        projectId,
+        ctx.workspaceId,
+        statusKeys,
+        sprintId,
+        laneFilter,
+        tx,
+      ),
     );
     const assigneeIds = rows.map((r) => r.assigneeId).filter((id): id is string => id !== null);
     const users = await userRepository.findByIds(assigneeIds);
@@ -1571,12 +1639,15 @@ async function buildSwimlanes(
   }
 
   if (groupBy === 'priority') {
-    const rows = await workItemRepository.aggregateBoardLanesByPriority(
-      projectId,
-      ctx.workspaceId,
-      statusKeys,
-      sprintId,
-      laneFilter,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.aggregateBoardLanesByPriority(
+        projectId,
+        ctx.workspaceId,
+        statusKeys,
+        sprintId,
+        laneFilter,
+        tx,
+      ),
     );
     return rows
       .map((r) => ({
@@ -1591,12 +1662,15 @@ async function buildSwimlanes(
   // epic — group by ancestor epic; the catch-all count is DERIVED by
   // subtraction (total board cards − Σ epic-lane counts), so no extra per-card
   // scan is needed to size the "No epic" lane.
-  const rows = await workItemRepository.aggregateBoardLanesByEpic(
-    projectId,
-    ctx.workspaceId,
-    statusKeys,
-    sprintId,
-    laneFilter,
+  const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.aggregateBoardLanesByEpic(
+      projectId,
+      ctx.workspaceId,
+      statusKeys,
+      sprintId,
+      laneFilter,
+      tx,
+    ),
   );
   const epics = await workItemRepository.findByIds(rows.map((r) => r.epicId));
   const epicById = new Map(epics.map((e) => [e.id, e]));
@@ -1617,13 +1691,21 @@ async function buildSwimlanes(
     .map((x) => x.lane);
 
   const epicCardCount = rows.reduce((sum, r) => sum + r.count, 0);
-  const total = await workItemRepository.countProjectIssues(projectId, ctx.workspaceId, {
-    statuses: statusKeys,
-    ...(sprintId ? { sprintId } : {}),
-    // The "No epic" catch-all is DERIVED (filtered total − Σ epic-lane counts),
-    // so this denominator must use the SAME 6.15.2 filter as the epic aggregate.
-    ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
-  });
+  const total = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.countProjectIssues(
+      projectId,
+      ctx.workspaceId,
+      {
+        statuses: statusKeys,
+        ...(sprintId ? { sprintId } : {}),
+        // The "No epic" catch-all is DERIVED (filtered total − Σ epic-lane counts),
+        // so this denominator must use the SAME 6.15.2 filter as the epic
+        // aggregate.
+        ...(filter ? { ast: filter.ast, filterReferents: filter.referents } : {}),
+      },
+      tx,
+    ),
+  );
   const noEpicCount = total - epicCardCount;
   if (noEpicCount > 0) {
     lanes.push({

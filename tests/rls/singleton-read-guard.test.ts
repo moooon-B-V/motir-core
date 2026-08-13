@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (39) ────────────────────────────────────────────────
+  // ── unbound-read-path (35) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -180,9 +180,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'workItemLinkRepository.ts#findBlockerStatesForItems': ['unbound-read-path', 'workItemsService'],
   'workItemLinkRepository.ts#findByFromItem': ['unbound-read-path', 'dispatchPromptService'],
   'workItemLinkRepository.ts#findByToItem': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#aggregateBoardLanesByAssignee': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#aggregateBoardLanesByEpic': ['unbound-read-path', 'boardsService'],
-  'workItemRepository.ts#aggregateBoardLanesByPriority': ['unbound-read-path', 'boardsService'],
   'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
@@ -190,7 +187,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   'workItemRepository.ts#findBySessionBranch': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
   'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
-  'workItemRepository.ts#findEpicAncestors': ['unbound-read-path', 'boardsService'],
   'workItemRepository.ts#findExpandableStubs': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findReadyLayer': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findRoadmapBlockerStubs': ['unbound-read-path', 'workItemsService'],
@@ -296,8 +292,10 @@ const UNREVIEWED_CEILING = 8;
  * Same subtraction discipline.
  * 44 -> 39: MOTIR-2804 bound `sprintsService` + `estimationService` — the four
  * `sprint_report_entry` reads and the child rollup.
+ * 39 -> 35: MOTIR-2801 bound `boardsService` — the three lane aggregates and the
+ * epic-ancestor walk.
  */
-const UNBOUND_READ_PATH_CEILING = 39;
+const UNBOUND_READ_PATH_CEILING = 35;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {

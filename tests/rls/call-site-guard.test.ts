@@ -142,46 +142,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-call-site',
     'MOTIR-2846 · backlogService',
   ],
-  'lib/services/boardsService.ts#boardColumnRepository.findByBoard': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#boardColumnRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#boardColumnStatusRepository.findByBoard': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#boardRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#boardRepository.findByProjectByPosition': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#boardRepository.findDefaultForProject': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#sprintRepository.findActiveByProject': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#workItemRepository.countProjectIssues': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#workItemRepository.findColumnCards': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
-  'lib/services/boardsService.ts#workflowsRepository.findStatusById': [
-    'unbound-call-site',
-    'MOTIR-2801 · boardsService',
-  ],
   'lib/services/commentsService.ts#commentRepository.countByWorkItem': [
     'unbound-call-site',
     'MOTIR-2846 · commentsService',
@@ -567,8 +527,12 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * 205 = 183 `no-context` + 22 `in-bare-transaction`. The second number is the
  * sharper one: those reads DO share a transaction, so they look bound in review,
  * and it binds no GUCs.
+ *
+ * 205 -> 180: MOTIR-2801 bound `boardsService`'s 25 sites — the guard's first
+ * consumer, and the reason it was moved early: the plan named four of them.
+ * Lowered BY SUBTRACTION of this card's own, never restated as an absolute.
  */
-const UNBOUND_CALL_SITE_CEILING = 205;
+const UNBOUND_CALL_SITE_CEILING = 180;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.
