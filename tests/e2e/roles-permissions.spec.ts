@@ -1,4 +1,4 @@
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 import { resetDatabase, db } from './_helpers/db-reset';

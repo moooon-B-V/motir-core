@@ -35,7 +35,7 @@
 // with an emptied catalogue and checks the message and the two ways out
 // (`tests/api-docs/mcp-pages.test.tsx`). Recorded here rather than left as a
 // silent omission.
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';
 import { seedCliConnect } from './_helpers/cli-connect-seed';

@@ -27,7 +27,7 @@
 // holds are pacing for a human viewer, never synchronisation — remove them all
 // and every assertion is unchanged.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { createFirstProject, signUp } from './_helpers/shell-session';
 

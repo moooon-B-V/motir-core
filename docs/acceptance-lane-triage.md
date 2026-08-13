@@ -39,9 +39,9 @@ repo already states the main lane's ground truth from the other side:
 `ai-callout-gate.spec.ts` asserts that with Motir AI unconfigured **there is no
 orb**.
 
-Those nine are therefore **blocked on MOTIR-2849**, which builds the cloud-on
-regression lane they can actually be promoted into. They are dispositioned here
-— PROMOTE — but their destination does not exist yet.
+Those nine are promoted into the **cloud-on regression lane** MOTIR-2849 built
+for them: `playwright.cloud.config.ts` (the former billing lane, widened rather
+than a third lane invented), which they join under the `cloud-` prefix.
 
 ---
 
@@ -86,23 +86,24 @@ every assertion.
 | `acceptance-token-permissions.spec.ts`         | MOTIR-2572 | `api-tokens.spec.ts` covers minting and displayed scopes; only this asserts a real write **refused by name**. Enforcement is uncovered.   |
 | `acceptance-work-item-type-vocabulary.spec.ts` | MOTIR-2622 | `work-item-type.spec.ts` covers typed create / chips / filter; only this asserts the fourteen-member vocabulary in both pickers.          |
 
-## PROMOTE — into the CLOUD-ON lane (blocked on MOTIR-2849)
+## PROMOTE — into the CLOUD-ON lane (MOTIR-2849)
 
-Dispositioned, destination not yet built. These stay in the acceptance lane
-until MOTIR-2849 lands, and the guard (MOTIR-2770) is blocked behind both cards
-for exactly this reason.
+Renamed `acceptance-<name>.spec.ts` → `cloud-<name>.spec.ts`, which moves them out
+of the acceptance lane's glob and into `playwright.cloud.config.ts`'s. That lane
+now boots a PRODUCTION build and carries every seam they drive — billing, the
+motir-ai boundary mock, the code-health fixture and the GitHub provisioning mock.
 
-| Spec                                          | Story      | Seam the main lane lacks                                              |
-| --------------------------------------------- | ---------- | --------------------------------------------------------------------- |
-| `acceptance-video.spec.ts`                    | MOTIR-1627 | billing — 7 plan/toggle/pending/upgrade gate states + the board badge |
-| `acceptance-ai-callout.spec.ts`               | MOTIR-1342 | motir-ai + billing — the main lane provably has no orb                |
-| `acceptance-augment-replan.spec.ts`           | MOTIR-811  | motir-ai + billing                                                    |
-| `acceptance-contextual-plan-confirm.spec.ts`  | MOTIR-812  | motir-ai + billing                                                    |
-| `acceptance-plan-change-conversation.spec.ts` | MOTIR-1726 | motir-ai + billing                                                    |
-| `acceptance-cadence.spec.ts`                  | MOTIR-813  | motir-ai                                                              |
-| `acceptance-audit-coverage.spec.ts`           | MOTIR-2244 | code-health fixture + motir-ai                                        |
-| `acceptance-org-settings-truth.spec.ts`       | MOTIR-2542 | billing — the "no upgrade this org needs" assertion                   |
-| `acceptance-repository-set.spec.ts`           | MOTIR-1775 | the GitHub provisioning mock (9 tests, 783 lines)                     |
+| Spec                                     | Story      | Seam the main lane lacks                                              |
+| ---------------------------------------- | ---------- | --------------------------------------------------------------------- |
+| `cloud-video.spec.ts`                    | MOTIR-1627 | billing — 7 plan/toggle/pending/upgrade gate states + the board badge |
+| `cloud-ai-callout.spec.ts`               | MOTIR-1342 | motir-ai + billing — the main lane provably has no orb                |
+| `cloud-augment-replan.spec.ts`           | MOTIR-811  | motir-ai + billing                                                    |
+| `cloud-contextual-plan-confirm.spec.ts`  | MOTIR-812  | motir-ai + billing                                                    |
+| `cloud-plan-change-conversation.spec.ts` | MOTIR-1726 | motir-ai + billing                                                    |
+| `cloud-cadence.spec.ts`                  | MOTIR-813  | motir-ai                                                              |
+| `cloud-audit-coverage.spec.ts`           | MOTIR-2244 | code-health fixture + motir-ai                                        |
+| `cloud-org-settings-truth.spec.ts`       | MOTIR-2542 | billing — the "no upgrade this org needs" assertion                   |
+| `cloud-repository-set.spec.ts`           | MOTIR-1775 | the GitHub provisioning mock (9 tests, 783 lines)                     |
 
 > **The `acceptance-ai-callout` row corrects MOTIR-2765's worked example.** The
 > story cites it as the model retire, on the grounds that `ai-callout-gate.spec.ts`
