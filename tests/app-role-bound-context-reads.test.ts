@@ -13,6 +13,8 @@ import { savedFiltersService } from '@/lib/services/savedFiltersService';
 import { savedFilterSubscriptionsService } from '@/lib/services/savedFilterSubscriptionsService';
 import { encodeFilterParam } from '@/lib/filters/ast';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
+import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
 import { makeWorkItemFixture } from '@/tests/fixtures';
 import { adminDb } from './helpers/adminDb';
@@ -687,4 +689,85 @@ describe('boardsService — the board that could not be found and the lanes that
     expect(byKey.get('high')).toBe(1);
     expect(byKey.get('low')).toBe(1);
   });
+});
+
+// ── MOTIR-2807 · workItemRepository.findByIds ─────────────────────────────────
+//
+// ONE read, thirteen call sites, five services. It has its own card because the
+// ratchet counts the READ: bind one caller, delete the entry, and the counter
+// says "done" while twelve paths stay dark. That is the worst outcome available
+// in this story, because it turns the progress measure into a lie.
+//
+// ⚠️ The card says fourteen. The grep finds THIRTEEN, and the card's own table
+// sums to thirteen too — the prose count is off by one against its own evidence.
+// Recorded rather than quietly corrected, because "if the grep now finds more,
+// bind those too and say so" cuts both ways.
+//
+// ⚠️ AND ONE OF THE THIRTEEN IS DELIBERATELY LEFT UNBOUND —
+// `publicProjectsService`'s parent lookup. See the comment at that call site:
+// `work_item_public_project_read` fires only when `app.workspace_id` is UNSET,
+// so binding it would switch the public page onto the private arm. It would
+// probably still return the row, which is exactly why it is dangerous.
+
+describe('workItemRepository.findByIds — one read, five consuming surfaces', () => {
+  async function seedLinkedPair(identifier: string) {
+    const fx = await makeWorkItemFixture({ identifier });
+    const blocked = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Needs the other one' },
+      fx.ctx,
+    );
+    const blocker = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Must land first' },
+      fx.ctx,
+    );
+    await workItemsService.linkWorkItems(
+      { fromId: blocked.id, toId: blocker.id, kind: 'is_blocked_by' },
+      fx.ctx,
+    );
+    return { fx, blocked, blocker };
+  }
+
+  it('resolves an item’s BLOCKERS rather than reporting it unblocked', async () => {
+    const { fx, blocked } = await seedLinkedPair('FBA');
+
+    // The worst failure mode in the story: unbound, the batch came back empty and
+    // a blocked item reported NO blockers — not "unknown", not an error. The plan's
+    // central invariant, inverted silently.
+    const blockers = await workItemsService.getBlockers(blocked.id, fx.ctx);
+    expect(blockers.map((b) => b.title)).toEqual(['Must land first']);
+  });
+
+  it('resolves the reverse edge — what an item is BLOCKING', async () => {
+    const { fx, blocker } = await seedLinkedPair('FBB');
+
+    const blocking = await workItemsService.getBlocking(blocker.id, fx.ctx);
+    expect(blocking.map((b) => b.title)).toEqual(['Needs the other one']);
+  });
+
+  it('reads the batch through a bound tx, and returns the EMPTY answer without one', async () => {
+    const { fx, blocker } = await seedLinkedPair('FBC');
+
+    // The two arms of `tx ?? db`, side by side. The bound one is the contract;
+    // the unbound one is pinned as the EMPTY answer rather than as rows, because
+    // asserting rows there would be asserting that a path with no binding works.
+    const bound = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.findByIds([blocker.id], tx),
+    );
+    expect(bound.map((r) => r.title)).toEqual(['Must land first']);
+
+    const unbound = await workItemRepository.findByIds([blocker.id]);
+    if (isAppRoleTestMode()) {
+      expect(unbound).toEqual([]);
+    } else {
+      expect(unbound.map((r) => r.title)).toEqual(['Must land first']);
+    }
+  });
+
+  // ⚠️ NOT ASSERTED HERE, and the reason is ownership rather than difficulty.
+  // The item-detail panel and the dispatch prompt are the other two consuming
+  // surfaces, and both open on reads this card does not own — `findByIdentifier`
+  // and the five-link fan-out in `getIssueDetail`, which are MOTIR-2802's and
+  // MOTIR-2803's. `findByIds` is bound at those call sites already; proving them
+  // end-to-end needs those cards, and writing a test that passes only once a
+  // sibling lands would report this card's state dishonestly.
 });

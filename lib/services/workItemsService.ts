@@ -49,7 +49,11 @@ import {
   QUICK_SEARCH_MIN_QUERY_LENGTH,
 } from '@/lib/workItems/quickSearch';
 import { relationshipToLink } from '@/lib/workItems/linkRelationships';
-import { withSystemContext, withWorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withSystemContext,
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+} from '@/lib/workspaces/context';
 import { readMembership } from '@/lib/workspaces/membershipGate';
 import { readProject, readWorkItem } from '@/lib/workspaces/tenantRead';
 import {
@@ -3219,22 +3223,37 @@ export const workItemsService = {
   /**
    * The blockers of `workItemId`: the items it `is_blocked_by`. One link-table
    * query yields the toIds, one findByIds resolves them all (N+0 — no N+1).
-   * Sorted by key for a stable order. Read-only; `ctx` reserved for 1.4.5 RLS.
+   * Sorted by key for a stable order. Read-only; `ctx` binds the read (MOTIR-2807).
    */
-  async getBlockers(workItemId: string, _ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
-    const links = await workItemLinkRepository.findByFromItem(workItemId, 'is_blocked_by');
-    const rows = await workItemRepository.findByIds(links.map((l) => l.toId));
+  async getBlockers(workItemId: string, ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
+    // The edge read and the batch it resolves are ONE contiguous run of this
+    // method's own reads, so they share one transaction. Binding only the batch
+    // would fix nothing: the edge read returns [] first and the item reports no
+    // blockers — which does not render as "unknown", it renders as READY.
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const links = await workItemLinkRepository.findByFromItem(workItemId, 'is_blocked_by', tx);
+      return workItemRepository.findByIds(
+        links.map((l) => l.toId),
+        tx,
+      );
+    });
     return rows.sort(byKeyAsc).map(toWorkItemSummaryDto);
   },
 
   /**
    * The items `workItemId` is blocking: those that are `is_blocked_by` it. One
    * reverse link-table query (the @@index([toId, kind]) lookup) yields the
-   * fromIds, one findByIds resolves them. Read-only; `ctx` reserved for 1.4.5.
+   * fromIds, one findByIds resolves them. Read-only; `ctx` binds the read (MOTIR-2807).
    */
-  async getBlocking(workItemId: string, _ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
-    const links = await workItemLinkRepository.findByToItem(workItemId, 'is_blocked_by');
-    const rows = await workItemRepository.findByIds(links.map((l) => l.fromId));
+  async getBlocking(workItemId: string, ctx: ServiceContext): Promise<WorkItemSummaryDto[]> {
+    // Same contiguous run as `getBlockers`, mirrored onto the IN edges.
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => {
+      const links = await workItemLinkRepository.findByToItem(workItemId, 'is_blocked_by', tx);
+      return workItemRepository.findByIds(
+        links.map((l) => l.fromId),
+        tx,
+      );
+    });
     return rows.sort(byKeyAsc).map(toWorkItemSummaryDto);
   },
 
@@ -3305,7 +3324,9 @@ export const workItemsService = {
     // Stopped at the depth cap with a non-empty frontier → more levels remain.
     if (frontier.length > 0) truncated = true;
 
-    const rows = await workItemRepository.findByIds([...closureIds]);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIds([...closureIds], tx),
+    );
     return { nodes: rows.sort(byKeyAsc).map(toWorkItemSummaryDto), edges, truncated };
   },
 
@@ -3689,28 +3710,40 @@ export const workItemsService = {
       watcherRepository.existsFor(item.id, ctx.userId),
     ]);
 
-    const [
-      blockerRows,
-      blockingRows,
-      relatesRows,
-      duplicatesRows,
-      clonesRows,
-      readiness,
-      archivedActor,
-    ] = await Promise.all([
-      workItemRepository.findByIds(blockedByLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(blocksLinks.map((l) => l.fromId)),
-      workItemRepository.findByIds(relatesLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(duplicatesLinks.map((l) => l.toId)),
-      workItemRepository.findByIds(clonesLinks.map((l) => l.toId)),
-      this.getReadiness(item.id, ctx),
-      // Who archived it (2.9.6) — ONLY for an archived item; an active item
-      // skips the read entirely (no extra round-trip on the common path). The
-      // banner names the actor from this; the timestamp rides `item.archivedAt`.
-      item.archivedAt
-        ? workItemRevisionRepository.findLatestArchivedActor(item.id)
-        : Promise.resolve(null),
-    ]);
+    // The five relationship batches are THIS method's own reads and share ONE
+    // bound transaction (the 5-wide fan-out MOTIR-2799 measured); `getReadiness`
+    // is a service call and opens its own, per the call-into-another-service
+    // clause in the transaction-shape ADR.
+    const { blockerRows, blockingRows, relatesRows, duplicatesRows, clonesRows, archivedActor } =
+      await withWorkspaceServiceContext(ctx.workspaceId, async (tx) => ({
+        blockerRows: await workItemRepository.findByIds(
+          blockedByLinks.map((l) => l.toId),
+          tx,
+        ),
+        blockingRows: await workItemRepository.findByIds(
+          blocksLinks.map((l) => l.fromId),
+          tx,
+        ),
+        relatesRows: await workItemRepository.findByIds(
+          relatesLinks.map((l) => l.toId),
+          tx,
+        ),
+        duplicatesRows: await workItemRepository.findByIds(
+          duplicatesLinks.map((l) => l.toId),
+          tx,
+        ),
+        clonesRows: await workItemRepository.findByIds(
+          clonesLinks.map((l) => l.toId),
+          tx,
+        ),
+        // Who archived it (2.9.6) — ONLY for an archived item; an active item
+        // skips the read entirely (no extra round-trip on the common path). The
+        // banner names the actor from this; the timestamp rides `item.archivedAt`.
+        archivedActor: item.archivedAt
+          ? await workItemRevisionRepository.findLatestArchivedActor(item.id, tx)
+          : null,
+      }));
+    const readiness = await this.getReadiness(item.id, ctx);
 
     const ancestors = ancestorRows.map(toWorkItemSummaryDto);
     const blockedBy = toRelationshipLinks(blockedByLinks, blockerRows, 'toId');
@@ -4622,7 +4655,14 @@ async function buildReadyDispatchDto(
     // needed for the ONE item being dispatched (never for the list read).
     resolveItemDispatchRepo(row.targetRepo, row.projectId, ctx),
   ]);
-  const blockerRows = (await workItemRepository.findByIds(blockerLinks.map((l) => l.toId)))
+  const blockerRows = (
+    await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRepository.findByIds(
+        blockerLinks.map((l) => l.toId),
+        tx,
+      ),
+    )
+  )
     .slice()
     .sort(byKeyAsc);
 

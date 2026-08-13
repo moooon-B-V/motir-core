@@ -52,8 +52,13 @@ export const workItemLinkRepository = {
    * this issue" endpoint feeds from a from + to merge). With a `kind`
    * filter, narrows to the indexed `(fromId, kind)` lookup.
    */
-  async findByFromItem(fromId: string, kind?: WorkItemLinkKind): Promise<WorkItemLink[]> {
-    return db.workItemLink.findMany({
+  async findByFromItem(
+    fromId: string,
+    kind?: WorkItemLinkKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemLink[]> {
+    const client = tx ?? db;
+    return client.workItemLink.findMany({
       where: { fromId, ...(kind ? { kind } : {}) },
     });
   },
@@ -63,8 +68,13 @@ export const workItemLinkRepository = {
    * mirror of findByFromItem; for `is_blocked_by` this is the "what does
    * this item block?" reverse lookup the ready-set engine needs.
    */
-  async findByToItem(toId: string, kind?: WorkItemLinkKind): Promise<WorkItemLink[]> {
-    return db.workItemLink.findMany({
+  async findByToItem(
+    toId: string,
+    kind?: WorkItemLinkKind,
+    tx?: Prisma.TransactionClient,
+  ): Promise<WorkItemLink[]> {
+    const client = tx ?? db;
+    return client.workItemLink.findMany({
       where: { toId, ...(kind ? { kind } : {}) },
     });
   },

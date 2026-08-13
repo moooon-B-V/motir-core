@@ -1672,7 +1672,12 @@ async function buildSwimlanes(
       tx,
     ),
   );
-  const epics = await workItemRepository.findByIds(rows.map((r) => r.epicId));
+  const epics = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+    workItemRepository.findByIds(
+      rows.map((r) => r.epicId),
+      tx,
+    ),
+  );
   const epicById = new Map(epics.map((e) => [e.id, e]));
   const lanes: BoardSwimlaneDto[] = rows
     .map((r) => {

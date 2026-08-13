@@ -103,8 +103,10 @@ export const workItemRevisionRepository = {
    */
   async findLatestArchivedActor(
     workItemId: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<{ id: string; name: string | null; image: string | null } | null> {
-    const revision = await db.workItemRevision.findFirst({
+    const client = tx ?? db;
+    const revision = await client.workItemRevision.findFirst({
       where: { workItemId, changeKind: 'archived' },
       orderBy: [{ changedAt: 'desc' }, { id: 'desc' }],
       select: { changedBy: { select: { id: true, name: true, image: true } } },

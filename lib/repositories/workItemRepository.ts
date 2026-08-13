@@ -755,9 +755,10 @@ export const workItemRepository = {
    * Read-only path → `db` singleton. Empty input short-circuits to `[]` so
    * we never issue a degenerate `IN ()`.
    */
-  async findByIds(ids: string[]): Promise<WorkItem[]> {
+  async findByIds(ids: string[], tx?: Prisma.TransactionClient): Promise<WorkItem[]> {
     if (ids.length === 0) return [];
-    return db.workItem.findMany({ where: { id: { in: ids } } });
+    const client = tx ?? db;
+    return client.workItem.findMany({ where: { id: { in: ids } } });
   },
 
   /**

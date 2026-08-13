@@ -59,6 +59,7 @@ import { commentsService } from '@/lib/services/commentsService';
 import { InvalidActivityCursorError } from '@/lib/activity/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { storedAssetUrl } from '@/lib/blob/referencedUrls';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
 
@@ -144,16 +145,27 @@ async function buildResolvers(
     collectDiffRefs(row.changeKind, row.diff, refs);
   }
 
-  const [users, statuses, sprints, issues] = await Promise.all([
-    refs.users.size > 0 ? userRepository.findByIds([...refs.users]) : ([] as User[]),
-    refs.statuses.size > 0
-      ? workflowsRepository.findStatuses(item.projectId, ctx.workspaceId)
-      : ([] as WorkflowStatus[]),
-    refs.sprints.size > 0
-      ? sprintRepository.findByIds([...refs.sprints], ctx.workspaceId)
-      : ([] as Sprint[]),
-    refs.issues.size > 0 ? workItemRepository.findByIds([...refs.issues]) : ([] as WorkItem[]),
-  ]);
+  // The three tenant reads share ONE bound transaction; `user` carries no policy
+  // (checked against `pg_policies`), so it stays on the singleton.
+  const users =
+    refs.users.size > 0 ? await userRepository.findByIds([...refs.users]) : ([] as User[]);
+  const { statuses, sprints, issues } = await withWorkspaceServiceContext(
+    ctx.workspaceId,
+    async (tx) => ({
+      statuses:
+        refs.statuses.size > 0
+          ? await workflowsRepository.findStatuses(item.projectId, ctx.workspaceId, tx)
+          : ([] as WorkflowStatus[]),
+      sprints:
+        refs.sprints.size > 0
+          ? await sprintRepository.findByIds([...refs.sprints], ctx.workspaceId, tx)
+          : ([] as Sprint[]),
+      issues:
+        refs.issues.size > 0
+          ? await workItemRepository.findByIds([...refs.issues], tx)
+          : ([] as WorkItem[]),
+    }),
+  );
 
   const userById = new Map(users.map((u) => [u.id, u]));
   const statusByKey = new Map(statuses.map((s) => [s.key, s]));

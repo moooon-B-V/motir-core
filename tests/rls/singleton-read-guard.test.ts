@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (35) ────────────────────────────────────────────────
+  // ── unbound-read-path (31) ────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -165,7 +165,6 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     'unbound-read-path',
     'projectSquareService',
   ],
-  'sprintRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
   'workItemLinkRepository.ts#findBlockedByEdges': ['unbound-read-path', 'workItemsService'],
   'workItemLinkRepository.ts#findBlockedEdgesForItems': ['unbound-read-path', 'workItemsService'],
   'workItemLinkRepository.ts#findBlockerEdgesForItems': [
@@ -178,12 +177,9 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   ],
   'workItemLinkRepository.ts#findBlockerStates': ['unbound-read-path', 'workItemsService'],
   'workItemLinkRepository.ts#findBlockerStatesForItems': ['unbound-read-path', 'workItemsService'],
-  'workItemLinkRepository.ts#findByFromItem': ['unbound-read-path', 'dispatchPromptService'],
-  'workItemLinkRepository.ts#findByToItem': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findAllByProjectForValidity': ['unbound-read-path', 'planValidityService'],
   'workItemRepository.ts#findAncestorIdsForItems': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findBoundedSubtree': ['unbound-read-path', 'workItemsService'],
-  'workItemRepository.ts#findByIds': ['unbound-read-path', 'activityService'],
   'workItemRepository.ts#findBySessionBranch': ['unbound-read-path', 'workItemsService'],
   'workItemRepository.ts#findChildrenCreatedAfter': ['unbound-read-path', 'planStalenessService'],
   'workItemRepository.ts#findDescriptionsByIds': ['unbound-read-path', 'planValidityService'],
@@ -294,8 +290,14 @@ const UNREVIEWED_CEILING = 8;
  * `sprint_report_entry` reads and the child rollup.
  * 39 -> 35: MOTIR-2801 bound `boardsService` — the three lane aggregates and the
  * epic-ancestor walk.
+ * 35 -> 32: MOTIR-2807 made `workItemRepository.findByIds` bindable and bound its
+ * 13 call sites; `sprintRepository.findByIds` and `workItemLinkRepository.
+ * findByFromItem` came with it, because two of those call sites read the edge and
+ * the batch together and binding one without the other fixes nothing.
+ * 32 -> 31: `workItemLinkRepository.findByToItem`, the IN-edge mirror, for the
+ * same reason.
  */
-const UNBOUND_READ_PATH_CEILING = 35;
+const UNBOUND_READ_PATH_CEILING = 31;
 
 describe('singleton reads of policy-gated tables are all accounted for', () => {
   it('every scanned site has a verdict, and every verdict names a real site', () => {
@@ -403,7 +405,11 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
     // A guard whose scanner silently returns nothing passes forever. Pin that it
     // resolves the schema, walks the repositories, and finds a known site.
     const scanned = scanSingletonReads();
-    expect(scanned.length).toBeGreaterThan(50);
+    // A floor, not a target: it exists so a scanner that silently returns nothing
+    // fails instead of passing forever. It moves DOWN as reads become bindable
+    // (MOTIR-2807 took the population 51 -> 48), so keep it comfortably below the
+    // live count rather than pinned to it.
+    expect(scanned.length).toBeGreaterThan(20);
     expect(scanned.map((r) => r.key)).toContain('workItemRepository.ts#quickSearch');
     // And that the `tx ?? db` fallback is genuinely excluded — `findStatuses` uses it,
     // so if this ever appears the scanner has stopped distinguishing bindable reads

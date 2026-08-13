@@ -8,6 +8,7 @@ import { ProjectNotFoundError } from '@/lib/projects/errors';
 import { resolveItemDispatchRepo } from '@/lib/workItems/dispatchRepo';
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readProject } from '@/lib/workspaces/tenantRead';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // The DISPATCH-PROMPT read (Story 7.9 · MOTIR-1802) — resolve everything the
 // canonical prompt is assembled from, then hand it to the PURE assembler
@@ -28,9 +29,18 @@ import { readProject } from '@/lib/workspaces/tenantRead';
 
 /** The blockers of a work item, resolved to their `PROD-<n>` keys in ascending
  *  key order (deterministic — the prompt lists them verbatim). */
-async function resolveBlockerKeys(workItemId: string): Promise<string[]> {
-  const links = await workItemLinkRepository.findByFromItem(workItemId, 'is_blocked_by');
-  const rows = await workItemRepository.findByIds(links.map((l) => l.toId));
+async function resolveBlockerKeys(workItemId: string, workspaceId: string): Promise<string[]> {
+  // ONE bound transaction for the edge read and the batch it resolves: unbound,
+  // both returned nothing and the dispatched prompt listed no blockers at all —
+  // which is worse than an empty screen, because the agent then starts work
+  // whose prerequisites are unbuilt.
+  const rows = await withWorkspaceServiceContext(workspaceId, async (tx) => {
+    const links = await workItemLinkRepository.findByFromItem(workItemId, 'is_blocked_by', tx);
+    return workItemRepository.findByIds(
+      links.map((l) => l.toId),
+      tx,
+    );
+  });
   return rows
     .slice()
     .sort((a, b) => a.key - b.key)
@@ -88,8 +98,12 @@ export const dispatchPromptService = {
     const item = await workItemsService.getWorkItemByIdentifier(projectId, identifier, ctx);
 
     const [parentRow, blockerKeys, readiness, dispatchRepo, advisories] = await Promise.all([
-      item.parentId ? workItemRepository.findById(item.parentId) : Promise.resolve(null),
-      resolveBlockerKeys(item.id),
+      item.parentId
+        ? withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+            workItemRepository.findById(item.parentId as string, tx),
+          )
+        : Promise.resolve(null),
+      resolveBlockerKeys(item.id, ctx.workspaceId),
       workItemsService.getReadiness(item.id, ctx),
       resolveItemDispatchRepo(item.targetRepo, projectId, ctx),
       // The prose-vs-graph advisories (MOTIR-2079) — a SIBLING of the reads

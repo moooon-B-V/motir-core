@@ -50,6 +50,26 @@ type Verdict =
  * three places carries one entry and the scan counts three sites.
  */
 const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
+  'lib/services/workItemsService.ts#workItemLinkRepository.findByToItem': [
+    'unbound-call-site',
+    'MOTIR-2802/2803 · workItemsService',
+  ],
+  'lib/services/aiBugTelemetryService.ts#workItemLinkRepository.findByFromItem': [
+    'unbound-call-site',
+    'MOTIR-2846 · aiBugTelemetryService',
+  ],
+  'lib/services/proseGraphAdvisoryService.ts#workItemLinkRepository.findByFromItem': [
+    'unbound-call-site',
+    'MOTIR-2846 · proseGraphAdvisoryService',
+  ],
+  'lib/services/publicProjectsService.ts#workItemRepository.findByIds': [
+    'public-arm',
+    'the public pages read with app.workspace_id UNSET',
+  ],
+  'lib/services/workItemsService.ts#workItemLinkRepository.findByFromItem': [
+    'unbound-call-site',
+    'MOTIR-2802/2803 · workItemsService',
+  ],
   'app/(onboarding)/onboarding/discovery/page.tsx#workItemRepository.countProjectIssues': [
     'unbound-call-site',
     'MOTIR-2846 · page',
@@ -77,10 +97,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
   'lib/services/acceptanceEvidenceService.ts#workspaceRepository.findById': [
     'unbound-call-site',
     'MOTIR-2846 · acceptanceEvidenceService',
-  ],
-  'lib/services/activityService.ts#workflowsRepository.findStatuses': [
-    'unbound-call-site',
-    'MOTIR-2806 · activityService',
   ],
   'lib/services/aiPlanEditsService.ts#workItemRepository.findByIdentifier': [
     'unbound-call-site',
@@ -169,10 +185,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
   'lib/services/designEvidenceService.ts#workspaceRepository.findById': [
     'unbound-call-site',
     'MOTIR-2846 · designEvidenceService',
-  ],
-  'lib/services/dispatchPromptService.ts#workItemRepository.findById': [
-    'unbound-call-site',
-    'MOTIR-2809 · dispatchPromptService',
   ],
   'lib/services/entitlementsService.ts#attachmentRepository.sumSizeByOrganization': [
     'unbound-call-site',
@@ -531,8 +543,25 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * 205 -> 180: MOTIR-2801 bound `boardsService`'s 25 sites — the guard's first
  * consumer, and the reason it was moved early: the plan named four of them.
  * Lowered BY SUBTRACTION of this card's own, never restated as an absolute.
+ *
+ * ⚠️ 180 -> 189: THE ONE LEGITIMATE RISE, and it needs stating because a ratchet
+ * that goes up looks exactly like a regression. MOTIR-2807 made
+ * `workItemRepository.findByIds`, `workItemLinkRepository.findByFromItem` and
+ * `sprintRepository.findByIds` BINDABLE, which is what puts a read in this
+ * scanner's scope at all — so their callers entered the population on the commit
+ * that fixed them. Those callers were always dark; they were invisible to BOTH
+ * scanners, because the singleton scan saw an unbindable read and this one saw
+ * no bindable read to check. Net on that commit: 13 sites bound, 22 revealed,
+ * and `UNBOUND_READ_PATH_CEILING` fell 35 -> 31 (`findByToItem` came with the
+ * IN-edge half of the same two methods).
+ *
+ * So the rule, because the next card will hit it: **a rise is permitted ONLY in a
+ * commit that also lowers `UNBOUND_READ_PATH_CEILING`, and only with the read
+ * that caused it named here.** Anything else is a regression and the fix is to
+ * pass the `tx`. Never raise this number to make a build pass — that is the one
+ * edit both of these files exist to prevent.
  */
-const UNBOUND_CALL_SITE_CEILING = 180;
+const UNBOUND_CALL_SITE_CEILING = 189;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.

@@ -871,6 +871,17 @@ export const publicProjectsService = {
     // descendant (or the private epic itself) would have 404'd the item above.
     let parent: PublicWorkItemDetailParentDto | null = null;
     if (item.parentId) {
+      // ⚠️ DELIBERATELY UNBOUND (MOTIR-2807), and the one call site of this read
+      // that must stay so. `work_item_public_project_read` (MOTIR-2684) admits a
+      // row only when `app.workspace_id` is UNSET —
+      // `coalesce(current_setting('app.workspace_id', true), '') = ''` — so
+      // opening a workspace context here would switch OFF the arm that makes the
+      // public page work and leave the read depending on the private arm instead.
+      // It would very likely still return the row (the project's own workspace
+      // would match), which is what makes it dangerous: the public path would
+      // silently stop being exercised, and a later change to the public policy
+      // would break the page with nothing to catch it. Carried as `public-arm`
+      // in `tests/rls/call-site-guard.test.ts`, pinned to this file.
       const [parentRow] = await workItemRepository.findByIds([item.parentId]);
       if (parentRow) parent = toPublicWorkItemDetailParentDto(parentRow);
     }
