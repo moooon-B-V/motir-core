@@ -226,8 +226,10 @@ export const githubRepoRepository = {
   async findConnectedByName(
     owner: string,
     name: string,
+    tx?: Prisma.TransactionClient,
   ): Promise<(GithubRepo & { installation: GithubInstallation })[]> {
-    return db.githubRepo.findMany({
+    const client = tx ?? db;
+    return client.githubRepo.findMany({
       where: {
         owner: { equals: owner, mode: 'insensitive' },
         name: { equals: name, mode: 'insensitive' },

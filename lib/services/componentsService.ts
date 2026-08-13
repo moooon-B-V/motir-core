@@ -1,13 +1,20 @@
 import { Prisma, type Component, type Project, type WorkItem } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { componentRepository } from '@/lib/repositories/componentRepository';
+import {
+  componentRepository,
+  type ComponentWithCount,
+} from '@/lib/repositories/componentRepository';
 import { workItemComponentRepository } from '@/lib/repositories/workItemComponentRepository';
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
 import { assignableMembersService } from '@/lib/services/assignableMembersService';
 import { workItemRevisionsService } from '@/lib/services/workItemRevisionsService';
-import { withWorkspaceContext, type WorkspaceContext } from '@/lib/workspaces/context';
+import {
+  withWorkspaceContext,
+  withWorkspaceServiceContext,
+  type WorkspaceContext,
+} from '@/lib/workspaces/context';
 import { ProjectAccessDeniedError, ProjectNotFoundError } from '@/lib/projects/errors';
 import { WorkItemNotFoundError } from '@/lib/workItems/errors';
 import {
@@ -255,7 +262,9 @@ export const componentsService = {
       }
       throw err;
     }
-    const rows = await componentRepository.listByProject(project.id);
+    const rows: ComponentWithCount[] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      componentRepository.listByProject(project.id, tx),
+    );
     const assigneeIds = [...new Set(rows.flatMap((r) => r.defaultAssigneeId ?? []))];
     const users = assigneeIds.length > 0 ? await userRepository.findByIds(assigneeIds) : [];
     const usersById = new Map(users.map((u) => [u.id, u]));

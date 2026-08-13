@@ -1,4 +1,5 @@
 import type { Prisma } from '@/generated/prisma/client';
+import { withOrgServiceWriteContext } from '@/lib/organizations/context';
 import { isCloudBilling } from '@/lib/billing/availability';
 import { entitlementsFor, pmTierForOrg, type PmTier } from '@/lib/billing/entitlements';
 import { EntitlementExceededError } from '@/lib/billing/errors';
@@ -44,7 +45,15 @@ async function tierForOrgInTx(
 }
 
 async function tierForOrg(organizationId: string): Promise<PmTier> {
-  return pmTierForOrg(await organizationRepository.findCapContext(organizationId));
+  // ⚠️ A GATE, not a list, and the ORG tier rather than the workspace one:
+  // `organization_active` keys on `app.organization_id`. Unbound the row was
+  // invisible and `pmTierForOrg` fell through to its default tier — so the cap
+  // decision was made on missing context rather than refused. `withOrgServiceWriteContext`
+  // is the userless org binding (this helper takes no actor).
+  const context = await withOrgServiceWriteContext(organizationId, (tx) =>
+    organizationRepository.findCapContext(organizationId, tx),
+  );
+  return pmTierForOrg(context);
 }
 
 function isScaledActive(sub: ScaledTrackerSubscription | null): boolean {

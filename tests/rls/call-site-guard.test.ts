@@ -40,6 +40,17 @@ type Verdict =
   | 'public-arm'
   /** No tenant exists at read time; there is nothing to bind. */
   | 'pre-auth'
+  /**
+   * NOT GATED AT ALL — no binding is owed, and adding one would be noise.
+   *
+   * ⚠️ This verdict exists because the scope filter OVER-APPROXIMATES, on purpose:
+   * `policyGatedModels` asks the SCHEMA whether a model carries a `workspaceId`
+   * column, which is cheap and drift-proof and slightly wrong. `pg_policies` is
+   * the authority, and a table can carry the column while carrying no policy.
+   * The reason field holds the QUERY, so the next reader re-measures instead of
+   * trusting this line.
+   */
+  | 'no-policy'
   /** Fixed: the call now receives a GUC-bound transaction. Only ever REMOVED. */
   | 'bound';
 
@@ -50,21 +61,13 @@ type Verdict =
  * three places carries one entry and the scan counts three sites.
  */
 const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
-  'lib/services/aiBugTelemetryService.ts#workItemLinkRepository.findByFromItem': [
-    'unbound-call-site',
-    'MOTIR-2846 · aiBugTelemetryService',
-  ],
-  'lib/services/proseGraphAdvisoryService.ts#workItemLinkRepository.findByFromItem': [
-    'unbound-call-site',
-    'MOTIR-2846 · proseGraphAdvisoryService',
+  'lib/services/cliDeviceService.ts#deviceCodeRepository.findByUserCodeForRead': [
+    'no-policy',
+    'device_code: relrowsecurity=f, 0 rows in pg_policies — measured, not inferred',
   ],
   'lib/services/publicProjectsService.ts#workItemRepository.findByIds': [
     'public-arm',
     'the public pages read with app.workspace_id UNSET',
-  ],
-  'lib/services/workItemsService.ts#workItemLinkRepository.findByFromItem': [
-    'unbound-call-site',
-    'MOTIR-2802/2803 · workItemsService',
   ],
   'app/(onboarding)/onboarding/discovery/page.tsx#workItemRepository.countProjectIssues': [
     'unbound-call-site',
@@ -283,10 +286,6 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     'MOTIR-2846 · projectStateService',
   ],
   'lib/services/proseGraphAdvisoryService.ts#projectRepository.findByWorkspace': [
-    'unbound-call-site',
-    'MOTIR-2846 · proseGraphAdvisoryService',
-  ],
-  'lib/services/proseGraphAdvisoryService.ts#workItemRepository.findAncestors': [
     'unbound-call-site',
     'MOTIR-2846 · proseGraphAdvisoryService',
   ],
@@ -538,8 +537,10 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * 177 -> 174: MOTIR-2803 bound the tree / search / stub half of the same file.
  * 174 -> 172: MOTIR-2808 bound the plan-health verdicts and the identifier resolve
  * their subtree read opens on.
+ * 172 -> 169: MOTIR-2809 bound the nine single-read services and their
+ * out-of-service callers.
  */
-const UNBOUND_CALL_SITE_CEILING = 172;
+const UNBOUND_CALL_SITE_CEILING = 169;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.

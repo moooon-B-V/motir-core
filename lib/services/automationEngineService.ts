@@ -1,6 +1,6 @@
 import { Prisma } from '@/generated/prisma/client';
 import { db } from '@/lib/db';
-import { withSystemContext } from '@/lib/workspaces/context';
+import { withSystemContext, withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { automationRuleRepository } from '@/lib/repositories/automationRuleRepository';
 import { automationRuleExecutionRepository } from '@/lib/repositories/automationRuleExecutionRepository';
 import { userRepository } from '@/lib/repositories/userRepository';
@@ -366,7 +366,12 @@ export const automationEngineService = {
     if (!decoded.ok) return false;
     const ast: FilterAst = decoded.ast;
     const referents = await loadFilterReferents(rule.projectId, rule.workspaceId, ast);
-    return workItemRepository.matchesAutomationCondition(input.workItemId, ast, referents);
+    // ⚠️ A GATE, not a list. Unbound this matched NOTHING, so the rule never
+    // fired and no surface reported that it hadn't — an automation that silently
+    // stops working looks identical to one nobody triggered.
+    return withWorkspaceServiceContext(rule.workspaceId, (tx) =>
+      workItemRepository.matchesAutomationCondition(input.workItemId, ast, referents, tx),
+    );
   },
 
   /** Write a `no_actions` audit row (condition gated). The failure counter is

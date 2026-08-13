@@ -79,9 +79,13 @@ export const workItemRevisionRepository = {
    * targets. A work item with no revisions simply has no entry in the map.
    * Read-only path → `db` singleton; empty input short-circuits to an empty map.
    */
-  async findLatestIdsByWorkItemIds(workItemIds: string[]): Promise<Map<string, string>> {
+  async findLatestIdsByWorkItemIds(
+    workItemIds: string[],
+    tx?: Prisma.TransactionClient,
+  ): Promise<Map<string, string>> {
     if (workItemIds.length === 0) return new Map();
-    const rows = await db.$queryRaw<Array<{ workItemId: string; id: string }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ workItemId: string; id: string }>>`
       SELECT DISTINCT ON ("workItemId") "workItemId", "id"
       FROM "work_item_revision"
       WHERE "workItemId" IN (${Prisma.join(workItemIds)})

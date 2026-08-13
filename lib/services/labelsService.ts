@@ -310,7 +310,9 @@ export const labelsService = {
       }
       throw err;
     }
-    const rows = await labelRepository.searchByPrefix(project.id, q.trim(), LABEL_SEARCH_LIMIT);
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      labelRepository.searchByPrefix(project.id, q.trim(), LABEL_SEARCH_LIMIT, tx),
+    );
     return rows.map(toLabelDto);
   },
 

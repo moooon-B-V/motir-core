@@ -68,8 +68,12 @@ export const deviceCodeRepository = {
    * the caller: a concurrent poll can reap the row between the claim and this read, and
    * `null` then means "the grant is gone", which is an honest 404.
    */
-  async findByUserCodeForRead(userCode: string): Promise<DeviceCode | null> {
-    return db.deviceCode.findUnique({ where: { userCode } });
+  async findByUserCodeForRead(
+    userCode: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<DeviceCode | null> {
+    const client = tx ?? db;
+    return client.deviceCode.findUnique({ where: { userCode } });
   },
 
   /** Record the CLI-reported hostname on a freshly created grant. */

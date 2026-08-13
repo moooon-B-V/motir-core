@@ -1,4 +1,5 @@
 import { workItemRepository } from '@/lib/repositories/workItemRepository';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { workItemLinkRepository } from '@/lib/repositories/workItemLinkRepository';
 import { projectRepository } from '@/lib/repositories/projectRepository';
 import { projectAccessService } from '@/lib/services/projectAccessService';
@@ -325,10 +326,13 @@ export async function buildDispatchProseAdvisories(
   const namesNoPath = !hasCriterionPathTokens(item.descriptionMd);
   if (namesNothing && wellOrdered && namesNoPath) return [];
 
-  const [ancestors, blockerLinks] = await Promise.all([
-    workItemRepository.findAncestors(item.id, ctx.workspaceId),
-    workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by'),
-  ]);
+  const { ancestors, blockerLinks } = await withWorkspaceServiceContext(
+    ctx.workspaceId,
+    async (tx) => ({
+      ancestors: await workItemRepository.findAncestors(item.id, ctx.workspaceId, tx),
+      blockerLinks: await workItemLinkRepository.findByFromItem(item.id, 'is_blocked_by', tx),
+    }),
+  );
   const exemptIds = new Set<string>([item.id]);
   for (const a of ancestors) exemptIds.add(a.id);
   for (const l of blockerLinks) exemptIds.add(l.toId);

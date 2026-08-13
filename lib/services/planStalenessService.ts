@@ -194,7 +194,9 @@ export const planStalenessService: PlanStalenessService = {
 
     const latestRevByTarget = new Map<string, string | undefined>();
     if (targetIds.size > 0) {
-      const latest = await workItemRevisionRepository.findLatestIdsByWorkItemIds([...targetIds]);
+      const latest = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        workItemRevisionRepository.findLatestIdsByWorkItemIds([...targetIds], tx),
+      );
       // Seed an entry for EVERY target that's still present, so the drift rule
       // can tell "archived" (present, key set) from "missing" (absent, no key).
       for (const id of targetIds) {

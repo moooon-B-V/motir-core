@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { withSystemContext } from '@/lib/workspaces/context';
 import { githubRepoRepository } from '@/lib/repositories/githubRepoRepository';
 import { workspaceMembershipRepository } from '@/lib/repositories/workspaceMembershipRepository';
 
@@ -94,7 +95,14 @@ export async function authenticateGithubOidc(req: Request): Promise<OidcAuthResu
   // The verified `repository` claim determines the tenant → resolve it GLOBALLY
   // (the caller has no workspace yet). Reject unconnected OR ambiguous — never
   // silently pick a workspace when a coordinate resolves to more than one.
-  const matches = await githubRepoRepository.findConnectedByName(owner, name);
+  // ⚠️ AN AUTH PATH, and deliberately CROSS-WORKSPACE: the verified `repository`
+  // claim is what determines the tenant, so there is no workspace to bind yet.
+  // `github_repo_workspace_or_system` has a system arm for exactly this, so the
+  // resolve binds `app.system_admin` rather than a workspace. Unbound it matched
+  // NOTHING and every OIDC exchange was refused as `repo_not_connected`.
+  const matches = await withSystemContext((tx) =>
+    githubRepoRepository.findConnectedByName(owner, name, tx),
+  );
   const [match, ...rest] = matches;
   if (!match || rest.length > 0) {
     return { ok: false, status: 403, reason: 'repo_not_connected' };

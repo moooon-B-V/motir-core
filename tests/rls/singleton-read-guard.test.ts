@@ -134,7 +134,7 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
     '7 suites, MOTIR-2775 shape',
   ],
 
-  // ── unbound-read-path (11) ────────────────────────────────────────────────
+  // ── unbound-read-path (3) ─────────────────────────────────────────────────
   // Measured, not guessed: every call site of every read below was located and its
   // enclosing service method inspected for a context wrapper. NONE has one.
   // `reportsService.ts` and `savedFiltersService.ts` contain ZERO context wrappers in
@@ -148,25 +148,11 @@ const VERDICTS: Record<string, readonly [Verdict, string]> = {
   // `withWorkspaceServiceContext` at the service-method boundary and thread `tx` down.
   // Grouped by service, that is ~20 units of work, which is why MOTIR-2796 is a story
   // and not another sweep card.
-  'componentRepository.ts#listByProject': ['unbound-read-path', 'componentsService'],
-  'dashboardRepository.ts#listVisible': ['unbound-read-path', 'dashboardsService'],
-  'deviceCodeRepository.ts#findByUserCodeForRead': ['unbound-read-path', 'cliDeviceService'],
-  'githubRepoRepository.ts#findConnectedByName': ['unbound-read-path', 'oidcAuth'],
   'importRepository.ts#findCompletedForProject': ['unbound-read-path', 'migrateOnboardingService'],
-  'labelRepository.ts#searchByPrefix': ['unbound-read-path', 'labelsService'],
-  'organizationRepository.ts#findCapContext': ['unbound-read-path', 'entitlementsService'],
   'planRepository.ts#findBySourceJobId': ['unbound-read-path', 'migrateOnboardingService'],
   'publicRequestVoteRepository.ts#sumUpvotesByProjects': [
     'unbound-read-path',
     'projectSquareService',
-  ],
-  'workItemRepository.ts#matchesAutomationCondition': [
-    'unbound-read-path',
-    'automationEngineService',
-  ],
-  'workItemRevisionRepository.ts#findLatestIdsByWorkItemIds': [
-    'unbound-read-path',
-    'aiBoundaryService',
   ],
 
   // ── unreviewed (8) ────────────────────────────────────────────────────────
@@ -386,15 +372,17 @@ describe('singleton reads of policy-gated tables are all accounted for', () => {
     // resolves the schema, walks the repositories, and finds a known site.
     const scanned = scanSingletonReads();
     // A floor, not a target: it exists so a scanner that silently returns nothing
-    // fails instead of passing forever. It moves DOWN as reads become bindable
-    // (MOTIR-2807 took the population 51 -> 48), so keep it comfortably below the
-    // live count rather than pinned to it.
-    expect(scanned.length).toBeGreaterThan(20);
-    // A KNOWN site, chosen because it must survive the story: `matchesAutomationCondition`
-    // is a `pre-auth`-adjacent read the automation engine issues and it stays on
-    // the singleton for now. (`quickSearch` used to stand here and was bound by
-    // MOTIR-2803 — a canary has to name something the scan still finds.)
-    expect(scanned.map((r) => r.key)).toContain('workItemRepository.ts#matchesAutomationCondition');
+    // fails instead of passing forever. It moves DOWN as reads become bindable —
+    // 51 before MOTIR-2807, 19 after MOTIR-2809 — so it is kept comfortably below
+    // the live count rather than pinned to it, and lowered when a card takes the
+    // population past it.
+    expect(scanned.length).toBeGreaterThan(10);
+    // A KNOWN site, chosen because it SURVIVES this story by design:
+    // `rateLimitCounterRepository.countAllUnsafe` carries the `pre-auth` verdict
+    // (no tenant exists at read time), so nothing will bind it away. Two earlier
+    // canaries — `quickSearch`, then `matchesAutomationCondition` — were each
+    // bound by the very next card, which is the wrong property for a canary.
+    expect(scanned.map((r) => r.key)).toContain('rateLimitCounterRepository.ts#countAllUnsafe');
     // And that the `tx ?? db` fallback is genuinely excluded — `findStatuses` uses it,
     // so if this ever appears the scanner has stopped distinguishing bindable reads
     // from unbound ones and every verdict above is meaningless.

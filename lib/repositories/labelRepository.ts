@@ -42,8 +42,14 @@ export const labelRepository = {
    * labels (the Jira field's behaviour). Walks the `[projectId, nameLower]`
    * unique index. Read-only path → `db` singleton.
    */
-  async searchByPrefix(projectId: string, q: string, take = 20): Promise<Label[]> {
-    return db.label.findMany({
+  async searchByPrefix(
+    projectId: string,
+    q: string,
+    take = 20,
+    tx?: Prisma.TransactionClient,
+  ): Promise<Label[]> {
+    const client = tx ?? db;
+    return client.label.findMany({
       where: { projectId, nameLower: { startsWith: q.toLowerCase() } },
       orderBy: { nameLower: 'asc' },
       take,

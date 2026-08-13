@@ -3246,9 +3246,11 @@ export const workItemRepository = {
     workItemId: string,
     ast: FilterAst,
     referents?: ProjectFilterReferents,
+    tx?: Prisma.TransactionClient,
   ): Promise<boolean> {
     const astSql = compileFilterConditionsSql(ast, referents);
-    const rows = await db.$queryRaw<Array<{ ok: number }>>`
+    const client = tx ?? db;
+    const rows = await client.$queryRaw<Array<{ ok: number }>>`
       SELECT 1 AS ok FROM "work_item" w
       WHERE w."id" = ${workItemId} AND (${astSql})
       LIMIT 1`;

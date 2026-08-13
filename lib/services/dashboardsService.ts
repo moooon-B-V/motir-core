@@ -1,4 +1,5 @@
 import type { DashboardAccess, DashboardLayout, Prisma } from '@/generated/prisma/client';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 import { db } from '@/lib/db';
 import { dashboardRepository } from '@/lib/repositories/dashboardRepository';
 import { dashboardWidgetRepository } from '@/lib/repositories/dashboardWidgetRepository';
@@ -205,10 +206,8 @@ export const dashboardsService = {
   /** The bounded home/switcher list: mine + workspace-shared (private rows
    * of others never leave the predicate), name-ordered. */
   async listDashboards(ctx: ServiceContext): Promise<DashboardSummaryDto[]> {
-    const rows = await dashboardRepository.listVisible(
-      ctx.workspaceId,
-      ctx.userId,
-      DASHBOARD_LIST_LIMIT,
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      dashboardRepository.listVisible(ctx.workspaceId, ctx.userId, DASHBOARD_LIST_LIMIT, tx),
     );
     return rows.map((row) => toDashboardSummaryDto(row, ctx.userId));
   },

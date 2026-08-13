@@ -7,6 +7,12 @@ import { workItemsService } from '@/lib/services/workItemsService';
 import { automationRulesService } from '@/lib/services/automationRulesService';
 import { activityService } from '@/lib/services/activityService';
 import { boardsService } from '@/lib/services/boardsService';
+import { componentsService } from '@/lib/services/componentsService';
+import { dashboardsService } from '@/lib/services/dashboardsService';
+import { entitlementsService } from '@/lib/services/entitlementsService';
+import { entitlementsFor } from '@/lib/billing/entitlements';
+import { labelsService } from '@/lib/services/labelsService';
+import { workItemRevisionRepository } from '@/lib/repositories/workItemRevisionRepository';
 import { estimationService } from '@/lib/services/estimationService';
 import { reportsService } from '@/lib/services/reportsService';
 import { sprintsService } from '@/lib/services/sprintsService';
@@ -1001,5 +1007,145 @@ describe('planValidityService — the verdict that was wrong and certain', () =>
     const verdict = await workItemsService.validateWorkItem(fx.projectId, story.identifier, fx.ctx);
     expect(verdict.valid).toBe(true);
     expect(verdict.blockers).toEqual([]);
+  });
+});
+
+// ── MOTIR-2809 · the nine single-read services ────────────────────────────────
+//
+// Five are ordinary lists that came back empty. FOUR ARE GATES, and a gate fed
+// an empty answer does not go blank — it DECIDES. Their measured failure modes,
+// which is what this card asks for rather than "returned nothing":
+//
+//   organizationRepository.findCapContext — FAILS CLOSED. The repository's own
+//     contract is "missing/hidden org → the safe default (bounded `free` tier,
+//     caps apply)", so an org on a paid `scaled` plan was silently capped as if
+//     it were free. Not a leak; a paying customer refused what they bought.
+//     It also needed the ORG tier, not the workspace one: `organization_active`
+//     keys on `app.organization_id`.
+//
+//   githubRepoRepository.findConnectedByName (oidcAuth) — FAILS CLOSED, on an
+//     AUTH path. The verified `repository` claim is what determines the tenant,
+//     so there is no workspace to bind; unbound the resolve matched nothing and
+//     every OIDC exchange was refused `repo_not_connected`. Bound with
+//     `withSystemContext` — `github_repo_workspace_or_system` has the arm.
+//
+//   workItemRepository.matchesAutomationCondition — FAILS CLOSED, SILENTLY. No
+//     match means the rule never fires and nothing anywhere reports that it
+//     didn't. An automation that has stopped working is indistinguishable from
+//     one nobody triggered — the quietest failure in the whole story.
+//
+//   deviceCodeRepository.findByUserCodeForRead — NOT A DEFECT. `device_code` has
+//     `relrowsecurity = false` and ZERO policies (measured against `pg_policies`,
+//     not inferred): the scanner flagged it because the model carries a nullable
+//     `workspaceId` column. Carried as `no-policy`, and binding it would be
+//     actively wrong — the CLI flow has no workspace until the approver picks one.
+
+describe('the nine single-read services', () => {
+  it('componentsService lists the project’s components', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'CMP' });
+    await adminDb.component.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'Billing',
+        nameLower: 'billing',
+      },
+    });
+
+    const rows = await componentsService.listComponents(fx.projectIdentifier, fx.ctx);
+    expect(rows.map((c) => c.name)).toEqual(['Billing']);
+  });
+
+  it('dashboardsService lists the actor’s dashboards', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'DSH' });
+    await adminDb.dashboard.create({
+      data: { workspaceId: fx.workspaceId, ownerId: fx.ownerId, name: 'Delivery' },
+    });
+
+    const rows = await dashboardsService.listDashboards(fx.ctx);
+    expect(rows.map((d) => d.name)).toEqual(['Delivery']);
+  });
+
+  it('labelsService autocompletes by prefix', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'LBL' });
+    await adminDb.label.create({
+      data: {
+        workspaceId: fx.workspaceId,
+        projectId: fx.projectId,
+        name: 'needs-design',
+        nameLower: 'needs-design',
+      },
+    });
+
+    const rows = await labelsService.searchLabels(fx.projectIdentifier, 'needs', fx.ctx);
+    expect(rows.map((l) => l.name)).toEqual(['needs-design']);
+  });
+
+  it('entitlements read the org’s REAL tier rather than failing closed to free', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'ENT' });
+    const ws = await adminDb.workspace.findUniqueOrThrow({
+      where: { id: fx.workspaceId },
+      select: { organizationId: true },
+    });
+    await adminDb.organization.update({
+      where: { id: ws.organizationId },
+      data: { scaledTrackerSubscription: { status: 'active', seats: 5 } },
+    });
+
+    // The gate, through the surface that consumes it. `resolvePerFileLimitBytes`
+    // short-circuits to the free limit off-cloud, so the cloud flag is set for
+    // the duration — the point under test is the ORG READ, not the flag.
+    const wasCloud = process.env['MOTIR_CLOUD'];
+    process.env['MOTIR_CLOUD'] = 'true';
+    try {
+      // Unbound the org row was invisible, `findCapContext` returned its
+      // documented safe default, and a paid `scaled` org was handed the FREE
+      // per-file limit — refused what it bought rather than granted what it
+      // had not.
+      const limit = await entitlementsService.resolvePerFileLimitBytes(ws.organizationId);
+      expect(limit).toBe(entitlementsFor('scaled').maxUploadBytes);
+      expect(limit).not.toBe(entitlementsFor('free').maxUploadBytes);
+    } finally {
+      if (wasCloud === undefined) delete process.env['MOTIR_CLOUD'];
+      else process.env['MOTIR_CLOUD'] = wasCloud;
+    }
+  });
+
+  it('an automation condition MATCHES rather than silently never firing', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'AUT' });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'bug', title: 'Matches the rule' },
+      fx.ctx,
+    );
+
+    // Bound directly at the repository: the engine's own entry point needs a
+    // rule row and an event envelope, and the read under test is the predicate.
+    const matched = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRepository.matchesAutomationCondition(
+        item.id,
+        {
+          combinator: 'and',
+          conditions: [{ field: 'kind', operator: 'is_any_of', value: ['bug'] }],
+        },
+        undefined,
+        tx,
+      ),
+    );
+    expect(matched).toBe(true);
+  });
+
+  it('the AI boundary resolves each item’s latest revision id', async () => {
+    const fx = await makeWorkItemFixture({ identifier: 'AIB' });
+    const item = await workItemsService.createWorkItem(
+      { projectId: fx.projectId, kind: 'task', title: 'Has a revision' },
+      fx.ctx,
+    );
+
+    const latest = await withWorkspaceServiceContext(fx.workspaceId, (tx) =>
+      workItemRevisionRepository.findLatestIdsByWorkItemIds([item.id], tx),
+    );
+    // The anchor every AI edit is validated against: unbound the map was empty
+    // and every node came back with no `baseRevision` to write against.
+    expect(latest.get(item.id)).toBeTruthy();
   });
 });

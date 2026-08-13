@@ -3857,7 +3857,9 @@ export const workItemsService = {
       this.getIssueDetail(projectId, identifier, ctx),
       assignableMembersService.list({ projectId, accessLevel, ctx }),
       sprintRepository.listByProject(projectId, ctx.workspaceId),
-      componentRepository.listByProject(projectId),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        componentRepository.listByProject(projectId, tx),
+      ),
       // MOTIR-2593 — the estimation config the composed `EstimateBadge` needs.
       // One primary-key project read, in the same round trip; without it the
       // badge falls back to a read-only default and is silently inert on every
@@ -4705,7 +4707,9 @@ async function buildReadyDispatchDto(
 ): Promise<ReadyItemDispatchDto> {
   const [parentRow, blockerLinks, readiness, dispatchRepo] = await Promise.all([
     row.parentId ? workItemRepository.findById(row.parentId) : Promise.resolve(null),
-    workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by'),
+    withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findByFromItem(row.id, 'is_blocked_by', tx),
+    ),
     workItemsService.getReadiness(row.id, ctx),
     // WHICH repo to run this in, resolved against the item's PROJECT repo set —
     // else, for a project with no set, the workspace's connected repos (Story
