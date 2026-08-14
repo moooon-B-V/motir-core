@@ -62,10 +62,34 @@ export interface SingletonRead {
 }
 
 /**
- * Prisma models that carry a `workspaceId` column, plus the three TENANT-ROOT
- * models. Read out of the schema rather than hardcoded, so a new tenant-scoped
- * table is in scope the moment it is added — the same reason the sibling guard
- * queries `pg_class` instead of listing tables.
+ * Every Prisma model whose TABLE is under row-level security.
+ *
+ * TWO sources, unioned, because either alone is wrong (MOTIR-2815):
+ *
+ *  1. **The schema** — a model carrying a `workspaceId` column, plus the three
+ *     tenant roots. Cheap, drift-proof, and it OVER-approximates: a table can
+ *     carry the column and no policy, which is what the `no-policy` verdict is
+ *     for.
+ *  2. **The migrations** — every table named by a `CREATE POLICY` or an
+ *     `ENABLE ROW LEVEL SECURITY`. This is the half that was missing, and it
+ *     UNDER-approximated in the direction that hides bugs: **18 of the 69
+ *     RLS-protected tables carry no `workspaceId` field on their model** and so
+ *     were outside BOTH scanners entirely. They are gated through a join
+ *     instead — `work_item_revision` through its work item, `watcher`,
+ *     `work_item_label`, `comment_mention`, `github_pull_request`,
+ *     `dashboard_widget` and the rest.
+ *
+ * The cost of the gap was concrete: `workItemsService.listRevisions` reads
+ * `workItemRevisionRepository.listByWorkItem` with no `tx`, and under
+ * `motir_app` an item's entire history comes back EMPTY. No verdict covered it,
+ * no ratchet counted it, and the read looks perfectly ordinary — which is the
+ * whole argument for deriving scope from the policies rather than from a column
+ * name that merely correlates with them.
+ *
+ * ⚠️ The migration sweep is textual and deliberately CUMULATIVE — it never
+ * subtracts. A `DROP POLICY` in a later migration leaves the table in scope, so
+ * the worst case is an extra table needing an adjudication, never a silently
+ * dropped one. Getting that backwards is how a scanner goes quiet.
  */
 export function policyGatedModels(root = process.cwd()): Set<string> {
   const src = readFileSync(path.join(root, SCHEMA), 'utf8');
@@ -76,6 +100,32 @@ export function policyGatedModels(root = process.cwd()): Set<string> {
     const [, name, body] = m;
     if (name && body && /^\s*workspaceId\s/m.test(body)) {
       gated.add(name[0]!.toLowerCase() + name.slice(1));
+    }
+  }
+
+  const camel = (table: string): string =>
+    table.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase());
+  const migrations = path.join(root, 'prisma/migrations');
+  let dirs: string[] = [];
+  try {
+    dirs = readdirSync(migrations);
+  } catch {
+    return gated; // a fixture root carries no migrations; the schema half stands
+  }
+  for (const d of dirs) {
+    let sql: string;
+    try {
+      sql = readFileSync(path.join(migrations, d, 'migration.sql'), 'utf8');
+    } catch {
+      continue;
+    }
+    for (const hit of sql.matchAll(/CREATE\s+POLICY\s+"[^"]+"\s+ON\s+"([a-z_]+)"/gi)) {
+      gated.add(camel(hit[1]!));
+    }
+    for (const hit of sql.matchAll(
+      /ALTER\s+TABLE\s+"([a-z_]+)"\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY/gi,
+    )) {
+      gated.add(camel(hit[1]!));
     }
   }
   return gated;

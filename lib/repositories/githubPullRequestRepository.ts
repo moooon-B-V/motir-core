@@ -112,8 +112,12 @@ export const githubPullRequestRepository = {
 
   /** A work item's linked PRs, newest-updated first, with the repo + check rows
    *  the Development surface renders (MOTIR-1579). Read-only path → `db`. */
-  async listByWorkItemWithContext(workItemId: string): Promise<GithubPullRequestWithContext[]> {
-    return db.githubPullRequest.findMany({
+  async listByWorkItemWithContext(
+    workItemId: string,
+    tx?: Prisma.TransactionClient,
+  ): Promise<GithubPullRequestWithContext[]> {
+    const client = tx ?? db;
+    return client.githubPullRequest.findMany({
       where: { workItemId },
       include: { repo: true, checkRuns: true },
       orderBy: { updatedAt: 'desc' },
@@ -143,7 +147,9 @@ export const githubPullRequestRepository = {
     workspaceId: string,
     query: string,
     take: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<GithubPullRequestCandidate[]> {
+    const client = tx ?? db;
     const trimmed = query.trim();
     const asNumber = /^\d+$/.test(trimmed) ? Number(trimmed) : null;
     const match: Prisma.GithubPullRequestWhereInput[] = [
@@ -152,7 +158,7 @@ export const githubPullRequestRepository = {
       { repo: { is: { name: { contains: trimmed, mode: 'insensitive' } } } },
     ];
     if (asNumber !== null && Number.isSafeInteger(asNumber)) match.push({ number: asNumber });
-    return db.githubPullRequest.findMany({
+    return client.githubPullRequest.findMany({
       // Gate on the REPO row's own `workspace_id` (MOTIR-1931), not a join through
       // the installation: a PR on a repo Motir created sits behind the shared
       // provisioning installation, which is bound to no workspace, so the old

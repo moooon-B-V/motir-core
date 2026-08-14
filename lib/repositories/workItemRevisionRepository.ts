@@ -174,8 +174,10 @@ export const workItemRevisionRepository = {
     sprintId: string,
     workspaceId: string,
     after: Date,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    const rows = await db.workItemRevision.findMany({
+    const client = tx ?? db;
+    const rows = await client.workItemRevision.findMany({
       where: {
         changeKind: 'updated',
         changedAt: { gt: after },

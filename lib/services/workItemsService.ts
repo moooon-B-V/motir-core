@@ -1984,9 +1984,8 @@ export const workItemsService = {
       [...terminalKeys].filter((key) => key !== CANCELLED_STATUS_KEY),
     );
 
-    const rows = await workItemRepository.findProvenanceBackfillCandidates(
-      projectId,
-      project.workspaceId,
+    const rows = await withWorkspaceServiceContext(project.workspaceId, (tx) =>
+      workItemRepository.findProvenanceBackfillCandidates(projectId, project.workspaceId, tx),
     );
 
     const report: ProvenanceBackfillReport = {
@@ -3966,7 +3965,7 @@ export const workItemsService = {
     // The Development section's linked PRs (MOTIR-1579). Tenancy rides the
     // detail read above: the PR link is keyed by the item's internal id, which
     // getIssueDetail already gated to the caller's workspace.
-    const pullRequests = await this.listLinkedPullRequests(detail.item.id);
+    const pullRequests = await this.listLinkedPullRequests(detail.item.id, ctx);
     // The Plan / Re-plan door's permission (MOTIR-910). Planning proposes plan
     // changes, so the peek shows the door only to an actor who could approve
     // them — the same `canEdit` the detail page gates it on. `getIssueDetail`
@@ -3994,9 +3993,19 @@ export const workItemsService = {
    * AND the detail page. Takes the item's INTERNAL id; callers pass an id an
    * access-gated read (getIssueDetail / getQuickView) already resolved — this
    * method adds no tenancy gate of its own.
+   *
+   * `ctx` is for the BINDING, not for a gate (MOTIR-2815): `github_pull_request`
+   * is policy-gated, so the read needs the workspace GUC or it returns no PRs
+   * for an item that has them. The parameter is required rather than optional
+   * precisely so the next caller cannot forget it.
    */
-  async listLinkedPullRequests(workItemId: string): Promise<LinkedPullRequestDto[]> {
-    const rows = await githubPullRequestRepository.listByWorkItemWithContext(workItemId);
+  async listLinkedPullRequests(
+    workItemId: string,
+    ctx: ServiceContext,
+  ): Promise<LinkedPullRequestDto[]> {
+    const rows = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      githubPullRequestRepository.listByWorkItemWithContext(workItemId, tx),
+    );
     return rows.map(toLinkedPullRequestDto);
   },
 
@@ -4034,7 +4043,13 @@ export const workItemsService = {
   async listRevisions(workItemId: string, ctx: ServiceContext): Promise<WorkItemRevisionDto[]> {
     const row = await readWorkItem(workItemId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
-    const revisions = await workItemRevisionRepository.listByWorkItem(workItemId);
+    // Bound (MOTIR-2815). `work_item_revision` carries an RLS policy but no
+    // `workspaceId` COLUMN (it is gated through its work item), so it sat
+    // outside both scanners' scope until they learned to read the policies —
+    // and unbound, an item's entire history came back empty.
+    const revisions = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(workItemId, {}, tx),
+    );
     return revisions.map(toWorkItemRevisionDto);
   },
 
@@ -4055,11 +4070,13 @@ export const workItemsService = {
     const row = await readWorkItem(workItemId, ctx);
     if (!row || row.workspaceId !== ctx.workspaceId) throw new WorkItemNotFoundError(workItemId);
     const take = clampBound(options.take, 1, HISTORY_PAGE_SIZE, HISTORY_PAGE_SIZE);
-    const window = await workItemRevisionRepository.listByWorkItem(workItemId, {
-      take: take + 1,
-      cursor: options.cursor,
-      order: 'desc',
-    });
+    const window = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemRevisionRepository.listByWorkItem(
+        workItemId,
+        { take: take + 1, cursor: options.cursor, order: 'desc' },
+        tx,
+      ),
+    );
     const page = window.slice(0, take);
     const nextCursor = window.length > take ? (page[page.length - 1]?.id ?? null) : null;
     return { revisions: page.map(toWorkItemRevisionDto), nextCursor };

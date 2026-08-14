@@ -250,9 +250,11 @@ export const automationEngineService = {
     const projectId = input.projectId ?? (await this.resolveProjectId(input));
     if (!projectId) return summary;
 
-    const rules = await automationRuleRepository.listEnabledByProjectAndTrigger(
-      projectId,
-      input.trigger,
+    // Bound (MOTIR-2815): `automation_rule` is policy-gated, so unbound this
+    // returned NO rules and every automation silently declined to fire — a
+    // no-op that reads exactly like "no rule matched".
+    const rules = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      automationRuleRepository.listEnabledByProjectAndTrigger(projectId, input.trigger, tx),
     );
     const matching = rules.filter((rule) => triggerMatches(rule, input));
     summary.matched = matching.length;
@@ -309,9 +311,11 @@ export const automationEngineService = {
   ): Promise<'success' | 'failure' | 'no_actions' | 'deduped'> {
     // (4) Idempotency — already ran this rule for this event? Skip before
     // re-executing any action (a replay must not re-apply side effects).
-    const already = await automationRuleExecutionRepository.existsByRuleAndEvent(
-      rule.id,
-      input.eventId,
+    // Bound (MOTIR-2815): `automation_rule_execution` is policy-gated. Unbound,
+    // the idempotency probe found NO prior run, so a replayed event re-applied
+    // every action — the one direction this guard exists to prevent.
+    const already = await withWorkspaceServiceContext(input.workspaceId, (tx) =>
+      automationRuleExecutionRepository.existsByRuleAndEvent(rule.id, input.eventId, tx),
     );
     if (already) return 'deduped';
 

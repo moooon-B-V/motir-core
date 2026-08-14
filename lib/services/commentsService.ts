@@ -529,7 +529,12 @@ export const commentsService = {
 
     const pageComments = roots.flatMap((root) => [root, ...root.replies]);
     const [mentionRows, authors, totalCount] = await Promise.all([
-      commentMentionRepository.findByCommentIds(pageComments.map((c) => c.id)),
+      withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+        commentMentionRepository.findByCommentIds(
+          pageComments.map((c) => c.id),
+          tx,
+        ),
+      ),
       userRepository.findByIds([...new Set(pageComments.map((c) => c.authorId))]),
       withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
         commentRepository.countByWorkItem(workItemId, tx),

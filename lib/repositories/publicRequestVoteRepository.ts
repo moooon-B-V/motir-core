@@ -70,8 +70,9 @@ export const publicRequestVoteRepository = {
    * gate (RLS-secondary posture, like 6.12.6's triage vote-tally). Returns 0
    * when the project has no public requests / votes.
    */
-  async countByProject(projectId: string): Promise<number> {
-    return db.publicRequestVote.count({ where: { workItem: { projectId } } });
+  async countByProject(projectId: string, tx?: Prisma.TransactionClient): Promise<number> {
+    const client = tx ?? db;
+    return client.publicRequestVote.count({ where: { workItem: { projectId } } });
   },
 
   /**

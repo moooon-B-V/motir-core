@@ -137,7 +137,7 @@ export default async function IssueDetailPage({
 
   // The Development section's linked PRs (MOTIR-1579) — the same display-ready
   // read the peek payload uses; item.id came from the access-gated detail read.
-  const pullRequests = await workItemsService.listLinkedPullRequests(detail.item.id);
+  const pullRequests = await workItemsService.listLinkedPullRequests(detail.item.id, ctx);
 
   // Members back the inline assignee picker + reporter display (getIssueDetail
   // carries ids only); the workflow (already in the detail bundle) backs the

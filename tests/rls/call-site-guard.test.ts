@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { bareTransactionSites, scanCallSites, unboundCallSites } from './callSiteScan';
 
 // The CALL-SITE guard (MOTIR-2845) — the second axis of the singleton-read
@@ -74,6 +74,15 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
     // of a public project's items and nothing else; the comment INSERT beneath it
     // binds the item's own workspace. Binding here would disable the arm.
     'the id is all the route has — the read is FINDING the workspace, and the public arm admits it',
+  ],
+  'lib/services/publicProjectsService.ts#publicRequestVoteRepository.countByProject': [
+    'public-arm',
+    // In scope only since MOTIR-2815 taught the detector to read the POLICIES:
+    // `public_request_vote` carries no `workspaceId` column, so the schema
+    // heuristic never saw it. MOTIR-2811 gave the table a public SELECT arm for
+    // exactly this read — the project square's upvote total, which has no
+    // workspace to bind — so binding it would disable the arm.
+    'public_request_vote_public_project_read (20260813210000) — the square counts UNBOUND',
   ],
   'lib/services/publicProjectsService.ts#workItemRepository.findByIds': [
     'public-arm',
@@ -162,14 +171,33 @@ const CALL_SITE_VERDICTS: Record<string, readonly [Verdict, string]> = {
  * `tx` through a local `(t: Prisma.TransactionClient) => …` callback and through
  * a `tx ?? t` argument, both of which ARE bound (see `callSiteScan.ts`).
  *
- * ⚠️ 15 IS THE FLOOR, and every one of them is adjudicated above as `public-arm`
+ * 15 -> 15, but NOT unchanged: MOTIR-2815's seam analysis found that the detector
+ * could not see a read written as the INLINE `(tx ?? db).model` — twelve reads
+ * across five repositories, invisible to BOTH scanners because neither recognised
+ * that spelling. Teaching it the form revealed three genuinely unbound reads
+ * nobody had ever measured (`aiSprintPlanningService`'s blocked-by edges,
+ * `automationEngineService`'s enabled-rule lookup — every automation silently
+ * declining to fire — and `workItemsService`'s provenance-backfill candidates).
+ * All three are bound; the count returns to the same 15 adjudicated survivors,
+ * which is the only reason the number looks still.
+ *
+ * 15 -> 16: MOTIR-2815 again, and the rise is the honest kind. Teaching
+ * `policyGatedModels` to read the migrations put 18 previously-invisible
+ * RLS-protected tables in scope, and one of the reads they carry —
+ * `publicRequestVoteRepository.countByProject`, the project square's upvote
+ * total — is a PUBLIC-ARM read that must stay unbound. It is a survivor joining
+ * the adjudicated set, not a regression: six OTHER reads the same change
+ * revealed (watchers ×2, comment mentions, revision history, automation
+ * idempotency, PR search) were genuine defects and are bound.
+ *
+ * ⚠️ 16 IS THE FLOOR, and every one of them is adjudicated above as `public-arm`
  * or `no-policy`. **There are no `unbound-call-site` verdicts left.** A rise now
  * means a NEW unbound caller — bind it. The only legitimate rise is still the one
  * described above (a read becoming bindable brings its callers into scope), and
  * it still requires `UNBOUND_READ_PATH_CEILING` to fall in the same commit — but
  * that ceiling is at 0, so in practice this number only ever goes down or stays.
  */
-const UNBOUND_CALL_SITE_CEILING = 15;
+const UNBOUND_CALL_SITE_CEILING = 16;
 
 /**
  * Service functions opening a bare `db.$transaction`, which binds nothing.
@@ -188,12 +216,39 @@ const UNBOUND_CALL_SITE_CEILING = 15;
  * 60 -> 32: MOTIR-2846 replaced every bare transaction that enclosed a
  * policy-gated read with `withWorkspaceContext` / `withWorkspaceServiceContext`
  * (workItems ×6, dashboards ×7, triage ×5, labels ×3, components ×3, imports ×2,
- * and the rest). What remains encloses no gated read, which is why the number
- * stops here rather than at zero.
+ * and the rest).
+ *
+ * 32 -> 29: the same card's second pass. `importPersistService` opened three more
+ * — the run-status finalise, the mid-run counts flush and the source-id mapping
+ * upsert — each around a policy-gated WRITE rather than a read, which the first
+ * pass had not looked for. `tx.import.update()` matched zero rows under
+ * `motir_app` and failed the import outright. The lesson generalises: a bare
+ * transaction is not "safe if it only writes".
+ *
+ * What remains encloses no policy-gated statement at all — user preferences,
+ * rate-limit counters, CLI device codes, the tenant bootstrap that runs before a
+ * workspace exists — which is why the number stops here rather than at zero.
  */
-const BARE_TRANSACTION_CEILING = 32;
+const BARE_TRANSACTION_CEILING = 29;
 
 describe('call sites of bindable tenant reads are all accounted for', () => {
+  // WARM THE SCAN ONCE, in a hook with its own budget (MOTIR-2815).
+  //
+  // The scanner parses `lib/` + `app/` with the TypeScript compiler API. Bare
+  // that is a few seconds; under `vitest run --coverage` the v8 provider
+  // instruments the work and the FIRST caller alone blew the repo's 15 s
+  // `testTimeout` — so `pnpm test` was green while the coverage lane was red, on
+  // a change that added no test. The scan memoises per root, so warming it here
+  // (where `hookTimeout` applies, and with an explicit budget on top) leaves
+  // every `it` below reading a cache hit.
+  //
+  // ⚠️ Do NOT "fix" a recurrence by raising `testTimeout`: that is a global knob
+  // and this is one expensive fixture.
+  beforeAll(() => {
+    scanCallSites();
+    bareTransactionSites();
+  }, 120_000);
+
   it('every unbound site has a verdict, and every verdict names a real site', () => {
     const scanned = [...new Set(unboundCallSites().map((c) => c.key))].sort();
     const declared = Object.keys(CALL_SITE_VERDICTS).sort();

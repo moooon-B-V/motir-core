@@ -161,7 +161,32 @@ function txFallbackAlias(body: ts.Node): string | undefined {
   return alias;
 }
 
-/** Models / raw-SQL addressed off `alias` (or off `tx` directly). */
+/** Is this expression the INLINE fallback `(tx ?? db)`? */
+function isInlineTxFallback(e: ts.Expression): boolean {
+  const inner = ts.isParenthesizedExpression(e) ? e.expression : e;
+  return (
+    ts.isBinaryExpression(inner) &&
+    inner.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+    ts.isIdentifier(inner.right) &&
+    inner.right.text === SINGLETON
+  );
+}
+
+/**
+ * Models / raw-SQL addressed off `alias`, off `tx` directly, or off the INLINE
+ * `(tx ?? db).model` form.
+ *
+ * That third shape is why this is not just an identifier check (MOTIR-2815).
+ * `txFallbackAlias` only recognises `const client = tx ?? db`, so a repository
+ * written as `await (tx ?? db).workItemLink.findMany(…)` registered NO models,
+ * failed the `tenant.length > 0` test, and never entered the bindable set — which
+ * means neither scanner could see it and none of its call sites were ever
+ * classified. Twelve reads across five repositories use that form, including
+ * `workItemLinkRepository.findBlockerEdgesForItems`, one of the shared reads this
+ * story's gate is supposed to enumerate. A read invisible to the enumeration is
+ * the exact failure the guard exists to prevent, so the detector has to know both
+ * spellings.
+ */
 function accessesOff(
   node: ts.Node,
   aliases: readonly string[],
@@ -171,8 +196,8 @@ function accessesOff(
   const visit = (n: ts.Node): void => {
     if (
       ts.isPropertyAccessExpression(n) &&
-      ts.isIdentifier(n.expression) &&
-      aliases.includes(n.expression.text)
+      (isInlineTxFallback(n.expression) ||
+        (ts.isIdentifier(n.expression) && aliases.includes(n.expression.text)))
     ) {
       const name = n.name.text;
       if (name.startsWith('$')) {
@@ -195,7 +220,22 @@ function accessesOff(
  * is why the gating filter runs here rather than at the call site: `user` carries
  * no policy at all, so `userRepository.findByIds` is correct unbound.
  */
+/**
+ * Memoised per root. Each of this file's exports re-derives the whole scan from
+ * disk, and the guard calls them from six tests — so an unmemoised scan parsed
+ * `lib/` + `app/` (626 call sites across 208 bindable reads) six times over. That
+ * is tolerable bare and NOT under coverage instrumentation, where it blew the
+ * 15 s per-test timeout. The filesystem does not change inside a run, so the
+ * cache is safe; it is keyed by root because the fixture tests scan a different
+ * one.
+ */
+const readsCache = new Map<string, BindableRead[]>();
+const sitesCache = new Map<string, CallSite[]>();
+const helpersCache = new Map<string, BindableRead[]>();
+
 export function bindableGatedReads(root = process.cwd()): BindableRead[] {
+  const cached = readsCache.get(root);
+  if (cached) return cached;
   const gated = policyGatedModels(root);
   const dir = path.join(root, REPO_DIR);
   const out: BindableRead[] = [];
@@ -230,6 +270,7 @@ export function bindableGatedReads(root = process.cwd()): BindableRead[] {
     };
     visit(sf);
   }
+  readsCache.set(root, out);
   return out;
 }
 
@@ -273,6 +314,8 @@ function* walk(dir: string): Generator<string> {
  * reach, and the guard's fixture pins that limit rather than leaving it implicit.
  */
 function forwardingHelpers(root: string, reads: Map<string, BindableRead>): BindableRead[] {
+  const cached = helpersCache.get(root);
+  if (cached) return cached;
   const out: BindableRead[] = [];
 
   for (const scanRoot of SCAN_ROOTS) {
@@ -361,6 +404,7 @@ function forwardingHelpers(root: string, reads: Map<string, BindableRead>): Bind
       visit(sf);
     }
   }
+  helpersCache.set(root, out);
   return out;
 }
 
@@ -483,6 +527,8 @@ function passesTx(args: ts.NodeArray<ts.Expression>, candidates: readonly string
  * MOTIR-2797's and MOTIR-2830's, measured by their own classifier.
  */
 export function scanCallSites(root = process.cwd()): CallSite[] {
+  const cachedSites = sitesCache.get(root);
+  if (cachedSites) return cachedSites;
   const reads = new Map(bindableGatedReads(root).map((r) => [r.key, r]));
   // …plus the module-local helpers that FORWARD a `tx?` into one of those reads,
   // grouped by the file that declares them: they are called as a bare identifier,
@@ -584,7 +630,9 @@ export function scanCallSites(root = process.cwd()): CallSite[] {
       visit(sf);
     }
   }
-  return out.sort((a, b) => a.key.localeCompare(b.key) || a.line - b.line);
+  const sorted = out.sort((a, b) => a.key.localeCompare(b.key) || a.line - b.line);
+  sitesCache.set(root, sorted);
+  return sorted;
 }
 
 /** The unbound sites — everything the guard has to carry a verdict for. */

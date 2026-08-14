@@ -9,6 +9,7 @@ import type { WatcherDto, WatchersPageDto, WatchStateDto } from '@/lib/dto/watch
 import type { ServiceContext } from '@/lib/workItems/serviceContext';
 import { readWorkItem } from '@/lib/workspaces/tenantRead';
 import { withWorkspaceContext } from '@/lib/workspaces/context';
+import { withWorkspaceServiceContext } from '@/lib/workspaces/context';
 
 // Watchers service (Story 5.4 · Subtask 5.4.4) — the watch mechanics over the
 // 5.4.1 watcher repository. Owns the verified permission split, the
@@ -180,13 +181,21 @@ export const watchersService = {
     const { item, canManage } = await resolveGatedWorkItem(workItemId, ctx);
 
     // take+1 probes for a next page without a second count read.
-    const window = await watcherRepository.listByWorkItem(item.id, {
-      take: WATCHER_PAGE_SIZE + 1,
-      cursor: options.cursor,
-    });
+    // The page and its denominator in ONE bound transaction (MOTIR-2815) — they
+    // must agree, and unbound BOTH came back empty, so an item with watchers
+    // rendered as having none.
+    const [window, totalCount] = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      Promise.all([
+        watcherRepository.listByWorkItem(
+          item.id,
+          { take: WATCHER_PAGE_SIZE + 1, cursor: options.cursor },
+          tx,
+        ),
+        watcherRepository.countByWorkItem(item.id, tx),
+      ]),
+    );
     const page = window.slice(0, WATCHER_PAGE_SIZE);
     const hasMore = window.length > WATCHER_PAGE_SIZE;
-    const totalCount = await watcherRepository.countByWorkItem(item.id);
 
     return {
       watchers: page.map(toWatcherDto),

@@ -166,10 +166,21 @@ function buildMentionData(
  * ids (finding #57 — a 200-watcher issue never builds an unbounded batch).
  * Cursor-paged oldest-first via `watcherRepository.listByWorkItem`, the same
  * roster walk `watcherNotificationsService.fanOut` uses for the email twin. */
-async function* watcherRosterPages(workItemId: string, pageSize: number): AsyncGenerator<string[]> {
+async function* watcherRosterPages(
+  workItemId: string,
+  workspaceId: string,
+  pageSize: number,
+): AsyncGenerator<string[]> {
   let cursor: string | undefined;
   do {
-    const page = await watcherRepository.listByWorkItem(workItemId, { take: pageSize, cursor });
+    // Bound per page (MOTIR-2815) rather than once around the whole walk: the
+    // generator yields to its consumer between pages, and holding a transaction
+    // open across an arbitrary consumer is how a pooled connection gets pinned.
+    // `watcher` is policy-gated, so unbound the roster was EMPTY and the fan-in
+    // notified nobody.
+    const page = await withWorkspaceServiceContext(workspaceId, (tx) =>
+      watcherRepository.listByWorkItem(workItemId, { take: pageSize, cursor }, tx),
+    );
     cursor = page.length === pageSize ? page[page.length - 1]!.id : undefined;
     if (page.length > 0) yield page.map((w) => w.userId);
   } while (cursor);
@@ -241,7 +252,7 @@ export const NOTIFICATION_FAN_IN_REGISTRY: NotificationFanInRegistry = {
       ]);
       return {
         actorId: payload.actorId,
-        candidatePages: (pageSize) => watcherRosterPages(item.id, pageSize),
+        candidatePages: (pageSize) => watcherRosterPages(item.id, item.workspaceId, pageSize),
         // Idempotency scope = the revision row (revision × recipient), the same
         // key the 5.4.5 watcher email job dedupes on.
         dedupeSourceId: payload.revisionId,

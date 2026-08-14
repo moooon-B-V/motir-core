@@ -232,7 +232,9 @@ export const aiSprintPlanningService = {
     );
     const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
 
-    const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);
+    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockedByEdges([...idToKey.keys()], tx),
+    );
     const blockersByKey = new Map<string, string[]>();
     for (const edge of edges) {
       const blockedKey = idToKey.get(edge.blockedId);
@@ -452,7 +454,9 @@ export const aiSprintPlanningService = {
       for (const key of sprint.itemKeys) position.set(key, next++);
     }
     const idToKey = new Map(rows.map((r) => [r.id, r.identifier]));
-    const edges = await workItemLinkRepository.findBlockedByEdges([...idToKey.keys()]);
+    const edges = await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+      workItemLinkRepository.findBlockedByEdges([...idToKey.keys()], tx),
+    );
     for (const edge of edges) {
       const blockedKey = idToKey.get(edge.blockedId);
       const blockerKey = idToKey.get(edge.blockerId);

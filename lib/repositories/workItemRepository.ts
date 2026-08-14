@@ -4402,7 +4402,13 @@ function compileConditionSql(condition: FilterCondition, def: FilterFieldDef): P
       return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} - (${value as number})::int AND ${column}::date <= ${UTC_TODAY_SQL}`;
     case 'in_next_days':
       return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} AND ${column}::date <= ${UTC_TODAY_SQL} + (${value as number})::int`;
-    /* istanbul ignore next -- defensive: validateFilterAst rejects text ops on non-text fields before this switch */
+    // A text operator on a NON-text field. `validateFilterAst` rejects it before
+    // any request-path caller reaches here — but a repository is a leaf that
+    // trusts its caller, so the guard is real and REACHABLE from the repository's
+    // own surface (MOTIR-2815 covers it that way rather than marking it ignored:
+    // it carried an `istanbul ignore` comment under a `v8` provider, which never
+    // applied, and an unreachable-looking branch that IS reachable is worth a test
+    // rather than a directive).
     case 'contains':
     case 'not_contains':
       throw new UnknownFilterOperatorError(field, operator);
@@ -4760,6 +4766,7 @@ function buildIssueFilterSql(filter: RepoIssueFilter, alias: 'f' | 'w'): Prisma.
     // alias `w` — callers on the fixed-projection forest alias `f` must strip
     // it and compose the fragment over a joined `w` instead (findProjectForest
     // does); reaching here with alias `f` is a programming error, not input.
+    /* v8 ignore next 3 -- defensive: see above; no caller can reach it with `f`. */
     if (alias !== 'w') {
       throw new Error('RepoIssueFilter.ast requires the full work_item alias (w)');
     }

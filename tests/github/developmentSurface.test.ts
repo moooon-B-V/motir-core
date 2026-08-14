@@ -179,7 +179,7 @@ describe('getQuickView().pullRequests — the Development surface read path (MOT
 
     // The detail page's read (same service method) returns the identical shape.
     const itemRow = await adminDb.workItem.findFirst({ where: { title: 'A tracked change' } });
-    const detailPrs = await workItemsService.listLinkedPullRequests(itemRow!.id);
+    const detailPrs = await workItemsService.listLinkedPullRequests(itemRow!.id, s.ctx);
     expect(detailPrs).toEqual(peek.pullRequests);
   });
 

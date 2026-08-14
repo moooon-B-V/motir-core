@@ -870,10 +870,13 @@ export const sprintsService = {
     // during sprint" figure). A sprint with no startDate (never started) has no
     // anchor — 0.
     const addedAfterStart = sprint.startDate
-      ? await workItemRevisionRepository.countItemsAddedToSprintAfter(
-          id,
-          ctx.workspaceId,
-          sprint.startDate,
+      ? await withWorkspaceServiceContext(ctx.workspaceId, (tx) =>
+          workItemRevisionRepository.countItemsAddedToSprintAfter(
+            id,
+            ctx.workspaceId,
+            sprint.startDate as Date,
+            tx,
+          ),
         )
       : 0;
 
