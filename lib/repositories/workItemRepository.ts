@@ -4402,13 +4402,24 @@ function compileConditionSql(condition: FilterCondition, def: FilterFieldDef): P
       return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} - (${value as number})::int AND ${column}::date <= ${UTC_TODAY_SQL}`;
     case 'in_next_days':
       return Prisma.sql`${column}::date >= ${UTC_TODAY_SQL} AND ${column}::date <= ${UTC_TODAY_SQL} + (${value as number})::int`;
-    // A text operator on a NON-text field. `validateFilterAst` rejects it before
-    // any request-path caller reaches here — but a repository is a leaf that
-    // trusts its caller, so the guard is real and REACHABLE from the repository's
-    // own surface (MOTIR-2815 covers it that way rather than marking it ignored:
-    // it carried an `istanbul ignore` comment under a `v8` provider, which never
-    // applied, and an unreachable-looking branch that IS reachable is worth a test
-    // rather than a directive).
+    // A text operator on a NON-text field. GENUINELY unreachable, and I first
+    // concluded otherwise (MOTIR-2815): a repository is normally a leaf that
+    // trusts its caller, so this looked testable from the repository's own
+    // surface. It is not. Every path into this switch goes through
+    // `compileFilterConditionsSql` -> `resolveFilterAst` ->
+    // `validateResolvedCondition`, which throws `UnknownFilterOperatorError`
+    // (`lib/filters/registry.ts`) for exactly this shape BEFORE the compiler runs.
+    //
+    // ⚠️ THE TEST THAT "COVERED" IT WAS PASSING ON THE VALIDATOR'S THROW — same
+    // error class, different layer — which CI's coverage report caught and a
+    // green assertion did not. So: a directive, not a test.
+    //
+    // ⚠️ ONE LINE on purpose. `next N` counts from the DIRECTIVE'S OWN line, so a
+    // multi-line comment makes the range swallow its own text and cover nothing
+    // (measured — it cost a 33-minute run). And it is spelled for V8, not
+    // istanbul: the provider is `v8`, so the `istanbul ignore` this replaced never
+    // applied and the branch was counted uncovered all along.
+    /* v8 ignore next 3 */
     case 'contains':
     case 'not_contains':
       throw new UnknownFilterOperatorError(field, operator);

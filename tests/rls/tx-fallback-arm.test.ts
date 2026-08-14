@@ -15,6 +15,7 @@ import { customFieldOptionRepository } from '@/lib/repositories/customFieldOptio
 import { planChangeSessionRepository } from '@/lib/repositories/planChangeSessionRepository';
 import { planChangeTurnRepository } from '@/lib/repositories/planChangeTurnRepository';
 import { codeGraphOffboardingRepository } from '@/lib/repositories/codeGraphOffboardingRepository';
+import { ciPeriodChargeRepository } from '@/lib/repositories/ciPeriodChargeRepository';
 import { sprintsService } from '@/lib/services/sprintsService';
 import { savedFilterRepository } from '@/lib/repositories/savedFilterRepository';
 import { savedFilterSubscriptionRepository } from '@/lib/repositories/savedFilterSubscriptionRepository';
@@ -309,15 +310,26 @@ describe('workItemRepository.setStoryPoints — the P2025 translation', () => {
   });
 });
 
-describe('workItemRepository — the filter guard the coverage sweep surfaced', () => {
+describe('workItemRepository — an invalid operator never reaches the SQL compiler', () => {
   it('REFUSES a text operator on a non-text field with a typed error', async () => {
     const fx = await makeWorkItemFixture({ identifier: 'FA7' });
 
-    // A repository is a LEAF that trusts its caller: `validateFilterAst` rejects
-    // this shape before any route reaches the repository, so the guard looks
-    // unreachable — and is not, from the repository's own surface. It matters
-    // because the alternative to throwing is emitting SQL for an operator the
-    // column cannot support.
+    // ⚠️ WHAT THIS DOES AND DOES NOT PROVE — corrected on the record, because the
+    // first version of this comment was wrong in a way worth keeping visible.
+    //
+    // It asserts the CONTRACT: a repository handed a nonsense operator refuses it
+    // with a typed error instead of compiling it into SQL a column cannot
+    // support. That is real and worth holding.
+    //
+    // It does NOT reach `compileConditionSql`'s `case 'contains'` guard, which is
+    // what it originally claimed. `resolveFilterAst` -> `validateResolvedCondition`
+    // throws the SAME error class one layer earlier, so the assertion is satisfied
+    // before the compiler runs. The repository branch is genuinely unreachable and
+    // now carries a `v8 ignore` directive saying so.
+    //
+    // The general lesson, and the reason this is written out: an assertion on an
+    // ERROR CLASS does not pin WHERE the error came from. CI's coverage report is
+    // what caught it; the green test could not.
     await expect(
       workItemRepository.countProjectIssues(fx.projectId, fx.workspaceId, {
         ast: {
@@ -580,12 +592,25 @@ describe('the fallback arms MOTIR-2830 left without a caller', () => {
       1,
     );
 
-    // Two rows whose tables are gated but NOT by `app.workspace_id`: the
-    // offboarding queue is a system-context table and the CI charge is
-    // org-scoped. Unbound, both are still empty — which is the point.
+    // Two tables gated but NOT by `app.workspace_id`: the offboarding queue is a
+    // system-context table, the CI charge is org-scoped. Their arms still need a
+    // caller, and BOTH answer the same under either role here — nothing seeded,
+    // so nothing to hide. The value is the branch, not the verdict.
     expectFallbackAnswer(
       await codeGraphOffboardingRepository.findByProject(fx.workspaceId, fx.projectId),
       0,
     );
+
+    // ⚠️ Named in a comment on the first pass and never actually CALLED, which is
+    // why CI kept reporting `ciPeriodChargeRepository` at 83.33%. A comment does
+    // not execute a branch.
+    const organizationId = await adminDb.workspace
+      .findUniqueOrThrow({ where: { id: fx.workspaceId } })
+      .then((w) => w.organizationId);
+    const charge = await ciPeriodChargeRepository.findForPeriod(
+      organizationId,
+      new Date('2026-08-01T00:00:00.000Z'),
+    );
+    expect(charge).toBeNull(); // no row for that period, under either role
   });
 });
