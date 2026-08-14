@@ -318,6 +318,8 @@ worse failure than a gap.
 
 **R52.** A DESIGN RESULT attached to a work item (Story MOTIR-2664 · MOTIR-2667) — the note, the mock and the screenshot a design PR's CI publishes. Governed by **`work_item:edit`**, the same key as R43's acceptance evidence and for the same reason: attaching evidence to an item is editing that item, and the project is resolved from the ITEM rather than from the actor's active project (the gate MOTIR-2365 added after a token-minting endpoint turned out to be reachable with a session and an id).
 
+**R53.** TEST-SUPPORT probe (MOTIR-2816): _which role is this server connected as?_ Deliberately UNGATED and deliberately not tenant-aware — it is asked BEFORE sign-in by `tests/e2e/app-role-surfaces.spec.ts`, and the answer is a property of the PROCESS, not of a session. It reads two catalogue facts about the connection (`current_user`, `pg_roles.rolbypassrls`) and nothing else: no table, no row, no tenant data — nothing an attacker could not learn from an error message. `productionGate()` 404s it in any real production build, the same mechanism that keeps its `%5Ftest` siblings out. It exists because no other vantage point can answer the question — a psql session reports ITS OWN connection, and `TEST_DB_APP_ROLE=1` speaks only for a Vitest process — and because without it the whole app-role E2E spec passes vacuously against a BYPASSRLS server. It is MOTIR-2515's step 4, made reproducible.
+
 Two things it deliberately does NOT inherit from R43, both recorded in `docs/decisions/design-result.md`:
 
 - **No parent-story hop (§3).** Acceptance rolls a leaf key UP to its story because a story has exactly one end-to-end receipt. A story has MANY designs — one per design subtask — so a design result attaches to the card that PRODUCED it, and a container target is refused 422. `resolveTarget` is therefore shorter than `resolveStory`, not a copy of it.
@@ -484,6 +486,7 @@ MOTIR-2277 grows the catalog and MOTIR-2256 wires the enforcement.
 
 | Operation                                    | Verbs                 | Gate today                                            | Permission | Decision | Why |
 | -------------------------------------------- | --------------------- | ----------------------------------------------------- | ---------- | -------- | --- |
+| `/api/%5Ftest/db-role`                       | GET                   | — none, deliberately —                                | —          | no-gate  | R53 |
 | `/api/%5Ftest/work-item-links`               | DELETE/GET/POST       | `assertCanBrowse`, `assertCanEdit`                    | —          | finding  | R8  |
 | `/api/%5Ftest/work-items`                    | DELETE/GET/PATCH/POST | `assertCanBrowse`, `assertCanEdit`                    | —          | finding  | R8  |
 | `/api/auth/[...all]`                         | —                     | — none —                                              | —          | no-gate  | R12 |
