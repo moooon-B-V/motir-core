@@ -49,7 +49,7 @@
 // `Finish setting up access` shares a prefix with `Finish setting up
 // repositories`, so both are matched with `exact: true`.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';

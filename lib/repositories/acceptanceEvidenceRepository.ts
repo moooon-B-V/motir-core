@@ -47,11 +47,41 @@ export const acceptanceEvidenceRepository = {
   },
 
   /**
+   * Lock the story's CURRENT receipt FOR UPDATE and return its status — the
+   * freeze gate's read (MOTIR-2764). The service reads the status under the lock
+   * before deriving whether it may supersede (the lock-before-read-derived-update
+   * rule), so two concurrent publishes for the same story cannot both see a
+   * replaceable `pending` row and both write.
+   *
+   * Deliberately NOT folded into a status predicate on `markSupersededByWorkItem`:
+   * a supersede that silently affects zero rows would let the insert proceed and
+   * collide with the partial-unique slot, surfacing a P2002 instead of the typed
+   * refusal a caller can branch on. Returns null when the story has no receipt yet.
+   */
+  async lockCurrentStatusByWorkItem(
+    workItemId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<{ id: string; status: AcceptanceEvidenceStatus } | null> {
+    const rows = await tx.$queryRaw<Array<{ id: string; status: AcceptanceEvidenceStatus }>>`
+      SELECT "id", "status"
+      FROM "acceptance_evidence"
+      WHERE "work_item_id" = ${workItemId} AND "is_current" = true
+      FOR UPDATE
+    `;
+    return rows[0] ?? null;
+  },
+
+  /**
    * Mark every current row for a story superseded (is_current → false) — the
    * first half of a supersede (the caller then unlinks the old video so the
    * orphan-GC reclaims its blob, and inserts the new current row). Clears the
    * `WHERE is_current` partial-unique slot so the new insert can take it.
    * Returns the affected count.
+   *
+   * ⚠️ Carries NO status predicate BY DESIGN — the freeze decision belongs to the
+   * service, which takes `lockCurrentStatusByWorkItem` above first and refuses an
+   * `approved` receipt with a typed error. Do not add one here in the belief it
+   * makes this safer; it would make the refusal a silent no-op.
    */
   async markSupersededByWorkItem(
     workItemId: string,

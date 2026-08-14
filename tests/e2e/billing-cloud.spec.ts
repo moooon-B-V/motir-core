@@ -16,7 +16,7 @@ import { E2E_CHECKOUT_URL, E2E_PORTAL_URL } from '@/lib/test-billing-mock';
 import { escapeRegExp } from '@/lib/utils/regexp';
 
 // Subtask 8.1.10 — the billing user journeys, CLOUD-ON lane (MOTIR_CLOUD via
-// playwright.billing.config.ts). The motir-ai side (AI plan/usage + Stripe
+// playwright.cloud.config.ts). The motir-ai side (AI plan/usage + Stripe
 // sessions) is the E2E_TEST_BILLING boundary mock; the browser-side navigation to
 // the (synthetic) Stripe hosted URLs is fulfilled by page.route, so nothing leaves
 // localhost. EVERY persisted-state assertion waits on the AUTHORITATIVE response

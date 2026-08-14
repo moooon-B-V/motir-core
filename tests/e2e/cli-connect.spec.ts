@@ -31,7 +31,7 @@
 // narrated into the video: a reviewer accepts this Story by watching it work,
 // not by watching four ways it can refuse.
 
-import { test, expect } from './_helpers/acceptance-video';
+import { test, expect } from './_helpers/promoted-regression';
 import type { Page } from '@playwright/test';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signIn } from './_helpers/shell-session';

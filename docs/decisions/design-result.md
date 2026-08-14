@@ -201,6 +201,18 @@ A push to an open PR re-runs the lane and **supersedes** — that is correct and
 intended: the panel shows the design as of the latest commit, and the history
 rows record the iterations.
 
+> **⚠️ A DESIGN RESULT IS NEVER FROZEN — do not port the acceptance receipt's
+> freeze rule here.** `acceptance-receipt-lifecycle.md` (Story MOTIR-2765) makes
+> an **approved** acceptance receipt immutable: a republish is REFUSED rather
+> than superseding it. That rule keys off `AcceptanceEvidenceStatus.approved` —
+> a human's signature on one recording. **A design result has no such status and
+> no approval gate** (§2 above gates nothing; the "approve" of Story MOTIR-693 /
+> §7 is a runtime workflow gate, not a property of the artifact), so there is
+> nothing to freeze on, and superseding is the intended behaviour described in
+> this very table. **Acceptance receipts are signed-and-frozen; design results
+> are superseded-by-design** — same storage shape, opposite lifecycle. See
+> `acceptance-receipt-lifecycle.md` §5.
+
 ### 5. The `text/html` serving posture — THREE layers, all required
 
 Publishing a mock means accepting an HTML file from a repository and rendering it

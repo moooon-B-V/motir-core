@@ -652,9 +652,47 @@ export async function uploadAcceptanceVideo({
     }),
   });
   if (!res.ok) {
-    throw new Error(`Acceptance-video publish failed: ${res.status} ${await res.text()}`);
+    const body = await res.text();
+    // THE FROZEN-RECEIPT SKIP (MOTIR-2768). The service refuses to supersede an
+    // APPROVED receipt (MOTIR-2764) — the story was accepted, its receipt stands,
+    // and there is nothing left for this run to write. That is an ORDINARY
+    // OUTCOME, not a failure: once the backlog of accepted stories is larger than
+    // the handful in flight it is the commonest response this loop sees, and
+    // reddening the lane for it would train everyone to ignore its red — the same
+    // trust erosion MOTIR-2499 spent a card removing from the other direction.
+    //
+    // Branch on the `code`, never on the status number or a message substring: a
+    // 409 is shared with unrelated conflicts and a message is not a contract.
+    // `tests/acceptance-video-uploader.test.ts` pins this constant against
+    // `lib/acceptanceEvidence/errors.ts`, so the two cannot drift.
+    //
+    // ⚠️ The uploader does NOT decide this. It never reads the story's status and
+    // never skips pre-emptively: that would put the freeze rule in a second place
+    // where it can drift, and it would still race an approval landing mid-run.
+    // The service is asked; the service decides; this branch handles the answer.
+    if (parseErrorCode(body) === ALREADY_APPROVED_CODE) {
+      return { skipped: true, reason: 'the story is accepted and its receipt is frozen' };
+    }
+    throw new Error(`Acceptance-video publish failed: ${res.status} ${body}`);
   }
   return res.json();
+}
+
+/** The typed refusal this client recognises — pinned to
+ *  `lib/acceptanceEvidence/errors.ts`'s `AcceptanceEvidenceAlreadyApprovedError`
+ *  by a drift test, because a `.mjs` run by CI cannot import the TS class. */
+export const ALREADY_APPROVED_CODE = 'ACCEPTANCE_EVIDENCE_ALREADY_APPROVED';
+
+/** The `code` out of an error envelope, or null when the body is not one. Never
+ *  throws and never returns the body — a response body can carry detail we do
+ *  not want in a public log. */
+function parseErrorCode(body) {
+  try {
+    const parsed = JSON.parse(body);
+    return typeof parsed?.code === 'string' ? parsed.code : null;
+  } catch {
+    return null;
+  }
 }
 
 function ciRunUrl() {
@@ -940,6 +978,10 @@ export async function main() {
   // one story's bad publish cannot cost the others their receipt; the step still
   // exits non-zero at the end, so a partial publish is never silently green.
   let failed = 0;
+  // A skipped story wrote nothing, so it is NOT a publish; nothing went wrong, so
+  // it is NOT a failure. A third tally is what keeps the "Published N of M" line
+  // honest once most of the lane is accepted (MOTIR-2768).
+  let skipped = 0;
   for (const { recording, storyKey, verdict, sizes } of owned) {
     // An over-cap TRACE is dropped, not fatal (MOTIR-1911). The receipt is the
     // video; refusing to publish it because a debugging aid is too big is how
@@ -965,6 +1007,21 @@ export async function main() {
         },
         provenance,
       });
+      if (result?.skipped) {
+        // Reported where a person is already looking. A step that quietly does
+        // nothing is indistinguishable from a step that worked, and this lane has
+        // already shipped one incident of exactly that (MOTIR-2499).
+        skipped += 1;
+        const line = `${storyKey} is accepted — its receipt is frozen, nothing was published.`;
+        console.log(`Skipped ${storyKey}: ${result.reason}.`);
+        ciAnnotate('notice', `Acceptance publish skipped: ${line}`);
+        ciSummary(
+          `- ⏭️ **${storyKey}** — skipped: ${result.reason}. The spec has discharged its ` +
+            'purpose and should leave the lane (promote or retire — see ' +
+            'docs/decisions/acceptance-receipt-lifecycle.md §3).',
+        );
+        continue;
+      }
       console.log(`Published acceptance evidence for ${storyKey}: ${result?.evidence?.id ?? 'ok'}`);
       ciSummary(
         `- ✅ **${storyKey}** — published (${verdict.totalSeconds?.toFixed(1) ?? '?'}s clip, ` +
@@ -983,8 +1040,12 @@ export async function main() {
   }
 
   console.log(
-    `Published ${owned.length - failed} of ${owned.length} owned acceptance recording(s) ` +
-      `(${targets.length} recorded in this run).`,
+    `Published ${owned.length - failed - skipped} of ${owned.length} owned acceptance ` +
+      `recording(s) (${targets.length} recorded in this run` +
+      (skipped > 0
+        ? `; ${skipped} skipped — the story is accepted and its receipt is frozen`
+        : '') +
+      ').',
   );
   if (rejectedRehearsed.length > 0) {
     console.log(

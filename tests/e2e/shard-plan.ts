@@ -52,20 +52,27 @@ export type BulkLegId = (typeof BULK_LEG_IDS)[number];
  * run and sum durations per file — or read the `out/e2e-harness/*.jsonl` series
  * the harness watchdog now uploads with every leg, whose `test` records carry
  * the same per-spec durations alongside the memory samples.
+ *
+ * ⚠️ THE TWELVE SPECS PROMOTED BY MOTIR-2769 carry a DIFFERENT provenance, stated
+ * so nobody averages them with the rest: they were measured LOCALLY, in one run
+ * against a production build on 2026-08-13, because they had never run in this
+ * lane before and a spec with no entry is assigned to no leg at all. They are
+ * honest numbers for one machine, not the two-CI-run average above — expect CI
+ * to differ, and re-measure them from the first green run that includes them.
+ * `onboarding-migrate.spec.ts` (43.5 s) is by far the heaviest of the twelve and
+ * is the one to watch when the bin-packer redistributes.
  */
 export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'activity.spec.ts': 11.2,
   'ai-callout-gate.spec.ts': 1.5,
   'ai-plan-generation.spec.ts': 10.0,
+  'api-docs.spec.ts': 15.0,
   'api-tokens.spec.ts': 18.2,
   'appearance-sync.spec.ts': 4.9,
   'archive-flow.spec.ts': 10.3,
   'attachments.spec.ts': 14.9,
   'auth-credentials.spec.ts': 3.6,
   'auth-google.spec.ts': 3.5,
-  // Not measured from a green `main` run — this spec did not exist for either
-  // of them. The value is its own budget: the two injected document holds
-  // (1.5s + 4s, `auth-post-auth-landing.spec.ts`) plus sign-in and seeding.
   'auth-post-auth-landing.spec.ts': 12.0,
   'automation.spec.ts': 12.1,
   'backlog-filter.spec.ts': 3.1,
@@ -87,11 +94,16 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'build-in-public-flow.spec.ts': 8.0,
   'canvas-detail.spec.ts': 5.7,
   'charts.spec.ts': 8.9,
+  'child-panel-graph.spec.ts': 4.4,
+  'cli-connect.spec.ts': 20.2,
   'collab-at-scale.spec.ts': 0,
   'collab-journey.spec.ts': 10.4,
   'comments.spec.ts': 11.6,
   'custom-fields.spec.ts': 18.5,
+  'custom-roles.spec.ts': 8.2,
   'dashboards.spec.ts': 12.6,
+  'design-result.spec.ts': 6.3,
+  'docs-index.spec.ts': 1.7,
   'epic-privacy-flow.spec.ts': 6.5,
   'epic2-acceptance.spec.ts': 6.7,
   'epic6-at-scale.spec.ts': 0,
@@ -100,10 +112,6 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'filter-builder.spec.ts': 20.0,
   'github.spec.ts': 7.1,
   'gitlab.spec.ts': 4.9,
-  // Story MOTIR-2649 · Subtask MOTIR-2656 — three tests: the journey, the two
-  // shell affordances (rail + bell), and the workspace-scope check. Seeds two
-  // projects and five items through the services, so the cost is mostly fixture
-  // build; measured against the other seed-then-signIn specs of this shape.
   'home.spec.ts': 8.0,
   'import.spec.ts': 7.4,
   'issue-create-edit-flow.spec.ts': 14.1,
@@ -113,6 +121,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'jobs-flow.spec.ts': 89.7,
   'labels-components-watch.spec.ts': 27.6,
   'link-search-flow.spec.ts': 12.6,
+  'mcp-docs.spec.ts': 2.2,
   'member-facing-permissions.spec.ts': 6.6,
   'migrate-index-fleet.spec.ts': 26.1,
   'multi-tenant-isolation.spec.ts': 2.2,
@@ -121,6 +130,7 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'onboarding-entrance.spec.ts': 5.8,
   'onboarding-entry.spec.ts': 1.2,
   'onboarding-fresh.spec.ts': 8.6,
+  'onboarding-migrate.spec.ts': 43.5,
   'onboarding-ran-gate.spec.ts': 11.9,
   'org-admin.spec.ts': 7.9,
   'per-domain-admin-permissions.spec.ts': 11.4,
@@ -131,13 +141,8 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'profile.spec.ts': 10.8,
   'project-access.spec.ts': 8.7,
   'project-details.spec.ts': 8.0,
-  // MOTIR-2682 — new with the story, so there is no measured run to average.
-  // Estimated from its nearest sibling: four tests, one real sign-in each, the
-  // same seeded-tenant shape as `project-details.spec.ts` (8.0s over three), plus
-  // one upload round trip. Re-measure from the first two green `main` runs the
-  // way every other entry here was, and correct it then.
-  'project-logo.spec.ts': 9.0,
   'project-isolation.spec.ts': 4.9,
+  'project-logo.spec.ts': 9.0,
   'project-square-flow.spec.ts': 4.3,
   'projects-flow.spec.ts': 5.3,
   'provenance.spec.ts': 14.8,
@@ -147,12 +152,14 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'quick-view-edit.spec.ts': 14.5,
   'ready.spec.ts': 5.9,
   'reports.spec.ts': 18.0,
+  'roadmap-auto-drill.spec.ts': 4.0,
   'roadmap-done-ready.spec.ts': 2.6,
   'roadmap-flow.spec.ts': 4.8,
   'roadmap-fullscreen.spec.ts': 2.9,
   'roadmap-locate.spec.ts': 3.1,
   'roadmap-refresh-scope.spec.ts': 8.5,
   'roadmap-scope-toggle.spec.ts': 5.8,
+  'roles-permissions.spec.ts': 9.3,
   'saved-filters.spec.ts': 15.2,
   'settings-area.spec.ts': 10.8,
   'shell-a11y-detail.spec.ts': 0,
@@ -170,10 +177,12 @@ export const SPEC_COST_SECONDS: Readonly<Record<string, number>> = {
   'sprint-lifecycle.spec.ts': 8.0,
   'sprint-rename.spec.ts': 6.3,
   'status-derivation.spec.ts': 15.5,
+  'token-permissions.spec.ts': 2.2,
   'top-bar-budget.spec.ts': 6.8,
   'triage-flow.spec.ts': 11.6,
   'work-item-delete.spec.ts': 5.7,
   'work-item-mentions.spec.ts': 5.6,
+  'work-item-type-vocabulary.spec.ts': 7.4,
   'work-item-type.spec.ts': 6.9,
   'work-items-isolation.spec.ts': 10.2,
   'workflow-delete-reassign.spec.ts': 5.5,

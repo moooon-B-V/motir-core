@@ -144,11 +144,11 @@ export default defineConfig({
   // tests/e2e/global-setup.ts + tests/e2e/_helpers/readiness.ts.
   globalSetup: './tests/e2e/global-setup.ts',
   // The cloud-on billing journeys (Subtask 8.1.10) run in their own MOTIR_CLOUD
-  // lane (playwright.billing.config.ts) — excluded here so this off-cloud suite
+  // lane (playwright.cloud.config.ts) — excluded here so this off-cloud suite
   // never boots them (they 404 without MOTIR_CLOUD, and turning it on globally
   // would break unrelated at-scale/menu specs). The self-host-ABSENT billing spec
   // (billing-selfhost) is off-cloud and DOES run in this lane.
-  testIgnore: ['**/billing-cloud.spec.ts', '**/acceptance*.spec.ts'],
+  testIgnore: ['**/billing-cloud.spec.ts', '**/cloud-*.spec.ts', '**/acceptance*.spec.ts'],
   // MOTIR-2617 — bulk-leg membership comes from MEASURED per-spec cost, not from
   // Playwright's `--shard=i/5`. `E2E_SHARD=bulk-N` (set per matrix leg in
   // ci.yml) narrows this run to that leg's specs; the a11y / at-scale / billing

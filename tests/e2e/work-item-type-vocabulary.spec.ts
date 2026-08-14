@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { test } from './_helpers/acceptance-video';
+import { test } from './_helpers/promoted-regression';
 import { resetDatabase, db } from './_helpers/db-reset';
 import { signUp } from './_helpers/shell-session';
 import { projectsService } from '@/lib/services/projectsService';
@@ -299,7 +299,14 @@ test('the create-issue modal offers the same fourteen, and creates with a new ty
   });
 
   await chapter('It lands in the list carrying its type', async () => {
-    await expect(page.getByText('Terms of service review')).toBeVisible();
+    // `{ exact: true }` (MOTIR-2769): the create flow's `aria-live` announcement
+    // ("Notification TVA-1 created…") EMBEDS the title, so a loose match resolves
+    // to two elements and trips strict mode. This passed in the acceptance lane
+    // only because the pacing holds gave the announcement time to clear — i.e. the
+    // spec was leaning on pacing for SYNCHRONISATION, which the pacing helpers
+    // explicitly are not. Promoting it into a lane that does not pace surfaced
+    // that, which is the promotion doing its job.
+    await expect(page.getByText('Terms of service review', { exact: true })).toBeVisible();
     await expect(page.getByText('Legal', { exact: true }).first()).toBeVisible();
     // And the server agrees on BOTH columns — including the human executor the
     // type seeded, which is the half a chip cannot show.

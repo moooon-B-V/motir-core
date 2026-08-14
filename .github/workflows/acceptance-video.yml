@@ -38,12 +38,53 @@ name: Acceptance video
 #     set of sources these specs read is most of the app, so any honest widening
 #     runs a ~30-minute lane on nearly every PR, and covering one page
 #     (`lib/apiDocs/**`) would close one instance while leaving the class.
+#     ⚠️ THIS IS A KNOWN, OPEN GAP, NOT SETTLED COVERAGE — it is tracked as
+#     MOTIR-2760, which owns the trigger question. Do not read the paragraph
+#     below as "the trigger is correct"; read it as "the trigger is deliberate,
+#     and its cost is filed". MOTIR-2765 shrinks the problem rather than solving
+#     it: a lane holding only in-flight stories is a much smaller thing to decide
+#     a trigger policy for.
 #     THIS LANE IS THE RECEIPT LANE, NOT A REGRESSION GATE. Behaviour a page owes
 #     on every PR belongs in a bulk-shard spec, which `ci.yml` already runs
 #     unconditionally; an acceptance spec is what a REVIEWER WATCHES. So: if you
 #     change a surface an acceptance spec drives, run this lane yourself before
 #     merging (`pnpm test:e2e --config playwright.acceptance.config.ts <spec>`),
 #     or expect the next spec-touching PR to find it for you.
+#
+# ── A SPEC IN THIS LANE HAS A LIFECYCLE — IT DOES NOT LIVE HERE FOREVER ──────
+#   (Story MOTIR-2765 · `docs/decisions/acceptance-receipt-lifecycle.md`)
+#
+# The spec is a TEST. The video it publishes is a TEST EXECUTION — the record of
+# one run, at one moment. Their lifetimes are independent, and the spec's ends
+# first:
+#
+#   in review  the story's receipt is `pending`; every run re-records and
+#              supersedes it. This is correct — the reviewer must see current
+#              truth, and this lane is why the spec is here.
+#   APPROVED   the receipt is FROZEN. A republish against it is REFUSED by the
+#              service (MOTIR-2764), the publisher reports the skip and exits 0
+#              (MOTIR-2768), and the spec has discharged the job it was written
+#              for.
+#   then       it LEAVES this lane, by exactly one of two routes — PROMOTE it
+#              into a lane that runs on every PR (keep every assertion, strip
+#              `chapter()` / `beat()` / `acceptanceStory()` and the pacing), or
+#              RETIRE it, naming where the flow stays covered. There is no third
+#              route and no "leave it for now": "leave it" was the silent default
+#              that grew this lane to 26 specs, none of which ever left.
+#
+# ⚠️ A spec whose story is already accepted is in the WRONG LANE, and a guard
+#    fails on it (MOTIR-2770) rather than leaving you to notice. If that guard
+#    named your spec, it is asking for one of the two routes above — not for the
+#    assertion to be updated. Editing a receipt so it describes today is editing
+#    history to agree with the present; that reflex is right for a regression
+#    test and exactly backwards here (motir-core#2051 is the instance).
+#
+# ⚠️ AND THE DESTINATION IS NOT ALWAYS THE MAIN LANE. This lane's server is
+#    CLOUD-ON with the motir-ai, code-health and GitHub-provisioning mocks; the
+#    main lane's is none of those. A spec whose subject is a gated surface must
+#    be promoted into a lane that can switch that surface on, or it goes GREEN
+#    off-cloud for a reason it is not testing (MOTIR-2601). See
+#    `docs/acceptance-lane-triage.md` for which spec goes where, and MOTIR-2849.
 #
 # ── SHARDED, AND WHY THE RECEIPTS SURVIVE IT (MOTIR-2600) ────────────────────
 #
@@ -276,8 +317,14 @@ jobs:
       # `--shard=i/N` (MOTIR-2600). Playwright partitions the suite across the
       # legs, so every recording is produced by exactly one of them — which is
       # what makes the per-shard publish step below publish each receipt once.
+      # `--pass-with-no-tests` (MOTIR-2769): the lane's membership is now exactly
+      # the stories currently IN REVIEW, so an EMPTY lane is a legitimate — and
+      # after a triage, common — state rather than a misconfiguration. Playwright
+      # exits non-zero on "no tests found" by default, which would red-light every
+      # PR that touches this workflow or the config while no story is in flight.
+      # A shard leg can also legitimately draw zero specs once the lane is small.
       - name: Run E2E (acceptance-video)
-        run: pnpm test:e2e --config playwright.acceptance.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }}
+        run: pnpm test:e2e --config playwright.acceptance.config.ts --pass-with-no-tests --shard=${{ matrix.shard }}/${{ matrix.total }}
 
       # On a GREEN acceptance run, publish the recordings this PR owns to their
       # OWN STORY's acceptance panel (BYOK). The lane carries one chaptered

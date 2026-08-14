@@ -26,10 +26,22 @@ import { CLI_CLIENT_ID } from '@/lib/cliDevice/constants';
 
 export const CLI_CONNECT_PASSWORD = 'cli-connect-e2e-pass-123';
 
-/** Mirror the acceptance lane's BASE_URL derivation (playwright.acceptance.config.ts)
- *  so a worktree run on a custom port targets the same origin the server bound to. */
+/** The origin the lane's server bound to.
+ *
+ *  ⚠️ The default is the MAIN lane's 3000, not 3200 (MOTIR-2769). This helper
+ *  used to mirror `playwright.acceptance.config.ts`'s derivation, which was right
+ *  while `cli-connect` lived in the acceptance lane and wrong the moment it was
+ *  promoted: the spec ran against the main lane's server on 3000 while every
+ *  seeded request went to 3200, so all five of its tests failed at the first
+ *  `POST /api/cli/device/start` with `ECONNREFUSED ::1:3200`.
+ *
+ *  A lane-specific port belongs to the lane's config, never to a helper. Any lane
+ *  on a non-default port already exports `PORT`/`E2E_BASE_URL`, which is what the
+ *  two overrides below read — so this is correct in the main lane, the cloud lane
+ *  and the acceptance lane alike, and does not have to be edited again when a
+ *  spec moves. */
 export const BASE_URL =
-  process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3200'}`;
+  process.env['E2E_BASE_URL'] ?? `http://localhost:${process.env['PORT'] ?? '3000'}`;
 
 export interface CliConnectSeed {
   email: string;

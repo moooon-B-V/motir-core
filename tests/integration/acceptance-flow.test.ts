@@ -4,6 +4,7 @@ import { makeWorkItemFixture, type WorkItemFixture } from '../fixtures';
 import { adminDb } from '../helpers/adminDb';
 import { truncateAuthTables } from '../helpers/db';
 import { grantForLegacyScopes } from '@/tests/helpers/tokenGrant';
+import { AcceptanceEvidenceAlreadyApprovedError } from '@/lib/acceptanceEvidence/errors';
 
 // The story-acceptance INTEGRATION SEAM (Story MOTIR-1627 · Subtask MOTIR-1637)
 // against a REAL Postgres — the assembled flow across the subtasks, not each
@@ -160,6 +161,109 @@ describe('story-acceptance flow (publish → read → board flag → gate → re
       where: { source: 'acceptance_video', workItemId: null },
     });
     expect(unlinked).toBe(1);
+  });
+
+  // ── THE FREEZE (MOTIR-2764) ────────────────────────────────────────────────
+  //
+  // The regression these four hold: `markSupersededByWorkItem` carries no status
+  // predicate, so before the service gate ANY publish flipped an APPROVED row
+  // `isCurrent: false` and unlinked its attachments, handing the approved video's
+  // bytes to the orphan-GC. The trigger was as small as a one-line fix to an
+  // `acceptance*.spec.ts` — a test-only change destroying a production record.
+  // Policy: docs/decisions/acceptance-receipt-lifecycle.md §2.
+
+  it('an APPROVED receipt is FROZEN — a republish is refused and writes NOTHING', async () => {
+    const story = await inReviewStory(fx);
+    await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaa' });
+    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+    const approved = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+
+    const res = await publishVia(token, story, { videoName: 'later.webm', commitSha: 'bbb' });
+
+    // Refused at the service boundary, by CODE — the uploader branches on this
+    // rather than on the status number (MOTIR-2768).
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('ACCEPTANCE_EVIDENCE_ALREADY_APPROVED');
+
+    // The approved row is untouched: still current, still approved, same row.
+    const stillCurrent = await adminDb.acceptanceEvidence.findFirstOrThrow({
+      where: { workItemId: story.id, isCurrent: true },
+    });
+    expect(stillCurrent.id).toBe(approved.id);
+    expect(stillCurrent.status).toBe('approved');
+
+    // No pending replacement was inserted — the whole row set is still just the one.
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(1);
+
+    // And its bytes are safe: the attachment is still linked, so the orphan-GC
+    // (blob-first, 7-day window) never sees it. THIS is the data loss.
+    expect(
+      await adminDb.attachment.count({ where: { source: 'acceptance_video', workItemId: null } }),
+    ).toBe(0);
+    const attachment = await adminDb.attachment.findUniqueOrThrow({
+      where: { id: approved.attachmentId! },
+    });
+    expect(attachment.workItemId).toBe(story.id);
+  });
+
+  it('a `changes_requested` receipt stays REPLACEABLE — the rule narrows, it does not stop supersede', async () => {
+    const story = await inReviewStory(fx);
+    await publishVia(token, story, { videoName: 'first.webm', commitSha: 'aaa' });
+    await acceptanceEvidenceService.decide(
+      { workItemId: story.id, decision: 'request_changes' },
+      fx.ctx,
+    );
+
+    // The whole point of requesting changes is that the next run should differ.
+    const res = await publishVia(token, story, { videoName: 'second.webm', commitSha: 'bbb' });
+    expect(res.status).toBe(201);
+
+    const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
+    expect(current!.commitSha).toBe('bbb');
+    expect(current!.status).toBe('pending');
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(2);
+  });
+
+  it('an IDEMPOTENT redelivery of the approved commit is NOT an error — it returns the receipt', async () => {
+    // The idempotency short-circuit runs BEFORE the freeze gate, and must keep
+    // doing so: a CI redelivery of the same commit+producer is a no-op, not a
+    // conflict. Getting this order wrong would fail a retry that changed nothing.
+    const story = await inReviewStory(fx);
+    await publishVia(token, story, { commitSha: 'aaa', producedByKey: 'MOTIR-1638' });
+    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+
+    // 201, like every other success on this route — the idempotent path returns
+    // the EXISTING receipt rather than a conflict. What proves it short-circuited
+    // is the row set below, not the status code.
+    const res = await publishVia(token, story, { commitSha: 'aaa', producedByKey: 'MOTIR-1638' });
+    expect(res.status).toBe(201);
+
+    const current = await acceptanceEvidenceService.getCurrentForStory(story.id, fx.ctx);
+    expect(current!.status).toBe('approved');
+    expect(await adminDb.acceptanceEvidence.count({ where: { workItemId: story.id } })).toBe(1);
+  });
+
+  it('the refusal is a property of the SERVICE, so it holds for a non-CI caller too', async () => {
+    // The gate is at the service boundary rather than in the uploader precisely
+    // so that a future manual republish or a backfill inherits it. Drive the
+    // service directly — no route, no token — and it still refuses.
+    const story = await inReviewStory(fx);
+    await publishVia(token, story, { videoName: 'signed.webm', commitSha: 'aaa' });
+    await acceptanceEvidenceService.decide({ workItemId: story.id, decision: 'approve' }, fx.ctx);
+
+    await expect(
+      acceptanceEvidenceService.recordFromPathnames(
+        {
+          workItemId: story.id,
+          videoPathname: `acceptance/${fx.workspaceId}/${story.id}/backfill.webm`,
+          chapters: [],
+          commitSha: 'ccc',
+        },
+        fx.ctx,
+      ),
+    ).rejects.toThrow(AcceptanceEvidenceAlreadyApprovedError);
   });
 
   it('a token WITHOUT the integration scope cannot publish (403)', async () => {
